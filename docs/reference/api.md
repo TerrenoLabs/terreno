@@ -552,6 +552,8 @@ A session whose app `User` has `disabled: true` does not set `req.user`, so prot
 answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
 registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
 `TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
+The legacy JWT socket handshake loads the same user model and refuses a token whose user is
+disabled or missing (`createSocketAuthMiddleware({tokenSecret, userModel})`).
 
 **Social sign-in for a web app on another site (`oauthHandoff`):**
 

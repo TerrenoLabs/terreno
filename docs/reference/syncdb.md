@@ -138,7 +138,9 @@ instance automatically, with or without a JWT secret. The handshake creates the 
 first contact and refuses disabled users. A `RealtimeApp` without its own `userModel` uses the
 `TerrenoApp`'s, for JWT and Better Auth sockets alike: socket authorization reads the user from
 the database instead of the token's claims, and the revalidation sweep disconnects users who
-were disabled or deleted. Pass `betterAuth` only for a `RealtimeApp` mounted without
+were disabled or deleted. With a user model, the JWT handshake also refuses a token whose user
+is disabled or no longer exists, so a disconnected client cannot reconnect with the same token.
+Pass `betterAuth` only for a `RealtimeApp` mounted without
 `TerrenoApp`:
 
 ```typescript

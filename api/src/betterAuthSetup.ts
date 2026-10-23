@@ -5,8 +5,9 @@
  * create session middleware, and sync users with the application User model.
  */
 
-import {type BetterAuthOptions, betterAuth} from "better-auth";
+import {type BetterAuthOptions, type BetterAuthPlugin, betterAuth} from "better-auth";
 import {mongodbAdapter} from "better-auth/adapters/mongodb";
+import {createAuthMiddleware} from "better-auth/api";
 import {toNodeHandler} from "better-auth/node";
 import {bearer} from "better-auth/plugins";
 import type {Application, NextFunction, Request, Response} from "express";
@@ -269,6 +270,8 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       })
     : [];
 
+  const credentialSyncPlugins = userModel ? [createCredentialSyncPlugin(userModel)] : [];
+
   const created = betterAuth({
     ...merged,
     // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
@@ -277,7 +280,8 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // token as a bearer header) — without it, a raw session token cannot be validated and
     // socket auth silently fails (the sync client shows perpetually "offline").
     // The handoff plugins come last so their callback hook sees the final redirect.
-    plugins: [bearer(), ...(config.plugins ?? []), ...handoffPlugins],
+    // The credential sync plugin keeps the legacy passport credential in step with Better Auth.
+    plugins: [bearer(), ...credentialSyncPlugins, ...(config.plugins ?? []), ...handoffPlugins],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred
@@ -353,6 +357,92 @@ export const applyJwtPasswordResetToBetterAuth = async (
   await ctx.internalAdapter.deleteUserSessions(betterAuthUserId);
 };
 
+// Better Auth endpoints that change or revoke a user's credentials; the legacy JWT credential
+// must follow them.
+const CREDENTIAL_CHANGE_PATHS = new Set([
+  "/change-password",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+]);
+
+// The new password of an in-flight Better Auth `/reset-password`, keyed by its request. The
+// endpoint reads its JSON body before `onPasswordReset` runs, so the hook cannot read it again.
+const resetPasswordsByRequest = new WeakMap<object, string>();
+
+interface CredentialHookContext {
+  body?: Record<string, unknown>;
+  context: {returned?: unknown; session?: {user?: {id?: string}} | null};
+  path?: string;
+  request?: object;
+}
+
+/**
+ * After a Better Auth password change, set the legacy passport password of a dual-enrolled app
+ * user to the new one; after a password change or session revocation, bump `tokenEpoch` so
+ * legacy refresh tokens issued before it stop working.
+ */
+const applyBetterAuthCredentialChangeToJwt = async (
+  userModel: UserModel,
+  ctx: CredentialHookContext
+): Promise<void> => {
+  if (ctx.context.returned instanceof Error) {
+    return;
+  }
+  const betterAuthId = ctx.context.session?.user?.id;
+  if (!betterAuthId) {
+    return;
+  }
+  const appUser = await findOneOrNoneFor(userModel, {betterAuthId} as never);
+  if (!appUser) {
+    return;
+  }
+  const newPassword = ctx.body?.newPassword;
+  if (ctx.path === "/change-password" && typeof newPassword === "string") {
+    // Only an account that already has a legacy password gets the new one, so a Better Auth only
+    // account does not gain a second way to sign in.
+    const hasLegacyPassword =
+      userModel.schema.path("hash") !== undefined &&
+      Boolean(
+        await userModel.exists({_id: appUser._id, hash: {$exists: true, $ne: null}} as never)
+      );
+    if (hasLegacyPassword) {
+      await setPasswordForUser(appUser as unknown as HasSetPassword, newPassword);
+    }
+  }
+  if (userModel.schema.path("tokenEpoch") !== undefined) {
+    appUser.tokenEpoch = (appUser.tokenEpoch ?? 0) + 1;
+  }
+  await appUser.save();
+};
+
+const createCredentialSyncPlugin = (userModel: UserModel): BetterAuthPlugin => ({
+  hooks: {
+    after: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          await applyBetterAuthCredentialChangeToJwt(
+            userModel,
+            ctx as unknown as CredentialHookContext
+          );
+        }),
+        matcher: (ctx): boolean => CREDENTIAL_CHANGE_PATHS.has(ctx.path ?? ""),
+      },
+    ],
+    before: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          const newPassword = (ctx.body as Record<string, unknown> | undefined)?.newPassword;
+          if (ctx.request && typeof newPassword === "string") {
+            resetPasswordsByRequest.set(ctx.request, newPassword);
+          }
+        }),
+        matcher: (ctx): boolean => ctx.path === "/reset-password",
+      },
+    ],
+  },
+  id: "terreno-credential-sync",
+});
+
 interface PasswordResetRequestLike {
   body?: unknown;
   clone?: () => {json: () => Promise<unknown>};
@@ -375,6 +465,10 @@ export const readPasswordFromBetterAuthResetRequest = async (
 ): Promise<string> => {
   if (!request) {
     return "";
+  }
+  const stashed = resetPasswordsByRequest.get(request);
+  if (stashed) {
+    return stashed;
   }
   const attached = passwordFromUnknown(request.body);
   if (attached.length > 0) {

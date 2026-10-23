@@ -410,3 +410,182 @@ describe("BetterAuthApp on TerrenoApp with a cookie-less bearer from another sit
     expect(res.headers["set-auth-token"]).toBeUndefined();
   });
 });
+
+describe("BetterAuthApp credential changes on a dual-enrolled account", () => {
+  const OLD_PASSWORD = "old-password-123";
+  const NEW_PASSWORD = "new-password-456";
+
+  interface DualUserFields {
+    betterAuthId?: string;
+    email: string;
+    name?: string;
+    tokenEpoch?: number;
+  }
+
+  const getDualUserModel = (): mongoose.Model<DualUserFields> => {
+    if (mongoose.models.BetterAuthAppDualUser) {
+      return mongoose.models.BetterAuthAppDualUser as mongoose.Model<DualUserFields>;
+    }
+    const schema = new Schema<DualUserFields>({
+      betterAuthId: {description: "Linked Better Auth user id", index: true, type: String},
+      email: {description: "Email address", required: true, type: String},
+      name: {description: "Display name", type: String},
+      tokenEpoch: {default: 0, description: "Refresh token epoch", type: Number},
+    });
+    schema.plugin(
+      passportLocalMongoose as unknown as (
+        target: Schema,
+        options?: Record<string, unknown>
+      ) => void,
+      {usernameCaseInsensitive: true, usernameField: "email"}
+    );
+    return mongoose.model<DualUserFields>("BetterAuthAppDualUser", schema);
+  };
+
+  const DualUser = getDualUserModel();
+  const mails: {text: string; to: string}[] = [];
+
+  const buildApp = (): {app: express.Application; betterAuthApp: BetterAuthApp} => {
+    const betterAuthApp = new BetterAuthApp({
+      config: {
+        baseURL: "http://localhost:3000",
+        enabled: true,
+        publicAppUrl: "http://localhost:8082",
+        secret: "test-secret-at-least-32-characters-long",
+        sendMail: async (message): Promise<void> => {
+          mails.push({text: message.text, to: message.to});
+        },
+      },
+      userModel: DualUser as unknown as UserModel,
+    });
+    const app = new TerrenoApp({
+      skipListen: true,
+      userModel: DualUser as unknown as UserModel,
+    })
+      .register(betterAuthApp)
+      .build();
+    return {app, betterAuthApp};
+  };
+
+  // Signs up through Better Auth, creates the app user, and gives it the same legacy password,
+  // as the JWT reset bridge does. Returns the Better Auth bearer and a legacy refresh token.
+  const enrollDualUser = async (
+    app: express.Application,
+    betterAuthApp: BetterAuthApp,
+    email: string
+  ): Promise<{bearer: string; refreshToken: string}> => {
+    const signUp = await betterAuthApp.ensureAuth().api.signUpEmail({
+      body: {email, name: "Dual User", password: OLD_PASSWORD},
+    });
+    const bearer = signUp.token as string;
+    await supertest(app).get("/auth/me").set("authorization", `Bearer ${bearer}`).expect(200);
+    const appUser = await DualUser.findOne({email});
+    await (appUser as unknown as {setPassword: (password: string) => Promise<void>}).setPassword(
+      OLD_PASSWORD
+    );
+    await appUser?.save();
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email, password: OLD_PASSWORD})
+      .expect(200);
+    return {bearer, refreshToken: login.body.data.refreshToken as string};
+  };
+
+  beforeEach(async () => {
+    mails.length = 0;
+    await DualUser.deleteMany({});
+    for (const collection of ["user", "session", "account", "verification"]) {
+      await mongoose.connection.db?.collection(collection).deleteMany({});
+    }
+  });
+
+  it("retires the legacy password and refresh tokens after a Better Auth change-password", async () => {
+    const {app, betterAuthApp} = buildApp();
+    const email = "dual-change@example.com";
+    const {bearer, refreshToken} = await enrollDualUser(app, betterAuthApp, email);
+
+    await supertest(app)
+      .post("/api/auth/change-password")
+      .set("authorization", `Bearer ${bearer}`)
+      .send({currentPassword: OLD_PASSWORD, newPassword: NEW_PASSWORD, revokeOtherSessions: true})
+      .expect(200);
+
+    await supertest(app).post("/auth/login").send({email, password: OLD_PASSWORD}).expect(401);
+    await supertest(app).post("/auth/login").send({email, password: NEW_PASSWORD}).expect(200);
+    await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
+  });
+
+  it("does not touch the legacy credential when change-password fails", async () => {
+    const {app, betterAuthApp} = buildApp();
+    const email = "dual-change-fail@example.com";
+    const {bearer, refreshToken} = await enrollDualUser(app, betterAuthApp, email);
+
+    const res = await supertest(app)
+      .post("/api/auth/change-password")
+      .set("authorization", `Bearer ${bearer}`)
+      .send({currentPassword: "wrong-password-1", newPassword: NEW_PASSWORD});
+    expect(res.status).toBe(400);
+
+    await supertest(app).post("/auth/login").send({email, password: OLD_PASSWORD}).expect(200);
+    await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(200);
+  });
+
+  it("does not create a legacy password for a Better Auth only account", async () => {
+    const {app, betterAuthApp} = buildApp();
+    const email = "ba-only-change@example.com";
+    const signUp = await betterAuthApp.ensureAuth().api.signUpEmail({
+      body: {email, name: "Better Auth Only", password: OLD_PASSWORD},
+    });
+    const bearer = signUp.token as string;
+    await supertest(app).get("/auth/me").set("authorization", `Bearer ${bearer}`).expect(200);
+
+    await supertest(app)
+      .post("/api/auth/change-password")
+      .set("authorization", `Bearer ${bearer}`)
+      .send({currentPassword: OLD_PASSWORD, newPassword: NEW_PASSWORD})
+      .expect(200);
+
+    await supertest(app).post("/auth/login").send({email, password: NEW_PASSWORD}).expect(401);
+    const appUser = await DualUser.findOne({email}).lean();
+    expect(appUser?.tokenEpoch).toBe(1);
+  });
+
+  it("revokes legacy refresh tokens when Better Auth revokes all sessions", async () => {
+    const {app, betterAuthApp} = buildApp();
+    const email = "dual-revoke@example.com";
+    const {bearer, refreshToken} = await enrollDualUser(app, betterAuthApp, email);
+
+    await supertest(app)
+      .post("/api/auth/revoke-sessions")
+      .set("authorization", `Bearer ${bearer}`)
+      .send({})
+      .expect(200);
+
+    await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
+  });
+
+  it("syncs a Better Auth password reset to the legacy password", async () => {
+    const {app, betterAuthApp} = buildApp();
+    const email = "dual-reset@example.com";
+    const {refreshToken} = await enrollDualUser(app, betterAuthApp, email);
+
+    await supertest(app)
+      .post("/api/auth/request-password-reset")
+      .send({email, redirectTo: "/reset"})
+      .expect(200);
+    const resetMail = mails.find(
+      (mail) => mail.to === email && mail.text.includes("resetPassword")
+    );
+    const token = decodeURIComponent(resetMail?.text.match(/token=([^\s&]+)/)?.[1] ?? "");
+    expect(token.length).toBeGreaterThan(0);
+
+    await supertest(app)
+      .post("/api/auth/reset-password")
+      .send({newPassword: NEW_PASSWORD, token})
+      .expect(200);
+
+    await supertest(app).post("/auth/login").send({email, password: OLD_PASSWORD}).expect(401);
+    await supertest(app).post("/auth/login").send({email, password: NEW_PASSWORD}).expect(200);
+    await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
+  });
+});

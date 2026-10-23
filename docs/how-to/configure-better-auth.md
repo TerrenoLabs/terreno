@@ -97,7 +97,10 @@ email-verification mail match the JWT recovery templates. The hooks throw 501 an
 `publicAppUrl` is missing. JWT `POST /auth/resetPassword` updates the Better Auth password and
 deletes Better Auth sessions when this plugin is registered. Better Auth password reset updates
 the JWT password and `tokenEpoch` for the matching app User so dual-enrolled accounts cannot keep
-the old passport hash.
+the old passport hash. Better Auth `change-password` does the same for an app User that already
+has a JWT password, and bumps `tokenEpoch` for every app User. `revoke-sessions` and
+`revoke-other-sessions` bump `tokenEpoch`, so JWT refresh tokens issued before them stop working.
+An account with only a Better Auth password does not gain a JWT password.
 
 ```typescript
 import {getCommsService, renderAuthMail} from "@terreno/comms";
@@ -151,6 +154,7 @@ const config: BetterAuthConfig = {
 | `emailAndPassword.revokeSessionsOnPasswordReset` | `true` | Signing out other sessions after a password reset |
 | `emailAndPassword.sendResetPassword` | `sendMail` | Terreno's reset email |
 | `emailAndPassword.onPasswordReset` | `userModel` | Syncing the new password to JWT credentials |
+| `terreno-credential-sync` plugin (always registered with `userModel`) | `userModel` | Not overridable; syncs change-password and session revocation to JWT credentials |
 | `emailVerification.sendOnSignUp`, `emailVerification.sendVerificationEmail` | `sendMail` | Terreno's verification email on sign-up |
 | `session.cookieCache` | `{enabled: true, maxAge: 300}` | The 5-minute session cookie cache |
 | `advanced.defaultCookieAttributes` | `crossDomainCookies` | `SameSite=None; Secure` cookies for cross-site frontends |

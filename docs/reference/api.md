@@ -540,6 +540,11 @@ Those hooks throw 501 and do not send when `publicAppUrl` is missing, so links a
 relative. Password reset also sets `revokeSessionsOnPasswordReset`, so existing Better Auth sessions
 are deleted when that reset path succeeds. JWT `POST /auth/resetPassword` updates the
 Better Auth password and deletes those sessions when `BetterAuthApp` is registered.
+With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
+password and bumps `tokenEpoch`. `change-password` sets the new JWT password only on an app
+`User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`
+bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens issued before the change stop
+working.
 Optional `authMailTemplates` overrides
 subject/text/html per template id.
 

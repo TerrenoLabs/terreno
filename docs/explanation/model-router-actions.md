@@ -103,6 +103,8 @@ HTTP method and scope map to a CRUD permission check:
 **403** — denied after the instance document is loaded (e.g. `IsOwner` with a document that fails the check).  
 **401** — unauthenticated when a permission requires auth (from existing auth middleware).
 
+With RBAC `access` on the router, an action without its own `access` inherits the router's resource and the mapped CRUD action. When the action's resource (inherited or set with `access`) matches the router's resource, the router's `access.scope` check and `access.also[method]` permissions also run, before and after the document loads, exactly as they do for the mapped CRUD method. A user whose role grants `todo:update` but who fails the router scope for a document gets **403** on that document's instance actions, the same as on `PATCH`. An action whose `access` names another resource skips the router's `scope` and `also`.
+
 `authenticateMiddleware` honors the router’s `allowAnonymous` option, same as CRUD. An action may set `allowAnonymous: true` to accept unauthenticated requests without making the router's CRUD routes or other actions anonymous. Keep a non-empty permission such as `Permissions.IsAny` and authenticate any service token in the handler.
 
 ## Validation

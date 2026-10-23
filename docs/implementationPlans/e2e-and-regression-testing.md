@@ -141,7 +141,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
   - Docs: the reference itself is the doc. Plugin docs land in T7.
   - Skills: update-agent-docs
 
-- [ ] **T2** — Pick writes each planned e2e spec in the task that delivers it
+- [x] **T2** — Pick writes each planned e2e spec in the task that delivers it
   - Depends on: T1
   - Files: plugins/terreno-planning/skills/terreno-2-pick/SKILL.md, plugins/terreno-planning/skills/terreno-2-pick/references/testing.md, generated copies
   - Delivers:

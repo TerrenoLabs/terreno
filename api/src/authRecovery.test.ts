@@ -5,6 +5,7 @@ import mongoose from "mongoose";
 import supertest from "supertest";
 
 import {MAX_PASSWORD_LENGTH} from "./auth";
+import {changeUserPassword} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
 import {setupDb, UserModel} from "./tests";
@@ -341,5 +342,62 @@ describe("password reset routes", () => {
     } finally {
       process.env.NODE_ENV = previous;
     }
+  });
+});
+
+describe("changeUserPassword", () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  it("sets the password, bumps tokenEpoch, and runs the Better Auth sync registered on the app", async () => {
+    const synced: string[] = [];
+    const app = new TerrenoApp({
+      authOptions: {
+        syncPasswordResetToBetterAuth: async (_user, password): Promise<void> => {
+          synced.push(password);
+        },
+      },
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    const user = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.isNotNull(user);
+
+    await changeUserPassword(user as never, "changed-password-123", {adminId: "admin-1", app});
+
+    assert.deepEqual(synced, ["changed-password-123"]);
+    const stored = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.equal(stored?.tokenEpoch, 1);
+    await supertest(app)
+      .post("/auth/refresh_token")
+      .send({refreshToken: login.body.data.refreshToken})
+      .expect(401);
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "changed-password-123"})
+      .expect(200);
+  });
+
+  it("prefers explicit authOptions and works without an app", async () => {
+    const synced: string[] = [];
+    const user = await UserModel.findOne({email: "notAdmin@example.com"});
+
+    await changeUserPassword(user as never, "explicit-password-123", {
+      authOptions: {
+        syncPasswordResetToBetterAuth: async (_user, password): Promise<void> => {
+          synced.push(password);
+        },
+      },
+    });
+    await changeUserPassword(user as never, "no-sync-password-123");
+
+    assert.deepEqual(synced, ["explicit-password-123"]);
+    const stored = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.equal(stored?.tokenEpoch, 2);
   });
 });

@@ -529,6 +529,13 @@ and `tokenEpoch` for the matching app User. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
 matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
 
+For any other server-side password change, such as an admin "set password" action, call
+`changeUserPassword(user, password, {adminId, app: req.app})`. It does what reset does: sets the
+passport password, increments `tokenEpoch`, saves, and, when `BetterAuthApp` is registered (or
+`authOptions.syncPasswordResetToBetterAuth` is set), sets the Better Auth password and deletes
+that user's Better Auth sessions. `adminId` adds the audit log line. Pass `authOptions` instead
+of `app` outside a request. `setPasswordForUser` alone only sets the hash and revokes nothing.
+
 Add `tokenEpoch` (number, default 0) on the User schema so epoch bumps persist under
 `strict: "throw"`. See `example-backend` User. Opt in to `emailVerified` with
 `emailVerificationPlugin`. Set `authOptions.requireEmailVerification` to reject login

@@ -139,11 +139,52 @@ const incrementTokenEpoch = (user: User): void => {
   user.tokenEpoch = (user.tokenEpoch ?? 0) + 1;
 };
 
+// The auth options passed to addAuthRoutes, kept on the app so changeUserPassword can reach the
+// Better Auth credential sync that TerrenoApp wires after the routes are added.
+const AUTH_OPTIONS_LOCAL_KEY = "terrenoAuthOptions";
+
+const authOptionsFromApp = (app: express.Application | undefined): AuthOptions | undefined =>
+  app?.locals?.[AUTH_OPTIONS_LOCAL_KEY] as AuthOptions | undefined;
+
+export interface ChangeUserPasswordOptions {
+  /** The admin making the change; recorded in the audit log line, never with the password. */
+  adminId?: unknown;
+  /** The Express app (`req.app`) the auth routes were added to. */
+  app?: express.Application;
+  /** Auth options to use instead of the ones registered on `app`. */
+  authOptions?: AuthOptions;
+}
+
+/**
+ * Change a user's password on the server and end the credentials issued before it: sets the
+ * passport password, increments `tokenEpoch` (legacy refresh tokens and MCP credentials stop
+ * working), saves, and, when Better Auth is registered, sets the Better Auth password and deletes
+ * that user's Better Auth sessions. Use it for every server-side password change; calling
+ * `setPasswordForUser` alone revokes nothing.
+ */
+export const changeUserPassword = async (
+  user: User,
+  password: string,
+  options: ChangeUserPasswordOptions = {}
+): Promise<void> => {
+  const audit = options.adminId === undefined ? undefined : {adminId: options.adminId};
+  await setPasswordForUser(user as unknown as HasSetPassword, password, undefined, audit);
+  incrementTokenEpoch(user);
+  await (user as unknown as {save: () => Promise<unknown>}).save();
+  const authOptions = options.authOptions ?? authOptionsFromApp(options.app);
+  if (authOptions?.syncPasswordResetToBetterAuth) {
+    await authOptions.syncPasswordResetToBetterAuth(user, password);
+  }
+};
+
 export const addAuthRecoveryRoutes = (
   app: express.Application,
   userModel: UserModel,
   authOptions?: AuthOptions
 ): void => {
+  if (authOptions) {
+    app.locals[AUTH_OPTIONS_LOCAL_KEY] = authOptions;
+  }
   const forgotPassword = asyncHandler(async (req: express.Request, res: express.Response) => {
     const email = normalizeEmail(req.body?.email);
     if (email) {
@@ -194,12 +235,7 @@ export const addAuthRecoveryRoutes = (
     if (isUserDisabled(user)) {
       throw new APIError({status: 401, title: "User is disabled"});
     }
-    await setPasswordForUser(user as unknown as HasSetPassword, password);
-    incrementTokenEpoch(user);
-    await (user as unknown as {save: () => Promise<unknown>}).save();
-    if (authOptions?.syncPasswordResetToBetterAuth) {
-      await authOptions.syncPasswordResetToBetterAuth(user, password);
-    }
+    await changeUserPassword(user, password, {authOptions});
     const tokens = await generateTokens(user, authOptions);
     return res.json({
       data: {refreshToken: tokens.refreshToken, token: tokens.token, userId: user._id},

@@ -30,7 +30,7 @@ import type {
   McpOAuthTokenIssueOptions,
   McpOAuthTokenModel,
 } from "../types/mcpOAuth";
-import {bearerFromHeaders} from "./auth";
+import {bearerFromHeaders, isCredentialEpochStale, userTokenEpoch} from "./auth";
 import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
@@ -489,6 +489,7 @@ const addConsentRoutes = (
             codeHash: hashMcpOAuthSecret(code),
             expiresAt: expiresAt.toJSDate(),
             status: "approved",
+            tokenEpoch: userTokenEpoch(user),
             userId: new mongoose.Types.ObjectId(String(user._id)),
           },
         },
@@ -624,6 +625,12 @@ const exchangeAuthorizationCode = async (
   if (!user || userIsDisabled(user)) {
     throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
   }
+  if (isCredentialEpochStale(consumed.tokenEpoch, user)) {
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "The authorizing user's credentials changed after approval"
+    );
+  }
 
   const issued = await issueOrInvalidGrant({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
@@ -632,6 +639,7 @@ const exchangeAuthorizationCode = async (
     refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
     resource: consumed.resource,
     scope: consumed.scope,
+    tokenEpoch: userTokenEpoch(user),
     userId: consumed.userId as mongoose.Types.ObjectId,
   });
   return {
@@ -683,6 +691,14 @@ const exchangeRefreshToken = async (
     await McpOAuthToken.revokeFamily(rotated.familyId);
     throw new OAuthProtocolError("invalid_grant", "The authorizing user is not active");
   }
+  if (isCredentialEpochStale(rotated.tokenEpoch, user)) {
+    // A password reset or session revocation ends every grant approved before it.
+    await McpOAuthToken.revokeFamily(rotated.familyId);
+    throw new OAuthProtocolError(
+      "invalid_grant",
+      "The authorizing user's credentials changed after approval"
+    );
+  }
   const issued = await issueOrInvalidGrant({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
     clientId,
@@ -690,6 +706,7 @@ const exchangeRefreshToken = async (
     refreshTokenTtlSeconds: oauth.refreshTokenTtlSeconds,
     resource: rotated.resource,
     scope: rotated.scope,
+    tokenEpoch: userTokenEpoch(user),
     userId: rotated.userId,
   });
   return {

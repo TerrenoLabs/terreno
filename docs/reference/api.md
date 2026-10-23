@@ -372,7 +372,7 @@ const {mcpServiceToken, token} = await McpServiceToken.issueFor(
 // Store or show `token` once. Only its SHA-256 hash is persisted.
 ```
 
-The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
+The token begins with `mcp_` followed by 32 random bytes encoded as hex. `issueFor` records the user's `tokenEpoch` (pass it on the user argument; default 0). `/mcp` refuses a token whose recorded epoch differs from the user's current `tokenEpoch` and sets its `revokedAt`, so a password reset, Better Auth password change, or session revocation ends every key minted before it. A row stored without `tokenEpoch` counts as epoch 0. `revokeOutdatedForUser(user)` revokes the user's keys from earlier epochs; the list and create routes call it so the list shows them as revoked. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
 
 Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint or list tokens.
 
@@ -437,7 +437,7 @@ Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256
 
 Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
 
-With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
+With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Each approval, and every pair issued from it, records the user's `tokenEpoch`; after it changes (password reset, Better Auth password change, or session revocation), the code exchange and refresh answer `invalid_grant` and `/mcp` refuses the access token, and the whole family is revoked. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
 
 ## Authentication
 
@@ -521,7 +521,8 @@ Wire `authOptions.publicAppUrl` and `authOptions.sendMail` (typically
 `${publicAppUrl}/resetPassword?token=...`. Forgot-password skips issuing a token when
 `publicAppUrl` is missing. Authenticated `POST /auth/sendVerification` returns 501 in that
 case instead of 202. Email lookup is case-insensitive. Successful reset calls `setPassword`, increments
-`tokenEpoch` so outstanding **refresh** tokens fail, and returns new JWT tokens. When
+`tokenEpoch` so outstanding **refresh** tokens and MCP credentials (`mcp_` service tokens and
+`mcpat_`/`mcprt_` OAuth grants) fail, and returns new JWT tokens. When
 `BetterAuthApp` is registered, JWT reset also updates that user's Better Auth password
 and deletes Better Auth sessions. Better Auth password reset updates the JWT password
 and `tokenEpoch` for the matching app User. Access
@@ -609,8 +610,8 @@ Better Auth password and deletes those sessions when `BetterAuthApp` is register
 With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
 password and bumps `tokenEpoch`. `change-password` sets the new JWT password only on an app
 `User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`
-bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens issued before the change stop
-working.
+bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens and MCP credentials issued
+before the change stop working.
 Optional `authMailTemplates` overrides
 subject/text/html per template id.
 

@@ -120,6 +120,7 @@ curl https://api.example.com/.well-known/oauth-authorization-server
 
 - The client revokes with `POST /oauth/revoke`. Revoking a refresh token ends the whole chain.
 - Disabling the user stops their tokens at the next call.
+- A password reset, Better Auth password change, or session revocation (anything that bumps `tokenEpoch`) ends every grant approved before it: the next `/mcp` call, refresh, or code exchange fails and the chain is revoked. The user reconnects the client.
 - Server-side, revoke everything a user granted with `McpOAuthToken.updateMany({userId, revokedAt: {$exists: false}}, {$set: {revokedAt: DateTime.now().toJSDate()}})`.
 
 Refresh tokens rotate on every use. If an old refresh token comes back, Terreno assumes it leaked and revokes every token issued from that approval; the user reconnects the client. The revoke is final: Terreno records the revoked approval, so a refresh or code exchange that was already in flight cannot issue a new token for it.

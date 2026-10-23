@@ -39,6 +39,20 @@ const rejectIfDisabled = (user: User | undefined, source: string): User | undefi
   return user;
 };
 
+/** The user's credential generation; a password reset or session revocation increments it. */
+export const userTokenEpoch = (user: unknown): number => {
+  const tokenEpoch = (user as {tokenEpoch?: unknown} | null | undefined)?.tokenEpoch;
+  return typeof tokenEpoch === "number" ? tokenEpoch : 0;
+};
+
+/**
+ * True when a credential minted under `issuedEpoch` predates the user's current tokenEpoch.
+ * A credential stored before the field existed counts as epoch 0, as a refresh token without
+ * `te` does.
+ */
+export const isCredentialEpochStale = (issuedEpoch: number | undefined, user: unknown): boolean =>
+  (issuedEpoch ?? 0) !== userTokenEpoch(user);
+
 export const bearerFromHeaders = (
   headers: Record<string, string | string[] | undefined>
 ): {authorization?: string; token?: string} => {
@@ -65,6 +79,16 @@ const authenticateServiceToken = async (
   if (!activeUser) {
     return undefined;
   }
+  if (isCredentialEpochStale(serviceToken.tokenEpoch, activeUser)) {
+    logger.warn(
+      `[mcp] Revoking an MCP service token issued before user ${activeUser.id}'s credentials changed`
+    );
+    await McpServiceToken.updateOne(
+      {_id: serviceToken._id, revokedAt: {$exists: false}},
+      {$set: {revokedAt: DateTime.now().toJSDate()}}
+    );
+    return undefined;
+  }
   void McpServiceToken.updateOne(
     {_id: serviceToken._id},
     {$set: {lastUsedAt: DateTime.now().toJSDate()}}
@@ -85,6 +109,13 @@ const authenticateOAuthAccessToken = async (
   const user = await userModel.findById(accessToken.userId);
   const activeUser = rejectIfDisabled(user as unknown as User | undefined, "MCP OAuth");
   if (!activeUser) {
+    return undefined;
+  }
+  if (isCredentialEpochStale(accessToken.tokenEpoch, activeUser)) {
+    logger.warn(
+      `[mcp] Revoking an MCP OAuth grant issued before user ${activeUser.id}'s credentials changed`
+    );
+    await McpOAuthToken.revokeFamily(accessToken.familyId);
     return undefined;
   }
   return {credential: "oauth", user: activeUser};

@@ -8,6 +8,7 @@ import type TestAgent from "supertest/lib/agent";
 
 import {modelRouter} from "../api";
 import type {UserModel as UserModelType} from "../auth";
+import {AuthToken} from "../authTokens";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
 import {McpOAuthToken} from "../models/mcpOAuthToken";
@@ -700,6 +701,84 @@ describe("MCP OAuth authorization server", () => {
 
       expect(toolPayload(jwtCall.text).credential).toBe("jwt");
       expect(toolPayload(tokenCall.text).credential).toBe("mcp-service-token");
+    });
+  });
+
+  describe("credential events", () => {
+    const resetPassword = async (): Promise<void> => {
+      const issued = await AuthToken.issueFor({_id: String(notAdminId)}, "passwordReset");
+      const res = await supertest(app)
+        .post("/auth/resetPassword")
+        .send({password: "reset-password-123", token: issued.token});
+      expect(res.status).toBe(200);
+    };
+
+    it("ends service tokens, access tokens, and refresh tokens issued before a password reset", async () => {
+      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
+        .token as string;
+      const flow = await approvedCode(app, agent);
+      const oauth = (await exchangeCode(app, flow)).body;
+      expect((await callMcp(app, serviceToken)).status).toBe(200);
+      expect((await callMcp(app, oauth.access_token)).status).toBe(200);
+
+      await resetPassword();
+
+      const serviceCall = await callMcp(app, serviceToken);
+      expect(serviceCall.status).toBe(401);
+      expect(serviceCall.headers["www-authenticate"]).toContain('error="invalid_token"');
+      expect((await callMcp(app, oauth.access_token)).status).toBe(401);
+      const refreshed = await refresh(app, flow.clientId, oauth.refresh_token);
+      expect(refreshed.status).toBe(400);
+      expect(refreshed.body.error).toBe("invalid_grant");
+    });
+
+    it("lists service tokens from before a password reset as revoked", async () => {
+      await agent.post("/mcp/service-tokens").send({name: "Before reset"});
+
+      await resetPassword();
+
+      const list = await agent.get("/mcp/service-tokens");
+      expect(list.body.data).toHaveLength(1);
+      expect(list.body.data[0].revokedAt).not.toBeNull();
+    });
+
+    it("refuses to exchange a code approved before a password reset", async () => {
+      const flow = await approvedCode(app, agent);
+
+      await resetPassword();
+
+      const exchanged = await exchangeCode(app, flow);
+      expect(exchanged.status).toBe(400);
+      expect(exchanged.body.error).toBe("invalid_grant");
+    });
+
+    it("ends MCP credentials on any tokenEpoch bump, such as a Better Auth session revocation", async () => {
+      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
+        .token as string;
+      const flow = await approvedCode(app, agent);
+      const oauth = (await exchangeCode(app, flow)).body;
+
+      await UserModel.updateOne({_id: notAdminId}, {$inc: {tokenEpoch: 1}});
+
+      expect((await callMcp(app, serviceToken)).status).toBe(401);
+      expect((await callMcp(app, oauth.access_token)).status).toBe(401);
+      expect((await refresh(app, flow.clientId, oauth.refresh_token)).body.error).toBe(
+        "invalid_grant"
+      );
+    });
+
+    it("accepts MCP credentials issued after a password reset", async () => {
+      await resetPassword();
+
+      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "After"})).body.data
+        .token as string;
+      const flow = await approvedCode(app, agent);
+      const oauth = (await exchangeCode(app, flow)).body;
+      const refreshed = await refresh(app, flow.clientId, oauth.refresh_token);
+
+      expect((await callMcp(app, serviceToken)).status).toBe(200);
+      expect(refreshed.status).toBe(200);
+      expect((await callMcp(app, refreshed.body.access_token)).status).toBe(200);
     });
   });
 

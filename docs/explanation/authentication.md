@@ -99,7 +99,7 @@ OAuth 2.0 authentication with GitHub.
 
 Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) that cannot hold a session cookie. `TerrenoApp` must set `mcpServiceTokens`. Users mint keys from `POST /mcp/service-tokens` or **Profile → MCP connections**. The plaintext secret is returned **once**; the database stores SHA-256 `tokenHash`.
 
-`extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
+`extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user, and so does a key minted before the user's last password reset or session revocation (`tokenEpoch` changed since it was issued). MCP OAuth grants end the same way. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
 
 This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
 

@@ -2,6 +2,8 @@ import {afterEach, beforeEach, describe, expect, it, setSystemTime, spyOn} from 
 import {assert} from "chai";
 import express from "express";
 import type jwt from "jsonwebtoken";
+import mongoose, {Schema} from "mongoose";
+import passportLocalMongoose from "passport-local-mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
@@ -15,12 +17,14 @@ import {
   MAX_PASSWORD_LENGTH,
   omitUserRolesFromWriteBody,
   PRIVILEGED_USER_FIELDS,
+  SELF_SERVICE_BLOCKED_USER_FIELDS,
   setPasswordForUser,
   setupAuth,
   signupUser,
   stripPrivilegedUserFields,
 } from "./auth";
 import {apiUnauthorizedMiddleware} from "./errors";
+import {githubUserPlugin} from "./githubAuth";
 import {logger} from "./logger";
 import {Permissions} from "./permissions";
 import {getCurrentRequestContext} from "./requestContext";
@@ -1173,6 +1177,118 @@ describe("privileged user fields", () => {
 
     const reloaded = await UserModel.findById(notAdminId);
     expect((reloaded as unknown as {emailVerified?: boolean})?.emailVerified).toBe(true);
+  });
+});
+
+// A user schema that declares the identity-binding fields Better Auth and GitHub linking add.
+const identityUserSchema = new Schema({
+  admin: {default: false, description: "Admin flag", type: Boolean},
+  betterAuthId: {description: "Better Auth user id", type: String},
+  email: {description: "Email", type: String},
+  name: {description: "Name", type: String},
+  oauthProvider: {description: "Social provider", type: String},
+  tokenEpoch: {default: 0, description: "Refresh token epoch", type: Number},
+});
+identityUserSchema.plugin(
+  passportLocalMongoose as unknown as (schema: Schema, options?: Record<string, unknown>) => void,
+  {usernameCaseInsensitive: true, usernameField: "email"}
+);
+identityUserSchema.plugin(githubUserPlugin);
+const IdentityUserModel =
+  (mongoose.models.AuthIdentityUser as mongoose.Model<Record<string, unknown>> | undefined) ??
+  mongoose.model("AuthIdentityUser", identityUserSchema);
+
+describe("self-service identity and credential fields", () => {
+  const identityFields = {
+    attempts: 0,
+    betterAuthId: "victim-better-auth-id",
+    disabled: false,
+    githubAvatarUrl: "https://example.com/avatar.png",
+    githubId: "gh-victim-1",
+    githubProfileUrl: "https://example.com/victim",
+    githubUsername: "victim",
+    hash: "attacker-hash",
+    last: new Date(0).toISOString(),
+    oauthProvider: "github",
+    salt: "attacker-salt",
+  };
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    await IdentityUserModel.deleteMany({});
+    const app = new TerrenoApp({
+      configureApp: () => {},
+      skipListen: true,
+      userModel: IdentityUserModel as unknown as AuthUserModel,
+    }).build();
+    agent = supertest.agent(app);
+  });
+
+  it("drops identity-binding and credential fields from self-service bodies", () => {
+    expect(stripPrivilegedUserFields({...identityFields, name: "Someone"}, "test")).toEqual({
+      name: "Someone",
+    });
+  });
+
+  it("blocks the privileged fields plus identity and credential fields", () => {
+    expect([...SELF_SERVICE_BLOCKED_USER_FIELDS]).toEqual([
+      ...PRIVILEGED_USER_FIELDS,
+      "betterAuthId",
+      "githubId",
+      "githubUsername",
+      "githubProfileUrl",
+      "githubAvatarUrl",
+      "oauthProvider",
+      "hash",
+      "salt",
+      "attempts",
+      "last",
+      "disabled",
+    ]);
+  });
+
+  it("does not let anonymous signup bind another person's credentials", async () => {
+    await agent
+      .post("/auth/signup")
+      .send({...identityFields, email: "signup-binder@example.com", password: "Password123!"})
+      .expect(200);
+
+    const created = await IdentityUserModel.findOne({email: "signup-binder@example.com"}).lean();
+    assert.isUndefined(created?.betterAuthId);
+    assert.isUndefined(created?.githubId);
+    assert.isUndefined(created?.githubUsername);
+    assert.isUndefined(created?.oauthProvider);
+  });
+
+  it("does not let PATCH /auth/me bind credentials or overwrite the password hash", async () => {
+    const signup = await agent
+      .post("/auth/signup")
+      .send({email: "patch-binder@example.com", password: "Password123!"})
+      .expect(200);
+    const token = signup.body.data.token as string;
+    const before = await IdentityUserModel.findOne({email: "patch-binder@example.com"})
+      .select("+hash +salt")
+      .lean();
+
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({...identityFields, name: "Renamed"})
+      .expect(200);
+
+    const after = await IdentityUserModel.findOne({email: "patch-binder@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.equal(after?.name, "Renamed");
+    assert.isUndefined(after?.betterAuthId);
+    assert.isUndefined(after?.githubId);
+    assert.isUndefined(after?.oauthProvider);
+    assert.equal(after?.hash, before?.hash);
+    assert.equal(after?.salt, before?.salt);
+    await agent
+      .post("/auth/login")
+      .send({email: "patch-binder@example.com", password: "Password123!"})
+      .expect(200);
   });
 });
 

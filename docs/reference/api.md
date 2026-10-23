@@ -429,8 +429,12 @@ forgot-password and both token-reset paths, `emailVerification: false` to omit s
 email, or `legacyResetPasswordRoute: false` to omit only the deprecated
 `POST /resetPassword` alias while retaining `POST /auth/resetPassword`.
 
-Signup and `PATCH /auth/me` drop privileged fields: `admin`, `roles`, `organizationIds`,
-`emailVerified`, and `tokenEpoch`. Request logs redact `password`, `newPassword`,
+Signup and `PATCH /auth/me` drop the fields in `SELF_SERVICE_BLOCKED_USER_FIELDS`: the
+privileged fields `admin`, `roles`, `organizationIds`, `emailVerified`, and `tokenEpoch`
+(`PRIVILEGED_USER_FIELDS`), the identity-binding fields `betterAuthId`, `githubId`,
+`githubUsername`, `githubProfileUrl`, `githubAvatarUrl`, and `oauthProvider`, the
+passport-local-mongoose fields `hash`, `salt`, `attempts`, and `last`, and `disabled`. Only the
+Better Auth sync, GitHub link, and password flows write those. Request logs redact `password`, `newPassword`,
 `oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also

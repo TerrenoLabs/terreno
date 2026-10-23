@@ -124,8 +124,31 @@ export const PRIVILEGED_USER_FIELDS = [
 ] as const;
 
 /**
- * Removes {@link PRIVILEGED_USER_FIELDS} from a self-service body. Fields are dropped rather
- * than rejected so clients that echo a whole user object back still succeed.
+ * Fields self-service requests (anonymous signup, `PATCH /me`) must never set: the
+ * {@link PRIVILEGED_USER_FIELDS} plus the fields that bind an external credential to the row
+ * (Better Auth id, GitHub link, OAuth provider), the passport-local-mongoose password and
+ * lockout state, and the disabled flag. Only the Better Auth sync, GitHub link, and password
+ * flows that own them write these. Kept apart from PRIVILEGED_USER_FIELDS so authorized admin
+ * User writes through modelRouter, sync, MCP, and the admin panel can still manage them.
+ */
+export const SELF_SERVICE_BLOCKED_USER_FIELDS = [
+  ...PRIVILEGED_USER_FIELDS,
+  "betterAuthId",
+  "githubId",
+  "githubUsername",
+  "githubProfileUrl",
+  "githubAvatarUrl",
+  "oauthProvider",
+  "hash",
+  "salt",
+  "attempts",
+  "last",
+  "disabled",
+] as const;
+
+/**
+ * Removes {@link SELF_SERVICE_BLOCKED_USER_FIELDS} from a self-service body. Fields are dropped
+ * rather than rejected so clients that echo a whole user object back still succeed.
  */
 export const stripPrivilegedUserFields = (
   body: Record<string, unknown>,
@@ -134,7 +157,7 @@ export const stripPrivilegedUserFields = (
   const sanitized: Record<string, unknown> = {};
   const dropped: string[] = [];
   for (const [key, value] of Object.entries(body)) {
-    if ((PRIVILEGED_USER_FIELDS as readonly string[]).includes(key)) {
+    if ((SELF_SERVICE_BLOCKED_USER_FIELDS as readonly string[]).includes(key)) {
       dropped.push(key);
       continue;
     }

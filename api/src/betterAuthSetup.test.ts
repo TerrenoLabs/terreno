@@ -56,6 +56,7 @@ const dualAuthUserSchema = new Schema({
   admin: {default: false, type: Boolean},
   betterAuthId: {type: String},
   email: {required: true, type: String},
+  emailVerified: {type: Boolean},
   name: {type: String},
   tokenEpoch: {default: 0, type: Number},
 });
@@ -834,6 +835,83 @@ describe("syncBetterAuthUser", () => {
     expect(result.name).toBe("Keep This Name");
   });
 
+  it("refuses to link an existing user by an unverified email", async () => {
+    await setup;
+    await TestUser.create({admin: true, email: "test@example.com", name: "Existing Admin"});
+
+    const baUser = makeBetterAuthUser({emailVerified: false});
+    await expect(syncBetterAuthUser(TestUser, baUser)).rejects.toThrow(
+      "An account with this email already exists"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.isUndefined(saved?.betterAuthId);
+    expect(await TestUser.countDocuments()).toBe(1);
+  });
+
+  it("refuses to relink a user that is bound to another Better Auth account", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    await expect(syncBetterAuthUser(TestUser, makeBetterAuthUser())).rejects.toThrow(
+      "An account with this email already exists"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.equal(saved?.betterAuthId, "ba-other");
+  });
+
+  it("links an unverified email when the caller trusts it, as seeds do", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    const result = await syncBetterAuthUser(
+      TestUser,
+      makeBetterAuthUser({emailVerified: false}),
+      undefined,
+      {trustEmail: true}
+    );
+
+    assert.equal(result.betterAuthId, "ba-user-123");
+  });
+
+  it("revokes an unproven legacy password when a verified email links the row", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register({email: "test@example.com", name: "Legacy"}, "legacy-pass-123");
+
+    const result = await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+    assert.equal(result.betterAuthId, "ba-user-123");
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isUndefined((saved as {hash?: string}).hash);
+    assert.isUndefined((saved as {salt?: string}).salt);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 1);
+  });
+
+  it("keeps the legacy password when the row proved the same email", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register(
+      {email: "test@example.com", emailVerified: true, name: "Legacy"},
+      "legacy-pass-123"
+    );
+
+    await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isString((saved as {hash?: string}).hash);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 0);
+  });
+
   it("logs and rethrows when the lookup fails", async () => {
     await setup;
     const failure = new Error("lookup exploded");
@@ -1217,6 +1295,41 @@ describe("createBetterAuthSessionMiddleware with disabled users", () => {
       .send({});
 
     expect(res.status).toBe(200);
+  });
+});
+
+describe("createBetterAuthSessionMiddleware with an existing app user's email", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  it("does not resolve an unverified sign-up to the existing app user", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const existing = await TestUser.create({admin: true, email: "existing-admin@example.com"});
+    const created = await auth.api.signUpEmail({
+      body: {email: "existing-admin@example.com", name: "Someone", password: "password-123456"},
+    });
+    assert.isFalse(created.user.emailVerified);
+
+    const app = express();
+    app.use(createBetterAuthSessionMiddleware(auth, TestUser));
+    app.get("/protected", (req, res) => {
+      if (!req.user) {
+        return res.status(401).json({status: 401, title: "Unauthorized"});
+      }
+      return res.json({id: req.user.id});
+    });
+
+    const res = await supertest(app)
+      .get("/protected")
+      .set("authorization", `Bearer ${created.token as string}`);
+
+    expect(res.status).toBe(401);
+    const reloaded = await TestUser.findById(existing._id).lean();
+    assert.isUndefined(reloaded?.betterAuthId);
   });
 });
 

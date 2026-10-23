@@ -569,6 +569,16 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 4. Existing users continue using JWT tokens
 5. Optionally add migration logic to link accounts
 
+An existing JWT user who signs up through Better Auth with the same email is linked to their app
+`User` only once Better Auth has verified that email. Until then their session does not
+authenticate. Configure `sendMail` so verification mail goes out, and consider
+`options.emailAndPassword.requireEmailVerification: true`. Social sign-in with a provider that
+verifies email links on first contact. If the app `User` never verified its email
+(`emailVerified` is not `true`), linking removes its legacy password and bumps `tokenEpoch`, so
+the user signs in through Better Auth or resets the password from then on. A row that already has
+a different `betterAuthId` is never relinked. Set `SIGNUP_DISABLED=true` once Better Auth is the
+only sign-up path, so new accounts cannot be created through the legacy `/auth/signup`.
+
 ## Learn More
 
 - [Authentication Architecture](../explanation/authentication.md)

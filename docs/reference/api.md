@@ -548,6 +548,15 @@ replaced, explicit values win), and `plugins` appends Better Auth plugins after 
 See [Pass other Better Auth options and plugins](../how-to/configure-better-auth.md#pass-other-better-auth-options-and-plugins)
 for the defaults each override replaces.
 
+On first contact, `syncBetterAuthUser` finds the app `User` by `betterAuthId` and creates it
+when missing. It links an existing app `User` that has the same email only when Better Auth has
+verified that email and the row has no other `betterAuthId`. Otherwise the session does not set
+`req.user` and the socket handshake is refused, until the address is verified. When a verified
+email links a row whose own `emailVerified` is not `true`, its legacy passport password is removed
+and `tokenEpoch` is bumped, because whoever set that password never proved the mailbox. Seeds
+that create the Better Auth account themselves pass `{trustEmail: true}` as the fourth argument
+to skip these checks; `seedBetterAuthUser` does.
+
 A session whose app `User` has `disabled: true` does not set `req.user`, so protected routes
 answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
 registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the

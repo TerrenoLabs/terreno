@@ -16,7 +16,7 @@ import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
-import {APIError} from "./errors";
+import {APIError, isAPIError} from "./errors";
 import type {AuthRecoveryMail} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
@@ -486,8 +486,10 @@ export const createBetterAuthSessionMiddleware = (
 // Loose shape used when mutating Mongoose user documents during Better Auth sync.
 // The fields are added by the consumer's user schema (via baseUserPlugin or similar).
 interface MutableUserDoc {
+  _id?: unknown;
   admin?: boolean;
   email?: string;
+  emailVerified?: boolean;
   name?: string;
   betterAuthId?: string;
   oauthProvider?: string | null;
@@ -495,10 +497,71 @@ interface MutableUserDoc {
   save: () => Promise<unknown>;
 }
 
+export interface SyncBetterAuthUserOptions {
+  /**
+   * Link an existing app user by email even when Better Auth has not verified the address or
+   * the row is bound to another Better Auth id. Only for operator-run seeds that create the
+   * Better Auth account themselves; never set it for a request-driven sync.
+   */
+  trustEmail?: boolean;
+}
+
+/**
+ * An email alone does not prove the caller owns an existing app user. Link by email only when
+ * Better Auth verified the address and the row is not bound to another Better Auth account.
+ */
+const assertEmailLinkAllowed = (
+  userByEmail: MutableUserDoc,
+  betterAuthUser: BetterAuthUser
+): void => {
+  if (betterAuthUser.emailVerified === true && !userByEmail.betterAuthId) {
+    return;
+  }
+  throw new APIError({
+    detail: "Verify the email address before signing in to the existing account.",
+    disableExternalErrorTracking: true,
+    status: 409,
+    title: "An account with this email already exists",
+  });
+};
+
+/**
+ * A legacy password on a row whose email was never verified may have been set by someone who
+ * does not own the mailbox. Once the verified owner links the row, that password and the
+ * refresh tokens issued from it stop working.
+ */
+const revokeUnprovenLegacyPassword = async (
+  userModel: UserModel,
+  userByEmail: MutableUserDoc
+): Promise<void> => {
+  if (userByEmail.emailVerified === true || userModel.schema.path("hash") === undefined) {
+    return;
+  }
+  const hasLegacyPassword = await userModel.exists({
+    _id: userByEmail._id,
+    hash: {$exists: true, $ne: null},
+  } as never);
+  if (!hasLegacyPassword) {
+    return;
+  }
+  const bumpEpoch = userModel.schema.path("tokenEpoch") !== undefined;
+  await userModel.updateOne(
+    {_id: userByEmail._id} as never,
+    {
+      $unset: {hash: 1, salt: 1},
+      ...(bumpEpoch ? {$inc: {tokenEpoch: 1}} : {}),
+    } as never
+  );
+  logger.info(
+    `Revoked an unverified legacy password while linking Better Auth user ${userByEmail.id}`
+  );
+};
+
 export const syncBetterAuthUser = async (
   userModel: UserModel,
   betterAuthUser: BetterAuthUser,
-  oauthProvider?: string
+  oauthProvider?: string,
+  options: SyncBetterAuthUserOptions = {}
 ): Promise<MutableUserDoc> => {
   try {
     const existingUser = (await findOneOrNoneFor(userModel, {
@@ -519,7 +582,15 @@ export const syncBetterAuthUser = async (
     const userByEmail = (await findOneOrNoneFor(userModel, {
       email: betterAuthUser.email,
     })) as unknown as MutableUserDoc | null;
+    if (userByEmail?.betterAuthId === betterAuthUser.id) {
+      // A concurrent first contact created this row between the two lookups.
+      return userByEmail;
+    }
     if (userByEmail) {
+      if (!options.trustEmail) {
+        assertEmailLinkAllowed(userByEmail, betterAuthUser);
+        await revokeUnprovenLegacyPassword(userModel, userByEmail);
+      }
       // Link existing user to Better Auth
       userByEmail.betterAuthId = betterAuthUser.id;
       if (oauthProvider) {
@@ -550,6 +621,8 @@ export const syncBetterAuthUser = async (
     // resolveBetterAuthAppUser recover from it, so it is not an error worth alerting on.
     if ((error as {code?: number}).code === 11000) {
       logger.debug(`Better Auth user was created concurrently: ${error}`);
+    } else if (isAPIError(error) && error.status === 409) {
+      logger.warn(`Refused to link Better Auth user ${betterAuthUser.id} by email: ${error.title}`);
     } else {
       logger.error(`Error syncing Better Auth user: ${error}`);
     }

@@ -311,6 +311,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
         apiOrigin: apiOriginOf(typeof merged.baseURL === "string" ? merged.baseURL : baseURL),
         config: config.oauthHandoff,
         getAuth: () => auth,
+        isLinkingDisabled,
       })
     : [];
 

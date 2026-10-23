@@ -272,7 +272,7 @@ Open risks:
       /api/auth/terreno/methods` lists `mock-oidc` and reports every feature on.
   - Skills: terreno-backend-api, backend-test-env
 
-- [ ] **T5** — Linking a provider works for bearer-mode web clients
+- [x] **T5** — Linking a provider works for bearer-mode web clients
   - Depends on: T4
   - Files: api/src/betterAuthOAuthHandoff.ts, api/src/betterAuthOAuthHandoff.test.ts, api/src/betterAuth.ts, rtk/src/betterAuthClient.ts, rtk/src/betterAuthClient.test.ts, rtk/src/index.ts, docs/reference/api.md, docs/how-to/configure-better-auth.md, changelog/unreleased/oauth-handoff-link.md
   - Why: #1604's handoff covers sign-in. Linking a provider from the Security screen

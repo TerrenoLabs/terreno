@@ -706,6 +706,67 @@ context only, so parallel tests do not collide. An authorize request with a `log
 cookie signs in that email, verified. Use an unverified identity to drive the linking cases that
 must refuse.
 
+### Linking a provider in bearer mode
+
+A signed-in user links Google, GitHub, or a generic OAuth provider from the Security screen. In
+cookie mode `authClient.linkSocial` does this. In bearer mode it can't: its
+`POST /link-social` fetch comes from another site, so the OAuth state cookie it needs on the
+API's origin is never set. Use `linkSocialWithHandoff` from `@terreno/rtk` instead. It needs
+the same `oauthHandoff` server config as social sign-in, and account linking must be on
+(`accountLinking.mode` other than `never`).
+
+``````typescript
+import {linkSocialWithHandoff} from "@terreno/rtk";
+
+const {error} = await linkSocialWithHandoff({
+  callbackURL: "/settings/security", // any page on a web origin; sent as an absolute URL
+  client: authClient,
+  errorCallbackURL: "/settings/security?link=failed", // optional; defaults to callbackURL
+  provider: "google",
+});
+if (error?.code === "LINKING_DISABLED") {
+  // Linking is off on this server; hide the "Link" buttons.
+}
+``````
+
+On web in bearer mode it takes two steps:
+
+1. It posts `{provider, callbackURL, errorCallbackURL}` with the bearer to
+   `POST {basePath}/oauth-handoff/link-intent`, with both URLs resolved to absolute ones. The
+   server accepts any page on one of `oauthHandoff.webOrigins` that `trustedOrigins` allows.
+   `callbackPaths` do not apply, because no token travels on a link's return. It answers
+   `{token, startURL}`. The token is single-use, expires in
+   three minutes, and stands for the caller's session.
+2. It submits the token in a hidden HTML form (method POST) to `startURL`. That page navigation
+   keeps the token out of the URL and lets the server set the state cookie first-party. The
+   server uses the token up, starts Better Auth's link flow as that session, and redirects to
+   the provider.
+
+The provider sends the page back to `callbackURL`. The account is linked, and the URL carries
+no `#ott`, because linking creates no session. `completeBetterAuthOAuthHandoff` finds nothing
+to do there. A failure comes back to `errorCallbackURL` (default `callbackURL`) with `?error=`:
+
+- `session_expired`: the session was revoked or expired between the two steps.
+- `provider_not_found`: the server has no such provider.
+- `link_failed`: any other failure.
+- Better Auth's own callback codes, such as `email_does_not_match`, `unable_to_link_account`
+  (the provider did not verify the email), or `account_already_linked_to_different_user`.
+
+The intent answers 400 for a return URL that is not on one of `oauthHandoff.webOrigins` (403
+when `trustedOrigins` does not allow it), and 403 `LINKING_DISABLED` when linking is off. The function resolves with that
+`{error}` and submits nothing. The start answers 400, with no redirect, for an unknown, used, or
+expired token. It also answers 400 when `Sec-Fetch-Dest` is set and is not `document`, and 403
+when `Origin` is missing, `null`, or not one of `webOrigins`. Those two refusals leave the token
+unused.
+
+Don't serve the web app with `Referrer-Policy: no-referrer` or `Referrer-Policy: same-origin`.
+With either, the browser sends `Origin: null` on the cross-site form post, and every link start
+answers 403. The default, `strict-origin-when-cross-origin`, works.
+
+Better Auth's same-email rule still applies: the provider's verified email must match the
+user's, unless `options.account.accountLinking.allowDifferentEmails` is set. In cookie mode and
+on native, `linkSocialWithHandoff` calls `client.linkSocial` as before.
+
 ### Trade-offs
 
 A bearer token in web storage is readable by any script on the frontend's origin, so an XSS

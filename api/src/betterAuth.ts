@@ -313,6 +313,32 @@ export interface BetterAuthConfig {
    * The handoff is for bearer clients only. A handed-off callback redirect carries no session
    * cookie for the API's origin, and verify drops every Set-Cookie it would send (the session
    * cookies and any a plugin adds there), so a cookie-mode app gets no session from it.
+   *
+   * Linking a provider to the signed-in user takes two steps, because the link must also start
+   * from a top-level navigation and a bearer cannot ride along on one:
+   * - `POST {basePath}/oauth-handoff/link-intent`, authenticated with the bearer (or a cookie
+   *   session), body `{provider, callbackURL, errorCallbackURL?}`, answers
+   *   `{token, startURL}`. Both URLs must be absolute and on one of `webOrigins` that
+   *   `trustedOrigins` allows; `callbackPaths` do not apply, since no token travels on a link's
+   *   return (400 otherwise; Better Auth's own origin check answers 403 first for an untrusted
+   *   one). It answers 403
+   *   `LINKING_DISABLED` when account linking is off. The token is single-use, expires in three
+   *   minutes, and is stored hashed in the verification table (`terreno-link-intent:<hash>`),
+   *   bound to the caller's session.
+   * - `POST {basePath}/oauth-handoff/link-start`, a form post (`token=<token>`) the web app
+   *   submits as a page navigation, so the token never appears in a URL. It answers 400 when
+   *   `Sec-Fetch-Dest` is set and is not `document`, and 403 when `Origin` is missing, `null`, or
+   *   not one of `webOrigins`; neither uses the token. The web origins must therefore not serve
+   *   `Referrer-Policy: no-referrer` or `same-origin`, which make the form's `Origin` `null`. It then uses the token up (400 with no redirect
+   *   when it is unknown, used, or expired), runs Better Auth's link flow as the token's
+   *   session, sets only the OAuth state cookie, and redirects to the provider.
+   *   A link that cannot start redirects to `errorCallbackURL` (or `callbackURL`) with
+   *   `error=session_expired` (the session was revoked after the intent),
+   *   `error=provider_not_found`, or `error=link_failed`.
+   *
+   * The provider callback links the account and redirects to `callbackURL` without a token,
+   * since no session is created. Better Auth's limiter allows three link intents and three link
+   * starts per ten seconds per IP.
    */
   oauthHandoff?: BetterAuthOAuthHandoffConfig;
 }

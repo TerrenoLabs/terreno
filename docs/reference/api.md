@@ -611,8 +611,28 @@ Endpoints it adds, under `basePath` (default `/api/auth`):
 - `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
   session and the `set-auth-token` header, and sets no cookie. `GET
   {basePath}/one-time-token/generate` is refused.
+- `POST {basePath}/oauth-handoff/link-intent` — Bearer- or cookie-authenticated. Body
+  `{provider, callbackURL, errorCallbackURL?}`. Both URLs must be absolute and on one of
+  `webOrigins` that `trustedOrigins` allows; `callbackPaths` do not apply, since no token travels
+  on a link's return (400; Better Auth's origin check answers 403 first for a URL outside
+  `trustedOrigins`). Answers
+  `{token, startURL}`: a single-use link token that expires in three minutes, stored hashed in
+  Better Auth's verification table (`terreno-link-intent:<hash>`) and bound to the caller's
+  session. Answers 401 without a session and 403 `LINKING_DISABLED` when account linking is off.
+- `POST {basePath}/oauth-handoff/link-start` — Form body `token=<token>`, submitted as a page
+  navigation (`application/x-www-form-urlencoded` only). Answers 400 when `Sec-Fetch-Dest` is set
+  and is not `document`, and 403 when `Origin` is missing, `null`, or not one of `webOrigins`,
+  without using the token. Web origins must not serve `Referrer-Policy: no-referrer` or
+  `same-origin`, which make the form's `Origin` `null`. Otherwise it uses the token up (400, no redirect, when unknown, used, or
+  expired), runs Better Auth's link flow as the token's session, sets only the OAuth state
+  cookie, and redirects to the provider. A link that cannot start redirects to
+  `errorCallbackURL` (or `callbackURL`) with `error=session_expired`, `error=provider_not_found`,
+  or `error=link_failed`. The provider callback links the account and redirects to `callbackURL`
+  with no `#ott`, since no session is created. rtk's `linkSocialWithHandoff` drives both steps;
+  see [Linking a provider in bearer mode](../how-to/configure-better-auth.md#linking-a-provider-in-bearer-mode).
 
-With the opt-in `rateLimit`, both paths are in the auth bucket.
+With the opt-in `rateLimit`, every path above is in the auth bucket. Better Auth's own limiter
+allows three starts, three link intents, and three link starts per ten seconds per IP.
 
 **Sign-in methods discovery (`GET {basePath}/terreno/methods`):**
 

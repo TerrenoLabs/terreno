@@ -95,6 +95,7 @@ const {
   createBetterAuthClient,
   createStorageAdapter,
   getBetterAuthBearerToken,
+  linkSocialWithHandoff,
   repairCookieJar,
   signInSocialWithHandoff,
   withCookieJarRepair,
@@ -1241,6 +1242,278 @@ describe("OAuth handoff for web bearer clients", () => {
     const foreign = {} as BetterAuthClient;
     await expect(completeBetterAuthOAuthHandoff({client: foreign})).resolves.toBe(false);
     expect(browser.href()).toBe("http://localhost:8082/");
+  });
+});
+
+interface SubmittedForm {
+  action: string;
+  appended: boolean;
+  fields: Record<string, string>;
+  method: string;
+  submitted: boolean;
+}
+
+// A document just big enough for the hidden form: it records the form and its fields.
+const installFormDocument = (): SubmittedForm[] => {
+  const forms: SubmittedForm[] = [];
+  const createElement = (tag: string): Record<string, unknown> => {
+    if (tag === "form") {
+      const form: SubmittedForm = {
+        action: "",
+        appended: false,
+        fields: {},
+        method: "",
+        submitted: false,
+      };
+      forms.push(form);
+      const element = {
+        set action(value: string) {
+          form.action = value;
+        },
+        appendChild: (child: {name: string; value: string}): void => {
+          form.fields[child.name] = child.value;
+        },
+        set method(value: string) {
+          form.method = value;
+        },
+        style: {} as Record<string, string>,
+        submit: (): void => {
+          form.submitted = true;
+        },
+      };
+      formElements.set(element, form);
+      return element;
+    }
+    return {name: "", style: {}, type: "", value: ""};
+  };
+  const formElements = new Map<object, SubmittedForm>();
+  (globalThis as {window: Record<string, unknown>}).window.document = {
+    body: {
+      appendChild: (element: object): void => {
+        const form = formElements.get(element);
+        if (form) {
+          form.appended = true;
+        }
+      },
+    },
+    createElement,
+  };
+  return forms;
+};
+
+describe("linkSocialWithHandoff", () => {
+  const globalWithWindow = globalThis as {window?: unknown};
+  const hadWindow = "window" in globalWithWindow;
+  const originalWindow = globalWithWindow.window;
+
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+    if (hadWindow) {
+      globalWithWindow.window = originalWindow;
+    } else {
+      delete globalWithWindow.window;
+    }
+  });
+
+  const intentResponse = (): Response =>
+    jsonResponse({
+      startURL: "http://localhost:4000/api/auth/oauth-handoff/link-start",
+      token: "link-token-1",
+    });
+
+  it("posts the intent with the bearer, then submits the token in a hidden form", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "bearer-1"});
+    const {sent} = useRealClient(() => intentResponse());
+    const browser = installBrowser("http://localhost:8082/settings/security");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/login?linked=google",
+      client,
+      provider: "google",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(sent).toHaveLength(1);
+    expect(sent[0].pathname).toBe("/api/auth/oauth-handoff/link-intent");
+    expect(sent[0].authorization).toBe("Bearer bearer-1");
+    // Absolute URLs, and the error page defaults to the return page.
+    expect(sent[0].body).toEqual({
+      callbackURL: "http://localhost:8082/login?linked=google",
+      errorCallbackURL: "http://localhost:8082/login?linked=google",
+      provider: "google",
+    });
+    expect(forms).toEqual([
+      {
+        action: "http://localhost:4000/api/auth/oauth-handoff/link-start",
+        appended: true,
+        fields: {token: "link-token-1"},
+        method: "POST",
+        submitted: true,
+      },
+    ]);
+    // The token never goes into the page URL.
+    expect(browser.assigned).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/settings/security");
+  });
+
+  it("passes an errorCallbackURL through", async () => {
+    const {sent} = useRealClient(() => intentResponse());
+    installBrowser("http://localhost:8082/settings");
+    installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    await linkSocialWithHandoff({
+      callbackURL: "http://localhost:8082/login",
+      client,
+      errorCallbackURL: "/settings?tab=security",
+      provider: "github",
+    });
+
+    expect((sent[0].body as {errorCallbackURL: string}).errorCallbackURL).toBe(
+      "http://localhost:8082/settings?tab=security"
+    );
+  });
+
+  it("returns the refusal and submits nothing when the intent is refused", async () => {
+    useRealClient(() =>
+      jsonResponse(
+        {code: "LINKING_DISABLED", message: "Account linking is turned off"},
+        {status: 403}
+      )
+    );
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({callbackURL: "/login", client, provider: "google"});
+
+    expect(result.error).toEqual({
+      code: "LINKING_DISABLED",
+      message: "Account linking is turned off",
+      status: 403,
+    });
+    expect(forms).toEqual([]);
+  });
+
+  it("refuses a start URL that is not http(s) and submits nothing", async () => {
+    useRealClient(() => jsonResponse({startURL: "javascript:alert(1)", token: "t"}));
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({callbackURL: "/login", client, provider: "google"});
+
+    expect(result.error?.status).toBe(500);
+    expect(forms).toEqual([]);
+  });
+
+  it("calls linkSocial in cookie mode, with no intent and no form", async () => {
+    const calls: unknown[] = [];
+    captured.build = (): unknown => ({
+      linkSocial: async (body: unknown): Promise<{data: unknown; error: null}> => {
+        calls.push(body);
+        return {data: {redirect: true, url: "https://accounts.google.com/o"}, error: null};
+      },
+    });
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      provider: "google",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(calls).toEqual([{callbackURL: "/settings", provider: "google"}]);
+    expect(forms).toEqual([]);
+  });
+
+  it("returns linkSocial's error in cookie mode", async () => {
+    const calls: unknown[] = [];
+    captured.build = (): unknown => ({
+      linkSocial: async (body: unknown): Promise<{data: null; error: Record<string, unknown>}> => {
+        calls.push(body);
+        return {
+          data: null,
+          error: {code: "LINKING_DISABLED", message: "off", status: 403, statusText: "Forbidden"},
+        };
+      },
+    });
+    installBrowser("http://localhost:8082/settings");
+    const client = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      errorCallbackURL: "/settings?failed=1",
+      provider: "google",
+    });
+
+    expect(result.error).toEqual({code: "LINKING_DISABLED", message: "off", status: 403});
+    expect(calls).toEqual([
+      {callbackURL: "/settings", errorCallbackURL: "/settings?failed=1", provider: "google"},
+    ]);
+  });
+
+  it("calls linkSocial for a bearer-configured client when there is no window", async () => {
+    const calls: unknown[] = [];
+    const fetched: string[] = [];
+    captured.build = (): unknown => ({
+      $fetch: async (path: string): Promise<{data: null; error: null}> => {
+        fetched.push(path);
+        return {data: null, error: null};
+      },
+      linkSocial: async (body: unknown): Promise<{data: unknown; error: null}> => {
+        calls.push(body);
+        return {data: {redirect: false, url: ""}, error: null};
+      },
+    });
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    delete globalWithWindow.window;
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      provider: "github",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(calls).toEqual([{callbackURL: "/settings", provider: "github"}]);
+    expect(fetched).toEqual([]);
   });
 });
 

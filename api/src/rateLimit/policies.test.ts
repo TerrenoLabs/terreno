@@ -20,6 +20,8 @@ describe("classifyRateLimitPolicy for Better Auth feature routes", () => {
       "/api/auth/multi-session/set-active",
       "/api/auth/one-time-token/verify",
       "/api/auth/oauth-handoff/start",
+      "/api/auth/oauth-handoff/link-intent",
+      "/api/auth/oauth-handoff/link-start",
       "/api/auth/oauth-proxy-callback",
       "/api/auth/expo-authorization-proxy",
     ];

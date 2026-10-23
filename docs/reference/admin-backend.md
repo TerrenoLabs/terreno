@@ -263,6 +263,11 @@ Admin create, update, bulk-patch, and admin-window sync bodies drop `readonlyFie
 `createAccess` under any name) also drop
 `organizationIds` and `roles` in any key form (`roles.0`). A `roles` array in the body is
 assigned after the write through `access.roles.assign`, which requires `rbac:assignRoles`.
+Admin update, bulk-patch, delete, and admin-window sync writes to another user also require the
+actor to hold every permission the target user holds (the RoleManager target-privilege rule).
+A delegate with `user:update` gets 403 `Cannot modify a user with permissions you do not hold` for
+a superadmin target; bulk-patch reports that target under `failures` and patches the rest. Legacy
+`admin: true` actors and writes to the actor's own record are not checked.
 
 **Important:** Only expose models that should be editable via admin panel. Avoid sensitive internal models.
 

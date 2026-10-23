@@ -4,6 +4,7 @@ import {
   type AdminModelAdminMap,
   type AnyTerrenoAccess,
   APIError,
+  assertCanWriteTargetUser,
   asyncHandler,
   auditActorIdFromRequest,
   authenticateMiddleware,
@@ -1967,6 +1968,12 @@ export class AdminApp {
                 failures.push({id, title: "Forbidden"});
                 continue;
               }
+              await assertCanWriteTargetUser({
+                accessControl: this.options.accessControl,
+                actor,
+                modelName: config.model.modelName,
+                target: doc,
+              });
               await assertCanWriteUserAdminFlag(
                 rawPatch,
                 req,

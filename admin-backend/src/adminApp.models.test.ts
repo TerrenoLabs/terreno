@@ -2626,6 +2626,62 @@ describe("AdminApp user elevation and scoped bulk-patch", () => {
     expect(after?.tokenEpoch ?? 0).toBe(0);
   });
 
+  it("does not let an RBAC admin delegate rewrite a more privileged user", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          bulkPatchAllowlist: ["disabled", "name"],
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const delegate = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: delegate._id}, {$set: {roles: ["admin"]}});
+    const [superadmin, member] = await UserModel.create([
+      {email: "admin-target-super@example.com", name: "Super", roles: ["superadmin"]},
+      {email: "admin-target-member@example.com", name: "Member", roles: ["member"]},
+    ]);
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    await agent
+      .patch(`/admin/users/${String(superadmin._id)}`)
+      .send({email: "redirect@example.com"})
+      .expect(403);
+    await agent
+      .patch(`/admin/users/${String(superadmin._id)}`)
+      .send({disabled: true})
+      .expect(403);
+    const bulk = await agent
+      .post("/admin/users/bulk-patch")
+      .send({ids: [String(superadmin._id), String(member._id)], patch: {disabled: true}})
+      .expect(200);
+    expect(bulk.body.updated).toBe(1);
+    expect(bulk.body.failures).toEqual([
+      {id: String(superadmin._id), title: "Cannot modify a user with permissions you do not hold"},
+    ]);
+
+    const storedSuper = await UserModel.findById(superadmin._id).lean();
+    expect(storedSuper?.email).toBe("admin-target-super@example.com");
+    expect((storedSuper as {disabled?: boolean} | null)?.disabled ?? false).toBe(false);
+    const storedMember = await UserModel.findById(member._id).lean();
+    expect((storedMember as {disabled?: boolean} | null)?.disabled).toBe(true);
+
+    await agent
+      .patch(`/admin/users/${String(member._id)}`)
+      .send({name: "Member renamed"})
+      .expect(200);
+  });
+
   it("does not persist organizationIds on RBAC admin User writes", async () => {
     const accessControl = createAccess({
       connection: mongoose.connection,

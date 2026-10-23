@@ -6,7 +6,7 @@ import {modelRouter} from "../api";
 import {addAuthRoutes, setupAuth, type UserModel as UserMongooseModel} from "../auth";
 import {apiErrorMiddleware, apiUnauthorizedMiddleware} from "../errors";
 import {Permissions} from "../permissions";
-import {executeDelete, executeUpdate} from "../sync/executors";
+import {executeCreate, executeDelete, executeUpdate} from "../sync/executors";
 import {authAsUser, getBaseServer, setupDb, type User, UserModel} from "../tests";
 import {createAccess} from "./access";
 import {terrenoStatements} from "./statements";
@@ -23,6 +23,13 @@ const userPermissions = {
 const buildAccess = async (): Promise<AnyTerrenoAccess> => {
   const access = createAccess({
     connection: mongoose.connection,
+    defaultRoles: [
+      {
+        displayName: "User editor",
+        name: "userEditor",
+        permissions: {user: ["create", "list", "read", "update"]},
+      },
+    ],
     statements: terrenoStatements,
     userModel: UserModel as unknown as UserMongooseModel,
   });
@@ -230,5 +237,171 @@ describe("RBAC target-privilege check over modelRouter HTTP", () => {
       .send({name: "Self edit"})
       .expect(200);
     expect((await UserModel.findById(self._id).lean())?.name).toBe("Self edit");
+  });
+});
+
+describe("user:updateIdentity on RBAC user model writes", () => {
+  let editor: User;
+  let identityAdmin: User;
+  let member: User;
+  let access: AnyTerrenoAccess;
+
+  beforeEach(async () => {
+    const [, notAdmin] = await setupDb();
+    access = await buildAccess();
+    await setRoles(notAdmin._id, ["userEditor"]);
+    const [identityAdminDoc, memberDoc] = await UserModel.create([
+      {email: "identity-admin@example.com", name: "Identity admin", roles: ["admin"]},
+      {email: "identity-member@example.com", name: "Member", roles: ["member"]},
+    ]);
+    editor = (await UserModel.findById(notAdmin._id).orFail()) as unknown as User;
+    identityAdmin = identityAdminDoc as unknown as User;
+    member = memberDoc as unknown as User;
+  });
+
+  const options = (): Parameters<typeof executeUpdate>[0]["options"] =>
+    ({
+      accessControl: access,
+      permissions: userPermissions,
+    }) as unknown as Parameters<typeof executeUpdate>[0]["options"];
+
+  it("rejects identity-field changes to another user without user:updateIdentity", async () => {
+    for (const body of [
+      {email: "identity-redirect@example.com"},
+      {disabled: true},
+      {emailVerified: true},
+      {"email.value": "identity-redirect@example.com"},
+    ]) {
+      await expect(
+        executeUpdate({body, id: member.id, model: UserModel, options: options(), user: editor})
+      ).rejects.toMatchObject({status: 403, title: "Missing user:updateIdentity permission"});
+    }
+    const stored = await UserModel.findById(member.id).lean();
+    expect(stored?.email).toBe("identity-member@example.com");
+    expect(stored?.disabled).toBe(false);
+  });
+
+  it("rejects identity-field changes over sync admin windows that skip permission checks", async () => {
+    await expect(
+      executeUpdate({
+        body: {disabled: true},
+        id: member.id,
+        model: UserModel,
+        options: options(),
+        skipPermissionChecks: true,
+        user: editor,
+      })
+    ).rejects.toMatchObject({status: 403, title: "Missing user:updateIdentity permission"});
+    expect((await UserModel.findById(member.id).lean())?.disabled).toBe(false);
+  });
+
+  it("allows bodies that echo unchanged identity values", async () => {
+    await executeUpdate({
+      body: {disabled: false, email: "identity-member@example.com", name: "Renamed"},
+      id: member.id,
+      model: UserModel,
+      options: options(),
+      user: editor,
+    });
+    expect((await UserModel.findById(member.id).lean())?.name).toBe("Renamed");
+  });
+
+  it("allows identity changes by holders, self-writes, legacy admins, and creates", async () => {
+    await executeUpdate({
+      body: {disabled: true},
+      id: member.id,
+      model: UserModel,
+      options: options(),
+      user: identityAdmin,
+    });
+    expect((await UserModel.findById(member.id).lean())?.disabled).toBe(true);
+
+    await executeUpdate({
+      body: {email: "editor-self@example.com"},
+      id: editor.id,
+      model: UserModel,
+      options: options(),
+      user: editor,
+    });
+    expect((await UserModel.findById(editor.id).lean())?.email).toBe("editor-self@example.com");
+
+    const legacyAdmin = (await UserModel.findOne({email: "admin@example.com"})
+      .orFail()
+      .exec()) as unknown as User;
+    await executeUpdate({
+      body: {disabled: false},
+      id: member.id,
+      model: UserModel,
+      options: options(),
+      user: legacyAdmin,
+    });
+    expect((await UserModel.findById(member.id).lean())?.disabled).toBe(false);
+
+    const {doc} = await executeCreate({
+      body: {email: "identity-new@example.com", name: "New"},
+      model: UserModel,
+      options: options(),
+      user: editor,
+    });
+    expect((doc as unknown as {email: string}).email).toBe("identity-new@example.com");
+  });
+});
+
+describe("user:updateIdentity over modelRouter HTTP", () => {
+  let app: express.Application;
+  let memberId: string;
+
+  beforeEach(async () => {
+    const [, notAdmin] = await setupDb();
+    const access = await buildAccess();
+    await setRoles(notAdmin._id, ["userEditor"]);
+    const target = await UserModel.create({
+      email: "http-identity-member@example.com",
+      name: "Member",
+      roles: ["member"],
+    });
+    memberId = String(target._id);
+    app = getBaseServer();
+    setupAuth(app, UserModel as unknown as UserMongooseModel);
+    addAuthRoutes(app, UserModel as unknown as UserMongooseModel);
+    app.use(
+      "/users",
+      modelRouter(UserModel, {
+        access: {resource: "user"},
+        accessControl: access,
+        instanceActions: {
+          changeEmail: {
+            handler: async ({body, doc}) => {
+              await UserModel.updateOne(
+                {_id: (doc as {_id: unknown})._id},
+                {email: (body as {email: string}).email}
+              );
+              return {ok: true};
+            },
+            method: "POST",
+            permissions: [Permissions.IsAuthenticated],
+          },
+        },
+        permissions: userPermissions,
+      })
+    );
+    app.use(apiUnauthorizedMiddleware);
+    app.use(apiErrorMiddleware);
+  });
+
+  it("rejects PATCH and write actions that change another user's identity fields", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    const patch = await agent.patch(`/users/${memberId}`).send({disabled: true}).expect(403);
+    expect(patch.body.title).toBe("Missing user:updateIdentity permission");
+    await agent
+      .post(`/users/${memberId}/changeEmail`)
+      .send({email: "http-identity-redirect@example.com"})
+      .expect(403);
+    await agent.patch(`/users/${memberId}`).send({name: "Renamed"}).expect(200);
+
+    const stored = await UserModel.findById(memberId).lean();
+    expect(stored?.email).toBe("http-identity-member@example.com");
+    expect(stored?.disabled).toBe(false);
+    expect(stored?.name).toBe("Renamed");
   });
 });

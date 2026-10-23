@@ -269,6 +269,13 @@ A delegate with `user:update` gets 403 `Cannot modify a user with permissions yo
 a superadmin target; bulk-patch reports that target under `failures` and patches the rest. Legacy
 `admin: true` actors and writes to the actor's own record are not checked.
 
+Changing another user's `email`, `disabled`, `betterAuthId`, `githubId`, or `emailVerified`
+through admin `PATCH`, bulk-patch, or admin-window sync also needs `user:updateIdentity`. Without it
+the write gets 403 `Missing user:updateIdentity permission`, and bulk-patch lists the target under
+`failures` with that title. Values equal to the stored ones do not count, so the edit form can
+still save other fields. Existing deployments must add `updateIdentity` to the stored `admin` role.
+See [RBAC user identity writes](api.md#rbac-user-identity-writes).
+
 **Important:** Only expose models that should be editable via admin panel. Avoid sensitive internal models.
 
 ## Document storage

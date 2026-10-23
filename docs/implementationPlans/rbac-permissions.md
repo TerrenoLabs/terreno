@@ -112,7 +112,7 @@ export const terrenoStatements = {
   // Managing the RBAC system itself
   rbac: ["read", "manageRoles", "assignRoles"],
   // The framework user model (auth surfaces, admin user CRUD)
-  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword"],
+  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword", "updateIdentity"],
   // Feature flag / configuration app
   configuration: ["read", "update"],
 } as const;

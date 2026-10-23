@@ -34,7 +34,7 @@ import {
 } from "../errors";
 import {checkPermissions, type PermissionMethod, Permissions} from "../permissions";
 import {buildAccessPermissions, validateAccessWritePayload} from "../rbac/modelRouterAccess";
-import {assertCanWriteTargetUser} from "../rbac/userWriteGuards";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "../rbac/userWriteGuards";
 import {transform} from "../transformers";
 
 /** A hydrated mongoose document joined with the router's base type. */
@@ -608,6 +608,15 @@ export const executeUpdate = async <T>({
       });
     }
   }
+
+  // Checked before the privileged-field strip so identity writes are rejected, not dropped.
+  await assertCanWriteUserIdentity({
+    accessControl: options.accessControl,
+    actor: user,
+    body: cleanedBody,
+    modelName: writeModelName ?? model.modelName,
+    target: doc,
+  });
 
   cleanedBody = omitUserRolesFromWriteBody(
     writeModelName ?? model.modelName,

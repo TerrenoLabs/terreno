@@ -2682,6 +2682,67 @@ describe("AdminApp user elevation and scoped bulk-patch", () => {
       .expect(200);
   });
 
+  it("requires user:updateIdentity for admin identity-field writes to another user", async () => {
+    const accessControl = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "User editor",
+          name: "userEditor",
+          permissions: {admin: ["access"], user: ["create", "list", "read", "update"]},
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserModelType,
+    });
+    await accessControl.roles.seedDefaults();
+    const localApp = buildApp(
+      [
+        {
+          bulkPatchAllowlist: ["disabled", "name"],
+          displayName: "Users",
+          listFields: ["email", "admin"],
+          model: UserModel,
+          routePath: "/users",
+        },
+      ],
+      {accessControl}
+    );
+    const delegate = await UserModel.findOne({email: "notAdmin@example.com"}).orFail();
+    await UserModel.updateOne({_id: delegate._id}, {$set: {roles: ["userEditor"]}});
+    const member = await UserModel.create({
+      email: "identity-target-member@example.com",
+      name: "Member",
+      roles: ["member"],
+    });
+    const memberId = String(member._id);
+    const agent = await authAsUser(localApp, "notAdmin");
+
+    const patch = await agent.patch(`/admin/users/${memberId}`).send({disabled: true}).expect(403);
+    expect(patch.body.title).toBe("Missing user:updateIdentity permission");
+    await agent
+      .patch(`/admin/users/${memberId}`)
+      .send({email: "identity-redirect@example.com"})
+      .expect(403);
+    const bulk = await agent
+      .post("/admin/users/bulk-patch")
+      .send({ids: [memberId], patch: {disabled: true}})
+      .expect(200);
+    expect(bulk.body.updated).toBe(0);
+    expect(bulk.body.failures).toEqual([
+      {id: memberId, title: "Missing user:updateIdentity permission"},
+    ]);
+
+    await agent
+      .patch(`/admin/users/${memberId}`)
+      .send({email: "identity-target-member@example.com", name: "Member renamed"})
+      .expect(200);
+    const stored = await UserModel.findById(memberId).lean();
+    expect(stored?.email).toBe("identity-target-member@example.com");
+    expect((stored as {disabled?: boolean} | null)?.disabled ?? false).toBe(false);
+    expect(stored?.name).toBe("Member renamed");
+  });
+
   it("does not persist organizationIds on RBAC admin User writes", async () => {
     const accessControl = createAccess({
       connection: mongoose.connection,

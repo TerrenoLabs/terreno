@@ -18,7 +18,7 @@ import {APIError, apiErrorMiddleware, errorMessage} from "./errors";
 import type {AuthOptions} from "./expressServer";
 import {logger} from "./logger";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
-import {isRbacUserModelName} from "./rbac/userWriteGuards";
+import {isRbacUserModelName, isWriteKeyForField} from "./rbac/userWriteGuards";
 import {
   getCurrentRequestContext,
   getSessionIdFromJwtPayload,
@@ -156,15 +156,6 @@ export const SELF_SERVICE_BLOCKED_USER_FIELDS = [
   "last",
   "disabled",
 ] as const;
-
-/**
- * True when a write-body key addresses `field` itself or a path inside it. Mongoose `set`,
- * `create`, and the document constructor treat a dotted key such as `roles.0` as a path into
- * `roles`, so field filters must match the first path segment, not only the exact key.
- */
-export const isWriteKeyForField = (key: string, field: string): boolean => {
-  return key === field || key.startsWith(`${field}.`);
-};
 
 const isWriteKeyForAnyField = (key: string, fields: readonly string[]): boolean => {
   return fields.some((field) => isWriteKeyForField(key, field));

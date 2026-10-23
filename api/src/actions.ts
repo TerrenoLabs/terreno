@@ -12,7 +12,7 @@ import {checkPermissions, type PermissionMethod} from "./permissions";
 import {createIsPermitted} from "./rbac/middleware";
 import {buildAccessScopeCheck} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
-import {assertCanWriteTargetUser} from "./rbac/userWriteGuards";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 
 // At least two characters: leading letter plus one or more alphanumeric/_/- chars.
 export const ACTION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]+$/;
@@ -537,6 +537,13 @@ const buildActionMiddleware = <T>(
               await assertCanWriteTargetUser({
                 accessControl: options.accessControl,
                 actor: req.user,
+                modelName: model.modelName,
+                target: doc,
+              });
+              await assertCanWriteUserIdentity({
+                accessControl: options.accessControl,
+                actor: req.user,
+                body: req.body,
                 modelName: model.modelName,
                 target: doc,
               });

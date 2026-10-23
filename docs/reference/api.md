@@ -469,7 +469,9 @@ roles with `access.roles.assign`. Those writes, plus array operations and POST i
 the user model, also apply the RoleManager target-privilege rule: an actor whose permissions do not
 cover the target user's gets 403 `Cannot modify a user with permissions you do not hold` on update
 or delete. This runs on REST, sync (including admin-window mutations), and MCP. Writes to the
-actor's own record and writes by legacy `admin: true` users are not checked.
+actor's own record and writes by legacy `admin: true` users are not checked. Changing another
+user's identity fields also needs `user:updateIdentity`; see
+[RBAC user identity writes](#rbac-user-identity-writes).
 
 Request logs redact `password`, `newPassword`,
 `oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
@@ -1110,6 +1112,38 @@ so a rename (`{name}`) is checked like a permission edit:
 
 A `PermissionSource` that returns role names keeps returning the old name after a rename; update
 the source's mapping in the same change.
+
+### RBAC user identity writes
+
+`terrenoStatements.user` includes `updateIdentity`. With `accessControl` set, a write that changes
+another user's identity field needs `user:updateIdentity` in addition to `user:update`. Without it
+the write fails with 403 `Missing user:updateIdentity permission`. The field is not silently
+dropped. The identity fields are `USER_IDENTITY_FIELDS`: `email`, `disabled`, `betterAuthId`,
+`githubId`, and `emailVerified`, plus dotted paths into them.
+
+- The check runs on modelRouter `PATCH`, array operations, non-GET instance actions (on the
+  request body), sync and MCP updates (including admin-window mutations that skip modelRouter
+  permissions), and AdminApp `PATCH` and bulk-patch.
+- A key whose value equals the target's current value is not a change. A client that sends the
+  whole record back, unchanged email included, still succeeds. Unset, `null`, `""`, and `false`
+  count as the same empty value.
+- Not checked: writes to the actor's own record (`PATCH /auth/me` has its own guards), writes
+  without an actor (server-internal calls), legacy `admin: true` actors, and creates. A
+  `user:create` holder can still create a user with an email.
+
+| Role | `user:updateIdentity` |
+| --- | --- |
+| `superadmin` | Yes, through `*` |
+| `admin` (seeded) | Yes, for new seeds |
+| `operator` (organizations) | No |
+| `auditor`, `member` | No |
+
+`seedDefaults` does not add new `user` actions to an `admin` role that is already stored. It only
+merges observability actions. In an existing deployment, add `updateIdentity` to the stored `admin`
+role's `user` actions (and to any custom role that should manage identities) with
+`PATCH /rbac/roles/admin` or a migration. Until then, RBAC `admin` holders get 403 when they change
+another user's email or disabled flag. An app that overrides the `user` statement in its own
+statements must list `updateIdentity` for any role to hold it.
 
 ### RBAC permission sources
 

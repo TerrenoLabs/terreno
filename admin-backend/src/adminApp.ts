@@ -5,6 +5,7 @@ import {
   type AnyTerrenoAccess,
   APIError,
   assertCanWriteTargetUser,
+  assertCanWriteUserIdentity,
   asyncHandler,
   auditActorIdFromRequest,
   authenticateMiddleware,
@@ -1971,6 +1972,13 @@ export class AdminApp {
               await assertCanWriteTargetUser({
                 accessControl: this.options.accessControl,
                 actor,
+                modelName: config.model.modelName,
+                target: doc,
+              });
+              await assertCanWriteUserIdentity({
+                accessControl: this.options.accessControl,
+                actor,
+                body: patch,
                 modelName: config.model.modelName,
                 target: doc,
               });

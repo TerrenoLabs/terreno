@@ -55,7 +55,7 @@ import {checkPermissions, permissionMiddleware, type RESTPermissions} from "./pe
 import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
-import {assertCanWriteTargetUser} from "./rbac/userWriteGuards";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 import {warnRealtimeDeprecated} from "./realtime/deprecation";
 import type {RealtimeConfig} from "./realtime/types";
 import {
@@ -1355,6 +1355,14 @@ const _buildModelRouter = <T>(
       });
     }
     let body = await applyArrayOperationUpdateHooks({[field]: array} as unknown as Partial<T>, req);
+
+    await assertCanWriteUserIdentity({
+      accessControl: options.accessControl,
+      actor: req.user,
+      body,
+      modelName: model.modelName,
+      target: doc,
+    });
 
     body = omitUserRolesFromWriteBody(
       model.modelName,

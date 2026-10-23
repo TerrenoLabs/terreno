@@ -1477,4 +1477,360 @@ describe("CommsService", () => {
     assert.isUndefined(row.payload);
     assert.deepEqual(row.metadata?.hookErrors, {redactPayload: ["hook-threw"]});
   });
+  it("cancels SMS and verification sends from beforeSend without calling providers", async (): Promise<void> => {
+    let providerCalls = 0;
+    const service = new CommsService({
+      beforeSend: async (): Promise<{cancel: boolean}> => ({cancel: true}),
+      sms: {
+        id: "cancel-sms",
+        sendSms: async (): Promise<SendResult> => {
+          providerCalls += 1;
+          return {accepted: true};
+        },
+      },
+      verification: {
+        checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+        id: "cancel-verification",
+        startVerification: async (): Promise<SendResult> => {
+          providerCalls += 1;
+          return {accepted: true};
+        },
+      },
+    });
+
+    const sms = await service.sendSms({body: "Hello", to: "+15555550100"});
+    const verification = await service.startVerification({channel: "email", to: "a@example.com"});
+
+    assert.equal(providerCalls, 0);
+    assert.equal(sms.errorCode, "before-send-cancel");
+    assert.equal(verification.errorCode, "before-send-cancel");
+    assert.isUndefined(verification.loggedMessageId);
+    const smsRow = await CommsMessage.findExactlyOne({channel: "sms", status: "cancelled"});
+    const verificationRow = await CommsMessage.findExactlyOne({
+      channel: "verification",
+      status: "cancelled",
+    });
+    assert.equal(sms.loggedMessageId, String(smsRow._id));
+    assert.equal(smsRow.provider, "cancel-sms");
+    assert.equal(verificationRow.provider, "cancel-verification");
+    assert.equal(
+      (verificationRow.metadata as {verificationChannel?: string}).verificationChannel,
+      "email"
+    );
+  });
+
+  it("returns no push results when beforeSend removes every token", async (): Promise<void> => {
+    const userId = new mongoose.Types.ObjectId();
+    await PushToken.upsert(
+      {token: "ExponentPushToken[filtered]"},
+      {active: true, lastSeenAt: DateTime.utc().toJSDate(), platform: "ios", userId}
+    );
+    let providerCalls = 0;
+    const service = new CommsService({
+      beforeSend: async (context): Promise<{message: PushMessage}> => ({
+        message: {...(context.message as PushMessage), tokens: []},
+      }),
+      push: {
+        id: "filtered-push",
+        sendPush: async (): Promise<SendResult[]> => {
+          providerCalls += 1;
+          return [];
+        },
+      },
+    });
+
+    const results = await service.sendPushToUser({body: "Hello", title: "Title", userId});
+
+    assert.deepEqual(results, []);
+    assert.equal(providerCalls, 0);
+    assert.equal(await CommsMessage.countDocuments(), 0);
+  });
+
+  it("reports each channel as configured only with a provider in production", (): void => {
+    const verification: VerificationProvider = {
+      checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+      id: "configured-verification",
+      startVerification: async (): Promise<SendResult> => ({accepted: true}),
+    };
+    const smsOnly = new CommsService({
+      sms: {id: "configured-sms", sendSms: async (): Promise<SendResult> => ({accepted: true})},
+    });
+    const pushAndVerification = new CommsService({
+      push: {id: "configured-push", sendPush: async (): Promise<SendResult[]> => []},
+      verification,
+    });
+    const channels = ["mail", "sms", "push", "verification"] as const;
+
+    assert.deepEqual(
+      channels.map((channel) => smsOnly.isChannelConfigured(channel)),
+      [true, true, true, true]
+    );
+    process.env.NODE_ENV = "production";
+    assert.deepEqual(
+      channels.map((channel) => smsOnly.isChannelConfigured(channel)),
+      [false, true, false, false]
+    );
+    assert.deepEqual(
+      channels.map((channel) => pushAndVerification.isChannelConfigured(channel)),
+      [false, false, true, true]
+    );
+  });
+
+  it("retries a failed SMS from its stored payload", async (): Promise<void> => {
+    const sent: Array<{body: string; to: string}> = [];
+    const service = new CommsService({
+      sms: {
+        id: "retry-sms",
+        sendSms: async (message): Promise<SendResult> => {
+          sent.push({body: message.body, to: message.to});
+          return {accepted: true, providerMessageId: "sms-retry-ok"};
+        },
+      },
+    });
+    const original = await CommsMessage.create({
+      channel: "sms",
+      payload: {body: "Your appointment is tomorrow", to: "+15555550100"},
+      provider: "retry-sms",
+      status: "failed",
+      to: "+15555550100",
+    });
+
+    const retried = await service.retryMessage({
+      messageId: String(original._id),
+      retriedByUserId: "admin-1",
+    });
+
+    assert.deepEqual(sent, [{body: "Your appointment is tomorrow", to: "+15555550100"}]);
+    assert.equal(retried.providerMessageId, "sms-retry-ok");
+    assert.equal(String(retried.retriedFromId), String(original._id));
+    assert.equal((retried.metadata as {retriedByUserId?: string}).retriedByUserId, "admin-1");
+    const updatedOriginal = await CommsMessage.findExactlyOne({_id: original._id});
+    assert.equal(String(updatedOriginal.retriedById), String(retried._id));
+  });
+
+  it("retries a failed push to the linked user's current devices", async (): Promise<void> => {
+    const userId = new mongoose.Types.ObjectId();
+    await PushToken.upsert(
+      {token: "ExponentPushToken[retry]"},
+      {active: true, lastSeenAt: DateTime.utc().toJSDate(), platform: "ios", userId}
+    );
+    const sent: PushMessage[] = [];
+    const service = new CommsService({
+      push: {
+        id: "retry-push",
+        sendPush: async (message: PushMessage): Promise<SendResult[]> => {
+          sent.push(message);
+          return message.tokens.map(() => ({accepted: true, providerMessageId: "push-retry-ok"}));
+        },
+      },
+    });
+    const original = await CommsMessage.create({
+      channel: "push",
+      payload: {
+        badge: 2,
+        body: "New message",
+        data: {screen: "inbox"},
+        sound: null,
+        title: "Inbox",
+      },
+      provider: "retry-push",
+      status: "failed",
+      to: "ExponentPushToken[old]",
+      userId,
+    });
+
+    const retried = await service.retryMessage({messageId: String(original._id)});
+
+    assert.deepEqual(sent, [
+      {
+        badge: 2,
+        body: "New message",
+        data: {screen: "inbox"},
+        sound: null,
+        title: "Inbox",
+        tokens: ["ExponentPushToken[retry]"],
+      },
+    ]);
+    assert.equal(retried.providerMessageId, "push-retry-ok");
+    assert.equal(String(retried.retriedFromId), String(original._id));
+  });
+
+  it("refuses to retry a push without a linked user", async (): Promise<void> => {
+    const service = new CommsService({
+      push: {id: "orphan-push", sendPush: async (): Promise<SendResult[]> => []},
+    });
+    const original = await CommsMessage.create({
+      channel: "push",
+      payload: {body: "Hello", title: "Title"},
+      provider: "orphan-push",
+      status: "failed",
+      to: "ExponentPushToken[orphan]",
+    });
+
+    const error = await captureError(() => service.retryMessage({messageId: String(original._id)}));
+
+    assert.isTrue(isAPIError(error));
+    assert.equal((error as APIError).status, 400);
+    assert.equal((error as APIError).title, "Push retries require a linked user");
+  });
+
+  it("returns 404 when retrying a malformed or unknown message id", async (): Promise<void> => {
+    const service = new CommsService();
+
+    for (const messageId of ["not-an-object-id", String(new mongoose.Types.ObjectId())]) {
+      const error = await captureError(() => service.retryMessage({messageId}));
+      assert.isTrue(isAPIError(error));
+      assert.equal((error as APIError).status, 404);
+      assert.equal((error as APIError).title, "Comms message not found");
+    }
+  });
+
+  it("records a throwing onRetry hook on each retried push token", async (): Promise<void> => {
+    const userId = new mongoose.Types.ObjectId();
+    await PushToken.upsert(
+      {token: "ExponentPushToken[flaky]"},
+      {active: true, lastSeenAt: DateTime.utc().toJSDate(), platform: "ios", userId}
+    );
+    let pushCalls = 0;
+    const service = new CommsService({
+      onRetry: async (): Promise<void> => {
+        throw new Error("onRetry boom");
+      },
+      push: {
+        id: "flaky-push",
+        sendPush: async (message: PushMessage): Promise<SendResult[]> => {
+          pushCalls += 1;
+          return message.tokens.map(
+            (): SendResult =>
+              pushCalls === 1
+                ? {accepted: false, error: "Timeout", errorClass: "transient"}
+                : {accepted: true, providerMessageId: "flaky-retry-ok"}
+          );
+        },
+      },
+    });
+
+    const results = await service.sendPushToUser({body: "Hello", title: "Title", userId});
+
+    assert.equal(pushCalls, 2);
+    assert.isTrue(results[0]?.accepted);
+    const row = await CommsMessage.findExactlyOne({providerMessageId: "flaky-retry-ok"});
+    assert.equal(row.attemptCount, 2);
+    assert.deepEqual(row.metadata?.hookErrors, {onRetry: ["hook-threw"]});
+  });
+
+  it("retries a transient SMS failure even when message logging is off", async (): Promise<void> => {
+    let smsCalls = 0;
+    const service = new CommsService({
+      logMessages: false,
+      sms: {
+        id: "unlogged-sms",
+        sendSms: async (): Promise<SendResult> => {
+          smsCalls += 1;
+          return smsCalls === 1
+            ? {accepted: false, error: "Timeout", errorClass: "transient"}
+            : {accepted: true, providerMessageId: "unlogged-ok"};
+        },
+      },
+    });
+
+    const result = await service.sendSms({body: "Hello", to: "+15555550100"});
+
+    assert.equal(smsCalls, 2);
+    assert.isTrue(result.accepted);
+    assert.isUndefined(result.loggedMessageId);
+    assert.equal(await CommsMessage.countDocuments(), 0);
+  });
+
+  it("skips delivery events without a provider message id after running the hook", async (): Promise<void> => {
+    const events: string[] = [];
+    const service = new CommsService({
+      onDeliveryEvent: async (event): Promise<void> => {
+        events.push(event.status);
+      },
+    });
+    const row = await CommsMessage.create({
+      channel: "mail",
+      provider: "events-mail",
+      status: "sent",
+      to: "person@example.com",
+    });
+
+    await service.recordDeliveryEvent({channel: "mail", status: "delivered"});
+
+    assert.deepEqual(events, ["delivered"]);
+    const unchanged = await CommsMessage.findExactlyOne({_id: row._id});
+    assert.equal(unchanged.status, "sent");
+  });
+
+  it("leaves inactive push tokens alone and logs deactivation failures", async (): Promise<void> => {
+    const userId = new mongoose.Types.ObjectId();
+    const inactive = await PushToken.upsert(
+      {token: "ExponentPushToken[inactive]"},
+      {active: false, lastSeenAt: DateTime.utc().toJSDate(), platform: "ios", userId}
+    );
+    const service = new CommsService();
+    const saveSpy = spyOn(PushToken.prototype, "save");
+
+    await service.deactivatePushToken("ExponentPushToken[inactive]");
+    await service.deactivatePushToken("ExponentPushToken[unknown]");
+    assert.equal(saveSpy.mock.calls.length, 0);
+    saveSpy.mockRestore();
+    const stored = await PushToken.findExactlyOne({_id: inactive._id});
+    assert.isFalse(stored.active);
+
+    const warnSpy = spyOn(logger, "warn").mockImplementation(() => logger);
+    const findSpy = spyOn(PushToken, "findOneOrNone").mockImplementation((async () => {
+      throw new Error("lookup failed");
+    }) as never);
+    try {
+      await service.deactivatePushToken("ExponentPushToken[inactive]");
+      assert.isTrue(
+        warnSpy.mock.calls.some((call) =>
+          String(call[0]).includes("Failed to deactivate push token: Error: lookup failed")
+        )
+      );
+    } finally {
+      findSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("keeps the send outcome when hook errors cannot be saved to the log", async (): Promise<void> => {
+    const service = new CommsService({
+      mail: {
+        id: "hook-save-fail-mail",
+        sendMail: async (): Promise<SendResult> => ({accepted: true, providerMessageId: "m-1"}),
+      },
+      onSend: async (): Promise<void> => {
+        throw new Error("onSend boom");
+      },
+    });
+    const originalSave = CommsMessage.prototype.save;
+    const saveSpy = spyOn(CommsMessage.prototype, "save").mockImplementation(function (
+      this: InstanceType<typeof CommsMessage>,
+      ...args: Parameters<typeof originalSave>
+    ) {
+      if (!this.isNew && (this.metadata as {hookErrors?: unknown} | undefined)?.hookErrors) {
+        return Promise.reject(new Error("metadata write failed"));
+      }
+      return originalSave.apply(this, args);
+    } as typeof originalSave);
+    const warnSpy = spyOn(logger, "warn").mockImplementation(() => logger);
+    try {
+      const result = await service.sendMail({subject: "Welcome", to: "person@example.com"});
+
+      assert.isTrue(result.accepted);
+      assert.isTrue(
+        warnSpy.mock.calls.some((call) =>
+          String(call[0]).includes("Failed to record hook errors: Error: metadata write failed")
+        )
+      );
+      const row = await CommsMessage.findExactlyOne({_id: result.loggedMessageId});
+      assert.isUndefined(row.metadata?.hookErrors);
+    } finally {
+      saveSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
 });

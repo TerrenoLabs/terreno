@@ -1,8 +1,9 @@
-import {beforeEach, describe, it} from "bun:test";
+import {beforeEach, describe, it, spyOn} from "bun:test";
 import {
   addAuthRoutes,
   apiErrorMiddleware,
   apiUnauthorizedMiddleware,
+  logger,
   setupAuth,
   TerrenoApp,
   type UserModel as UserModelType,
@@ -309,6 +310,106 @@ describe("CommsApp", () => {
       .post("/comms/pushTokens")
       .send({platform: "desktop", token: "ExponentPushToken[test]"})
       .expect(400);
+  });
+
+  it("filters the push-token list by active state and platform", async (): Promise<void> => {
+    const app = buildApp();
+    const owner = await authAsUser(app, "notAdmin");
+    const ios = await owner
+      .post("/comms/pushTokens")
+      .send({platform: "ios", token: "ExponentPushToken[ios]"})
+      .expect(201);
+    await owner
+      .post("/comms/pushTokens")
+      .send({platform: "android", token: "ExponentPushToken[android]"})
+      .expect(201);
+    await owner.delete(`/comms/pushTokens/${ios.body.data._id}`).expect(204);
+
+    const active = await owner.get("/comms/pushTokens?active=true").expect(200);
+    const inactive = await owner.get("/comms/pushTokens?active=false").expect(200);
+    const iosOnly = await owner.get("/comms/pushTokens?platform=ios").expect(200);
+    const ignoredFilter = await owner.get("/comms/pushTokens?active=maybe").expect(200);
+
+    assert.deepEqual(
+      active.body.data.map((row: {token: string}) => row.token),
+      ["ExponentPushToken[android]"]
+    );
+    assert.deepEqual(
+      inactive.body.data.map((row: {token: string}) => row.token),
+      ["ExponentPushToken[ios]"]
+    );
+    assert.deepEqual(
+      iosOnly.body.data.map((row: {active: boolean; token: string}) => [row.token, row.active]),
+      [["ExponentPushToken[ios]", false]]
+    );
+    assert.equal(ignoredFilter.body.total, 2);
+  });
+
+  it("surfaces non-conflict storage failures while claiming a push token", async (): Promise<void> => {
+    const app = buildApp();
+    const owner = await authAsUser(app, "notAdmin");
+    const duplicateKey = Object.assign(new Error("E11000 duplicate key"), {code: 11000});
+    const claim = spyOn(PushToken, "findOneAndUpdate");
+    try {
+      claim.mockImplementationOnce((() => {
+        throw new Error("primary stepped down");
+      }) as never);
+      await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+
+      // A lost race retries once; a different failure on the retry is not reported as a conflict.
+      claim
+        .mockImplementationOnce((() => {
+          throw duplicateKey;
+        }) as never)
+        .mockImplementationOnce((() => {
+          throw new Error("primary stepped down");
+        }) as never);
+      await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+
+      claim.mockImplementationOnce((async () => ({
+        lastErrorObject: {updatedExisting: false},
+        value: null,
+      })) as never);
+      const empty = await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+      assert.equal(empty.body.title, "Push token claim returned no document");
+    } finally {
+      claim.mockRestore();
+    }
+    assert.equal(await PushToken.countDocuments({token: "ExponentPushToken[outage]"}), 0);
+  });
+
+  it("logs when the push-token index cannot be built at registration", async (): Promise<void> => {
+    const init = spyOn(PushToken, "init").mockImplementation((async () => {
+      throw new Error("index build refused");
+    }) as never);
+    const errorSpy = spyOn(logger, "error").mockImplementation(() => logger);
+    try {
+      new CommsApp({logMessages: false}).register(getBaseServer());
+      // The index build runs in the background, so wait for its rejection handler.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const messages = errorSpy.mock.calls.map((call) => String(call[0]));
+      assert.isTrue(
+        messages.some(
+          (message) =>
+            message.includes("[comms] Failed to build PushToken indexes") &&
+            message.includes("index build refused")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      init.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 
   it("exposes a paginated, filterable delivery explorer to admins only", async (): Promise<void> => {

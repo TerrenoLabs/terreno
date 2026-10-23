@@ -447,7 +447,9 @@ including a custom one, from the summary alone: `{method} {securityBase}{path}`,
 `:passkeyId` from `passkeys.items[].id` and `:providerId` from `providers[].providerId`.
 `@terreno/admin-frontend`'s
 [`MemberSecurityPanel`](./admin-frontend.md#membersecuritypanel) renders this list on the
-org members screen, so a new action gets a button without a frontend change.
+org members screen and on the platform
+[`UserSecurityScreen`](./admin-frontend.md#usersecurityscreen), so a new action gets a button
+without a frontend change.
 
 | `id` | Label | Destructive | Listed when |
 | --- | --- | --- | --- |

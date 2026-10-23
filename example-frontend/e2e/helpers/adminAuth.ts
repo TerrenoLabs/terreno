@@ -21,6 +21,20 @@ export const setUserAdmin = async (email: string): Promise<void> => {
   }
 };
 
+/** Grants an RBAC role to the app User, such as `operator` for platform account recovery. */
+export const addUserRole = async (email: string, role: string): Promise<void> => {
+  const client = new MongoClient(MONGO_URI);
+  try {
+    await client.connect();
+    await client
+      .db()
+      .collection("users")
+      .updateOne({email}, {$addToSet: {roles: role}});
+  } finally {
+    await client.close();
+  }
+};
+
 /**
  * Marks the Better Auth user's email verified, the way a seeded account starts, so account
  * linking (`verified-email` mode) treats it as the email's owner. The app User's own

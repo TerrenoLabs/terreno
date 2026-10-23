@@ -166,6 +166,13 @@ export type {
   ScreenWidgetComponent,
 } from "./types";
 export {resolveAdminBases, SYSTEM_FIELDS} from "./types";
+export {
+  UserSecurityLink,
+  type UserSecurityLinkProps,
+  UserSecurityScreen,
+  type UserSecurityScreenProps,
+  userSecurityRoute,
+} from "./UserSecurityScreen";
 export {useAdminApi} from "./useAdminApi";
 export {useAdminConfig} from "./useAdminConfig";
 export {useAdminRpc, useAdminRpcMutation, useAdminRpcQuery} from "./useAdminRpc";

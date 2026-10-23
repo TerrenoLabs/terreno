@@ -236,6 +236,82 @@ as `{passkeyId}` and throws before sending when one is missing.
 `memberSecurityPath` and `resolveSecurityActionRequest` are exported for custom
 screens.
 
+### UserSecurityScreen
+
+The platform staff page for one user's sign-in security. It renders a header
+naming the user, then a [`MemberSecurityPanel`](#membersecuritypanel) against the
+platform routes (`/users/:id/security`). Only holders of `user:manageSecurity`
+reach those routes: `superadmin`, and the locked `operator` role, which is seeded
+only when the backend calls `createAccess({organizations: true})`. Without
+organizations, grant `user:manageSecurity` on a role of your own. The server
+also refuses acting on yourself and on a user holding any permission you lack,
+such as a superadmin. The panel then shows the refusal title inline
+(`{testID}-panel-error`) and the header still names the user.
+
+```tsx
+// app/admin/users/[id]/security.tsx
+import {UserSecurityScreen} from "@terreno/admin-frontend";
+import {useLocalSearchParams} from "expo-router";
+
+const AdminUserSecurityRoute: React.FC = () => {
+  const {id} = useLocalSearchParams<{id: string}>();
+  return <UserSecurityScreen userId={id} />;
+};
+
+export default AdminUserSecurityRoute;
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `userId` | `string` | App `User` id |
+| `userModelName` | `string` | Admin model name of the user record. Default `User` |
+| `apiBase` | `string` | Admin JSON base for `{apiBase}/config`. Defaults to the `AdminProvider` `apiBase` |
+| `routeBase` | `string` | Admin route base. Defaults to the `AdminProvider` `routeBase` |
+| `securityBaseURL` | `string` | Prefix of the security routes. Default `/users` |
+| `backHref` | `string` | Where the back arrow goes. Default `{routeBase}/{userModelName}/{userId}`, the admin user record |
+| `testID` | `string` | Root test id. Default `user-security-screen`; the panel is `{testID}-panel` |
+
+The header reads `GET {apiBase}/config` to find `userModelName`'s `routePath`,
+then `GET {routePath}/{userId}`, both through the host-bound `adminRequest`. It
+shows the user's `name` (`{testID}-user-name`) and `email`
+(`{testID}-user-email`). Without a name it shows the email, and without a
+record it shows the id. While the record loads it shows a spinner
+(`{testID}-user-loading`). When the record fails to load, an inline alert
+(`{testID}-user-error`) says `Could not load the user record.`. The panel loads
+on its own either way, because the security routes do not depend on the admin
+record. If the user model is not registered in admin, the header shows the id
+and no record request is sent.
+
+#### Linking from the user record
+
+`UserSecurityLink` is a **Security** button (`admin-user-security-link`) that
+opens `userSecurityRoute({routeBase, userId})`, which is
+`{routeBase}/users/{userId}/security`. Mount `UserSecurityScreen` at that path,
+or pass `href` to the link. admin-frontend does not know which admin model is
+your user model, so the host adds the link to its user record. The usual place
+is `AdminModelForm`'s `footerContent`:
+
+```tsx
+// app/admin/[model]/[id].tsx
+import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
+
+const footerContent =
+  model === "User" && canManageUserSecurity ? <UserSecurityLink userId={id} /> : undefined;
+
+<AdminModelForm api={api} baseUrl="/admin" footerContent={footerContent} itemId={id} mode="edit" modelName={model} />
+```
+
+Show the link and the route only to staff holding `user:manageSecurity` (or
+`admin: true` without RBAC), and hide the link on the viewer's own record, since
+the routes refuse self-targeting; staff manage their own account from their own
+security screen. The example reads `permissions` from `/auth/me`
+(`example-frontend/utils/userSecurityAccess.ts`), shows the link on other users'
+`User` records, and shows everyone else an `AdminScreenPage`
+(`admin-user-security-forbidden`) with a forbidden message and a back arrow to
+the record. Add the
+route to the admin `Stack` (`<Stack.Screen name="users/[id]/security" />`) next
+to `[model]`.
+
 ### AdminModelList
 
 Entry screen showing all available models as cards.

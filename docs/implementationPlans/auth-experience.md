@@ -818,7 +818,7 @@ Open risks:
   - Docs: `admin-frontend.md` MemberSecurityPanel section.
   - Skills: building-admin-interfaces, verify-ui-changes, accessibility-testing
 
-- [ ] **T25** — Platform user security screen
+- [x] **T25** — Platform user security screen
   - Depends on: T8, T24
   - Files: admin-frontend/src/UserSecurityScreen.tsx, admin-frontend/src/UserSecurityScreen.test.tsx, admin-frontend/src/index.tsx, example-frontend/app/admin/users/[id]/security.tsx, example-frontend/e2e/admin-user-security.spec.ts, docs/reference/admin-frontend.md
   - Build: operators get a user security screen that reuses `MemberSecurityPanel`

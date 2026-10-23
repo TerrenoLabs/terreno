@@ -1,8 +1,9 @@
-import {AdminModelForm} from "@terreno/admin-frontend";
+import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
 import {Box, Button, Card, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {terrenoApi, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {terrenoApi, useGetMeQuery, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
 const ADMIN_BASE_URL = "/admin";
 const MIN_PASSWORD_LENGTH = 8;
@@ -81,12 +82,24 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
 
 const AdminEditScreen: React.FC = () => {
   const {model, id} = useLocalSearchParams<{model: string; id: string}>();
+  const {data: profile} = useGetMeQuery();
+  // Recovery routes refuse self-targeting (D9); staff manage their own account from their own
+  // security screen.
+  const isOwnRecord = Boolean(id) && (profile?._id === id || profile?.id === id);
+  const canOpenSecurity =
+    !isOwnRecord &&
+    canManageUserSecurity({admin: profile?.admin, permissions: profile?.permissions});
   const footerContent = useMemo((): React.ReactNode => {
     if (model?.toLowerCase() !== "user") {
       return undefined;
     }
-    return <AdminUserPasswordCard userId={id} />;
-  }, [id, model]);
+    return (
+      <Box gap={4}>
+        {canOpenSecurity && id ? <UserSecurityLink routeBase={ADMIN_BASE_URL} userId={id} /> : null}
+        <AdminUserPasswordCard userId={id} />
+      </Box>
+    );
+  }, [canOpenSecurity, id, model]);
 
   return (
     <AdminModelForm

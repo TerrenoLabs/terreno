@@ -148,7 +148,8 @@ const errorTitle = (error: unknown, fallback: string): string => {
   return typeof message === "string" && message.length > 0 ? message : fallback;
 };
 
-const Alert: React.FC<{message: string; testID: string}> = ({message, testID}) => (
+/** An inline error announced to screen readers (`role="alert"`). Shared with UserSecurityScreen. */
+export const SecurityAlert: React.FC<{message: string; testID: string}> = ({message, testID}) => (
   <View role="alert" testID={testID}>
     <Text color="error">{message}</Text>
   </View>
@@ -307,7 +308,9 @@ export const MemberSecurityPanel: React.FC<MemberSecurityPanelProps> = ({
 
   const feedback = (
     <>
-      {actionError ? <Alert message={actionError} testID={`${testID}-action-error`} /> : null}
+      {actionError ? (
+        <SecurityAlert message={actionError} testID={`${testID}-action-error`} />
+      ) : null}
       {outcome ? (
         <Box gap={2}>
           <View role="status" testID={`${testID}-result`}>
@@ -361,7 +364,7 @@ export const MemberSecurityPanel: React.FC<MemberSecurityPanelProps> = ({
             <Spinner />
           </Box>
         ) : (
-          <Alert
+          <SecurityAlert
             message={errorTitle(error, "Could not load security details.")}
             testID={`${testID}-error`}
           />
@@ -384,7 +387,7 @@ export const MemberSecurityPanel: React.FC<MemberSecurityPanelProps> = ({
     <Card gap={4} padding={4} testID={testID}>
       {header}
       {error ? (
-        <Alert
+        <SecurityAlert
           message={errorTitle(error, "Could not refresh security details.")}
           testID={`${testID}-refresh-error`}
         />

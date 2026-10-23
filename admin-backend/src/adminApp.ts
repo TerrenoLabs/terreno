@@ -1,6 +1,7 @@
 import {
   ADMIN_PAGE_ACTION,
   type AdminAccessConfig,
+  type AdminConfig,
   type AdminModelAdminMap,
   type AnyTerrenoAccess,
   APIError,
@@ -758,7 +759,27 @@ export class AdminApp {
     return ownerId != null && String(ownerId) === String(user.id);
   }
 
+  /**
+   * Admin permissions for one model action: the admin page gate plus RBAC (or IsAdmin), ANDed
+   * with the model's `admin.adminPermissions[action]` methods. An explicitly empty array denies
+   * the action.
+   */
   private resourceActionPermissions(
+    config: Pick<AdminModelConfig, "adminAccess" | "model"> & {admin?: AdminConfig},
+    action: "list" | "read" | "create" | "update" | "delete"
+  ): PermissionMethod<unknown>[] {
+    const base = this.baseResourceActionPermissions(config, action);
+    const configured = config.admin?.adminPermissions?.[action];
+    if (!configured) {
+      return base;
+    }
+    if (configured.length === 0 || base.length === 0) {
+      return [];
+    }
+    return [...base, ...configured];
+  }
+
+  private baseResourceActionPermissions(
     config: Pick<AdminModelConfig, "adminAccess" | "model">,
     action: "list" | "read" | "create" | "update" | "delete"
   ): PermissionMethod<unknown>[] {

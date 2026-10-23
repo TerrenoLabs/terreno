@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {
   ADMIN_MODEL_ACCESS,
+  type AdminConfig,
   AuditApp,
   addAuthRoutes,
   apiErrorMiddleware,
@@ -13,6 +14,7 @@ import {
   modelRouter,
   Organization,
   orgScopedPlugin,
+  type PermissionMethod,
   Permissions,
   resetAuditRecorderForTests,
   setupAuth,
@@ -2181,6 +2183,109 @@ describe("AdminApp per-model queryFilter", () => {
       const searched = await agent.get("/admin/foods?name=Mine&q=M").expect(200);
       expect(searched.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
     });
+  });
+});
+
+describe("AdminApp adminPermissions methods", () => {
+  const buildContributionApp = (
+    adminPermissions: NonNullable<AdminConfig["adminPermissions"]>
+  ): express.Application => {
+    const plugin: TerrenoPlugin = {
+      adminContribution: () => ({
+        models: [
+          {
+            admin: {
+              adminPermissions,
+              bulkPatchAllowlist: ["calories"],
+              displayName: "Locked foods",
+              listFields: ["name", "calories"],
+              searchFields: ["name"],
+            },
+            model: FoodModel,
+            routePath: "/locked-foods",
+          },
+        ],
+      }),
+      register() {},
+    };
+    const terrenoApp = {
+      getPlugins: () => [plugin],
+      getRegistrations: () => [],
+    } as unknown as TerrenoApp;
+    const localApp = getBaseServer();
+    setupAuth(localApp, UserModel as unknown as UserModelType);
+    addAuthRoutes(localApp, UserModel as unknown as UserModelType);
+    new AdminApp({basePath: "/admin"}).register(localApp, undefined, terrenoApp);
+    localApp.use(apiUnauthorizedMiddleware);
+    localApp.use(apiErrorMiddleware);
+    return localApp;
+  };
+
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  afterEach(async () => {
+    await FoodModel.deleteMany({});
+  });
+
+  it("denies list, read, and search when list and read are empty arrays", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Locked"});
+    const agent = await authAsUser(buildContributionApp({list: [], read: []}), "admin");
+    await agent.get("/admin/locked-foods").expect(405);
+    await agent.get(`/admin/locked-foods/${row._id}`).expect(405);
+    await agent.get("/admin/locked-foods/search?q=Lock").expect(403);
+    const config = await agent.get("/admin/config").expect(200);
+    expect(config.body.models.map((model: {routePath: string}) => model.routePath)).not.toContain(
+      "/admin/locked-foods"
+    );
+  });
+
+  it("evaluates configured update methods on PATCH, bulk-patch, and capabilities", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Locked"});
+    let denyCalls = 0;
+    const denyAll: PermissionMethod<unknown> = async () => {
+      denyCalls += 1;
+      return false;
+    };
+    const agent = await authAsUser(buildContributionApp({update: [denyAll]}), "admin");
+
+    const read = await agent.get(`/admin/locked-foods/${row._id}`).expect(200);
+    expect(read.body.data._adminCapabilities.update).toBe(false);
+    expect(read.body.data._adminCapabilities.delete).toBe(true);
+    await agent.patch(`/admin/locked-foods/${row._id}`).send({calories: 77}).expect(405);
+    await agent
+      .post("/admin/locked-foods/bulk-patch")
+      .send({ids: [String(row._id)], patch: {calories: 78}})
+      .expect(403);
+    const config = await agent.get("/admin/config").expect(200);
+    const meta = config.body.models.find(
+      (model: {routePath: string}) => model.routePath === "/admin/locked-foods"
+    );
+    expect(meta?.permissions.update).toBe(false);
+
+    expect(denyCalls).toBeGreaterThan(0);
+    const stored = await FoodModel.findById(row._id).lean();
+    expect(stored?.calories).toBe(5);
+  });
+
+  it("ANDs configured methods with the admin check and passes the document", async () => {
+    const row = await FoodModel.create({calories: 5, name: "Editable"});
+    const seen: unknown[] = [];
+    const onlyEditable: PermissionMethod<unknown> = async (_method, _user, obj) => {
+      seen.push(obj);
+      return obj === undefined || (obj as {name?: string}).name === "Editable";
+    };
+    const app = buildContributionApp({update: [onlyEditable]});
+    const agent = await authAsUser(app, "admin");
+    await agent.patch(`/admin/locked-foods/${row._id}`).send({calories: 9}).expect(200);
+    expect(seen.some((obj) => obj !== undefined)).toBe(true);
+
+    const other = await FoodModel.create({calories: 5, name: "Other"});
+    await agent.patch(`/admin/locked-foods/${other._id}`).send({calories: 9}).expect(403);
+
+    const notAdmin = await authAsUser(app, "notAdmin");
+    await notAdmin.patch(`/admin/locked-foods/${row._id}`).send({calories: 10}).expect(405);
   });
 });
 

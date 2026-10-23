@@ -186,6 +186,15 @@ pipeline (Mongoose validation, conflict/baseVersion checks, and ledger ordering 
 Organization-scoped models do not register this scope and use REST mutations. Product clients
 that omit the marker keep product sync permissions and hooks.
 
+### Per-model permission methods
+
+`admin.adminPermissions` holds optional `PermissionMethod` arrays per action (`list`, `read`,
+`create`, `update`, `delete`). AdminApp ANDs them with the admin permissions above on every path
+that uses that action: REST CRUD, search (`list`), bulk-patch (`update`), the `/admin/config`
+capability flags and `_adminCapabilities`, and the admin-window sync read and write scopes. They
+can only restrict. An empty array disables the action; for `list` the model also drops out of
+`/admin/config`.
+
 ### Row scope
 
 A model's `queryFilter` (or `admin.adminFilter`, which AdminApp turns into one) is its admin row

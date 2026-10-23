@@ -5,7 +5,10 @@ platform staff and, through `OrgsApp`, for org-admins: a summary of a user's sig
 two-factor authentication, remove a passkey, unlink a sign-in provider, sign the user out
 everywhere, mail a password reset, disable or enable the account, and issue a set-password link to
 a legacy user who has no way to sign in. Every action that changes something writes an
-`AuditEvent` with `source: "security"`.
+`AuditEvent` with `source: "security"` and emails the affected user
+([Notifications](#notifications)). The user's own security changes (linking a provider, turning
+on 2FA, changing their password) are recorded and emailed the same way
+([Self-service events](#self-service-events)).
 
 It reads Better Auth's data (`user`, `account`, `session`, `twoFactor`, `passkey`) through
 Better Auth's internal adapter, so custom collection names keep working. The app `User` links to
@@ -47,6 +50,7 @@ registered on. With `setupServer` there is no `TerrenoApp`, so:
 | `audit` | `boolean` | `true` | `false` boots without `AuditApp`. Actions still run and still reach listeners, but nothing is written to the audit log |
 | `basePath` | `string` | `"/users"` | Prefix for the platform routes |
 | `getBetterAuth` | `() => BetterAuthInstance \| undefined` | the registered `BetterAuthApp`'s instance | Better Auth instance to read from. Required with `setupServer` |
+| `notifications` | `{enabled?, includeOrgName?, throttleMinutes?, render?, sendMail?}` | `{enabled: true, includeOrgName: false, throttleMinutes: 10}` | Security notification emails; see [Notifications](#notifications) |
 | `publicAppUrl` | `string` | the registered `BetterAuthApp`'s `publicAppUrl` | App page base for `issue-sign-in-link` URLs (`{publicAppUrl}/resetPassword?token=`). Required with `setupServer` to issue links |
 | `userModel` | `UserModel` | the TerrenoApp's `userModel` | App User model. Registration throws without one |
 
@@ -441,7 +445,7 @@ Every action name the security log can record, including self-service changes:
 | `id` | Started by |
 | --- | --- |
 | `reset-two-factor`, `remove-passkey`, `unlink-provider`, `revoke-sessions`, `send-password-reset`, `disable`, `enable`, `suspend-membership`, `issue-sign-in-link` | An administrator |
-| `provider-linked`, `provider-unlinked`, `passkey-added`, `passkey-removed`, `two-factor-enabled`, `two-factor-disabled`, `password-changed` | The user |
+| `provider-linked`, `provider-unlinked`, `passkey-added`, `passkey-removed`, `two-factor-enabled`, `two-factor-disabled`, `password-changed`, `password-reset`, `other-sessions-revoked` | The user (see [Self-service events](#self-service-events)) |
 
 `SECURITY_ACTIONS` exports the full table with labels.
 
@@ -469,6 +473,139 @@ write is logged without failing the action. Filter the log with
 `onSecurityAction(listener)` subscribes to every recorded action and returns an unsubscribe
 function. Listeners receive the record plus `occurredAt` (ISO time) and `origin`
 (`"admin"` or `"self"`). A listener that throws is logged and never fails the action.
+
+## Self-service events
+
+`createBetterAuth` records the security changes a user makes to their own account with
+`origin: "self"`, and the user as both actor and target. Each change writes a security
+`AuditEvent` when `AuditApp` is registered and reaches every `onSecurityAction` listener. It needs
+a `userModel`, because security principals are app User ids. Only successful requests are
+recorded. Admin recovery actions change Better Auth data through its adapters, not its endpoints,
+so they never show up here twice.
+
+| Action | Recorded when | `after` details |
+| --- | --- | --- |
+| `provider-linked` | A non-password account is created for a user who already had another sign-in method: `/link-social`, the link callback, the OAuth handoff, or implicit linking on sign-in. A first account is a sign-up and is not recorded | `providerId` |
+| `provider-unlinked` | `POST {basePath}/unlink-account` deletes an account | `providerId` |
+| `passkey-added` | `POST {basePath}/passkey/verify-registration` succeeds | `passkeyId` |
+| `passkey-removed` | `POST {basePath}/passkey/delete-passkey` succeeds | `passkeyId` |
+| `two-factor-enabled` | A successful `/two-factor/verify-totp`, `verify-otp`, or `enable` request that turned the stored `twoFactorEnabled` on (enrolment). The 2FA step of a sign-in is not recorded | none |
+| `two-factor-disabled` | A successful `POST {basePath}/two-factor/disable` that turned the stored `twoFactorEnabled` off | none |
+| `password-changed` | `POST {basePath}/change-password` succeeds | none |
+| `password-reset` | `POST {basePath}/reset-password` completes (Better Auth's `onPasswordReset`) | none |
+| `other-sessions-revoked` | `POST {basePath}/revoke-other-sessions` succeeds | none |
+
+Two-factor changes are read from the database, not the session. A `user.update.before` database
+hook compares the `twoFactorEnabled` being written with the stored user row, so a stale
+cookie-cached session cannot hide or invent a change. Admin resets run outside any Better Auth
+endpoint, so they are never mistaken for the user's own change.
+
+The plugin is `createSecurityEventsPlugin(userModel)` (id `terreno-security-events`).
+`createBetterAuth` adds it next to the app user sync plugin whenever it has a `userModel`.
+
+## Notifications
+
+`AccountSecurityApp` emails the affected user about every recorded security action, both admin
+recovery and self-service. It subscribes at registration with `onSecurityAction`. Security
+actions are process-wide, so one registration owns the emails: the newest `AccountSecurityApp`
+to register replaces any earlier subscription, and two registered apps never email twice.
+`accountSecurityApp.unsubscribeNotifications()` stops them on shutdown (it does nothing unless
+that instance is the owner).
+
+```typescript
+new AccountSecurityApp({
+  notifications: {
+    enabled: true, // default; nothing is sent while no sendMail is configured
+    includeOrgName: false, // default; see below
+    throttleMinutes: 10, // default
+  },
+});
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | `false` sends no notification. Recording and audit are unchanged |
+| `includeOrgName` | `false` | Name the organization in emails about actions an org-admin ran |
+| `throttleMinutes` | `10` | At most one email per user, template, origin (self or admin), and org in this window, so a burst of the same change is one email but an administrator's change is never hidden behind the user's own (D3). Expired entries are pruned as emails go out. `0` sends every one. Every action is still audited |
+| `render` | the built-in renderer | Renders the emails instead, for example `@terreno/comms` `renderAuthMail`. See [Templates](#templates) |
+| `sendMail` | the registered `BetterAuthApp`'s `sendMail` | Mailer for the notifications. Set it with `setupServer` |
+
+Each email:
+
+- Goes to the target app User's `email`. It is skipped, with no error, when `sendMail` is not
+  configured or the user has no email.
+- Says who acted: "You" for the user's own changes, or "An administrator" for recovery actions.
+  It never gives the admin's name or email.
+- Names the organization only when `includeOrgName` is `true` and an org-admin acted ("An
+  administrator at Acme Clinic ..."). On a shared inbox the org name can reveal care, so it is
+  off by default (Q9).
+- Gives the time (UTC) and ends with "If you did not expect this change, contact support right
+  away." When `publicAppUrl` is set, it adds "You can review your account security at
+  {publicAppUrl}."
+- Never includes tokens, links that sign in, passkey names, or other text the user chose. A
+  provider is named only when it is a known one (Google, GitHub, Apple, Microsoft, Facebook);
+  otherwise the email says "a sign-in provider".
+
+A failed delivery is logged (`Security notification failed action=... userId=...`, never the
+address) and never fails the action, and it frees the throttle slot so the next change can still
+email. No-op actions (`changed: false`) are not recorded, so they send nothing.
+
+| Action | Template id | Subject |
+| --- | --- | --- |
+| `reset-two-factor`, `two-factor-disabled` | `securityTwoFactorDisabled` | Two-step verification was turned off |
+| `two-factor-enabled` | `securityTwoFactorEnabled` | Two-step verification was turned on |
+| `remove-passkey`, `passkey-removed` | `securityPasskeyRemoved` | A passkey was removed from your account |
+| `passkey-added` | `securityPasskeyAdded` | A passkey was added to your account |
+| `unlink-provider`, `provider-unlinked` | `securityProviderUnlinked` | A sign-in method was disconnected from your account |
+| `provider-linked` | `securityProviderLinked` | A sign-in method was connected to your account |
+| `revoke-sessions` | `securitySessionsRevoked` | You were signed out everywhere |
+| `other-sessions-revoked` | `securityOtherSessionsRevoked` | Your other sessions were signed out |
+| `password-changed` | `securityPasswordChanged` | Your password was changed |
+| `password-reset` | `securityPasswordReset` | Your password was reset (the body does not say who: anyone holding the link can reset) |
+| `disable` | `securityAccountDisabled` | Your account was disabled |
+| `enable` | `securityAccountEnabled` | Your account was re-enabled |
+| `suspend-membership` | `securityMembershipSuspended` | Your organization membership was suspended |
+| `issue-sign-in-link` | `securitySignInLinkIssued` | A sign-in link was created for your account (the link itself went to the administrator and is never in the email; the action refuses users with no email) |
+| `send-password-reset` | none | The reset email it sends is the notice; a second email is noise |
+
+### Templates
+
+The built-in renderer renders the emails. `BetterAuthConfig.renderAuthMail` is never used for
+them: a renderer written only for `resetPassword`/`verifyEmail` would answer every security id
+with a reset or verify mail. To render them yourself, opt in with `notifications.render`; it gets
+`{templateId, data, publicAppUrl, templates: authMailTemplates}`. `@terreno/comms`
+`renderAuthMail` fits and gives the same output as the built-in renderer. When `render` throws or
+returns no subject, the built-in renderer is used and a warning is logged.
+
+Override any template's subject, text, or HTML through `BetterAuthConfig.authMailTemplates`:
+
+```typescript
+const betterAuthConfig: BetterAuthConfig = {
+  // ...
+  authMailTemplates: {
+    securityPasswordChanged: {
+      subject: "Your Acme password changed",
+      text: "{{actor}} changed your password on {{occurredAt}}.\n\n{{secureAccountLine}}",
+    },
+  },
+  sendMail: async (message) => getCommsService().sendMail(message),
+};
+
+new AccountSecurityApp({notifications: {render: renderAuthMail}}); // optional, from @terreno/comms
+```
+
+| Placeholder | Value |
+| --- | --- |
+| `actor` | `You` or `An administrator` |
+| `orgClause` | `""`, or ` at {org name}` with `includeOrgName` |
+| `orgReference` | `an organization`, or the org name with `includeOrgName` |
+| `providerName` | `Google`, `GitHub`, `Apple`, `Microsoft`, `Facebook`, or `a sign-in provider` |
+| `occurredAt` | Such as `October 23, 2026 at 14:05 UTC` |
+| `appUrl` | `publicAppUrl` without a trailing slash, or `""` |
+| `secureAccountLine` | The "contact support" sentence, with the app URL when set |
+
+HTML bodies get HTML-escaped values, so an org name cannot inject markup. Subject and text get
+the raw values.
 
 ## Mounting the routes elsewhere
 
@@ -513,6 +650,9 @@ prefix's params as literal text.
 | `ISSUE_SIGN_IN_LINK_PERMISSION` | `{user: ["issueSignInLink"]}` |
 | `SECURITY_ACTIONS`, `SecurityActionId` | Action names, labels, and origins |
 | `recordSecurityAction`, `onSecurityAction` | Record an action; subscribe to actions |
+| `createSecurityEventsPlugin`, `recordSelfSecurityAction` | The Better Auth plugin that records self-service events; record one by Better Auth user id |
+| `createSecurityNotificationListener`, `SECURITY_NOTIFICATION_TEMPLATES`, `DEFAULT_SECURITY_MAIL_TEMPLATES`, `SECURITY_MAIL_TEMPLATE_IDS`, `renderSecurityMail`, `buildSecurityMailData`, `escapeMailHtml` | Notification listener, the action-to-template map, the default templates, and the built-in renderer |
+| `SecurityNotificationsOptions`, `SecurityMailTemplateId`, `SecurityMailRenderer` | Types |
 | `createAccountSecurityService` | The summary, reset, credential, and access logic without routes |
 | `createOrgSecurityAuthorizer`, `mountOrgSecurityRoutes`, `OrgRecoveryOptions` | The org-admin authorizer and mount that `OrgsApp` uses |
 | `suspendMembershipAction` | The org-only `suspend-membership` action |

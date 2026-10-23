@@ -466,7 +466,7 @@ Open risks:
     `recover-locked-out-user.md` covers platform and org paths.
   - Skills: terreno-backend-api, security-audit, building-admin-interfaces
 
-- [ ] **T10** — Security notification emails
+- [x] **T10** — Security notification emails
   - Depends on: T8, T27
   - Files: api/src/accountSecurity/securityNotifications.ts, api/src/accountSecurity/securityEventHooks.ts, api/src/accountSecurity/securityEvents.ts, api/src/betterAuthFeatures.ts, api/src/accountSecurity/securityNotifications.test.ts, comms/src/templates.ts, comms/src/templates.test.ts, comms/src/types.ts, docs/reference/account-security.md
   - Build:

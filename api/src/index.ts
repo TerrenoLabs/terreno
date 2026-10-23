@@ -7,7 +7,12 @@ export {
   mountOrgSecurityRoutes,
   type OrgRecoveryOptions,
 } from "./accountSecurity/orgSecurityRoutes";
+export {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
 export * from "./accountSecurity/securityEvents";
+export * from "./accountSecurity/securityNotifications";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";

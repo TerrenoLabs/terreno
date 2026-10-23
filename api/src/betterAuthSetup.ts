@@ -14,6 +14,10 @@ import type {Application, NextFunction, Request, Response} from "express";
 import mergeWith from "lodash/mergeWith";
 import type {Db} from "mongodb";
 import mongoose from "mongoose";
+import {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {
@@ -264,6 +268,11 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
                 request,
                 passwordFromUnknown(currentBetterAuthEndpointBody())
               );
+              await recordSelfSecurityAction({
+                action: "password-reset",
+                betterAuthUserId: user.id,
+                userModel,
+              });
             },
           }
         : {}),
@@ -324,7 +333,8 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // socket auth silently fails (the sync client shows perpetually "offline").
     // The methods plugin serves `GET {basePath}/terreno/methods` for login screens.
     // With a user model, the app user sync plugin links or creates the app User as each session
-    // is created (see createAppUserSyncPlugin).
+    // is created (see createAppUserSyncPlugin), and the security events plugin records the
+    // user's own security changes (see createSecurityEventsPlugin).
     // Feature plugins (two-factor, passkey, ...) come before `config.plugins`, so a consumer
     // plugin can still hook around them. The closed sign-up plugin follows `config.plugins` so
     // its init reaches the providers `genericOAuth` registers.
@@ -334,7 +344,9 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       createMethodsPlugin(),
       ...buildFeaturePlugins(config),
       ...(isLinkingDisabled ? [createLinkingDisabledPlugin()] : []),
-      ...(userModel ? [createAppUserSyncPlugin(userModel)] : []),
+      ...(userModel
+        ? [createAppUserSyncPlugin(userModel), createSecurityEventsPlugin(userModel)]
+        : []),
       ...(config.plugins ?? []),
       ...(isClosed ? [createSignUpClosedPlugin()] : []),
       ...handoffPlugins,

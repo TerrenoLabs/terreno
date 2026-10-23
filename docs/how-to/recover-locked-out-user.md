@@ -94,7 +94,11 @@ new TerrenoApp({
 ## Check the audit trail
 
 Every change is one `AuditEvent` with `source: "security"`. Org actions carry the org's id in
-`organizationId`.
+`organizationId`. When `sendMail` is configured, each change also emails the user (except
+`send-password-reset`, whose reset email is the notice). For `issue-sign-in-link` the email says a
+link was created, never the link itself. The email says "an administrator" and never names you;
+see
+[Notifications](../reference/account-security.md#notifications).
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" \

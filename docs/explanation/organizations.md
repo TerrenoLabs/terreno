@@ -81,8 +81,10 @@ platform staff. `OrgsApp` mounts the same recovery handlers the platform uses at
   membership in that org only (Q8). The user still signs in and keeps their other orgs.
   `User.disabled` and `issue-sign-in-link` stay platform-only.
 - **Attach-then-act.** An org-admin can attach any existing user by email
-  (`POST /orgs/:id/members`). Every org-admin action is audited with the org's id. Apps that
-  want more can set `orgRecovery.minMembershipDays` to refuse members who joined too recently.
+  (`POST /orgs/:id/members`). Every org-admin action is audited with the org's id and emails the
+  user, so they learn about it ([notifications](../reference/account-security.md#notifications);
+  the org is named only with `notifications.includeOrgName`). Apps that want more can set
+  `orgRecovery.minMembershipDays` to refuse members who joined too recently.
 - **Platform staff** holding `user:manageSecurity` pass the org checks. The target must still be
   an active member of the org in the path.
 

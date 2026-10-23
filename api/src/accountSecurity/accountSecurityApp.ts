@@ -49,11 +49,20 @@ import {
 import {removePasskeyAction, unlinkProviderAction} from "./credentialActions";
 import {suspendMembershipAction} from "./membershipActions";
 import {
+  onSecurityAction,
   recordSecurityAction,
   SECURITY_ACTIONS,
   type SecurityActionId,
   type SecurityActionOrg,
 } from "./securityEvents";
+import {
+  createSecurityNotificationListener,
+  type SecurityMailConfig,
+  type SecurityNotificationsOptions,
+} from "./securityNotifications";
+
+/** The registration that currently owns security notification emails (see subscribeNotifications). */
+let activeNotifications: {owner: AccountSecurityApp; stop: () => void} | undefined;
 
 /** The RBAC statement that grants the platform security routes. */
 export const MANAGE_SECURITY_PERMISSION = {user: ["manageSecurity"]} as const;
@@ -200,6 +209,12 @@ export interface AccountSecurityAppOptions {
   audit?: boolean;
   /** Prefix for the platform routes. Defaults to `/users`. */
   basePath?: string;
+  /**
+   * Security notification emails: every recorded security action (admin recovery and the user's
+   * own changes) emails the affected user. On by default whenever `sendMail` is configured; the
+   * org name is left out unless `includeOrgName` is true.
+   */
+  notifications?: SecurityNotificationsOptions;
   /**
    * Better Auth instance. Defaults to the registered BetterAuthApp's. Required outside
    * TerrenoApp (setupServer); without it every Better Auth feature reads as off.
@@ -352,6 +367,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
     this.openApi = openApi as OpenApiMiddleware | undefined;
     this.assertAuditRegistered();
     this.resolveUserModel();
+    this.subscribeNotifications();
     const router = Router();
     this.mountSecurityRoutes(router, this.authorizePlatform, {includePlatformOnly: true});
     app.use(this.options.basePath ?? "/users", router);
@@ -607,6 +623,52 @@ export class AccountSecurityApp implements TerrenoPlugin {
       status: 500,
       title: "AccountSecurityApp requires AuditApp",
     });
+  };
+
+  /**
+   * Emails the affected user about each security action, unless `notifications.enabled` is
+   * false. Security actions are process-wide, so one registration owns the emails: the newest
+   * one replaces any earlier subscription, and two registered apps never email twice.
+   */
+  private subscribeNotifications = (): void => {
+    activeNotifications?.stop();
+    activeNotifications = undefined;
+    const notifications = this.options.notifications ?? {};
+    if (notifications.enabled === false) {
+      return;
+    }
+    activeNotifications = {
+      owner: this,
+      stop: onSecurityAction(
+        createSecurityNotificationListener({
+          getMailConfig: () => this.resolveMailConfig(),
+          getUserModel: () => this.resolveUserModel(),
+          includeOrgName: notifications.includeOrgName === true,
+          render: notifications.render,
+          throttleMinutes: notifications.throttleMinutes,
+        })
+      ),
+    };
+  };
+
+  /** Stops the security notification emails, when this instance owns them (on shutdown). */
+  unsubscribeNotifications(): void {
+    if (activeNotifications?.owner !== this) {
+      return;
+    }
+    activeNotifications.stop();
+    activeNotifications = undefined;
+  }
+
+  private resolveMailConfig = (): SecurityMailConfig => {
+    const config = this.terrenoApp
+      ? findBetterAuthProvider(this.terrenoApp.getRegistrations())?.getBetterAuthConfig?.()
+      : undefined;
+    return {
+      authMailTemplates: config?.authMailTemplates,
+      publicAppUrl: this.resolvePublicAppUrl(),
+      sendMail: this.options.notifications?.sendMail ?? config?.sendMail,
+    };
   };
 
   private resolveAccessControl = (): AnyTerrenoAccess | undefined =>

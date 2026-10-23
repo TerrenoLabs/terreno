@@ -22,6 +22,7 @@ import {
   SecurityUser,
   securityEventsFor,
   securityUserModel,
+  selfSecurityEventsFor,
   signInWithPassword,
   signUp,
 } from "../tests/accountSecurityTestApp";
@@ -797,7 +798,8 @@ describe("AccountSecurityApp", () => {
         changed: true,
         itemId: "pk-123",
       });
-      const events = await securityEventsFor(target.id);
+      // The custom action reuses a self-service id, so its event is among the self events.
+      const events = await selfSecurityEventsFor(target.id);
       expect(events).toHaveLength(1);
       expect(events[0].after).toEqual({itemId: "pk-123", securityAction: "password-changed"});
     });

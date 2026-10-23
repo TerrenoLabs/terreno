@@ -6,6 +6,7 @@
  */
 
 import type {BetterAuthOptions, BetterAuthPlugin} from "better-auth";
+import type {SecurityMailTemplateId} from "./accountSecurity/securityNotifications";
 import type {BetterAuthAccountLinkingMode} from "./betterAuthMethods";
 
 /**
@@ -142,6 +143,16 @@ export interface BetterAuthOAuthProxyConfig {
   productionURL: string;
 }
 
+/** Auth mail template ids: recovery links plus security notifications. */
+export type BetterAuthMailTemplateId = "resetPassword" | "verifyEmail" | SecurityMailTemplateId;
+
+/** A rendered (or overriding) auth mail template. */
+export interface BetterAuthMailTemplate {
+  html?: string;
+  subject: string;
+  text?: string;
+}
+
 /**
  * Configuration options for Better Auth integration.
  */
@@ -205,7 +216,8 @@ export interface BetterAuthConfig {
 
   /**
    * Render reset/verify mail. Pass `@terreno/comms` `renderAuthMail` so JWT and
-   * Better Auth send identical templates.
+   * Better Auth send identical templates. Security notifications do not use it; see
+   * `AccountSecurityApp` `notifications.render`.
    */
   renderAuthMail?: (options: {
     publicAppUrl: string;
@@ -216,10 +228,11 @@ export interface BetterAuthConfig {
     >;
   }) => {html?: string; subject: string; text?: string};
 
-  /** Optional per-app subject/text/html overrides for auth mail. */
-  authMailTemplates?: Partial<
-    Record<"resetPassword" | "verifyEmail", {html?: string; subject: string; text?: string}>
-  >;
+  /**
+   * Optional per-app subject/text/html overrides for auth mail, including the `security*`
+   * notification templates `AccountSecurityApp` sends.
+   */
+  authMailTemplates?: Partial<Record<BetterAuthMailTemplateId, BetterAuthMailTemplate>>;
 
   /**
    * Disable Better Auth's built-in IP limiter. Use only on throwaway in-process

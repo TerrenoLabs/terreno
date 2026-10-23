@@ -13,7 +13,10 @@ import {
   AccountSecurityApp,
   type AccountSecurityAppOptions,
 } from "../accountSecurity/accountSecurityApp";
-import {clearSecurityActionListenersForTests} from "../accountSecurity/securityEvents";
+import {
+  clearSecurityActionListenersForTests,
+  SECURITY_ACTIONS,
+} from "../accountSecurity/securityEvents";
 import {AuditApp} from "../audit/auditApp";
 import {createAuditEventModel} from "../audit/auditEventModel";
 import {flushAuditRecorderForTests, resetAuditRecorderForTests} from "../audit/record";
@@ -222,11 +225,37 @@ export const resetTwoFactor = (
     .set("authorization", `Bearer ${token}`)
     .send({});
 
+const actionIdsWithOrigin = (origin: "admin" | "self"): string[] =>
+  Object.entries(SECURITY_ACTIONS)
+    .filter(([, definition]) => definition.origin === origin)
+    .map(([id]) => id);
+
+/**
+ * The admin recovery events recorded for the user. Self-service events (such as the
+ * `two-factor-enabled` a test's 2FA enrolment records) are left out; see
+ * {@link selfSecurityEventsFor}.
+ */
 export const securityEventsFor = async (
   userId: string
 ): Promise<{actorId?: unknown; after?: unknown}[]> => {
   await flushAuditRecorderForTests();
-  return AuditEvent.find({recordId: userId, source: "security"}).lean();
+  return AuditEvent.find({
+    "after.securityAction": {$in: actionIdsWithOrigin("admin")},
+    recordId: userId,
+    source: "security",
+  }).lean();
+};
+
+/** The self-service security events (`origin: "self"`) recorded for the user. */
+export const selfSecurityEventsFor = async (
+  userId: string
+): Promise<{actorId?: unknown; after?: unknown}[]> => {
+  await flushAuditRecorderForTests();
+  return AuditEvent.find({
+    "after.securityAction": {$in: actionIdsWithOrigin("self")},
+    recordId: userId,
+    source: "security",
+  }).lean();
 };
 
 export const betterAuthCollection = (name: string): ReturnType<mongoose.mongo.Db["collection"]> => {

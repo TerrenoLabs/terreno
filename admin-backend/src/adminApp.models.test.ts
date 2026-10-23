@@ -2134,6 +2134,54 @@ describe("AdminApp per-model queryFilter", () => {
       await nullAgent.get(`/admin/foods/${row._id}`).expect(403);
     });
   });
+
+  describe("declared list filters on a scoped field", () => {
+    let agent: TestAgent;
+    let actorId: string;
+    let otherOwnerId: mongoose.Types.ObjectId;
+
+    beforeEach(async () => {
+      const localApp = buildApp([
+        {
+          ...foodModelConfig,
+          filters: [
+            {field: "ownerId", kind: "ref", refModel: "User"},
+            {field: "name", kind: "text"},
+          ],
+          queryFilter: (user, query): Record<string, unknown> => ({
+            ...(query ?? {}),
+            ownerId: user?.id,
+          }),
+          searchFields: ["name"],
+        },
+      ]);
+      agent = await authAsUser(localApp, "admin");
+      const actor = await findOneOrNoneFor(UserModel, {email: "admin@example.com"});
+      actorId = String(actor?._id);
+      otherOwnerId = new mongoose.Types.ObjectId();
+      await FoodModel.create({calories: 1, name: "Mine", ownerId: actorId});
+      await FoodModel.create({calories: 2, name: "Theirs", ownerId: otherOwnerId});
+    });
+
+    it("keeps the row scope when the client filters on the scoped field", async () => {
+      const res = await agent.get(`/admin/foods?ownerId=${otherOwnerId}`).expect(200);
+      expect(res.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+    });
+
+    it("keeps the row scope when the scoped-field filter is combined with search", async () => {
+      const res = await agent.get(`/admin/foods?ownerId=${otherOwnerId}&q=T`).expect(200);
+      expect(res.body.data).toEqual([]);
+    });
+
+    it("still applies declared filters on other fields inside the scope", async () => {
+      const mine = await agent.get("/admin/foods?name=Mine").expect(200);
+      expect(mine.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+      const theirs = await agent.get("/admin/foods?name=Theirs").expect(200);
+      expect(theirs.body.data).toEqual([]);
+      const searched = await agent.get("/admin/foods?name=Mine&q=M").expect(200);
+      expect(searched.body.data.map((row: {name: string}) => row.name)).toEqual(["Mine"]);
+    });
+  });
 });
 
 describe("AdminApp organization scoping", () => {

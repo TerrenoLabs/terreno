@@ -189,7 +189,9 @@ that omit the marker keep product sync permissions and hooks.
 ### Row scope
 
 A model's `queryFilter` (or `admin.adminFilter`, which AdminApp turns into one) is its admin row
-scope, the equivalent of Django's `get_queryset`. List and search add it to the query. Every route
+scope, the equivalent of Django's `get_queryset`. List and search add it to the query. Declared
+`filters` only narrow results inside the scope: when a client filter names a field the scope also
+sets, the scope's value is used. Every route
 that resolves one document by id applies it too:
 
 - `GET`, `PATCH`, and `DELETE {basePath}{routePath}/:id` (and the array-field routes) return 403

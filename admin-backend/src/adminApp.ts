@@ -443,13 +443,16 @@ const buildAdminListQueryFilter = (
       merged = {...merged, ...OrgQueryFilter(user, merged)};
     }
     const result = andMongoFilters(merged, searchClause);
-    const overrides: Record<string, unknown> = {...filter};
-    for (const key of consumedKeys) {
-      if (!(key in overrides)) {
-        overrides[key] = undefined;
+    // modelRouter spreads this over the raw request query. Clear consumed raw keys that the
+    // result does not set, and spread the result last so the row scope always wins over a
+    // client filter on the same field.
+    const cleared: Record<string, unknown> = {};
+    for (const key of [...consumedKeys, ...Object.keys(filter)]) {
+      if (!(key in result)) {
+        cleared[key] = undefined;
       }
     }
-    return {...result, ...overrides, [ADMIN_LIST_SEARCH_PARAM]: undefined};
+    return {...cleared, ...result, [ADMIN_LIST_SEARCH_PARAM]: undefined};
   };
 };
 

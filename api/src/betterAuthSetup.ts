@@ -109,6 +109,7 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
     });
     const message: AuthRecoveryMail = {
       html: rendered.html,
+      sensitive: true,
       subject: rendered.subject,
       text: rendered.text ?? "",
       to: user.email,

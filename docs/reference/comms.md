@@ -364,6 +364,12 @@ When a channel is unconfigured:
 - non-production environments use the matching console provider and emit a warning;
 - production throws a `501` `APIError` titled `Comms channel not configured`.
 
+A mail with `sensitive: true` (or sent with `sendMail(message, {sensitive: true})`) is logged
+without a payload on every attempt, so its content, such as a password-reset or verification
+link, is never stored and the dashboard cannot return it. Such a row cannot be retried from the
+dashboard (`comms-retry-payload-expired`). Auth recovery mail from `@terreno/api` sets the flag;
+pass it on any other mail that carries a secret. The flag is not sent to the provider.
+
 Delivery attempts are stored in `CommsMessage`. Recipient values are stored as `[redacted]` unless
 `redactRecipients` is explicitly `false`. Rendered payloads are retained for `retainPayloadDays`
 (default 30) after `redactPayload`; expired payloads are unset without deleting the log row.

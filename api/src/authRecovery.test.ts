@@ -12,6 +12,7 @@ import {setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
+  sensitive?: boolean;
   subject: string;
   text: string;
   to: string;
@@ -42,6 +43,25 @@ describe("password reset routes", () => {
       skipListen: true,
       userModel: UserModel,
     }).build();
+  });
+
+  it("marks reset and verification mail as sensitive so transports do not store the link", async () => {
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "notAdmin@example.com"})
+      .expect(202);
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    await supertest(app)
+      .post("/auth/sendVerification")
+      .set("authorization", `Bearer ${login.body.data.token}`)
+      .send({})
+      .expect(202);
+
+    assert.lengthOf(sentMail, 2);
+    assert.isTrue(sentMail.every((mail) => mail.sensitive === true));
   });
 
   it("returns 202 for existing and missing emails and only mails existing users", async () => {

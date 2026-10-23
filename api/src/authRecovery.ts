@@ -113,6 +113,7 @@ export const sendVerificationEmail = async (
   const verifyUrl = buildVerifyUrl(authOptions.publicAppUrl, issued.token);
   await deliverRecoveryMail(authOptions, {
     html: verifyEmailHtml(verifyUrl),
+    sensitive: true,
     subject: VERIFY_EMAIL_SUBJECT,
     text: verifyEmailText(verifyUrl),
     to: userEmail(user),
@@ -198,6 +199,7 @@ export const addAuthRecoveryRoutes = (
             const resetUrl = buildResetUrl(authOptions.publicAppUrl, issued.token);
             await deliverRecoveryMail(authOptions, {
               html: resetPasswordHtml(resetUrl),
+              sensitive: true,
               subject: RESET_PASSWORD_SUBJECT,
               text: resetPasswordText(resetUrl),
               to: userEmail(user, email),

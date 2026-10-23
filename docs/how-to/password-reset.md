@@ -29,6 +29,8 @@ authOptions: {
 }
 ```
 
+Pass the `message` through unchanged. Recovery mail carries `sensitive: true`, and `@terreno/comms` stores no payload for a sensitive message, so the reset or verify link never reaches the `CommsMessage` log or the admin Comms Dashboard. If you send through another transport, do not log or store the content of a message with `sensitive: true`.
+
 | Action | Path | Body |
 | --- | --- | --- |
 | Forgot | `POST /auth/forgotPassword` | `{email}` → 202 |

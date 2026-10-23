@@ -547,4 +547,40 @@ describe("CommsApp", () => {
       assert.equal(await PushToken.countDocuments({active: true}), 0);
     });
   });
+
+  describe("auth recovery mail", () => {
+    const buildRecoveryApp = (): express.Application => {
+      const plugin = new CommsApp();
+      return new TerrenoApp({
+        authOptions: {
+          publicAppUrl: "https://app.example.com",
+          sendMail: async (message): Promise<void> => {
+            await getCommsService().sendMail(message);
+          },
+        },
+        skipListen: true,
+        userModel: UserModel as unknown as UserModelType,
+      })
+        .register(plugin)
+        .build();
+    };
+
+    it("keeps the reset link out of the message log and the dashboard", async (): Promise<void> => {
+      const app = buildRecoveryApp();
+      const admin = await authAsUser(app, "admin");
+
+      await supertest(app)
+        .post("/auth/forgotPassword")
+        .send({email: "notAdmin@example.com"})
+        .expect(202);
+
+      const rows = await CommsMessage.find({channel: "mail"});
+      assert.lengthOf(rows, 1);
+      assert.isUndefined(rows[0]?.payload);
+      assert.equal(rows[0]?.subject, "Reset your password");
+      const list = await admin.get("/comms/messages").expect(200);
+      assert.notInclude(JSON.stringify(list.body), "token=");
+      assert.notInclude(JSON.stringify(list.body), "notAdmin@example.com");
+    });
+  });
 });

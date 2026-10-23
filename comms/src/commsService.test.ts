@@ -409,6 +409,36 @@ describe("CommsService", () => {
     assert.equal(await CommsMessage.countDocuments({to: "person@example.com"}), 0);
   });
 
+  it("stores no payload for mail marked sensitive, on the first attempt or the retry", async (): Promise<void> => {
+    let calls = 0;
+    const mail: MailProvider = {
+      id: "flaky-mail",
+      sendMail: async (): Promise<SendResult> => {
+        calls += 1;
+        return calls === 1 ? {accepted: false, errorClass: "transient"} : {accepted: true};
+      },
+    };
+    const service = new CommsService({mail});
+
+    await service.sendMail({
+      sensitive: true,
+      subject: "Reset",
+      text: "token=abc",
+      to: "a@example.com",
+    });
+    await service.sendMail(
+      {subject: "Verify", text: "token=def", to: "b@example.com"},
+      {sensitive: true}
+    );
+
+    const rows = await CommsMessage.find({channel: "mail"});
+    assert.lengthOf(rows, 2);
+    for (const row of rows) {
+      assert.isUndefined(row.payload);
+      assert.isUndefined(row.payloadExpiresAt);
+    }
+  });
+
   it("skips push for a soft-deleted user from the configured user model", async (): Promise<void> => {
     const userId = new mongoose.Types.ObjectId();
     await PushToken.upsert(

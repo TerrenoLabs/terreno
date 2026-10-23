@@ -518,7 +518,9 @@ marks one unused, unexpired row. TTL is 1 hour for `passwordReset` and 24 hours 
 
 Wire `authOptions.publicAppUrl` and `authOptions.sendMail` (typically
 `getCommsService().sendMail`) so forgot-password can deliver the link
-`${publicAppUrl}/resetPassword?token=...`. Forgot-password skips issuing a token when
+`${publicAppUrl}/resetPassword?token=...`. Reset and verification mail (JWT and Better Auth)
+has `sensitive: true` so the transport keeps no copy of the one-time link; `@terreno/comms`
+stores no payload for it. Forgot-password skips issuing a token when
 `publicAppUrl` is missing. Authenticated `POST /auth/sendVerification` returns 501 in that
 case instead of 202. Email lookup is case-insensitive. Successful reset calls `setPassword`, increments
 `tokenEpoch` so outstanding **refresh** tokens and MCP credentials (`mcp_` service tokens and

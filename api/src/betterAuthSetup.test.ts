@@ -294,7 +294,7 @@ describe("createBetterAuth", () => {
   it("sends reset and verification mail through the injected renderer", async () => {
     await setup;
     const renderedCalls: Array<{templateId: string; token: string}> = [];
-    const sent: Array<{subject: string; text?: string; to: string}> = [];
+    const sent: Array<{sensitive?: boolean; subject: string; text?: string; to: string}> = [];
     const hooks = createBetterAuthEmailHooks({
       enabled: true,
       publicAppUrl: "https://app.example.com",
@@ -303,7 +303,12 @@ describe("createBetterAuth", () => {
         return {subject: templateId, text: `link-${token}`};
       },
       sendMail: async (message) => {
-        sent.push({subject: message.subject, text: message.text, to: message.to});
+        sent.push({
+          sensitive: message.sensitive,
+          subject: message.subject,
+          text: message.text,
+          to: message.to,
+        });
       },
     });
     assert.isDefined(hooks);
@@ -322,8 +327,18 @@ describe("createBetterAuth", () => {
       {templateId: "verifyEmail", token: "verify-token"},
     ]);
     assert.deepEqual(sent, [
-      {subject: "resetPassword", text: "link-reset-token", to: "reset@example.com"},
-      {subject: "verifyEmail", text: "link-verify-token", to: "verify@example.com"},
+      {
+        sensitive: true,
+        subject: "resetPassword",
+        text: "link-reset-token",
+        to: "reset@example.com",
+      },
+      {
+        sensitive: true,
+        subject: "verifyEmail",
+        text: "link-verify-token",
+        to: "verify@example.com",
+      },
     ]);
   });
 

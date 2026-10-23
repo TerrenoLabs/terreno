@@ -70,6 +70,8 @@ export class CommsService {
   private readonly consoleVerification = new ConsoleVerificationProvider();
 
   private userModel: CommsUserModel | undefined;
+  // Sends whose payload carries a secret; their log rows keep no payload.
+  private readonly sensitiveContexts = new WeakSet<CommsHookContext>();
 
   constructor(options?: CommsOptions) {
     this.options = options ?? {};
@@ -272,7 +274,7 @@ export class CommsService {
   }
 
   private resolvePayload(context: CommsHookContext, hookErrors: Record<string, string[]>): unknown {
-    if (this.retainPayloadDays() <= 0) {
+    if (this.retainPayloadDays() <= 0 || this.sensitiveContexts.has(context)) {
       return undefined;
     }
     const payload = this.defaultPayload(context.message, context.channel);
@@ -675,14 +677,18 @@ export class CommsService {
   async sendMail(message: MailMessage, sendOptions?: CommsSendOptions): Promise<SendResult> {
     const provider = this.mailProvider();
     const hookErrors: Record<string, string[]> = {};
+    const {sensitive, ...mail} = message;
     const context: CommsHookContext = {
       attempt: 1,
       channel: "mail",
       isRetry: sendOptions?.isRetry === true,
-      message: this.applyMailDefaults(message),
+      message: this.applyMailDefaults(mail),
       provider: provider.id,
       userId: sendOptions?.userId ? String(sendOptions.userId) : undefined,
     };
+    if (sensitive === true || sendOptions?.sensitive === true) {
+      this.sensitiveContexts.add(context);
+    }
     const before = await this.applyBeforeSend(context, hookErrors);
     const activeMessage = this.applyMailDefaults(before.message as MailMessage);
     context.message = activeMessage;

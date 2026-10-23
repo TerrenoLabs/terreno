@@ -210,6 +210,11 @@ export const createRouterWithAuth = (
 
 export interface AuthRecoveryMail {
   html?: string;
+  /**
+   * True on Terreno's recovery mail: it carries a one-time secret link. Mail transports should
+   * not store its content; `@terreno/comms` keeps no payload for it in the message log.
+   */
+  sensitive?: boolean;
   subject: string;
   text: string;
   to: string;

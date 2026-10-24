@@ -1180,10 +1180,14 @@ describe("Box", () => {
       expect(getByTestId("box").props.accessibilityLabel).toBe("Loading profile");
     });
 
-    it("hands loadingAnimation to skeletons inside the loading component", () => {
+    it("hands loadingAnimation to skeletons inside the loading component", async () => {
       const {getByTestId} = renderWithTheme(
         <Box loading loadingAnimation="shimmer" loadingComponent={<Skeleton testID="block" />} />
       );
+      // Skeletons hold still until the reduce-motion setting resolves.
+      await act(async () => {
+        await Promise.resolve();
+      });
       expect(getByTestId("block.shimmer", HIDDEN)).toBeTruthy();
     });
 

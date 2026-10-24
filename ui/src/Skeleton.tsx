@@ -69,8 +69,17 @@ interface SkeletonGroupContextValue {
 
 const SkeletonGroupContext = createContext<SkeletonGroupContextValue | undefined>(undefined);
 
+// Web can read prefers-reduced-motion synchronously. Native has no synchronous API, so skeletons
+// hold still until AccessibilityInfo answers rather than animating before the answer arrives.
+const getInitialReducedMotion = (): boolean => {
+  if (Platform.OS === "web" && typeof window !== "undefined" && window.matchMedia) {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  return true;
+};
+
 const useReducedMotion = (): boolean => {
-  const [isReducedMotion, setIsReducedMotion] = useState(false);
+  const [isReducedMotion, setIsReducedMotion] = useState(getInitialReducedMotion);
 
   // Follow the OS reduce-motion setting so skeletons stop animating when the user asks for less motion.
   useEffect(() => {
@@ -170,6 +179,9 @@ const ShimmerHighlight: FC<{progress: Animated.Value; testID?: string}> = ({prog
   const {colorScheme} = useTheme();
   const [width, setWidth] = useState(0);
   const highlight = colorScheme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.6)";
+  // Fade to transparent white, not "transparent": Android reads that as transparent black and the
+  // gradient would pass through a dark band.
+  const edge = "rgba(255,255,255,0)";
 
   const onLayout = (event: LayoutChangeEvent): void => {
     setWidth(event.nativeEvent.layout.width);
@@ -182,7 +194,7 @@ const ShimmerHighlight: FC<{progress: Animated.Value; testID?: string}> = ({prog
       {width > 0 && (
         <Animated.View style={{height: "100%", transform: [{translateX}], width}}>
           <LinearGradient
-            colors={["transparent", highlight, "transparent"]}
+            colors={[edge, highlight, edge]}
             end={{x: 1, y: 0.5}}
             start={{x: 0, y: 0.5}}
             style={{height: "100%", width: "100%"}}

@@ -347,4 +347,22 @@ describe("Page", () => {
     expect(getByTestId("page-loading").props["aria-busy"]).toBe(true);
     expect(queryByText("Content")).toBeNull();
   });
+
+  it("announces loadingLabel and is busy while showing the default spinner", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <Page
+        loading
+        loadingLabel="Loading patients"
+        loadingText="Fetching..."
+        navigation={mockNavigation}
+        testID="page"
+      >
+        <Text>Content</Text>
+      </Page>
+    );
+    const region = getByTestId("page-loading");
+    expect(region.props["aria-busy"]).toBe(true);
+    expect(region.props.accessibilityLabel).toBe("Loading patients");
+    expect(getByText("Fetching...", HIDDEN)).toBeTruthy();
+  });
 });

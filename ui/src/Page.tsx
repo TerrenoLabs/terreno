@@ -101,16 +101,14 @@ export class Page extends React.Component<PageProps, {}> {
     if (!this.props.loading) {
       return this.props.children;
     }
-    if (!this.props.loadingComponent) {
-      return spinner;
-    }
+    // Both paths render through a loading Box so the page announces loadingLabel and is busy.
     return (
       <Box
         direction="column"
         flex="grow"
         loading
         loadingAnimation={this.props.loadingAnimation}
-        loadingComponent={this.props.loadingComponent}
+        loadingComponent={this.props.loadingComponent ?? spinner}
         loadingLabel={this.props.loadingLabel}
         testID={this.props.testID ? `${this.props.testID}-loading` : undefined}
         width="100%"

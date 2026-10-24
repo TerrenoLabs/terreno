@@ -303,7 +303,9 @@ Containers share one loading contract, `LoadingProps`:
 | `Page` | `loadingComponent` instead of children | `Spinner` and `loadingText` |
 | `SplitPage` | `loadingComponent` instead of the list and detail | `Spinner` beside the content |
 
-`Page`, `SplitPage`, and the charts keep their spinner unless you pass `loadingComponent`.
+`Page`, `SplitPage`, and the charts keep their spinner unless you pass `loadingComponent`. The
+spinner is busy and labeled the same way. `SplitPage` takes no `testID`, so its loading region is
+always `split-page-loading`.
 
 While loading, the container sets `accessibilityState.busy` (`aria-busy` on web) and the
 `loadingLabel` as its accessibility label. Skeleton blocks are hidden from screen readers. A
@@ -333,7 +335,8 @@ assistive tech, so React Native Testing Library queries need `{includeHiddenElem
 
 `SkeletonGroup` sets `animation` for every skeleton inside it and runs them from one timeline, so
 they pulse together. Loading containers wrap `loadingComponent` in one. A skeleton's own
-`animation` overrides the group. Animations stop while the OS reduce-motion setting is on.
+`animation` overrides the group. Animations stop while the OS reduce-motion setting is on. On
+native, skeletons hold still until that setting has been read, so they never animate first.
 
 ### Custom components
 

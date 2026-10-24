@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
+import {LinearGradient} from "expo-linear-gradient";
 import {AccessibilityInfo, Animated, View} from "react-native";
 
 import {
@@ -31,7 +32,9 @@ const flushReducedMotion = async (): Promise<void> => {
 };
 
 describe("Skeleton", () => {
-  beforeEach(() => {
+  // Earlier renders may still be waiting on the reduce-motion answer; settle them before counting.
+  beforeEach(async () => {
+    await flushReducedMotion();
     loopMock.mockClear();
   });
 
@@ -54,25 +57,49 @@ describe("Skeleton", () => {
     });
   });
 
-  it("pulses by default", () => {
+  it("pulses by default", async () => {
     renderWithTheme(<Skeleton />);
+    await flushReducedMotion();
     expect(loopMock.mock.calls.length).toBe(1);
   });
 
-  it("does not animate with animation none", () => {
+  it("holds still until the reduce-motion setting is known", async () => {
+    const {getByTestId} = renderWithTheme(<Skeleton testID="block" />);
+    expect(loopMock.mock.calls.length).toBe(0);
+    expect(getByTestId("block", HIDDEN).props.style.opacity).toBeUndefined();
+    await flushReducedMotion();
+    expect(loopMock.mock.calls.length).toBe(1);
+  });
+
+  it("does not animate with animation none", async () => {
     const {getByTestId} = renderWithTheme(<Skeleton animation="none" testID="block" />);
+    await flushReducedMotion();
     expect(loopMock.mock.calls.length).toBe(0);
     expect(getByTestId("block", HIDDEN).props.style.opacity).toBeUndefined();
   });
 
-  it("renders a shimmer highlight once the block has a width", () => {
+  it("renders a shimmer highlight once the block has a width", async () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
       <Skeleton animation="shimmer" testID="block" />
     );
+    await flushReducedMotion();
     const overlay = getByTestId("block.shimmer", HIDDEN);
     expect(overlay.children.length).toBe(0);
     fireEvent(overlay, "layout", {nativeEvent: {layout: {height: 16, width: 200}}});
     expect(queryByTestId("block.shimmer", HIDDEN)?.children.length).toBe(1);
+  });
+
+  it("fades the shimmer to transparent white so Android does not draw a dark band", async () => {
+    const {getByTestId, UNSAFE_getByType} = renderWithTheme(
+      <Skeleton animation="shimmer" testID="block" />
+    );
+    await flushReducedMotion();
+    fireEvent(getByTestId("block.shimmer", HIDDEN), "layout", {
+      nativeEvent: {layout: {height: 16, width: 200}},
+    });
+    const [start, , end] = UNSAFE_getByType(LinearGradient).props.colors;
+    expect(start).toBe("rgba(255,255,255,0)");
+    expect(end).toBe("rgba(255,255,255,0)");
   });
 
   describe("reduced motion", () => {
@@ -98,11 +125,13 @@ describe("Skeleton", () => {
 });
 
 describe("SkeletonGroup", () => {
-  beforeEach(() => {
+  // Earlier renders may still be waiting on the reduce-motion answer; settle them before counting.
+  beforeEach(async () => {
+    await flushReducedMotion();
     loopMock.mockClear();
   });
 
-  it("drives every skeleton inside it from one timeline", () => {
+  it("drives every skeleton inside it from one timeline", async () => {
     renderWithTheme(
       <SkeletonGroup>
         <Skeleton />
@@ -110,25 +139,28 @@ describe("SkeletonGroup", () => {
         <Skeleton />
       </SkeletonGroup>
     );
+    await flushReducedMotion();
     expect(loopMock.mock.calls.length).toBe(1);
   });
 
-  it("passes its animation down to skeletons that do not set one", () => {
+  it("passes its animation down to skeletons that do not set one", async () => {
     const {getByTestId} = renderWithTheme(
       <SkeletonGroup animation="none">
         <Skeleton testID="block" />
       </SkeletonGroup>
     );
+    await flushReducedMotion();
     expect(loopMock.mock.calls.length).toBe(0);
     expect(getByTestId("block", HIDDEN).props.style.opacity).toBeUndefined();
   });
 
-  it("lets a skeleton override the group animation", () => {
+  it("lets a skeleton override the group animation", async () => {
     const {getByTestId} = renderWithTheme(
       <SkeletonGroup animation="none">
         <Skeleton animation="shimmer" testID="block" />
       </SkeletonGroup>
     );
+    await flushReducedMotion();
     expect(getByTestId("block.shimmer", HIDDEN)).toBeTruthy();
     expect(loopMock.mock.calls.length).toBe(1);
   });

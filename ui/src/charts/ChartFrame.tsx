@@ -2,7 +2,7 @@ import type {FC, ReactNode} from "react";
 
 import {Box} from "../Box";
 import type {LoadingProps} from "../Common";
-import {resolveLoadingContent} from "../Skeleton";
+import {getLoadingAccessibilityProps, resolveLoadingContent} from "../Skeleton";
 import {Spinner} from "../Spinner";
 import {Text} from "../Text";
 import {resolveTestID, toTestProps} from "../testing/resolveTestId";
@@ -34,13 +34,14 @@ export const ChartFrame: FC<ChartFrameProps> = ({
   tooltipText,
 }) => {
   const showPlot = !loading && !isEmpty;
+  const loadingAccessibilityProps = getLoadingAccessibilityProps({loading, loadingLabel});
 
   // alignSelf stretch keeps the frame full width even when a parent centers its children, so the
   // measured plot width comes from the container instead of the chart's own content.
   return (
     <Box
-      accessibilityLabel={loading ? (loadingLabel ?? "Loading") : accessibilityLabel}
-      accessibilityState={loading ? {busy: true} : undefined}
+      accessibilityLabel={loadingAccessibilityProps.accessibilityLabel ?? accessibilityLabel}
+      accessibilityState={loadingAccessibilityProps.accessibilityState}
       alignSelf="stretch"
       minWidth={0}
       width="100%"

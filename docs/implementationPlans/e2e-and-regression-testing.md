@@ -270,7 +270,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
   - Acceptance: The docs site build (`bun run --cwd website build`) passes.
   - Skills: update-docs
 
-- [ ] **T11** — Declare Terreno's Testing conventions and extend the IP template
+- [x] **T11** — Declare Terreno's Testing conventions and extend the IP template
   - Depends on: T1, T8, T10
   - Files: .rulesync/rules/00-root.md, generated rule outputs (AGENTS.md, CLAUDE.md and the other `bun run rules` targets), docs/implementationPlans/IP_TEMPLATE.md, docs/implementationPlans/README.md
   - Delivers:

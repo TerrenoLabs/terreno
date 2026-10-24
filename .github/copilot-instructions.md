@@ -121,6 +121,18 @@ keeps a ratcheted baseline; run `bun run analyze:dependency-baseline` only after
 an intentional repository-wide dependency-graph change. See
 `docs/explanation/static-analysis.md`.
 
+## Testing conventions
+
+Lifecycle skills read this table to find the e2e guide, the manual regression suites,
+and the smoke command. Terreno uses the planning plugin's default paths and declares
+`bun run smoke` as its smoke command.
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke |
+
 ## How the Packages Work Together
 
 The three core packages form a complete full-stack framework:

@@ -47,6 +47,29 @@ the roadmap entry is scaffolded with on merge; omit it to have them inferred.
 
 Link to `docs/tasks/<slug>.md`.
 
+## E2E tests
+
+Every planned spec or flow, written by the task that delivers its behaviour. Follow
+[`docs/testing/e2e.md`](../testing/e2e.md) for paths and layers. Write
+`None — <reason>` when the plan adds none; never delete the section.
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | `<package>/e2e/<name>.spec.ts` | browser \| native flow \| http \| process | `<acceptance criterion, observable>` | T1 |
+
+## Regression cases
+
+Manual cases this plan adds or changes, in the suite format used by the files in
+`docs/regression/`. IDs here are provisional (`<AREA>-new-<n>`); Brew
+assigns real IDs when it writes them into the suite. Write `None — <reason>` when the
+plan adds none; never delete the section.
+
+Destination: `<AREA>` → `docs/regression/<area>.md`
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| `<AREA>-new-1` | `<case>` | `<starting state, then actions>` | `<what a person observes>` | `<platforms>` | manual \| E1 | `<slug>` |
+
 ## Acceptance Criteria
 
 - [ ]

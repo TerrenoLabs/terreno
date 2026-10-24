@@ -5,8 +5,14 @@ import {loginAs} from "./helpers/login";
 test.describe("Profile", () => {
   test.beforeEach(async ({page}) => {
     await loginAs(page);
+    // syncdb starts on every page load and ends its start with stream discovery. Waiting for it
+    // keeps a test that cuts the network off (or signs out) from landing mid-start.
+    const syncDbStarted = page.waitForResponse((response) =>
+      response.url().includes("/sync/streams")
+    );
     await page.goto("/profile");
     await page.getByTestId("profile-name-input.edit-clickable").first().waitFor({state: "visible"});
+    await syncDbStarted;
   });
 
   test("profile screen renders correctly", async ({page}) => {
@@ -112,6 +118,13 @@ test.describe("Profile", () => {
     await page.route("**/api/auth/sign-out", (route) => route.abort("connectionrefused"));
     await page.route("**/api/auth/get-session**", (route) => route.abort("connectionrefused"));
 
+    // The failed sign-out leaves the user signed in, so syncdb starts again, offline: it cannot
+    // read a session to connect with, and says so (the documented offline start).
+    const offlineStart = "[syncdb] transport connect failed; starting offline";
+    consoleGuard.allow(offlineStart);
+    const syncDbRestarted = page.waitForEvent("console", (message) =>
+      message.text().includes(offlineStart)
+    );
     await page.getByTestId("profile-logout-button").first().click();
 
     await expect(page.getByTestId("profile-logout-error").first()).toBeVisible();
@@ -121,6 +134,7 @@ test.describe("Profile", () => {
     await expect(page).toHaveURL(/\/profile$/);
     await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
     await expect(page.getByTestId("login-screen")).toHaveCount(0);
+    await syncDbRestarted;
   });
 
   test("logout redirects to login", async ({page}) => {

@@ -382,7 +382,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Acceptance: `bun run --cwd example-frontend smoke` exits 0. A user signs in with `loginAs`, reaches the todos screen, and creates a todo, finding every element by `testID`. `bun test scripts/ci/e2eAffected/` passes.
   - Skills: verify-ui-changes
 
-- [ ] **T30** — Smoke spec for demo
+- [x] **T30** — Smoke spec for demo
   - Depends on: T8
   - Files: demo/e2e/smoke.spec.ts, demo/package.json, docs/testing/e2e/demo.md
   - Acceptance: After `export`, `bun run --cwd demo smoke` exits 0. In Chromium, the demo home lists the stories, and opening one story by route renders its root `testID`.

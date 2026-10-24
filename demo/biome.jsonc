@@ -16,6 +16,7 @@
       "collectRegisteredStoryRenders.ts",
       "collectRegisteredStoryRenders.test.tsx",
       "storiesSmoke.test.tsx",
+      "e2e/**/*.ts",
       "story-config.tsx",
       "!!**/node_modules",
       "!!node_modules",

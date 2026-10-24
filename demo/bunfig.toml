@@ -1,6 +1,8 @@
 [test]
 preload = ["../ui/src/bunSetup.ts"]
 root = "."
+# e2e/smoke.spec.ts is a Bun-driven Playwright smoke (`bun run smoke`), not a unit test.
+pathIgnorePatterns = ["e2e/**"]
 coveragePathIgnorePatterns = [
   "**/*.test.ts",
   "**/*.test.tsx",

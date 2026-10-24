@@ -8,7 +8,11 @@ import {useAiObservabilityEvaluatorsApi} from "../evaluators/useAiObservabilityE
 import {unwrapPromptDetail, unwrapPromptList} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
-import {AiExperimentNewView, type ExperimentWizardStep} from "./AiExperimentNewView";
+import {
+  AiExperimentNewView,
+  DATASET_REQUIRED_MESSAGE,
+  type ExperimentWizardStep,
+} from "./AiExperimentNewView";
 import {
   type ExperimentEstimate,
   isAutomaticExperimentEvaluator,
@@ -84,8 +88,23 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     });
   }, []);
 
+  const hasDataset = useMemo(() => {
+    return datasets.some((entry) => entry.id === datasetId);
+  }, [datasetId, datasets]);
+
+  const handleDatasetChange = useCallback((nextDatasetId: string): void => {
+    setDatasetId(nextDatasetId);
+    setEstimate(undefined);
+    setValidationError("");
+  }, []);
+
   const handleStepChange = useCallback(
     (next: ExperimentWizardStep): void => {
+      if (next > 1 && !hasDataset) {
+        setValidationError(DATASET_REQUIRED_MESSAGE);
+        setStep(1);
+        return;
+      }
       if (next > 2 && !isValidExperimentVersionCount(versions.length)) {
         setValidationError("Select 2–3 prompt versions.");
         setStep(2);
@@ -94,7 +113,7 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
       setValidationError("");
       setStep(next);
     },
-    [versions.length]
+    [hasDataset, versions.length]
   );
 
   const handleEvaluatorToggle = useCallback((id: string): void => {
@@ -118,8 +137,9 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
       setValidationError("Experiment name is required.");
       return false;
     }
-    if (!datasetId) {
-      setValidationError("Select a dataset.");
+    if (!hasDataset) {
+      setValidationError(DATASET_REQUIRED_MESSAGE);
+      setStep(1);
       return false;
     }
     if (!promptName) {
@@ -136,7 +156,7 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     }
     setValidationError("");
     return true;
-  }, [datasetId, evaluatorIds.length, name, promptName, versions.length]);
+  }, [evaluatorIds.length, hasDataset, name, promptName, versions.length]);
 
   // Refresh the cost estimate on the review step. Drop responses after the
   // selection changes so a slower request cannot replace a newer estimate.
@@ -227,7 +247,7 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
         isEstimating={estimateState.isLoading}
         modelOverride={modelOverride}
         name={name}
-        onDatasetChange={setDatasetId}
+        onDatasetChange={handleDatasetChange}
         onEvaluatorToggle={handleEvaluatorToggle}
         onIncludeUnproofreadChange={setIncludeUnproofread}
         onModelOverrideChange={setModelOverride}

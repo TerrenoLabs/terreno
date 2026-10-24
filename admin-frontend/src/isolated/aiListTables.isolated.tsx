@@ -110,6 +110,7 @@ describe("AiExperimentsListView table", () => {
       true,
       true,
       true,
+      true,
       false,
     ]);
     expect(table.columns[0]?.width).toBeGreaterThanOrEqual(300);
@@ -143,6 +144,40 @@ describe("AiExperimentsListView table", () => {
       />
     );
     expect(view.getByText("ds-orphan")).toBeTruthy();
+  });
+
+  it("summarizes gates per version in one column instead of badges", () => {
+    const gate = {
+      aggregate: "mean" as const,
+      dimension: "helpfulness",
+      evaluatorName: "helpfulness",
+      op: "gte" as const,
+      value: 0.8,
+    };
+    const view = renderWithTheme(
+      <AiExperimentsListView
+        experiments={[
+          experiment({
+            id: "e5",
+            results: {
+              gates: [
+                {...gate, actual: 0.6, passed: false, version: 1},
+                {...gate, actual: 0.9, passed: true, version: 2},
+              ],
+              lowConfidenceItemIds: [],
+              outlierItemIds: [],
+              progress: {completed: 1, total: 1},
+            } as ExperimentRecord["results"],
+          }),
+        ]}
+        isLoading={false}
+        onCreate={() => undefined}
+        onOpenResults={() => undefined}
+        onRetry={() => undefined}
+      />
+    );
+    expect(view.getByText("v1 fails 1 gate · v2 passes")).toBeTruthy();
+    expect(view.queryByText(/gates failing/)).toBeNull();
   });
 });
 

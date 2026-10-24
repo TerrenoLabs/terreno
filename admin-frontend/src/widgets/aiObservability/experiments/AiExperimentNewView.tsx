@@ -44,6 +44,12 @@ const STEP_LABELS = ["Dataset", "Prompt versions", "Evaluators", "Review & run"]
 
 const EXPERIMENT_VERSION_HELP = "Select 2–3 prompt versions to compare.";
 
+export const DATASET_REQUIRED_MESSAGE = "Select a dataset.";
+
+// Shown in the dataset field while nothing is chosen. Without it, a required SelectField with an
+// empty value displays the first dataset even though none is selected.
+const DATASET_PLACEHOLDER = "Choose a dataset";
+
 const versionTags = (version: number, detail?: PromptDetail): string[] => {
   const tags: string[] = [];
   if (!detail) {
@@ -92,8 +98,16 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
 }) => {
   const selectedDataset = datasets.find((entry) => entry.id === datasetId);
   const automaticEvaluators = evaluators.filter(isAutomaticExperimentEvaluator);
+  const hasDataset = Boolean(selectedDataset);
   const hasVersionSelection = isValidExperimentVersionCount(versions.length);
-  const isNextDisabled = step === 2 && !hasVersionSelection;
+  const isNextDisabled = (step === 1 && !hasDataset) || (step === 2 && !hasVersionSelection);
+  // Later steps need a dataset, and steps after prompt versions need a valid version selection.
+  const isStepLocked = (stepNumber: ExperimentWizardStep): boolean => {
+    if (stepNumber > 1 && !hasDataset) {
+      return true;
+    }
+    return stepNumber > 2 && !hasVersionSelection;
+  };
 
   return (
     <Box gap={4} testID="ai-experiment-new">
@@ -103,10 +117,10 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
           const completed = step > stepNumber;
           return (
             <Button
-              disabled={stepNumber > 2 && !hasVersionSelection}
+              disabled={isStepLocked(stepNumber)}
               key={label}
               onClick={() => {
-                if (stepNumber > 2 && !hasVersionSelection) {
+                if (isStepLocked(stepNumber)) {
                   return;
                 }
                 onStepChange(stepNumber);
@@ -134,16 +148,21 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
                 value: entry.id,
               };
             })}
-            requireValue
+            placeholder={DATASET_PLACEHOLDER}
+            testID="ai-experiment-dataset"
             title="Dataset"
-            value={datasetId}
+            value={hasDataset ? datasetId : ""}
           />
           {selectedDataset ? (
-            <Text color="secondaryDark" size="sm">
+            <Text color="secondaryDark" size="sm" testID="ai-experiment-dataset-summary">
               Schema binding: {selectedDataset.inputSchemaPromptName ?? "none"} ·{" "}
               {selectedDataset.counts.needsReview} need review
             </Text>
-          ) : undefined}
+          ) : (
+            <Text color="error" size="sm" testID="ai-experiment-dataset-help">
+              {DATASET_REQUIRED_MESSAGE}
+            </Text>
+          )}
           <Box
             accessibilityHint="Toggle include unproofread items"
             accessibilityLabel="Include unproofread items"

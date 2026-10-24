@@ -2,9 +2,11 @@ import {
   Badge,
   Box,
   Button,
+  Card,
   DataTable,
   type DataTableCellData,
   type DataTableColumn,
+  Heading,
   type LayoutChangeEvent,
   Modal,
   SelectField,
@@ -12,20 +14,26 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {
+  type ExperimentGateResult,
   type ExperimentRecord,
   experimentItemColumnWidths,
-  gatesForVersion,
+  formatGateActual,
+  formatGateAggregate,
+  formatGateName,
+  formatGateThreshold,
+  formatPromoteBlockedReason,
+  formatVersionGateVerdict,
+  summarizeGatesByVersion,
+  type VersionGateSummary,
 } from "./experimentTypes";
 
 export interface AiExperimentResultsViewProps {
   experiment: ExperimentRecord;
   isPromoting: boolean;
   onPromote: (version: number) => void;
-  promoteBlockedMessage?: string;
   promoteConfirmOpen: boolean;
   promoteError?: string;
   promoteVersion: number;
-  selectedVersion: number;
   onDismissPromoteConfirm: () => void;
   onOpenPromoteConfirm: () => void;
   onSelectVersion: (version: number) => void;
@@ -43,24 +51,82 @@ const summarizeOutput = (value: unknown): string => {
   return text.length > OUTPUT_PREVIEW_CHARS ? `${text.slice(0, OUTPUT_PREVIEW_CHARS)}…` : text;
 };
 
+const GateTile: React.FC<{gate: ExperimentGateResult}> = ({gate}) => {
+  return (
+    <Box
+      color={gate.passed ? "successLight" : "errorLight"}
+      gap={1}
+      padding={2}
+      rounding="md"
+      testID={`ai-experiment-gate-v${gate.version}-${gate.dimension}`}
+    >
+      <Box alignItems="center" direction="row" gap={2} justifyContent="between">
+        <Text bold>{formatGateName(gate)}</Text>
+        <Text bold color={gate.passed ? "success" : "error"} size="sm">
+          {gate.passed ? "✓ Pass" : "✗ Fail"}
+        </Text>
+      </Box>
+      <Text size="sm">
+        {formatGateAggregate(gate.aggregate)} {formatGateActual(gate.actual)} · needs{" "}
+        {formatGateThreshold(gate)}
+      </Text>
+    </Box>
+  );
+};
+
+const VersionGatesCard: React.FC<{isSelected: boolean; summary: VersionGateSummary}> = ({
+  isSelected,
+  summary,
+}) => {
+  const verdictStatus =
+    summary.gates.length === 0 ? "neutral" : summary.passed ? "success" : "error";
+  return (
+    <Card
+      border={isSelected ? "dark" : undefined}
+      gap={2}
+      minWidth={240}
+      padding={3}
+      testID={`ai-experiment-gates-v${summary.version}`}
+    >
+      <Box alignItems="center" direction="row" gap={2} justifyContent="between" wrap>
+        <Heading size="sm">
+          {`v${summary.version}${isSelected ? " (selected to promote)" : ""}`}
+        </Heading>
+        <Badge
+          secondary
+          status={verdictStatus}
+          testID={`ai-experiment-gates-v${summary.version}-verdict`}
+          value={formatVersionGateVerdict(summary)}
+        />
+      </Box>
+      {summary.gates.length === 0 ? (
+        <Text color="secondaryDark" size="sm">
+          No gate scores yet.
+        </Text>
+      ) : (
+        summary.gates.map((gate) => {
+          return <GateTile gate={gate} key={`${gate.evaluatorName}-${gate.dimension}`} />;
+        })
+      )}
+    </Card>
+  );
+};
+
 export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = ({
   experiment,
   isPromoting,
   onPromote,
-  promoteBlockedMessage,
   promoteConfirmOpen,
   promoteError,
   promoteVersion,
-  selectedVersion,
   onDismissPromoteConfirm,
   onOpenPromoteConfirm,
   onSelectVersion,
 }) => {
-  const versionGates = gatesForVersion(experiment, selectedVersion);
-  const failing = versionGates.filter((gate) => {
-    return !gate.passed;
-  }).length;
-  const blockedGate = versionGates.find((gate) => !gate.passed);
+  const versionSummaries = useMemo(() => summarizeGatesByVersion(experiment), [experiment]);
+  const promoteSummary = versionSummaries.find((summary) => summary.version === promoteVersion);
+  const blockedReason = promoteSummary ? formatPromoteBlockedReason(promoteSummary) : undefined;
+  const hasGates = versionSummaries.some((summary) => summary.gates.length > 0);
 
   const [tableWidth, setTableWidth] = useState(0);
   const handleTableLayout = useCallback((event: LayoutChangeEvent) => {
@@ -88,7 +154,7 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
         const result = item.versionResults[String(version)];
         row.push({value: summarizeOutput(result?.output)});
         const scores = result?.evaluatorScores ?? {};
-        const passed = Object.values(scores).every((entry) => !entry.error);
+        const passed = !result?.error && Object.values(scores).every((entry) => !entry.error);
         row.push({value: passed ? "pass" : "fail"});
       }
       return row;
@@ -105,44 +171,78 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
           {experiment.results?.progress.total ?? 0}
         </Text>
       ) : undefined}
-      {failing > 0 ? (
-        <Badge
-          status="error"
-          testID="ai-experiment-gates-failing"
-          value={`${failing} gates failing`}
-        />
+      {hasGates ? (
+        <Box gap={2} testID="ai-experiment-gates">
+          <Heading size="sm">Score gates by version</Heading>
+          <Text color="secondaryDark" size="sm">
+            A version can be promoted only when every one of its gates passes.
+          </Text>
+          <Box direction="row" gap={3} wrap>
+            {versionSummaries.map((summary) => {
+              return (
+                <VersionGatesCard
+                  isSelected={summary.version === promoteVersion}
+                  key={summary.version}
+                  summary={summary}
+                />
+              );
+            })}
+          </Box>
+        </Box>
       ) : undefined}
-      <Box direction="row" gap={2} wrap>
-        {versionGates.map((gate) => {
-          return (
-            <Box
-              color={gate.passed ? "successLight" : "errorLight"}
-              key={`${gate.version}-${gate.dimension}`}
-              padding={2}
-              testID={`ai-experiment-gate-${gate.dimension}`}
-            >
-              <Text bold>
-                v{gate.version} {gate.evaluatorName}.{gate.dimension}
-              </Text>
-              <Text>
-                {gate.actual !== undefined ? gate.actual.toFixed(2) : "—"} {gate.op} {gate.value} —{" "}
-                {gate.passed ? "pass" : "fail"}
-              </Text>
-            </Box>
-          );
-        })}
-      </Box>
-      {blockedGate && promoteBlockedMessage ? (
-        <Text color="error" testID="ai-experiment-promote-blocked">
-          Promote blocked: {promoteBlockedMessage}
-        </Text>
-      ) : undefined}
+      <Card gap={2} padding={3} testID="ai-experiment-promote-section">
+        <Heading size="sm">Promote to production</Heading>
+        <Box alignItems="end" direction="row" gap={2} wrap>
+          <Box minWidth={160}>
+            <SelectField
+              onChange={(value) => {
+                onSelectVersion(Number(value));
+              }}
+              options={experiment.versions.map((version) => {
+                return {label: `v${version}`, value: String(version)};
+              })}
+              requireValue
+              title="Version to promote"
+              value={String(promoteVersion)}
+            />
+          </Box>
+          <Button
+            disabled={Boolean(blockedReason)}
+            onClick={onOpenPromoteConfirm}
+            testID="ai-experiment-promote"
+            text="Promote to production"
+          />
+        </Box>
+        {blockedReason ? (
+          <Box gap={1} testID="ai-experiment-gates-failing">
+            <Badge status="error" value={`Can't promote v${promoteVersion}`} />
+            <Text color="error" size="sm">
+              {blockedReason}
+            </Text>
+          </Box>
+        ) : undefined}
+        {!blockedReason && promoteSummary?.passed ? (
+          <Box gap={1} testID="ai-experiment-gates-passing">
+            <Badge status="success" value={`Ready to promote v${promoteVersion}`} />
+            <Text color="secondaryDark" size="sm">
+              {`v${promoteVersion} ${formatVersionGateVerdict(promoteSummary).toLowerCase()}.`}
+            </Text>
+          </Box>
+        ) : undefined}
+        {promoteError ? (
+          <Text color="error" testID="ai-experiment-promote-error">
+            {promoteError}
+          </Text>
+        ) : undefined}
+      </Card>
       {outliers.length > 0 ? (
         <Box gap={1} testID="ai-experiment-outliers">
           <Text bold>Outliers</Text>
-          {outliers.map((itemId) => {
-            return <Badge key={itemId} status="warning" value={itemId.slice(-8)} />;
-          })}
+          <Box direction="row" gap={1} wrap>
+            {outliers.map((itemId) => {
+              return <Badge key={itemId} status="warning" value={itemId.slice(-8)} />;
+            })}
+          </Box>
         </Box>
       ) : undefined}
       <Box onLayout={handleTableLayout} testID="ai-experiment-items-table-container" width="100%">
@@ -153,30 +253,6 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
           testID="ai-experiment-items-table"
         />
       </Box>
-      <Box direction="row" gap={2} wrap>
-        <SelectField
-          onChange={(value) => {
-            const version = Number(value);
-            onSelectVersion(version);
-          }}
-          options={experiment.versions.map((version) => {
-            return {label: `v${version}`, value: String(version)};
-          })}
-          title="Promote version"
-          value={String(promoteVersion)}
-        />
-        <Button
-          disabled={Boolean(blockedGate)}
-          onClick={onOpenPromoteConfirm}
-          testID="ai-experiment-promote"
-          text="Promote to production"
-        />
-      </Box>
-      {promoteError ? (
-        <Text color="error" testID="ai-experiment-promote-error">
-          {promoteError}
-        </Text>
-      ) : undefined}
       <Modal
         onDismiss={onDismissPromoteConfirm}
         primaryButtonDisabled={isPromoting}
@@ -193,11 +269,7 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
           <Text>
             Promote v{promoteVersion} of {experiment.promptName} to production?
           </Text>
-          {blockedGate ? (
-            <Text color="error">
-              Gate {blockedGate.evaluatorName}.{blockedGate.dimension} is failing.
-            </Text>
-          ) : undefined}
+          {blockedReason ? <Text color="error">{blockedReason}</Text> : undefined}
         </Box>
       </Modal>
     </Box>

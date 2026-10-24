@@ -1,13 +1,23 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
-import type {ExperimentRecord} from "./experimentTypes";
+import type {ExperimentRecord, VersionGateSummary} from "./experimentTypes";
 import {
+  describeFailingVersions,
+  describeGateResult,
   experimentItemColumnWidths,
   experimentProgressPercent,
   failingGateCount,
+  formatGateActual,
+  formatGateAggregate,
+  formatGateName,
+  formatGateOp,
+  formatGateThreshold,
+  formatPromoteBlockedReason,
+  formatVersionGateVerdict,
   gatesForVersion,
   isValidExperimentVersionCount,
   parsePromoteBlockedTitle,
+  summarizeGatesByVersion,
   unwrapExperimentList,
   unwrapExperimentRecord,
   unwrapObservabilityPayload,
@@ -54,6 +64,14 @@ const experiment: ExperimentRecord = {
   thresholds: [],
   updated: "2026-01-01T00:05:00.000Z",
   versions: [1, 2],
+};
+
+const summaryFor = (version: number): VersionGateSummary => {
+  const summary = summarizeGatesByVersion(experiment).find((entry) => entry.version === version);
+  if (!summary) {
+    throw new Error(`No gate summary for v${version}`);
+  }
+  return summary;
 };
 
 describe("experimentTypes helpers", () => {
@@ -111,5 +129,81 @@ describe("experimentTypes helpers", () => {
   it("keeps output columns readable when the table is narrow or unmeasured", () => {
     assert.equal(experimentItemColumnWidths({containerWidth: 0, versionCount: 2}).output, 180);
     assert.equal(experimentItemColumnWidths({containerWidth: 500, versionCount: 3}).output, 180);
+  });
+
+  it("shows gate operators as symbols, never API words", () => {
+    assert.equal(formatGateOp("gte"), "≥");
+    assert.equal(formatGateOp("lte"), "≤");
+    assert.equal(formatGateOp("gt"), ">");
+    assert.equal(formatGateOp("lt"), "<");
+    assert.equal(formatGateOp("eq"), "=");
+    assert.equal(formatGateThreshold({op: "gte", value: 0.8}), "≥ 0.8");
+    assert.equal(formatGateThreshold({op: "eq", value: 1}), "= 1");
+  });
+
+  it("names gates in plain words without repeating a shared name", () => {
+    assert.equal(
+      formatGateName({dimension: "helpfulness", evaluatorName: "helpfulness"}),
+      "helpfulness"
+    );
+    assert.equal(
+      formatGateName({dimension: "correct", evaluatorName: "correctness"}),
+      "correctness: correct"
+    );
+    assert.equal(
+      formatGateName({dimension: "schema_valid", evaluatorName: "schema-assert"}),
+      "schema-assert: schema valid"
+    );
+  });
+
+  it("formats measured values and aggregates", () => {
+    assert.equal(formatGateActual(0.625), "0.63");
+    assert.equal(formatGateActual(undefined), "—");
+    assert.equal(formatGateAggregate("mean"), "Average");
+    assert.equal(formatGateAggregate("trueRate"), "Pass rate");
+  });
+
+  it("summarizes gates per version in version order", () => {
+    const summaries = summarizeGatesByVersion(experiment);
+    assert.deepEqual(
+      summaries.map((summary) => [summary.version, summary.passed, summary.failing.length]),
+      [
+        [1, true, 0],
+        [2, false, 1],
+      ]
+    );
+    assert.equal(formatVersionGateVerdict(summaryFor(1)), "Passes its gate");
+    assert.equal(formatVersionGateVerdict(summaryFor(2)), "Fails 1 of 1 gate");
+    assert.equal(
+      formatVersionGateVerdict({failing: [], gates: [], passed: false, version: 3}),
+      "No gates"
+    );
+  });
+
+  it("explains which gates block promoting a version, with correct plurals", () => {
+    const failing = summaryFor(2);
+    assert.isUndefined(formatPromoteBlockedReason(summaryFor(1)));
+    assert.equal(
+      formatPromoteBlockedReason(failing),
+      "v2 fails 1 gate: quality: correct ≥ 0.8 (got 0.50) — can't promote v2."
+    );
+    const [gate] = failing.gates;
+    if (!gate) {
+      throw new Error("Expected a v2 gate");
+    }
+    const twoFailing: VersionGateSummary = {
+      failing: [gate, {...gate, dimension: "helpfulness", evaluatorName: "helpfulness"}],
+      gates: [gate],
+      passed: false,
+      version: 2,
+    };
+    assert.equal(
+      formatPromoteBlockedReason(twoFailing),
+      "v2 fails 2 gates: quality: correct ≥ 0.8 (got 0.50); helpfulness ≥ 0.8 (got 0.50) — can't promote v2."
+    );
+    assert.equal(describeGateResult(gate), "quality: correct ≥ 0.8 (got 0.50)");
+    assert.deepEqual(describeFailingVersions(experiment), [
+      "v2 fails 1 gate: quality: correct ≥ 0.8 (got 0.50) — can't promote v2.",
+    ]);
   });
 });

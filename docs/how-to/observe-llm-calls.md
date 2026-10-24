@@ -124,7 +124,19 @@ that key exists.
    Seeded experiments run through the real experiment runner with a deterministic
    `seed-fixture` client, so they need no API key. Seeded traces use session IDs that
    start with `seed-obs-`. Production stays on v1 for every prompt, so promoting v2 from
-   an experiment changes what the app sends. On a database that already booted, run
+   an experiment changes what the app sends.
+
+   **New experiment** keeps **Next** disabled and shows "Select a dataset." until you
+   choose a dataset; the field reads "Choose a dataset" until then. **Experiment
+   results** shows one card per version under **Score gates by version**. Each card says
+   whether that version passes (for example "Fails 1 of 3 gates"), and each gate tile
+   names the evaluator and dimension in plain words, the measured value, the threshold
+   with a symbol, and Pass or Fail — for example "correctness: correct · Pass rate 0.75 ·
+   needs ≥ 0.8 · ✗ Fail". The **Promote to production** card explains a blocked version
+   next to the button, for example "v1 fails 1 gate: correctness: correct ≥ 0.8 (got
+   0.75) — can't promote v1.", or says "Ready to promote v2" when every gate passes.
+
+   On a database that already booted, run
    Admin → Scripts → `seedAiObservabilityDemo`, or
    `cd example-backend && bun run script seedAiObservabilityDemo --wet`.
 3. Start `bun run backend:dev` and `bun run frontend:web`, then sign in as the seeded

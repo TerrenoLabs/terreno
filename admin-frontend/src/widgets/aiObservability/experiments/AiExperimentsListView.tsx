@@ -5,6 +5,7 @@ import {
   type ExperimentRecord,
   experimentProgressPercent,
   failingGateCount,
+  summarizeGatesByVersion,
 } from "./experimentTypes";
 
 export interface AiExperimentsListViewProps {
@@ -25,6 +26,21 @@ const experimentCost = (experiment: ExperimentRecord): number | undefined => {
 
 const isInFlight = (experiment: ExperimentRecord): boolean => {
   return experiment.status === "running" || experiment.status === "pending";
+};
+
+/** Per-version gate verdict for the list, e.g. "v1 fails 1 gate · v2 passes". */
+const gateSummaryText = (experiment: ExperimentRecord): string => {
+  const summaries = summarizeGatesByVersion(experiment).filter((entry) => entry.gates.length > 0);
+  if (summaries.length === 0) {
+    return "—";
+  }
+  return summaries
+    .map((entry) =>
+      entry.passed
+        ? `v${entry.version} passes`
+        : `v${entry.version} fails ${entry.failing.length} ${entry.failing.length === 1 ? "gate" : "gates"}`
+    )
+    .join(" · ");
 };
 
 const experimentSearchText = (experiment: ExperimentRecord): string => experiment.name;
@@ -84,6 +100,14 @@ const buildColumns = ({
     title: "Cost",
     value: experimentCost,
     width: 130,
+  },
+  {
+    cell: (experiment) => ({value: gateSummaryText(experiment)}),
+    filter: {kind: "numberRange", label: "Failing gates"},
+    key: "gates",
+    title: "Gates",
+    value: (experiment) => (experiment.results ? failingGateCount(experiment) : undefined),
+    width: 240,
   },
   {
     cell: (experiment) => ({value: experiment.id}),
@@ -213,15 +237,6 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
             </Box>
           );
         })}
-      {experiments.map((experiment) => {
-        const failing = failingGateCount(experiment);
-        if (failing === 0) {
-          return undefined;
-        }
-        return (
-          <Badge key={`fail-${experiment.id}`} status="error" value={`${failing} gates failing`} />
-        );
-      })}
     </Box>
   );
 };

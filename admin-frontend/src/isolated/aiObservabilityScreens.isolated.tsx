@@ -2433,7 +2433,7 @@ describe("AiExperimentResultsScreen", () => {
         status: "completed",
       };
       rerender(<AiExperimentResultsScreenWidget {...widgetProps} />);
-      expect(getByTestId("ai-experiment-gate-correct")).toHaveTextContent(/v1 quality\.correct/);
+      expect(getByTestId("ai-experiment-gates-v1")).toHaveTextContent(/v1 \(selected to promote\)/);
     });
 
     it("blocks promote when gates fail and surfaces API errors", async () => {
@@ -2463,7 +2463,9 @@ describe("AiExperimentResultsScreen", () => {
       await act(async () => {
         await Promise.resolve();
       });
-      expect(view.getByTestId("ai-experiment-promote-blocked")).toBeTruthy();
+      expect(view.getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
+        /v2 fails 1 gate: quality: correct ≥ 0\.8 \(got 0\.40\) — can't promote v2\./
+      );
     });
 
     it("shows query errors", () => {
@@ -6034,7 +6036,6 @@ describe("AiExperimentResultsView", () => {
         onSelectVersion={() => undefined}
         promoteConfirmOpen={false}
         promoteVersion={2}
-        selectedVersion={2}
       />
     );
     expect(getByTestId("ai-experiment-results-running")).toBeTruthy();
@@ -6049,16 +6050,13 @@ describe("AiExperimentResultsView", () => {
         onOpenPromoteConfirm={() => undefined}
         onPromote={() => undefined}
         onSelectVersion={() => undefined}
-        promoteBlockedMessage="gate failed for v2 quality.correct"
         promoteConfirmOpen={false}
         promoteVersion={2}
-        selectedVersion={2}
       />
     );
-    expect(getByTestId("ai-experiment-gates-failing")).toBeTruthy();
-    assert.include(
-      String(getByTestId("ai-experiment-promote-blocked").props.children),
-      "quality.correct"
+    expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
+      /v2 fails 1 gate: quality: correct ≥ 0\.8 \(got 0\.40\)/
     );
+    expect(getByTestId("ai-experiment-promote")).toBeDisabled();
   });
 });

@@ -4,7 +4,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {AiExperimentResultsView} from "./AiExperimentResultsView";
-import {gatesForVersion, parsePromoteBlockedTitle, unwrapExperimentRecord} from "./experimentTypes";
+import {parsePromoteBlockedTitle, unwrapExperimentRecord} from "./experimentTypes";
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
@@ -19,7 +19,6 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-experiments`;
 
-  const [selectedVersion, setSelectedVersion] = useState(0);
   const [promoteVersion, setPromoteVersion] = useState(0);
   const [promoteConfirmOpen, setPromoteConfirmOpen] = useState(false);
   const [promoteError, setPromoteError] = useState("");
@@ -35,7 +34,6 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
     }
     const latest = experiment.versions[experiment.versions.length - 1] ?? 0;
     initializedExperimentId.current = experiment.id;
-    setSelectedVersion(latest);
     setPromoteVersion(latest);
   }, [experiment]);
 
@@ -51,13 +49,6 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
       clearInterval(timer);
     };
   }, [experiment, refetch]);
-
-  const blockedGate = useMemo(() => {
-    if (!experiment) {
-      return undefined;
-    }
-    return gatesForVersion(experiment, promoteVersion).find((gate) => !gate.passed);
-  }, [experiment, promoteVersion]);
 
   const handlePromote = useCallback(
     async (version: number): Promise<void> => {
@@ -119,18 +110,12 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
         }}
         onPromote={handlePromote}
         onSelectVersion={(version) => {
-          setSelectedVersion(version);
           setPromoteVersion(version);
+          setPromoteError("");
         }}
-        promoteBlockedMessage={
-          blockedGate
-            ? `gate failed for v${promoteVersion} ${blockedGate.evaluatorName}.${blockedGate.dimension}`
-            : undefined
-        }
         promoteConfirmOpen={promoteConfirmOpen}
         promoteError={promoteError}
         promoteVersion={promoteVersion}
-        selectedVersion={selectedVersion}
       />
     </AiObservabilityChrome>
   );

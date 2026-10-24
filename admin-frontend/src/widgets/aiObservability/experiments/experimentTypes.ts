@@ -109,6 +109,117 @@ export const gatesForVersion = (
   return experiment.results.gates.filter((gate) => gate.version === version);
 };
 
+const GATE_OP_SYMBOLS: Record<string, string> = {
+  eq: "=",
+  gt: ">",
+  gte: "≥",
+  lt: "<",
+  lte: "≤",
+};
+
+/** Show a gate comparison operator as the math symbol people read, never the API word. */
+export const formatGateOp = (op: string): string => {
+  return GATE_OP_SYMBOLS[op] ?? op;
+};
+
+/** Show a measured gate value with two decimals, or a dash before any scores arrive. */
+export const formatGateActual = (actual?: number): string => {
+  if (actual === undefined || Number.isNaN(actual)) {
+    return "—";
+  }
+  return actual.toFixed(2);
+};
+
+/** The threshold a gate needs, such as "≥ 0.8". */
+export const formatGateThreshold = (gate: Pick<ScoreThreshold, "op" | "value">): string => {
+  return `${formatGateOp(gate.op)} ${gate.value}`;
+};
+
+const humanizeIdentifier = (value: string): string => {
+  return value.replace(/[_-]+/g, " ").trim();
+};
+
+/**
+ * Name a gate in plain words. When the evaluator and dimension share a name ("helpfulness"),
+ * say it once; otherwise "correctness: correct" or "schema-assert: schema valid".
+ */
+export const formatGateName = (
+  gate: Pick<ScoreThreshold, "dimension" | "evaluatorName">
+): string => {
+  const dimension = humanizeIdentifier(gate.dimension);
+  if (humanizeIdentifier(gate.evaluatorName).toLowerCase() === dimension.toLowerCase()) {
+    return dimension;
+  }
+  return `${gate.evaluatorName}: ${dimension}`;
+};
+
+/** What the measured number is: the average score, or the share of items scored true. */
+export const formatGateAggregate = (aggregate: ScoreThreshold["aggregate"]): string => {
+  return aggregate === "trueRate" ? "Pass rate" : "Average";
+};
+
+/** One failing gate in a sentence, such as "helpfulness ≥ 0.8 (got 0.62)". */
+export const describeGateResult = (gate: ExperimentGateResult): string => {
+  return `${formatGateName(gate)} ${formatGateThreshold(gate)} (got ${formatGateActual(gate.actual)})`;
+};
+
+const pluralize = (count: number, singular: string, plural: string): string => {
+  return `${count} ${count === 1 ? singular : plural}`;
+};
+
+export interface VersionGateSummary {
+  failing: ExperimentGateResult[];
+  gates: ExperimentGateResult[];
+  passed: boolean;
+  version: number;
+}
+
+/** Gate results for every compared version, in version order, with pass/fail rolled up. */
+export const summarizeGatesByVersion = (experiment: ExperimentRecord): VersionGateSummary[] => {
+  return [...experiment.versions]
+    .sort((left, right) => left - right)
+    .map((version) => {
+      const gates = gatesForVersion(experiment, version);
+      const failing = gates.filter((gate) => !gate.passed);
+      return {failing, gates, passed: gates.length > 0 && failing.length === 0, version};
+    });
+};
+
+/** Short verdict for one version's gates, such as "Fails 1 of 3 gates". */
+export const formatVersionGateVerdict = (summary: VersionGateSummary): string => {
+  if (summary.gates.length === 0) {
+    return "No gates";
+  }
+  if (summary.failing.length === 0) {
+    return summary.gates.length === 1
+      ? "Passes its gate"
+      : `Passes all ${summary.gates.length} gates`;
+  }
+  return `Fails ${summary.failing.length} of ${pluralize(summary.gates.length, "gate", "gates")}`;
+};
+
+/**
+ * Explain why a version cannot be promoted, such as
+ * "v1 fails 1 gate: helpfulness ≥ 0.8 (got 0.62) — can't promote v1."
+ */
+export const formatPromoteBlockedReason = (summary: VersionGateSummary): string | undefined => {
+  if (summary.failing.length === 0) {
+    return undefined;
+  }
+  const details = summary.failing.map(describeGateResult).join("; ");
+  return `v${summary.version} fails ${pluralize(summary.failing.length, "gate", "gates")}: ${details} — can't promote v${summary.version}.`;
+};
+
+/**
+ * One sentence per version that fails a gate, for places that summarize a whole experiment
+ * (such as the experiments list) instead of one version.
+ */
+export const describeFailingVersions = (experiment: ExperimentRecord): string[] => {
+  return summarizeGatesByVersion(experiment)
+    .map(formatPromoteBlockedReason)
+    .filter((reason): reason is string => Boolean(reason));
+};
+
 export const experimentProgressPercent = (experiment: ExperimentRecord): number => {
   const progress = experiment.results?.progress;
   if (!progress || progress.total === 0) {

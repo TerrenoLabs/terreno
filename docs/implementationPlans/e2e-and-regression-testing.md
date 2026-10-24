@@ -376,7 +376,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: example-backend/e2e/smoke.ts, example-backend/package.json, docs/testing/e2e/example-backend.md
   - Acceptance: `bun run --cwd example-backend smoke` exits 0. `src/index.ts` boots as a child process, `/health` reports `healthy: true`, and a seeded user signs in.
 
-- [ ] **T29** — Smoke spec for example-frontend
+- [x] **T29** — Smoke spec for example-frontend
   - Depends on: T8
   - Files: example-frontend/e2e/smoke.spec.ts, example-frontend/package.json, scripts/ci/e2eAffected/shards.ts, docs/testing/e2e/example-frontend.md
   - Acceptance: `bun run --cwd example-frontend smoke` exits 0. A user signs in with `loginAs`, reaches the todos screen, and creates a todo, finding every element by `testID`. `bun test scripts/ci/e2eAffected/` passes.

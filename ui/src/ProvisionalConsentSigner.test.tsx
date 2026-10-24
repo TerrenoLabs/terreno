@@ -545,6 +545,59 @@ describe("ProvisionalConsentSigner", () => {
       });
     });
 
+    it("closes the void dialog on cancel without voiding", async () => {
+      const {api, refetch, voidedArgs} = buildApi({data: rows});
+      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-void-form-provisional");
+      expect(UNSAFE_getByProps({testID: "provisional-consent-void-modal"}).props.visible).toBe(
+        true
+      );
+      await press(getByTestId, "provisional-consent-void-modal.secondary");
+
+      expect(UNSAFE_getByProps({testID: "provisional-consent-void-modal"}).props.visible).toBe(
+        false
+      );
+      expect(voidedArgs).toEqual([]);
+      expect(refetch).not.toHaveBeenCalled();
+    });
+
+    it("does not void without a reason even if the confirm handler runs", async () => {
+      const {api, voidedArgs} = buildApi({data: rows});
+      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-void-form-provisional");
+      await act(async () => {
+        await UNSAFE_getByProps({
+          testID: "provisional-consent-void-modal",
+        }).props.primaryButtonOnClick();
+      });
+
+      expect(voidedArgs).toEqual([]);
+    });
+
+    it("does not sign without a note even if the submit handler runs", async () => {
+      const {api, signedBodies} = buildApi({data: [rows[0]]});
+      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
+        <ProvisionalConsentSigner api={api} userId="member-1" />
+      );
+
+      await press(getByTestId, "provisional-consent-open-form-pending");
+      await act(async () => {
+        await UNSAFE_getByProps({
+          testID: "provisional-consent-submit-button",
+          text: "Sign provisionally",
+        }).props.onClick();
+      });
+
+      expect(signedBodies).toEqual([]);
+      expect(getByTestId("provisional-consent-note-input")).toBeTruthy();
+    });
+
     it("shows a void error in the dialog and calls onError", async () => {
       const failure = {data: {title: "Provisional signature is already voided"}, status: 400};
       const onError = mock(() => {});

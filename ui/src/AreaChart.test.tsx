@@ -124,6 +124,21 @@ describe("AreaChart", () => {
     expect(getByText("B: 50")).toBeTruthy();
   });
 
+  it("records a positive plot width from layout", () => {
+    const {getByTestId} = renderWithTheme(<AreaChart data={POINTS} testID="chart" />);
+
+    act(() => {
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 0, width: 0}},
+      });
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 180, width: 640}},
+      });
+    });
+
+    expect(getByTestId("chart.plot")).toBeTruthy();
+  });
+
   it("updates or clears the active tooltip when data changes", async () => {
     const {getByTestId, getByText, queryByTestId, rerender} = renderWithTheme(
       <AreaChart data={POINTS} testID="chart" />

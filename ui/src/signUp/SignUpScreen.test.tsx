@@ -278,4 +278,26 @@ describe("SignUpScreen keyboard", () => {
       Platform.OS = originalOS;
     }
   });
+
+  it("ignores a browser submit while the password misses a requirement", async () => {
+    const originalOS = Platform.OS;
+    Platform.OS = "web";
+    try {
+      const onSubmit = mock(() => Promise.resolve());
+      const {UNSAFE_getByType, getByTestId} = renderWithHostMocks(
+        <SignUpScreen
+          fields={defaultFields}
+          onSubmit={onSubmit}
+          passwordRequirements={defaultPasswordRequirements}
+        />
+      );
+      fillSignUp(getByTestId, "short");
+      await act(async () => {
+        fireEvent(UNSAFE_getByType("form" as never), "submit", {preventDefault: () => {}});
+      });
+      expect(onSubmit).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = originalOS;
+    }
+  });
 });

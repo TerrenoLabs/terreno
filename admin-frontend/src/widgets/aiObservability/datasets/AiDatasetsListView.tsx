@@ -3,7 +3,6 @@ import {
   Button,
   DataTable,
   type DataTableCellData,
-  type DataTableColumn,
   FilePickerButton,
   Modal,
   Text,
@@ -12,6 +11,7 @@ import {
 } from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useMemo} from "react";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {detectImportFormat} from "./datasetImport";
 import {type DatasetImportResult, type DatasetRecord, formatProvenanceBar} from "./datasetTypes";
 
@@ -49,16 +49,6 @@ export interface AiDatasetsListViewProps {
   onRetry: () => void;
 }
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "text", title: "Name", width: 180},
-  {columnType: "text", title: "Items", width: 80},
-  {columnType: "text", title: "Provenance", width: 160},
-  {columnType: "text", title: "Schema binding", width: 160},
-  {columnType: "text", title: "Updated", width: 120},
-  {columnType: "datasetOpen", title: "", width: 88},
-  {columnType: "datasetImport", title: "", width: 100},
-];
-
 const formatUpdated = (iso: string): string => {
   const parsed = DateTime.fromISO(iso);
   if (!parsed.isValid) {
@@ -66,6 +56,75 @@ const formatUpdated = (iso: string): string => {
   }
   return parsed.toRelative() ?? iso;
 };
+
+const humanShare = (dataset: DatasetRecord): number | undefined => {
+  if (dataset.counts.total === 0) {
+    return undefined;
+  }
+  return Math.round((dataset.counts.human / dataset.counts.total) * 100);
+};
+
+const datasetSearchText = (dataset: DatasetRecord): string => dataset.name;
+
+const buildColumns = (datasets: DatasetRecord[]): ClientTableColumn<DatasetRecord>[] => [
+  {
+    filter: {kind: "text"},
+    key: "name",
+    title: "Name",
+    value: (dataset) => dataset.name,
+    width: 240,
+  },
+  {
+    cell: (dataset) => ({value: String(dataset.counts.total)}),
+    filter: {kind: "numberRange"},
+    key: "items",
+    title: "Items",
+    value: (dataset) => dataset.counts.total,
+    width: 120,
+  },
+  {
+    // Sorts and filters by the human-annotated share shown first in the cell.
+    cell: (dataset) => ({value: formatProvenanceBar(dataset.counts)}),
+    filter: {kind: "numberRange", label: "Human %"},
+    key: "provenance",
+    title: "Provenance",
+    value: humanShare,
+    width: 200,
+  },
+  {
+    cell: (dataset) => ({value: dataset.inputSchemaPromptName ?? "—"}),
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(datasets, (dataset) => dataset.inputSchemaPromptName),
+    },
+    key: "schemaBinding",
+    title: "Schema binding",
+    value: (dataset) => dataset.inputSchemaPromptName,
+    width: 220,
+  },
+  {
+    cell: (dataset) => ({value: formatUpdated(dataset.updated)}),
+    filter: {kind: "dateRange"},
+    key: "updated",
+    title: "Updated",
+    value: (dataset) => dataset.updated,
+    width: 160,
+  },
+  {
+    cell: (dataset) => ({value: dataset.id}),
+    columnType: "datasetOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
+  {
+    cell: (dataset) => ({value: dataset.id}),
+    columnType: "datasetImport",
+    key: "import",
+    title: "",
+    width: 100,
+  },
+];
 
 export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
   canCreate = true,
@@ -132,19 +191,12 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
     [canImport, onOpenDetail, onOpenImport]
   );
 
-  const rows: DataTableCellData[][] = useMemo(() => {
-    return datasets.map((dataset) => {
-      return [
-        {value: dataset.name},
-        {value: String(dataset.counts.total)},
-        {value: formatProvenanceBar(dataset.counts)},
-        {value: dataset.inputSchemaPromptName ?? "—"},
-        {value: formatUpdated(dataset.updated)},
-        {value: dataset.id},
-        {value: dataset.id},
-      ];
-    });
-  }, [datasets]);
+  const columns = useMemo(() => buildColumns(datasets), [datasets]);
+  const {rows: _sortedDatasets, ...table} = useClientTable({
+    columns,
+    rows: datasets,
+    searchText: datasetSearchText,
+  });
 
   return (
     <Box gap={3} testID="ai-datasets-list">
@@ -172,18 +224,28 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
         </Box>
       ) : (
         <DataTable
-          columns={COLUMNS}
+          {...table}
           customColumnComponentMap={customColumnComponentMap}
-          data={rows}
+          emptyContent={
+            <Box padding={4} testID="ai-datasets-no-matches">
+              <Text color="secondaryDark">No datasets match these filters.</Text>
+            </Box>
+          }
           testID="ai-datasets-table"
         />
       )}
       <Modal onDismiss={onDismissCreate} title="New dataset" visible={createOpen}>
         <Box gap={3} padding={3} testID="ai-datasets-create-form">
-          <TextField onChange={onCreateNameChange} title="Name" value={createName} />
+          <TextField
+            onChange={onCreateNameChange}
+            testID="ai-datasets-create-name"
+            title="Name"
+            value={createName}
+          />
           <TextField
             helperText="Optional prompt whose input schema validates items"
             onChange={onCreatePromptBindingChange}
+            testID="ai-datasets-create-binding"
             title="Input schema prompt binding"
             value={createPromptBinding}
           />

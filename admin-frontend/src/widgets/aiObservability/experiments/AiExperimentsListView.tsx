@@ -1,13 +1,6 @@
-import {
-  Badge,
-  Box,
-  Button,
-  DataTable,
-  type DataTableCellData,
-  type DataTableColumn,
-  Text,
-} from "@terreno/ui";
+import {Badge, Box, Button, DataTable, type DataTableCellData, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
   type ExperimentRecord,
   experimentProgressPercent,
@@ -16,6 +9,8 @@ import {
 
 export interface AiExperimentsListViewProps {
   canCreate?: boolean;
+  /** Dataset names by id; the table falls back to the id when a dataset is missing. */
+  datasetNames?: Record<string, string>;
   experiments: ExperimentRecord[];
   isLoading: boolean;
   loadError?: string;
@@ -24,13 +19,79 @@ export interface AiExperimentsListViewProps {
   onRetry: () => void;
 }
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "text", title: "Name", width: 180},
-  {columnType: "text", title: "Dataset", width: 140},
-  {columnType: "experimentStatus", title: "Status", width: 120},
-  {columnType: "text", title: "Progress", width: 160},
-  {columnType: "text", title: "Cost", width: 100},
-  {columnType: "experimentOpen", title: "", width: 88},
+const experimentCost = (experiment: ExperimentRecord): number | undefined => {
+  return experiment.results?.totalCostUsd ?? experiment.estimate?.costUsd;
+};
+
+const isInFlight = (experiment: ExperimentRecord): boolean => {
+  return experiment.status === "running" || experiment.status === "pending";
+};
+
+const experimentSearchText = (experiment: ExperimentRecord): string => experiment.name;
+
+const buildColumns = ({
+  datasetName,
+  experiments,
+}: {
+  datasetName: (experiment: ExperimentRecord) => string;
+  experiments: ExperimentRecord[];
+}): ClientTableColumn<ExperimentRecord>[] => [
+  {
+    filter: {kind: "text"},
+    key: "name",
+    title: "Name",
+    value: (experiment) => experiment.name,
+    // Fits seeded names such as "Summarize v2 vs v3 (length cap)" on one line.
+    width: 300,
+  },
+  {
+    filter: {kind: "choice", options: distinctChoiceOptions(experiments, datasetName)},
+    key: "dataset",
+    title: "Dataset",
+    value: datasetName,
+    // Fits seeded names such as "example-summarize-gold" on one line.
+    width: 240,
+  },
+  {
+    columnType: "experimentStatus",
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(experiments, (experiment) => experiment.status),
+    },
+    key: "status",
+    title: "Status",
+    value: (experiment) => experiment.status,
+    width: 140,
+  },
+  {
+    cell: (experiment) => ({
+      value: isInFlight(experiment) ? `${experimentProgressPercent(experiment)}%` : "—",
+    }),
+    filter: {kind: "numberRange"},
+    key: "progress",
+    title: "Progress",
+    value: (experiment) =>
+      isInFlight(experiment) ? experimentProgressPercent(experiment) : undefined,
+    width: 160,
+  },
+  {
+    cell: (experiment) => {
+      const cost = experimentCost(experiment);
+      return {value: cost !== undefined ? `$${cost.toFixed(2)}` : "—"};
+    },
+    filter: {kind: "numberRange"},
+    key: "cost",
+    title: "Cost",
+    value: experimentCost,
+    width: 130,
+  },
+  {
+    cell: (experiment) => ({value: experiment.id}),
+    columnType: "experimentOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
 ];
 
 const statusBadge = (
@@ -59,6 +120,7 @@ const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
 
 export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   canCreate = true,
+  datasetNames,
   experiments,
   isLoading,
   loadError,
@@ -86,25 +148,19 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
     [onOpenResults]
   );
 
-  const rows: DataTableCellData[][] = useMemo(() => {
-    return experiments.map((experiment) => {
-      const percent = experimentProgressPercent(experiment);
-      const cost = experiment.results?.totalCostUsd ?? experiment.estimate?.costUsd;
-      return [
-        {value: experiment.name},
-        {value: experiment.datasetId},
-        {value: experiment.status},
-        {
-          value:
-            experiment.status === "running" || experiment.status === "pending"
-              ? `${percent}%`
-              : "—",
-        },
-        {value: cost !== undefined ? `$${cost.toFixed(2)}` : "—"},
-        {value: experiment.id},
-      ];
-    });
-  }, [experiments]);
+  const columns = useMemo(
+    () =>
+      buildColumns({
+        datasetName: (experiment) => datasetNames?.[experiment.datasetId] ?? experiment.datasetId,
+        experiments,
+      }),
+    [datasetNames, experiments]
+  );
+  const {rows: _sortedExperiments, ...table} = useClientTable({
+    columns,
+    rows: experiments,
+    searchText: experimentSearchText,
+  });
 
   return (
     <Box gap={3} testID="ai-experiments-list">
@@ -132,9 +188,13 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
         </Box>
       ) : (
         <DataTable
-          columns={COLUMNS}
+          {...table}
           customColumnComponentMap={customColumnComponentMap}
-          data={rows}
+          emptyContent={
+            <Box padding={4} testID="ai-experiments-no-matches">
+              <Text color="secondaryDark">No experiments match these filters.</Text>
+            </Box>
+          }
           testID="ai-experiments-table"
         />
       )}

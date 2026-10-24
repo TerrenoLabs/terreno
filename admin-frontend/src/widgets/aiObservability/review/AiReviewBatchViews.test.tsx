@@ -250,7 +250,7 @@ describe("AiReviewBatchesView", () => {
     expect(getByText("2 / 3")).toBeTruthy();
     await press(getByTestId("ai-review-batch-grab-recent"));
     expect(onCreate).toHaveBeenCalled();
-    await press(getByTestId("ai-review-batches-table-row-b1-clickable"));
+    await press(getByTestId("ai-review-batches-open-b1"));
     expect(onOpenBatch).toHaveBeenCalledWith("b1");
   });
 

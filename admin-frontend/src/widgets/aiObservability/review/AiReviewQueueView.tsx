@@ -4,13 +4,13 @@ import {
   Button,
   DataTable,
   type DataTableCellData,
-  type DataTableColumn,
   Heading,
   SegmentedControl,
   Spinner,
   Text,
 } from "@terreno/ui";
 import React, {useMemo} from "react";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
   REVIEW_STATUSES,
   type ReviewListItem,
@@ -19,14 +19,70 @@ import {
   waitingLabel,
 } from "./reviewTypes";
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "text", title: "Item", width: 130},
-  {columnType: "text", title: "What the AI did", width: 180},
-  {columnType: "text", title: "Prompt", width: 160},
-  {columnType: "text", title: "Assignee", width: 160},
-  {columnType: "text", title: "Waiting", width: 90},
-  {columnType: "reviewStatus", title: "Status", width: 120},
-  {columnType: "reviewOpen", title: "", width: 88},
+const assigneeLabel = (item: ReviewListItem): string => item.assigneeId ?? "Unassigned";
+
+const reviewSearchText = (item: ReviewListItem): string => `${item.traceName} ${item.id}`;
+
+const buildColumns = (items: ReviewListItem[]): ClientTableColumn<ReviewListItem>[] => [
+  {
+    filter: {kind: "text"},
+    key: "item",
+    title: "Item",
+    value: (item) => item.id.slice(-8),
+    width: 150,
+  },
+  {
+    filter: {kind: "text"},
+    key: "traceName",
+    title: "What the AI did",
+    value: (item) => item.traceName,
+    width: 220,
+  },
+  {
+    cell: (item) => ({value: item.promptName ?? "—"}),
+    filter: {kind: "choice", options: distinctChoiceOptions(items, (item) => item.promptName)},
+    key: "prompt",
+    title: "Prompt",
+    value: (item) => item.promptName,
+    width: 200,
+  },
+  {
+    filter: {kind: "choice", options: distinctChoiceOptions(items, assigneeLabel)},
+    key: "assignee",
+    title: "Assignee",
+    value: assigneeLabel,
+    width: 200,
+  },
+  {
+    // Sorting by enqueue time ascending lists the longest-waiting items first.
+    cell: (item) => ({value: waitingLabel(item.enqueuedAt)}),
+    filter: {kind: "dateRange", label: "Enqueued"},
+    key: "waiting",
+    title: "Waiting",
+    value: (item) => item.enqueuedAt,
+    width: 150,
+  },
+  {
+    columnType: "reviewStatus",
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(items, (item) => item.status).map((option) => ({
+        label: reviewStatusLabel(option.value as ReviewStatus),
+        value: option.value,
+      })),
+    },
+    key: "status",
+    title: "Status",
+    value: (item) => item.status,
+    width: 150,
+  },
+  {
+    cell: (item) => ({value: item.id}),
+    columnType: "reviewOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
 ];
 
 const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
@@ -80,6 +136,7 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
             onOpenItem(String(cellData.value));
           }}
           size="sm"
+          testID={`ai-review-open-${String(cellData.value)}`}
           text="Open"
           variant="outline"
         />
@@ -88,17 +145,12 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
     }),
     [onOpenItem]
   );
-  const rows = useMemo(() => {
-    return items.map((item) => [
-      {value: item.id.slice(-8)},
-      {value: item.traceName},
-      {value: item.promptName ?? "—"},
-      {value: item.assigneeId ?? "Unassigned"},
-      {value: waitingLabel(item.enqueuedAt)},
-      {value: item.status},
-      {value: item.id},
-    ]);
-  }, [items]);
+  const columns = useMemo(() => buildColumns(items), [items]);
+  const {rows: _sortedItems, ...table} = useClientTable({
+    columns,
+    rows: items,
+    searchText: reviewSearchText,
+  });
   const selectedIndex = REVIEW_STATUSES.indexOf(status);
 
   return (
@@ -156,9 +208,13 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
         </Box>
       ) : (
         <DataTable
-          columns={COLUMNS}
+          {...table}
           customColumnComponentMap={customColumnComponentMap}
-          data={rows}
+          emptyContent={
+            <Box padding={4} testID="ai-review-no-matches">
+              <Text color="secondaryDark">No review items match these filters.</Text>
+            </Box>
+          }
           testID="ai-review-table"
         />
       )}

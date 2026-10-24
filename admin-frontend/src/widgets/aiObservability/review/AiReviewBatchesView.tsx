@@ -3,6 +3,8 @@ import {
   Box,
   Button,
   Card,
+  DataTable,
+  type DataTableCellData,
   Heading,
   SelectField,
   Spinner,
@@ -10,11 +12,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import React, {useMemo} from "react";
-import {
-  ObservabilityTable,
-  type ObservabilityTableColumn,
-  type ObservabilityTableRow,
-} from "../shell/ObservabilityTable";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
   agreementStatus,
   DEFAULT_BATCH_SIZE,
@@ -22,12 +20,95 @@ import {
   type ReviewBatchListItem,
 } from "./batchTypes";
 
-const COLUMNS: ObservabilityTableColumn[] = [
-  {grow: 2, minWidth: 200, title: "Batch"},
-  {grow: 2, minWidth: 180, title: "Question set"},
-  {minWidth: 110, title: "Answered"},
-  {grow: 2, minWidth: 220, title: "Best judge vs humans"},
-  {minWidth: 80, title: "Judges"},
+const AnsweredCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const batch = cellData.value as ReviewBatchListItem;
+  return (
+    <Text testID={`ai-review-batch-answered-${batch.id}`}>
+      {`${batch.counts.done} / ${batch.counts.total}`}
+    </Text>
+  );
+};
+
+const BestJudgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const best = (cellData.value as ReviewBatchListItem).bestJudge;
+  if (!best) {
+    return <Text color="secondaryDark">No judge run yet</Text>;
+  }
+  return (
+    <Box alignItems="center" direction="row" gap={2}>
+      <Badge status={agreementStatus(best.rate)} value={formatPercent(best.rate)} />
+      <Text numberOfLines={1}>{best.evaluatorName}</Text>
+    </Box>
+  );
+};
+
+/** Best judge agreement as a whole percent, so the filter takes the same numbers the badge shows. */
+const bestJudgePercent = (batch: ReviewBatchListItem): number | undefined => {
+  const rate = batch.bestJudge?.rate;
+  return rate === undefined || Number.isNaN(rate) ? undefined : Math.round(rate * 100);
+};
+
+const batchSearchText = (batch: ReviewBatchListItem): string =>
+  `${batch.name} ${batch.promptName ?? ""}`;
+
+const buildColumns = (batches: ReviewBatchListItem[]): ClientTableColumn<ReviewBatchListItem>[] => [
+  {
+    filter: {kind: "text"},
+    key: "name",
+    title: "Batch",
+    value: (batch) => batch.name,
+    width: 260,
+  },
+  {
+    cell: (batch) => ({value: batch.promptName ?? "—"}),
+    filter: {kind: "choice", options: distinctChoiceOptions(batches, (batch) => batch.promptName)},
+    key: "prompt",
+    title: "Prompt",
+    value: (batch) => batch.promptName,
+    width: 200,
+  },
+  {
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(batches, (batch) => batch.evaluatorName),
+    },
+    key: "questionSet",
+    title: "Question set",
+    value: (batch) => batch.evaluatorName,
+    width: 240,
+  },
+  {
+    cell: (batch) => ({value: batch}),
+    columnType: "batchAnswered",
+    filter: {kind: "numberRange", label: "Answered items"},
+    key: "answered",
+    title: "Answered",
+    value: (batch) => batch.counts.done,
+    width: 150,
+  },
+  {
+    cell: (batch) => ({value: batch}),
+    columnType: "batchBestJudge",
+    filter: {kind: "numberRange", label: "Agreement %"},
+    key: "bestJudge",
+    title: "Best judge vs humans",
+    value: bestJudgePercent,
+    width: 280,
+  },
+  {
+    filter: {kind: "numberRange"},
+    key: "judges",
+    title: "Judges",
+    value: (batch) => batch.judgeCount,
+    width: 130,
+  },
+  {
+    cell: (batch) => ({value: batch.id}),
+    columnType: "batchOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
 ];
 
 export interface BatchOption {
@@ -72,43 +153,32 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
   questionSetId,
   questionSetOptions,
 }) => {
-  const rows: ObservabilityTableRow[] = useMemo(() => {
-    return batches.map((batch) => {
-      const best = batch.bestJudge;
-      return {
-        accessibilityLabel: `Open ${batch.name}`,
-        cells: [
-          <Box gap={1} key="name">
-            <Text bold>{batch.name}</Text>
-            {batch.promptName ? (
-              <Text color="secondaryDark" size="sm">
-                {batch.promptName}
-              </Text>
-            ) : undefined}
-          </Box>,
-          batch.evaluatorName,
-          <Text key="answered" testID={`ai-review-batch-answered-${batch.id}`}>
-            {`${batch.counts.done} / ${batch.counts.total}`}
-          </Text>,
-          best ? (
-            <Box alignItems="center" direction="row" gap={2} key="best" wrap>
-              <Badge status={agreementStatus(best.rate)} value={formatPercent(best.rate)} />
-              <Text numberOfLines={1}>{best.evaluatorName}</Text>
-            </Box>
-          ) : (
-            <Text color="secondaryDark" key="best">
-              No judge run yet
-            </Text>
-          ),
-          String(batch.judgeCount),
-        ],
-        key: batch.id,
-        onClick: () => {
-          onOpenBatch(batch.id);
-        },
-      };
-    });
-  }, [batches, onOpenBatch]);
+  const customColumnComponentMap = useMemo(
+    () => ({
+      batchAnswered: AnsweredCell,
+      batchBestJudge: BestJudgeCell,
+      batchOpen: ({cellData}: {cellData: DataTableCellData}) => (
+        <Box justifyContent="center">
+          <Button
+            onClick={() => {
+              onOpenBatch(String(cellData.value ?? ""));
+            }}
+            size="sm"
+            testID={`ai-review-batches-open-${String(cellData.value ?? "")}`}
+            text="Open"
+            variant="outline"
+          />
+        </Box>
+      ),
+    }),
+    [onOpenBatch]
+  );
+  const columns = useMemo(() => buildColumns(batches), [batches]);
+  const {rows: _sortedBatches, ...table} = useClientTable({
+    columns,
+    rows: batches,
+    searchText: batchSearchText,
+  });
 
   return (
     <Box gap={4} testID="ai-review-batches">
@@ -197,7 +267,16 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
           <Text color="secondaryDark">Grab recent traces above to start one.</Text>
         </Box>
       ) : (
-        <ObservabilityTable columns={COLUMNS} rows={rows} testID="ai-review-batches-table" />
+        <DataTable
+          {...table}
+          customColumnComponentMap={customColumnComponentMap}
+          emptyContent={
+            <Box padding={4} testID="ai-review-batches-no-matches">
+              <Text color="secondaryDark">No batches match these filters.</Text>
+            </Box>
+          }
+          testID="ai-review-batches-table"
+        />
       )}
     </Box>
   );

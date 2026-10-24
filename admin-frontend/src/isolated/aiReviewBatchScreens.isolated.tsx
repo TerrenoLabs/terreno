@@ -335,7 +335,7 @@ describe("AiReviewBatchesScreenWidget", () => {
     });
     expect(routerPush).toHaveBeenCalledWith("/admin/ai-review-batch?id=b1");
 
-    await press(view.getByTestId("ai-review-batches-table-row-b1-clickable"));
+    await press(view.getByTestId("ai-review-batches-open-b1"));
     expect(routerPush).toHaveBeenCalledTimes(2);
   });
 

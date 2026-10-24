@@ -1,13 +1,6 @@
-import {
-  Badge,
-  Box,
-  Button,
-  DataTable,
-  type DataTableCellData,
-  type DataTableColumn,
-  Text,
-} from "@terreno/ui";
+import {Badge, Box, Button, DataTable, type DataTableCellData, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
   EVALUATOR_TYPE_LABELS,
   type EvaluatorRecord,
@@ -25,13 +18,69 @@ export interface AiEvaluatorsListViewProps {
   onRetry: () => void;
 }
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "text", title: "Name", width: 200},
-  {columnType: "evaluatorType", title: "Type", width: 120},
-  {columnType: "text", title: "Dimensions", width: 200},
-  {columnType: "text", title: "Target", width: 140},
-  {columnType: "text", title: "Run modes", width: 220},
-  {columnType: "evaluatorOpen", title: "", width: 88},
+const runModesText = (evaluator: EvaluatorRecord): string | undefined => {
+  const chips = formatRunModeChips(evaluator.runModes);
+  return chips.length > 0 ? chips.join(" · ") : undefined;
+};
+
+const evaluatorSearchText = (evaluator: EvaluatorRecord): string => evaluator.name;
+
+const buildColumns = (evaluators: EvaluatorRecord[]): ClientTableColumn<EvaluatorRecord>[] => [
+  {
+    filter: {kind: "text"},
+    key: "name",
+    title: "Name",
+    value: (evaluator) => evaluator.name,
+    width: 240,
+  },
+  {
+    columnType: "evaluatorType",
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(evaluators, (evaluator) => evaluator.type).map((option) => ({
+        label: EVALUATOR_TYPE_LABELS[option.value as EvaluatorRecord["type"]] ?? option.value,
+        value: option.value,
+      })),
+    },
+    key: "type",
+    title: "Type",
+    value: (evaluator) => evaluator.type,
+    width: 150,
+  },
+  {
+    cell: (evaluator) => ({value: formatDimensionSummary(evaluator.dimensions)}),
+    filter: {kind: "text"},
+    key: "dimensions",
+    title: "Dimensions",
+    value: (evaluator) =>
+      evaluator.dimensions.length > 0 ? formatDimensionSummary(evaluator.dimensions) : undefined,
+    width: 220,
+  },
+  {
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(evaluators, (evaluator) => evaluator.target),
+    },
+    key: "target",
+    title: "Target",
+    value: (evaluator) => evaluator.target,
+    width: 170,
+  },
+  {
+    cell: (evaluator) => ({value: runModesText(evaluator) ?? "—"}),
+    filter: {kind: "text"},
+    key: "runModes",
+    title: "Run modes",
+    value: runModesText,
+    width: 240,
+  },
+  {
+    cell: (evaluator) => ({value: evaluator.id}),
+    columnType: "evaluatorOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
 ];
 
 const typeBadgeStatus = (type: EvaluatorRecord["type"]): "info" | "neutral" | "warning" => {
@@ -86,19 +135,12 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
     [onOpen]
   );
 
-  const rows: DataTableCellData[][] = useMemo(() => {
-    return evaluators.map((evaluator) => {
-      const chips = formatRunModeChips(evaluator.runModes);
-      return [
-        {value: evaluator.name},
-        {value: evaluator.type},
-        {value: formatDimensionSummary(evaluator.dimensions)},
-        {value: evaluator.target},
-        {value: chips.length > 0 ? chips.join(" · ") : "—"},
-        {value: evaluator.id},
-      ];
-    });
-  }, [evaluators]);
+  const columns = useMemo(() => buildColumns(evaluators), [evaluators]);
+  const {rows: _sortedEvaluators, ...table} = useClientTable({
+    columns,
+    rows: evaluators,
+    searchText: evaluatorSearchText,
+  });
 
   return (
     <Box gap={3} testID="ai-evaluators-list">
@@ -128,9 +170,13 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
         </Box>
       ) : (
         <DataTable
-          columns={COLUMNS}
+          {...table}
           customColumnComponentMap={customColumnComponentMap}
-          data={rows}
+          emptyContent={
+            <Box padding={4} testID="ai-evaluators-no-matches">
+              <Text color="secondaryDark">No evaluators match these filters.</Text>
+            </Box>
+          }
           testID="ai-evaluators-table"
         />
       )}

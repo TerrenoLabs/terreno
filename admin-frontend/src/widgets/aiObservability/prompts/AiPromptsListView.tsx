@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import React, {useMemo} from "react";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
   ALL_FOLDERS,
   filterPrompts,
@@ -28,15 +29,83 @@ const LATEST_TOOLTIP =
 const PRODUCTION_TOOLTIP =
   "Production is the labelled version apps resolve with promptLabel production. — means no production label yet.";
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "text", title: "Name", width: 200},
-  {columnType: "promptType", title: "Type", width: 90},
-  {columnType: "text", infoModalText: LATEST_TOOLTIP, title: "Latest", width: 80},
-  {columnType: "text", infoModalText: PRODUCTION_TOOLTIP, title: "Production", width: 110},
-  {columnType: "text", title: "Last used", width: 110},
-  {columnType: "text", title: "Calls 7d", width: 90},
-  {columnType: "text", title: "Cost 7d", width: 90},
-  {columnType: "promptOpen", title: "", width: 88},
+/** Header tooltips by column index; `useClientTable` columns do not carry `infoModalText`. */
+const COLUMN_INFO: Record<number, string> = {2: LATEST_TOOLTIP, 3: PRODUCTION_TOOLTIP};
+
+const productionVersion = (prompt: PromptListItem): number | undefined => {
+  return prompt.production === "—" ? undefined : prompt.production;
+};
+
+const buildColumns = (prompts: PromptListItem[]): ClientTableColumn<PromptListItem>[] => [
+  {
+    filter: {kind: "text"},
+    key: "name",
+    title: "Name",
+    value: (prompt) => `${prompt.folder}/${prompt.name}`,
+    width: 220,
+  },
+  {
+    columnType: "promptType",
+    filter: {kind: "choice", options: distinctChoiceOptions(prompts, (prompt) => prompt.type)},
+    key: "type",
+    title: "Type",
+    value: (prompt) => prompt.type,
+    width: 130,
+  },
+  {
+    // Title, filter, info, and sort icons plus padding keep "v12" and the header on one line.
+    cell: (prompt) => ({value: `v${prompt.latestVersion}`}),
+    filter: {kind: "numberRange"},
+    key: "latest",
+    title: "Latest",
+    value: (prompt) => prompt.latestVersion,
+    width: 160,
+  },
+  {
+    cell: (prompt) => ({value: formatProduction(prompt.production)}),
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(prompts, productionVersion).map((option) => ({
+        label: `v${option.value}`,
+        value: option.value,
+      })),
+    },
+    key: "production",
+    title: "Production",
+    value: productionVersion,
+    width: 190,
+  },
+  {
+    cell: (prompt) => ({value: formatLastUsed(prompt.usage7d)}),
+    filter: {kind: "dateRange"},
+    key: "lastUsed",
+    title: "Last used",
+    value: (prompt) => prompt.usage7d?.lastUsed,
+    width: 160,
+  },
+  {
+    cell: (prompt) => ({value: formatUsageCalls(prompt.usage7d)}),
+    filter: {kind: "numberRange"},
+    key: "calls7d",
+    title: "Calls 7d",
+    value: (prompt) => prompt.usage7d?.calls,
+    width: 150,
+  },
+  {
+    cell: (prompt) => ({value: formatUsageCost(prompt.usage7d)}),
+    filter: {kind: "numberRange"},
+    key: "cost7d",
+    title: "Cost 7d",
+    value: (prompt) => prompt.usage7d?.costUsd,
+    width: 150,
+  },
+  {
+    cell: (prompt) => ({value: prompt.name}),
+    columnType: "promptOpen",
+    key: "open",
+    title: "",
+    width: 88,
+  },
 ];
 
 const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
@@ -129,18 +198,18 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
     [onOpenPrompt]
   );
 
-  const rows: DataTableCellData[][] = useMemo(() => {
-    return visible.map((prompt) => [
-      {value: `${prompt.folder}/${prompt.name}`},
-      {value: prompt.type},
-      {value: `v${prompt.latestVersion}`},
-      {value: formatProduction(prompt.production)},
-      {value: formatLastUsed(prompt.usage7d)},
-      {value: formatUsageCalls(prompt.usage7d)},
-      {value: formatUsageCost(prompt.usage7d)},
-      {value: prompt.name},
-    ]);
-  }, [visible]);
+  const tableColumnsInput = useMemo(() => buildColumns(visible), [visible]);
+  // The library search box above the table already covers names, so the table adds no search.
+  const {rows: _sortedPrompts, ...table} = useClientTable({
+    columns: tableColumnsInput,
+    rows: visible,
+  });
+  const columns: DataTableColumn[] = useMemo(() => {
+    return table.columns.map((column, index) => {
+      const infoModalText = COLUMN_INFO[index];
+      return infoModalText ? {...column, infoModalText} : column;
+    });
+  }, [table.columns]);
 
   return (
     <Box gap={3} testID="ai-prompts-list">
@@ -198,9 +267,14 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
             </Box>
           ) : (
             <DataTable
-              columns={COLUMNS}
+              {...table}
+              columns={columns}
               customColumnComponentMap={customColumnComponentMap}
-              data={rows}
+              emptyContent={
+                <Box padding={4} testID="ai-prompts-no-matches">
+                  <Text color="secondaryDark">No prompts match these filters.</Text>
+                </Box>
+              }
               testID="ai-prompts-table"
             />
           )}

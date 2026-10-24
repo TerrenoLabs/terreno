@@ -306,7 +306,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: feature-flags/e2e/smoke.ts, feature-flags/package.json, docs/testing/e2e/feature-flags.md
   - Acceptance: `bun run --cwd feature-flags smoke` exits 0. A flag created over HTTP evaluates as on for a user.
 
-- [ ] **T15** — Smoke test for `@terreno/announcements`
+- [x] **T15** — Smoke test for `@terreno/announcements`
   - Depends on: T8
   - Files: announcements/e2e/smoke.ts, announcements/package.json, docs/testing/e2e/announcements.md
   - Acceptance: `bun run --cwd announcements smoke` exits 0. An announcement created over HTTP shows up in a signed-in user's list.

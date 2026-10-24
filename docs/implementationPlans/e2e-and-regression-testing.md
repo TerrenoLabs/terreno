@@ -371,7 +371,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: create-terreno-app/e2e/smoke.ts, create-terreno-app/package.json, docs/testing/e2e/create-terreno-app.md
   - Acceptance: `bun run --cwd create-terreno-app smoke` exits 0. The compiled binary generates an app into a temp dir without prompts. The generated backend entry then builds with `bun build` against the workspace packages, with no network install.
 
-- [ ] **T28** — Smoke test for example-backend
+- [x] **T28** — Smoke test for example-backend
   - Depends on: T8
   - Files: example-backend/e2e/smoke.ts, example-backend/package.json, docs/testing/e2e/example-backend.md
   - Acceptance: `bun run --cwd example-backend smoke` exits 0. `src/index.ts` boots as a child process, `/health` reports `healthy: true`, and a seeded user signs in.

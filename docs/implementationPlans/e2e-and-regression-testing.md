@@ -341,7 +341,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: admin-frontend/e2e/smoke.spec.ts, admin-frontend/package.json, docs/testing/e2e/admin-frontend.md
   - Acceptance: `bun run --cwd admin-frontend smoke` exits 0. In Chromium, an admin signs in to the admin-spa build against `spawnExampleBackend()`, and AdminHome lists at least one model, found by `testID`.
 
-- [ ] **T22** — Smoke test for `@terreno/rtk`
+- [x] **T22** — Smoke test for `@terreno/rtk`
   - Depends on: T8
   - Files: rtk/e2e/smoke.ts, rtk/package.json, docs/testing/e2e/rtk.md
   - Acceptance: `bun run --cwd rtk smoke` exits 0. A store built from the compiled rtk package signs in through Better Auth against `spawnExampleBackend()`, and an authenticated query returns the signed-in user. The runtime follows D6: Bun, with rtk's existing native-module shims. The package page names the shims.

@@ -89,6 +89,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun test",
     "test:agent": "AGENT=1 bun test --only-failures",
     "test:ci": "bun test",

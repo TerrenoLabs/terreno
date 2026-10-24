@@ -43,7 +43,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
   }, [confirmPassword, password, setPasswordForUser, toast, userId]);
 
   return (
-    <Card color="base" padding={4}>
+    <Card color="base" padding={4} testID="admin-user-password-card">
       <Box gap={3}>
         <Text bold size="lg">
           Set Password
@@ -89,6 +89,9 @@ const AdminEditScreen: React.FC = () => {
   const canOpenSecurity =
     !isOwnRecord &&
     canManageUserSecurity({admin: profile?.admin, permissions: profile?.permissions});
+  // The set-password action is admin-only (Permissions.IsAdmin); operators who can open a user
+  // record for security work would only see it fail.
+  const canSetPassword = Boolean(profile?.admin);
   const footerContent = useMemo((): React.ReactNode => {
     if (model?.toLowerCase() !== "user") {
       return undefined;
@@ -96,10 +99,10 @@ const AdminEditScreen: React.FC = () => {
     return (
       <Box gap={4}>
         {canOpenSecurity && id ? <UserSecurityLink routeBase={ADMIN_BASE_URL} userId={id} /> : null}
-        <AdminUserPasswordCard userId={id} />
+        {canSetPassword ? <AdminUserPasswordCard userId={id} /> : null}
       </Box>
     );
-  }, [canOpenSecurity, id, model]);
+  }, [canOpenSecurity, canSetPassword, id, model]);
 
   return (
     <AdminModelForm

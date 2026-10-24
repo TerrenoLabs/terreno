@@ -132,6 +132,9 @@ test.describe("Platform user security", () => {
   test("operator disables and re-enables a user", async ({page, playwright}) => {
     await loginAs(page, operator);
     await page.goto(`/admin/User/${target.userId}`);
+    await page.getByTestId("admin-user-security-link").waitFor({state: "visible"});
+    // Setting a password is admin-only, so an operator's record view leaves the card out.
+    await expect(page.getByTestId("admin-user-password-card")).toHaveCount(0);
     await page.getByTestId("admin-user-security-link").click();
 
     await page.getByTestId(SCREEN).waitFor({state: "visible"});

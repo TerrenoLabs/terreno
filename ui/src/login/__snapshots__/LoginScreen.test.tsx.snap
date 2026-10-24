@@ -82,7 +82,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                         "accessibilityState": {
                                           "disabled": true,
                                         },
-                                        "aria-label": "Text input field",
+                                        "aria-label": "Email",
                                         "autoCapitalize": "none",
                                         "autoCorrect": false,
                                         "blurOnSubmit": true,
@@ -188,7 +188,7 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                         "accessibilityState": {
                                           "disabled": true,
                                         },
-                                        "aria-label": "Text input field",
+                                        "aria-label": "Password",
                                         "autoCapitalize": "none",
                                         "autoCorrect": false,
                                         "blurOnSubmit": true,
@@ -878,6 +878,7 @@ exports[`LoginScreen v2 snapshot renders every new state together 1`] = `
                                           ],
                                           "props": {
                                             "aria-role": "button",
+                                            "focusable": false,
                                             "style": {
                                               "borderRadius": 1,
                                               "cursor": "auto",
@@ -1646,7 +1647,7 @@ exports[`LoginScreen v2 snapshot renders every new state together 1`] = `
                                         "accessibilityState": {
                                           "disabled": false,
                                         },
-                                        "aria-label": "Text input field",
+                                        "aria-label": "Email",
                                         "autoCapitalize": "none",
                                         "autoCorrect": false,
                                         "blurOnSubmit": true,
@@ -1752,7 +1753,7 @@ exports[`LoginScreen v2 snapshot renders every new state together 1`] = `
                                         "accessibilityState": {
                                           "disabled": false,
                                         },
-                                        "aria-label": "Text input field",
+                                        "aria-label": "Password",
                                         "autoCapitalize": "none",
                                         "autoCorrect": false,
                                         "blurOnSubmit": true,

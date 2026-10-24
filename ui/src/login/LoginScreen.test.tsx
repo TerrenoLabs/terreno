@@ -45,6 +45,14 @@ describe("LoginScreen", () => {
     expect(getByTestId("login-screen-password-input")).toBeTruthy();
   });
 
+  it("names each input by its field label for assistive tech", () => {
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={mock(() => Promise.resolve())} />
+    );
+    expect(getByTestId("login-screen-email-input").props["aria-label"]).toBe("Email");
+    expect(getByTestId("login-screen-password-input").props["aria-label"]).toBe("Password");
+  });
+
   it("renders submit button", () => {
     const {getByTestId} = renderWithTheme(
       <LoginScreen fields={defaultFields} onSubmit={mock(() => Promise.resolve())} />

@@ -316,6 +316,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({
 
           {fields.map((field) => (
             <TextField
+              accessibilityLabel={field.label}
               autoComplete={getFieldAutoComplete({field, passkeyAutofill})}
               disabled={loading}
               id={`${testID}-${field.name}-input`}

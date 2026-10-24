@@ -80,7 +80,7 @@ fragments and goes stale; the human chose one file per area).
 Tracers: T1 (the IP contract that every later skill task reads) and T8 (the smoke
 harness that every package task builds on) run in parallel.
 E2E: one real-process smoke per package (E1–E21) plus validator fixture cases (E22).
-Regression: five planning cases (PLAN-new-1 to PLAN-new-5), walked once in T34.
+Regression: five planning cases (PLAN-new-1 to PLAN-new-5), walked by a human before merge (T34, D8).
 brewery: a sibling IP in the brewery repo
 (`docs/plans/2026-10-23-e2e-and-regression-testing.md`) holds distill, cut and tap changes and the
 resync. It is signed off with this one. Its resync runs only after this PR merges.
@@ -423,8 +423,9 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
 - [ ] **T34** — Walk the planning regression cases and record the run
   - Depends on: T7, T11, T32
   - Files: docs/regression/planning.md
-  - Delivers: Using this branch's plugin build in a scratch repo, the run walks PLAN-001 to PLAN-005 once. It stamps `Last full run`, and adds the evidence (excerpts of the generated IP, PR diff, and Roast and Taste results) to the PR Verification section.
-  - Acceptance: All five cases meet their Expected. A failing case is `FAIL`, routed back to its owning task (T1–T5).
+  - Owner: a human (D8). No agent walks it. barrel skips this task, and Brew lists PLAN-001 to PLAN-005 under ⚠️ Not tested in the PR.
+  - Delivers: Before merging, Josh walks PLAN-001 to PLAN-005 in a scratch repo using this branch's plugin build, stamps `Last full run`, and adds the evidence to the PR Verification section.
+  - Acceptance: All five cases meet their Expected. A failing case goes back to its owning task (T1–T5).
 
 ## Assumptions
 
@@ -468,6 +469,8 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
 | D5 | Do bots execute manual regression cases? (Q4) | No, humans only | verify-ui-changes untouched; X7 parked |
 | D6 | How does the rtk smoke run? (Q7) | Bun with rtk's existing native shims, against a real backend | T22 as written |
 | D7 | Approve both plans? | ok, approve | Status approved on this IP and the sibling brewery IP |
+| D8 (durable) | Who runs T34's walk of the planning regression cases? | "the regression tests are ment to be manually tested by only a human. they're generally tests that can't be as easily automated (e.g. full flows, feel of the app, hardware related things). the rest fo the test cases should be e2e automated where possible." | testing-plan.md gains "Automate first": regression cases are only for full flows, feel and hardware/OS, and only a human walks them. Grow routes everything automatable to `## E2E tests`, and Roast fails a regression row a spec could fully cover. T34 is human-owned and skipped by barrel |
+| D9 | example-backend's smoke ran 26–82 s against the 30 s budget. Fix it, or make an exception? | Fix it to 30 s | T33 retry also edits `example-backend/e2e/smoke.ts` (T28's file): seed in-process and skip the duplicate first-boot work. If it still runs over, document a 60 s exception for that smoke only |
 
 ## Sign-off
 

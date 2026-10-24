@@ -38,6 +38,21 @@ default when an override names a missing file. When no file exists at the resolv
 `E2E guide` path, Grow adds a task that writes it there, and every task that writes a
 planned spec depends on that task.
 
+## Automate first
+
+A check is an `## E2E tests` row whenever a layer in the e2e guide can drive it and
+assert the result. A regression case is only for what a human must do or judge:
+
+- a full flow across apps, devices, or channels that automation cannot reasonably drive
+  end to end
+- how the app feels: motion, responsiveness, layout under real fonts and screens
+- hardware and the operating system: camera, push delivery, biometrics, permission
+  prompts, reinstall
+
+Only a human walks regression cases. No stage executes them or stamps `Last full run`.
+When a case has an automatable part, that part is an `## E2E tests` row and the case
+keeps only the human part.
+
 ## IP tables
 
 Every IP has both sections. Either may be `None — <reason>`, but neither may be missing.
@@ -68,8 +83,10 @@ reason it does not (for example: covered by an existing spec, which is named).
 - The section opens with one `Destination:` line per prefix, naming the suite file:
   `Destination: TODO → docs/regression/todos.md`. A prefix no suite declares yet gets a
   new file at that path.
-- `Automated by` is `manual`, or the `## E2E tests` row ID or spec path that covers it.
-  When the case is written into the suite, an `E<n>` value becomes that row's spec path.
+- `Automated by` is `manual`, or the `## E2E tests` row ID or spec path that covers the
+  case's automatable part. When the case is written into the suite, an `E<n>` value
+  becomes that row's spec path. A case a spec covers completely is not a regression
+  case: it is only the `## E2E tests` row.
 - `Added` is the IP slug.
 - A row that edits an existing case uses that case's real ID.
 

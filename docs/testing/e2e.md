@@ -22,11 +22,11 @@ prove the behavior.
 | Unit and integration | Functions, routes, and components behave, in-process | `bun test`, in-memory Mongo | `<package>/src/**/*.test.ts(x)` | `bun run --cwd <package> test:ci` |
 | Smoke | The package's built output works through its public entry in a real process | A child process, a real port, the compiled binary, or Chromium | `<package>/e2e/smoke.ts` or `smoke.spec.ts` | `bun run --cwd <package> smoke` |
 | E2E | A user flow works across the running frontend and backend | Playwright (browser) or Maestro (flow) | `<package>/e2e/*.spec.ts`, `.maestro/flows/` | `bun run frontend:e2e`, `bun run maestro:test` |
-| Manual regression | What no automated tier covers: native-only behavior, real email, OS permission prompts | A person, before a release | `docs/regression/<area>.md` | none |
+| Manual regression | What only a person can do or judge: full flows across devices or channels, how the app feels, hardware and OS behavior | A person, before a release | `docs/regression/<area>.md` | none |
 
 Unit tests are the default. A smoke exists once per package, not once per feature. A new e2e
-spec is for a user-visible flow that crosses the frontend and backend. A manual case is for a
-check that no automated tier can make.
+spec is for a user-visible flow that crosses the frontend and backend. Automate first: a manual
+case is only for a check that no automated tier can make, and only a person walks it.
 
 ## Layers
 

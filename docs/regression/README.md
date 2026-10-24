@@ -4,8 +4,9 @@ Run `bun run check:regression-suites` after you edit any file here. CI runs the 
 the `repo-policies` job.
 
 These files hold the manual regression cases a person walks before a release: the checks that
-no unit test, smoke, or e2e spec can make, such as native-only behavior, real email delivery,
-and operating-system permission prompts. Each area has one living file. Implementation plans
+no unit test, smoke, or e2e spec can make, such as full flows across devices or channels, how
+the app feels, real email delivery, and hardware or operating-system behavior. Only a person
+walks them; anything an e2e spec can drive and assert belongs in an e2e spec instead. Each area has one living file. Implementation plans
 propose cases under `## Regression cases`, and Brew writes them here with real IDs before it
 opens the pull request. See [Where regression suites live](../testing/e2e.md#where-regression-suites-live)
 for how this tier fits with the automated ones.

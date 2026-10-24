@@ -54,6 +54,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    against the testing-plan regression-step bar. A row without a concrete starting
    state, a followable action, and an observable Expected is `FAIL` that names the row
    ID and the missing part; Pick fixes it by rewriting that row in the IP in place.
+   A row an e2e guide layer could cover completely is also `FAIL` (testing-plan
+   "Automate first"); Pick moves it to `## E2E tests`. Roast never walks a row.
    An IP that lacks either section follows the testing-plan legacy rule: warn once and
    do not fail.
 4. **Inspect and execute.** Review this task's patch and run concrete checks in this
@@ -125,8 +127,8 @@ probes. If repository policy makes one mandatory and it is unavailable, emit `BL
 
 One or more criteria disproven by evidence emits `FAIL` with severity, expected, actual,
 and reproducible evidence. Set `next: pick`. A missing or failing `## E2E tests` row, or
-a `## Regression cases` row that misses the regression-step bar, is `FAIL` that names
-the row ID.
+a `## Regression cases` row that misses the regression-step bar or could be fully
+automated, is `FAIL` that names the row ID.
 
 ## Blocked conditions
 

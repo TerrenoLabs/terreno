@@ -64,8 +64,10 @@ human decision until the answer is executable.
    each success metric and guardrail into an acceptance criterion, grill each `TBD` as a
    human decision, and do not re-ask product decisions the PRD already settled.
    Pair each UI or cross-process criterion with a planned e2e spec at the path and layer
-   the e2e guide prescribes, or record why it needs none. List the manual regression
-   cases the feature adds or changes, each meeting the testing-plan regression-step bar.
+   the e2e guide prescribes, or record why it needs none. Automate first: anything a
+   guide layer can drive and assert is an e2e row. List as manual regression cases only
+   what a human must do or judge (full cross-device flows, feel, hardware and OS), each
+   meeting the testing-plan regression-step bar.
 8. **Write.** Produce the IP and a dependency-aware tracer-bullet task list. Each task
    names files/seams, acceptance criteria, blockers, verification, docs to create or
    update, and relevant supporting skills when discoverable. Docs updates follow the

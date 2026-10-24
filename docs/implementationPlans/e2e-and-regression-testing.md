@@ -291,7 +291,7 @@ Each package task below writes only three files:
 Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo from
 `smokeMongoUri()`.
 
-- [ ] **T12** — Smoke test for `@terreno/test`
+- [x] **T12** — Smoke test for `@terreno/test`
   - Depends on: T8
   - Files: test/e2e/smoke.ts, test/package.json, docs/testing/e2e/test.md
   - Acceptance: `bun run --cwd test smoke` exits 0. It gets a replica-set URI, opens a change stream, spawns a trivial HTTP child, and waits until the child is ready.

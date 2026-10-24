@@ -138,7 +138,7 @@ test.describe("Org-admin member security", () => {
   // TimezonePicker (DateTimeField with a timezone, in admin model forms and date filters) when the
   // test browser's zone is UTC. The members screen and MemberSecurityPanel render no timezone
   // picker; the panel formats times with Luxon only.
-  test("org-admin resets a member's 2FA", async ({page, playwright}) => {
+  test("org-admin resets a member's 2FA", async ({consoleGuard, page, playwright}) => {
     await loginAs(page, orgAdmin);
     await page.goto(`/admin/orgs/${orgId}/members`);
     await page.getByTestId("org-members-table").waitFor({state: "visible"});
@@ -150,13 +150,19 @@ test.describe("Org-admin member security", () => {
     await page.getByTestId(`${PANEL}-action-reset-two-factor`).click();
     await page.getByTestId(`${PANEL}-confirm.primary`).click();
 
-    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Two-factor reset");
+    // The reset revokes sessions and records security events; give a loaded machine room.
+    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Two-factor reset", {
+      timeout: 15_000,
+    });
     await expect(twoFactorStatus).toHaveText("Off");
     await expect(page.getByTestId(`${PANEL}-action-reset-two-factor`)).toHaveCount(0);
     await page.screenshot({path: "/opt/cursor/artifacts/org-admin-security-reset-2fa.png"});
 
     // The member's next password sign-in gets no second-factor challenge.
     expect(await signInNeedsTwoFactor(playwright, member)).toBe(false);
+    // Signing a second user in on this browser finds the first user's syncdb store, which their
+    // key cannot decrypt; syncdb wipes it and warns, as documented.
+    consoleGuard.allow(/\[syncdb\] persisted data for ".*" could not be decrypted/);
     await ensureLoggedOut(page);
     await loginAs(page, member);
     await page.getByTestId("todos-screen").waitFor({state: "visible"});

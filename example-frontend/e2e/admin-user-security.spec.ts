@@ -21,6 +21,7 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_URL ?? "http://localhost:8082";
 type Playwright = PlaywrightWorkerArgs["playwright"];
 const SCREEN = "user-security-screen";
 const PANEL = `${SCREEN}-panel`;
+const ACTION_TIMEOUT_MS = 15_000;
 
 interface SignedInUser extends E2EUser {
   token: string;
@@ -129,7 +130,7 @@ test.describe("Platform user security", () => {
     expect(await meStatus(playwright, target.token), "the target starts signed in").toBe(200);
   });
 
-  test("operator disables and re-enables a user", async ({page, playwright}) => {
+  test("operator disables and re-enables a user", async ({consoleGuard, page, playwright}) => {
     await loginAs(page, operator);
     await page.goto(`/admin/User/${target.userId}`);
     await page.getByTestId("admin-user-security-link").waitFor({state: "visible"});
@@ -144,7 +145,10 @@ test.describe("Platform user security", () => {
 
     await page.getByTestId(`${PANEL}-action-disable`).click();
     await page.getByTestId(`${PANEL}-confirm.primary`).click();
-    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Account disabled");
+    // Each action revokes sessions and records security events; give a loaded machine room.
+    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Account disabled", {
+      timeout: ACTION_TIMEOUT_MS,
+    });
     await expect(page.getByTestId(`${PANEL}-disabled`)).toBeVisible();
     await page.screenshot({path: "/opt/cursor/artifacts/admin-user-security-disabled.png"});
 
@@ -154,13 +158,18 @@ test.describe("Platform user security", () => {
     await expectSignInRefusedWhileDisabled(playwright, target);
 
     await page.getByTestId(`${PANEL}-action-enable`).click();
-    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Account enabled");
+    await expect(page.getByTestId(`${PANEL}-result`)).toContainText("Account enabled", {
+      timeout: ACTION_TIMEOUT_MS,
+    });
     await expect(page.getByTestId(`${PANEL}-disabled`)).toHaveCount(0);
     await expect(page.getByTestId(`${PANEL}-action-disable`)).toBeVisible();
 
     // After enable the user signs in again, over the API and in the app.
     const freshToken = await signIn(playwright, target);
     expect(await meStatus(playwright, freshToken)).toBe(200);
+    // Signing a second user in on this browser finds the first user's syncdb store, which their
+    // key cannot decrypt; syncdb wipes it and warns, as documented.
+    consoleGuard.allow(/\[syncdb\] persisted data for ".*" could not be decrypted/);
     await ensureLoggedOut(page);
     await loginAs(page, target);
     await page.getByTestId("todos-screen").waitFor({state: "visible"});

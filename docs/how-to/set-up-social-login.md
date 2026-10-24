@@ -187,26 +187,25 @@ set, copy each into its Secret Manager container:
 
 ```bash
 S=terreno-backend-example
-while read -r key name; do
-  value="$(secret terreno "$key")" || { echo "skip $key: not in OpenBao"; continue; }
-  [ -n "$value" ] || { echo "skip $key: empty"; continue; }
-  printf '%s' "$value" | gcloud secrets versions add "$S-$name" --data-file=- >/dev/null \
-    && echo "added $S-$name"
-done <<'EOF'
-GITHUB_OAUTH_CLIENT_ID      github-client-id
-GITHUB_OAUTH_CLIENT_SECRET  github-client-secret
-GOOGLE_OAUTH_CLIENT_ID      google-client-id
-GOOGLE_OAUTH_CLIENT_SECRET  google-client-secret
-APPLE_OAUTH_CLIENT_ID       apple-client-id
-APPLE_OAUTH_TEAM_ID         apple-team-id
-APPLE_OAUTH_KEY_ID          apple-key-id
-APPLE_OAUTH_SECERT          apple-private-key
-EOF
+put() { local v; v="$(secret terreno "$1" </dev/null)" && [ -n "$v" ] && printf '%s' "$v" | gcloud secrets versions add "$S-$2" --data-file=- --quiet >/dev/null && echo "added $S-$2" || echo "skipped $1"; }
+put GITHUB_OAUTH_CLIENT_ID     github-client-id
+put GITHUB_OAUTH_CLIENT_SECRET github-client-secret
+put GOOGLE_OAUTH_CLIENT_ID     google-client-id
+put GOOGLE_OAUTH_CLIENT_SECRET google-client-secret
+put APPLE_OAUTH_CLIENT_ID      apple-client-id
+put APPLE_OAUTH_TEAM_ID        apple-team-id
+put APPLE_OAUTH_KEY_ID         apple-key-id
+put APPLE_OAUTH_SECERT         apple-private-key
 ```
+
+Every line stands alone, so the block pastes into bash or zsh without a continuation prompt.
+`</dev/null` and `--quiet` stop `secret` and `gcloud` from reading the rest of the paste as
+input; a command that needs input fails and prints `skipped` instead. If every line skips, run
+`secret terreno GITHUB_OAUTH_CLIENT_ID >/dev/null` alone first to sign in to OpenBao.
 
 - `APPLE_OAUTH_SECERT` (spelled as stored) holds the `.p8` key's contents, `-----BEGIN PRIVATE
   KEY-----` included. `APPLE_OAUTH_CLIENT_ID` is the Services ID, such as `com.example.web`.
-- The loop never prints a value, and skips a key that is missing or empty instead of storing an
+- `put` never prints a value, and skips a key that is missing or empty instead of storing an
   empty version, which would mount a blank secret.
 - `printf '%s'` keeps a trailing newline out of the value. Check one with
   `gcloud secrets versions access latest --secret=$S-github-client-id`.

@@ -23,6 +23,7 @@ import {flushAuditRecorderForTests, resetAuditRecorderForTests} from "../audit/r
 import type {UserModel} from "../auth";
 import type {BetterAuthConfig} from "../betterAuth";
 import {BetterAuthApp} from "../betterAuthApp";
+import type {AuthOptions} from "../expressServer";
 import {clearMCPRegistry} from "../mcp/registry";
 import {McpServiceToken} from "../models/mcpServiceToken";
 import {createAccess} from "../rbac/access";
@@ -95,6 +96,8 @@ interface BuildOptions {
   /** Pass `false` to build without AccountSecurityApp. */
   accountSecurity?: boolean;
   auditApp?: boolean;
+  /** TerrenoApp `authOptions` for the legacy JWT routes (for example recovery mail). */
+  authOptions?: AuthOptions;
   config?: Partial<BetterAuthConfig>;
   /** TerrenoApp `organizations`; set, the app is started (skipListen) so OrgsApp registers. */
   organizations?: TerrenoAppOptions["organizations"];
@@ -114,6 +117,7 @@ export const buildApp = ({
   accessControl = true,
   accountSecurity = true,
   auditApp = true,
+  authOptions,
   config = {},
   organizations,
   security = {},
@@ -125,6 +129,7 @@ export const buildApp = ({
   });
   const terrenoApp = new TerrenoApp({
     ...(accessControl ? {accessControl: accessControl === true ? access : accessControl} : {}),
+    ...(authOptions ? {authOptions} : {}),
     mcpServiceTokens: true,
     ...(organizations ? {organizations} : {}),
     skipListen: true,

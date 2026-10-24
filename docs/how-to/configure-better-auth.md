@@ -98,7 +98,11 @@ email-verification mail match the JWT recovery templates. With `AccountSecurityA
 use their own renderer rather than `renderAuthMail` (see
 [Account security: Notifications](../reference/account-security.md#notifications)). The hooks throw 501 and do not send when
 `publicAppUrl` is missing. JWT `POST /auth/resetPassword` updates the Better Auth password and
-deletes Better Auth sessions when this plugin is registered. Better Auth password reset updates
+deletes Better Auth sessions when this plugin is registered. With this plugin registered, the JWT
+recovery routes only replace an existing JWT password: `POST /auth/forgotPassword` mails no link
+to an app User without one (it still answers 202), and `POST /auth/resetPassword` refuses that
+User's token with 400 `legacy-password-reset-unavailable`. Such an account resets through Better
+Auth (`request-password-reset` / `reset-password`). Better Auth password reset updates
 the JWT password of a matching app User that already has one, so dual-enrolled accounts cannot
 keep the old passport hash, and bumps `tokenEpoch` for every matching app User. Terreno reads the new password from Better Auth's parsed request body, so
 this works over HTTP (`POST {basePath}/reset-password`). Better Auth `change-password` does the

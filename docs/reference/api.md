@@ -466,8 +466,12 @@ setupServer({
 - `POST /auth/signup` — Create user account
 - `POST /auth/login` — Authenticate with email/password
 - `POST /auth/refresh_token` — Refresh access token
-- `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists
-- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the RTK client
+- `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists (with
+  `BetterAuthApp` registered, only when that user already has a JWT password)
+- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the
+  RTK client. With `BetterAuthApp` registered, a token for a user without a JWT password gets 400
+  `legacy-password-reset-unavailable` and sets no password (`POST /auth/login` has no second
+  factor); that user resets through Better Auth
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
@@ -664,7 +668,9 @@ Set `publicAppUrl`, `sendMail`, and `renderAuthMail` (from `@terreno/comms`) so 
 Those hooks throw 501 and do not send when `publicAppUrl` is missing, so links are never
 relative. Password reset also sets `revokeSessionsOnPasswordReset`, so existing Better Auth sessions
 are deleted when that reset path succeeds. JWT `POST /auth/resetPassword` updates the
-Better Auth password and deletes those sessions when `BetterAuthApp` is registered.
+Better Auth password and deletes those sessions when `BetterAuthApp` is registered; it only
+serves app `User`s that already have a JWT password then (others get 400
+`legacy-password-reset-unavailable`, and `POST /auth/forgotPassword` mails them nothing).
 With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
 password when that `User` already has one, and bumps `tokenEpoch` either way. `change-password` sets the new JWT password only on an app
 `User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`

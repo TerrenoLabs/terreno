@@ -3,61 +3,161 @@ import {
   Box,
   Button,
   CheckBox,
+  type ColumnSortInterface,
   DataTable,
   type DataTableCellData,
   type DataTableColumn,
-  DateTimeField,
+  type DataTableColumnFilter,
   Link,
   Modal,
   SelectField,
   Spinner,
   Text,
-  TextField,
   useTheme,
 } from "@terreno/ui";
 import React, {useCallback, useMemo} from "react";
 import {
+  DEFAULT_TRACE_SORT,
   type EvaluatorOption,
   formatCost,
   formatLatency,
+  formatStartedAt,
   formatTokens,
   selectedSensitiveCount,
-  type TraceListFilters,
+  TRACE_FILTER_FIELDS,
   type TraceListItem,
+  type TraceSortKey,
 } from "./traceTypes";
 
-const COLUMNS: DataTableColumn[] = [
-  {columnType: "traceSelect", title: "", width: 44},
-  {columnType: "traceStatus", title: "Status", width: 72},
-  {columnType: "text", title: "Name", width: 180},
-  {columnType: "traceSensitive", title: "Sensitive", width: 100},
-  {columnType: "text", title: "Error", width: 180},
-  {columnType: "text", title: "Prompts", width: 90},
-  {columnType: "text", title: "Spans", width: 72},
-  {columnType: "text", title: "Tokens", width: 80},
-  {columnType: "text", title: "Cost", width: 90},
-  {columnType: "text", title: "Latency", width: 90},
-  {columnType: "text", title: "Scores", width: 80},
-  {columnType: "traceOpen", title: "", width: 88},
-];
+/** Column order; `TRACE_SORT_KEY_BY_COLUMN` and the row builder index into it. */
+const COLUMN_INDEX = {
+  cost: 9,
+  error: 5,
+  latency: 10,
+  name: 2,
+  open: 12,
+  prompts: 6,
+  scores: 11,
+  select: 0,
+  sensitive: 4,
+  spans: 7,
+  startedAt: 3,
+  status: 1,
+  tokens: 8,
+} as const;
 
-const statusOptions = [
-  {label: "All statuses", value: ""},
+const TRACE_SORT_KEY_BY_COLUMN: Partial<Record<number, TraceSortKey>> = {
+  [COLUMN_INDEX.cost]: "cost",
+  [COLUMN_INDEX.latency]: "latency",
+  [COLUMN_INDEX.name]: "name",
+  [COLUMN_INDEX.scores]: "scores",
+  [COLUMN_INDEX.spans]: "spans",
+  [COLUMN_INDEX.startedAt]: "startedAt",
+  [COLUMN_INDEX.status]: "status",
+  [COLUMN_INDEX.tokens]: "tokens",
+};
+
+const STATUS_FILTER_OPTIONS = [
   {label: "ok", value: "ok"},
   {label: "error", value: "error"},
 ];
 
-const scoreOptions = [
-  {label: "All traces", value: ""},
-  {label: "Has a score", value: "true"},
-  {label: "No scores", value: "false"},
+const ADDITIONAL_FILTERS: DataTableColumnFilter[] = [
+  {field: TRACE_FILTER_FIELDS.userId, kind: "text", label: "User"},
+  {field: TRACE_FILTER_FIELDS.sessionId, kind: "text", label: "Session"},
 ];
 
-const sensitiveOptions = [
-  {label: "All traces", value: ""},
-  {label: "Sensitive only", value: "true"},
-  {label: "Not sensitive", value: "false"},
-];
+/**
+ * Widths fit the longest formatted value on one line (e.g. "$12.3456", "1234567",
+ * "123456 ms") plus the 32px cell padding and the header's sort and filter icons.
+ */
+const buildColumns = (promptOptions: string[]): DataTableColumn[] => {
+  const columns: DataTableColumn[] = [
+    {columnType: "traceSelect", title: "", width: 44},
+    {
+      columnType: "traceStatus",
+      filter: {
+        field: TRACE_FILTER_FIELDS.status,
+        kind: "choice",
+        label: "Status",
+        options: STATUS_FILTER_OPTIONS,
+      },
+      sortable: true,
+      title: "Status",
+      width: 136,
+    },
+    {
+      columnType: "traceText",
+      filter: {
+        field: TRACE_FILTER_FIELDS.prompt,
+        kind: "choice",
+        label: "Prompt",
+        options: promptOptions.map((prompt) => ({label: prompt, value: prompt})),
+      },
+      sortable: true,
+      title: "Name",
+      width: 220,
+    },
+    {
+      columnType: "traceText",
+      filter: {field: TRACE_FILTER_FIELDS.startedAt, kind: "dateRange", label: "Started"},
+      sortable: true,
+      title: "Started",
+      width: 200,
+    },
+    {
+      columnType: "traceSensitive",
+      filter: {field: TRACE_FILTER_FIELDS.sensitive, kind: "boolean", label: "Sensitive"},
+      title: "Sensitive",
+      width: 140,
+    },
+    {columnType: "traceText", title: "Error", width: 180},
+    {columnType: "traceText", title: "Prompts", width: 100},
+    {columnType: "traceText", sortable: true, title: "Spans", width: 110},
+    {columnType: "traceText", sortable: true, title: "Tokens", width: 120},
+    {columnType: "traceText", sortable: true, title: "Cost", width: 120},
+    {columnType: "traceText", sortable: true, title: "Latency", width: 130},
+    {
+      columnType: "traceText",
+      filter: {field: TRACE_FILTER_FIELDS.hasScore, kind: "boolean", label: "Has a score"},
+      sortable: true,
+      title: "Scores",
+      width: 140,
+    },
+    {columnType: "traceOpen", title: "", width: 88},
+  ];
+  return columns;
+};
+
+/** Maps a `sort` query value such as `-cost` to the DataTable's column sort state. */
+export const traceSortToSortColumn = (sort: string): ColumnSortInterface | undefined => {
+  const descending = sort.startsWith("-");
+  const key = descending ? sort.slice(1) : sort;
+  const entry = Object.entries(TRACE_SORT_KEY_BY_COLUMN).find(([, value]) => value === key);
+  if (!entry) {
+    return undefined;
+  }
+  return {column: Number(entry[0]), direction: descending ? "desc" : "asc"};
+};
+
+/**
+ * Maps a DataTable header press back to a `sort` value. The table cycles asc → desc → none;
+ * "none" falls back to newest first, and pressing Started while already newest first flips
+ * it to oldest first so that column can still toggle.
+ */
+export const sortColumnToTraceSort = (
+  next: ColumnSortInterface | undefined,
+  current: string
+): string => {
+  if (!next) {
+    return current === DEFAULT_TRACE_SORT ? "startedAt" : DEFAULT_TRACE_SORT;
+  }
+  const key = TRACE_SORT_KEY_BY_COLUMN[next.column];
+  if (!key) {
+    return current;
+  }
+  return next.direction === "desc" ? `-${key}` : key;
+};
 
 export interface AiTracesListViewProps {
   addToDatasetError?: string;
@@ -67,7 +167,8 @@ export interface AiTracesListViewProps {
   enqueueError?: string;
   evaluatorId: string;
   evaluators: EvaluatorOption[];
-  filters: TraceListFilters;
+  /** DataTable column filter values; the screen maps them to `TraceListFilters`. */
+  filterValues: Record<string, unknown>;
   isAddingToDataset?: boolean;
   isEnqueueing?: boolean;
   isLoading?: boolean;
@@ -84,12 +185,13 @@ export interface AiTracesListViewProps {
   onDismissReviewModal: () => void;
   onEnqueueReview: () => void;
   onEvaluatorChange: (id: string) => void;
-  onFiltersChange: (filters: TraceListFilters) => void;
+  onFilterValuesChange: (values: Record<string, unknown>) => void;
   onOpenAddToDataset: () => void;
   onOpenReview: () => void;
   onOpenTrace: (id: string) => void;
   onPageChange: (page: number) => void;
   onRunTestMultiStage: () => void;
+  onSortChange: (sort: string) => void;
   onToggleSelect: (id: string) => void;
   page: number;
   pageSize?: number;
@@ -98,9 +200,19 @@ export interface AiTracesListViewProps {
   routeBase: string;
   selectedIds: string[];
   showMultiStageTest?: boolean;
+  /** Server sort key such as `-startedAt` or `cost`. */
+  sort?: string;
   total: number;
   traces: TraceListItem[];
 }
+
+const SingleLineCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
+  <Box flex="grow" justifyContent="center">
+    <Text numberOfLines={1} size={cellData.textSize ?? "md"}>
+      {String(cellData.value ?? "")}
+    </Text>
+  </Box>
+);
 
 const StatusDot: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   const {theme} = useTheme();
@@ -127,7 +239,7 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
   enqueueError,
   evaluatorId,
   evaluators,
-  filters,
+  filterValues,
   isAddingToDataset,
   isEnqueueing,
   isLoading,
@@ -143,12 +255,13 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
   onDismissReviewModal,
   onEnqueueReview,
   onEvaluatorChange,
-  onFiltersChange,
+  onFilterValuesChange,
   onOpenAddToDataset,
   onOpenReview,
   onOpenTrace,
   onPageChange,
   onRunTestMultiStage,
+  onSortChange,
   onToggleSelect,
   page,
   pageSize = 20,
@@ -157,6 +270,7 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
   routeBase,
   selectedIds,
   showMultiStageTest,
+  sort = DEFAULT_TRACE_SORT,
   total,
   traces,
 }) => {
@@ -205,8 +319,19 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
           <Text color="secondaryDark">—</Text>
         ),
       traceStatus: StatusDot,
+      traceText: SingleLineCell,
     }),
     [onOpenTrace, onToggleSelect, selected]
+  );
+
+  const columns = useMemo(() => buildColumns(promptOptions), [promptOptions]);
+  const sortColumn = useMemo(() => traceSortToSortColumn(sort), [sort]);
+
+  const handleSortColumnChange = useCallback(
+    (next?: ColumnSortInterface): void => {
+      onSortChange(sortColumnToTraceSort(next, sort));
+    },
+    [onSortChange, sort]
   );
 
   const rows: DataTableCellData[][] = useMemo(() => {
@@ -214,6 +339,7 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
       {value: trace.id},
       {value: trace.status},
       {value: trace.name},
+      {value: formatStartedAt(trace.startedAt)},
       {value: trace.sensitive},
       {value: trace.errorSummary ?? "—"},
       {value: String(trace.prompts.length)},
@@ -225,21 +351,6 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
       {value: trace.id},
     ]);
   }, [traces]);
-
-  const handleStatusChange = useCallback(
-    (value: string): void => {
-      onFiltersChange({...filters, status: value as TraceListFilters["status"]});
-    },
-    [filters, onFiltersChange]
-  );
-
-  const handleBooleanFilterChange = useCallback(
-    (key: "hasScore" | "sensitive", value: string): void => {
-      const next = value === "" ? undefined : value === "true";
-      onFiltersChange({...filters, [key]: next});
-    },
-    [filters, onFiltersChange]
-  );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize) || 1);
 
@@ -274,99 +385,6 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
           {multiStageError}
         </Text>
       ) : undefined}
-      <Box gap={2} testID="ai-traces-filters">
-        <Box direction="row" gap={2} testID="ai-traces-time-filters" wrap>
-          <Box flex="grow" minWidth={320}>
-            <DateTimeField
-              onChange={(value) => {
-                onFiltersChange({...filters, from: value});
-              }}
-              testID="ai-traces-filter-from"
-              title="From"
-              type="datetime"
-              value={filters.from}
-            />
-          </Box>
-          <Box flex="grow" minWidth={320}>
-            <DateTimeField
-              onChange={(value) => {
-                onFiltersChange({...filters, to: value});
-              }}
-              testID="ai-traces-filter-to"
-              title="To"
-              type="datetime"
-              value={filters.to}
-            />
-          </Box>
-        </Box>
-        <Box alignItems="end" direction="row" gap={2} testID="ai-traces-field-filters" wrap>
-          <Box flex="grow" minWidth={160}>
-            <SelectField
-              onChange={handleStatusChange}
-              options={statusOptions}
-              testID="ai-traces-filter-status"
-              title="Status"
-              value={filters.status}
-            />
-          </Box>
-          <Box flex="grow" minWidth={180}>
-            <SelectField
-              onChange={(value) => {
-                onFiltersChange({...filters, prompt: value});
-              }}
-              options={[
-                {label: "All prompts", value: ""},
-                ...promptOptions.map((prompt) => ({label: prompt, value: prompt})),
-              ]}
-              testID="ai-traces-filter-prompt"
-              title="Prompt"
-              value={filters.prompt}
-            />
-          </Box>
-          <Box flex="grow" minWidth={160}>
-            <TextField
-              onChange={(value) => {
-                onFiltersChange({...filters, userId: value});
-              }}
-              testID="ai-traces-filter-user"
-              title="User"
-              value={filters.userId}
-            />
-          </Box>
-          <Box flex="grow" minWidth={160}>
-            <TextField
-              onChange={(value) => {
-                onFiltersChange({...filters, sessionId: value});
-              }}
-              testID="ai-traces-filter-session"
-              title="Session"
-              value={filters.sessionId}
-            />
-          </Box>
-          <Box flex="grow" minWidth={160}>
-            <SelectField
-              onChange={(value) => {
-                handleBooleanFilterChange("hasScore", value);
-              }}
-              options={scoreOptions}
-              testID="ai-traces-filter-has-score"
-              title="Score"
-              value={filters.hasScore === undefined ? "" : String(filters.hasScore)}
-            />
-          </Box>
-          <Box flex="grow" minWidth={160}>
-            <SelectField
-              onChange={(value) => {
-                handleBooleanFilterChange("sensitive", value);
-              }}
-              options={sensitiveOptions}
-              testID="ai-traces-filter-sensitive"
-              title="Data sensitivity"
-              value={filters.sensitive === undefined ? "" : String(filters.sensitive)}
-            />
-          </Box>
-        </Box>
-      </Box>
       {selectedIds.length > 0 ? (
         <Box
           color="secondaryLight"
@@ -484,17 +502,23 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
         <Box alignItems="center" padding={6} testID="ai-traces-loading">
           <Spinner />
         </Box>
-      ) : traces.length === 0 ? (
-        <Box padding={4} testID="ai-traces-empty">
-          <Text color="secondaryDark">No traces match these filters.</Text>
-        </Box>
       ) : (
         <DataTable
-          columns={COLUMNS}
+          additionalFilters={ADDITIONAL_FILTERS}
+          columns={columns}
           customColumnComponentMap={customColumnComponentMap}
           data={rows}
+          emptyContent={
+            <Box padding={4} testID="ai-traces-empty">
+              <Text color="secondaryDark">No traces match these filters.</Text>
+            </Box>
+          }
+          filterValues={filterValues}
+          onFilterValuesChange={onFilterValuesChange}
           page={page}
           setPage={onPageChange}
+          setSortColumn={handleSortColumnChange}
+          sortColumn={sortColumn}
           testID="ai-traces-table"
           totalPages={totalPages}
         />

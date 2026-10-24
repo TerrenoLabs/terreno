@@ -76,7 +76,8 @@ export interface TraceListFilters {
   flaggedForDataset?: boolean;
   from: string;
   hasScore?: boolean;
-  prompt: string;
+  /** Prompt names; a trace matches when it used any of them. */
+  prompts: string[];
   sensitive?: boolean;
   sessionId: string;
   status: "" | "error" | "ok";
@@ -97,14 +98,137 @@ export interface EvaluatorOption {
 
 export const TRACE_PAGE_SIZE = 20;
 
+/** Sort keys accepted by `GET /ai/observability/traces?sort=`; `-` prefix sorts descending. */
+export type TraceSortKey =
+  | "cost"
+  | "latency"
+  | "name"
+  | "scores"
+  | "spans"
+  | "startedAt"
+  | "status"
+  | "tokens";
+
+/** Newest first. */
+export const DEFAULT_TRACE_SORT = "-startedAt";
+
+/** DataTable filter field keys used by the Traces screen. */
+export const TRACE_FILTER_FIELDS = {
+  hasScore: "hasScore",
+  prompt: "prompt",
+  sensitive: "sensitive",
+  sessionId: "sessionId",
+  startedAt: "startedAt",
+  status: "status",
+  userId: "userId",
+} as const;
+
 export const emptyTraceFilters = (): TraceListFilters => ({
   from: "",
-  prompt: "",
+  prompts: [],
   sessionId: "",
   status: "",
   to: "",
   userId: "",
 });
+
+const stringList = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry).trim()).filter((entry) => entry !== "");
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    return [value.trim()];
+  }
+  return [];
+};
+
+const trimmedString = (value: unknown): string => {
+  return typeof value === "string" ? value.trim() : "";
+};
+
+const optionalBoolean = (value: unknown): boolean | undefined => {
+  if (value === true || value === "true") {
+    return true;
+  }
+  if (value === false || value === "false") {
+    return false;
+  }
+  return undefined;
+};
+
+/** Maps list filters to the DataTable's controlled `filterValues`. */
+export const traceFiltersToFilterValues = (filters: TraceListFilters): Record<string, unknown> => {
+  const values: Record<string, unknown> = {};
+  const fields = TRACE_FILTER_FIELDS;
+  if (filters.status) {
+    values[fields.status] = [filters.status];
+  }
+  if (filters.prompts.length > 0) {
+    values[fields.prompt] = filters.prompts;
+  }
+  if (filters.from) {
+    values[`${fields.startedAt}_gte`] = filters.from;
+  }
+  if (filters.to) {
+    values[`${fields.startedAt}_lte`] = filters.to;
+  }
+  if (filters.sensitive !== undefined) {
+    values[fields.sensitive] = filters.sensitive;
+  }
+  if (filters.hasScore !== undefined) {
+    values[fields.hasScore] = filters.hasScore;
+  }
+  if (filters.userId) {
+    values[fields.userId] = filters.userId;
+  }
+  if (filters.sessionId) {
+    values[fields.sessionId] = filters.sessionId;
+  }
+  return values;
+};
+
+/**
+ * Maps DataTable `filterValues` back to list filters. Picking both statuses means no status
+ * filter. Filters the table does not show (`flaggedForDataset`) carry over from `previous`.
+ */
+export const filterValuesToTraceFilters = (
+  values: Record<string, unknown>,
+  previous?: TraceListFilters
+): TraceListFilters => {
+  const fields = TRACE_FILTER_FIELDS;
+  const statuses = stringList(values[fields.status]).filter(
+    (entry): entry is "error" | "ok" => entry === "error" || entry === "ok"
+  );
+  const filters: TraceListFilters = {
+    from: trimmedString(values[`${fields.startedAt}_gte`]),
+    prompts: stringList(values[fields.prompt]),
+    sessionId: trimmedString(values[fields.sessionId]),
+    status: statuses.length === 1 ? (statuses[0] ?? "") : "",
+    to: trimmedString(values[`${fields.startedAt}_lte`]),
+    userId: trimmedString(values[fields.userId]),
+  };
+  const sensitive = optionalBoolean(values[fields.sensitive]);
+  if (sensitive !== undefined) {
+    filters.sensitive = sensitive;
+  }
+  const hasScore = optionalBoolean(values[fields.hasScore]);
+  if (hasScore !== undefined) {
+    filters.hasScore = hasScore;
+  }
+  if (previous?.flaggedForDataset !== undefined) {
+    filters.flaggedForDataset = previous.flaggedForDataset;
+  }
+  return filters;
+};
+
+/** Start time in the viewer's zone, short enough to stay on one line in the table. */
+export const formatStartedAt = (iso: string): string => {
+  const parsed = DateTime.fromISO(iso);
+  if (!parsed.isValid) {
+    return "—";
+  }
+  return parsed.toFormat("LLL d, HH:mm:ss");
+};
 
 export const unwrapTraceList = (raw: unknown): TraceListResponse => {
   if (Array.isArray(raw)) {

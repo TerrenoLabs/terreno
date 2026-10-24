@@ -59,9 +59,10 @@ describe("useAiObservabilityTracesApi", () => {
         from: "2026-01-01",
         hasScore: false,
         page: 2,
-        prompt: "summarize",
+        prompts: ["summarize"],
         sensitive: true,
         sessionId: "sess",
+        sort: "-cost",
         status: "error",
         to: "2026-01-02",
         userId: "user-1",
@@ -77,12 +78,23 @@ describe("useAiObservabilityTracesApi", () => {
         prompt: "summarize",
         sensitive: true,
         sessionId: "sess",
+        sort: "-cost",
         status: "error",
         to: "2026-01-02",
         userId: "user-1",
       },
       url: "/ai/observability/traces",
     });
+    expect(
+      endpoints.aiObservabilityTraces.query({
+        from: "",
+        prompts: ["summarize", " title ", ""],
+        sessionId: "",
+        status: "",
+        to: "",
+        userId: "",
+      } as never).params
+    ).toEqual({limit: 20, page: 1, prompt: ["summarize", "title"]});
     expect(endpoints.aiObservabilityTrace.query("trace-1" as never)).toEqual({
       method: "GET",
       url: "/ai/observability/traces/trace-1",

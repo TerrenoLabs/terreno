@@ -14,6 +14,8 @@ const STATUS_KEY = "aiObservabilityStatus";
 export interface TraceListQueryArgs extends TraceListFilters {
   limit?: number;
   page?: number;
+  /** Sort key such as `-cost`; the server defaults to `-startedAt`. */
+  sort?: string;
 }
 
 export interface TestMultiStageArgs {
@@ -40,8 +42,14 @@ const listParams = (args: TraceListQueryArgs): Record<string, unknown> => {
   if (args.from.trim()) {
     params.from = args.from.trim();
   }
-  if (args.prompt.trim()) {
-    params.prompt = args.prompt.trim();
+  const prompts = args.prompts.map((entry) => entry.trim()).filter((entry) => entry !== "");
+  if (prompts.length === 1) {
+    params.prompt = prompts[0];
+  } else if (prompts.length > 1) {
+    params.prompt = prompts;
+  }
+  if (args.sort?.trim()) {
+    params.sort = args.sort.trim();
   }
   if (args.to.trim()) {
     params.to = args.to.trim();

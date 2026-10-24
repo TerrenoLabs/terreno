@@ -507,9 +507,11 @@ same hint for `request-key` hosts so operators are not told to fix server config
 example admin supplies the Gemini key saved from Profile. **Save this run to dataset** stays
 disabled until phase 2.
 
-`ai-traces` lists traces with a filter bar: from/to date fields; dropdowns for prompt, status,
-score presence (**All traces / Has a score / No scores**), and data sensitivity
-(**All traces / Sensitive only / Not sensitive**); plus user and session text fields.
+`ai-traces` lists traces in a `DataTable` sorted on the server (`sort` query param): Status,
+Name, Started, Spans, Tokens, Cost, Latency, and Scores are sortable, newest first by default.
+Filters live in the column headers: Status (ok / error), Name (prompt), Started (date range),
+Sensitive and Scores (yes / no), plus **More filters** for user and session. Changing a sort or
+filter returns to page 1 and clears the selection.
 Checkbox selection opens a bulk bar with **Send to human review**, a sensitive-count
 warning, **Clear**, and **Add to dataset** (opens a dataset picker modal; sensitive traces show a
 warning before bulk add). **Send to human review** opens a modal that explains how human

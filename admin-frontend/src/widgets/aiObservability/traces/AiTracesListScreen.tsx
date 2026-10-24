@@ -10,9 +10,12 @@ import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolveAiRunBlockedMessage, resolveAiRunError} from "../shell/aiRunAccess";
 import {AiTracesListView} from "./AiTracesListView";
 import {
+  DEFAULT_TRACE_SORT,
   emptyTraceFilters,
+  filterValuesToTraceFilters,
   TRACE_PAGE_SIZE,
   type TraceListFilters,
+  traceFiltersToFilterValues,
   unwrapEvaluators,
   unwrapTraceList,
 } from "./traceTypes";
@@ -41,6 +44,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
   const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi(api);
   const [filters, setFilters] = useState<TraceListFilters>(emptyTraceFilters);
+  const [sort, setSort] = useState(DEFAULT_TRACE_SORT);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -55,6 +59,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
     ...filters,
     limit: TRACE_PAGE_SIZE,
     page,
+    sort,
   });
   const {data: evaluatorsRaw} = useEvaluatorsQuery();
   const {data: datasetsRaw} = useDatasetsQuery();
@@ -101,8 +106,16 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
     setDatasetId(first.id);
   }, [datasetId, datasetModalOpen, datasets]);
 
-  const handleFiltersChange = useCallback((next: TraceListFilters): void => {
-    setFilters(next);
+  const filterValues = useMemo(() => traceFiltersToFilterValues(filters), [filters]);
+
+  const handleFilterValuesChange = useCallback((next: Record<string, unknown>): void => {
+    setFilters((current) => filterValuesToTraceFilters(next, current));
+    setPage(1);
+    setSelectedIds([]);
+  }, []);
+
+  const handleSortChange = useCallback((next: string): void => {
+    setSort(next);
     setPage(1);
     setSelectedIds([]);
   }, []);
@@ -205,7 +218,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         enqueueError={enqueueError}
         evaluatorId={evaluatorId}
         evaluators={evaluators}
-        filters={filters}
+        filterValues={filterValues}
         isAddingToDataset={addTracesState.isLoading}
         isEnqueueing={enqueueState.isLoading}
         isLoading={isLoading}
@@ -225,12 +238,13 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         }}
         onEnqueueReview={handleEnqueueReview}
         onEvaluatorChange={setEvaluatorId}
-        onFiltersChange={handleFiltersChange}
+        onFilterValuesChange={handleFilterValuesChange}
         onOpenAddToDataset={handleOpenAddToDataset}
         onOpenReview={handleOpenReview}
         onOpenTrace={handleOpenTrace}
         onPageChange={setPage}
         onRunTestMultiStage={handleRunTestMultiStage}
+        onSortChange={handleSortChange}
         onToggleSelect={handleToggleSelect}
         page={page}
         pageSize={listed.limit}
@@ -239,6 +253,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         routeBase={prefix}
         selectedIds={selectedIds}
         showMultiStageTest={status?.localOn === true}
+        sort={sort}
         total={listed.total}
         traces={listed.data}
       />

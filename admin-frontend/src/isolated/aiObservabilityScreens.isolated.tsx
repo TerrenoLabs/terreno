@@ -54,7 +54,7 @@ import {AiTraceDetailScreenWidget} from "../widgets/aiObservability/traces/AiTra
 import {AiTraceDetailView} from "../widgets/aiObservability/traces/AiTraceDetailView";
 import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesListScreen";
 import {AiTracesListView} from "../widgets/aiObservability/traces/AiTracesListView";
-import {type TraceDetail, type TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
+import type {TraceDetail, TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
 
 interface ExpoRouterPushMock {

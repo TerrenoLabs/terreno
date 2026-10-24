@@ -245,6 +245,17 @@ describe("C1 write-path guards (m9 / m10) + C4 scope-move markers", () => {
     expect(counter?.seq).toBe(firstSeq as number);
   });
 
+  it("m10: a save that only changes the seq stamp restamps it instead of keeping it", async () => {
+    const doc = await FrontierModel.create({name: "n", orgId: "org1", ownerId: "u1"});
+    const firstSeq = doc._syncSeq as number;
+    doc._syncSeq = 123456789;
+    await doc.save();
+    const stored = await FrontierModel.findById(doc._id).lean();
+    expect(stored?._syncSeq).toBe(firstSeq + 1);
+    const counter = await SyncCounter.findOne({stream: "frontierStuff|tenant:org1"});
+    expect(counter?.seq).toBe(firstSeq + 1);
+  });
+
   it("m10: a meaningful save DOES claim a new seq", async () => {
     const doc = await FrontierModel.create({name: "n", orgId: "org1", ownerId: "u1"});
     const firstSeq = doc._syncSeq as number;

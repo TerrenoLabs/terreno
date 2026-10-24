@@ -3,6 +3,7 @@ import "fake-indexeddb/auto";
 import {describe, expect, it} from "bun:test";
 import {assert} from "chai";
 
+import {betterAuthAdapter} from "./auth/betterAuthAdapter";
 import {createSyncDb, type SyncDbConfig} from "./client";
 import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
 import {getConflict} from "./mutations/conflicts";
@@ -2632,6 +2633,46 @@ describe("createSyncDb", () => {
       const baseline = harness.http.state.fetchCount;
       await client.reconcile();
       expect(harness.http.state.fetchCount).toBe(baseline);
+      await client.stop();
+    });
+  });
+
+  describe("auth change while the session read fails (betterAuthAdapter)", () => {
+    it("keeps the user and mutate() working when the device goes offline before the auth-change handler reads the session", async () => {
+      // start() subscribes to the session atom, which hands over the current session at
+      // once; the handler that emission queues runs after start() resolves. When the
+      // network drops in between, its get-session read fails. That must not count as a
+      // sign-out.
+      const listeners = new Set<(value: unknown) => void>();
+      // Only start()'s own read gets through; the network is gone for every later one.
+      let sessionReads = 0;
+      const session = {data: {session: {token: "tok"}, user: {id: "u1"}}};
+      const harness = makeHarness({
+        authProvider: betterAuthAdapter({
+          getSession: async () => {
+            sessionReads += 1;
+            if (sessionReads > 1) {
+              throw new TypeError("Failed to fetch");
+            }
+            return session;
+          },
+          useSession: {
+            subscribe: (listener) => {
+              listeners.add(listener);
+              listener(session);
+              return () => listeners.delete(listener);
+            },
+          },
+        }),
+      });
+      const client = createSyncDb(harness.config);
+      await client.start();
+      await waitUntil(() => sessionReads > 1);
+      await flush();
+
+      expect(client.getSyncStatus().paused).toBeUndefined();
+      const {id} = client.mutate({collection: "todos", data: {title: "x"}, operation: "create"});
+      expect(id).toBeTruthy();
       await client.stop();
     });
   });

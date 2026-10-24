@@ -45,6 +45,9 @@ Do not open or update a PR for frontend work until this workflow is complete.
      add one concise `Verification` table row for the exercised flow.
    - Reference artifacts with HTML tags and absolute paths, e.g. `<img alt="Todos list after filter" src="/opt/cursor/artifacts/screenshots/todos-filter.png" />` or `<video src="/opt/cursor/artifacts/todos-create.mp4" controls></video>`.
    - Use the PR management tool to create or update the PR body after artifacts exist.
+   - Without a PR management tool that uploads files, or when `/opt/cursor/artifacts/` is
+     missing or read-only (save to your scratchpad instead), upload with the
+     `attach-pr-media` skill and use the URLs it returns.
    - Name the flow and UI state proved. Never include credentials.
 
 If environment setup blocks verification, add one `⚠️ Not tested` row naming the

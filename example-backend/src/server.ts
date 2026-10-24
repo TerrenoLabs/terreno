@@ -17,8 +17,6 @@ import {
   ConsentApp,
   checkModelsStrict,
   configureOpenApiValidator,
-  createBetterAuth,
-  getMongoClientFromMongoose,
   logger,
   Membership,
   type ModelRouterOptions,
@@ -84,7 +82,7 @@ import {AppConfiguration} from "./models/appConfiguration";
 import {Configuration} from "./models/configuration";
 import {organizationSettingsSchema} from "./models/organizationSettings";
 import {User} from "./models/user";
-import {seedDefaultData} from "./scripts/seed-test-data";
+import {seedDefaultDataOnBoot} from "./scripts/seed-test-data";
 import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
@@ -171,18 +169,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
   try {
     const betterAuthConfig = buildBetterAuthConfig();
-    // Build the Better Auth instance eagerly (MongoDB is connected above). It is shared
-    // with the RealtimeApp socket auth validator. We cannot use BetterAuthApp.getAuth()
-    // for this: plugin.register() (which populates it) runs later inside terraApp.start(),
-    // so getAuth() is still undefined at construction time here — that left the socket with
-    // only the legacy JWT validator, rejecting Better Auth session tokens on (re)connect.
-    const betterAuthInstance = betterAuthConfig
-      ? createBetterAuth({
-          config: betterAuthConfig,
-          mongoClient: getMongoClientFromMongoose(),
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      : undefined;
 
     const adminWebsocketsDebug = await AppConfiguration.getConfig("debug.websocketsDebug");
     const websocketsDebug = WEBSOCKETS_DEBUG || adminWebsocketsDebug === true;
@@ -287,12 +273,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     if (isWebsocketService) {
       terraApp.register(
         new RealtimeApp({
-          betterAuth: betterAuthInstance
-            ? {
-                auth: betterAuthInstance,
-                userModel: User as unknown as TerrenoAuthUserModel,
-              }
-            : undefined,
           changeStream: {
             ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
           },
@@ -566,10 +546,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       );
     }
 
-    if (process.env.SEED_DEFAULTS === "true") {
-      logger.info("Seeding default example data after sync collections are registered");
-      await seedDefaultData();
-    }
+    await seedDefaultDataOnBoot({isDeployed});
 
     const app = terraApp.start();
 

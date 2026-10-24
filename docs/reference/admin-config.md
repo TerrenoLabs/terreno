@@ -20,8 +20,8 @@
 | `excludeFields` | `exclude` | Additional response-scrubbing fields. |
 | `autocompleteFields` | `autocomplete_fields` | Reference fields using async search. |
 | `fieldOverrides` | `formfield_overrides` | Per-field label/help/widget metadata. |
-| `adminPermissions` | `has_*_permission` | Admin-route permission method overrides. |
-| `adminFilter` | `get_queryset` | Server-enforced query constraint. |
+| `adminPermissions` | `has_*_permission` | Per-action permission methods ANDed with the admin RBAC/`IsAdmin` check on admin REST, search, bulk patch, config capabilities, and admin-window sync. `[]` disables the action, including `list` and `read`. |
+| `adminFilter` | `get_queryset` | Server-enforced row scope for list, search, by-id read/update/delete, bulk patch, and admin-window sync writes. |
 | `actions` | `actions` | Declarative bulk-patch/background actions. |
 | `bulkPatchAllowlist` | — | Fields accepted by bulk patch. |
 | `recordTitleField` | `__str__` | Field used for edit-page titles. |

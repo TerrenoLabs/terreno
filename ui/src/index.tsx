@@ -192,6 +192,7 @@ export * from "./useConsentForms";
 export * from "./useStoredState";
 export * from "./useSubmitConsent";
 export * from "./WebAddressAutocomplete";
+export * from "./WhatsNewBanner";
 export * from "./withLoading";
 
 // export * from "./Layout";

@@ -26,6 +26,7 @@ import type mongoose from "mongoose";
 
 import {createTelemetryConfig, preparePromptForAI} from "../langfuseVercelAi";
 import {AIRequest} from "../models/aiRequest";
+import {FileAttachment} from "../models/fileAttachment";
 import {GptHistory} from "../models/gptHistory";
 import {getProjectModel} from "../models/project";
 import type {SpanRecord} from "../observability/types";
@@ -888,14 +889,43 @@ const toPlainPrompt = (prompt: GptHistoryPrompt): GptHistoryPrompt => {
   return typeof maybeSubdoc.toObject === "function" ? maybeSubdoc.toObject() : prompt;
 };
 
-/** Swap stored attachment references for short-lived signed URLs the model provider can fetch. */
+/** The stored keys among `keys` that name a live upload of `ownerId`. */
+const ownedUploadKeys = async (
+  keys: string[],
+  ownerId: mongoose.Types.ObjectId | undefined
+): Promise<Set<string>> => {
+  if (keys.length === 0 || !ownerId) {
+    return new Set();
+  }
+  const attachments = await FileAttachment.find({
+    deleted: false,
+    gcsKey: {$in: keys},
+    userId: ownerId,
+  })
+    .select({gcsKey: 1})
+    .lean();
+  return new Set(attachments.map((attachment) => attachment.gcsKey));
+};
+
+/**
+ * Swap stored attachment references for short-lived signed URLs the model provider can fetch.
+ * Only a key whose upload belongs to the conversation's owner is signed, as `GET /files/*gcsKey`
+ * requires; any other part keeps its stored URL.
+ */
 const resolveStoredAttachmentUrls = async (
   prompts: GptHistoryPrompt[],
+  ownerId: mongoose.Types.ObjectId | undefined,
   fileStorageService?: GptRouteOptions["fileStorageService"]
 ): Promise<GptHistoryPrompt[]> => {
   if (!fileStorageService || !("getSignedUrl" in fileStorageService)) {
     return prompts;
   }
+  const storedKeys = prompts.flatMap((prompt) =>
+    (prompt.content ?? []).flatMap((part) =>
+      part.type !== "text" && part.gcsKey ? [part.gcsKey] : []
+    )
+  );
+  const ownedKeys = await ownedUploadKeys(storedKeys, ownerId);
   return Promise.all(
     prompts.map(async (prompt) => {
       if (!prompt.content?.some((part) => part.type !== "text" && part.gcsKey)) {
@@ -905,6 +935,12 @@ const resolveStoredAttachmentUrls = async (
       const content = await Promise.all(
         (plain.content ?? []).map(async (part) => {
           if (part.type === "text" || !part.gcsKey) {
+            return part;
+          }
+          if (!ownedKeys.has(part.gcsKey)) {
+            logger.warn("Not signing a stored attachment the conversation owner did not upload", {
+              gcsKey: part.gcsKey,
+            });
             return part;
           }
           try {
@@ -1065,6 +1101,7 @@ const startTurn = async ({
   });
   const earlierPrompts = await resolveStoredAttachmentUrls(
     history.prompts,
+    history.userId,
     options.fileStorageService
   );
   const {modelParts, storedParts} = await buildAttachmentParts({
@@ -1187,7 +1224,15 @@ const collectTools = async ({
   if (mcpService) {
     try {
       const mcpTools = await mcpService.getTools();
-      Object.assign(allTools, mcpTools);
+      // An MCP server names its own tools, so it must not replace a host tool and drop that
+      // tool's approval policy.
+      for (const [name, mcpTool] of Object.entries(mcpTools)) {
+        if (Object.hasOwn(allTools, name)) {
+          logger.warn("Dropping an MCP tool whose name a host tool already uses", {tool: name});
+          continue;
+        }
+        allTools[name] = mcpTool;
+      }
     } catch {
       // MCP tool discovery failure should not block the request
     }

@@ -1,9 +1,12 @@
 import {afterAll, afterEach, describe, expect, it, mock} from "bun:test";
+import type {BetterAuthPlugin} from "better-auth";
 import {assert} from "chai";
 import express, {type Request, type Response} from "express";
+import {DateTime} from "luxon";
 import {MongoMemoryServer} from "mongodb-memory-server";
 import mongoose, {Schema} from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
+import supertest from "supertest";
 import type {UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {
@@ -19,8 +22,10 @@ import {
   type MongoClientLike,
   mountBetterAuthRoutes,
   readPasswordFromBetterAuthResetRequest,
+  resolveBetterAuthAppUser,
   setupBetterAuthUserSync,
   syncBetterAuthUser,
+  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 
 type SessionRequest = Request & {betterAuthSession?: BetterAuthSessionData};
@@ -42,6 +47,7 @@ let DualAuthUser: UserModel;
 const testUserSchema = new Schema({
   admin: {default: false, type: Boolean},
   betterAuthId: {type: String},
+  disabled: {default: false, type: Boolean},
   email: {required: true, type: String},
   name: {type: String},
   oauthProvider: {type: String},
@@ -51,6 +57,7 @@ const dualAuthUserSchema = new Schema({
   admin: {default: false, type: Boolean},
   betterAuthId: {type: String},
   email: {required: true, type: String},
+  emailVerified: {type: Boolean},
   name: {type: String},
   tokenEpoch: {default: 0, type: Number},
 });
@@ -288,7 +295,7 @@ describe("createBetterAuth", () => {
   it("sends reset and verification mail through the injected renderer", async () => {
     await setup;
     const renderedCalls: Array<{templateId: string; token: string}> = [];
-    const sent: Array<{subject: string; text?: string; to: string}> = [];
+    const sent: Array<{sensitive?: boolean; subject: string; text?: string; to: string}> = [];
     const hooks = createBetterAuthEmailHooks({
       enabled: true,
       publicAppUrl: "https://app.example.com",
@@ -297,7 +304,12 @@ describe("createBetterAuth", () => {
         return {subject: templateId, text: `link-${token}`};
       },
       sendMail: async (message) => {
-        sent.push({subject: message.subject, text: message.text, to: message.to});
+        sent.push({
+          sensitive: message.sensitive,
+          subject: message.subject,
+          text: message.text,
+          to: message.to,
+        });
       },
     });
     assert.isDefined(hooks);
@@ -316,8 +328,18 @@ describe("createBetterAuth", () => {
       {templateId: "verifyEmail", token: "verify-token"},
     ]);
     assert.deepEqual(sent, [
-      {subject: "resetPassword", text: "link-reset-token", to: "reset@example.com"},
-      {subject: "verifyEmail", text: "link-verify-token", to: "verify@example.com"},
+      {
+        sensitive: true,
+        subject: "resetPassword",
+        text: "link-reset-token",
+        to: "reset@example.com",
+      },
+      {
+        sensitive: true,
+        subject: "verifyEmail",
+        text: "link-verify-token",
+        to: "verify@example.com",
+      },
     ]);
   });
 
@@ -630,6 +652,43 @@ describe("createBetterAuth email and password-reset wiring", () => {
   });
 });
 
+describe("verifyBetterAuthCredentialPassword", () => {
+  const makeAuth = (): BetterAuthInstance =>
+    createBetterAuth({
+      config: {
+        baseURL: "http://localhost:3000",
+        enabled: true,
+        secret: "test-secret-at-least-32-characters-long",
+      },
+      mongoClient: getClient(),
+    });
+
+  it("verifies the right password and rejects a wrong one for a credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    const signedUp = await auth.api.signUpEmail({
+      body: {email: "verify-me@example.com", name: "Verify Me", password: "right-password-123"},
+    });
+    const betterAuthId = signedUp.user.id;
+
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "right-password-123")
+    ).toBe("verified");
+    expect(await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "wrong-password")).toBe(
+      "wrong"
+    );
+  });
+
+  it("returns no-password without a linked Better Auth user or credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    expect(await verifyBetterAuthCredentialPassword(auth, {}, "anything")).toBe("no-password");
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId: "missing-user"}, "anything")
+    ).toBe("no-password");
+  });
+});
+
 describe("applyJwtPasswordResetToBetterAuth lookups", () => {
   const makeAuth = (): BetterAuthInstance =>
     createBetterAuth({
@@ -829,6 +888,83 @@ describe("syncBetterAuthUser", () => {
     expect(result.name).toBe("Keep This Name");
   });
 
+  it("refuses to link an existing user by an unverified email", async () => {
+    await setup;
+    await TestUser.create({admin: true, email: "test@example.com", name: "Existing Admin"});
+
+    const baUser = makeBetterAuthUser({emailVerified: false});
+    await expect(syncBetterAuthUser(TestUser, baUser)).rejects.toThrow(
+      "An account with this email already exists"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.isUndefined(saved?.betterAuthId);
+    expect(await TestUser.countDocuments()).toBe(1);
+  });
+
+  it("refuses to relink a user that is bound to another Better Auth account", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    await expect(syncBetterAuthUser(TestUser, makeBetterAuthUser())).rejects.toThrow(
+      "An account with this email already exists"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.equal(saved?.betterAuthId, "ba-other");
+  });
+
+  it("links an unverified email when the caller trusts it, as seeds do", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    const result = await syncBetterAuthUser(
+      TestUser,
+      makeBetterAuthUser({emailVerified: false}),
+      undefined,
+      {trustEmail: true}
+    );
+
+    assert.equal(result.betterAuthId, "ba-user-123");
+  });
+
+  it("revokes an unproven legacy password when a verified email links the row", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register({email: "test@example.com", name: "Legacy"}, "legacy-pass-123");
+
+    const result = await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+    assert.equal(result.betterAuthId, "ba-user-123");
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isUndefined((saved as {hash?: string}).hash);
+    assert.isUndefined((saved as {salt?: string}).salt);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 1);
+  });
+
+  it("keeps the legacy password when the row proved the same email", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register(
+      {email: "test@example.com", emailVerified: true, name: "Legacy"},
+      "legacy-pass-123"
+    );
+
+    await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isString((saved as {hash?: string}).hash);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 0);
+  });
+
   it("logs and rethrows when the lookup fails", async () => {
     await setup;
     const failure = new Error("lookup exploded");
@@ -1010,6 +1146,246 @@ describe("createBetterAuthSessionMiddleware", () => {
   });
 });
 
+describe("createBetterAuth options and plugins passthrough", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  const signInRequest = (email: string): globalThis.Request =>
+    new globalThis.Request("http://localhost:3000/api/auth/sign-in/email", {
+      body: JSON.stringify({email, password: "password-123456"}),
+      headers: {"Content-Type": "application/json"},
+      method: "POST",
+    });
+
+  it("applies requireEmailVerification from options and keeps Terreno's defaults", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {...config, options: {emailAndPassword: {requireEmailVerification: true}}},
+      mongoClient: getClient(),
+    });
+    const email = `unverified-${DateTime.now().toMillis()}@example.com`;
+    await auth.api.signUpEmail({body: {email, name: "Unverified", password: "password-123456"}});
+
+    const response = await auth.handler(signInRequest(email));
+
+    expect(response.status).toBe(403);
+    expect(auth.options.emailAndPassword?.enabled).toBe(true);
+    expect(auth.options.emailAndPassword?.revokeSessionsOnPasswordReset).toBe(true);
+    expect(auth.options.session?.cookieCache).toEqual({enabled: true, maxAge: 300});
+  });
+
+  it("lets an explicit option override a Terreno default", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {...config, options: {session: {cookieCache: {enabled: false}}}},
+      mongoClient: getClient(),
+    });
+
+    expect(auth.options.session?.cookieCache).toEqual({enabled: false, maxAge: 300});
+  });
+
+  it("replaces arrays instead of merging them by index", async () => {
+    await setup;
+    const auth = createBetterAuth({
+      config: {
+        ...config,
+        options: {trustedOrigins: ["https://a.example.com"]},
+        trustedOrigins: ["https://b.example.com", "https://c.example.com"],
+      },
+      mongoClient: getClient(),
+    });
+
+    expect(auth.options.trustedOrigins).toEqual(["https://a.example.com"]);
+  });
+
+  it("appends plugins after bearer and leaves defaults alone without the new fields", async () => {
+    await setup;
+    const plugin = {id: "terreno-test"} satisfies BetterAuthPlugin;
+    const withPlugin = createBetterAuth({
+      config: {...config, plugins: [plugin]},
+      mongoClient: getClient(),
+    });
+    const plain = createBetterAuth({config, mongoClient: getClient()});
+
+    expect(withPlugin.options.plugins?.map((p) => p.id)).toEqual(["bearer", "terreno-test"]);
+    expect(plain.options.plugins?.map((p) => p.id)).toEqual(["bearer"]);
+    expect(plain.options.trustedOrigins).toEqual([]);
+  });
+});
+
+describe("resolveBetterAuthAppUser", () => {
+  it("resolves concurrent first contacts for a new user to one app user", async () => {
+    await setup;
+    const betterAuthUser: BetterAuthUser = {
+      createdAt: new Date(),
+      email: "first-contact@example.com",
+      emailVerified: false,
+      id: new mongoose.Types.ObjectId().toString(),
+      name: "First Contact",
+      updatedAt: new Date(),
+    };
+
+    const results = await Promise.all([
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+      resolveBetterAuthAppUser({betterAuthUser, userModel: TestUser}),
+    ]);
+
+    expect(new Set(results.map((result) => String(result.user.id))).size).toBe(1);
+    expect(await TestUser.countDocuments({betterAuthId: betterAuthUser.id})).toBe(1);
+  });
+
+  it("uses the user a concurrent request created when the insert hits a duplicate key", async () => {
+    // Another request (a REST call racing the socket handshake) inserts the same user
+    // between this lookup and this insert.
+    let insertedByOtherRequest: Record<string, unknown> | null = null;
+    class RacingUser {
+      constructor(doc: Record<string, unknown>) {
+        Object.assign(this, doc);
+      }
+      async save(): Promise<void> {
+        insertedByOtherRequest = {...this, id: "app-user-1"};
+        throw Object.assign(new Error("E11000 duplicate key error"), {code: 11000});
+      }
+      static async findOneOrNone(
+        query: Record<string, unknown>
+      ): Promise<Record<string, unknown> | null> {
+        return query.betterAuthId ? insertedByOtherRequest : null;
+      }
+    }
+
+    const {isDisabled, user} = await resolveBetterAuthAppUser({
+      betterAuthUser: {
+        createdAt: new Date(),
+        email: "raced@example.com",
+        emailVerified: false,
+        id: "ba-raced",
+        name: "Raced",
+        updatedAt: new Date(),
+      },
+      userModel: RacingUser as unknown as UserModel,
+    });
+
+    expect(user.id).toBe("app-user-1");
+    expect(isDisabled).toBe(false);
+  });
+});
+
+describe("createBetterAuthSessionMiddleware with disabled users", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  // A real bearer session for a Better Auth user linked to an app user.
+  const signUpLinkedUser = async (
+    auth: BetterAuthInstance,
+    email: string,
+    disabled: boolean
+  ): Promise<{token: string; betterAuthId: string}> => {
+    const created = await auth.api.signUpEmail({
+      body: {email, name: "Linked User", password: "password-123456"},
+    });
+    await TestUser.create({betterAuthId: created.user.id, disabled, email});
+    return {betterAuthId: created.user.id, token: created.token as string};
+  };
+
+  // Mounted in TerrenoApp's order: session middleware first, then Better Auth's routes,
+  // then a route that requires an authenticated user.
+  const buildApp = (auth: BetterAuthInstance): express.Application => {
+    const app = express();
+    app.use(createBetterAuthSessionMiddleware(auth, TestUser));
+    mountBetterAuthRoutes(app, auth);
+    app.get("/protected", (req, res) => {
+      if (!req.user) {
+        return res.status(401).json({status: 401, title: "Unauthorized"});
+      }
+      return res.json({id: req.user.id});
+    });
+    return app;
+  };
+
+  it("does not authenticate a session that belongs to a disabled user", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {token} = await signUpLinkedUser(auth, "disabled-session@example.com", true);
+
+    const res = await supertest(buildApp(auth))
+      .get("/protected")
+      .set("authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+  });
+
+  it("stops authenticating once a user is disabled while their session is live", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {betterAuthId, token} = await signUpLinkedUser(auth, "disabled-later@example.com", false);
+    const app = buildApp(auth);
+
+    const before = await supertest(app).get("/protected").set("authorization", `Bearer ${token}`);
+    expect(before.status).toBe(200);
+
+    await TestUser.updateOne({betterAuthId}, {disabled: true});
+
+    const after = await supertest(app).get("/protected").set("authorization", `Bearer ${token}`);
+    expect(after.status).toBe(401);
+  });
+
+  it("still lets a disabled user sign out", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const {token} = await signUpLinkedUser(auth, "disabled-signout@example.com", true);
+
+    const res = await supertest(buildApp(auth))
+      .post("/api/auth/sign-out")
+      .set("authorization", `Bearer ${token}`)
+      .set("origin", "http://localhost:3000")
+      .send({});
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("createBetterAuthSessionMiddleware with an existing app user's email", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  it("does not resolve an unverified sign-up to the existing app user", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const existing = await TestUser.create({admin: true, email: "existing-admin@example.com"});
+    const created = await auth.api.signUpEmail({
+      body: {email: "existing-admin@example.com", name: "Someone", password: "password-123456"},
+    });
+    assert.isFalse(created.user.emailVerified);
+
+    const app = express();
+    app.use(createBetterAuthSessionMiddleware(auth, TestUser));
+    app.get("/protected", (req, res) => {
+      if (!req.user) {
+        return res.status(401).json({status: 401, title: "Unauthorized"});
+      }
+      return res.json({id: req.user.id});
+    });
+
+    const res = await supertest(app)
+      .get("/protected")
+      .set("authorization", `Bearer ${created.token as string}`);
+
+    expect(res.status).toBe(401);
+    const reloaded = await TestUser.findById(existing._id).lean();
+    assert.isUndefined(reloaded?.betterAuthId);
+  });
+});
+
 describe("mountBetterAuthRoutes", () => {
   it("mounts routes at the default path", async () => {
     await setup;
@@ -1086,6 +1462,19 @@ describe("getMongoClientFromMongoose", () => {
     // Default mongoose connection is set up by bunSetup.ts preload
     const client = getMongoClientFromMongoose();
     expect(client).toBeDefined();
+  });
+
+  it("returns the connection's database, not the connection string's default", () => {
+    // A dbName passed to mongoose.connect only sets the connection name; the client's
+    // default database still comes from the URI.
+    const connection = mongoose.connection as unknown as {name: string};
+    const originalName = connection.name;
+    connection.name = "terreno-isolated-dbname-test";
+    try {
+      expect(getMongoClientFromMongoose().db().databaseName).toBe("terreno-isolated-dbname-test");
+    } finally {
+      connection.name = originalName;
+    }
   });
 
   it("throws when the mongoose connection has no client", () => {

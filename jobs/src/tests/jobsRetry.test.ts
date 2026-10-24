@@ -364,24 +364,36 @@ describe("jobs retry and dead-letter", () => {
       payload: {},
     });
 
-    await staleWorker.startWorker();
-    await waitUntil(() => Promise.resolve(staleHandlerRunning));
+    try {
+      await staleWorker.startWorker();
+      await waitUntil(() => Promise.resolve(staleHandlerRunning));
 
-    await reclaimWorker.startWorker();
-    await waitUntil(
-      async () => (await Job.findExactlyOne({_id: enqueued._id})).status === "completed"
-    );
+      // The stale worker's lease renewals stop landing (for example a stalled process), so its
+      // lock ages past the TTL and another worker reclaims the row.
+      await Job.updateOne(
+        {_id: enqueued._id},
+        {$set: {lockedAt: DateTime.utc().minus({seconds: 5}).toJSDate()}}
+      );
 
-    releaseStaleHandler();
-    await Bun.sleep(150);
+      await reclaimWorker.startWorker();
+      await waitUntil(
+        async () => (await Job.findExactlyOne({_id: enqueued._id})).status === "completed"
+      );
 
-    const finalRow = await Job.findExactlyOne({_id: enqueued._id});
-    assert.equal(finalRow.status, "completed");
-    assert.equal(finalRow.attemptCount, 0);
-    assert.lengthOf(finalRow.attempts, 0);
-    assert.isTrue(hasWorkerIdPrefix(finalRow.lockedBy));
+      releaseStaleHandler();
+      await Bun.sleep(150);
 
-    await Promise.all([staleWorker.stopWorker(), reclaimWorker.stopWorker()]);
+      const finalRow = await Job.findExactlyOne({_id: enqueued._id});
+      assert.equal(finalRow.status, "completed");
+      assert.equal(finalRow.attemptCount, 1);
+      assert.lengthOf(finalRow.attempts, 1);
+      assert.equal(finalRow.attempts[0].errorClass, "LeaseExpired");
+      assert.isTrue(hasWorkerIdPrefix(finalRow.lockedBy));
+      assert.isTrue(staleWorker.isWorkerActive());
+    } finally {
+      releaseStaleHandler();
+      await Promise.all([staleWorker.stopWorker(), reclaimWorker.stopWorker()]);
+    }
   });
 
   it("keeps the worker running after a retryable handler failure", async (): Promise<void> => {

@@ -9,6 +9,7 @@
     "@openfeature/core": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
     "@reduxjs/toolkit": "catalog:",
+    "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "ai": "catalog:",
     "async-mutex": "^0.5.0",
@@ -93,5 +94,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.16.2"
+  "version": "57.17.0"
 }

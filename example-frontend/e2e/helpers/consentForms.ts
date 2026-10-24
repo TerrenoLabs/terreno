@@ -1,3 +1,5 @@
+import type {APIRequestContext} from "@playwright/test";
+
 const API_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
 
 export const createConsentForm = async (
@@ -47,4 +49,35 @@ export const deleteConsentForm = async (
   await request.delete(`${API_URL}/consent-forms/${formId}`, {
     headers: {authorization: `Bearer ${token}`},
   });
+};
+
+/**
+ * Agrees to every consent form pending for the user the bearer `token` belongs to, on the API at
+ * `apiUrl` (default `BACKEND_URL`, or the local backend).
+ */
+export const acceptPendingConsentForms = async (
+  request: APIRequestContext,
+  token: string,
+  {apiUrl = API_URL}: {apiUrl?: string} = {}
+): Promise<void> => {
+  const pendingRes = await request.get(`${apiUrl}/consents/pending`, {
+    headers: {authorization: `Bearer ${token}`},
+  });
+  if (!pendingRes.ok()) {
+    return;
+  }
+  const pendingData = await pendingRes.json();
+  const forms: Array<{_id: string; captureSignature?: boolean}> = pendingData?.data ?? [];
+
+  for (const form of forms) {
+    await request.post(`${apiUrl}/consents/respond`, {
+      data: {
+        agreed: true,
+        consentFormId: form._id,
+        locale: "en",
+        ...(form.captureSignature ? {signature: "Test User"} : {}),
+      },
+      headers: {authorization: `Bearer ${token}`},
+    });
+  }
 };

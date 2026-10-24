@@ -225,6 +225,69 @@ describe("expressServer", () => {
       }
     });
 
+    it("redacts credentials under any key name and at any depth in logged bodies", () => {
+      const logged: string[] = [];
+      const originalDebug = logger.debug;
+      logger.debug = ((message: string) => {
+        logged.push(message);
+      }) as typeof logger.debug;
+      try {
+        const req = {
+          body: {
+            client_secret: "dummy-client-secret",
+            code_verifier: "dummy-code-verifier",
+            currentPassword: "dummy-current-pass",
+            idToken: {token: "dummy-id-token"},
+            integrations: [{apiKey: "dummy-api-key", name: "listed-integration"}],
+            otp: "123456",
+            provider: "google",
+            refresh_token: "dummy-refresh-token",
+          },
+          method: "POST",
+          url: "/api/auth/sign-in/social",
+        };
+        logRequests(req as never, {locals: {}, on: () => {}} as never, () => {});
+        const combined = logged.join("\n");
+        for (const secret of [
+          "dummy-client-secret",
+          "dummy-code-verifier",
+          "dummy-current-pass",
+          "dummy-id-token",
+          "dummy-api-key",
+          "123456",
+          "dummy-refresh-token",
+        ]) {
+          expect(combined).not.toContain(secret);
+        }
+        expect(combined).toContain("google");
+        expect(combined).toContain("listed-integration");
+        expect(req.body.idToken.token).toBe("dummy-id-token");
+      } finally {
+        logger.debug = originalDebug;
+      }
+    });
+
+    it("redacts OAuth codes and other credential query params in request URLs", () => {
+      const logged: string[] = [];
+      const originalDebug = logger.debug;
+      logger.debug = ((message: string) => {
+        logged.push(message);
+      }) as typeof logger.debug;
+      try {
+        const req = {
+          method: "GET",
+          url: "/api/auth/callback/google?code=dummy-oauth-code&state=abc&client_secret=dummy-cs",
+        };
+        logRequests(req as never, {locals: {}, on: () => {}} as never, () => {});
+        const combined = logged.join("\n");
+        expect(combined).not.toContain("dummy-oauth-code");
+        expect(combined).not.toContain("dummy-cs");
+        expect(combined).toContain("state=abc");
+      } finally {
+        logger.debug = originalDebug;
+      }
+    });
+
     it("redacts token query params in request URLs", () => {
       const logged: string[] = [];
       const originalDebug = logger.debug;
@@ -529,6 +592,36 @@ describe("expressServer", () => {
       }).build();
 
       expect(app).toBeDefined();
+    });
+
+    it("does not log requests when loggingOptions.logRequests is false", async () => {
+      const logged: string[] = [];
+      const originalDebug = logger.debug;
+      logger.debug = ((message: string) => {
+        logged.push(message);
+      }) as typeof logger.debug;
+      try {
+        const app = new TerrenoApp({
+          configureApp: (httpApp: Router) => {
+            httpApp.post("/echo", (_req, res) => {
+              res.json({ok: true});
+            });
+          },
+          loggingOptions: {
+            disableConsoleLogging: true,
+            disableFileLogging: true,
+            logRequests: false,
+          },
+          skipListen: true,
+          userModel: typedUserModel,
+        }).build();
+
+        await supertest(app).post("/echo").send({note: "dummy-logged-body"}).expect(200);
+
+        expect(logged.join("\n")).not.toContain("dummy-logged-body");
+      } finally {
+        logger.debug = originalDebug;
+      }
     });
 
     it("creates server with authOptions", () => {

@@ -182,3 +182,27 @@ export const GPTChatStreaming: React.FC = (): React.ReactElement => {
     </Box>
   );
 };
+
+export const GPTChatNoHistory: React.FC = (): React.ReactElement => {
+  return (
+    <Box gap={2} width="100%">
+      <Heading size="sm">No history sidebar</Heading>
+      <Text>
+        `showHistory={false}` drops the sidebar so messages use the full width, as on a phone.
+      </Text>
+      <GPTChatFrame>
+        <GPTChat
+          currentHistoryId="h1"
+          currentMessages={STATIC_MESSAGES}
+          histories={STATIC_HISTORIES}
+          onCreateHistory={noop}
+          onDeleteHistory={noop}
+          onSelectHistory={noop}
+          onSubmit={noop}
+          showHistory={false}
+          testID="demo-gpt-chat-no-history"
+        />
+      </GPTChatFrame>
+    </Box>
+  );
+};

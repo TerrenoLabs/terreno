@@ -69,6 +69,14 @@ seeded before the statement existed gains it once, on the next seed; the role re
 `appliedGrants`, so an admin who later revokes it keeps it revoked. Without `accessControl`, the
 routes accept `admin: true` users instead.
 
+Operators reach a user's Security screen from the user's admin record, so they also need to read
+users in the admin panel. The `operator` role holds `user:list` and `user:read`. An app that opts
+User into per-model admin access by declaring an `adminUser` statement gates the admin User list and
+record on `adminUser` instead, so the `operator` role also gets `adminUser:read` in such an app. It
+does not get `write` or `writeOwned`, so an operator can't edit, create, or delete users through the
+admin panel. The grant is recorded in `appliedGrants` the same way: an existing `operator` row gains
+it once, on the first seed after the app declares `adminUser`, and a revoked grant stays revoked.
+
 `issue-sign-in-link` also needs `user:issueSignInLink` (D11). Only `superadmin` holds it by
 default, through `*`; `operator` does not, so an operator gets `403 Access denied` and does not see
 the action in the summary. Grant it to another role to delegate it. Without `accessControl`, the

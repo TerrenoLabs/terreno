@@ -86,10 +86,33 @@ interface SeededRoleGrant {
  */
 const OPERATOR_ADDED_GRANTS: SeededRoleGrant[] = [
   {id: "user.manageSecurity", permissions: {user: ["manageSecurity"]}},
+  // An app that opts User into per-model admin access (`adminUser`) gates the admin User list
+  // and record on it instead of `user`. Operators find users there to reach their Security
+  // screen, so they need the same read they already hold on `user`.
+  {id: "adminUser.read", permissions: {adminUser: ["read"]}},
 ];
 
-const addedGrantsFor = (role: RoleDefinition): SeededRoleGrant[] =>
-  role === organizationOperatorRole ? OPERATOR_ADDED_GRANTS : [];
+/** Whether the app declares every resource and action a grant adds. */
+const isGrantDeclared = (grant: SeededRoleGrant, statements: Statements): boolean =>
+  Object.entries(grant.permissions).every(([resource, actions]) =>
+    actions.every((action) => statements[resource]?.includes(action))
+  );
+
+/**
+ * Grants added to a seeded role after it shipped. A grant on a resource the app does not declare
+ * is left out (and not recorded as applied), so it is merged once the app declares it.
+ */
+const addedGrantsFor = (role: RoleDefinition, statements: Statements): SeededRoleGrant[] =>
+  role === organizationOperatorRole
+    ? OPERATOR_ADDED_GRANTS.filter((grant) => isGrantDeclared(grant, statements))
+    : [];
+
+const mergeGrants = (permissions: PermissionSet, grants: SeededRoleGrant[]): PermissionSet =>
+  grants.reduce(
+    (merged, grant) =>
+      mergeMissingResourcePermissions(merged, grant.permissions, Object.keys(grant.permissions)),
+    permissions
+  );
 
 /**
  * Insert missing default roles. Existing unsealed roles are left unchanged so admin
@@ -120,15 +143,9 @@ const upsertSeededRole = async (
         await existing.save();
       } else {
         const applied = new Set(existing.appliedGrants ?? []);
-        const pending = addedGrantsFor(role).filter((grant) => !applied.has(grant.id));
+        const pending = addedGrantsFor(role, statements).filter((grant) => !applied.has(grant.id));
         if (pending.length > 0) {
-          for (const grant of pending) {
-            existing.permissions = mergeMissingResourcePermissions(
-              existing.permissions,
-              grant.permissions,
-              Object.keys(grant.permissions)
-            );
-          }
+          existing.permissions = mergeGrants(existing.permissions, pending);
           existing.appliedGrants = [...applied, ...pending.map((grant) => grant.id)];
           await existing.save();
         }
@@ -144,16 +161,17 @@ const upsertSeededRole = async (
     await existing.save();
     return;
   }
+  // A new row starts with every added grant, so none is merged in later.
+  const addedGrants = addedGrantsFor(role, statements);
   await model.create({
-    // A new row already holds every added grant, so none is merged in later.
-    appliedGrants: addedGrantsFor(role).map((grant) => grant.id),
+    appliedGrants: addedGrants.map((grant) => grant.id),
     description: role.description,
     displayName: role.displayName,
     excludesRoles: role.excludesRoles ?? [],
     isLocked: role.isLocked ?? false,
     isSealed: role.isSealed ?? false,
     name: role.name,
-    permissions,
+    permissions: mergeGrants(permissions, addedGrants),
   });
 };
 

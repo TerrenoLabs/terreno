@@ -2,20 +2,21 @@ import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {Page} from "@terreno/ui";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import React from "react";
-import {renderWithTheme} from "../../ui/src/test-utils";
-import {AdminProvider} from "./AdminProvider";
-import type {MemberSecuritySummary} from "./orgs/useMemberSecurityApi";
-import type {AdminApi} from "./types";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AdminProvider} from "../AdminProvider";
+import type {MemberSecuritySummary} from "../orgs/useMemberSecurityApi";
+import type {AdminApi} from "../types";
 import {
   UserSecurityLink,
   type UserSecurityLinkProps,
   UserSecurityScreen,
   type UserSecurityScreenProps,
   userSecurityRoute,
-} from "./UserSecurityScreen";
+} from "../UserSecurityScreen";
 
 const pushMock = mock((_href: string) => {});
 
+// Own process (see scripts/run-tests.sh), so this replacement cannot leak into shared suites.
 mock.module("expo-router", () => ({
   router: {back: mock(() => {}), push: pushMock},
 }));

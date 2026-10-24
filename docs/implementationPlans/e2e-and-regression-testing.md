@@ -351,7 +351,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: syncdb/e2e/smoke.ts, syncdb/package.json, docs/testing/e2e/syncdb.md
   - Acceptance: `bun run --cwd syncdb smoke` exits 0. Two clients built from the compiled syncdb connect to `spawnExampleBackend()`. A todo written by client A appears in client B's store within 5 s.
 
-- [ ] **T24** — Smoke test for `@terreno/blocks`
+- [x] **T24** — Smoke test for `@terreno/blocks`
   - Depends on: T8
   - Files: blocks/e2e/smoke.ts, blocks/package.json, docs/testing/e2e/blocks.md
   - Acceptance: `bun run --cwd blocks smoke` exits 0. The compiled `terreno-blocks` binary accepts a valid document with exit code 0, and rejects an invalid one with a non-zero exit code and an error message.

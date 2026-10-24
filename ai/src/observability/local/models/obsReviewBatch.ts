@@ -5,6 +5,11 @@ import type {ObsReviewBatchDocument, ObsReviewBatchModel} from "../../../types/o
 
 const obsReviewBatchSchema = new mongoose.Schema<ObsReviewBatchDocument, ObsReviewBatchModel>(
   {
+    datasetId: {
+      description: "Dataset the batch was built from, when reviewers judge dataset items",
+      ref: "ObsDataset",
+      type: mongoose.Schema.Types.ObjectId,
+    },
     description: {description: "Operator note about why this batch exists", type: String},
     evaluatorId: {
       description: "Human evaluator whose questions reviewers answer for every item",
@@ -15,6 +20,10 @@ const obsReviewBatchSchema = new mongoose.Schema<ObsReviewBatchDocument, ObsRevi
     name: {description: "Operator-facing batch name", required: true, type: String},
     promptName: {
       description: "Prompt the batch traces were drawn from, when filtered by prompt",
+      type: String,
+    },
+    questionsFingerprint: {
+      description: "Question-set fingerprint when the batch was created",
       type: String,
     },
     traceIds: {

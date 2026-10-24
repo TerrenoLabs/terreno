@@ -2,9 +2,14 @@ import type {EvaluatorDimension} from "../types/observability";
 
 export type ScoreValue = boolean | number | string;
 
+/**
+ * Answers for one reviewed item. Human and judge answers pair up by `datasetItemId` when set,
+ * otherwise by `traceId`.
+ */
 export interface AgreementAnswerSet {
+  datasetItemId?: string;
   scores?: Record<string, ScoreValue>;
-  traceId: string;
+  traceId?: string;
 }
 
 export interface JudgeAnswerSet extends AgreementAnswerSet {
@@ -22,10 +27,11 @@ export interface JudgeQuestionAgreement {
 }
 
 export interface JudgeDisagreement {
+  datasetItemId?: string;
   human: ScoreValue;
   judge?: ScoreValue;
   key: string;
-  traceId: string;
+  traceId?: string;
 }
 
 export interface JudgeAgreement {
@@ -89,12 +95,17 @@ export const answersAgree = (
   return String(human).trim().toLowerCase() === String(judge).trim().toLowerCase();
 };
 
+/** Key that pairs human and judge answers for the same item. */
+export const agreementAnswerKey = (answer: AgreementAnswerSet): string => {
+  return answer.datasetItemId ? `item:${answer.datasetItemId}` : `trace:${answer.traceId ?? ""}`;
+};
+
 const rateOf = (matches: number, compared: number): number | undefined => {
   return compared > 0 ? matches / compared : undefined;
 };
 
 /**
- * Compare one judge's answers with human answers for the same traces. Only questions the judge
+ * Compare one judge's answers with human answers for the same traces or dataset items. Only questions the judge
  * answers (judgeKeys) count; a judge error or a missing answer counts as a disagreement.
  */
 export const computeJudgeAgreement = (params: {
@@ -104,9 +115,9 @@ export const computeJudgeAgreement = (params: {
   judgeKeys: string[];
 }): JudgeAgreement => {
   const judgeKeys = new Set(params.judgeKeys);
-  const judgeByTrace = new Map(
+  const judgeByKey = new Map(
     params.judgeAnswers.map((answer) => {
-      return [answer.traceId, answer];
+      return [agreementAnswerKey(answer), answer];
     })
   );
   const questions: JudgeQuestionAgreement[] = params.dimensions.map((dimension) => {
@@ -123,7 +134,7 @@ export const computeJudgeAgreement = (params: {
   let errors = 0;
 
   for (const human of params.humanAnswers) {
-    const judge = judgeByTrace.get(human.traceId);
+    const judge = judgeByKey.get(agreementAnswerKey(human));
     if (!judge || !human.scores) {
       continue;
     }
@@ -145,10 +156,11 @@ export const computeJudgeAgreement = (params: {
         return;
       }
       disagreements.push({
+        ...(human.datasetItemId ? {datasetItemId: human.datasetItemId} : {}),
         human: humanValue,
         judge: judgeValue,
         key: dimension.key,
-        traceId: human.traceId,
+        ...(human.traceId ? {traceId: human.traceId} : {}),
       });
     });
     if (comparedThisItem) {

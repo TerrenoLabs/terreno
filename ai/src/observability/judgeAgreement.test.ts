@@ -32,6 +32,32 @@ describe("answersAgree", () => {
 });
 
 describe("computeJudgeAgreement", () => {
+  it("pairs answers by dataset item before trace", () => {
+    const agreement = computeJudgeAgreement({
+      dimensions: QUESTIONS,
+      humanAnswers: [
+        {datasetItemId: "item-1", scores: {faithful: false}, traceId: "shared-trace"},
+        {datasetItemId: "item-2", scores: {faithful: true}},
+      ],
+      judgeAnswers: [
+        {datasetItemId: "item-2", scores: {faithful: true}},
+        {datasetItemId: "item-1", scores: {faithful: true}, traceId: "shared-trace"},
+        {scores: {faithful: false}, traceId: "shared-trace"},
+      ],
+      judgeKeys: ["faithful"],
+    });
+    expect(agreement.rate).toBe(0.5);
+    expect(agreement.disagreements).toEqual([
+      {
+        datasetItemId: "item-1",
+        human: false,
+        judge: true,
+        key: "faithful",
+        traceId: "shared-trace",
+      },
+    ]);
+  });
+
   it("scores only covered questions and lists disagreements", () => {
     const agreement = computeJudgeAgreement({
       dimensions: QUESTIONS,

@@ -24,8 +24,16 @@ export {
   type JudgeAgreement,
 } from "./observability/judgeAgreement";
 export {LocalDatasetStore} from "./observability/local/datasetStore";
-export {LocalEvaluatorStore} from "./observability/local/evaluatorStore";
-export {LocalExperimentRunner} from "./observability/local/experimentRunner";
+export {type EvaluatorCalibration, LocalEvaluatorStore} from "./observability/local/evaluatorStore";
+export {
+  DEFAULT_TARGET_AGREEMENT,
+  type JudgeExperimentCreateInput,
+  LocalExperimentRunner,
+} from "./observability/local/experimentRunner";
+export {
+  type DatasetJudgmentSummary,
+  loadCurrentHumanAnswers,
+} from "./observability/local/humanAnswers";
 export {
   createLocalObservabilityBundle,
   createLocalObservabilityPlugin,
@@ -51,6 +59,7 @@ export {
   ObservabilityApp,
   resetObservabilityApp,
 } from "./observability/observabilityApp";
+export {questionSetFingerprint} from "./observability/questionFingerprint";
 export type {
   ObservabilityPluginStatus,
   ObservabilityStatus,

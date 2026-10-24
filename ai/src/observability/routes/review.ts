@@ -109,6 +109,7 @@ export const addObservabilityReviewRoutes = (
           id: req.params.id,
           scores: body.scores ?? {},
           sinks: getObservabilityApp()?.scoreSinks ?? [],
+          userId: req.user?._id ? String(req.user._id) : undefined,
         });
       } else if (body.action === "skip") {
         await options.store.skip(req.params.id);

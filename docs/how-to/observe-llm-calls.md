@@ -114,16 +114,16 @@ that key exists.
 
    | Screen | Seeded data |
    | --- | --- |
-   | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness` |
+   | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness`; `eval-judge-summary-questions` v1 (short paraphrased wording) and v2 (careful wording, production) |
    | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, the `correctness` and `helpfulness` LLM judges, and the review-queue question sets `output-quality-questions` and `helpfulness-questions` (three yes/no questions each) |
-   | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6) |
-   | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes |
+   | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6), and `summary-review-set` (the 10 newest seeded summaries, every item answered by humans with `summary-review-questions`) |
+   | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes. `Summary judge v1 vs v2 (calibration)`: a judge calibration experiment on `summary-review-set`; v1 agrees with humans 77.5% (fails the 90% gate), v2 agrees 95% (passes) |
    | Traces | 18 Todos → Summarize traces over the past week (2 errors, 1 sensitive, 2 flagged for the dataset), 6 `joke-generator` traces, and 6 `chat-assistant` turns (4 with a tool span); user-feedback, LLM-judge, and code scores |
-   | Review | 14 items: 9 pending, 1 in progress, 3 done, 1 skipped |
+   | Review | 34 items: 11 pending, 1 in progress, 21 done, 1 skipped, including the batches `Recent summaries — batch 1` (8 of 10 answered) and `summary-review-set — human answers` (10 of 10) |
 
    Seeded experiments run through the real experiment runner with a deterministic
    `seed-fixture` client, so they need no API key. Seeded traces use session IDs that
-   start with `seed-obs-`. Production stays on v1 for every prompt, so promoting v2 from
+   start with `seed-obs-`. Production stays on v1 for every product prompt, so promoting v2 from
    an experiment changes what the app sends.
 
    **New experiment** keeps **Next** disabled and shows "Select a dataset." until you
@@ -316,4 +316,25 @@ the same list of questions for. Then run LLM judges over the same traces and com
 
 The seed adds the batch `Recent summaries — batch 1` (8 of 10 answered) with two judges run:
 `summary-questions-judge` agrees 97% and `summary-questions-judge-quick` agrees 78%.
+
+## Calibrate a judge prompt against a human-judged dataset
+
+A batch answers "does this judge match people on these traces?". To improve a judge prompt
+version by version, judge a dataset once and reuse those answers:
+
+1. Build a dataset of traces (**Add to dataset** on traces, or
+   `POST /ai/observability/traces/add-to-dataset`).
+2. Create a review batch from it: `POST /ai/observability/review/batches` with
+   `{evaluatorId: <question set>, datasetId}`. Only items without a current answer are queued.
+   Every submitted answer is saved on its dataset item, and the dataset's `judgments` show
+   answered, current, and stale counts per question set.
+3. Save 2–3 versions of the judge prompt, then create a judge experiment:
+   `POST /ai/observability/experiments` with
+   `{kind: "judge", name, datasetId, questionSetId, judgeEvaluatorId, versions: [1, 2], targetAgreement: 0.9}`.
+   Each version answers every human-answered item; `results.agreement` ranks the versions and
+   each version gets an `agreement` gate.
+4. Promote the version that passes (`POST /ai/observability/experiments/:id/promote`); the
+   judge evaluator then shows its `calibration`. Use that judge in prompt experiments.
+
+Rewording a question makes earlier answers stale: re-run step 2 to re-queue those items.
 

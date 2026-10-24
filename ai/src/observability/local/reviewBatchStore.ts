@@ -10,7 +10,16 @@ import type {
   ObsReviewItemDocument,
 } from "../../types/observability";
 import {type EvaluatorAiClient, runLlmJudgeEvaluator} from "../evaluate";
-import {computeJudgeAgreement, type JudgeAgreement, type ScoreValue} from "../judgeAgreement";
+import {
+  agreementAnswerKey,
+  computeJudgeAgreement,
+  type JudgeAgreement,
+  type ScoreValue,
+} from "../judgeAgreement";
+import {questionSetFingerprint} from "../questionFingerprint";
+import {loadDatasetItemSubjects} from "./humanAnswers";
+import {registerObsDataset} from "./models/obsDataset";
+import {registerObsDatasetItem} from "./models/obsDatasetItem";
 import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsJudgeRun} from "./models/obsJudgeRun";
 import {registerObsReviewBatch} from "./models/obsReviewBatch";
@@ -44,6 +53,9 @@ export interface ReviewBatchListItem {
   bestJudge?: {evaluatorName: string; rate?: number};
   counts: ReviewBatchCounts;
   created: string;
+  /** Dataset the batch judges, when it was built from a dataset. */
+  datasetId?: string;
+  datasetName?: string;
   description?: string;
   evaluatorId: string;
   evaluatorName: string;
@@ -51,16 +63,31 @@ export interface ReviewBatchListItem {
   judgeCount: number;
   name: string;
   promptName?: string;
+  /** Question-set fingerprint when the batch was created (dataset batches). */
+  questionsFingerprint?: string;
+  /** True when the question set's questions changed since this dataset batch was created. */
+  questionsStale?: boolean;
 }
 
 export interface ReviewBatchItem {
+  datasetItemId?: string;
   input?: unknown;
   judgeAnswers: Record<string, {error?: string; scores?: Record<string, ScoreValue>}>;
   output?: unknown;
   reviewItemId: string;
   scores?: Record<string, ScoreValue>;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset for a dataset item without a source trace. */
+  traceId?: string;
+  traceName: string;
+}
+
+interface ReviewSubject {
+  datasetItemId?: string;
+  input?: unknown;
+  key: string;
+  output?: unknown;
+  traceId?: string;
   traceName: string;
 }
 
@@ -113,6 +140,7 @@ export class LocalReviewBatchStore {
   ) {}
 
   async create(params: {
+    datasetId?: string;
     description?: string;
     evaluatorId: string;
     limit?: number;
@@ -128,6 +156,15 @@ export class LocalReviewBatchStore {
     }
     if (evaluator.type !== "human") {
       throw new APIError({status: 400, title: "Review batches require a human evaluator"});
+    }
+    if (params.datasetId) {
+      if (params.traceIds !== undefined || params.limit !== undefined) {
+        throw new APIError({
+          status: 400,
+          title: "datasetId cannot be combined with traceIds or limit",
+        });
+      }
+      return this.createFromDataset({...params, datasetId: params.datasetId, evaluator});
     }
     const limit = params.limit ?? DEFAULT_REVIEW_BATCH_SIZE;
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_REVIEW_BATCH_SIZE) {
@@ -187,6 +224,82 @@ export class LocalReviewBatchStore {
     return this.get(String(batch._id));
   }
 
+  /**
+   * One review item per dataset item that lacks a current answer from this question set and is
+   * not already waiting in an open review for it.
+   */
+  private async createFromDataset(params: {
+    datasetId: string;
+    description?: string;
+    evaluator: ObsEvaluatorDocument;
+    name?: string;
+  }): Promise<ReviewBatchDetail> {
+    const {evaluator} = params;
+    const dataset = await registerObsDataset().findOneOrNone({
+      _id: objectId(params.datasetId, "datasetId"),
+    });
+    if (!dataset) {
+      throw new APIError({status: 404, title: `Unknown dataset "${params.datasetId}"`});
+    }
+    const fingerprint = questionSetFingerprint(evaluator.dimensions);
+    const evaluatorKey = String(evaluator._id);
+    const datasetItems = await registerObsDatasetItem()
+      .find({datasetId: dataset._id})
+      .sort({_id: 1});
+    const unanswered = datasetItems.filter((item) => {
+      return item.humanAnswers?.[evaluatorKey]?.fingerprint !== fingerprint;
+    });
+    if (unanswered.length === 0) {
+      throw new APIError({
+        detail: datasetItems.length === 0 ? `Dataset "${dataset.name}" has no items.` : undefined,
+        status: 400,
+        title: "Every item already has current answers",
+      });
+    }
+    const open = await registerObsReviewItem()
+      .find({
+        datasetItemId: {$in: unanswered.map((item) => item._id)},
+        evaluatorId: evaluator._id,
+        status: {$in: ["in_progress", "pending"]},
+      })
+      .select({datasetItemId: 1});
+    const openIds = new Set(open.map((item) => String(item.datasetItemId)));
+    const toJudge = unanswered.filter((item) => !openIds.has(String(item._id)));
+    if (toJudge.length === 0) {
+      throw new APIError({
+        status: 400,
+        title: "Every unanswered item is already waiting in an open review batch",
+      });
+    }
+    const Batch = registerObsReviewBatch();
+    const existingCount = await Batch.countDocuments({datasetId: dataset._id});
+    const batch = await Batch.create({
+      datasetId: dataset._id,
+      description: params.description,
+      evaluatorId: evaluator._id,
+      name: params.name?.trim() || `${dataset.name} — ${evaluator.name} ${existingCount + 1}`,
+      questionsFingerprint: fingerprint,
+      traceIds: toJudge.flatMap((item) => (item.sourceTraceId ? [item.sourceTraceId] : [])),
+    });
+    try {
+      await this.reviewStore.enqueueDatasetItems({
+        batchId: String(batch._id),
+        evaluatorId: evaluatorKey,
+        items: toJudge.map((item) => {
+          return {
+            datasetItemId: String(item._id),
+            traceId: item.sourceTraceId ? String(item.sourceTraceId) : undefined,
+          };
+        }),
+      });
+    } catch (error) {
+      await registerObsReviewItem().deleteMany({batchId: batch._id});
+      await Batch.deleteOne({_id: batch._id});
+      throw error;
+    }
+    return this.get(String(batch._id));
+  }
+
   async list(): Promise<ReviewBatchListItem[]> {
     const batches = await registerObsReviewBatch().find({}).sort({created: -1});
     if (batches.length === 0) {
@@ -195,7 +308,7 @@ export class LocalReviewBatchStore {
     const batchIds = batches.map((batch) => batch._id);
     const reviewItems = await registerObsReviewItem()
       .find({batchId: {$in: batchIds}})
-      .select({batchId: 1, scores: 1, status: 1, traceId: 1});
+      .select({batchId: 1, datasetItemId: 1, scores: 1, status: 1, traceId: 1});
     const runs = await this.latestJudgeRuns(batchIds);
     const evaluators = await registerObsEvaluator().find({
       _id: {
@@ -207,6 +320,7 @@ export class LocalReviewBatchStore {
         return [String(evaluator._id), evaluator];
       })
     );
+    const datasetNames = await this.datasetNames(batches);
     return batches.map((batch) => {
       const batchId = String(batch._id);
       const evaluator = evaluatorById.get(String(batch.evaluatorId));
@@ -217,7 +331,13 @@ export class LocalReviewBatchStore {
         reviewItems: items,
         runs: runs.filter((run) => String(run.batchId) === batchId),
       });
-      return this.toListItem({batch, evaluatorName: evaluator?.name, items, judges});
+      return this.toListItem({
+        batch,
+        datasetName: batch.datasetId ? datasetNames.get(String(batch.datasetId)) : undefined,
+        evaluator,
+        items,
+        judges,
+      });
     });
   }
 
@@ -231,12 +351,7 @@ export class LocalReviewBatchStore {
     const reviewItems = await registerObsReviewItem()
       .find({batchId: batch._id})
       .sort({_id: 1, enqueuedAt: 1});
-    const traces = await registerObsTrace().find({_id: {$in: batch.traceIds}});
-    const traceById = new Map(
-      traces.map((trace) => {
-        return [String(trace._id), trace];
-      })
-    );
+    const subjects = await this.loadSubjects(reviewItems);
     const runs = await this.latestJudgeRuns([batch._id]);
     const judgeEvaluators = await registerObsEvaluator().find({
       _id: {$in: runs.map((run) => run.evaluatorId)},
@@ -253,28 +368,38 @@ export class LocalReviewBatchStore {
     });
 
     const items: ReviewBatchItem[] = reviewItems.map((item) => {
-      const traceId = String(item.traceId);
-      const trace = traceById.get(traceId);
+      const subject = subjects.get(String(item._id));
+      const key = subject?.key ?? agreementAnswerKey(this.answerIds(item));
       const judgeAnswers: ReviewBatchItem["judgeAnswers"] = {};
       for (const run of runs) {
-        const result = run.results.find((entry) => String(entry.traceId) === traceId);
+        const result = run.results.find((entry) => {
+          return agreementAnswerKey(this.answerIds(entry)) === key;
+        });
         if (result) {
           judgeAnswers[String(run.evaluatorId)] = {error: result.error, scores: result.scores};
         }
       }
       return {
-        input: trace?.input,
+        datasetItemId: item.datasetItemId ? String(item.datasetItemId) : undefined,
+        input: subject?.input,
         judgeAnswers,
-        output: trace?.output,
+        output: subject?.output,
         reviewItemId: String(item._id),
         scores: item.scores,
         status: item.status,
-        traceId,
-        traceName: trace?.name ?? "Unknown trace",
+        traceId: subject?.traceId ?? (item.traceId ? String(item.traceId) : undefined),
+        traceName: subject?.traceName ?? "Unknown trace",
       };
     });
+    const datasetNames = await this.datasetNames([batch]);
     return {
-      ...this.toListItem({batch, evaluatorName: evaluator?.name, items: reviewItems, judges}),
+      ...this.toListItem({
+        batch,
+        datasetName: batch.datasetId ? datasetNames.get(String(batch.datasetId)) : undefined,
+        evaluator: evaluator ?? undefined,
+        items: reviewItems,
+        judges,
+      }),
       dimensions,
       instructions: evaluator?.instructions,
       items,
@@ -322,29 +447,42 @@ export class LocalReviewBatchStore {
         title: `Judge prompt "${judge.judgePromptName}" has no production output schema`,
       });
     }
-    const traces = await registerObsTrace().find({_id: {$in: batch.traceIds}});
-    const results = await mapWithConcurrency(traces, JUDGE_CONCURRENCY, async (trace) => {
-      const result = await runLlmJudgeEvaluator(
-        {
-          evaluator: {
-            dimensions: judge.dimensions,
-            judgePromptName: judge.judgePromptName,
-            name: judge.name,
-            type: judge.type,
+    const reviewItems = await registerObsReviewItem()
+      .find({batchId: batch._id})
+      .sort({_id: 1, enqueuedAt: 1});
+    const subjectByKey = new Map<string, ReviewSubject>();
+    for (const subject of (await this.loadSubjects(reviewItems)).values()) {
+      subjectByKey.set(subject.key, subject);
+    }
+    const results = await mapWithConcurrency(
+      [...subjectByKey.values()],
+      JUDGE_CONCURRENCY,
+      async (subject) => {
+        const result = await runLlmJudgeEvaluator(
+          {
+            evaluator: {
+              dimensions: judge.dimensions,
+              judgePromptName: judge.judgePromptName,
+              name: judge.name,
+              type: judge.type,
+            },
+            input: subject.input,
+            output: subject.output,
           },
-          input: trace.input,
-          output: trace.output,
-        },
-        params.ai,
-        judgeVersion.outputSchema as Record<string, unknown>
-      );
-      return {
-        confidence: result.confidence,
-        error: result.error,
-        scores: result.scores,
-        traceId: trace._id,
-      };
-    });
+          params.ai,
+          judgeVersion.outputSchema as Record<string, unknown>
+        );
+        return {
+          confidence: result.confidence,
+          error: result.error,
+          scores: result.scores,
+          ...(subject.datasetItemId
+            ? {datasetItemId: new mongoose.Types.ObjectId(subject.datasetItemId)}
+            : {}),
+          ...(subject.traceId ? {traceId: new mongoose.Types.ObjectId(subject.traceId)} : {}),
+        };
+      }
+    );
     await registerObsJudgeRun().create({
       batchId: batch._id,
       completedAt: DateTime.utc().toJSDate(),
@@ -353,6 +491,78 @@ export class LocalReviewBatchStore {
       results,
     });
     return this.get(String(batch._id));
+  }
+
+  private answerIds(row: {
+    datasetItemId?: mongoose.Types.ObjectId;
+    traceId?: mongoose.Types.ObjectId;
+  }): {datasetItemId?: string; traceId?: string} {
+    return {
+      datasetItemId: row.datasetItemId ? String(row.datasetItemId) : undefined,
+      traceId: row.traceId ? String(row.traceId) : undefined,
+    };
+  }
+
+  // What reviewers saw for each review item: its trace, or the dataset item when it has none.
+  private async loadSubjects(
+    reviewItems: Pick<ObsReviewItemDocument, "_id" | "datasetItemId" | "traceId">[]
+  ): Promise<Map<string, ReviewSubject>> {
+    const traceIds = reviewItems.flatMap((item) => (item.traceId ? [item.traceId] : []));
+    const traces = traceIds.length ? await registerObsTrace().find({_id: {$in: traceIds}}) : [];
+    const traceById = new Map(
+      traces.map((trace) => {
+        return [String(trace._id), trace];
+      })
+    );
+    const datasetItemIds = reviewItems.flatMap((item) => {
+      const hasTrace = item.traceId && traceById.has(String(item.traceId));
+      return !hasTrace && item.datasetItemId ? [item.datasetItemId] : [];
+    });
+    const datasetSubjects = datasetItemIds.length
+      ? await loadDatasetItemSubjects(
+          await registerObsDatasetItem().find({_id: {$in: datasetItemIds}})
+        )
+      : new Map();
+    const subjects = new Map<string, ReviewSubject>();
+    for (const item of reviewItems) {
+      const ids = this.answerIds(item);
+      const key = agreementAnswerKey(ids);
+      const trace = item.traceId ? traceById.get(String(item.traceId)) : undefined;
+      if (trace) {
+        subjects.set(String(item._id), {
+          ...ids,
+          input: trace.input,
+          key,
+          output: trace.output,
+          traceName: trace.name,
+        });
+        continue;
+      }
+      const datasetSubject = ids.datasetItemId ? datasetSubjects.get(ids.datasetItemId) : undefined;
+      subjects.set(String(item._id), {
+        ...ids,
+        input: datasetSubject?.input,
+        key,
+        output: datasetSubject?.output,
+        traceName: datasetSubject ? "Dataset item" : "Unknown trace",
+      });
+    }
+    return subjects;
+  }
+
+  private async datasetNames(
+    batches: Pick<ObsReviewBatchDocument, "datasetId">[]
+  ): Promise<Map<string, string>> {
+    const ids = batches.flatMap((batch) => (batch.datasetId ? [batch.datasetId] : []));
+    if (ids.length === 0) {
+      return new Map();
+    }
+    const datasets = await registerObsDataset().find({_id: {$in: ids}});
+    return new Map(
+      datasets.map((dataset) => {
+        return [String(dataset._id), dataset.name];
+      })
+    );
   }
 
   private async latestJudgeRuns(
@@ -375,13 +585,13 @@ export class LocalReviewBatchStore {
   private summarizeJudges(params: {
     dimensions: EvaluatorDimension[];
     evaluatorById: Map<string, ObsEvaluatorDocument>;
-    reviewItems: Pick<ObsReviewItemDocument, "scores" | "status" | "traceId">[];
+    reviewItems: Pick<ObsReviewItemDocument, "datasetItemId" | "scores" | "status" | "traceId">[];
     runs: ObsJudgeRunDocument[];
   }): ReviewBatchJudgeSummary[] {
     const humanAnswers = params.reviewItems
       .filter((item) => item.status === "done")
       .map((item) => {
-        return {scores: item.scores, traceId: String(item.traceId)};
+        return {...this.answerIds(item), scores: item.scores};
       });
     const summaries = params.runs.map((run) => {
       const judge = params.evaluatorById.get(String(run.evaluatorId));
@@ -390,7 +600,7 @@ export class LocalReviewBatchStore {
           dimensions: params.dimensions,
           humanAnswers,
           judgeAnswers: run.results.map((result) => {
-            return {error: result.error, scores: result.scores, traceId: String(result.traceId)};
+            return {...this.answerIds(result), error: result.error, scores: result.scores};
           }),
           judgeKeys: (judge?.dimensions ?? []).map((dimension) => dimension.key),
         }),
@@ -408,11 +618,16 @@ export class LocalReviewBatchStore {
 
   private toListItem(params: {
     batch: ObsReviewBatchDocument;
-    evaluatorName?: string;
+    datasetName?: string;
+    evaluator?: Pick<ObsEvaluatorDocument, "dimensions" | "name">;
     items: Pick<ObsReviewItemDocument, "status">[];
     judges: ReviewBatchJudgeSummary[];
   }): ReviewBatchListItem {
-    const {batch, items, judges} = params;
+    const {batch, evaluator, items, judges} = params;
+    const questionsStale =
+      batch.questionsFingerprint && evaluator
+        ? questionSetFingerprint(evaluator.dimensions) !== batch.questionsFingerprint
+        : undefined;
     const best = judges[0];
     return {
       bestJudge: best ? {evaluatorName: best.evaluatorName, rate: best.agreement.rate} : undefined,
@@ -424,13 +639,17 @@ export class LocalReviewBatchStore {
         total: items.length,
       },
       created: toIso(batch.created),
+      datasetId: batch.datasetId ? String(batch.datasetId) : undefined,
+      datasetName: params.datasetName,
       description: batch.description,
       evaluatorId: String(batch.evaluatorId),
-      evaluatorName: params.evaluatorName ?? "Deleted evaluator",
+      evaluatorName: evaluator?.name ?? "Deleted evaluator",
       id: String(batch._id),
       judgeCount: judges.length,
       name: batch.name,
       promptName: batch.promptName,
+      questionsFingerprint: batch.questionsFingerprint,
+      questionsStale,
     };
   }
 

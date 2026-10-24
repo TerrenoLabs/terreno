@@ -4,9 +4,11 @@
  * versions, a golden dataset, and finished experiments, plus traces with scores and a human
  * review queue in every status. A human question-set batch of the 10 newest summaries has 8 items
  * answered and two LLM judges run over it, so judge-vs-human agreement shows a judge that matches
- * reviewers and one that does not. Experiments run through the real LocalExperimentRunner against
- * a deterministic fixture client, so gates, outliers, and promote rules behave as they do for
- * live runs.
+ * reviewers and one that does not. The same 10 summaries also form the summary-review-set dataset,
+ * answered by humans for every item, and a judge calibration experiment ranks two versions of the
+ * summary judge prompt by agreement with those answers (v1 fails at 77.5%, v2 passes at 95%).
+ * Experiments run through the real LocalExperimentRunner against a deterministic fixture client,
+ * so gates, outliers, and promote rules behave as they do for live runs.
  */
 
 import {randomUUID} from "node:crypto";
@@ -19,6 +21,7 @@ import {
   LocalReviewStore,
   LocalScoreSink,
   LocalTraceStore,
+  loadCurrentHumanAnswers,
   type ObservabilityGenerateClient,
   type ScoreRecord,
   type SpanRecord,
@@ -41,6 +44,10 @@ export const SUMMARY_QUESTION_SET = "summary-review-questions";
 export const SUMMARY_CAREFUL_JUDGE = "summary-questions-judge";
 export const SUMMARY_QUICK_JUDGE = "summary-questions-judge-quick";
 export const SUMMARY_REVIEW_BATCH = "Recent summaries — batch 1";
+export const SUMMARY_REVIEW_DATASET = "summary-review-set";
+export const SUMMARY_DATASET_BATCH = "summary-review-set — human answers";
+export const SUMMARY_JUDGE_CALIBRATION = "Summary judge v1 vs v2 (calibration)";
+export const SUMMARY_JUDGE_PROMPT = "eval-judge-summary-questions";
 
 const SEED_TRACE_SESSION_PREFIX = "seed-obs-";
 const TRACE_MODEL_ID = "gemini-2.5-flash";
@@ -652,29 +659,40 @@ const summaryQuestionSchema = {
   type: "object",
 };
 
+const SUMMARY_CAREFUL_JUDGE_SYSTEM = [
+  "You review one-sentence summaries of todo lists. The input is the todo list; the model output is the summary.",
+  "Answer each question true or false:",
+  "- faithful: Is every statement backed by the todo list? Rewording and merging are fine; adding a relationship or detail the list does not state is not.",
+  "- covers_every_item: Does the summary mention every todo?",
+  "- actionable: Is each todo still a clear action someone could do? A bare noun like 'plumber call' is not.",
+  "- concise: Is it one sentence of about 20 words or fewer?",
+  "Set confidence from 0 to 1.",
+].join("\n");
+
+const SUMMARY_QUICK_JUDGE_SYSTEM =
+  "Is the summary faithful, does it cover every item, is it actionable, and is it concise (10 words or fewer)? Answer true or false for each and set confidence from 0 to 1.";
+
 // Two judges for the same questions: the careful prompt spells out each rule the reviewers use;
 // the quick prompt paraphrases them and reads "concise" as 10 words, so it drifts from humans.
-const SUMMARY_JUDGE_PROMPTS = [
+// The careful prompt's history starts from the quick wording (v1) and was rewritten (v2) after
+// judge calibration showed v1 disagreeing with reviewers; production is the last version.
+const SUMMARY_JUDGE_PROMPTS: Array<{
+  description: string;
+  name: string;
+  outputSchema: typeof summaryQuestionSchema;
+  versions: string[];
+}> = [
   {
     description: "Careful judge prompt for the summary review question set",
-    name: "eval-judge-summary-questions",
+    name: SUMMARY_JUDGE_PROMPT,
     outputSchema: summaryQuestionSchema,
-    system: [
-      "You review one-sentence summaries of todo lists. The input is the todo list; the model output is the summary.",
-      "Answer each question true or false:",
-      "- faithful: Is every statement backed by the todo list? Rewording and merging are fine; adding a relationship or detail the list does not state is not.",
-      "- covers_every_item: Does the summary mention every todo?",
-      "- actionable: Is each todo still a clear action someone could do? A bare noun like 'plumber call' is not.",
-      "- concise: Is it one sentence of about 20 words or fewer?",
-      "Set confidence from 0 to 1.",
-    ].join("\n"),
+    versions: [SUMMARY_QUICK_JUDGE_SYSTEM, SUMMARY_CAREFUL_JUDGE_SYSTEM],
   },
   {
     description: "Quick judge prompt for the summary review question set",
     name: "eval-judge-summary-questions-quick",
     outputSchema: summaryQuestionSchema,
-    system:
-      "Is the summary faithful, does it cover every item, is it actionable, and is it concise (10 words or fewer)? Answer true or false for each and set confidence from 0 to 1.",
+    versions: [SUMMARY_QUICK_JUDGE_SYSTEM],
   },
 ];
 
@@ -777,7 +795,7 @@ const REVIEW_QUEUE_QUESTION_SETS = [
 const SUMMARY_JUDGE_EVALUATORS = [
   {
     description: "LLM judge for the summary review questions (spells out each reviewer rule)",
-    judgePromptName: "eval-judge-summary-questions",
+    judgePromptName: SUMMARY_JUDGE_PROMPT,
     name: SUMMARY_CAREFUL_JUDGE,
   },
   {
@@ -905,17 +923,29 @@ export const createSeedFixtureClient = (): ObservabilityGenerateClient => {
     return suite.dataset.rows.flatMap((row) => Object.values(row.outputs));
   });
   return {
-    generateJsonObject: async <OBJECT>(options: {prompt: string; schemaName?: string}) => {
+    generateJsonObject: async <OBJECT>(options: {
+      prompt: string;
+      schemaName?: string;
+      systemPrompt?: string;
+    }) => {
       const output = outputs.find((candidate) => {
         return options.prompt.includes(JSON.stringify(candidate.text));
       });
       const confidence = output?.confidence ?? 0.92;
+      // Judge calibration passes a specific prompt version's text; production runs pass its name.
+      const bySystem =
+        options.systemPrompt === SUMMARY_CAREFUL_JUDGE_SYSTEM
+          ? "careful"
+          : options.systemPrompt === SUMMARY_QUICK_JUDGE_SYSTEM
+            ? "quick"
+            : undefined;
       const questionJudge =
-        options.schemaName === `${SUMMARY_CAREFUL_JUDGE}-judge`
+        bySystem ??
+        (options.schemaName === `${SUMMARY_CAREFUL_JUDGE}-judge`
           ? "careful"
           : options.schemaName === `${SUMMARY_QUICK_JUDGE}-judge`
             ? "quick"
-            : undefined;
+            : undefined);
       if (questionJudge) {
         const summary = Object.entries(SUMMARY_ANSWERS).find(([text]) => {
           return options.prompt.includes(JSON.stringify(text));
@@ -1024,7 +1054,11 @@ const ensureJudgePrompts = async (
   promptStore: LocalPromptStore,
   output: AiObservabilityDemoResult
 ): Promise<void> => {
-  for (const judge of [...JUDGE_PROMPTS, ...SUMMARY_JUDGE_PROMPTS]) {
+  const judges = [
+    ...JUDGE_PROMPTS.map(({system, ...judge}) => ({...judge, versions: [system]})),
+    ...SUMMARY_JUDGE_PROMPTS,
+  ];
+  for (const judge of judges) {
     const existing = await findPrompt(promptStore, judge.name);
     output.changes.push({
       change: existing ? "unchanged" : "created",
@@ -1035,19 +1069,26 @@ const ensureJudgePrompts = async (
     if (existing || dryRun) {
       continue;
     }
-    await promptStore.create({
+    const [first, ...later] = judge.versions;
+    const fields = {
       config: {temperature: TemperaturePresets.DETERMINISTIC},
+      outputSchema: judge.outputSchema,
+      template: "Grade the model output against the input and expected output.",
+      type: "chat" as const,
+      variables: [],
+    };
+    await promptStore.create({
+      ...fields,
       description: judge.description,
       folder: "evaluators",
       name: judge.name,
-      outputSchema: judge.outputSchema,
-      system: judge.system,
+      system: first,
       tags: ["judge"],
-      template: "Grade the model output against the input and expected output.",
-      type: "chat",
-      variables: [],
     });
-    await promptStore.moveLabel(judge.name, {label: "production", version: 1});
+    for (const system of later) {
+      await promptStore.createVersion(judge.name, {...fields, system});
+    }
+    await promptStore.moveLabel(judge.name, {label: "production", version: judge.versions.length});
   }
 };
 
@@ -1662,6 +1703,141 @@ const seedReviewBatch = async (params: {
   );
 };
 
+// A synchronous runner: the seed waits for each experiment before moving on.
+const inlineExperimentRunner = (params: {
+  datasetStore: LocalDatasetStore;
+  evaluatorStore: LocalEvaluatorStore;
+  promptStore: LocalPromptStore;
+}): LocalExperimentRunner => {
+  const runner = new LocalExperimentRunner({
+    backgroundTaskRunner: {
+      enqueue: async ({execute, taskType}) => {
+        const task = await BackgroundTask.create({status: "running", taskType});
+        await execute();
+        task.status = "completed";
+        task.completedAt = DateTime.now().toJSDate();
+        await task.save();
+        return {taskId: String(task._id)};
+      },
+    },
+    ...params,
+  });
+  runner.configureAi({aiService: createSeedFixtureClient()});
+  return runner;
+};
+
+/**
+ * The opinionated eval pipeline end to end: a dataset of the 10 newest seeded summaries, human
+ * answers for every item through a dataset review batch, and a judge calibration experiment
+ * comparing two versions of the summary judge prompt against those answers.
+ */
+const seedJudgeCalibration = async (params: {
+  datasetStore: LocalDatasetStore;
+  dryRun: boolean;
+  evaluatorStore: LocalEvaluatorStore;
+  output: AiObservabilityDemoResult;
+  promptStore: LocalPromptStore;
+}): Promise<void> => {
+  const {datasetStore, dryRun, evaluatorStore, output, promptStore} = params;
+  const existingDataset = (await datasetStore.list()).find((row) => {
+    return row.name === SUMMARY_REVIEW_DATASET;
+  });
+  output.changes.push({
+    change: existingDataset ? "unchanged" : "created",
+    count: 1,
+    key: JSON.stringify({name: SUMMARY_REVIEW_DATASET}),
+    model: "ObsDataset",
+  });
+  const runner = inlineExperimentRunner({datasetStore, evaluatorStore, promptStore});
+  const experimentExists = (await runner.list({kind: "judge", limit: 100})).data.some((row) => {
+    return row.name === SUMMARY_JUDGE_CALIBRATION;
+  });
+  output.changes.push({
+    change: experimentExists ? "unchanged" : "created",
+    count: 1,
+    key: JSON.stringify({name: SUMMARY_JUDGE_CALIBRATION}),
+    model: "ObsExperiment",
+  });
+  if (dryRun) {
+    return;
+  }
+  const questionSet = await evaluatorStore.getByName(SUMMARY_QUESTION_SET);
+  const judge = await evaluatorStore.getByName(SUMMARY_CAREFUL_JUDGE);
+  if (!questionSet || !judge) {
+    output.results.push("Skipped judge calibration: summary question set or judge is missing");
+    return;
+  }
+
+  let datasetId = existingDataset?.id;
+  if (!datasetId) {
+    const traceIds = await seededSummaryTraceIds(new LocalTraceStore());
+    if (traceIds.length === 0) {
+      output.results.push("Skipped judge calibration: seeded summaries are missing");
+      return;
+    }
+    const dataset = await datasetStore.create({
+      description: "The 10 newest seeded summaries, answered by reviewers for every question.",
+      name: SUMMARY_REVIEW_DATASET,
+      tags: ["judge-calibration"],
+    });
+    await datasetStore.addTracesToDataset({datasetId: dataset.id, traceIds});
+    datasetId = dataset.id;
+  }
+
+  const current = await loadCurrentHumanAnswers({datasetId, questionSetId: questionSet.id});
+  const items = await datasetStore.listItems(datasetId);
+  if (current.items.length < items.length) {
+    const batchStore = new LocalReviewBatchStore(promptStore);
+    const batch = await batchStore.create({
+      datasetId,
+      description: "Seeded: reviewers answered every summary in the dataset.",
+      evaluatorId: questionSet.id,
+      name: SUMMARY_DATASET_BATCH,
+    });
+    const reviewStore = new LocalReviewStore();
+    const sinks = [new LocalScoreSink(new LocalTraceStore())];
+    for (const item of batch.items) {
+      const answers = typeof item.output === "string" ? SUMMARY_ANSWERS[item.output] : undefined;
+      if (answers) {
+        await reviewStore.submit({id: item.reviewItemId, scores: answers.human, sinks});
+      }
+    }
+    output.results.push(
+      `Dataset "${SUMMARY_REVIEW_DATASET}": humans answered ${batch.items.length} items`
+    );
+  }
+
+  if (experimentExists) {
+    return;
+  }
+  const [v1, v2] = await Promise.all([
+    promptStore.getVersionByNumber(SUMMARY_JUDGE_PROMPT, 1),
+    promptStore.getVersionByNumber(SUMMARY_JUDGE_PROMPT, 2),
+  ]);
+  if (v1?.system !== SUMMARY_QUICK_JUDGE_SYSTEM || v2?.system !== SUMMARY_CAREFUL_JUDGE_SYSTEM) {
+    output.results.push(
+      `Skipped "${SUMMARY_JUDGE_CALIBRATION}": ${SUMMARY_JUDGE_PROMPT} v1/v2 were edited or are missing`
+    );
+    return;
+  }
+  const experiment = await runner.create({
+    datasetId,
+    judgeEvaluatorId: judge.id,
+    kind: "judge",
+    name: SUMMARY_JUDGE_CALIBRATION,
+    questionSetId: questionSet.id,
+    targetAgreement: 0.9,
+    versions: [1, 2],
+  });
+  const agreement = experiment.versions
+    .map((version) => {
+      const rate = experiment.results?.agreement?.[String(version)]?.rate ?? 0;
+      return `v${version} ${Math.round(rate * 1000) / 10}%`;
+    })
+    .join(", ");
+  output.results.push(`Ran judge calibration "${SUMMARY_JUDGE_CALIBRATION}": ${agreement}`);
+};
+
 export const seedAiObservabilityDemo = async ({
   dryRun,
 }: {
@@ -1684,5 +1860,6 @@ export const seedAiObservabilityDemo = async ({
   await ensureExperiments({datasetIds, datasetStore, dryRun, evaluatorStore, output, promptStore});
   await seedTracesAndReview({dryRun, evaluatorStore, output});
   await seedReviewBatch({dryRun, evaluatorStore, output, promptStore});
+  await seedJudgeCalibration({datasetStore, dryRun, evaluatorStore, output, promptStore});
   return output;
 };

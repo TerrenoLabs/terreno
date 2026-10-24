@@ -5,8 +5,12 @@ import mongoose from "mongoose";
 import type {EvaluatorDimension} from "../../types/observability";
 import {buildReviewPanels, type ReviewPanels} from "../reviewPanels";
 import type {ScoreRecord, ScoreSink} from "../types";
+import {loadDatasetItemSubjects, writeHumanAnswer} from "./humanAnswers";
+import {registerObsDataset} from "./models/obsDataset";
+import {registerObsDatasetItem} from "./models/obsDatasetItem";
 import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsPrompt} from "./models/obsPrompt";
+import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsReviewBatch} from "./models/obsReviewBatch";
 import {registerObsReviewItem} from "./models/obsReviewItem";
@@ -18,15 +22,20 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 export interface ReviewListItem {
   assigneeId?: string;
   batchId?: string;
+  /** Dataset item under review, when the item came from a dataset review batch. */
+  datasetItemId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
   promptName?: string;
   reason: string;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
   traceName: string;
 }
+
+const DATASET_ITEM_NAME = "Dataset item";
 
 const objectId = (value: string, label: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(value)) {
@@ -82,6 +91,28 @@ export class LocalReviewStore {
     return created;
   }
 
+  /** Queue dataset items for a human question set; items with a source trace show that trace. */
+  async enqueueDatasetItems(params: {
+    batchId: string;
+    evaluatorId: string;
+    items: Array<{datasetItemId: string; traceId?: string}>;
+  }): Promise<ReviewListItem[]> {
+    const created: ReviewListItem[] = [];
+    for (const entry of params.items) {
+      const item = await registerObsReviewItem().create({
+        batchId: objectId(params.batchId, "batchId"),
+        datasetItemId: objectId(entry.datasetItemId, "datasetItemId"),
+        enqueuedAt: DateTime.utc().toJSDate(),
+        evaluatorId: objectId(params.evaluatorId, "evaluatorId"),
+        reason: "manual",
+        status: "pending",
+        ...(entry.traceId ? {traceId: objectId(entry.traceId, "traceId")} : {}),
+      });
+      created.push(this.toListItem(item, DATASET_ITEM_NAME));
+    }
+    return created;
+  }
+
   async list(
     status?: ReviewStatus,
     options: {batchId?: string} = {}
@@ -102,6 +133,10 @@ export class LocalReviewStore {
     const rows = await ObsReviewItem.find(filter).sort({_id: 1, enqueuedAt: 1});
     const data: ReviewListItem[] = [];
     for (const row of rows) {
+      if (!row.traceId) {
+        data.push(this.toListItem(row, DATASET_ITEM_NAME));
+        continue;
+      }
       const trace = await registerObsTrace().findOneOrNone({_id: row.traceId});
       data.push(this.toListItem(row, trace?.name ?? "Unknown trace", trace?.prompts[0]?.name));
     }
@@ -112,6 +147,7 @@ export class LocalReviewStore {
     batchId?: string;
     batchName?: string;
     comment?: string;
+    datasetItemId?: string;
     dimensions: EvaluatorDimension[];
     evaluatorId: string;
     id: string;
@@ -121,7 +157,7 @@ export class LocalReviewStore {
     rawOutput?: unknown;
     scores?: Record<string, boolean | number | string>;
     status: ReviewStatus;
-    traceId: string;
+    traceId?: string;
   }> {
     const item = await registerObsReviewItem().findOneOrNone({_id: objectId(id, "id")});
     if (!item) {
@@ -131,16 +167,49 @@ export class LocalReviewStore {
     if (!evaluator) {
       throw new APIError({status: 404, title: "Unknown evaluator"});
     }
-    const trace = await registerObsTrace().findOneOrNone({_id: item.traceId});
+    const trace = item.traceId
+      ? await registerObsTrace().findOneOrNone({_id: item.traceId})
+      : undefined;
     const batch = item.batchId
       ? await registerObsReviewBatch().findOneOrNone({_id: item.batchId})
       : undefined;
-    const promptRef = trace?.prompts[0];
+    let input = trace?.input;
+    let output = trace?.output;
     let variables:
       | {key: string; label?: string; required: boolean; reviewerNote?: string}[]
       | undefined;
     let outputFieldNotes: Record<string, string> | undefined;
     let outputSchema: Record<string, unknown> | undefined;
+    // A dataset item without a (surviving) source trace shows its own input and expected output.
+    if (!trace && item.datasetItemId) {
+      const datasetItem = await registerObsDatasetItem().findOneOrNone({
+        _id: item.datasetItemId,
+      });
+      if (datasetItem) {
+        const subject = (await loadDatasetItemSubjects([datasetItem])).get(String(datasetItem._id));
+        input = subject?.input;
+        output = subject?.output;
+        const dataset = await registerObsDataset().findOneOrNone({_id: datasetItem.datasetId});
+        if (dataset?.inputSchemaPromptName) {
+          const prompt = await registerObsPrompt().findOneOrNone({
+            name: dataset.inputSchemaPromptName,
+          });
+          const label = prompt
+            ? await registerObsPromptLabel().findOneOrNone({
+                label: "production",
+                promptId: prompt._id,
+              })
+            : undefined;
+          const version = label
+            ? await registerObsPromptVersion().findOneOrNone({_id: label.versionId})
+            : undefined;
+          variables = version?.variables;
+          outputFieldNotes = version?.outputFieldNotes;
+          outputSchema = version?.outputSchema;
+        }
+      }
+    }
+    const promptRef = trace?.prompts[0];
     if (promptRef) {
       const prompt = await registerObsPrompt().findOneOrNone({name: promptRef.name});
       if (prompt) {
@@ -157,22 +226,17 @@ export class LocalReviewStore {
       batchId: batch ? String(batch._id) : undefined,
       batchName: batch?.name,
       comment: item.comment,
+      datasetItemId: item.datasetItemId ? String(item.datasetItemId) : undefined,
       dimensions: evaluator.dimensions,
       evaluatorId: String(evaluator._id),
       id: String(item._id),
       instructions: evaluator.instructions,
-      panels: buildReviewPanels({
-        input: trace?.input,
-        output: trace?.output,
-        outputFieldNotes,
-        outputSchema,
-        variables,
-      }),
-      rawInput: trace?.input,
-      rawOutput: trace?.output,
+      panels: buildReviewPanels({input, output, outputFieldNotes, outputSchema, variables}),
+      rawInput: input,
+      rawOutput: output,
       scores: item.scores,
       status: item.status,
-      traceId: String(item.traceId),
+      traceId: item.traceId ? String(item.traceId) : undefined,
     };
   }
 
@@ -181,6 +245,8 @@ export class LocalReviewStore {
     id: string;
     scores: Record<string, boolean | number | string>;
     sinks: ScoreSink[];
+    /** Reviewer, recorded on the dataset item's human answers. */
+    userId?: string;
   }): Promise<void> {
     const item = await this.requireItem(params.id);
     const evaluator = await registerObsEvaluator().findOneOrNone({_id: item.evaluatorId});
@@ -194,7 +260,9 @@ export class LocalReviewStore {
       throw new APIError({status: 400, title: `Score "${missing.key}" is required`});
     }
     const records: ScoreRecord[] = [];
-    for (const dimension of evaluator.dimensions) {
+    const traceId = item.traceId;
+    // Scores attach to traces, so a dataset item without a trace only records human answers.
+    for (const dimension of traceId ? evaluator.dimensions : []) {
       const value = params.scores[dimension.key];
       if (value === undefined) {
         continue;
@@ -205,7 +273,7 @@ export class LocalReviewStore {
         evaluatorId: String(evaluator._id),
         name: dimension.key,
         source: "human" as const,
-        traceId: String(item.traceId),
+        traceId: String(traceId),
         value,
       });
     }
@@ -229,6 +297,15 @@ export class LocalReviewStore {
     item.scores = params.scores;
     item.status = "done";
     await item.save();
+    if (item.datasetItemId) {
+      await writeHumanAnswer({
+        datasetItemId: item.datasetItemId,
+        evaluator,
+        reviewItemId: String(item._id),
+        scores: params.scores,
+        userId: params.userId,
+      });
+    }
   }
 
   async skip(id: string): Promise<void> {
@@ -257,11 +334,12 @@ export class LocalReviewStore {
       _id: mongoose.Types.ObjectId;
       assigneeId?: mongoose.Types.ObjectId;
       batchId?: mongoose.Types.ObjectId;
+      datasetItemId?: mongoose.Types.ObjectId;
       enqueuedAt: Date;
       evaluatorId: mongoose.Types.ObjectId;
       reason: string;
       status: ReviewStatus;
-      traceId: mongoose.Types.ObjectId;
+      traceId?: mongoose.Types.ObjectId;
     },
     traceName: string,
     promptName?: string
@@ -269,13 +347,14 @@ export class LocalReviewStore {
     return {
       assigneeId: row.assigneeId ? String(row.assigneeId) : undefined,
       batchId: row.batchId ? String(row.batchId) : undefined,
+      datasetItemId: row.datasetItemId ? String(row.datasetItemId) : undefined,
       enqueuedAt: toIso(row.enqueuedAt),
       evaluatorId: String(row.evaluatorId),
       id: String(row._id),
       promptName,
       reason: row.reason,
       status: row.status,
-      traceId: String(row.traceId),
+      traceId: row.traceId ? String(row.traceId) : undefined,
       traceName,
     };
   }

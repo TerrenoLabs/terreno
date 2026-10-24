@@ -12275,6 +12275,18 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
           {
             "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "enum": [
+                "judge",
+                "prompt",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
             "name": "page",
             "required": false,
             "schema": {
@@ -12408,7 +12420,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
-        "summary": "Create an experiment",
+        "summary": "Create a prompt comparison or judge calibration experiment",
         "tags": [
           "observability",
         ],
@@ -13354,7 +13366,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
-        "summary": "Create a review batch from traces or the most recent traces",
+        "summary": "Create a review batch from traces, the most recent traces, or a dataset's unanswered items",
         "tags": [
           "observability",
         ],
@@ -13762,6 +13774,33 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "name": "scope",
             "required": false,
             "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Sort column, \`-\` prefix for descending. Defaults to \`-startedAt\`.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "enum": [
+                "cost",
+                "-cost",
+                "latency",
+                "-latency",
+                "name",
+                "-name",
+                "scores",
+                "-scores",
+                "spans",
+                "-spans",
+                "startedAt",
+                "-startedAt",
+                "status",
+                "-status",
+                "tokens",
+                "-tokens",
+              ],
               "type": "string",
             },
           },

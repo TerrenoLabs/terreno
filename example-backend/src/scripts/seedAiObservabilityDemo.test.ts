@@ -24,9 +24,13 @@ import {
   SUMMARIZE_EXPERIMENT_V2_V3,
   SUMMARIZE_GOLD_DATASET_NAME,
   SUMMARY_CAREFUL_JUDGE,
+  SUMMARY_DATASET_BATCH,
+  SUMMARY_JUDGE_CALIBRATION,
+  SUMMARY_JUDGE_PROMPT,
   SUMMARY_QUESTION_SET,
   SUMMARY_QUICK_JUDGE,
   SUMMARY_REVIEW_BATCH,
+  SUMMARY_REVIEW_DATASET,
   seedAiObservabilityDemo,
 } from "./seedAiObservabilityDemo";
 
@@ -134,7 +138,8 @@ describe("seedAiObservabilityDemo", () => {
     assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/, status: "error"}), 2);
 
     const {counts} = await new LocalReviewStore().list();
-    assert.deepEqual(counts, {done: 11, in_progress: 1, pending: 11, skipped: 1});
+    // 11 queue and batch answers plus the 10 dataset items reviewers answered.
+    assert.deepEqual(counts, {done: 21, in_progress: 1, pending: 11, skipped: 1});
 
     // Every queue item outside the batch asks exactly three yes/no questions.
     const evaluatorStore = new LocalEvaluatorStore();
@@ -150,8 +155,12 @@ describe("seedAiObservabilityDemo", () => {
     }
 
     const batchStore = new LocalReviewBatchStore(promptStore);
-    const [batchRow] = await batchStore.list();
-    assert.equal(batchRow?.name, SUMMARY_REVIEW_BATCH);
+    const batchRows = await batchStore.list();
+    assert.sameMembers(
+      batchRows.map((row) => row.name),
+      [SUMMARY_REVIEW_BATCH, SUMMARY_DATASET_BATCH]
+    );
+    const batchRow = batchRows.find((row) => row.name === SUMMARY_REVIEW_BATCH);
     assert.deepEqual(batchRow?.counts, {done: 8, pending: 2, skipped: 0, total: 10});
     const batch = await batchStore.get(batchRow?.id ?? "");
     assert.isTrue(batch.dimensions.every((dimension) => Boolean(dimension.question)));
@@ -162,11 +171,43 @@ describe("seedAiObservabilityDemo", () => {
     assert.closeTo(rates[SUMMARY_QUICK_JUDGE] ?? 0, 25 / 32, 0.001);
     assert.equal(batch.judges[0]?.evaluatorName, SUMMARY_CAREFUL_JUDGE);
 
+    // Judge calibration: humans answered every summary in the dataset; two judge prompt versions.
+    const judgePrompt = (await promptStore.list({search: SUMMARY_JUDGE_PROMPT})).find((entry) => {
+      return entry.name === SUMMARY_JUDGE_PROMPT;
+    });
+    assert.equal(judgePrompt?.latestVersion, 2);
+    assert.equal(judgePrompt?.production, 2);
+    const reviewSet = (await new LocalDatasetStore(promptStore).list()).find((entry) => {
+      return entry.name === SUMMARY_REVIEW_DATASET;
+    });
+    assert.equal(reviewSet?.counts.total, 10);
+    assert.deepEqual(
+      reviewSet?.judgments.map(({evaluatorId: _id, ...row}) => row),
+      [{answered: 10, current: 10, evaluatorName: SUMMARY_QUESTION_SET, stale: 0, total: 10}]
+    );
+    const [calibrationRow] = (await runner.list({kind: "judge"})).data;
+    assert.equal(calibrationRow?.name, SUMMARY_JUDGE_CALIBRATION);
+    const calibration = await runner.get(calibrationRow?.id ?? "");
+    assert.equal(calibration.status, "completed");
+    assert.equal(calibration.judgeName, SUMMARY_CAREFUL_JUDGE);
+    assert.equal(calibration.questionSetName, SUMMARY_QUESTION_SET);
+    assert.equal(calibration.datasetName, SUMMARY_REVIEW_DATASET);
+    assert.lengthOf(calibration.items, 10);
+    assert.closeTo(calibration.results?.agreement?.["1"]?.rate ?? 0, 31 / 40, 0.001);
+    assert.closeTo(calibration.results?.agreement?.["2"]?.rate ?? 0, 38 / 40, 0.001);
+    assert.isFalse(gate(calibration.results?.gates ?? [], 1, "agreement"));
+    assert.isTrue(gate(calibration.results?.gates ?? [], 2, "agreement"));
+    const careful = (await evaluatorStore.list()).find((row) => {
+      return row.name === SUMMARY_CAREFUL_JUDGE;
+    });
+    assert.deepInclude(careful?.calibration, {passed: true, stale: false, version: 2});
+    assert.closeTo(careful?.calibration?.rate ?? 0, 0.95, 0.001);
+
     await seedAiObservabilityDemo({dryRun: false});
     assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/}), 30);
-    assert.lengthOf((await runner.list({limit: 100})).data, 4);
+    assert.lengthOf((await runner.list({limit: 100})).data, 5);
     assert.deepEqual((await new LocalReviewStore().list()).counts, counts);
-    assert.lengthOf(await batchStore.list(), 1);
+    assert.lengthOf(await batchStore.list(), 2);
   });
 
   it("writes nothing on a dry run", async () => {

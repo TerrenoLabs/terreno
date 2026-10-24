@@ -30,6 +30,19 @@ const obsExperimentSchema = new mongoose.Schema<ObsExperimentDocument, ObsExperi
       description: "When true, synthetic/unproofread items are included",
       type: Boolean,
     },
+    judgeEvaluatorId: {
+      description: "Judge experiments: llm-judge evaluator whose prompt versions are compared",
+      ref: "ObsEvaluator",
+      type: mongoose.Schema.Types.ObjectId,
+    },
+    kind: {
+      default: "prompt",
+      description:
+        "prompt compares product prompt versions; judge ranks judge prompt versions by agreement with human answers",
+      enum: ["judge", "prompt"],
+      required: true,
+      type: String,
+    },
     modelOverride: {
       description: "Optional model id override for all generations",
       type: String,
@@ -38,6 +51,15 @@ const obsExperimentSchema = new mongoose.Schema<ObsExperimentDocument, ObsExperi
     promptName: {
       description: "Prompt whose versions are compared",
       required: true,
+      type: String,
+    },
+    questionSetId: {
+      description: "Judge experiments: human question set whose answers are the reference",
+      ref: "ObsEvaluator",
+      type: mongoose.Schema.Types.ObjectId,
+    },
+    questionsFingerprint: {
+      description: "Judge experiments: question-set fingerprint of the compared human answers",
       type: String,
     },
     results: {
@@ -50,6 +72,10 @@ const obsExperimentSchema = new mongoose.Schema<ObsExperimentDocument, ObsExperi
       enum: ["completed", "failed", "pending", "running"],
       required: true,
       type: String,
+    },
+    targetAgreement: {
+      description: "Judge experiments: agreement rate (0–1) a judge version must reach to pass",
+      type: Number,
     },
     thresholds: {
       default: [],
@@ -79,6 +105,9 @@ obsExperimentSchema.index({created: -1, datasetId: 1});
 obsExperimentSchema.index({created: -1, status: 1});
 // biome-ignore assist/source/useSortedKeys: promptName must be the leading key for prompt-filtered lists
 obsExperimentSchema.index({promptName: 1, created: -1});
+// Evaluator calibration reads the latest judge experiment per judge evaluator.
+// biome-ignore assist/source/useSortedKeys: judgeEvaluatorId must lead for calibration lookups
+obsExperimentSchema.index({judgeEvaluatorId: 1, created: -1});
 
 export const registerObsExperiment = (): ObsExperimentModel => {
   if (mongoose.models.ObsExperiment) {

@@ -50,12 +50,15 @@ export const addObservabilityReviewBatchRoutes = (
       {action: "assign", resource: "aiReview"},
       builder()
         .withTags(["observability"])
-        .withSummary("Create a review batch from traces or the most recent traces")
+        .withSummary(
+          "Create a review batch from traces, the most recent traces, or a dataset's unanswered items"
+        )
         .withResponse(201, {data: {type: "object"}})
         .build()
     ),
     asyncHandler(async (req, res) => {
       const body = req.body as {
+        datasetId?: string;
         description?: string;
         evaluatorId?: string;
         limit?: number;
@@ -69,7 +72,11 @@ export const addObservabilityReviewBatchRoutes = (
       if (body.traceIds !== undefined && !Array.isArray(body.traceIds)) {
         throw new APIError({status: 400, title: "traceIds must be an array"});
       }
+      if (body.datasetId !== undefined && typeof body.datasetId !== "string") {
+        throw new APIError({status: 400, title: "datasetId must be a string"});
+      }
       const data = await options.store.create({
+        datasetId: body.datasetId || undefined,
         description: body.description,
         evaluatorId: body.evaluatorId,
         limit: body.limit,

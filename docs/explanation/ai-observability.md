@@ -93,6 +93,29 @@ With the local plugin registered and primaries set to `local`, the control plane
 
 Operator UI for datasets and experiments ships in tasks 2.7–2.9; routes and stores are live for API clients and tests today.
 
+## The eval pipeline: humans first, then calibrated judges
+
+Terreno's evaluation flow has four steps, and each step reuses the one before it:
+
+1. **Build a dataset** of traces (or hand-written items).
+2. **Humans answer a question set** — a `human` evaluator whose dimensions are usually yes/no
+   `question`s — for every dataset item, through review batches built from the dataset. Each
+   submitted answer is written back onto the dataset item (`humanAnswers`).
+3. **Calibrate the judge.** A judge calibration experiment (`kind: "judge"`) runs 2–3 versions of
+   an LLM judge's prompt over the human-answered items and ranks the versions by agreement with
+   the humans. Iterate on the judge prompt until a version clears the target (default 90%), then
+   promote it.
+4. **Compare product prompts** with ordinary prompt experiments, scored by a judge whose
+   calibration (latest agreement, and whether it is stale) shows on the evaluator.
+
+Human answers are expensive, so they are reused: a dataset judged once feeds any number of judge
+experiments. The rule that keeps reuse honest is the **question fingerprint** — a hash of each
+question's key, type, wording, and range. Answers stay *current* while the fingerprint matches;
+rewording a question makes them *stale*, the dataset shows them as stale, new review batches
+re-queue those items, and judge calibrations based on the old wording are flagged stale.
+Judges always see what reviewers saw (the source trace, else the item's input and expected
+output), so agreement measures the judge, not a difference in evidence.
+
 ## GPT tool spans and nested traces
 
 `/gpt/prompt` streams tool rounds to the client **and** records them in observability traces. Each provider `tool-call` / `tool-result` pair becomes a `TOOL` span (input args, cleaned output, timing, `parentSpanId` on the chain root). When tools run, the exported trace uses a `CHAIN` root wrapping those `TOOL` children instead of a lone `LLM` span. Plain `AIService.generate*` calls without tool children still log a single `LLM` root.

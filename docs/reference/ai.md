@@ -525,13 +525,13 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 | `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
 | `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
 | `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
-| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment, optional `batchId` |
-| `ObsReviewBatch` | Review batch: `name`, human question-set `evaluatorId`, `traceIds[]`, optional `promptName` and `description` |
-| `ObsJudgeRun` | One LLM judge's answers for every trace in a batch: `batchId`, `evaluatorId`, `modelId`, `results[]` (`traceId`, `scores`, `confidence`, `error`) |
+| `ObsReviewItem` | Review queue item: status, evaluator, reason, scores, comment, optional `batchId` and `datasetItemId`. `traceId` is optional: unset when reviewers judge a dataset item that has no source trace |
+| `ObsReviewBatch` | Review batch: `name`, human question-set `evaluatorId`, `traceIds[]`, optional `promptName` and `description`; dataset batches add `datasetId` and `questionsFingerprint` |
+| `ObsJudgeRun` | One LLM judge's answers for every item in a batch: `batchId`, `evaluatorId`, `modelId`, `results[]` (`traceId?`, `datasetItemId?`, `scores`, `confidence`, `error`) |
 | `ObsDataset` | Named dataset with optional `inputSchemaPromptName` and `expectedOutputSchema` |
-| `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata` |
-| `ObsExperiment` | Compares 2–3 prompt versions on a dataset with thresholds and aggregates |
-| `ObsExperimentItem` | Per dataset row: outputs per version, evaluator score maps, gate failure flags |
+| `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata`, and `humanAnswers` (keyed by question-set evaluator id: `{fingerprint, scores, reviewItemId, userId?, answeredAt}`) |
+| `ObsExperiment` | `kind: "prompt"` (default) compares 2–3 prompt versions with thresholds; `kind: "judge"` compares 2–3 judge prompt versions by agreement with human answers (`questionSetId`, `judgeEvaluatorId`, `targetAgreement`, `questionsFingerprint`) |
+| `ObsExperimentItem` | Per dataset row: outputs per version, evaluator score maps, gate failure flags; judge experiments add `humanScores` |
 
 `POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
 `dimensions[]` render as reviewer score fields and `instructions` render above the review form.
@@ -595,17 +595,28 @@ Prompt references: a `system` or `template` may contain `{{> <name>}}`, with an 
 | POST | `/ai/observability/traces/review` | Enqueue one or many traces against a human evaluator (`reason: "manual"`) |
 | GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
 | GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
-| POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
-| GET | `/ai/observability/review/batches` | Batches with `counts` (`done`, `pending`, `skipped`, `total`), `judgeCount`, and `bestJudge` (`aiReview:list`) |
-| POST | `/ai/observability/review/batches` | Create a batch for a human evaluator from `traceIds`, or from the newest `limit` (default 10, max 50) successful traces with output not already batched for that evaluator, optionally filtered by `promptName`. Enqueues one review item per trace. 404 `Unknown trace ids` when any id is missing; a failed enqueue removes the batch so its traces stay available (`aiReview:assign`) |
-| GET | `/ai/observability/review/batches/:id` | Batch detail: question `dimensions`, `items[]` (input, output, status, human `scores`, `judgeAnswers` by judge id), and `judges[]` with `agreement` (`rate`, `matches`, `compared`, `itemsCompared`, `errors`, per-question `questions[]`, `disagreements[]`) sorted best first (`aiReview:read`) |
-| POST | `/ai/observability/review/batches/:id/judgeRuns` | Run an `llm-judge` evaluator over every batch trace (five at a time) and store an `ObsJudgeRun`. 400 when the judge shares no dimension keys with the question set; 503 without an AI client (`aiReview:assign`) |
+| POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks when the item has a trace, status `done`), `skip`, or `assign`. Submitting an item with `datasetItemId` writes `humanAnswers[evaluatorId]` on the dataset item (replacing an earlier answer) with the question set's current fingerprint and the reviewer's id. `skip` writes nothing |
+| GET | `/ai/observability/review/batches` | Batches with `counts` (`done`, `pending`, `skipped`, `total`), `judgeCount`, `bestJudge`, and for dataset batches `datasetId`, `datasetName`, `questionsFingerprint`, `questionsStale` (`aiReview:list`) |
+| POST | `/ai/observability/review/batches` | Create a batch for a human evaluator from `traceIds`, or from the newest `limit` (default 10, max 50) successful traces with output not already batched for that evaluator, optionally filtered by `promptName`. Enqueues one review item per trace. 404 `Unknown trace ids` when any id is missing; a failed enqueue removes the batch so its traces stay available. **From a dataset:** `{evaluatorId, datasetId, name?, description?}` (400 with `traceIds` or `limit`) enqueues one item per dataset item without a current answer from that question set and not already pending in another batch, with `datasetItemId` and `traceId = sourceTraceId`. 400 `Every item already has current answers`, or `Every unanswered item is already waiting in an open review batch` (`aiReview:assign`) |
+| GET | `/ai/observability/review/batches/:id` | Batch detail: question `dimensions`, `items[]` (input, output, status, human `scores`, `judgeAnswers` by judge id, `datasetItemId?`, `traceId?`), and `judges[]` with `agreement` (`rate`, `matches`, `compared`, `itemsCompared`, `errors`, per-question `questions[]`, `disagreements[]`) sorted best first (`aiReview:read`) |
+| POST | `/ai/observability/review/batches/:id/judgeRuns` | Run an `llm-judge` evaluator over every batch item (five at a time) and store an `ObsJudgeRun`. 400 when the judge shares no dimension keys with the question set; 503 without an AI client (`aiReview:assign`) |
+
+Reviewers and judges see the same thing for a dataset item: its source trace's input and output
+when the trace still exists, otherwise the item's `input` and `expectedOutput` (shown as
+"Dataset item"; `traceId` is unset and no `ObsScore` rows are written).
 
 Judge agreement compares only items with `done` human answers and only dimension keys the judge
 also returns. Booleans and categories must match exactly (case-insensitive for categories);
 numbers match within 10% of the dimension's range (default 0–1). A judge error or missing answer
-counts as a disagreement. `computeJudgeAgreement` and `answersAgree` are exported for custom
-reports. `GET /ai/observability/review` also accepts `batchId` to scope the queue to one batch.
+counts as a disagreement. Answers pair by `datasetItemId` when set, otherwise by `traceId`;
+`disagreements[]` carry both. `computeJudgeAgreement` and `answersAgree` are exported for custom
+reports.
+
+**Question fingerprint.** `questionSetFingerprint(dimensions)` (exported) is a sha256 over each
+dimension's `key`, `dataType`, `question`, and `range`, sorted by key (`required` and order do not
+count). A human answer is *current* while its fingerprint matches the question set now and
+*stale* after any of those fields change. `loadCurrentHumanAnswers({datasetId, questionSetId})`
+returns the dataset items with current answers. `GET /ai/observability/review` also accepts `batchId` to scope the queue to one batch.
 
 `createLocalObservabilityPlugin()` wires `LocalDatasetStore` and `LocalExperimentRunner` when datasets/experiments primaries are `local`.
 
@@ -613,17 +624,49 @@ reports. `GET /ai/observability/review` also accepts `batchId` to scope the queu
 | --- | --- | --- |
 | GET/POST | `/ai/observability/datasets` | List (includes `humanCount` for proofread items, `autoCount` for unreviewed trace or synthetic items, `needsReviewCount`) / create |
 | GET/PATCH/DELETE | `/ai/observability/datasets/:id` | Detail (with counts) / update / soft-delete. PATCH `null` clears optional dataset fields; omitted fields stay unchanged |
-| GET/POST | `/ai/observability/datasets/:id/items` | List / create items |
+| GET/POST | `/ai/observability/datasets/:id/items` | List / create items. Items include `humanAnswers` keyed by question-set id (`answeredAt` as ISO) |
+
+Dataset list and detail include `judgments[]`: one row per question set that answered any item or
+has a review batch built from the dataset, `{evaluatorId, evaluatorName, answered, current,
+stale, total}`. `current` answers match the question set's fingerprint now; `stale` answers were
+given to an older version of the questions; `total` is the dataset's item count.
 | PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields |
 | POST | `/ai/observability/datasets/:id/import` | **JSON:** body is an array of bare input objects, or structured rows with `input` / `expectedOutput` / `proofread` / `tags` / `outcomeClass` / `metadata`. **CSV:** `Content-Type: text/csv` with raw CSV body, or JSON `{format: "csv", content: "..."}`. Plain columns map to `input`; plain `input` / `expectedOutput` cells accept JSON values; `input.foo` and `expectedOutput.foo` nest fields; reserved `proofread`, `tags`, `outcomeClass` map metadata. Nested paths reject `__proto__`, `constructor`, and `prototype` segments. Rows validate against the dataset's bound prompt `inputSchema` when `inputSchemaPromptName` is set; 400 reports row number and JSON path |
 | POST | `/ai/observability/traces/add-to-dataset` | `{datasetId, traceId \| traceIds[]}`. Copies span I/O; `origin: "trace"`; `sourceTraceId` set; **sensitive traces always `proofread: false`** |
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| POST | `/ai/observability/experiments/estimate` | `{datasetId, promptName, versions[], evaluatorIds[], modelOverride?}` → generation count, USD, wall-clock estimate |
-| GET/POST | `/ai/observability/experiments` | List / create. Body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`), `modelOverride`, `includeUnproofread` (default false). Evaluator ids must be `llm-judge` or `json-assert` (human → 400). Local primary always enqueues `BackgroundTask` (even one item) |
-| GET | `/ai/observability/experiments/:id` | Status, progress, per-version aggregates, gate pass/fail (`gates[].version`), `outlierItemIds`, `lowConfidenceItemIds`, per-item side-by-side (**failed rows first**) |
-| POST | `/ai/observability/experiments/:id/promote` | `{version}` moves the `production` label when **that version's** gates pass; **409** while any gate for the selected version fails |
+| POST | `/ai/observability/experiments/estimate` | `{datasetId, promptName, versions[], evaluatorIds[], modelOverride?}` → generation count, USD, wall-clock estimate. Judge experiments: `{kind: "judge", datasetId, questionSetId, versions[]}` counts items with current human answers |
+| GET/POST | `/ai/observability/experiments` | List (query `promptName`, `kind` = `prompt` \| `judge`, `page`, `limit`) / create. Prompt body: dataset, 2–3 version numbers, evaluator ids, optional `thresholds[]` (defaults to `SOP_DEFAULT_THRESHOLDS`; `aggregate: "agreement"` → 400), `modelOverride`, `includeUnproofread` (default false). Evaluator ids must be `llm-judge` or `json-assert` (human → 400). Judge body: see below. Local primary always enqueues `BackgroundTask` (even one item) |
+| GET | `/ai/observability/experiments/:id` | Status, progress, per-version aggregates, gate pass/fail (`gates[].version`), `outlierItemIds`, `lowConfidenceItemIds`, per-item side-by-side (**failed rows first**). Every view has `kind`, `datasetName`; judge views add `questionSetId`, `questionSetName`, `judgeEvaluatorId`, `judgeName`, `targetAgreement`, `questionsFingerprint`, `questionsStale`, `results.agreement`, and per-item `humanScores` |
+| POST | `/ai/observability/experiments/:id/promote` | `{version}` moves the `production` label of the experiment's `promptName` (the judge prompt for judge experiments) when **that version's** gates pass; **409** while any gate for the selected version fails |
+
+**Judge calibration experiments.** `POST /ai/observability/experiments` with
+`{kind: "judge", name, datasetId, questionSetId, judgeEvaluatorId, versions, targetAgreement?, modelOverride?}`
+runs 2–3 versions of the judge evaluator's `judgePromptName` (stored as `promptName`) over every
+dataset item with a current human answer from `questionSetId`. Each version runs with its own
+resolved `system` (or `template` when `system` is empty) as the system prompt, its own
+`outputSchema`, and the judge's usual user prompt, on what reviewers saw (source trace, else
+item input / expected output). 400 titles: `questionSetId must be a human question set`,
+`judgeEvaluatorId must be an llm-judge evaluator with a judge prompt`, `Judge answers none of the
+question set's questions`, `Dataset has no current human answers for this question set`,
+`Unknown judge prompt version`, `Judge prompt version has no output schema`, and
+`judge experiments must compare 2–3 judge prompt versions`. Results:
+
+- `items[].versionResults[v].evaluatorScores[judgeEvaluatorId]` holds each version's answers;
+  `items[].humanScores` the reviewers' answers. A row is `failed` when any version errors or
+  disagrees on a compared question.
+- `results.agreement[v]` is a `JudgeAgreement` (overall `rate`, per-question `questions[]`,
+  `disagreements[]` with `datasetItemId`).
+- `results.gates` has one gate per version:
+  `{evaluatorName: <judge>, dimension: "agreement", aggregate: "agreement", op: "gte", value: targetAgreement (default 0.9), actual, passed, version}`.
+
+**Judge calibration on evaluators.** `GET /ai/observability/evaluators` and `/:id` add
+`calibration` to `llm-judge` evaluators that have a completed judge experiment:
+`{experimentId, experimentName, datasetName, questionSetName, version, rate, passed, stale, targetAgreement}`
+from the latest one. `version` is the judge prompt's production version when the experiment
+compared it, otherwise the best-agreeing version. `stale` is true when the question set's
+fingerprint changed since the run.
 
 Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
 

@@ -25,15 +25,19 @@ const obsJudgeRunSchema = new mongoose.Schema<ObsJudgeRunDocument, ObsJudgeRunMo
       type: [
         {
           confidence: {description: "Judge confidence in 0–1 when returned", type: Number},
+          datasetItemId: {
+            description: "Dataset item the judge answered, for dataset review batches",
+            ref: "ObsDatasetItem",
+            type: mongoose.Schema.Types.ObjectId,
+          },
           error: {description: "Why the judge could not answer this item", type: String},
           scores: {
             description: "Dimension-keyed judge answers",
             type: mongoose.Schema.Types.Mixed,
           },
           traceId: {
-            description: "Trace the judge answered",
+            description: "Trace the judge answered, unset for dataset items without a trace",
             ref: "ObsTrace",
-            required: true,
             type: mongoose.Schema.Types.ObjectId,
           },
         },

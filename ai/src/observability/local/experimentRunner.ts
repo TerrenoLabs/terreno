@@ -6,12 +6,22 @@ import type {
   ExperimentAggregates,
   ExperimentEstimate,
   ExperimentGateResult,
+  ExperimentKind,
   ExperimentVersionResult,
+  ObsEvaluatorDocument,
   ObsExperimentDocument,
   ScoreThreshold,
 } from "../../types/observability";
 import {compileTemplate} from "../compileTemplate";
-import {runEvaluator} from "../evaluate";
+import {runEvaluator, runLlmJudgeEvaluator} from "../evaluate";
+import {
+  type AgreementAnswerSet,
+  answersAgree,
+  computeJudgeAgreement,
+  type JudgeAgreement,
+  type JudgeAnswerSet,
+} from "../judgeAgreement";
+import {questionSetFingerprint} from "../questionFingerprint";
 import {SOP_DEFAULT_THRESHOLDS} from "../sopThresholds";
 import type {
   ModelPrice,
@@ -20,6 +30,9 @@ import type {
 } from "../types";
 import type {LocalDatasetStore} from "./datasetStore";
 import type {LocalEvaluatorStore} from "./evaluatorStore";
+import {loadCurrentHumanAnswers, loadDatasetItemSubjects} from "./humanAnswers";
+import {registerObsDataset} from "./models/obsDataset";
+import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsExperimentItem} from "./models/obsExperimentItem";
 import type {LocalPromptStore} from "./promptStore";
@@ -28,6 +41,7 @@ export interface ExperimentCreateInput {
   datasetId: string;
   evaluatorIds: string[];
   includeUnproofread?: boolean;
+  kind?: "prompt";
   modelOverride?: string;
   name: string;
   promptName: string;
@@ -35,20 +49,49 @@ export interface ExperimentCreateInput {
   versions: number[];
 }
 
+/**
+ * Judge calibration: run 2–3 versions of an llm-judge's prompt over dataset items humans already
+ * answered with `questionSetId`, and rank versions by agreement with those answers.
+ */
+export interface JudgeExperimentCreateInput {
+  datasetId: string;
+  judgeEvaluatorId: string;
+  kind: "judge";
+  modelOverride?: string;
+  name: string;
+  questionSetId: string;
+  /** Agreement rate (0–1) a version must reach to pass its gate. Defaults to 0.9. */
+  targetAgreement?: number;
+  /** Versions of the judge evaluator's `judgePromptName`. */
+  versions: number[];
+}
+
+export const DEFAULT_TARGET_AGREEMENT = 0.9;
+
 export interface ExperimentView {
   backgroundTaskId?: string;
   created: string;
   datasetId: string;
+  datasetName?: string;
   estimate?: ExperimentEstimate;
   evaluatorIds: string[];
   id: string;
   includeUnproofread: boolean;
   items: ExperimentItemView[];
+  judgeEvaluatorId?: string;
+  judgeName?: string;
+  kind: ExperimentKind;
   modelOverride?: string;
   name: string;
   promptName: string;
+  questionSetId?: string;
+  questionSetName?: string;
+  questionsFingerprint?: string;
+  /** Judge experiments: true when the question set's questions changed since the run. */
+  questionsStale?: boolean;
   results?: ExperimentAggregates;
   status: "completed" | "failed" | "pending" | "running";
+  targetAgreement?: number;
   thresholds: ScoreThreshold[];
   updated: string;
   versions: number[];
@@ -57,9 +100,29 @@ export interface ExperimentView {
 export interface ExperimentItemView {
   datasetItemId: string;
   failed: boolean;
+  /** Judge experiments: the human answers each judge version is compared with. */
+  humanScores?: Record<string, boolean | number | string>;
   id: string;
   versionResults: Record<string, ExperimentVersionResult>;
 }
+
+interface ExperimentNames {
+  datasetName?: string;
+  judgeName?: string;
+  questionSetName?: string;
+  questionsStale?: boolean;
+}
+
+const versionBody = (version: {system?: string; template?: string}): string => {
+  return version.system && version.system.length > 0 ? version.system : (version.template ?? "");
+};
+
+const toObjectId = (value: unknown, label: string): mongoose.Types.ObjectId => {
+  if (typeof value !== "string" || !mongoose.Types.ObjectId.isValid(value)) {
+    throw new APIError({status: 400, title: `${label} must be an object id`});
+  }
+  return new mongoose.Types.ObjectId(value);
+};
 
 export const EXPERIMENT_LIST_DEFAULT_LIMIT = 50;
 const EXPERIMENT_LIST_MAX_LIMIT = 100;
@@ -195,17 +258,32 @@ export class LocalExperimentRunner {
 
   async estimate(input: {
     datasetId: string;
-    evaluatorIds: string[];
+    evaluatorIds?: string[];
     includeUnproofread?: boolean;
+    kind?: ExperimentKind;
     modelOverride?: string;
+    questionSetId?: string;
     versions: number[];
   }): Promise<ExperimentEstimate> {
-    const items = await this.deps.datasetStore.listExperimentItems(
-      input.datasetId,
-      input.includeUnproofread ?? false
-    );
-    const generations = items.length * input.versions.length;
-    const evaluatorCount = input.evaluatorIds.length;
+    const itemCount =
+      input.kind === "judge"
+        ? input.questionSetId
+          ? (
+              await loadCurrentHumanAnswers({
+                datasetId: input.datasetId,
+                questionSetId: input.questionSetId,
+              })
+            ).items.length
+          : 0
+        : (
+            await this.deps.datasetStore.listExperimentItems(
+              input.datasetId,
+              input.includeUnproofread ?? false
+            )
+          ).length;
+    const generations = itemCount * input.versions.length;
+    // Judge experiments make one judge call per item and version and no separate generation.
+    const evaluatorCount = input.kind === "judge" ? 0 : (input.evaluatorIds?.length ?? 0);
     const secondsPerGeneration = 2;
     const judgeSeconds = generations * evaluatorCount * 0.5;
     const modelId =
@@ -237,9 +315,22 @@ export class LocalExperimentRunner {
     }
   }
 
-  async create(input: ExperimentCreateInput): Promise<ExperimentView> {
-    if (input.versions.length < 2 || input.versions.length > 3) {
+  async create(input: ExperimentCreateInput | JudgeExperimentCreateInput): Promise<ExperimentView> {
+    const kind: unknown = input.kind ?? "prompt";
+    if (kind !== "prompt" && kind !== "judge") {
+      throw new APIError({status: 400, title: "kind must be prompt or judge"});
+    }
+    if (input.kind === "judge") {
+      return this.createJudge(input);
+    }
+    if (!Array.isArray(input.versions) || input.versions.length < 2 || input.versions.length > 3) {
       throw new APIError({status: 400, title: "experiments must compare 2–3 prompt versions"});
+    }
+    if (input.thresholds?.some((threshold) => threshold.aggregate === "agreement")) {
+      throw new APIError({
+        status: 400,
+        title: "agreement gates belong to judge experiments (kind: judge)",
+      });
     }
     await this.assertAutomaticEvaluators(input.evaluatorIds);
     this.resolveAiClient(input.modelOverride);
@@ -258,6 +349,7 @@ export class LocalExperimentRunner {
         return new mongoose.Types.ObjectId(id);
       }),
       includeUnproofread: input.includeUnproofread ?? false,
+      kind: "prompt",
       modelOverride: input.modelOverride,
       name: input.name,
       promptName: input.promptName,
@@ -265,6 +357,128 @@ export class LocalExperimentRunner {
       thresholds: input.thresholds ?? SOP_DEFAULT_THRESHOLDS,
       versions: input.versions,
     });
+    return this.startRun(experiment);
+  }
+
+  private async createJudge(input: JudgeExperimentCreateInput): Promise<ExperimentView> {
+    if (!input.name) {
+      throw new APIError({status: 400, title: "name is required"});
+    }
+    if (
+      !Array.isArray(input.versions) ||
+      input.versions.length < 2 ||
+      input.versions.length > 3 ||
+      !input.versions.every((version) => Number.isInteger(version))
+    ) {
+      throw new APIError({
+        status: 400,
+        title: "judge experiments must compare 2–3 judge prompt versions",
+      });
+    }
+    if (new Set(input.versions).size !== input.versions.length) {
+      throw new APIError({status: 400, title: "judge prompt versions must be different"});
+    }
+    const targetAgreement = input.targetAgreement ?? DEFAULT_TARGET_AGREEMENT;
+    if (typeof targetAgreement !== "number" || targetAgreement <= 0 || targetAgreement > 1) {
+      throw new APIError({
+        status: 400,
+        title: "targetAgreement must be a number above 0 and at most 1",
+      });
+    }
+    const questionSet = await registerObsEvaluator().findOneOrNone({
+      _id: toObjectId(input.questionSetId, "questionSetId"),
+    });
+    if (!questionSet) {
+      throw new APIError({status: 404, title: "Unknown question set"});
+    }
+    if (questionSet.type !== "human") {
+      throw new APIError({status: 400, title: "questionSetId must be a human question set"});
+    }
+    const judge = await registerObsEvaluator().findOneOrNone({
+      _id: toObjectId(input.judgeEvaluatorId, "judgeEvaluatorId"),
+    });
+    if (!judge) {
+      throw new APIError({status: 404, title: "Unknown judge evaluator"});
+    }
+    if (judge.type !== "llm-judge" || !judge.judgePromptName) {
+      throw new APIError({
+        status: 400,
+        title: "judgeEvaluatorId must be an llm-judge evaluator with a judge prompt",
+      });
+    }
+    const questionKeys = new Set(questionSet.dimensions.map((row) => row.key));
+    if (!judge.dimensions.some((row) => questionKeys.has(row.key))) {
+      throw new APIError({
+        detail: `Questions: ${[...questionKeys].join(", ")}. Judge scores: ${judge.dimensions
+          .map((row) => row.key)
+          .join(", ")}.`,
+        status: 400,
+        title: "Judge answers none of the question set's questions",
+      });
+    }
+    const dataset = await this.deps.datasetStore.get(
+      toObjectId(input.datasetId, "datasetId").toString()
+    );
+    const current = await loadCurrentHumanAnswers({
+      datasetId: dataset.id,
+      questionSetId: String(questionSet._id),
+    });
+    if (current.items.length === 0) {
+      throw new APIError({
+        detail: `Create a review batch from dataset "${dataset.name}" with "${questionSet.name}" and answer it first.`,
+        status: 400,
+        title: "Dataset has no current human answers for this question set",
+      });
+    }
+    for (const version of input.versions) {
+      const promptVersion = await this.deps.promptStore.getVersionByNumber(
+        judge.judgePromptName,
+        version
+      );
+      if (!promptVersion) {
+        throw new APIError({
+          detail: `Judge prompt "${judge.judgePromptName}" has no version ${version}.`,
+          status: 400,
+          title: "Unknown judge prompt version",
+        });
+      }
+      if (!promptVersion.outputSchema) {
+        throw new APIError({
+          detail: `Judge prompt "${judge.judgePromptName}" v${version} has no output schema.`,
+          status: 400,
+          title: "Judge prompt version has no output schema",
+        });
+      }
+    }
+    this.resolveAiClient(input.modelOverride);
+    const estimate = await this.estimate({
+      datasetId: dataset.id,
+      kind: "judge",
+      modelOverride: input.modelOverride,
+      questionSetId: String(questionSet._id),
+      versions: input.versions,
+    });
+    const experiment = await registerObsExperiment().create({
+      datasetId: new mongoose.Types.ObjectId(dataset.id),
+      estimate,
+      evaluatorIds: [judge._id],
+      includeUnproofread: true,
+      judgeEvaluatorId: judge._id,
+      kind: "judge",
+      modelOverride: input.modelOverride,
+      name: input.name,
+      promptName: judge.judgePromptName,
+      questionSetId: questionSet._id,
+      questionsFingerprint: current.fingerprint,
+      status: "pending",
+      targetAgreement,
+      thresholds: [],
+      versions: input.versions,
+    });
+    return this.startRun(experiment);
+  }
+
+  private async startRun(experiment: ObsExperimentDocument): Promise<ExperimentView> {
     const runner = this.deps.backgroundTaskRunner ?? defaultBackgroundTaskRunner;
     const {taskId} = await runner.enqueue({
       execute: async () => {
@@ -272,13 +486,21 @@ export class LocalExperimentRunner {
       },
       taskType: `obs-experiment-${String(experiment._id)}`,
     });
-    experiment.backgroundTaskId = new mongoose.Types.ObjectId(taskId);
-    experiment.status = "running";
-    await experiment.save();
+    const ObsExperiment = registerObsExperiment();
+    await ObsExperiment.updateOne(
+      {_id: experiment._id},
+      {$set: {backgroundTaskId: new mongoose.Types.ObjectId(taskId)}}
+    );
+    // A runner that executes inline has already finished; only a still-pending run is "running".
+    await ObsExperiment.updateOne(
+      {_id: experiment._id, status: "pending"},
+      {$set: {status: "running"}}
+    );
     return this.get(String(experiment._id));
   }
 
   async list(params?: {
+    kind?: ExperimentKind;
     limit?: number;
     page?: number;
     promptName?: string;
@@ -292,15 +514,22 @@ export class LocalExperimentRunner {
     if (params?.promptName) {
       filter.promptName = params.promptName;
     }
+    if (params?.kind === "judge") {
+      filter.kind = "judge";
+    } else if (params?.kind === "prompt") {
+      // Experiments saved before `kind` existed are prompt experiments.
+      filter.kind = {$ne: "judge"};
+    }
     const ObsExperiment = registerObsExperiment();
     const total = await ObsExperiment.countDocuments(filter);
     const rows = await ObsExperiment.find(filter)
       .sort({created: -1})
       .skip((page - 1) * limit)
       .limit(limit);
+    const names = await this.loadNames(rows);
     return {
       data: rows.map((row) => {
-        return this.toSummaryView(row);
+        return this.toSummaryView(row, names.get(String(row._id)));
       }),
       meta: {limit, page, total},
     };
@@ -318,12 +547,14 @@ export class LocalExperimentRunner {
       }
       return left.created.getTime() - right.created.getTime();
     });
+    const names = await this.loadNames([experiment]);
     return {
-      ...this.toSummaryView(experiment),
+      ...this.toSummaryView(experiment, names.get(String(experiment._id))),
       items: sortedItems.map((row) => {
         return {
           datasetItemId: String(row.datasetItemId),
           failed: row.failed,
+          humanScores: row.humanScores,
           id: String(row._id),
           versionResults: row.versionResults,
         };
@@ -331,23 +562,81 @@ export class LocalExperimentRunner {
     };
   }
 
-  private toSummaryView(experiment: ObsExperimentDocument): ExperimentView {
+  // Dataset, question-set, and judge names for display, plus question-set staleness.
+  private async loadNames(
+    experiments: ObsExperimentDocument[]
+  ): Promise<Map<string, ExperimentNames>> {
+    const datasetIds = experiments.map((row) => row.datasetId);
+    const evaluatorIds = experiments.flatMap((row) => {
+      return [row.questionSetId, row.judgeEvaluatorId].filter((id): id is mongoose.Types.ObjectId =>
+        Boolean(id)
+      );
+    });
+    const datasets = datasetIds.length
+      ? await registerObsDataset().find({_id: {$in: datasetIds}})
+      : [];
+    const evaluators = evaluatorIds.length
+      ? await registerObsEvaluator().find({_id: {$in: evaluatorIds}})
+      : [];
+    const datasetNameById = new Map(datasets.map((row) => [String(row._id), row.name]));
+    const evaluatorById = new Map<string, ObsEvaluatorDocument>(
+      evaluators.map((row) => [String(row._id), row])
+    );
+    return new Map(
+      experiments.map((row) => {
+        const questionSet = row.questionSetId
+          ? evaluatorById.get(String(row.questionSetId))
+          : undefined;
+        const judge = row.judgeEvaluatorId
+          ? evaluatorById.get(String(row.judgeEvaluatorId))
+          : undefined;
+        return [
+          String(row._id),
+          {
+            datasetName: datasetNameById.get(String(row.datasetId)),
+            judgeName: judge?.name,
+            questionSetName: questionSet?.name,
+            questionsStale:
+              questionSet && row.questionsFingerprint
+                ? questionSetFingerprint(questionSet.dimensions) !== row.questionsFingerprint
+                : undefined,
+          },
+        ];
+      })
+    );
+  }
+
+  private toSummaryView(
+    experiment: ObsExperimentDocument,
+    names?: ExperimentNames
+  ): ExperimentView {
     return {
       backgroundTaskId: experiment.backgroundTaskId
         ? String(experiment.backgroundTaskId)
         : undefined,
       created: DateTime.fromJSDate(experiment.created).toUTC().toISO() ?? "",
       datasetId: String(experiment.datasetId),
+      datasetName: names?.datasetName,
       estimate: experiment.estimate,
       evaluatorIds: experiment.evaluatorIds.map((value) => String(value)),
       id: String(experiment._id),
       includeUnproofread: experiment.includeUnproofread,
       items: [],
+      judgeEvaluatorId: experiment.judgeEvaluatorId
+        ? String(experiment.judgeEvaluatorId)
+        : undefined,
+      judgeName: names?.judgeName,
+      kind: experiment.kind ?? "prompt",
       modelOverride: experiment.modelOverride,
       name: experiment.name,
       promptName: experiment.promptName,
+      questionSetId: experiment.questionSetId ? String(experiment.questionSetId) : undefined,
+      questionSetName: names?.questionSetName,
+      questionsFingerprint: experiment.questionsFingerprint,
+      questionsStale: names?.questionsStale,
       results: experiment.results,
       status: experiment.status,
+      targetAgreement: experiment.targetAgreement,
       thresholds: experiment.thresholds,
       updated: DateTime.fromJSDate(experiment.updated).toUTC().toISO() ?? "",
       versions: experiment.versions,
@@ -386,6 +675,10 @@ export class LocalExperimentRunner {
       throw new APIError({status: 404, title: `Unknown experiment "${id}"`});
     }
     const aiService = this.resolveAiClient(experiment.modelOverride);
+    if (experiment.kind === "judge") {
+      await this.executeJudgeExperiment(experiment, aiService);
+      return;
+    }
     const datasetItems = await this.deps.datasetStore.listExperimentItems(
       String(experiment.datasetId),
       experiment.includeUnproofread
@@ -522,6 +815,157 @@ export class LocalExperimentRunner {
       progress: {completed: datasetItems.length, total: datasetItems.length},
       totalCostUsd: experiment.estimate?.costUsd,
     };
+    await experiment.save();
+  }
+
+  private async executeJudgeExperiment(
+    experiment: ObsExperimentDocument,
+    aiService: ObservabilityGenerateClient
+  ): Promise<void> {
+    const judge = experiment.judgeEvaluatorId
+      ? await registerObsEvaluator().findOneOrNone({_id: experiment.judgeEvaluatorId})
+      : undefined;
+    if (!judge?.judgePromptName || !experiment.questionSetId) {
+      throw new APIError({
+        status: 404,
+        title: "Judge experiment is missing its judge or question set",
+      });
+    }
+    const judgePromptName = judge.judgePromptName;
+    const current = await loadCurrentHumanAnswers({
+      datasetId: experiment.datasetId,
+      questionSetId: experiment.questionSetId,
+    });
+    // Judges see exactly what reviewers saw: the source trace, else the item's input and expected output.
+    const subjects = await loadDatasetItemSubjects(current.items.map((row) => row.item));
+    const versionPrompts = new Map<number, {schema: Record<string, unknown>; system: string}>();
+    for (const versionNumber of experiment.versions) {
+      const version = await this.deps.promptStore.getVersionByNumber(
+        judgePromptName,
+        versionNumber
+      );
+      if (!version?.outputSchema) {
+        throw new APIError({
+          status: 404,
+          title: `Judge prompt "${judgePromptName}" v${versionNumber} is missing or has no output schema`,
+        });
+      }
+      versionPrompts.set(versionNumber, {
+        schema: version.outputSchema,
+        system: versionBody(version),
+      });
+    }
+    const judgeId = String(judge._id);
+    const judgeKeys = judge.dimensions.map((dimension) => dimension.key);
+    const comparedDimensions = current.questionSet.dimensions.filter((dimension) => {
+      return judgeKeys.includes(dimension.key);
+    });
+    const humanAnswers: AgreementAnswerSet[] = [];
+    const judgeAnswers = new Map<number, JudgeAnswerSet[]>(
+      experiment.versions.map((version) => [version, []])
+    );
+    const lowConfidenceItemIds: string[] = [];
+    const outlierItemIds: string[] = [];
+    const total = current.items.length;
+    const aggregate = (completed: number): ExperimentAggregates => {
+      const agreement: Record<string, JudgeAgreement> = {};
+      for (const version of experiment.versions) {
+        agreement[String(version)] = computeJudgeAgreement({
+          dimensions: current.questionSet.dimensions,
+          humanAnswers,
+          judgeAnswers: judgeAnswers.get(version) ?? [],
+          judgeKeys,
+        });
+      }
+      const target = experiment.targetAgreement ?? DEFAULT_TARGET_AGREEMENT;
+      return {
+        agreement,
+        gates: experiment.versions.map((version) => {
+          const actual = agreement[String(version)]?.rate;
+          return {
+            actual,
+            aggregate: "agreement" as const,
+            dimension: "agreement",
+            evaluatorName: judge.name,
+            op: "gte" as const,
+            passed: actual !== undefined && actual >= target,
+            value: target,
+            version,
+          };
+        }),
+        lowConfidenceItemIds: [...new Set(lowConfidenceItemIds)],
+        outlierItemIds: [...new Set(outlierItemIds)],
+        progress: {completed, total},
+        totalCostUsd: experiment.estimate?.costUsd,
+      };
+    };
+
+    let completed = 0;
+    for (const {answer, item} of current.items) {
+      const datasetItemId = String(item._id);
+      const subject = subjects.get(datasetItemId);
+      const ids = {datasetItemId, ...(subject?.traceId ? {traceId: subject.traceId} : {})};
+      humanAnswers.push({...ids, scores: answer.scores});
+      const versionResults: Record<string, ExperimentVersionResult> = {};
+      let rowFailed = false;
+      for (const versionNumber of experiment.versions) {
+        const prompt = versionPrompts.get(versionNumber);
+        if (!prompt) {
+          continue;
+        }
+        const result = await runLlmJudgeEvaluator(
+          {
+            evaluator: {
+              dimensions: judge.dimensions,
+              judgePromptName,
+              name: judge.name,
+              type: judge.type,
+            },
+            input: subject?.input,
+            output: subject?.output,
+          },
+          aiService,
+          prompt.schema,
+          {judgeSystemPrompt: prompt.system}
+        );
+        versionResults[String(versionNumber)] = {
+          evaluatorScores: {
+            [judgeId]: {confidence: result.confidence, error: result.error, scores: result.scores},
+          },
+        };
+        judgeAnswers.get(versionNumber)?.push({...ids, error: result.error, scores: result.scores});
+        if (result.error) {
+          rowFailed = true;
+          outlierItemIds.push(datasetItemId);
+        }
+        if (result.confidence !== undefined && result.confidence < judge.confidenceAlertBelow) {
+          lowConfidenceItemIds.push(datasetItemId);
+        }
+        // A row fails when any version disagrees with the reviewers on any compared question.
+        const disagrees = comparedDimensions.some((dimension) => {
+          const human = answer.scores[dimension.key];
+          return (
+            human !== undefined && !answersAgree(dimension, human, result.scores?.[dimension.key])
+          );
+        });
+        if (disagrees) {
+          rowFailed = true;
+        }
+      }
+      await registerObsExperimentItem().create({
+        datasetItemId: item._id,
+        experimentId: experiment._id,
+        failed: rowFailed,
+        humanScores: answer.scores,
+        versionResults,
+      });
+      completed += 1;
+      experiment.results = aggregate(completed);
+      await experiment.save();
+    }
+    experiment.questionsFingerprint = current.fingerprint;
+    experiment.results = aggregate(total);
+    experiment.status = "completed";
     await experiment.save();
   }
 

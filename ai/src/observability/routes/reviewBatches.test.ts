@@ -6,6 +6,8 @@ import {DateTime} from "luxon";
 import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
 import {LocalEvaluatorStore} from "../local/evaluatorStore";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
+import {registerObsDataset} from "../local/models/obsDataset";
+import {registerObsDatasetItem} from "../local/models/obsDatasetItem";
 import {registerObsEvaluator} from "../local/models/obsEvaluator";
 import {registerObsJudgeRun} from "../local/models/obsJudgeRun";
 import {registerObsReviewBatch} from "../local/models/obsReviewBatch";
@@ -43,6 +45,8 @@ describe("observability review batch routes", () => {
   beforeEach(async () => {
     await registerObsReviewItem().deleteMany({});
     await registerObsReviewBatch().deleteMany({});
+    await registerObsDataset().deleteMany({});
+    await registerObsDatasetItem().deleteMany({});
     await registerObsJudgeRun().deleteMany({});
     await registerObsEvaluator().deleteMany({});
     await registerObsTrace().deleteMany({});
@@ -147,6 +151,54 @@ describe("observability review batch routes", () => {
       .post(`/ai/observability/review/batches/${created.body.data.id}/judgeRuns`)
       .send({evaluatorId: judgeId});
     expect(judged.status).toBe(503);
+  });
+
+  it("builds a batch from a dataset's unanswered items and records answers on them", async () => {
+    const app = buildApp(judgeClient);
+    const agent = await authAsUser(app, "admin");
+    const dataset = await agent.post("/ai/observability/datasets").send({name: "route-set"});
+    const datasetId = dataset.body.data.id as string;
+    await agent
+      .post(`/ai/observability/datasets/${datasetId}/items`)
+      .send({expectedOutput: "summary", input: {text: "todo"}});
+
+    const mixed = await agent
+      .post("/ai/observability/review/batches")
+      .send({datasetId, evaluatorId: questionSetId, traceIds: []});
+    expect(mixed.status).toBe(400);
+
+    const created = await agent
+      .post("/ai/observability/review/batches")
+      .send({datasetId, evaluatorId: questionSetId});
+    expect(created.status).toBe(201);
+    expect(created.body.data.datasetId).toBe(datasetId);
+    const [item] = created.body.data.items as Array<{datasetItemId: string; reviewItemId: string}>;
+    const submitted = await agent
+      .post(`/ai/observability/review/${item?.reviewItemId}`)
+      .send({action: "submit", scores: {faithful: true}});
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.data.datasetItemId).toBe(item?.datasetItemId);
+
+    const again = await agent
+      .post("/ai/observability/review/batches")
+      .send({datasetId, evaluatorId: questionSetId});
+    expect(again.status).toBe(400);
+    expect(again.body.title).toBe("Every item already has current answers");
+
+    const detail = await agent.get(`/ai/observability/datasets/${datasetId}`);
+    expect(detail.body.data.judgments).toEqual([
+      {
+        answered: 1,
+        current: 1,
+        evaluatorId: questionSetId,
+        evaluatorName: "route-questions",
+        stale: 0,
+        total: 1,
+      },
+    ]);
+    const items = await agent.get(`/ai/observability/datasets/${datasetId}/items`);
+    expect(items.body.data[0].humanAnswers[questionSetId].scores).toEqual({faithful: true});
+    expect(items.body.data[0].humanAnswers[questionSetId].userId).toBeDefined();
   });
 
   it("forbids non-admin users", async () => {

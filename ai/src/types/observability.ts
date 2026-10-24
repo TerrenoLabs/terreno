@@ -1,6 +1,8 @@
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
 import type mongoose from "mongoose";
 
+import type {JudgeAgreement} from "../observability/judgeAgreement";
+
 export interface ObsPromptVariable {
   key: string;
   label?: string;
@@ -208,7 +210,8 @@ export interface ObsReviewItemDocument extends mongoose.Document<mongoose.Types.
   scores?: Record<string, boolean | number | string>;
   spanId?: mongoose.Types.ObjectId;
   status: "done" | "in_progress" | "pending" | "skipped";
-  traceId: mongoose.Types.ObjectId;
+  /** Trace under review. Unset when reviewers judge a dataset item that has no source trace. */
+  traceId?: mongoose.Types.ObjectId;
   updated: Date;
 }
 
@@ -222,11 +225,15 @@ export interface ObsReviewItemModel
 
 export interface ObsReviewBatchDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;
+  /** Dataset the batch was built from, when reviewers judge dataset items. */
+  datasetId?: mongoose.Types.ObjectId;
   deleted: boolean;
   description?: string;
   evaluatorId: mongoose.Types.ObjectId;
   name: string;
   promptName?: string;
+  /** Question-set fingerprint when the batch was created (see `questionSetFingerprint`). */
+  questionsFingerprint?: string;
   traceIds: mongoose.Types.ObjectId[];
   updated: Date;
 }
@@ -241,9 +248,10 @@ export interface ObsReviewBatchModel
 
 export interface ObsJudgeRunResult {
   confidence?: number;
+  datasetItemId?: mongoose.Types.ObjectId;
   error?: string;
   scores?: Record<string, boolean | number | string>;
-  traceId: mongoose.Types.ObjectId;
+  traceId?: mongoose.Types.ObjectId;
 }
 
 export interface ObsJudgeRunDocument extends mongoose.Document<mongoose.Types.ObjectId> {
@@ -286,12 +294,24 @@ export interface ObsDatasetStatics
 
 export interface ObsDatasetModel extends mongoose.Model<ObsDatasetDocument>, ObsDatasetStatics {}
 
+/** One question set's human answers for a dataset item. */
+export interface ObsDatasetHumanAnswer {
+  answeredAt: Date;
+  /** `questionSetFingerprint` of the question set when the reviewer answered. */
+  fingerprint: string;
+  reviewItemId: string;
+  scores: Record<string, boolean | number | string>;
+  userId?: string;
+}
+
 export interface ObsDatasetItemDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   annotatedBy?: ObsDatasetAnnotatedBy;
   created: Date;
   datasetId: mongoose.Types.ObjectId;
   deleted: boolean;
   expectedOutput?: unknown;
+  /** Human answers keyed by question-set (human evaluator) id. */
+  humanAnswers?: Record<string, ObsDatasetHumanAnswer>;
   input: unknown;
   metadata?: Record<string, unknown>;
   origin: "manual" | "synthetic" | "trace";
@@ -311,7 +331,8 @@ export interface ObsDatasetItemModel
     ObsDatasetItemStatics {}
 
 export interface ScoreThreshold {
-  aggregate: "mean" | "trueRate";
+  /** `agreement` gates compare a judge prompt version's answers with human answers. */
+  aggregate: "agreement" | "mean" | "trueRate";
   dimension: string;
   evaluatorName: string;
   op: "eq" | "gte" | "lte";
@@ -330,7 +351,11 @@ export interface ExperimentEstimate {
   wallClockSeconds: number;
 }
 
+export type ExperimentKind = "judge" | "prompt";
+
 export interface ExperimentAggregates {
+  /** Judge experiments: agreement with the human answers per judge prompt version. */
+  agreement?: Record<string, JudgeAgreement>;
   gates: ExperimentGateResult[];
   lowConfidenceItemIds: string[];
   outlierItemIds: string[];
@@ -346,11 +371,20 @@ export interface ObsExperimentDocument extends mongoose.Document<mongoose.Types.
   estimate?: ExperimentEstimate;
   evaluatorIds: mongoose.Types.ObjectId[];
   includeUnproofread: boolean;
+  /** Judge experiments: the llm-judge evaluator whose prompt versions are compared. */
+  judgeEvaluatorId?: mongoose.Types.ObjectId;
+  kind: ExperimentKind;
   modelOverride?: string;
   name: string;
   promptName: string;
+  /** Judge experiments: question-set fingerprint of the human answers compared. */
+  questionsFingerprint?: string;
+  /** Judge experiments: the human question set whose answers are the reference. */
+  questionSetId?: mongoose.Types.ObjectId;
   results?: ExperimentAggregates;
   status: "completed" | "failed" | "pending" | "running";
+  /** Judge experiments: agreement rate (0–1) a version must reach to pass. */
+  targetAgreement?: number;
   thresholds: ScoreThreshold[];
   updated: Date;
   versions: number[];
@@ -382,6 +416,8 @@ export interface ObsExperimentItemDocument extends mongoose.Document<mongoose.Ty
   deleted: boolean;
   experimentId: mongoose.Types.ObjectId;
   failed: boolean;
+  /** Judge experiments: the human answers the judge versions are compared with. */
+  humanScores?: Record<string, boolean | number | string>;
   updated: Date;
   versionResults: Record<string, ExperimentVersionResult>;
 }

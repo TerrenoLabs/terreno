@@ -23,6 +23,11 @@ const obsDatasetItemSchema = new mongoose.Schema<ObsDatasetItemDocument, ObsData
       description: "Human- or machine-authored expected output label",
       type: mongoose.Schema.Types.Mixed,
     },
+    humanAnswers: {
+      description:
+        "Human answers keyed by question-set evaluator id: {fingerprint, scores, reviewItemId, userId, answeredAt}. An answer is current while its fingerprint matches the question set",
+      type: mongoose.Schema.Types.Mixed,
+    },
     input: {
       description: "Dataset item input payload",
       required: true,

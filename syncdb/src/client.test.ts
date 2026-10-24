@@ -2795,6 +2795,32 @@ describe("createSyncDb", () => {
       await reopened.stop();
     });
 
+    it("an auth change queued behind a stop() does not reconnect the stopped client", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+      // start() subscribes to auth changes, then holds the mutex on its connect.
+      const releaseConnect = observable.gateNextConnect();
+      const startPromise = client.start();
+      await waitUntil(() => observable.events.includes("connect"));
+
+      // A sign-out stops the client while start() is still connecting, and an auth change
+      // (still the same signed-in user) fires before stop() runs: it queues behind the stop.
+      const stopPromise = client.stop();
+      harness.auth.emitAuthChange();
+      releaseConnect();
+      await startPromise;
+      await stopPromise;
+      const eventsAtStop = observable.events.length;
+      const streamsAtStop = harness.http.state.streamsCount;
+      await flush();
+      await flush();
+
+      expect(observable.events.slice(eventsAtStop)).toEqual([]);
+      expect(harness.http.state.streamsCount).toBe(streamsAtStop);
+      expect(client.getSyncStatus().isOnline).toBe(false);
+    });
+
     it("double start() is a no-op: listeners are not double-registered", async () => {
       const harness = makeHarness();
       let onDeltaCalls = 0;

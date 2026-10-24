@@ -119,6 +119,8 @@ populatePaths: [{fields: ["name", "email"], path: "ownerId"}],
 - A bare name (`"hash"`) is removed at **every depth**, including inside arrays and populated refs, so a redacted name cannot leak through a nested document.
 - A dot path (`"metadata.secretKey"`) removes exactly that location, following arrays of subdocuments element-wise.
 
+The list tool's `sort` argument accepts only the router's sortable fields (`queryFields`, fields in the router's `sort`, and `sortFields`) minus `excludeFields`. Sorting on any other field returns an error that lists the allowed fields, because result order would reveal the hidden values.
+
 ## Customizing responses
 
 `mcpResponseHandler` shapes MCP responses independently of the REST `responseHandler`, which is useful for returning compact summaries to an LLM:

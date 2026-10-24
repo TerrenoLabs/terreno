@@ -101,7 +101,11 @@ use their own renderer rather than `renderAuthMail` (see
 deletes Better Auth sessions when this plugin is registered. Better Auth password reset updates
 the JWT password and `tokenEpoch` for the matching app User so dual-enrolled accounts cannot keep
 the old passport hash. Terreno reads the new password from Better Auth's parsed request body, so
-this works over HTTP (`POST {basePath}/reset-password`).
+this works over HTTP (`POST {basePath}/reset-password`). Better Auth `change-password` does the
+same for an app User that already has a JWT password, and bumps `tokenEpoch` for every app User.
+`revoke-sessions` and `revoke-other-sessions` bump `tokenEpoch`, so JWT refresh tokens issued
+before them stop working. An account with only a Better Auth password does not gain a JWT
+password, and neither does one that adds its first password with `terreno/set-password`.
 
 ```typescript
 import {getCommsService, renderAuthMail} from "@terreno/comms";
@@ -151,11 +155,12 @@ const config: BetterAuthConfig = {
 
 | Terreno default | Set from | What overriding it drops |
 | --- | --- | --- |
-| `database` | MongoDB adapter on the app's connection | Users and sessions in the app's database |
+| `database` | MongoDB adapter on the app's connection, in the connection's database (the `dbName` passed to `mongoose.connect`, else the URI's database) | Users and sessions in the app's database |
 | `emailAndPassword.enabled` | `true` | Email/password sign-in |
 | `emailAndPassword.revokeSessionsOnPasswordReset` | `true` | Signing out other sessions after a password reset |
 | `emailAndPassword.sendResetPassword` | `sendMail` | Terreno's reset email |
 | `emailAndPassword.onPasswordReset` | `userModel` | Syncing the new password to JWT credentials |
+| `terreno-credential-sync` plugin (always registered with `userModel`) | `userModel` | Not overridable; syncs change-password and session revocation to JWT credentials |
 | `emailVerification.sendOnSignUp`, `emailVerification.sendVerificationEmail` | `sendMail` | Terreno's verification email on sign-up |
 | `session.cookieCache` | `{enabled: true, maxAge: 300}` | The 5-minute session cookie cache |
 | `advanced.defaultCookieAttributes` | `crossDomainCookies` | `SameSite=None; Secure` cookies for cross-site frontends |
@@ -340,6 +345,8 @@ const server = app.start();
 
 `RealtimeApp` (registered directly or through `TerrenoApp({realtime})`) uses this plugin's Better Auth instance for socket sessions. Do not build a second instance with `createBetterAuth` for sockets.
 
+`BetterAuthApp` keeps Better Auth's `user`, `account`, `session`, and `verification` collections in the mongoose connection's database, so a `dbName` passed to `mongoose.connect` (the example backend's `MONGO_DB_NAME`) isolates them along with your models. Earlier releases wrote them to the connection string's default database instead. If your app connects with a `dbName` that differs from the URI's database, copy those four collections into the `dbName` database when you upgrade, or users must sign up and sign in again.
+
 ### 4. Update User Model
 
 `syncBetterAuthUser` creates the app `User` on the first authenticated request after Better Auth sign-up. Declare `betterAuthId` on that schema. Declare `oauthProvider` only if the app uses social OAuth.
@@ -377,6 +384,15 @@ export const authClient = createBetterAuthClient({
 
 On web the client authenticates with Better Auth's session cookie. When the web frontend and
 the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
+
+A cookie-authenticated `POST`, `PUT`, `PATCH`, or `DELETE` to any Terreno route is
+authenticated only when its `Origin` (or, without one, its `Referer`) is in `trustedOrigins` or
+is the API's own origin. Otherwise `req.user` stays unset and protected routes answer 401, so
+another site cannot submit a form that writes as the signed-in user. Add every web origin that
+uses cookie mode to `trustedOrigins`. Requests with an `Authorization: Bearer` session token,
+safe methods, and clients that send no `Origin`, `Referer`, or cross-site `Sec-Fetch-Site`
+(native apps, server scripts) are not affected. Better Auth's `advanced.disableCSRFCheck` turns
+the check off. A `trustedOrigins` function is not consulted; list the origins.
 
 #### Client features
 
@@ -432,8 +448,10 @@ Notes:
 import {generateBetterAuthSlice} from "@terreno/rtk";
 import {configureStore} from "@reduxjs/toolkit";
 import {authClient} from "./authClient";
+import {api} from "./sdk"; // the app's generated RTK Query API
 
-const betterAuth = generateBetterAuthSlice({authClient});
+// Purge the SDK's cached responses on logout or user switch.
+const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
 
 export const store = configureStore({
   reducer: {
@@ -804,14 +822,15 @@ for the signed-in user. It needs a fresh session (signed in within Better Auth's
 `session.freshAge`, a day by default; otherwise 403 `SESSION_NOT_FRESH`), refuses with 409
 `PASSWORD_ALREADY_SET` when the user already has a password (changing one goes through
 `/change-password`, which checks the current password), follows Better Auth's password length
-rules, and counts against the `auth` rate-limit bucket. With a `userModel`, it sets the app User's
-JWT password too, and records a `password-set`
-security event, which emails the user when
+rules, and counts against the `auth` rate-limit bucket. With a `userModel`, an app User linked by
+`betterAuthId` that already has a JWT password gets the new one too (and a `tokenEpoch` bump); a
+social-only account does not gain a JWT password, since `POST /auth/login` has no second factor.
+It records a `password-set` security event, which emails the user when
 [security notifications](../reference/account-security.md#notifications) are on. See the
 [API reference](../reference/api.md#better-auth-authentication).
 
-With a `userModel`, a successful `/change-password` also replaces the app User's JWT password and
-bumps its `tokenEpoch`, so the old password stops working at `POST /auth/login`.
+With a `userModel`, a successful `/change-password` also replaces the app User's JWT password (when
+it has one) and bumps its `tokenEpoch`, so the old password stops working at `POST /auth/login`.
 
 #### Your own security screen
 
@@ -1188,6 +1207,16 @@ Better Auth runs **in parallel** with JWT auth. You don't need to migrate existi
 
 See [Account linking](../explanation/account-linking.md) for the linking modes, why both emails
 must be verified, and the full migration path for JWT apps.
+
+Without a matching password, an existing JWT user who signs up through Better Auth with the same
+email is linked to their app `User` only once Better Auth has verified that email. Configure
+`sendMail` so verification mail goes out, and consider
+`options.emailAndPassword.requireEmailVerification: true`. If the app `User` never verified its
+email (`emailVerified` is not `true`), linking through a verified email removes its legacy
+password and bumps `tokenEpoch`, so the user signs in through Better Auth or resets the password
+from then on. A row that already has a different `betterAuthId` is never relinked (409
+`ACCOUNT_ALREADY_EXISTS`). Set `SIGNUP_DISABLED=true` once Better Auth is the only sign-up path,
+so new accounts cannot be created through the legacy `/auth/signup`.
 
 ## Learn More
 

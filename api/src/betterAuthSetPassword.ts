@@ -13,12 +13,13 @@
  *   goes through `/change-password`, which checks the current password. Two concurrent requests
  *   leave one password: the later credential row is removed and its request refused;
  * - the new password follows Better Auth's `minPasswordLength` / `maxPasswordLength`;
- * - with a `userModel`, the app User's passport hash is set too, so a JWT sign-in with the same
- *   email and password works on dual-enrolled apps.
+ * - with a `userModel`, the app User linked by `betterAuthId` gets the same passport password
+ *   when it already has one (a dual-enrolled account), so a JWT sign-in with the same email and
+ *   password keeps working, and its `tokenEpoch` is bumped. A Better Auth only account never
+ *   gains a legacy password: the JWT `POST /auth/login` has no second factor.
  *
- * With a `userModel`, a successful `/change-password` also sets the app User's passport hash and
- * bumps its `tokenEpoch`, so the old password stops working at `POST /auth/login` (which has no
- * second factor) and outstanding JWT refresh tokens stop refreshing.
+ * `/change-password` (and session revocation) reach the legacy credential through the credential
+ * sync plugin in `betterAuthSetup.ts`, which follows the same rule and bumps `tokenEpoch`.
  *
  * The security events plugin records a successful set as `password-set`.
  */
@@ -26,7 +27,6 @@
 import type {BetterAuthPlugin} from "better-auth";
 import {
   createAuthEndpoint,
-  createAuthMiddleware,
   freshSessionMiddleware,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
@@ -39,78 +39,63 @@ import {findOneOrNoneFor} from "./plugins";
 /** The path the plugin serves, under Better Auth's `basePath`. */
 const SET_PASSWORD_PATH = "/terreno/set-password";
 
-const CHANGE_PASSWORD_PATH = "/change-password";
-
 const setPasswordBodySchema = z.object({
   newPassword: z.string().meta({description: "The password to add to the account"}),
 });
 
 interface PassportUserDoc {
+  _id?: unknown;
   betterAuthId?: string;
   save: () => Promise<unknown>;
   setPassword?: unknown;
   tokenEpoch?: number;
 }
 
-/** The Better Auth session user fields the JWT sync reads. */
-interface SessionUserLike {
-  email?: string | null;
-  emailVerified?: boolean | null;
-  id: string;
-}
-
 /**
- * The app User for a Better Auth user: the one carrying its id, or else the one with its email.
- * The email fallback applies only to a verified Better Auth email and never to an app User linked
- * to another Better Auth user, so a session cannot set the password of an account it has not
- * proved it owns.
+ * The app User linked to a Better Auth user by `betterAuthId`. There is no email fallback: the
+ * app user sync links the User before any session exists, and an email match alone does not
+ * prove the session owns that User.
  */
-const findAppUserFor = async (
+const findLinkedAppUser = async (
   userModel: UserModel,
-  user: SessionUserLike
-): Promise<PassportUserDoc | null> => {
-  const byId = (await findOneOrNoneFor(userModel, {
-    betterAuthId: user.id,
+  betterAuthUserId: string
+): Promise<PassportUserDoc | null> =>
+  (await findOneOrNoneFor(userModel, {
+    betterAuthId: betterAuthUserId,
   } as never)) as unknown as PassportUserDoc | null;
-  if (byId) {
-    return byId;
-  }
-  if (!user.email || user.emailVerified !== true) {
-    return null;
-  }
-  const byEmail = (await findOneOrNoneFor(userModel, {
-    email: user.email,
-  } as never)) as unknown as PassportUserDoc | null;
-  if (byEmail?.betterAuthId && byEmail.betterAuthId !== user.id) {
-    return null;
-  }
-  return byEmail;
-};
 
 /**
- * Sets the app User's passport-local-mongoose hash to the new password, and with
- * `bumpTokenEpoch` invalidates its JWT refresh tokens. Does nothing when no app User matches or
- * the model has no passport plugin. Never throws: Better Auth already holds the password, so a
+ * Sets the passport-local-mongoose hash of the linked app User to the new password, only when
+ * it already has one, so a Better Auth only account does not gain a second way to sign in. Like
+ * every server-side password change, replacing it bumps `tokenEpoch`, so JWT refresh tokens
+ * issued under the old password stop working. Does nothing when no app User is linked or the
+ * model has no passport plugin. Never throws: Better Auth already holds the password, so a
  * failure is logged.
  */
 const syncPasswordToAppUser = async ({
-  bumpTokenEpoch,
+  betterAuthUserId,
   password,
-  user,
   userModel,
 }: {
-  bumpTokenEpoch: boolean;
+  betterAuthUserId: string;
   password: string;
-  user: SessionUserLike;
   userModel: UserModel;
 }): Promise<void> => {
   try {
-    const appUser = await findAppUserFor(userModel, user);
+    const appUser = await findLinkedAppUser(userModel, betterAuthUserId);
     if (!appUser || typeof appUser.setPassword !== "function") {
       return;
     }
+    const hasLegacyPassword =
+      userModel.schema.path("hash") !== undefined &&
+      Boolean(
+        await userModel.exists({_id: appUser._id, hash: {$exists: true, $ne: null}} as never)
+      );
+    if (!hasLegacyPassword) {
+      return;
+    }
     await setPasswordForUser(appUser as unknown as HasSetPassword, password);
-    if (bumpTokenEpoch) {
+    if (userModel.schema.path("tokenEpoch") !== undefined) {
       appUser.tokenEpoch = (appUser.tokenEpoch ?? 0) + 1;
     }
     await appUser.save();
@@ -118,12 +103,6 @@ const syncPasswordToAppUser = async ({
     logger.error(`[better-auth] Syncing a new password to the app User failed: ${error}`);
   }
 };
-
-/** The parts of a Better Auth `/change-password` after-hook context the JWT sync reads. */
-interface ChangePasswordHookContext {
-  body?: {newPassword?: unknown};
-  context: {returned?: unknown; session?: {user?: SessionUserLike} | null};
-}
 
 interface CredentialRow {
   createdAt?: Date | string;
@@ -214,12 +193,7 @@ export const createSetPasswordPlugin = ({
         }
       }
       if (userModel) {
-        await syncPasswordToAppUser({
-          bumpTokenEpoch: false,
-          password: newPassword,
-          user: sessionUser,
-          userModel,
-        });
+        await syncPasswordToAppUser({betterAuthUserId: userId, password: newPassword, userModel});
       }
       ctx.setHeader("cache-control", "no-store");
       return ctx.json({status: true});
@@ -227,30 +201,6 @@ export const createSetPasswordPlugin = ({
   );
   return {
     endpoints: {terrenoSetPassword},
-    ...(userModel
-      ? {
-          hooks: {
-            after: [
-              {
-                // A changed Better Auth password replaces the app User's JWT password too.
-                handler: createAuthMiddleware(async (rawCtx): Promise<void> => {
-                  const ctx = rawCtx as unknown as ChangePasswordHookContext;
-                  const password = ctx.body?.newPassword;
-                  const user = ctx.context.session?.user;
-                  if (ctx.context.returned instanceof Error || typeof password !== "string") {
-                    return;
-                  }
-                  if (!user?.id) {
-                    return;
-                  }
-                  await syncPasswordToAppUser({bumpTokenEpoch: true, password, user, userModel});
-                }),
-                matcher: (context): boolean => context.path === CHANGE_PASSWORD_PATH,
-              },
-            ],
-          },
-        }
-      : {}),
     id: "terreno-set-password",
   } satisfies BetterAuthPlugin;
 };

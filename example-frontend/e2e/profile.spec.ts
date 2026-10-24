@@ -57,6 +57,32 @@ test.describe("Profile", () => {
     await page.getByTestId("profile-save-success").first().waitFor({state: "visible"});
   });
 
+  test("changing email asks for the current password and rejects a wrong one", async ({
+    consoleGuard,
+    page,
+  }) => {
+    // The rejected PATCH /auth/me is the behavior under test.
+    consoleGuard.allow("the server responded with a status of 403");
+    consoleGuard.allow("Error updating email");
+    await expect(page.getByTestId("profile-current-password-input")).not.toBeVisible();
+    await page.getByTestId("profile-email-input.edit-clickable").first().click();
+    const emailInput = page.getByTestId("profile-email-input").first();
+    await emailInput.waitFor({state: "visible"});
+    await emailInput.clear();
+    await emailInput.fill("e2e-changed-email@example.com");
+
+    const currentPasswordInput = page.getByTestId("profile-current-password-input").first();
+    await currentPasswordInput.waitFor({state: "visible"});
+    await currentPasswordInput.fill("not-the-password");
+    await page.getByTestId("profile-email-input.save").first().click();
+
+    await page.getByTestId("profile-save-error").first().waitFor({state: "visible"});
+    await expect(page.getByTestId("profile-save-error").first()).toContainText(
+      "current password is incorrect"
+    );
+    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
+  });
+
   test("can save and clear Gemini API key", async ({page}) => {
     const keyInput = page.getByTestId("profile-gemini-key-input").first();
     await keyInput.fill("test-api-key-12345");

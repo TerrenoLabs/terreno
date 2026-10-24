@@ -1,0 +1,5 @@
+> **clearMCPRegistry**(): `void`
+
+## Returns
+
+`void`

@@ -62,6 +62,43 @@ const buildPermissionRequest = (resource: string, action: string): Record<string
   [resource]: [action],
 });
 
+/**
+ * Per-document check for a router-level `access.scope`, shared by CRUD permissions and modelRouter
+ * actions. Returns undefined when the router has no scope check.
+ * @internal
+ */
+export const buildAccessScopeCheck = <T>(
+  accessControl: AnyTerrenoAccess,
+  access: ModelRouterAccessOptions,
+  action: string
+): PermissionMethod<T> | undefined => {
+  if (!access.scope?.check) {
+    return undefined;
+  }
+  return async (_method, user, obj) => {
+    if (!user) {
+      return false;
+    }
+    const result = await access.scope?.check?.({
+      action,
+      doc: obj,
+      user,
+    });
+    if (result === false) {
+      return false;
+    }
+    if (result && typeof result === "object") {
+      const extra = await accessControl.can({
+        doc: obj,
+        permissions: result as never,
+        user,
+      });
+      return extra.allowed;
+    }
+    return true;
+  };
+};
+
 /** @internal */
 export const buildAccessPermissions = <T>(
   accessControl: AnyTerrenoAccess,
@@ -79,29 +116,9 @@ export const buildAccessPermissions = <T>(
     const checks: PermissionMethod<T>[] = [
       isPermitted(buildPermissionRequest(access.resource, action)) as PermissionMethod<T>,
     ];
-    if (access.scope?.check) {
-      checks.push(async (_method, user, obj) => {
-        if (!user) {
-          return false;
-        }
-        const result = await access.scope?.check?.({
-          action,
-          doc: obj,
-          user,
-        });
-        if (result === false) {
-          return false;
-        }
-        if (result && typeof result === "object") {
-          const extra = await accessControl.can({
-            doc: obj,
-            permissions: result as never,
-            user,
-          });
-          return extra.allowed;
-        }
-        return true;
-      });
+    const scopeCheck = buildAccessScopeCheck<T>(accessControl, access, action);
+    if (scopeCheck) {
+      checks.push(scopeCheck);
     }
     const also = access.also?.[method] ?? [];
     return [...checks, ...(also as PermissionMethod<T>[])];

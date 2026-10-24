@@ -98,7 +98,7 @@ describe("POST {basePath}/terreno/set-password", () => {
     expect(accounts.map((account) => account.providerId).sort()).toEqual(["credential", "google"]);
   });
 
-  it("sets the app User's JWT password too", async () => {
+  it("does not give a Better Auth only app User a JWT password", async () => {
     const {app, identity} = buildOAuthApp();
     const token = await signInWithGoogle(app);
 
@@ -107,12 +107,38 @@ describe("POST {basePath}/terreno/set-password", () => {
     const login = await supertest(app)
       .post("/auth/login")
       .send({email: identity.email, password: NEW_PASSWORD});
-    expect(login.status).toBe(200);
+    expect(login.status).toBe(401);
   });
 
-  it("sets the JWT password of an unlinked app User with the same verified email", async () => {
+  it("sets the JWT password of a linked app User that already has one", async () => {
     const {app, identity} = buildOAuthApp();
     const token = await signInWithGoogle(app);
+    const appUser = await SecurityUser.findOne({email: identity.email});
+    await (appUser as unknown as {setPassword: (password: string) => Promise<void>}).setPassword(
+      "legacy-password-123456"
+    );
+    await appUser?.save();
+
+    expect((await setPassword(app, token, NEW_PASSWORD)).status).toBe(200);
+
+    const oldLogin = await supertest(app)
+      .post("/auth/login")
+      .send({email: identity.email, password: "legacy-password-123456"});
+    const newLogin = await supertest(app)
+      .post("/auth/login")
+      .send({email: identity.email, password: NEW_PASSWORD});
+    expect(oldLogin.status).toBe(401);
+    expect(newLogin.status).toBe(200);
+  });
+
+  it("leaves an unlinked app User alone even when the Better Auth email is verified", async () => {
+    const {app, identity} = buildOAuthApp();
+    const token = await signInWithGoogle(app);
+    const appUser = await SecurityUser.findOne({email: identity.email});
+    await (appUser as unknown as {setPassword: (password: string) => Promise<void>}).setPassword(
+      "legacy-password-123456"
+    );
+    await appUser?.save();
     await SecurityUser.updateOne({email: identity.email}, {$unset: {betterAuthId: 1}});
 
     expect((await setPassword(app, token, NEW_PASSWORD)).status).toBe(200);
@@ -120,7 +146,7 @@ describe("POST {basePath}/terreno/set-password", () => {
     const login = await supertest(app)
       .post("/auth/login")
       .send({email: identity.email, password: NEW_PASSWORD});
-    expect(login.status).toBe(200);
+    expect(login.status).toBe(401);
   });
 
   it("leaves an unlinked app User alone when the Better Auth email is unverified", async () => {

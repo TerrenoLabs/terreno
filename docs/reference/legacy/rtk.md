@@ -46,7 +46,7 @@ export const store = configureStore({
 **Returns:**
 - `authReducer` — Redux reducer for auth state
 - `authSlice` — Full Redux slice
-- `logout` — Action to clear tokens and reset state
+- `logout` — Action to clear tokens and reset state. A logout that ends a signed-in session also purges the API's RTK Query cache (`resetApiState`), so the next user never gets the previous user's cached responses
 - `setUserId` — Action to set current user ID
 - `tokenRefreshedSuccess` — Action signaling token refresh
 - `middleware` — Login/logout listener middleware array
@@ -90,6 +90,7 @@ For apps using Better Auth instead of JWT:
 ``````typescript
 import {configureStore} from "@reduxjs/toolkit";
 import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
+import {api} from "./sdk"; // the app's generated RTK Query API
 
 // Create Better Auth client. `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
@@ -97,8 +98,8 @@ export const authClient = createBetterAuthClient({
   scheme: "myapp",
 });
 
-// Generate the session Redux slice
-const betterAuth = generateBetterAuthSlice({authClient});
+// Generate the session Redux slice; list the APIs whose cache belongs to the signed-in user
+const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
 
 export const store = configureStore({
   reducer: {
@@ -132,7 +133,7 @@ void betterAuth.syncSession(store.dispatch);
 - `TerrenoAccountSecurityScreen` — `AccountSecurityScreen` connected through `useAccountSecurity`; takes its options plus `title?`, `description?`, `header?`, `children?`, `withPage?`, `maxWidth?`, `testID?`
 - `recordRememberedSignIn({store, user, method, rememberIdentity?})` — Records a sign-in the controller did not finish, such as one completed on the app's own two-factor screen
 - `getLoginFeedback({failure, mode?, originalMethod?}): {notice?, error?, isSignUpClosed}` — Maps `{code?, message?, source: "response" | "url"}` to login screen feedback: `account_not_linked` / `OAUTH_LINK_ERROR` / "account not linked" to guidance for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` to "verify your email", `signup_disabled` / `EMAIL_PASSWORD_SIGN_UP_DISABLED` to "ask your administrator" (and `isSignUpClosed`), `LINKING_DISABLED`, `provider_not_found`; a response's own message otherwise, and never text from a URL
-- `generateBetterAuthSlice({authClient, syncInterval?, signOutTimeoutMs?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`. `actions.logout()` keeps the session in the state with `isSigningOut: true` (`isLoading` unchanged) while the middleware calls `authClient.signOut()` (`signOutTimeoutMs`, default 10000), then dispatches `clearSession`. A sign-out that fails or times out asks `getSession`: a session that is still live, or a cookie or native client the server cannot be asked about, stays signed in with `error` set to `SIGN_OUT_FAILED_MESSAGE` ("Couldn't sign out. Check your connection and try again."); a web bearer client, which drops its token before the request leaves, ends signed out. The global `auth/logout` action (a refused session) always ends signed out
+- `generateBetterAuthSlice({authClient, apisToReset?, syncInterval?, signOutTimeoutMs?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`. Pass the app's RTK Query APIs (for example `apisToReset: [terrenoApi]`) so their caches are purged (`util.resetApiState()`) when a signed-in session logs out (`betterAuth/logout` or `auth/logout`; purged at once and again when the session clears), when `syncSession` finds the session gone, and when the session changes to another user. Without it, the next account on the same client can be served the previous account's cached responses. `actions.logout()` keeps the session in the state with `isSigningOut: true` (`isLoading` unchanged) while the middleware calls `authClient.signOut()` (`signOutTimeoutMs`, default 10000), then dispatches `clearSession`. A sign-out that fails or times out asks `getSession`: a session that is still live, or a cookie or native client the server cannot be asked about, stays signed in with `error` set to `SIGN_OUT_FAILED_MESSAGE` ("Couldn't sign out. Check your connection and try again."); a web bearer client, which drops its token before the request leaves, ends signed out. The global `auth/logout` action (a refused session) always ends signed out. Either sign-out leaves alone a session for another user that signed in while it was in flight
 - `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser`, `selectBetterAuthIsLoading`, `selectBetterAuthIsSigningOut`, `selectBetterAuthError` — Selectors over `state.betterAuth`
 - `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
 
@@ -248,6 +249,12 @@ Offline-slice exports the middleware uses for the user tag (exported from the pa
 ## WebSocket Integration
 
 > **Deprecated (removed in Terreno 58):** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket` patch RTK Query caches from `sync` events. Use [`@terreno/syncdb`](../syncdb.md). `useSocketConnection` remains for feature flags and other sockets.
+
+A `realtimeList` query subscription (`subscribe:query`) may filter only on fields in the router's
+`queryFields`, the same as the REST list; the server ignores a subscription that names any other
+field. On RBAC routers with field views, each subscriber's create, update, or delete event is
+decided against the document as their field view masks it, so a hidden field never changes which
+event they receive.
 
 ### useSocketConnection
 

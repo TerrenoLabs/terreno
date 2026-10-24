@@ -171,9 +171,14 @@ export const seedBetterAuthUser = async ({
       title: "Better Auth seed returned no user",
     });
   }
-  // The seed knows the plaintext password, so it can claim a legacy User whose passport hash
-  // matches, the same way a real sign-up does.
-  return syncBetterAuthUser(userModel, authUser, undefined, {password: user.password});
+  // The seed created or signed in to this Better Auth account itself, so its email is trusted
+  // for linking an existing app user (for example one seeded under the legacy JWT flow). With a
+  // `userModel` on `auth`, the sign-up itself is refused for a legacy User unless the seed
+  // password matches its passport hash, the same way a real sign-up is.
+  return syncBetterAuthUser(userModel, authUser, undefined, {
+    password: user.password,
+    trustEmail: true,
+  });
 };
 
 const selectSteps = (steps: SeedStep[], only?: string[]): SeedStep[] => {

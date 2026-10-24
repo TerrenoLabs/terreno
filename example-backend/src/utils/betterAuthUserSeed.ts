@@ -113,15 +113,21 @@ export const seedBetterAuthUserInProcess = async (
   if (body.user) {
     const context = await betterAuthApp.ensureAuth().$context;
     await context.internalAdapter.updateUser(body.user.id, {emailVerified: true});
-    await syncBetterAuthUser(User as unknown as TerrenoAuthUserModel, {
-      createdAt: DateTime.now().toJSDate(),
-      email: body.user.email,
-      emailVerified: true,
-      id: body.user.id,
-      image: null,
-      name: body.user.name,
-      updatedAt: DateTime.now().toJSDate(),
-    });
+    // The seed owns this Better Auth account, so its email is trusted for linking a legacy user.
+    await syncBetterAuthUser(
+      User as unknown as TerrenoAuthUserModel,
+      {
+        createdAt: DateTime.now().toJSDate(),
+        email: body.user.email,
+        emailVerified: true,
+        id: body.user.id,
+        image: null,
+        name: body.user.name,
+        updatedAt: DateTime.now().toJSDate(),
+      },
+      undefined,
+      {trustEmail: true}
+    );
   }
 
   logger.info(`Seeded Better Auth user in-process: ${user.email}`);

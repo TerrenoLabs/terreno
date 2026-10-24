@@ -82,6 +82,14 @@ anyone verified that email (the victim clicking the mail the attacker's sign-up 
 admin), the attacker's password would open the victim's `User`. Terreno never inserts a second
 `User` for the same email either.
 
+Two more rules hold whichever way the claim is proven. A `User` that already carries another
+Better Auth account's `betterAuthId` is never relinked by email (409 `ACCOUNT_ALREADY_EXISTS`).
+And when a verified email links a `User` whose own `emailVerified` is not `true`, the `User`'s
+legacy password is removed and its `tokenEpoch` bumped: whoever set that password never proved
+they own the mailbox, so it and the JWT refresh tokens issued from it stop working. A link proven
+by the legacy password itself keeps that password. Operator seeds pass `trustEmail` to
+`syncBetterAuthUser`, which skips these checks for accounts the seed created itself.
+
 Emails are compared ignoring case, so a legacy `User` stored as `Jane@Example.com` is protected
 from a sign-up as `jane@example.com`, and claiming it never creates a second `User`.
 

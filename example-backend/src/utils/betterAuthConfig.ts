@@ -12,7 +12,8 @@ import type {BetterAuthPlugin} from "better-auth";
 import {createAuthMiddleware} from "better-auth/api";
 import {genericOAuth} from "better-auth/plugins";
 
-const DEFAULT_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
+// Public, so only local development and tests may sign sessions with it.
+const DEV_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
 const DEFAULT_BETTER_AUTH_URL = "http://localhost:4000";
 const DEFAULT_FRONTEND_URL = "http://localhost:8082";
 
@@ -308,6 +309,24 @@ const buildAppleOAuthConfig = (isPreview: boolean): BetterAuthConfig["appleOAuth
   return clientSecret ? {clientId, clientSecret} : undefined;
 };
 
+/**
+ * The Better Auth signing secret. Production must supply its own: the development fallback is
+ * published in this repository, so anyone could sign session cookies with it.
+ */
+const resolveBetterAuthSecret = (): string => {
+  const fromEnv = process.env.BETTER_AUTH_SECRET;
+  if (process.env.NODE_ENV !== "production") {
+    return fromEnv || DEV_BETTER_AUTH_SECRET;
+  }
+  if (!fromEnv || fromEnv === DEV_BETTER_AUTH_SECRET) {
+    throw new APIError({
+      status: 500,
+      title: "BETTER_AUTH_SECRET is required in production when AUTH_PROVIDER=better-auth",
+    });
+  }
+  return fromEnv;
+};
+
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
   return provider ?? "better-auth";
@@ -379,7 +398,7 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     nativeApps: true,
     publicAppUrl: getFrontendUrl(),
     renderAuthMail,
-    secret: process.env.BETTER_AUTH_SECRET ?? DEFAULT_BETTER_AUTH_SECRET,
+    secret: resolveBetterAuthSecret(),
     sendMail: async (message) => {
       await getCommsService().sendMail(message);
     },

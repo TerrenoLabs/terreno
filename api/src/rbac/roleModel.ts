@@ -212,7 +212,7 @@ export const terrenoDefaultRoles: RoleDefinition[] = [
       adminAnnouncementClickEvent: ["read"],
       adminAnnouncementImpression: ["read"],
       configuration: ["read", "update"],
-      user: ["create", "list", "read", "update"],
+      user: ["create", "list", "read", "update", "updateIdentity"],
       ...observabilityAdminPermissionSpec(),
     },
   },

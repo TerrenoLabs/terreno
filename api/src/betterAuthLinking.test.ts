@@ -384,6 +384,20 @@ describe("legacy app User migration", () => {
     expect(signIn.status).toBe(401);
   });
 
+  it("refuses a sign-up for a User bound to another Better Auth account before anything is created", async () => {
+    const {app} = buildApp();
+    const email = uniqueEmail("legacy-bound");
+    const legacy = await createLegacyUser(email, PASSWORD);
+    await LinkingUser.updateOne({_id: legacy._id}, {$set: {betterAuthId: "ba-gone"}});
+
+    const signUp = await signUpEmail(app, email);
+
+    expect(signUp.status).toBe(409);
+    expect(signUp.body.code).toBe("ACCOUNT_ALREADY_EXISTS");
+    await expectNoBetterAuthUser(email);
+    expect((await LinkingUser.findById(legacy._id).lean())?.betterAuthId).toBe("ba-gone");
+  });
+
   it("leaves nothing for a later verification to link when a legacy User has no hash", async () => {
     const identity = newStubIdentity("legacy-no-hash");
     const {app} = buildGoogleApp(identity);
@@ -760,6 +774,28 @@ describe("syncBetterAuthUser email matches", () => {
     });
 
     expect(linked.betterAuthId).toBe(betterAuthUser.id);
+  });
+
+  it("keeps the legacy password a password-proven link relied on", async () => {
+    const email = uniqueEmail("sync-password-keeps");
+    const legacy = await createLegacyUser(email, PASSWORD);
+
+    await syncBetterAuthUser(userModel, unverifiedUser(email), undefined, {password: PASSWORD});
+
+    const stored = await LinkingUser.collection.findOne({_id: legacy._id});
+    expect(typeof stored?.hash).toBe("string");
+  });
+
+  it("refuses a password-proven claim on a User bound to another Better Auth account", async () => {
+    const email = uniqueEmail("sync-password-bound");
+    const legacy = await createLegacyUser(email, PASSWORD);
+    await LinkingUser.updateOne({_id: legacy._id}, {$set: {betterAuthId: "ba-other"}});
+
+    await expect(
+      syncBetterAuthUser(userModel, unverifiedUser(email), undefined, {password: PASSWORD})
+    ).rejects.toThrow("An account with this email already exists");
+
+    expect((await LinkingUser.findById(legacy._id).lean())?.betterAuthId).toBe("ba-other");
   });
 
   it("refuses when the passport password check throws", async () => {

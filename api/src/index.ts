@@ -222,6 +222,14 @@ export * from "./rbac/statements";
 export * from "./rbac/types";
 export * from "./rbac/userPlugin";
 export {
+  assertCanWriteTargetUser,
+  assertCanWriteUserIdentity,
+  isRbacUserModelName,
+  isWriteKeyForField,
+  USER_IDENTITY_FIELDS,
+  USER_UPDATE_IDENTITY_ACTION,
+} from "./rbac/userWriteGuards";
+export {
   type AuthorizedEmitEntry,
   emitPayloadToAuthorizedRoom,
   emitSyncDeltaForChange,

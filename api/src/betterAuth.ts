@@ -212,7 +212,13 @@ export interface BetterAuthConfig {
   publicAppUrl?: string;
 
   /** Deliver auth mail. Typically `getCommsService().sendMail`. */
-  sendMail?: (message: {html?: string; subject: string; text: string; to: string}) => Promise<void>;
+  sendMail?: (message: {
+    html?: string;
+    sensitive?: boolean;
+    subject: string;
+    text: string;
+    to: string;
+  }) => Promise<void>;
 
   /**
    * Render reset/verify mail. Pass `@terreno/comms` `renderAuthMail` so JWT and

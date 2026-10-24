@@ -25,6 +25,7 @@ import {
   resolveBetterAuthAppUser,
   setupBetterAuthUserSync,
   syncBetterAuthUser,
+  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 
 type SessionRequest = Request & {betterAuthSession?: BetterAuthSessionData};
@@ -56,6 +57,7 @@ const dualAuthUserSchema = new Schema({
   admin: {default: false, type: Boolean},
   betterAuthId: {type: String},
   email: {required: true, type: String},
+  emailVerified: {type: Boolean},
   name: {type: String},
   tokenEpoch: {default: 0, type: Number},
 });
@@ -293,7 +295,7 @@ describe("createBetterAuth", () => {
   it("sends reset and verification mail through the injected renderer", async () => {
     await setup;
     const renderedCalls: Array<{templateId: string; token: string}> = [];
-    const sent: Array<{subject: string; text?: string; to: string}> = [];
+    const sent: Array<{sensitive?: boolean; subject: string; text?: string; to: string}> = [];
     const hooks = createBetterAuthEmailHooks({
       enabled: true,
       publicAppUrl: "https://app.example.com",
@@ -302,7 +304,12 @@ describe("createBetterAuth", () => {
         return {subject: templateId, text: `link-${token}`};
       },
       sendMail: async (message) => {
-        sent.push({subject: message.subject, text: message.text, to: message.to});
+        sent.push({
+          sensitive: message.sensitive,
+          subject: message.subject,
+          text: message.text,
+          to: message.to,
+        });
       },
     });
     assert.isDefined(hooks);
@@ -321,8 +328,18 @@ describe("createBetterAuth", () => {
       {templateId: "verifyEmail", token: "verify-token"},
     ]);
     assert.deepEqual(sent, [
-      {subject: "resetPassword", text: "link-reset-token", to: "reset@example.com"},
-      {subject: "verifyEmail", text: "link-verify-token", to: "verify@example.com"},
+      {
+        sensitive: true,
+        subject: "resetPassword",
+        text: "link-reset-token",
+        to: "reset@example.com",
+      },
+      {
+        sensitive: true,
+        subject: "verifyEmail",
+        text: "link-verify-token",
+        to: "verify@example.com",
+      },
     ]);
   });
 
@@ -635,6 +652,43 @@ describe("createBetterAuth email and password-reset wiring", () => {
   });
 });
 
+describe("verifyBetterAuthCredentialPassword", () => {
+  const makeAuth = (): BetterAuthInstance =>
+    createBetterAuth({
+      config: {
+        baseURL: "http://localhost:3000",
+        enabled: true,
+        secret: "test-secret-at-least-32-characters-long",
+      },
+      mongoClient: getClient(),
+    });
+
+  it("verifies the right password and rejects a wrong one for a credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    const signedUp = await auth.api.signUpEmail({
+      body: {email: "verify-me@example.com", name: "Verify Me", password: "right-password-123"},
+    });
+    const betterAuthId = signedUp.user.id;
+
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "right-password-123")
+    ).toBe("verified");
+    expect(await verifyBetterAuthCredentialPassword(auth, {betterAuthId}, "wrong-password")).toBe(
+      "wrong"
+    );
+  });
+
+  it("returns no-password without a linked Better Auth user or credential account", async () => {
+    await setup;
+    const auth = makeAuth();
+    expect(await verifyBetterAuthCredentialPassword(auth, {}, "anything")).toBe("no-password");
+    expect(
+      await verifyBetterAuthCredentialPassword(auth, {betterAuthId: "missing-user"}, "anything")
+    ).toBe("no-password");
+  });
+});
+
 describe("applyJwtPasswordResetToBetterAuth lookups", () => {
   const makeAuth = (): BetterAuthInstance =>
     createBetterAuth({
@@ -832,6 +886,83 @@ describe("syncBetterAuthUser", () => {
     const result = await syncBetterAuthUser(TestUser, baUser);
 
     expect(result.name).toBe("Keep This Name");
+  });
+
+  it("refuses to link an existing user by an unverified email", async () => {
+    await setup;
+    await TestUser.create({admin: true, email: "test@example.com", name: "Existing Admin"});
+
+    const baUser = makeBetterAuthUser({emailVerified: false});
+    await expect(syncBetterAuthUser(TestUser, baUser)).rejects.toThrow(
+      "Verify your email to use this account"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.isUndefined(saved?.betterAuthId);
+    expect(await TestUser.countDocuments()).toBe(1);
+  });
+
+  it("refuses to relink a user that is bound to another Better Auth account", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    await expect(syncBetterAuthUser(TestUser, makeBetterAuthUser())).rejects.toThrow(
+      "An account with this email already exists"
+    );
+
+    const saved = await TestUser.findOne({email: "test@example.com"}).lean();
+    assert.equal(saved?.betterAuthId, "ba-other");
+  });
+
+  it("links an unverified email when the caller trusts it, as seeds do", async () => {
+    await setup;
+    await TestUser.create({betterAuthId: "ba-other", email: "test@example.com"});
+
+    const result = await syncBetterAuthUser(
+      TestUser,
+      makeBetterAuthUser({emailVerified: false}),
+      undefined,
+      {trustEmail: true}
+    );
+
+    assert.equal(result.betterAuthId, "ba-user-123");
+  });
+
+  it("revokes an unproven legacy password when a verified email links the row", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register({email: "test@example.com", name: "Legacy"}, "legacy-pass-123");
+
+    const result = await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+    assert.equal(result.betterAuthId, "ba-user-123");
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isUndefined((saved as {hash?: string}).hash);
+    assert.isUndefined((saved as {salt?: string}).salt);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 1);
+  });
+
+  it("keeps the legacy password when the row proved the same email", async () => {
+    await setup;
+    const registrable = DualAuthUser as unknown as {
+      register: (doc: Record<string, unknown>, password: string) => Promise<unknown>;
+    };
+    await registrable.register(
+      {email: "test@example.com", emailVerified: true, name: "Legacy"},
+      "legacy-pass-123"
+    );
+
+    await syncBetterAuthUser(DualAuthUser, makeBetterAuthUser());
+
+    const saved = await DualAuthUser.findOne({email: "test@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.isString((saved as {hash?: string}).hash);
+    assert.equal((saved as {tokenEpoch?: number}).tokenEpoch, 0);
   });
 
   it("logs and rethrows when the lookup fails", async () => {
@@ -1229,6 +1360,41 @@ describe("createBetterAuthSessionMiddleware with disabled users", () => {
   });
 });
 
+describe("createBetterAuthSessionMiddleware with an existing app user's email", () => {
+  const config: BetterAuthConfig = {
+    baseURL: "http://localhost:3000",
+    enabled: true,
+    secret: "test-secret-at-least-32-characters-long",
+  };
+
+  it("does not resolve an unverified sign-up to the existing app user", async () => {
+    await setup;
+    const auth = createBetterAuth({config, mongoClient: getClient()});
+    const existing = await TestUser.create({admin: true, email: "existing-admin@example.com"});
+    const created = await auth.api.signUpEmail({
+      body: {email: "existing-admin@example.com", name: "Someone", password: "password-123456"},
+    });
+    assert.isFalse(created.user.emailVerified);
+
+    const app = express();
+    app.use(createBetterAuthSessionMiddleware(auth, TestUser));
+    app.get("/protected", (req, res) => {
+      if (!req.user) {
+        return res.status(401).json({status: 401, title: "Unauthorized"});
+      }
+      return res.json({id: req.user.id});
+    });
+
+    const res = await supertest(app)
+      .get("/protected")
+      .set("authorization", `Bearer ${created.token as string}`);
+
+    expect(res.status).toBe(401);
+    const reloaded = await TestUser.findById(existing._id).lean();
+    assert.isUndefined(reloaded?.betterAuthId);
+  });
+});
+
 describe("mountBetterAuthRoutes", () => {
   it("mounts routes at the default path", async () => {
     await setup;
@@ -1305,6 +1471,19 @@ describe("getMongoClientFromMongoose", () => {
     // Default mongoose connection is set up by bunSetup.ts preload
     const client = getMongoClientFromMongoose();
     expect(client).toBeDefined();
+  });
+
+  it("returns the connection's database, not the connection string's default", () => {
+    // A dbName passed to mongoose.connect only sets the connection name; the client's
+    // default database still comes from the URI.
+    const connection = mongoose.connection as unknown as {name: string};
+    const originalName = connection.name;
+    connection.name = "terreno-isolated-dbname-test";
+    try {
+      expect(getMongoClientFromMongoose().db().databaseName).toBe("terreno-isolated-dbname-test");
+    } finally {
+      connection.name = originalName;
+    }
   });
 
   it("throws when the mongoose connection has no client", () => {

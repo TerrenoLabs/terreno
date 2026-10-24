@@ -1,8 +1,9 @@
-import {beforeEach, describe, it} from "bun:test";
+import {beforeEach, describe, it, spyOn} from "bun:test";
 import {
   addAuthRoutes,
   apiErrorMiddleware,
   apiUnauthorizedMiddleware,
+  logger,
   setupAuth,
   TerrenoApp,
   type UserModel as UserModelType,
@@ -17,6 +18,7 @@ import type TestAgent from "supertest/lib/agent";
 import {CommsApp, getCommsService} from "./commsApp";
 import {CommsMessage} from "./models/commsMessage";
 import {PushToken} from "./models/pushToken";
+import type {PushProvider, SendResult} from "./types";
 
 const buildApp = (): express.Application => {
   const app = getBaseServer();
@@ -310,6 +312,106 @@ describe("CommsApp", () => {
       .expect(400);
   });
 
+  it("filters the push-token list by active state and platform", async (): Promise<void> => {
+    const app = buildApp();
+    const owner = await authAsUser(app, "notAdmin");
+    const ios = await owner
+      .post("/comms/pushTokens")
+      .send({platform: "ios", token: "ExponentPushToken[ios]"})
+      .expect(201);
+    await owner
+      .post("/comms/pushTokens")
+      .send({platform: "android", token: "ExponentPushToken[android]"})
+      .expect(201);
+    await owner.delete(`/comms/pushTokens/${ios.body.data._id}`).expect(204);
+
+    const active = await owner.get("/comms/pushTokens?active=true").expect(200);
+    const inactive = await owner.get("/comms/pushTokens?active=false").expect(200);
+    const iosOnly = await owner.get("/comms/pushTokens?platform=ios").expect(200);
+    const ignoredFilter = await owner.get("/comms/pushTokens?active=maybe").expect(200);
+
+    assert.deepEqual(
+      active.body.data.map((row: {token: string}) => row.token),
+      ["ExponentPushToken[android]"]
+    );
+    assert.deepEqual(
+      inactive.body.data.map((row: {token: string}) => row.token),
+      ["ExponentPushToken[ios]"]
+    );
+    assert.deepEqual(
+      iosOnly.body.data.map((row: {active: boolean; token: string}) => [row.token, row.active]),
+      [["ExponentPushToken[ios]", false]]
+    );
+    assert.equal(ignoredFilter.body.total, 2);
+  });
+
+  it("surfaces non-conflict storage failures while claiming a push token", async (): Promise<void> => {
+    const app = buildApp();
+    const owner = await authAsUser(app, "notAdmin");
+    const duplicateKey = Object.assign(new Error("E11000 duplicate key"), {code: 11000});
+    const claim = spyOn(PushToken, "findOneAndUpdate");
+    try {
+      claim.mockImplementationOnce((() => {
+        throw new Error("primary stepped down");
+      }) as never);
+      await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+
+      // A lost race retries once; a different failure on the retry is not reported as a conflict.
+      claim
+        .mockImplementationOnce((() => {
+          throw duplicateKey;
+        }) as never)
+        .mockImplementationOnce((() => {
+          throw new Error("primary stepped down");
+        }) as never);
+      await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+
+      claim.mockImplementationOnce((async () => ({
+        lastErrorObject: {updatedExisting: false},
+        value: null,
+      })) as never);
+      const empty = await owner
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[outage]"})
+        .expect(500);
+      assert.equal(empty.body.title, "Push token claim returned no document");
+    } finally {
+      claim.mockRestore();
+    }
+    assert.equal(await PushToken.countDocuments({token: "ExponentPushToken[outage]"}), 0);
+  });
+
+  it("logs when the push-token index cannot be built at registration", async (): Promise<void> => {
+    const init = spyOn(PushToken, "init").mockImplementation((async () => {
+      throw new Error("index build refused");
+    }) as never);
+    const errorSpy = spyOn(logger, "error").mockImplementation(() => logger);
+    try {
+      new CommsApp({logMessages: false}).register(getBaseServer());
+      // The index build runs in the background, so wait for its rejection handler.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const messages = errorSpy.mock.calls.map((call) => String(call[0]));
+      assert.isTrue(
+        messages.some(
+          (message) =>
+            message.includes("[comms] Failed to build PushToken indexes") &&
+            message.includes("index build refused")
+        ),
+        messages.join("\n")
+      );
+    } finally {
+      init.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
   it("exposes a paginated, filterable delivery explorer to admins only", async (): Promise<void> => {
     const app = buildApp();
     const admin = await authAsUser(app, "admin");
@@ -457,5 +559,129 @@ describe("CommsApp", () => {
     ]) {
       assert.includeMembers(operation.tags, ["comms"]);
     }
+  });
+
+  describe("push delivery and the account lifecycle", () => {
+    let sentTokens: string[][];
+    const push: PushProvider = {
+      id: "lifecycle-push",
+      sendPush: async (message): Promise<SendResult[]> => {
+        sentTokens.push(message.tokens);
+        return message.tokens.map((): SendResult => ({accepted: true}));
+      },
+    };
+
+    const buildLifecycleApp = (): {app: express.Application; plugin: CommsApp} => {
+      const plugin = new CommsApp({logMessages: false, push});
+      const app = new TerrenoApp({
+        skipListen: true,
+        userModel: UserModel as unknown as UserModelType,
+      })
+        .register(plugin)
+        .build();
+      return {app, plugin};
+    };
+
+    const registerDevice = async (agent: TestAgent, token: string): Promise<void> => {
+      await agent.post("/comms/pushTokens").send({platform: "ios", token}).expect(201);
+    };
+
+    beforeEach((): void => {
+      sentTokens = [];
+    });
+
+    it("stops pushing to a device registered before the user's credentials changed", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "epoch@example.com");
+      await registerDevice(agent, "ExponentPushToken[epoch]");
+      assert.lengthOf(await plugin.service.sendPushToUser({body: "B", title: "T", userId}), 1);
+
+      await UserModel.updateOne({_id: userId}, {$inc: {tokenEpoch: 1}});
+      const afterReset = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(afterReset, 0);
+      assert.deepEqual(sentTokens, [["ExponentPushToken[epoch]"]]);
+      const stored = await PushToken.findExactlyOne({token: "ExponentPushToken[epoch]"});
+      assert.isFalse(stored.active);
+    });
+
+    it("pushes again after the device registers under the new credentials", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "reregister@example.com");
+      await registerDevice(agent, "ExponentPushToken[again]");
+      await UserModel.updateOne({_id: userId}, {$inc: {tokenEpoch: 1}});
+      await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      await agent
+        .post("/comms/pushTokens")
+        .send({platform: "ios", token: "ExponentPushToken[again]"})
+        .expect(200);
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 1);
+      assert.deepEqual(sentTokens, [["ExponentPushToken[again]"]]);
+    });
+
+    it("does not push to a disabled user and releases their devices", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "disabled@example.com");
+      await registerDevice(agent, "ExponentPushToken[disabled]");
+
+      await UserModel.updateOne({_id: userId}, {$set: {disabled: true}});
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 0);
+      assert.lengthOf(sentTokens, 0);
+      assert.equal(await PushToken.countDocuments({active: true}), 0);
+    });
+
+    it("does not push to a user that no longer exists", async (): Promise<void> => {
+      const {app, plugin} = buildLifecycleApp();
+      const {agent, userId} = await signUpAgent(app, "deleted@example.com");
+      await registerDevice(agent, "ExponentPushToken[deleted]");
+
+      await UserModel.deleteOne({_id: userId});
+      const results = await plugin.service.sendPushToUser({body: "B", title: "T", userId});
+
+      assert.lengthOf(results, 0);
+      assert.lengthOf(sentTokens, 0);
+      assert.equal(await PushToken.countDocuments({active: true}), 0);
+    });
+  });
+
+  describe("auth recovery mail", () => {
+    const buildRecoveryApp = (): express.Application => {
+      const plugin = new CommsApp();
+      return new TerrenoApp({
+        authOptions: {
+          publicAppUrl: "https://app.example.com",
+          sendMail: async (message): Promise<void> => {
+            await getCommsService().sendMail(message);
+          },
+        },
+        skipListen: true,
+        userModel: UserModel as unknown as UserModelType,
+      })
+        .register(plugin)
+        .build();
+    };
+
+    it("keeps the reset link out of the message log and the dashboard", async (): Promise<void> => {
+      const app = buildRecoveryApp();
+      const admin = await authAsUser(app, "admin");
+
+      await supertest(app)
+        .post("/auth/forgotPassword")
+        .send({email: "notAdmin@example.com"})
+        .expect(202);
+
+      const rows = await CommsMessage.find({channel: "mail"});
+      assert.lengthOf(rows, 1);
+      assert.isUndefined(rows[0]?.payload);
+      assert.equal(rows[0]?.subject, "Reset your password");
+      const list = await admin.get("/comms/messages").expect(200);
+      assert.notInclude(JSON.stringify(list.body), "token=");
+      assert.notInclude(JSON.stringify(list.body), "notAdmin@example.com");
+    });
   });
 });

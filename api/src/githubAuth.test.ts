@@ -320,6 +320,45 @@ const invokeGitHubVerify = (
   });
 };
 
+type StateStoreCallback = (err: unknown, ok?: unknown) => void;
+
+interface StateStoreLike {
+  store: (req: unknown, state: unknown, meta: unknown, callback: StateStoreCallback) => void;
+  verify: (req: unknown, state: unknown, meta: unknown, callback: StateStoreCallback) => void;
+}
+
+// Build a callback request whose link target was bound by the strategy's own state store, the
+// way /auth/github/link binds it.
+const linkRequestFor = async (userId: unknown): Promise<Record<string, unknown>> => {
+  const strategy = (
+    passport as unknown as {_strategies: Record<string, {_stateStore: StateStoreLike}>}
+  )._strategies.github;
+  let cookieValue = "";
+  const startReq = {
+    headers: {},
+    res: {
+      cookie: (_name: string, value: string): void => {
+        cookieValue = value;
+      },
+    },
+  };
+  const state = await new Promise<unknown>((resolve, reject) => {
+    strategy._stateStore.store(startReq, {linkUserId: String(userId)}, {}, (err, nonce) =>
+      err ? reject(err) : resolve(nonce)
+    );
+  });
+  const callbackReq = {
+    headers: {cookie: `terreno_github_oauth_state=${encodeURIComponent(cookieValue)}`},
+    res: {clearCookie: (): void => {}},
+  };
+  await new Promise<void>((resolve, reject) => {
+    strategy._stateStore.verify(callbackReq, state, {}, (err, ok) =>
+      err || !ok ? reject(err ?? new Error("state not verified")) : resolve()
+    );
+  });
+  return callbackReq;
+};
+
 describe("GitHub strategy verify callback", () => {
   const testApp = {get: () => {}, use: () => {}} as unknown as express.Application;
 
@@ -400,7 +439,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: existingUser};
+    const req = await linkRequestFor(existingUser._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {
       id: "gh-link-1",
       photos: [{value: "http://avatar"}],
@@ -408,8 +447,47 @@ describe("GitHub strategy verify callback", () => {
       username: "linkedghuser",
     });
     expect(result.err).toBeNull();
+    expect(result.user._id.toString()).toBe(existingUser._id.toString());
     expect(result.user.githubId).toBe("gh-link-1");
     expect(result.user.githubUsername).toBe("linkedghuser");
+  });
+
+  it("does not treat an ambient req.user as a link target", async () => {
+    const ambientUser = await GitHubTestUserModel.create({email: "ambient@example.com"});
+
+    setupGitHubAuth(testApp, GitHubTestUserModel as unknown as UserModel, {
+      allowAccountLinking: true,
+      callbackURL: "http://localhost:9000/auth/github/callback",
+      clientId: "id",
+      clientSecret: "secret",
+    });
+
+    const result = await invokeGitHubVerify({user: ambientUser}, "access", "refresh", {
+      emails: [{value: "ambient-gh@example.com"}],
+      id: "gh-ambient-1",
+    });
+    expect(result.err).toBeNull();
+    expect(result.user._id.toString()).not.toBe(ambientUser._id.toString());
+    const ambientRow = await GitHubTestUserModel.findById(ambientUser._id);
+    expect(ambientRow?.githubId).toBeUndefined();
+  });
+
+  it("passes the bound link user to a custom findOrCreateUser", async () => {
+    const linkUser = await GitHubTestUserModel.create({email: "customlink@example.com"});
+    let received: unknown;
+    setupGitHubAuth(testApp, GitHubTestUserModel as unknown as UserModel, {
+      callbackURL: "http://localhost:9000/auth/github/callback",
+      clientId: "id",
+      clientSecret: "secret",
+      findOrCreateUser: async (_profile, _access, _refresh, existingUser) => {
+        received = existingUser;
+        return existingUser;
+      },
+    });
+
+    const req = await linkRequestFor(linkUser._id);
+    await invokeGitHubVerify(req, "access", "refresh", {id: "gh-custom-link-1"});
+    expect(String((received as {_id: unknown})._id)).toBe(String(linkUser._id));
   });
 
   it("rejects linking when allowAccountLinking=false", async () => {
@@ -424,7 +502,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: existingUser};
+    const req = await linkRequestFor(existingUser._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {id: "gh-nolink-1"});
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(400);
@@ -446,7 +524,7 @@ describe("GitHub strategy verify callback", () => {
       clientSecret: "secret",
     });
 
-    const req = {user: userA};
+    const req = await linkRequestFor(userA._id);
     const result = await invokeGitHubVerify(req, "access", "refresh", {id: "gh-other-1"});
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(400);
@@ -608,6 +686,7 @@ describe("GitHub callback handler (fake strategy)", () => {
       configureApp: addRoutes,
       githubAuth: {
         allowAccountLinking: true,
+        allowedReturnTo: ["https://example.com"],
         callbackURL: "http://localhost:9000/auth/github/callback",
         clientId: "test-client-id",
         clientSecret: "test-client-secret",
@@ -640,7 +719,7 @@ describe("GitHub callback handler (fake strategy)", () => {
     expect(res.body.data.userId).toBeDefined();
   });
 
-  it("GET /auth/github/callback redirects to returnTo with tokens when session.returnTo is set", async () => {
+  it("GET /auth/github/callback redirects to an allowlisted returnTo with tokens in the fragment", async () => {
     const user = await GitHubTestUserModel.create({
       email: "cb2@example.com",
       githubId: "cb-gh-2",
@@ -652,10 +731,29 @@ describe("GitHub callback handler (fake strategy)", () => {
       .get("/auth/github/callback")
       .set("x-mock-return-to", "https://example.com/cb")
       .expect(302);
-    expect(res.headers.location).toContain("https://example.com/cb");
+    expect(res.headers.location).toContain("https://example.com/cb#");
     expect(res.headers.location).toContain("token=");
     expect(res.headers.location).toContain("refreshToken=");
     expect(res.headers.location).toContain("userId=");
+    expect(new URL(res.headers.location).search).toBe("");
+  });
+
+  it("GET /auth/github/callback refuses to issue tokens to a disabled user", async () => {
+    const user = await GitHubTestUserModel.create({
+      disabled: true,
+      email: "cb-disabled@example.com",
+      githubId: "cb-gh-disabled",
+      name: "CB Disabled",
+    } as unknown as TestUser);
+
+    fakeGithubOutcome = {type: "success", user};
+
+    const res = await agent
+      .get("/auth/github/callback")
+      .set("x-mock-return-to", "https://example.com/cb")
+      .expect(401);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.body.data?.token).toBeUndefined();
   });
 
   it("GET /auth/github/callback redirects on failure", async () => {
@@ -849,15 +947,359 @@ describe("GitHub strategy verify callback edge cases", () => {
       clientSecret: "secret",
     });
 
+    const req = await linkRequestFor((existingUser as unknown as {_id: unknown})._id);
+
     // Delete user before verify runs to hit the 404 path.
     await GitHubTestUserModel.deleteOne({_id: (existingUser as unknown as {_id: unknown})._id});
 
-    const req = {user: existingUser};
     const result = await invokeGitHubVerify(req, "access", "refresh", {
       id: "gh-missing-1",
       username: "missing",
     });
     expect(result.err).toBeDefined();
     expect(result.err?.status).toBe(404);
+  });
+});
+
+interface OAuth2Stub {
+  getOAuthAccessToken: (
+    code: string,
+    params: Record<string, unknown>,
+    callback: (err: unknown, accessToken?: string, refreshToken?: string, params?: unknown) => void
+  ) => void;
+}
+
+interface StubbableGitHubStrategy {
+  _oauth2: OAuth2Stub;
+  userProfile: (accessToken: string, done: (err: unknown, profile?: unknown) => void) => void;
+}
+
+// Replace only the GitHub HTTP exchange: the code maps to a dummy profile with the same id.
+const stubGitHubExchange = (): void => {
+  const strategy = (passport as unknown as {_strategies: Record<string, unknown>})._strategies
+    .github as StubbableGitHubStrategy;
+  strategy._oauth2.getOAuthAccessToken = (code, _params, callback): void => {
+    callback(null, `access-${code}`, undefined, {});
+  };
+  strategy.userProfile = (accessToken, done): void => {
+    const id = accessToken.replace(/^access-/, "");
+    done(null, {
+      emails: [{value: `${id}@github.example`}],
+      id,
+      photos: [],
+      profileUrl: `https://github.example/${id}`,
+      provider: "github",
+      username: `gh-${id}`,
+    });
+  };
+};
+
+const stateFromLocation = (location: string | undefined): string | null => {
+  if (!location) {
+    return null;
+  }
+  return new URL(location).searchParams.get("state");
+};
+
+describe("GitHub OAuth state binding", () => {
+  let app: express.Application;
+
+  beforeEach(async () => {
+    setSystemTime();
+    await connectDb();
+    await GitHubTestUserModel.deleteMany({});
+
+    app = new TerrenoApp({
+      beforeJsonSetup: (a) => {
+        // Stand-in for an ambient cookie session (such as Better Auth) that sets req.user on
+        // every request the browser makes, including the GitHub callback.
+        a.use(async (req, _res, next) => {
+          const ambientUserId = req.headers["x-ambient-session-user"];
+          if (typeof ambientUserId === "string") {
+            const ambientUser = await GitHubTestUserModel.findById(ambientUserId);
+            req.user = ambientUser as unknown as express.Request["user"];
+          }
+          next();
+        });
+      },
+      githubAuth: {
+        allowAccountLinking: true,
+        callbackURL: "http://localhost:9000/auth/github/callback",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+      },
+      skipListen: true,
+      userModel: GitHubTestUserModel as unknown as UserModel,
+    }).build();
+    stubGitHubExchange();
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("GET /auth/github sends a state parameter and sets an HttpOnly state cookie", async () => {
+    const res = await supertest(app).get("/auth/github").expect(302);
+    expect(stateFromLocation(res.headers.location)).toBeTruthy();
+    const setCookie = String(res.headers["set-cookie"] ?? "");
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie.toLowerCase()).toContain("samesite=lax");
+  });
+
+  it("callback without state does not link GitHub to an ambient session user", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim@example.test"});
+
+    await supertest(app)
+      .get("/auth/github/callback?code=attacker-gh-1")
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(302);
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+  });
+
+  it("callback with another browser's state is rejected", async () => {
+    const attacker = supertest.agent(app);
+    const start = await attacker.get("/auth/github").expect(302);
+    const attackerState = stateFromLocation(start.headers.location);
+
+    const victim = await GitHubTestUserModel.create({email: "victim2@example.test"});
+    const res = await supertest(app)
+      .get(`/auth/github/callback?code=attacker-gh-2&state=${attackerState}`)
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+    expect(await GitHubTestUserModel.countDocuments({githubId: "attacker-gh-2"})).toBe(0);
+  });
+
+  it("login flow with valid state ignores the ambient session user", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim3@example.test"});
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-login-3&state=${state}`)
+      .set("x-ambient-session-user", String(victim._id))
+      .expect(200);
+
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+    expect(String(res.body.data.userId)).not.toBe(String(victim._id));
+  });
+
+  it("state is single use", async () => {
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    await browser.get(`/auth/github/callback?code=gh-once-1&state=${state}`).expect(200);
+    const replay = await browser
+      .get(`/auth/github/callback?code=gh-once-2&state=${state}`)
+      .expect(302);
+    expect(replay.headers.location).toContain("/auth/github/failure");
+  });
+
+  it("link flow links GitHub to the user who started /auth/github/link", async () => {
+    const user = await GitHubTestUserModel.create({email: "linker@example.test"});
+    const {token} = await generateTokens({_id: user._id});
+    const browser = supertest.agent(app);
+
+    const start = await browser
+      .get("/auth/github/link")
+      .set("authorization", `Bearer ${token}`)
+      .expect(302);
+    const state = stateFromLocation(start.headers.location);
+    expect(state).toBeTruthy();
+
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-link-4&state=${state}`)
+      .expect(200);
+    expect(String(res.body.data.userId)).toBe(String(user._id));
+
+    const linked = await GitHubTestUserModel.findById(user._id);
+    expect(linked?.githubId).toBe("gh-link-4");
+    expect(linked?.githubUsername).toBe("gh-gh-link-4");
+  });
+
+  it("an expired state cookie is rejected", async () => {
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+
+    setSystemTime(new Date(Date.now() + 11 * 60 * 1000));
+    const res = await browser
+      .get(`/auth/github/callback?code=gh-late-1&state=${state}`)
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+  });
+
+  it("a tampered state cookie is rejected", async () => {
+    const victim = await GitHubTestUserModel.create({email: "victim5@example.test"});
+    const browser = supertest.agent(app);
+    const start = await browser.get("/auth/github").expect(302);
+    const state = stateFromLocation(start.headers.location);
+    const setCookie = String(start.headers["set-cookie"]);
+    const cookieValue = setCookie.split(";")[0].split("=").slice(1).join("=");
+    const [, signature] = decodeURIComponent(cookieValue).split(".");
+    const forgedPayload = Buffer.from(
+      JSON.stringify({expiresAt: Date.now() + 60_000, linkUserId: String(victim._id), nonce: state})
+    ).toString("base64url");
+
+    const res = await supertest(app)
+      .get(`/auth/github/callback?code=gh-forged-1&state=${state}`)
+      .set("cookie", `terreno_github_oauth_state=${forgedPayload}.${signature}`)
+      .expect(302);
+    expect(res.headers.location).toContain("/auth/github/failure");
+    const victimRow = await GitHubTestUserModel.findById(victim._id);
+    expect(victimRow?.githubId).toBeUndefined();
+  });
+});
+
+describe("GitHub OAuth returnTo allowlist", () => {
+  const buildApp = (allowedReturnTo?: string[]): express.Application => {
+    const sessions = new Map<string, Record<string, unknown>>();
+    let nextSessionId = 0;
+    const built = new TerrenoApp({
+      beforeJsonSetup: (a) => {
+        // Minimal cookie-keyed session store standing in for express-session.
+        a.use((req, res, next) => {
+          const match = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie ?? "");
+          let sessionId = match?.[1];
+          if (!sessionId || !sessions.has(sessionId)) {
+            nextSessionId += 1;
+            sessionId = `session-${nextSessionId}`;
+            sessions.set(sessionId, {});
+            res.cookie("sid", sessionId, {httpOnly: true, path: "/"});
+          }
+          const session = sessions.get(sessionId) as Record<string, unknown>;
+          const planted = req.headers["x-plant-return-to"];
+          if (typeof planted === "string") {
+            session.returnTo = planted;
+          }
+          (req as unknown as {session: Record<string, unknown>}).session = session;
+          next();
+        });
+      },
+      githubAuth: {
+        allowedReturnTo,
+        callbackURL: "http://localhost:9000/auth/github/callback",
+        clientId: "test-client-id",
+        clientSecret: "test-client-secret",
+      },
+      skipListen: true,
+      userModel: GitHubTestUserModel as unknown as UserModel,
+    }).build();
+    installFakeGithubStrategy();
+    return built;
+  };
+
+  beforeEach(async () => {
+    setSystemTime();
+    await connectDb();
+    await GitHubTestUserModel.deleteMany({});
+  });
+
+  afterEach(() => {
+    setSystemTime();
+    fakeGithubOutcome = {type: "redirect", url: "http://github.com/mock"};
+  });
+
+  const createGitHubUser = async (suffix: string): Promise<unknown> => {
+    return GitHubTestUserModel.create({
+      email: `returnto-${suffix}@example.test`,
+      githubId: `returnto-gh-${suffix}`,
+    } as unknown as TestUser);
+  };
+
+  it("rejects a returnTo outside the allowlist and sends no tokens there", async () => {
+    const app = buildApp(["https://app.example.test", "myapp://auth"]);
+    const browser = supertest.agent(app);
+    await browser.get("/auth/github?returnTo=https://attacker.example/steal").expect(400);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("a")};
+    const res = await browser.get("/auth/github/callback").expect(200);
+    expect(res.headers.location).toBeUndefined();
+  });
+
+  it("rejects look-alike and non-http returnTo values", async () => {
+    const app = buildApp(["https://app.example.test", "myapp://auth"]);
+    const targets = [
+      "https://app.example.test.attacker.example/cb",
+      "https://app.example.test@attacker.example/cb",
+      "http://app.example.test/cb",
+      "javascript:alert(1)",
+      "myapp://other/cb",
+      "/relative/path",
+    ];
+    for (const target of targets) {
+      await supertest(app)
+        .get(`/auth/github?returnTo=${encodeURIComponent(target)}`)
+        .expect(400);
+    }
+    await supertest(app).get("/auth/github?returnTo=a&returnTo=b").expect(400);
+  });
+
+  it("redirects an allowlisted returnTo with tokens in the fragment, not the query", async () => {
+    const app = buildApp(["https://app.example.test"]);
+    const browser = supertest.agent(app);
+    await browser
+      .get(`/auth/github?returnTo=${encodeURIComponent("https://app.example.test/auth/callback")}`)
+      .expect(302);
+
+    const user = await createGitHubUser("b");
+    fakeGithubOutcome = {type: "success", user};
+    const res = await browser.get("/auth/github/callback").expect(302);
+    const location = new URL(res.headers.location);
+    expect(location.origin).toBe("https://app.example.test");
+    expect(location.pathname).toBe("/auth/callback");
+    expect(location.search).toBe("");
+    const fragment = new URLSearchParams(location.hash.slice(1));
+    expect(fragment.get("token")).toBeTruthy();
+    expect(fragment.get("refreshToken")).toBeTruthy();
+    expect(fragment.get("userId")).toBe(String((user as {_id: unknown})._id));
+
+    // The stored target is used once.
+    const again = await browser.get("/auth/github/callback").expect(200);
+    expect(again.headers.location).toBeUndefined();
+  });
+
+  it("accepts an allowlisted custom-scheme authority", async () => {
+    const app = buildApp(["myapp://auth"]);
+    const browser = supertest.agent(app);
+    await browser
+      .get(`/auth/github?returnTo=${encodeURIComponent("myapp://auth/github")}`)
+      .expect(302);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("c")};
+    const res = await browser.get("/auth/github/callback").expect(302);
+    expect(res.headers.location.startsWith("myapp://auth/github#token=")).toBe(true);
+  });
+
+  it("ignores returnTo when no allowlist is configured", async () => {
+    const app = buildApp();
+    const browser = supertest.agent(app);
+    await browser.get("/auth/github?returnTo=https://attacker.example/steal").expect(302);
+
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("d")};
+    const res = await browser.get("/auth/github/callback").expect(200);
+    expect(res.headers.location).toBeUndefined();
+    expect(res.body.data.token).toBeDefined();
+  });
+
+  it("re-checks a stored returnTo before redirecting", async () => {
+    const app = buildApp(["https://app.example.test"]);
+    const browser = supertest.agent(app);
+    // Prime a session, then plant a target that did not pass the start-time check.
+    await browser.get("/auth/github").expect(302);
+    fakeGithubOutcome = {type: "success", user: await createGitHubUser("e")};
+    const res = await browser
+      .get("/auth/github/callback")
+      .set("x-plant-return-to", "https://attacker.example/steal")
+      .expect(200);
+    expect(res.headers.location).toBeUndefined();
   });
 });

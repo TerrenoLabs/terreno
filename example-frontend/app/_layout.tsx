@@ -78,9 +78,7 @@ const PushTokenRegistrar: FC = () => {
     await registerExpoPushTokenSafely({
       getToken: getCurrentExpoToken,
       platform: Platform.OS,
-      postToken: async (body) => {
-        await postToken(body).unwrap();
-      },
+      postToken: async (body) => postToken(body).unwrap(),
     });
   }, [postToken]);
 

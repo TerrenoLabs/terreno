@@ -7,7 +7,7 @@
 
 import {type BetterAuthOptions, type BetterAuthPlugin, betterAuth} from "better-auth";
 import {mongodbAdapter} from "better-auth/adapters/mongodb";
-import {APIError as BetterAuthAPIError} from "better-auth/api";
+import {APIError as BetterAuthAPIError, createAuthMiddleware} from "better-auth/api";
 import {toNodeHandler} from "better-auth/node";
 import {bearer} from "better-auth/plugins";
 import type {Application, NextFunction, Request, Response} from "express";
@@ -32,7 +32,7 @@ import {createMethodsPlugin} from "./betterAuthMethods";
 import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
 import {createSetPasswordPlugin} from "./betterAuthSetPassword";
 import {APIError, isAPIError} from "./errors";
-import type {AuthRecoveryMail} from "./expressServer";
+import type {AuthRecoveryMail, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 import {updateRequestContextFromRequest} from "./requestContext";
@@ -139,6 +139,7 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
     });
     const message: AuthRecoveryMail = {
       html: rendered.html,
+      sensitive: true,
       subject: rendered.subject,
       text: rendered.text ?? "",
       to: user.email,
@@ -325,6 +326,8 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       })
     : [];
 
+  const credentialSyncPlugins = userModel ? [createCredentialSyncPlugin(userModel)] : [];
+
   const created = betterAuth({
     ...merged,
     // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
@@ -341,10 +344,12 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     // plugin can still hook around them. The closed sign-up plugin follows `config.plugins` so
     // its init reaches the providers `genericOAuth` registers.
     // The handoff plugins come last so their callback hook sees the final redirect.
+    // The credential sync plugin keeps the legacy passport credential in step with Better Auth.
     plugins: [
       bearer(),
       createMethodsPlugin(),
       createSetPasswordPlugin({userModel}),
+      ...credentialSyncPlugins,
       ...buildFeaturePlugins(config, typeof merged.baseURL === "string" ? merged.baseURL : baseURL),
       ...(isLinkingDisabled ? [createLinkingDisabledPlugin()] : []),
       ...(userModel
@@ -364,6 +369,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
 };
 
 interface BetterAuthCredentialAccount {
+  password?: string | null;
   providerId?: string;
 }
 
@@ -385,7 +391,10 @@ interface BetterAuthPasswordResetContext {
     findUserById: (userId: string) => Promise<{id?: string} | null>;
     updatePassword: (userId: string, password: string) => Promise<unknown>;
   };
-  password: {hash: (password: string) => Promise<string>};
+  password: {
+    hash: (password: string) => Promise<string>;
+    verify: (data: {hash: string; password: string}) => Promise<boolean>;
+  };
 }
 
 /**
@@ -428,6 +437,118 @@ export const applyJwtPasswordResetToBetterAuth = async (
   }
   await ctx.internalAdapter.deleteUserSessions(betterAuthUserId);
 };
+
+/**
+ * Check `password` against the Better Auth credential account linked to an app user through
+ * `betterAuthId`. Returns "no-password" when the user has no linked Better Auth user or that user
+ * has no credential password (for example a social-only account).
+ */
+export const verifyBetterAuthCredentialPassword = async (
+  auth: BetterAuthInstance,
+  user: {betterAuthId?: string},
+  password: string
+): Promise<BetterAuthPasswordCheck> => {
+  const betterAuthUserId = typeof user.betterAuthId === "string" ? user.betterAuthId : "";
+  if (!betterAuthUserId) {
+    return "no-password";
+  }
+  const ctx = (await auth.$context) as BetterAuthPasswordResetContext;
+  const accounts = await ctx.internalAdapter.findAccounts(betterAuthUserId);
+  const credential = accounts.find(
+    (account) => account.providerId === "credential" && typeof account.password === "string"
+  );
+  if (!credential?.password) {
+    return "no-password";
+  }
+  const isMatch = await ctx.password.verify({hash: credential.password, password});
+  return isMatch ? "verified" : "wrong";
+};
+
+// Better Auth endpoints that change or revoke a user's credentials; the legacy JWT credential
+// must follow them.
+const CREDENTIAL_CHANGE_PATHS = new Set([
+  "/change-password",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+]);
+
+// The new password of an in-flight Better Auth `/reset-password`, keyed by its request. The
+// endpoint reads its JSON body before `onPasswordReset` runs, so the hook cannot read it again.
+const resetPasswordsByRequest = new WeakMap<object, string>();
+
+interface CredentialHookContext {
+  body?: Record<string, unknown>;
+  context: {returned?: unknown; session?: {user?: {id?: string}} | null};
+  path?: string;
+  request?: object;
+}
+
+/**
+ * After a Better Auth password change, set the legacy passport password of a dual-enrolled app
+ * user to the new one; after a password change or session revocation, bump `tokenEpoch` so
+ * legacy refresh tokens issued before it stop working.
+ */
+const applyBetterAuthCredentialChangeToJwt = async (
+  userModel: UserModel,
+  ctx: CredentialHookContext
+): Promise<void> => {
+  if (ctx.context.returned instanceof Error) {
+    return;
+  }
+  const betterAuthId = ctx.context.session?.user?.id;
+  if (!betterAuthId) {
+    return;
+  }
+  const appUser = await findOneOrNoneFor(userModel, {betterAuthId} as never);
+  if (!appUser) {
+    return;
+  }
+  const newPassword = ctx.body?.newPassword;
+  if (ctx.path === "/change-password" && typeof newPassword === "string") {
+    // Only an account that already has a legacy password gets the new one, so a Better Auth only
+    // account does not gain a second way to sign in.
+    const hasLegacyPassword =
+      userModel.schema.path("hash") !== undefined &&
+      Boolean(
+        await userModel.exists({_id: appUser._id, hash: {$exists: true, $ne: null}} as never)
+      );
+    if (hasLegacyPassword) {
+      await setPasswordForUser(appUser as unknown as HasSetPassword, newPassword);
+    }
+  }
+  if (userModel.schema.path("tokenEpoch") !== undefined) {
+    appUser.tokenEpoch = (appUser.tokenEpoch ?? 0) + 1;
+  }
+  await appUser.save();
+};
+
+const createCredentialSyncPlugin = (userModel: UserModel): BetterAuthPlugin => ({
+  hooks: {
+    after: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          await applyBetterAuthCredentialChangeToJwt(
+            userModel,
+            ctx as unknown as CredentialHookContext
+          );
+        }),
+        matcher: (ctx): boolean => CREDENTIAL_CHANGE_PATHS.has(ctx.path ?? ""),
+      },
+    ],
+    before: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          const newPassword = (ctx.body as Record<string, unknown> | undefined)?.newPassword;
+          if (ctx.request && typeof newPassword === "string") {
+            resetPasswordsByRequest.set(ctx.request, newPassword);
+          }
+        }),
+        matcher: (ctx): boolean => ctx.path === "/reset-password",
+      },
+    ],
+  },
+  id: "terreno-credential-sync",
+});
 
 interface PasswordResetRequestLike {
   body?: unknown;
@@ -477,6 +598,10 @@ export const readPasswordFromBetterAuthResetRequest = async (
 ): Promise<string> => {
   if (!request) {
     return "";
+  }
+  const stashed = resetPasswordsByRequest.get(request);
+  if (stashed) {
+    return stashed;
   }
   const attached = passwordFromUnknown(request.body);
   if (attached.length > 0) {
@@ -529,6 +654,81 @@ export const applyBetterAuthPasswordResetToJwt = async (
   await appUser.save();
 };
 
+const UNSAFE_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+
+interface OriginCheckContext {
+  isTrustedOrigin: (url: string, settings?: {allowRelativePaths: boolean}) => boolean;
+  options: {advanced?: {disableCSRFCheck?: boolean; disableOriginCheck?: boolean | string[]}};
+}
+
+const headerValue = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
+const originOfReferer = (referer: string | undefined): string | undefined => {
+  if (!referer) {
+    return undefined;
+  }
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return "null";
+  }
+};
+
+// True when the request's own `Authorization: Bearer` token is the session Better Auth resolved,
+// rather than a cookie sent beside some other header. The bearer plugin accepts the raw token or
+// the signed `token.signature` form.
+const isBearerSession = (req: Request, sessionToken: string): boolean => {
+  const match = /^Bearer\s+(.+)$/i.exec(headerValue(req.headers.authorization) ?? "");
+  if (!match || !sessionToken) {
+    return false;
+  }
+  let bearer = match[1].trim();
+  try {
+    bearer = decodeURIComponent(bearer);
+  } catch {
+    return false;
+  }
+  return bearer === sessionToken || bearer.startsWith(`${sessionToken}.`);
+};
+
+/**
+ * A session cookie rides along on requests other sites start, so a cookie-authenticated write is
+ * accepted only from an origin in Better Auth's `trustedOrigins` (which includes the API's own
+ * origin), the same rule Better Auth applies to its own routes. Bearer requests cannot be forged
+ * by another site. A request with no Origin, Referer, or cross-site Fetch Metadata did not come
+ * from a browser page, so it is not a cross-site forgery.
+ */
+const isUntrustedCookieWrite = async (
+  auth: BetterAuthInstance,
+  req: Request,
+  sessionToken: string
+): Promise<boolean> => {
+  if (!UNSAFE_METHODS.has(req.method) || !req.headers.cookie) {
+    return false;
+  }
+  if (isBearerSession(req, sessionToken)) {
+    return false;
+  }
+  const context = (await auth.$context) as unknown as OriginCheckContext;
+  const advanced = context.options.advanced;
+  const isCsrfCheckDisabled =
+    advanced?.disableCSRFCheck === true ||
+    (advanced?.disableOriginCheck === true && advanced.disableCSRFCheck === undefined);
+  if (isCsrfCheckDisabled) {
+    return false;
+  }
+  const origin =
+    headerValue(req.headers.origin) ?? originOfReferer(headerValue(req.headers.referer));
+  if (!origin) {
+    return headerValue(req.headers["sec-fetch-site"]) === "cross-site";
+  }
+  if (origin === "null") {
+    return true;
+  }
+  return !context.isTrustedOrigin(origin, {allowRelativePaths: false});
+};
+
 /**
  * Creates Express middleware that extracts the Better Auth session
  * and populates req.user with the application User model.
@@ -543,7 +743,16 @@ export const createBetterAuthSessionMiddleware = (
         headers: req.headers as Record<string, string>,
       });
 
-      if (session?.user && session?.session) {
+      if (
+        session?.user &&
+        session?.session &&
+        (await isUntrustedCookieWrite(auth, req, String(session.session.token ?? "")))
+      ) {
+        // Fall through as anonymous, like a disabled user, so protected routes answer 401.
+        logger.warn(
+          `[better-auth] Ignored a session cookie on ${req.method} ${req.path} from an untrusted origin`
+        );
+      } else if (session?.user && session?.session) {
         const betterAuthUser = session.user as BetterAuthUser;
 
         const reqWithSession = req as Request & {
@@ -602,8 +811,10 @@ const VERIFY_EMAIL_ERROR_CODE = "VERIFY_EMAIL_TO_USE_ACCOUNT";
 // Loose shape used when mutating Mongoose user documents during Better Auth sync.
 // The fields are added by the consumer's user schema (via baseUserPlugin or similar).
 interface MutableUserDoc {
+  _id?: unknown;
   admin?: boolean;
   email?: string;
+  emailVerified?: boolean;
   name?: string;
   betterAuthId?: string;
   oauthProvider?: string | null;
@@ -619,6 +830,12 @@ export interface SyncBetterAuthUserOptions {
    * Never stored or logged.
    */
   password?: string;
+  /**
+   * Link an existing app user by email even when Better Auth has not verified the address or
+   * the row is bound to another Better Auth id. Only for operator-run seeds that create the
+   * Better Auth account themselves; never set it for a request-driven sync.
+   */
+  trustEmail?: boolean;
 }
 
 // passport-local-mongoose's instance method (v8+ returns a promise).
@@ -717,6 +934,65 @@ const findAppUserByEmail = async (
     email: {$options: "i", $regex: `^${escapeRegExp(email)}$`},
   } as never)) as unknown as MutableUserDoc | null;
 
+/** The stable title for a sign-in whose email matches an app User bound to another account. */
+const EMAIL_BOUND_TO_ANOTHER_ACCOUNT = "An account with this email already exists";
+
+/** The Better Auth error code (JSON `code`, OAuth redirect `error`) for the same refusal. */
+const EMAIL_BOUND_ERROR_CODE = "ACCOUNT_ALREADY_EXISTS";
+
+/**
+ * An email alone does not prove the caller owns an existing app user, and an app user already
+ * bound to another Better Auth account is never relinked by email. (Whether the caller may claim
+ * an unbound row is `mayClaimAppUser`.)
+ */
+const assertNotBoundToAnotherAccount = (
+  userByEmail: MutableUserDoc,
+  betterAuthUserId?: string
+): void => {
+  if (!userByEmail.betterAuthId || userByEmail.betterAuthId === betterAuthUserId) {
+    return;
+  }
+  throw new APIError({
+    code: "email-bound-to-another-account",
+    detail: "Verify the email address before signing in to the existing account.",
+    disableExternalErrorTracking: true,
+    status: 409,
+    title: EMAIL_BOUND_TO_ANOTHER_ACCOUNT,
+  });
+};
+
+/**
+ * A legacy password on a row whose email was never verified may have been set by someone who
+ * does not own the mailbox. Once the verified owner links the row, that password and the
+ * refresh tokens issued from it stop working.
+ */
+const revokeUnprovenLegacyPassword = async (
+  userModel: UserModel,
+  userByEmail: MutableUserDoc
+): Promise<void> => {
+  if (userByEmail.emailVerified === true || userModel.schema.path("hash") === undefined) {
+    return;
+  }
+  const hasLegacyPassword = await userModel.exists({
+    _id: userByEmail._id,
+    hash: {$exists: true, $ne: null},
+  } as never);
+  if (!hasLegacyPassword) {
+    return;
+  }
+  const bumpEpoch = userModel.schema.path("tokenEpoch") !== undefined;
+  await userModel.updateOne(
+    {_id: userByEmail._id} as never,
+    {
+      $unset: {hash: 1, salt: 1},
+      ...(bumpEpoch ? {$inc: {tokenEpoch: 1}} : {}),
+    } as never
+  );
+  logger.info(
+    `Revoked an unverified legacy password while linking Better Auth user ${userByEmail.id}`
+  );
+};
+
 export const syncBetterAuthUser = async (
   userModel: UserModel,
   betterAuthUser: BetterAuthUser,
@@ -740,15 +1016,27 @@ export const syncBetterAuthUser = async (
 
     // Check if user exists by email (migration case)
     const userByEmail = await findAppUserByEmail(userModel, betterAuthUser.email);
+    if (userByEmail?.betterAuthId === betterAuthUser.id) {
+      // A concurrent first contact created this row between the two lookups.
+      return userByEmail;
+    }
     if (userByEmail) {
-      const mayLink = await mayClaimAppUser(userModel, userByEmail, {
-        betterAuthId: betterAuthUser.id,
-        emailVerified: betterAuthUser.emailVerified === true,
-        password: options.password,
-      });
-      if (!mayLink) {
-        throw verifyEmailRefusal();
+      if (!options.trustEmail) {
+        assertNotBoundToAnotherAccount(userByEmail, betterAuthUser.id);
+        const isEmailVerified = betterAuthUser.emailVerified === true;
+        const mayLink = await mayClaimAppUser(userModel, userByEmail, {
+          betterAuthId: betterAuthUser.id,
+          emailVerified: isEmailVerified,
+          password: options.password,
+        });
+        if (!mayLink) {
+          throw verifyEmailRefusal();
+        }
+        if (isEmailVerified) {
+          await revokeUnprovenLegacyPassword(userModel, userByEmail);
+        }
       }
+      // Link existing user to Better Auth
       userByEmail.betterAuthId = betterAuthUser.id;
       if (oauthProvider) {
         userByEmail.oauthProvider = oauthProvider;
@@ -781,6 +1069,8 @@ export const syncBetterAuthUser = async (
       logger.debug(`Better Auth user was created concurrently: ${error}`);
     } else if (isVerifyEmailRefusal(error)) {
       logger.info(`[better-auth] Refused to link unverified Better Auth user ${betterAuthUser.id}`);
+    } else if (isAPIError(error) && error.status === 409) {
+      logger.warn(`Refused to link Better Auth user ${betterAuthUser.id} by email: ${error.title}`);
     } else {
       logger.error(`Error syncing Better Auth user: ${error}`);
     }
@@ -790,6 +1080,9 @@ export const syncBetterAuthUser = async (
 
 const isVerifyEmailRefusal = (error: unknown): boolean =>
   isAPIError(error) && error.status === 409 && error.message === VERIFY_EMAIL_TO_USE_ACCOUNT;
+
+const isBoundToAnotherAccountRefusal = (error: unknown): boolean =>
+  isAPIError(error) && error.status === 409 && error.message === EMAIL_BOUND_TO_ANOTHER_ACCOUNT;
 
 // The parts of Better Auth's endpoint context the session hook reads.
 interface SessionHookContext {
@@ -836,6 +1129,12 @@ const verifyEmailConflict = (): BetterAuthAPIError =>
     message: VERIFY_EMAIL_TO_USE_ACCOUNT,
   });
 
+const boundToAnotherAccountConflict = (): BetterAuthAPIError =>
+  new BetterAuthAPIError("CONFLICT", {
+    code: EMAIL_BOUND_ERROR_CODE,
+    message: EMAIL_BOUND_TO_ANOTHER_ACCOUNT,
+  });
+
 // The app User with this email that no Better Auth user has claimed yet (or another one has).
 const findUnclaimedAppUser = async (
   userModel: UserModel,
@@ -857,11 +1156,14 @@ const findUnclaimedAppUser = async (
  * - Before a Better Auth user is created: when an app User already has the email, creation is
  *   refused with 409 `VERIFY_EMAIL_TO_USE_ACCOUNT` (an OAuth callback redirects with that
  *   `error`) unless the provider verified the email or the sign-up password verifies against
- *   that User's passport hash. Nothing is left behind (no user, account, or verification mail),
+ *   that User's passport hash. An app User bound to another Better Auth account is always
+ *   refused, with 409 `ACCOUNT_ALREADY_EXISTS`. Nothing is left behind (no user, account, or verification mail),
  *   so a later verification cannot hand an attacker's password the victim's User.
  * - Before a session is created, the app User is synced: the OAuth provider id fills
  *   `oauthProvider`, and on `/sign-up/email` and `/sign-in/email` the plaintext password lets an
- *   unverified user claim a legacy User. A refusal fails the sign-in with the same 409.
+ *   unverified user claim a legacy User. A refusal fails the sign-in with the same 409s. A
+ *   verified email that links a User whose own email was never verified revokes that User's
+ *   legacy password and refresh tokens (see `revokeUnprovenLegacyPassword`).
  * - A failed link that a password was proving fails the sign-in (500 `APP_USER_LINK_FAILED`), so
  *   no session exists that would be refused on every request. Any other sync failure is logged
  *   and the session proceeds; the session middleware retries the sync on the next request.
@@ -894,6 +1196,9 @@ export const createAppUserSyncPlugin = (userModel: UserModel): BetterAuthPlugin 
                     if (isVerifyEmailRefusal(error)) {
                       throw verifyEmailConflict();
                     }
+                    if (isBoundToAnotherAccountRefusal(error)) {
+                      throw boundToAnotherAccountConflict();
+                    }
                     if ((error as {code?: number}).code === 11000) {
                       return;
                     }
@@ -922,6 +1227,12 @@ export const createAppUserSyncPlugin = (userModel: UserModel): BetterAuthPlugin 
                   const appUser = email ? await findUnclaimedAppUser(userModel, email) : null;
                   if (!appUser) {
                     return;
+                  }
+                  if (appUser.betterAuthId) {
+                    logger.info(
+                      "[better-auth] Refused a sign-up for an app user bound to another account"
+                    );
+                    throw boundToAnotherAccountConflict();
                   }
                   const mayClaim = await mayClaimAppUser(userModel, appUser, {
                     emailVerified: user.emailVerified === true,
@@ -1005,18 +1316,20 @@ export const mountBetterAuthRoutes = (
 };
 
 /**
- * Gets the MongoDB client from the mongoose connection.
+ * Gets a MongoDB client view whose db() is the mongoose connection's database (its dbName).
  */
 export const getMongoClientFromMongoose = (): MongoClientLike => {
   const connection = mongoose.connection;
-  const client = (connection as unknown as {client?: MongoClientLike}).client;
+  const client = (connection as unknown as {client?: {db: (dbName?: string) => Db}}).client;
   if (!client) {
     throw new APIError({
       status: 500,
       title: "Mongoose is not connected. Ensure MongoDB connection is established first.",
     });
   }
-  return client;
+  // Use the connection's database (mongoose's dbName option), not the URI default, so Better
+  // Auth's collections live beside the app's models.
+  return {db: (): Db => client.db(connection.name || undefined)};
 };
 
 /**

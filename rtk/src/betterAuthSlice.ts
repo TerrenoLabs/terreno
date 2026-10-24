@@ -110,10 +110,22 @@ const initialState: BetterAuthState = {
   userId: null,
 };
 
+/** An RTK Query API whose cached responses can be purged, such as the app's generated SDK. */
+export interface ResettableApi {
+  util: {resetApiState: () => UnknownAction};
+}
+
 /**
  * Configuration for generating the Better Auth slice.
  */
 export interface GenerateBetterAuthSliceConfig {
+  /**
+   * RTK Query APIs whose cached responses belong to the signed-in user. Their caches are purged
+   * on logout, when a sync finds the session gone, and when the session changes to another user,
+   * so one account never sees responses fetched for another.
+   */
+  apisToReset?: ResettableApi[];
+
   /**
    * The Better Auth client instance.
    */
@@ -164,6 +176,25 @@ export interface GenerateBetterAuthSliceConfig {
  */
 export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) => {
   const {authClient, signOutTimeoutMs = DEFAULT_SIGN_OUT_TIMEOUT_MS} = config;
+  const apisToReset = config.apisToReset ?? [];
+
+  // Runs before any await in a listener, so the cache is empty before the next render.
+  const resetApis = (dispatch: (action: UnknownAction) => unknown): void => {
+    for (const api of apisToReset) {
+      dispatch(api.util.resetApiState());
+    }
+  };
+
+  // Only a logout that ends a signed-in session resets, so a query that keeps answering 401
+  // while signed out cannot loop through logout, reset, and refetch.
+  const resetIfSignedIn = (listenerApi: {
+    dispatch: (action: UnknownAction) => unknown;
+    getOriginalState: () => unknown;
+  }): void => {
+    if ((listenerApi.getOriginalState() as RootState).betterAuth?.userId) {
+      resetApis(listenerApi.dispatch);
+    }
+  };
 
   const betterAuthSlice = createSlice({
     initialState,
@@ -250,13 +281,36 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
     }
   };
 
+  // The user a sign-out started on. Read it before the first await: RTK allows
+  // `getOriginalState` only synchronously.
+  const startedUserIdOf = (listenerApi: {getOriginalState: () => unknown}): string | null =>
+    (listenerApi.getOriginalState() as RootState).betterAuth?.userId ?? null;
+
+  // True when another user signed in while this sign-out was in flight. The sign-out settles only
+  // the session it started on, so it must not clear the new one (or the cache fetched for it).
+  const isSupersededBySignIn = (
+    listenerApi: {getState: () => unknown},
+    startedUserId: string | null
+  ): boolean => {
+    const currentUserId = (listenerApi.getState() as RootState).betterAuth?.userId ?? null;
+    return currentUserId !== null && currentUserId !== startedUserId;
+  };
+
   // Handle logout action: sign out, then clear the session. A sign-out that failed leaves a
   // live session in place with an error, and clears one the client no longer holds.
   logoutListenerMiddleware.startListening({
     actionCreator: betterAuthSlice.actions.logout,
     effect: async (_action, listenerApi) => {
+      // Purge the cache at once; the session listener below purges it again when the session
+      // clears, dropping anything refetched while the sign-out was in flight. A sign-out that
+      // fails keeps the session, and its screens refetch.
+      resetIfSignedIn(listenerApi);
+      const startedUserId = startedUserIdOf(listenerApi);
       try {
         const result = await withTimeout(authClient.signOut(), signOutTimeoutMs);
+        if (isSupersededBySignIn(listenerApi, startedUserId)) {
+          return;
+        }
         if (!isRefused(result)) {
           listenerApi.dispatch(betterAuthSlice.actions.clearSession());
           console.debug("Better Auth: Signed out successfully");
@@ -266,7 +320,11 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
       } catch (error) {
         console.warn("Better Auth: Error signing out:", error);
       }
-      if (await isSessionStillLive()) {
+      const isStillLive = await isSessionStillLive();
+      if (isSupersededBySignIn(listenerApi, startedUserId)) {
+        return;
+      }
+      if (isStillLive) {
         listenerApi.dispatch(betterAuthSlice.actions.setError(SIGN_OUT_FAILED_MESSAGE));
         return;
       }
@@ -278,15 +336,39 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
   // out here, whether or not the server answers the sign-out.
   logoutListenerMiddleware.startListening({
     effect: async (_action, listenerApi) => {
+      resetIfSignedIn(listenerApi);
+      const startedUserId = startedUserIdOf(listenerApi);
       try {
         await withTimeout(authClient.signOut(), signOutTimeoutMs);
         console.debug("Better Auth: Signed out via global logout action");
       } catch (error) {
         console.warn("Better Auth: Error signing out:", error);
       }
+      if (isSupersededBySignIn(listenerApi, startedUserId)) {
+        return;
+      }
       listenerApi.dispatch(betterAuthSlice.actions.clearSession());
     },
     type: LOGOUT_ACTION_TYPE,
+  });
+
+  // A session that ends, or changes to another user, takes the previous user's cache with it.
+  logoutListenerMiddleware.startListening({
+    effect: (action, listenerApi) => {
+      const previousUserId = (listenerApi.getOriginalState() as RootState).betterAuth?.userId;
+      if (!previousUserId) {
+        return;
+      }
+      const nextUserId = betterAuthSlice.actions.setSession.match(action)
+        ? action.payload.userId
+        : null;
+      if (nextUserId !== previousUserId) {
+        resetApis(listenerApi.dispatch);
+      }
+    },
+    predicate: (action): boolean =>
+      betterAuthSlice.actions.setSession.match(action) ||
+      betterAuthSlice.actions.clearSession.match(action),
   });
 
   /**

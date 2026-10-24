@@ -1,5 +1,6 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {configureStore, type UnknownAction} from "@reduxjs/toolkit";
+import {createApi} from "@reduxjs/toolkit/query";
 import {
   type BetterAuthState,
   generateBetterAuthSlice,
@@ -577,6 +578,123 @@ describe("generateBetterAuthSlice", () => {
     expect(mockAuthClient.signOut).toHaveBeenCalledTimes(1);
     expect(store.getState().betterAuth.isAuthenticated).toBe(false);
     expect(store.getState().betterAuth.userId).toBeNull();
+  });
+});
+
+describe("generateBetterAuthSlice cache reset", () => {
+  let serverUser = "alice";
+  let serverCalls = 0;
+
+  const buildStore = () => {
+    const api = createApi({
+      baseQuery: async () => ({data: null}),
+      endpoints: (builder) => ({
+        getMe: builder.query<{id: string}, void>({
+          queryFn: () => {
+            serverCalls += 1;
+            return {data: {id: serverUser}};
+          },
+        }),
+      }),
+      reducerPath: "terreno-rtk",
+    });
+    const betterAuth = generateBetterAuthSlice({
+      apisToReset: [api],
+      authClient: createMockAuthClient(),
+    });
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) =>
+        getDefaultMiddleware({serializableCheck: false}).concat(
+          api.middleware,
+          ...betterAuth.middleware
+        ),
+      reducer: {[api.reducerPath]: api.reducer, betterAuth: betterAuth.reducer},
+    });
+    const fetchMe = async (): Promise<{id: string} | undefined> => {
+      const subscription = store.dispatch(api.endpoints.getMe.initiate());
+      const result = await subscription;
+      subscription.unsubscribe();
+      return result.data;
+    };
+    const signIn = (userId: string): void => {
+      store.dispatch(
+        betterAuth.actions.setSession({
+          user: {id: userId} as unknown as BetterAuthUser,
+          userId,
+        })
+      );
+    };
+    return {betterAuth, fetchMe, signIn, store};
+  };
+
+  beforeEach(() => {
+    serverUser = "alice";
+    serverCalls = 0;
+  });
+
+  it("does not serve the previous user's cached responses after logout", async () => {
+    const {betterAuth, fetchMe, signIn, store} = buildStore();
+    signIn("alice");
+    expect((await fetchMe())?.id).toBe("alice");
+
+    store.dispatch(betterAuth.actions.logout());
+    serverUser = "bob";
+    signIn("bob");
+
+    expect((await fetchMe())?.id).toBe("bob");
+    expect(serverCalls).toBe(2);
+  });
+
+  it("purges the cache on the global auth/logout action", async () => {
+    const {fetchMe, signIn, store} = buildStore();
+    signIn("alice");
+    await fetchMe();
+
+    store.dispatch({type: "auth/logout"});
+
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toEqual([]);
+  });
+
+  it("purges the cache when the session switches to another user without a logout", async () => {
+    const {fetchMe, signIn} = buildStore();
+    signIn("alice");
+    await fetchMe();
+
+    serverUser = "bob";
+    signIn("bob");
+
+    expect((await fetchMe())?.id).toBe("bob");
+  });
+
+  it("keeps the cache on a logout while already signed out", async () => {
+    const {betterAuth, fetchMe, store} = buildStore();
+    await fetchMe();
+
+    store.dispatch(betterAuth.actions.logout());
+    store.dispatch({type: "auth/logout"});
+
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toHaveLength(1);
+  });
+
+  it("keeps the cache when the same user's session is refreshed", async () => {
+    const {fetchMe, signIn} = buildStore();
+    signIn("alice");
+    await fetchMe();
+
+    signIn("alice");
+    await fetchMe();
+
+    expect(serverCalls).toBe(1);
+  });
+
+  it("purges the cache when a sync finds the session gone", async () => {
+    const {betterAuth, fetchMe, signIn, store} = buildStore();
+    signIn("alice");
+    await fetchMe();
+
+    store.dispatch(betterAuth.actions.clearSession());
+
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toEqual([]);
   });
 });
 

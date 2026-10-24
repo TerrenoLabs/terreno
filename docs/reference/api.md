@@ -1406,7 +1406,9 @@ source's deny posture for the user. Under every policy:
   `access.getPermissions({user, requireComplete: true})` for such a target: when a failed source's
   grants were dropped (not served from a `"use-stale"` cache), it throws 503
   `Permission source unavailable` instead of returning the partial set. The account-security
-  reach check and the RBAC user-write guard resolve their target this way.
+  reach check, the RBAC user-write guard, and the RoleManager target-privilege rule
+  (`access.roles.assign`, `unassign`, `previewAssignment`, and `assertCanModifyUser`, so also
+  `PUT /rbac/users/:id/roles` and admin user writes) resolve their target this way.
 
 ## Request Validation
 

@@ -62,6 +62,8 @@ export const createAccess = <S extends Statements>(options: AccessOptions<S>): T
     defaultRoles: extraRoles,
     getActorPermissions: (user) => resolver.resolvePermissionsForUser(user),
     getPreviewPermissions: (user) => resolver.resolvePermissionsForUserUncached(user),
+    getTargetPermissions: (user) =>
+      resolver.resolvePermissionsForUser(user, {requireComplete: true}),
     invalidateCache: resolver.invalidateCache,
     persistAudit,
     statements: mergedStatements,

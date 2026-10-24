@@ -6,6 +6,7 @@
  */
 
 import {beforeAll, beforeEach, describe, expect, it} from "bun:test";
+import mongoose from "mongoose";
 import supertest from "supertest";
 
 import {AuthToken} from "./authTokens";
@@ -115,11 +116,10 @@ describe("legacy JWT password reset with Better Auth on", () => {
       .post("/auth/login")
       .send({email: identity.email, password: NEW_PASSWORD})
       .expect(401);
-    const credential = await betterAuthAccounts().findOne({
-      providerId: "credential",
-      userId: stored?.betterAuthId,
-    });
-    expect(credential).toBeNull();
+    // Better Auth stores account.userId as an ObjectId; the social account proves the filter matches.
+    const betterAuthUserId = new mongoose.Types.ObjectId(String(stored?.betterAuthId));
+    const accounts = await betterAuthAccounts().find({userId: betterAuthUserId}).toArray();
+    expect(accounts.map((account) => account.providerId)).toEqual(["google"]);
     // The token is spent either way.
     await supertest(app)
       .post("/auth/resetPassword")

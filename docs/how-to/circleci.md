@@ -314,6 +314,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Run admin script CLI (when backend CI did not already run) | `example-backend-script-runner` |
 | Build backend Docker image | `example-backend-docker` |
 | Admin SPA Build and E2E | `admin-spa-ci` |
+| (none) | `smoke` (every workspace `smoke` script; any package change) |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |

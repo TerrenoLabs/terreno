@@ -58,12 +58,33 @@ bun test --only-failures <path>
 | `create-terreno-app-ci` | `cd create-terreno-app && bun run test:ci` |
 | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) | `cd <package> && bun run test:ci` |
 | `example-backend-ci` | `cd example-backend && bun run test:ci` |
+| `smoke` | `bun run smoke` (see [Package smokes](#package-smokes-smoke)) |
 | `example-frontend-ci` | `bun run frontend:test` |
 | `ui-demo-ci` | `cd demo && bun run test:ci` then `bun run check:demo-coverage` |
 | `new-file-coverage` | `bun run check:new-file-coverage --base=origin/master --threshold=90` |
 | `repo-policies` | `bun run prepush` (runs every repo-policies step) |
 
 Coverage gate for a published package: `cd <package> && bun run test:coverage`.
+
+## Package smokes (`smoke`)
+
+The CircleCI `smoke` job runs on any package change. It compiles the workspace, builds
+the admin-spa and demo web exports, installs Playwright Chromium, then runs every
+workspace `smoke` script against the job's replica-set Mongo sidecar
+(`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
+running it.
+
+```bash
+bun run compile
+(cd admin-spa && bun run build:web) && (cd demo && bun run export)
+bunx playwright install --with-deps chromium   # once
+bun run smoke              # every package; prints each one's time
+bun run smoke api rtk      # only these workspaces
+```
+
+Without `TERRENO_TEST_MONGODB_URI`, a smoke that needs Mongo starts its own in-memory
+replica set. To reuse a local replica-set `mongod`, export
+`TERRENO_TEST_MONGODB_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0"` first.
 
 ## Playwright (example-frontend e2e)
 

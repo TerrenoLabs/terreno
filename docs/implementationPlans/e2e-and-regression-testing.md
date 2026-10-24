@@ -244,7 +244,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
   - Docs: docs/reference/test.md (the smoke helpers)
   - Skills: backend-test-env, terreno-backend-api, update-docs
 
-- [ ] **T9** — CircleCI `smoke` job
+- [x] **T9** — CircleCI `smoke` job
   - Depends on: T8
   - Files: .circleci/config.yml, .circleci/continue-config.yml, scripts/ci/prepush/plan.ts, docs/how-to/run-tests-locally.md
   - Delivers:

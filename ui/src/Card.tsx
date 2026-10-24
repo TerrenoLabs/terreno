@@ -96,7 +96,7 @@ const DisplayCard = ({
       loadingComponent={
         loadingComponent ?? (
           <SkeletonCard
-            mediaHeight={imageHeight}
+            mediaHeight={columnImageHeight}
             showAvatar={false}
             showMedia={Boolean(imageUri)}
           />

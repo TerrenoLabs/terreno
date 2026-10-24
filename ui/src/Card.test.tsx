@@ -201,6 +201,23 @@ describe("Card", () => {
       expect(getByTestId("card").props["aria-busy"]).toBe(true);
     });
 
+    it("sizes the media skeleton to the large mobile image height", () => {
+      const {UNSAFE_root} = renderWithTheme(
+        <Card
+          imageUri="https://example.com/image.png"
+          loading
+          size="large"
+          testID="card"
+          title="Title"
+          variant="display"
+        />
+      );
+      const mediaBlocks = UNSAFE_root.findAll(
+        (node) => node.props["aria-hidden"] === true && node.props.style?.height === 300
+      );
+      expect(mediaBlocks.length).toBeGreaterThan(0);
+    });
+
     it("renders a custom loading component in a container card", () => {
       const {getByTestId, queryByText} = renderWithTheme(
         <Card loading loadingComponent={<SkeletonCircle testID="circle" />}>

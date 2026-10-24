@@ -107,6 +107,7 @@ describe("registerExpoTestEnvironment", () => {
   });
 
   it("re-registers a default mock with restoreModuleMock", async () => {
+    // isolation-safe: overrides this environment's own mock; restoreModuleMock puts it back below
     mock.module("expo-splash-screen", () => ({hideAsync: (): string => "suite mock"}));
     expect((await import("expo-splash-screen")).hideAsync()).toBe("suite mock");
     environment.restoreModuleMock("expo-splash-screen");
@@ -128,6 +129,7 @@ describe("registerExpoTestEnvironment", () => {
       secureStore.AUTH_TOKEN = "token";
       asyncStorage.key = "value";
       testGlobals.__DEV__ = false;
+      // isolation-safe: overrides this environment's own mock; cleanup.restoreModules restores it
       mock.module("expo-clipboard", () => ({getStringAsync: (): string => "suite mock"}));
       expect(target.read()).toBe("spied");
       expect((await import("expo-clipboard")).getStringAsync()).toBe("suite mock");

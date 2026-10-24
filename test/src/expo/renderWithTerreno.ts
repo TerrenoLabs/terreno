@@ -24,10 +24,15 @@ export interface RenderWithTerrenoOptions extends Omit<RenderOptions, "wrapper">
 
 type ProviderComponent = ComponentType<{children?: ReactNode; store: ReduxStoreLike}>;
 
-/** `react-redux` is optional, so it is only loaded when a test passes a store. */
-const loadReduxProvider = (): ProviderComponent => {
+/**
+ * `react-redux` is optional, so it is only loaded when a test passes a store. `load` exists so the
+ * missing-package error can be tested without uninstalling the package.
+ */
+export const loadReduxProvider = (
+  load: () => unknown = (): unknown => require("react-redux")
+): ProviderComponent => {
   try {
-    return (require("react-redux") as {Provider: ProviderComponent}).Provider;
+    return (load() as {Provider: ProviderComponent}).Provider;
   } catch (error) {
     throw new Error(
       "renderWithTerreno: passing `store` requires the `react-redux` package. Install it as a devDependency.",

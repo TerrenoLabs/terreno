@@ -1,8 +1,8 @@
 import {type Mock, mock} from "bun:test";
 
-// noExplicitAny: Bun's `Mock<T>` constraint is `(...args: any[]) => any`, so the group has to match it.
-// biome-ignore lint/suspicious/noExplicitAny: matches Bun's Mock generic constraint
-type AnyFunction = (...args: any[]) => any;
+// Any function: `never[]` parameters accept every signature, and the type is assignable to
+// Bun's `Mock<T>` constraint.
+type AnyFunction = (...args: never[]) => unknown;
 
 export interface MockGroup {
   /** Creates a mock whose default behavior `reset()` restores. */

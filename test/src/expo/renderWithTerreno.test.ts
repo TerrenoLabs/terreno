@@ -10,7 +10,9 @@ const {fireEvent, renderHook, waitFor} = await import("@testing-library/react-na
 const {configureStore, createSlice} = await import("@reduxjs/toolkit");
 const {useSelector} = await import("react-redux");
 const {Box, Button, Text, useTheme} = await import("@terreno/ui");
-const {createTerrenoWrapper, renderWithTerreno} = await import("./renderWithTerreno");
+const {createTerrenoWrapper, loadReduxProvider, renderWithTerreno} = await import(
+  "./renderWithTerreno"
+);
 
 const createCounterStore = (): ReturnType<typeof configureStore<{counter: {count: number}}>> =>
   configureStore({
@@ -58,5 +60,20 @@ describe("renderWithTerreno", () => {
     expect(result.current.theme.primitives.primary400).toBe("#123456");
     const {getByTestId} = renderWithTerreno(createElement(Text, null, "x"), {wrapper: Inner});
     expect(getByTestId("inner")).toBeTruthy();
+  });
+});
+
+describe("loadReduxProvider", () => {
+  it("returns react-redux's Provider", () => {
+    expect(loadReduxProvider()).toBe((require("react-redux") as {Provider: unknown}).Provider);
+  });
+
+  it("explains that a store needs react-redux when the package is missing", () => {
+    const missing = (): never => {
+      throw new Error("Cannot find package 'react-redux'");
+    };
+    expect(() => loadReduxProvider(missing)).toThrow(
+      "renderWithTerreno: passing `store` requires the `react-redux` package"
+    );
   });
 });

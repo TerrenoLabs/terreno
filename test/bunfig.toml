@@ -13,5 +13,7 @@ coveragePathIgnorePatterns = [
   # suite keeps a shared connection, so those files are excluded from the gate.
   "src/mongo/mongoServer.ts",
   "src/mongo/connection.ts",
+  # Three-line bin wrappers; the CLI logic is covered through testShard.ts / testHygiene.ts.
+  "src/cli/*Cli.ts",
 ]
 coverageThreshold = { line = 95, function = 95 }

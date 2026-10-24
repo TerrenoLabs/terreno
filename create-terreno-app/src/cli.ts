@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import {realpathSync} from "node:fs";
 import {pathToFileURL} from "node:url";
 
 import {parseCliArgs, writeScaffold} from "./writeScaffold.js";
@@ -82,9 +83,23 @@ export const runCli = (options: RunCliOptions = {}): RunCliResult => {
   };
 };
 
-const isMainModule =
-  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+/**
+ * True when `scriptPath` (process.argv[1]) is this module. Package managers run the CLI through a
+ * `node_modules/.bin` symlink, so the path is resolved before comparing.
+ */
+export const isEntryPoint = (moduleUrl: string, scriptPath: string | undefined): boolean => {
+  if (scriptPath === undefined) {
+    return false;
+  }
+  let resolvedPath = scriptPath;
+  try {
+    resolvedPath = realpathSync(scriptPath);
+  } catch {
+    // A path that cannot be resolved is compared as given.
+  }
+  return moduleUrl === pathToFileURL(resolvedPath).href;
+};
 
-if (isMainModule) {
+if (isEntryPoint(import.meta.url, process.argv[1])) {
   process.exit(runCli().exitCode);
 }

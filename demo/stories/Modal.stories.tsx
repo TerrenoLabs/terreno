@@ -35,7 +35,11 @@ export const Modals = () => {
     <>
       <Box>
         <Box paddingY={1}>
-          <Button onClick={() => setModalToShow("default")} text="Default/ Small Modal" />
+          <Button
+            onClick={() => setModalToShow("default")}
+            testID="modal-demo-open-default"
+            text="Default/ Small Modal"
+          />
         </Box>
         <Box paddingY={1}>
           <Button onClick={() => setModalToShow("md")} text="Medium Modal" />
@@ -59,6 +63,7 @@ export const Modals = () => {
         secondaryButtonText={modalToShow === "secondary" ? "Secondary" : undefined}
         size={size as "sm" | "md" | "lg"}
         subtitle="Sub heading"
+        testID="modal-demo"
         text="This is the text of the modal."
         title={`${modalToShow} modal`}
         visible={

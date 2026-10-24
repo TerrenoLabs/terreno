@@ -388,7 +388,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Acceptance: After `export`, `bun run --cwd demo smoke` exits 0. In Chromium, the demo home lists the stories, and opening one story by route renders its root `testID`.
   - Skills: verify-ui-changes
 
-- [ ] **T31** — Smoke spec for `@terreno/ui`
+- [x] **T31** — Smoke spec for `@terreno/ui`
   - Depends on: T8
   - Files: ui/e2e/smoke.spec.ts, ui/package.json, docs/testing/e2e/ui.md
   - Acceptance: `bun run --cwd ui smoke` exits 0, run against the demo export built by `bun run --cwd demo export`. In Chromium, a Button press changes visible state, a TextField takes typed input, and a Modal opens and dismisses.

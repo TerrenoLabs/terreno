@@ -581,11 +581,105 @@ describe("generateBetterAuthSlice", () => {
   });
 });
 
+describe("generateBetterAuthSlice sign-in landing mid-sign-out", () => {
+  const userOf = (id: string): BetterAuthUser => ({id}) as unknown as BetterAuthUser;
+
+  // A store whose sign-out waits until the test resolves it, and whose session check answers with
+  // `serverUserId`'s session (or none).
+  const build = (startUserId: string | null, serverUserId: string | null) => {
+    let resolveSignOut: (value: unknown) => void = () => {};
+    const authClient = {
+      getSession: mock(() =>
+        Promise.resolve({
+          data: serverUserId
+            ? {session: {id: "s", userId: serverUserId}, user: userOf(serverUserId)}
+            : null,
+        })
+      ),
+      signOut: mock(
+        () =>
+          new Promise((resolve) => {
+            resolveSignOut = resolve;
+          })
+      ),
+    };
+    const slice = generateBetterAuthSlice({authClient: authClient as never});
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(...slice.middleware),
+      reducer: {betterAuth: slice.reducer},
+    });
+    if (startUserId) {
+      store.dispatch(slice.actions.setSession({user: userOf(startUserId), userId: startUserId}));
+    }
+    const signIn = (userId: string): void => {
+      store.dispatch(slice.actions.setSession({user: userOf(userId), userId}));
+    };
+    const finishSignOut = async (): Promise<void> => {
+      resolveSignOut({data: {success: true}});
+      for (let i = 0; i < 20; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    };
+    return {authClient, finishSignOut, signIn, slice, store};
+  };
+
+  for (const kind of ["logout()", "auth/logout"] as const) {
+    const logoutAction = (slice: ReturnType<typeof build>["slice"]): UnknownAction =>
+      kind === "logout()" ? slice.actions.logout() : {type: "auth/logout"};
+
+    it(`${kind}: keeps another user's sign-in that lands mid-sign-out`, async () => {
+      const {authClient, finishSignOut, signIn, slice, store} = build("alice", null);
+      store.dispatch(logoutAction(slice));
+      signIn("bob");
+      await finishSignOut();
+
+      expect(store.getState().betterAuth.userId).toBe("bob");
+      expect(authClient.getSession).not.toHaveBeenCalled();
+    });
+
+    it(`${kind}: clears the same user's session refreshed mid-sign-out`, async () => {
+      const {finishSignOut, signIn, slice, store} = build("alice", null);
+      store.dispatch(logoutAction(slice));
+      signIn("alice");
+      await finishSignOut();
+
+      expect(store.getState().betterAuth.userId).toBeNull();
+    });
+
+    it(`${kind}: started signed out, clears a restored session the server no longer has`, async () => {
+      const {finishSignOut, signIn, slice, store} = build(null, null);
+      store.dispatch(logoutAction(slice));
+      signIn("alice");
+      await finishSignOut();
+
+      expect(store.getState().betterAuth.userId).toBeNull();
+    });
+
+    it(`${kind}: started signed out, keeps a sign-in the server still has`, async () => {
+      const {finishSignOut, signIn, slice, store} = build(null, "alice");
+      store.dispatch(logoutAction(slice));
+      signIn("alice");
+      await finishSignOut();
+
+      expect(store.getState().betterAuth.userId).toBe("alice");
+    });
+  }
+});
+
+// Lets listener effects run past their awaits on already-settled promises.
+const settleListeners = async (): Promise<void> => {
+  for (let i = 0; i < 20; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+};
+
 describe("generateBetterAuthSlice cache reset", () => {
   let serverUser = "alice";
   let serverCalls = 0;
 
-  const buildStore = () => {
+  const buildStore = (
+    authClient: ReturnType<typeof createMockAuthClient> = createMockAuthClient()
+  ) => {
     const api = createApi({
       baseQuery: async () => ({data: null}),
       endpoints: (builder) => ({
@@ -600,7 +694,7 @@ describe("generateBetterAuthSlice cache reset", () => {
     });
     const betterAuth = generateBetterAuthSlice({
       apisToReset: [api],
-      authClient: createMockAuthClient(),
+      authClient,
     });
     const store = configureStore({
       middleware: (getDefaultMiddleware) =>
@@ -643,6 +737,87 @@ describe("generateBetterAuthSlice cache reset", () => {
 
     expect((await fetchMe())?.id).toBe("bob");
     expect(serverCalls).toBe(2);
+  });
+
+  it("keeps the cache until a sign-out succeeds, then purges it", async () => {
+    const authClient = createMockAuthClient();
+    let resolveSignOut: (value: unknown) => void = () => {};
+    authClient.signOut = mock(
+      () =>
+        new Promise((resolve) => {
+          resolveSignOut = resolve;
+        })
+    ) as unknown as typeof authClient.signOut;
+    const {betterAuth, fetchMe, signIn, store} = buildStore(authClient);
+    signIn("alice");
+    await fetchMe();
+
+    store.dispatch(betterAuth.actions.logout());
+    await Promise.resolve();
+
+    // A purge now would refetch every mounted screen while the sign-out is in flight.
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toHaveLength(1);
+
+    resolveSignOut({data: {success: true}});
+    await settleListeners();
+
+    expect(store.getState().betterAuth.userId).toBeNull();
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toEqual([]);
+  });
+
+  it("keeps the cache and the session when a sign-out cannot reach the server", async () => {
+    const authClient = createMockAuthClient();
+    authClient.signOut = mock(() =>
+      Promise.reject(new Error("offline"))
+    ) as unknown as typeof authClient.signOut;
+    authClient.getSession = mock(() =>
+      Promise.reject(new Error("offline"))
+    ) as unknown as typeof authClient.getSession;
+    const originalWarn = console.warn;
+    console.warn = mock(() => {});
+    const {betterAuth, fetchMe, signIn, store} = buildStore(authClient);
+    signIn("alice");
+    await fetchMe();
+
+    try {
+      store.dispatch(betterAuth.actions.logout());
+      await settleListeners();
+
+      expect(store.getState().betterAuth.userId).toBe("alice");
+      expect(selectBetterAuthError(store.getState())).toBe(SIGN_OUT_FAILED_MESSAGE);
+      expect(Object.keys(store.getState()["terreno-rtk"].queries)).toHaveLength(1);
+      expect(serverCalls).toBe(1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("purges the cache once for global logouts that pile up while one is in flight", async () => {
+    const authClient = createMockAuthClient();
+    let resolveSignOut: (value: unknown) => void = () => {};
+    authClient.signOut = mock(
+      () =>
+        new Promise((resolve) => {
+          resolveSignOut = resolve;
+        })
+    ) as unknown as typeof authClient.signOut;
+    const {fetchMe, signIn, store} = buildStore(authClient);
+    signIn("alice");
+    await fetchMe();
+
+    store.dispatch({type: "auth/logout"});
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toEqual([]);
+
+    // A screen refetches after the purge and its 401 dispatches another global logout.
+    await fetchMe();
+    store.dispatch({type: "auth/logout"});
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toHaveLength(1);
+
+    resolveSignOut({data: {success: true}});
+    await settleListeners();
+
+    expect(store.getState().betterAuth.userId).toBeNull();
+    expect(Object.keys(store.getState()["terreno-rtk"].queries)).toEqual([]);
   });
 
   it("purges the cache on the global auth/logout action", async () => {

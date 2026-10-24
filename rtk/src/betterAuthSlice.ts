@@ -288,27 +288,39 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
 
   // True when another user signed in while this sign-out was in flight. The sign-out settles only
   // the session it started on, so it must not clear the new one (or the cache fetched for it).
-  const isSupersededBySignIn = (
+  // A sign-out that started signed out cannot tell a new sign-in from a restore of the session it
+  // just revoked (a sync that read the session before the sign-out landed), so it asks the server.
+  const isSupersededBySignIn = async (
     listenerApi: {getState: () => unknown},
     startedUserId: string | null
-  ): boolean => {
+  ): Promise<boolean> => {
     const currentUserId = (listenerApi.getState() as RootState).betterAuth?.userId ?? null;
-    return currentUserId !== null && currentUserId !== startedUserId;
+    if (currentUserId === null || currentUserId === startedUserId) {
+      return false;
+    }
+    if (startedUserId !== null) {
+      return true;
+    }
+    return isSessionStillLive();
   };
+
+  // Global logouts in flight. Only the first purges the cache: its refetches can answer 401 and
+  // dispatch more global logouts before the session clears, and each purge would refetch again.
+  let globalLogoutsInFlight = 0;
 
   // Handle logout action: sign out, then clear the session. A sign-out that failed leaves a
   // live session in place with an error, and clears one the client no longer holds.
   logoutListenerMiddleware.startListening({
     actionCreator: betterAuthSlice.actions.logout,
     effect: async (_action, listenerApi) => {
-      // Purge the cache at once; the session listener below purges it again when the session
-      // clears, dropping anything refetched while the sign-out was in flight. A sign-out that
-      // fails keeps the session, and its screens refetch.
-      resetIfSignedIn(listenerApi);
+      // The cache stays until the session clears: the session listener below purges it then. A
+      // purge now would refetch every mounted screen mid-sign-out, and a refetch that cannot
+      // reach the server answers 401, whose global logout signs the user out even when this
+      // sign-out fails and must keep the session.
       const startedUserId = startedUserIdOf(listenerApi);
       try {
         const result = await withTimeout(authClient.signOut(), signOutTimeoutMs);
-        if (isSupersededBySignIn(listenerApi, startedUserId)) {
+        if (await isSupersededBySignIn(listenerApi, startedUserId)) {
           return;
         }
         if (!isRefused(result)) {
@@ -321,7 +333,7 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
         console.warn("Better Auth: Error signing out:", error);
       }
       const isStillLive = await isSessionStillLive();
-      if (isSupersededBySignIn(listenerApi, startedUserId)) {
+      if (await isSupersededBySignIn(listenerApi, startedUserId)) {
         return;
       }
       if (isStillLive) {
@@ -336,18 +348,27 @@ export const generateBetterAuthSlice = (config: GenerateBetterAuthSliceConfig) =
   // out here, whether or not the server answers the sign-out.
   logoutListenerMiddleware.startListening({
     effect: async (_action, listenerApi) => {
-      resetIfSignedIn(listenerApi);
+      // This logout always ends signed out, so the previous user's data goes at once; the session
+      // listener below purges again when the session clears.
+      if (globalLogoutsInFlight === 0) {
+        resetIfSignedIn(listenerApi);
+      }
+      globalLogoutsInFlight += 1;
       const startedUserId = startedUserIdOf(listenerApi);
       try {
-        await withTimeout(authClient.signOut(), signOutTimeoutMs);
-        console.debug("Better Auth: Signed out via global logout action");
-      } catch (error) {
-        console.warn("Better Auth: Error signing out:", error);
+        try {
+          await withTimeout(authClient.signOut(), signOutTimeoutMs);
+          console.debug("Better Auth: Signed out via global logout action");
+        } catch (error) {
+          console.warn("Better Auth: Error signing out:", error);
+        }
+        if (await isSupersededBySignIn(listenerApi, startedUserId)) {
+          return;
+        }
+        listenerApi.dispatch(betterAuthSlice.actions.clearSession());
+      } finally {
+        globalLogoutsInFlight -= 1;
       }
-      if (isSupersededBySignIn(listenerApi, startedUserId)) {
-        return;
-      }
-      listenerApi.dispatch(betterAuthSlice.actions.clearSession());
     },
     type: LOGOUT_ACTION_TYPE,
   });

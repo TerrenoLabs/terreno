@@ -25,4 +25,5 @@
 /.github/ @joshgachnang
 /.rulesync/ @joshgachnang
 /terraform/ @joshgachnang
+/infra/ @joshgachnang
 /plugins/ @joshgachnang

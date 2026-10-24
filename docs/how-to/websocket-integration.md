@@ -137,24 +137,56 @@ Add to your `app.json` or environment:
 }
 ``````
 
-### 2. Set Up Connection Hook
+### 2. Register the token source
 
-Create a custom hook to manage the connection:
+The hook reads its handshake token from the token source the app registers once at startup
+with `setTokenSource`. A JWT app registers nothing: the default source reads the JWT in
+storage. A Better Auth app registers the adapter it builds for syncdb:
+
+``````typescript
+// store/tokenSource.ts: import once from the app entry, before the store is created
+import {setTokenSource} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+import {authClient} from "@/lib/betterAuth";
+
+setTokenSource(betterAuthAdapter(bridgeBetterAuthReactClient(authClient)));
+``````
+
+With `webAuth: "bearer"`, also pass the adapter `getBearerToken`
+([syncdb adapter](../reference/syncdb.md#createsyncdb-configuration)).
+
+With a token source, the hook:
+
+- reads `getToken()` on every connect and reconnect;
+- calls `refresh()` once when the server rejects the token, then reconnects, and stops after a
+  second rejection (`onConnectError` fires). With no `refresh`, or a failed one, it stops at
+  once;
+- reconnects with the new token when `onAuthChange` fires, and disconnects when there is no
+  token.
+
+To use a different source for one socket, pass it as `tokenSource`. Passing the legacy
+`getAuthToken` getter instead turns the token source off for that hook. See
+[Token source](../reference/legacy/rtk.md#token-source).
+
+### 3. Set Up Connection Hook
+
+Create a custom hook to manage the connection. A Better Auth app gates `shouldConnect` on
+`selectBetterAuthUserId` instead of the JWT user id:
 
 ``````typescript
 // hooks/useWebSocket.ts
-import {useSocketConnection, getAuthToken, baseWebsocketsUrl} from "@terreno/rtk";
-import {useSelectCurrentUserId} from "@/store";
+import {useSocketConnection, baseWebsocketsUrl} from "@terreno/rtk";
+import {selectBetterAuthUserId} from "@terreno/rtk";
+import {useSelector} from "react-redux";
 import {useCallback} from "react";
 import * as Sentry from "@sentry/react-native";
 
 export const useWebSocket = () => {
-  const userId = useSelectCurrentUserId();
+  const userId = useSelector(selectBetterAuthUserId); // JWT apps: useSelectCurrentUserId()
   
   const {socket, isSocketConnected} = useSocketConnection({
     baseUrl: baseWebsocketsUrl,
     shouldConnect: !!userId,
-    getAuthToken,
     onConnect: () => {
       console.info("[WebSocket] Connected");
     },
@@ -184,7 +216,6 @@ export const useWebSocket = () => {
 useSocketConnection({
   baseUrl,
   shouldConnect: !!userId,
-  getAuthToken,
   transports: ["websocket"],
 });
 ``````
@@ -193,7 +224,7 @@ useSocketConnection({
 
 `baseWebsocketsUrl` replaces `api.` with `ws.` in the API host (`https://api.example.com` becomes `ws.example.com`), for deployments that run sockets on a separate host. If sockets are served by the API host itself, as on Vercel, pass `baseUrl` instead.
 
-### 3. Subscribe to Events in Components
+### 4. Subscribe to Events in Components
 
 ``````typescript
 // screens/TodoList.tsx
@@ -243,7 +274,7 @@ export const TodoListScreen = () => {
 };
 ``````
 
-### 4. Show Connection Status (Optional)
+### 5. Show Connection Status (Optional)
 
 ``````typescript
 import {useWebSocket} from "@/hooks/useWebSocket";
@@ -378,7 +409,8 @@ This logs:
 **Cause:** Token not provided or invalid.
 
 **Solution:**
-1. Ensure `getAuthToken()` returns a valid JWT
+1. Ensure the token source returns a valid token: `await getTokenSource()?.getToken()` (or
+   `getAuthToken()` on a JWT app with no source registered)
 2. Check backend token verification logic
 3. Enable `WEBSOCKETS_DEBUG` to see token status
 

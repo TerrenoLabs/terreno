@@ -940,6 +940,46 @@ describe("TextField", () => {
       }
     });
 
+    it("keeps a typo fix the user backspaces within the oscillation window", async () => {
+      const savedOS = PlatformModule.OS;
+      const originalNow = performance.now.bind(performance);
+      let fakeNow = 20_000;
+
+      try {
+        PlatformModule.OS = "web";
+        performance.now = () => fakeNow;
+
+        let value = "hello";
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} testID="memory-text" type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+
+        // RN Web fires onChange (the DOM input event) and then onChangeText for each key.
+        const typeKey = async (text: string, inputType: string): Promise<void> => {
+          const input = view.getByDisplayValue(value);
+          await act(async () => {
+            fireEvent(input, "change", {nativeEvent: {inputType, text}});
+            fireEvent.changeText(input, text);
+          });
+          view.rerender(renderField());
+        };
+
+        await typeKey("hellox", "insertText");
+        fakeNow += 150;
+        await typeKey("hello", "deleteContentBackward");
+
+        expect(onChange.mock.calls.map((call) => call[0])).toEqual(["hellox", "hello"]);
+        expect(value).toBe("hello");
+      } finally {
+        performance.now = originalNow;
+        PlatformModule.OS = savedOS;
+      }
+    });
+
     it("allows backspace and retype after the oscillation window", async () => {
       const savedOS = PlatformModule.OS;
       const originalNow = performance.now.bind(performance);

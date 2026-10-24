@@ -4,7 +4,7 @@ import {assert} from "chai";
 import {classifyChangedFile} from "./changeScope";
 
 describe("classifyChangedFile", () => {
-  it("treats docs, rules, demo, and tests as inert", () => {
+  it("treats docs, rules, demo, infrastructure, and tests as inert", () => {
     for (const path of [
       "docs/how-to/circleci.md",
       ".cursor/rules/ui/00-ui.mdc",
@@ -15,6 +15,8 @@ describe("classifyChangedFile", () => {
       "biome.jsonc",
       "knip.jsonc",
       "changelog/unreleased/x.md",
+      "terraform/modules/terreno-backend/main.tf",
+      "infra/flourish/main.tf",
     ]) {
       assert.equal(classifyChangedFile({path}), "inert", path);
     }

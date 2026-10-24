@@ -1,4 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
+import type {AuthProvider} from "@terreno/syncdb";
 
 mock.module("react-native", () => ({
   Platform: {OS: "ios"},
@@ -12,6 +13,17 @@ mock.module("../authSlice", () => ({
 mock.module("../constants", () => ({
   baseUrl: "http://localhost:4000",
   LOGOUT_ACTION_TYPE: "auth/logout",
+}));
+// Stand-in for the built-in JWT token source; this file only exercises native network monitoring.
+const fakeJwtTokenSource: AuthProvider = {
+  getToken: async (): Promise<string | null> => null,
+  getUserId: async (): Promise<string | null> => null,
+  onAuthChange: (): (() => void) => (): void => {},
+};
+mock.module("../emptyApi", () => ({
+  isJwtTokenSource: (source: AuthProvider | undefined): boolean =>
+    !source || source === fakeJwtTokenSource,
+  jwtTokenSource: fakeJwtTokenSource,
 }));
 
 let networkListener: ((state: {isConnected?: boolean}) => void) | undefined;

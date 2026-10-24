@@ -35,6 +35,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
 - [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
+- [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
 - [Develop an AI feature](ai-feature-development.md) — Dataset → prompt → evaluators → experiment → production label → live traces (SOP)
 - [Observe LLM calls](observe-llm-calls.md) — Register ObservabilityApp, primaries, price map, sampleRate

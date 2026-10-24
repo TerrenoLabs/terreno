@@ -229,7 +229,7 @@ describe("email verification gating", () => {
     await supertest(openApp)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-mailbox@example.com"})
+      .send({currentPassword: "password", email: "new-mailbox@example.com"})
       .expect(200);
 
     await supertest(openApp).post("/auth/verifyEmail").send({token: issued.token}).expect(400);
@@ -250,7 +250,7 @@ describe("email verification gating", () => {
     await supertest(openApp)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-mailbox@example.com"})
+      .send({currentPassword: "password", email: "new-mailbox@example.com"})
       .expect(200);
 
     await supertest(openApp)
@@ -303,7 +303,7 @@ describe("email verification gating", () => {
     await supertest(app)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-reset-only@example.com"})
+      .send({currentPassword: "password", email: "new-reset-only@example.com"})
       .expect(200);
 
     await supertest(app)

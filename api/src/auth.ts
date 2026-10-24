@@ -12,13 +12,15 @@ import {
   type StrategyOptions,
 } from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
-import {addAuthRecoveryRoutes, sendVerificationEmail} from "./authRecovery";
+import {addAuthRecoveryRoutes, sendEmailChangedNotice, sendVerificationEmail} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {APIError, apiErrorMiddleware, errorMessage} from "./errors";
-import type {AuthOptions} from "./expressServer";
+import type {AuthOptions, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
+import {isRbacUserModelName, isWriteKeyForField} from "./rbac/userWriteGuards";
 import {
+  getCurrentRequestContext,
   getSessionIdFromJwtPayload,
   type JwtSessionPayload,
   setRequestContext,
@@ -98,6 +100,10 @@ export const authenticateMiddleware = (anonymous = false) => {
         // req.logIn used to populate authInfo; keep that passport-public API
         // intact for downstream consumers.
         req.authInfo = (info ?? {}) as Express.AuthInfo;
+        // Only the jwt strategy reaches this callback with a user (anonymous calls pass()).
+        if (!getCurrentRequestContext()?.credential) {
+          setRequestContext({credential: "jwt"});
+        }
         return next();
       }
     )(req, res, next);
@@ -119,8 +125,46 @@ export const PRIVILEGED_USER_FIELDS = [
 ] as const;
 
 /**
- * Removes {@link PRIVILEGED_USER_FIELDS} from a self-service body. Fields are dropped rather
- * than rejected so clients that echo a whole user object back still succeed.
+ * passport-local-mongoose password and lockout fields. Only the password flows (reset,
+ * `setPassword`-gated actions) write them, so RBAC user-model writes through modelRouter, sync,
+ * MCP, and the admin panel drop them along with {@link PRIVILEGED_USER_FIELDS}.
+ */
+export const USER_CREDENTIAL_FIELDS = ["hash", "salt", "attempts", "last"] as const;
+
+const RBAC_USER_WRITE_BLOCKED_FIELDS = [...PRIVILEGED_USER_FIELDS, ...USER_CREDENTIAL_FIELDS];
+
+/**
+ * Fields self-service requests (anonymous signup, `PATCH /me`) must never set: the
+ * {@link PRIVILEGED_USER_FIELDS} plus the fields that bind an external credential to the row
+ * (Better Auth id, GitHub link, OAuth provider), the passport-local-mongoose password and
+ * lockout state, and the disabled flag. Only the Better Auth sync, GitHub link, and password
+ * flows that own them write these. Kept apart from PRIVILEGED_USER_FIELDS so authorized admin
+ * User writes through modelRouter, sync, MCP, and the admin panel can still manage the identity
+ * and disabled fields (those writes still drop {@link USER_CREDENTIAL_FIELDS}).
+ */
+export const SELF_SERVICE_BLOCKED_USER_FIELDS = [
+  ...PRIVILEGED_USER_FIELDS,
+  "betterAuthId",
+  "githubId",
+  "githubUsername",
+  "githubProfileUrl",
+  "githubAvatarUrl",
+  "oauthProvider",
+  "hash",
+  "salt",
+  "attempts",
+  "last",
+  "disabled",
+] as const;
+
+const isWriteKeyForAnyField = (key: string, fields: readonly string[]): boolean => {
+  return fields.some((field) => isWriteKeyForField(key, field));
+};
+
+/**
+ * Removes {@link SELF_SERVICE_BLOCKED_USER_FIELDS} from a self-service body, including dotted
+ * paths into them (`roles.0`). Fields are dropped rather than rejected so clients that echo a
+ * whole user object back still succeed.
  */
 export const stripPrivilegedUserFields = (
   body: Record<string, unknown>,
@@ -129,7 +173,7 @@ export const stripPrivilegedUserFields = (
   const sanitized: Record<string, unknown> = {};
   const dropped: string[] = [];
   for (const [key, value] of Object.entries(body)) {
-    if ((PRIVILEGED_USER_FIELDS as readonly string[]).includes(key)) {
+    if (isWriteKeyForAnyField(key, SELF_SERVICE_BLOCKED_USER_FIELDS)) {
       dropped.push(key);
       continue;
     }
@@ -141,6 +185,9 @@ export const stripPrivilegedUserFields = (
   return sanitized;
 };
 
+// Password keys clients send to a profile update; PATCH /me rejects them rather than ignore them.
+const PROFILE_PASSWORD_FIELDS = ["password", "newPassword"] as const;
+
 const isEmailUpdateChangingMailbox = (currentEmail: unknown, nextEmail: unknown): boolean => {
   if (typeof currentEmail !== "string" || typeof nextEmail !== "string") {
     return false;
@@ -148,13 +195,65 @@ const isEmailUpdateChangingMailbox = (currentEmail: unknown, nextEmail: unknown)
   return currentEmail.trim().toLowerCase() !== nextEmail.trim().toLowerCase();
 };
 
+// The body field PATCH /me reads to confirm an email change. It is never written to the user.
+const CURRENT_PASSWORD_FIELD = "currentPassword";
+
+// passport-local-mongoose errors that mean the user has no passport password to check.
+const NO_PASSPORT_PASSWORD_ERRORS = new Set(["IncorrectUsernameError", "NoSaltValueStoredError"]);
+
+// passport-local-mongoose lockout errors (`limitAttempts`), reported to the user as they are.
+const LOCKOUT_ERRORS = new Set(["AttemptTooSoonError", "TooManyAttemptsError"]);
+
+interface PassportAuthenticateResult {
+  error?: {message?: string; name?: string};
+  user?: unknown;
+}
+
+interface CurrentPasswordCheck {
+  message?: string;
+  status: BetterAuthPasswordCheck;
+}
+
+/**
+ * Confirm `password` is the user's current password: first against the passport-local-mongoose
+ * hash (which counts a wrong attempt toward its lockout when `limitAttempts` is on), then, for a
+ * user with no passport password, against the Better Auth credential when Better Auth is wired.
+ */
+const checkCurrentPassword = async (
+  doc: User,
+  password: string,
+  authOptions: AuthOptions | undefined
+): Promise<CurrentPasswordCheck> => {
+  const authenticate = (doc as unknown as {authenticate?: (password: string) => unknown})
+    .authenticate;
+  if (typeof authenticate === "function") {
+    const result = (await authenticate.call(doc, password)) as PassportAuthenticateResult;
+    if (result?.user) {
+      return {status: "verified"};
+    }
+    const errorName = result?.error?.name ?? "";
+    if (!NO_PASSPORT_PASSWORD_ERRORS.has(errorName)) {
+      // Pass the lockout message through so the user knows why a right password fails.
+      const message = LOCKOUT_ERRORS.has(errorName) ? result?.error?.message : undefined;
+      return {message, status: "wrong"};
+    }
+  }
+  if (authOptions?.verifyBetterAuthPassword) {
+    return {status: await authOptions.verifyBetterAuthPassword(doc, password)};
+  }
+  return {status: "no-password"};
+};
+
 const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean): unknown => {
   if (!item || typeof item !== "object" || Array.isArray(item)) {
     return item;
   }
   const record = item as Record<string, unknown>;
-  const fieldsToDrop = PRIVILEGED_USER_FIELDS.filter(
-    (field) => field in record && !(field === "admin" && allowAdminWrite)
+  // Only the exact `admin` key is an authorized legacy-admin write; `admin.x` is never one.
+  const fieldsToDrop = Object.keys(record).filter(
+    (key) =>
+      isWriteKeyForAnyField(key, RBAC_USER_WRITE_BLOCKED_FIELDS) &&
+      !(key === "admin" && allowAdminWrite)
   );
   if (fieldsToDrop.length === 0) {
     return item;
@@ -170,7 +269,8 @@ const omitPrivilegedFieldsFromObject = (item: unknown, allowAdminWrite: boolean)
 /**
  * When RBAC is enabled, authority-bearing User fields must not flow through ordinary mongoose
  * writes on `/users`, sync, or MCP. AdminApp captures role assignments before this runs and
- * explicitly marks authorized legacy-admin writes after its additional checks.
+ * explicitly marks authorized legacy-admin writes after its additional checks. The user model is
+ * recognized by {@link isRbacUserModelName}.
  */
 export const omitUserRolesFromWriteBody = (
   modelName: string,
@@ -178,7 +278,7 @@ export const omitUserRolesFromWriteBody = (
   body: unknown,
   allowAdminWrite = false
 ): unknown => {
-  if (modelName !== "User" || !accessControl || body == null) {
+  if (!isRbacUserModelName(modelName, accessControl) || body == null) {
     return body;
   }
   if (Array.isArray(body)) {
@@ -417,6 +517,14 @@ export const generateTokens = async (
   return {refreshToken, sessionId, token};
 };
 
+/**
+ * Whether an account has been disabled (`isDisabledPlugin`). Disabled users must not
+ * authenticate or receive new tokens on any path.
+ * @internal
+ */
+export const isUserDisabled = (user: unknown): boolean =>
+  (user as {disabled?: boolean} | null | undefined)?.disabled === true;
+
 export const setupAuth = (app: express.Application, userModel: UserModel): void => {
   if (!userModel.createStrategy) {
     throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
@@ -442,14 +550,17 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
     ) as passport.Strategy
   );
 
+  // Only the jwt cookie or the Bearer scheme carries an access JWT. Other schemes (such as
+  // "Secret") skip decodeJWTMiddleware, so passport must not read a JWT out of them either.
   const customTokenExtractor: JwtFromRequestFunction = (req) => {
-    let token: string | null = null;
     if (req?.cookies?.jwt) {
-      token = req.cookies.jwt;
-    } else if (req?.headers?.authorization) {
-      token = req?.headers?.authorization.split(" ")[1];
+      return req.cookies.jwt;
     }
-    return token;
+    const [scheme, value] = (req?.headers?.authorization ?? "").split(" ");
+    if (scheme?.toLowerCase() === "bearer" && value) {
+      return value;
+    }
+    return null;
   };
 
   if (process.env.TOKEN_SECRET) {
@@ -477,6 +588,10 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
           return done(error, false);
         }
         if (user) {
+          if (isUserDisabled(user)) {
+            logger.warn(`[jwt] User ${user.id} is disabled`);
+            return done(null, false);
+          }
           return done(null, user);
         }
         if (userModel.createAnonymousUser) {
@@ -600,6 +715,10 @@ export const addAuthRoutes = (
           logger.warn(`Invalid login: ${info}`);
           return res.status(401).json({message: info?.message});
         }
+        if (isUserDisabled(user)) {
+          logger.warn(`[auth] Refusing login for disabled user ${user._id}`);
+          return next(new APIError({status: 401, title: "User is disabled"}));
+        }
         if (authOptions?.requireEmailVerification && user.emailVerified !== true) {
           return next(
             new APIError({
@@ -650,7 +769,7 @@ export const addAuthRoutes = (
       const user = await userModel.findById(decoded.id);
       const tokenEpoch = typeof decoded.te === "number" ? decoded.te : 0;
       const userEpoch = (user as User | null)?.tokenEpoch ?? 0;
-      if (!user || tokenEpoch !== userEpoch) {
+      if (!user || tokenEpoch !== userEpoch || isUserDisabled(user)) {
         logger.error(`Invalid refresh token, user id: ${req.user?.id}`);
         return res.status(401).json({message: "Invalid refresh token"});
       }
@@ -724,7 +843,7 @@ export const addAuthRoutes = (
 export const addMeRoutes = (
   app: express.Application,
   userModel: UserModel,
-  _authOptions?: AuthOptions,
+  authOptions?: AuthOptions,
   accessControl?: import("./rbac/types").AnyTerrenoAccess
 ): void => {
   const router = express.Router();
@@ -764,9 +883,41 @@ export const addMeRoutes = (
     // } catch (e) {
     //   return res.status(403).send({message: (e as Error).message});
     // }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    // `password` is not a schema path, so assigning it would save nothing and still answer 200.
+    if (PROFILE_PASSWORD_FIELDS.some((field) => field in body)) {
+      return res.status(400).send({
+        message:
+          "PATCH /auth/me does not change passwords. Use the password reset flow or Better Auth change-password.",
+      });
+    }
+    const {[CURRENT_PASSWORD_FIELD]: currentPassword, ...profileBody} = body;
+    const previousEmail = doc.email;
     try {
-      const update = stripPrivilegedUserFields(req.body ?? {}, "PATCH /auth/me");
+      const update = stripPrivilegedUserFields(profileBody, "PATCH /auth/me");
       const isMailboxChange = isEmailUpdateChangingMailbox(doc.email, update.email);
+      if (isMailboxChange) {
+        // A stolen session must not be able to move the recovery address, so changing the
+        // mailbox needs the current password.
+        if (typeof currentPassword !== "string" || currentPassword.length === 0) {
+          return res.status(403).send({
+            message: "Enter your current password to change your email.",
+          });
+        }
+        const check = await checkCurrentPassword(doc, currentPassword, authOptions);
+        if (check.status === "no-password") {
+          return res.status(400).send({
+            message:
+              "Set a password on your account before changing your email. Use the password reset flow to set one.",
+          });
+        }
+        if (check.status === "wrong") {
+          logger.warn(`[auth] Rejected email change for user ${String(doc._id)}: wrong password`);
+          return res.status(403).send({
+            message: check.message ?? "The current password is incorrect.",
+          });
+        }
+      }
       Object.assign(doc, update);
       if (isMailboxChange) {
         await AuthToken.invalidateUnusedFor({_id: String(doc._id)}, "passwordReset");
@@ -776,6 +927,9 @@ export const addMeRoutes = (
         }
       }
       await doc.save();
+      if (isMailboxChange && typeof previousEmail === "string" && typeof doc.email === "string") {
+        await sendEmailChangedNotice({authOptions, newEmail: doc.email, previousEmail});
+      }
 
       const dataObject = doc.toObject() as unknown as Record<string, unknown>;
       dataObject.id = doc._id;

@@ -3,7 +3,7 @@ import type React from "react";
 
 const AdminModelLayout: React.FC = () => {
   return (
-    <Stack>
+    <Stack screenOptions={{contentStyle: {backgroundColor: "transparent", flex: 1}}}>
       <Stack.Screen name="index" />
       <Stack.Screen name="[id]" options={{title: "Edit"}} />
       <Stack.Screen name="create" />

@@ -67,6 +67,7 @@
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
     "sdk": "bun scripts/generate-sdk.ts && bun biome check --write scripts/generate-sdk.ts",
+    "smoke:deployed": "playwright test --config playwright.smoke.config.ts",
     "start": "EXPO_UNSTABLE_MCP_SERVER=1 bun expo start --port 8082",
     "sync-sdk": "bun ../syncdb/src/codegen/cli.ts --schema ${OPENAPI_URL:-http://localhost:4000/openapi.json} --out ./store/syncDbSdk.ts --collections todos,notifications,notification-preferences --config ./syncdb-codegen.json",
     "test": "bun test ./**/*.test.ts ./**/*.test.tsx",

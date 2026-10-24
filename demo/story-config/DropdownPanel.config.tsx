@@ -28,7 +28,7 @@ export const DropdownPanelConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3458-6098",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23975",
     ios: "ready",
     android: "ready",
     web: "ready",

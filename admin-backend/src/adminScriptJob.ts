@@ -91,22 +91,29 @@ const isAbortLike = (error: unknown): boolean => {
   return error.name === "AbortError" || error.name === "TaskCancelledError";
 };
 
+/**
+ * Run an admin script against its BackgroundTask row. `requirePending` makes the run conditional
+ * on winning the task's pending -> running transition, so a durable job delivered twice never
+ * starts the script twice. The in-process path creates its task already running and omits it.
+ */
 export const runRegisteredScriptTask = async ({
   args,
+  requirePending = false,
   script,
   signal,
   taskId,
   wetRun,
 }: {
   args: ScriptArgs;
+  requirePending?: boolean;
   script: AdminScriptJobTarget;
   signal?: AbortSignal;
   taskId: string;
   wetRun: boolean;
 }): Promise<void> => {
   const now = DateTime.now().toJSDate();
-  await BackgroundTask.findOneAndUpdate(
-    {_id: taskId, status: {$in: ["pending", "running"]}},
+  const started = await BackgroundTask.findOneAndUpdate(
+    {_id: taskId, status: requirePending ? "pending" : {$in: ["pending", "running"]}},
     {
       $set: {
         progress: {message: "Starting...", percentage: 0, stage: "Running"},
@@ -115,6 +122,18 @@ export const runRegisteredScriptTask = async ({
       },
     }
   );
+
+  if (!started && requirePending) {
+    const current = await BackgroundTask.findById(taskId);
+    if (current?.status === "cancelled") {
+      return;
+    }
+    throw new APIError({
+      detail: `Task ${taskId} is ${current?.status ?? "missing"}`,
+      status: 409,
+      title: "Admin script task already started",
+    });
+  }
 
   const ctx: ScriptContext = {
     addLog: async (level, message) => {
@@ -217,6 +236,7 @@ const createAdminScriptHandler = (
 
     await runRegisteredScriptTask({
       args,
+      requirePending: true,
       script,
       signal: ctx.signal,
       taskId: parsed.taskId,

@@ -1,0 +1,1 @@
+> **TerrenoAppAdminEvent** = `"admin:model.changed"`

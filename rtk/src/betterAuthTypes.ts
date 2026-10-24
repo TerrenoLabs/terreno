@@ -24,6 +24,42 @@ export interface BetterAuthClientConfig {
    * @default "terreno"
    */
   storagePrefix?: string;
+
+  /**
+   * How the web client authenticates to the auth server. Native ignores it: the Expo plugin
+   * already keeps the session without browser cookies.
+   *
+   * - `"cookie"` (default): the browser sends Better Auth's HttpOnly session cookie. Use it
+   *   when the frontend and API share a site.
+   * - `"bearer"`: the client stores the `set-auth-token` header from the server's bearer
+   *   plugin, sends `Authorization: Bearer` on every Better Auth call, and sends no cookies
+   *   (`credentials: "omit"`). Use it when the frontend and API are on different sites, where
+   *   browsers block or partition third-party cookies.
+   * @default "cookie"
+   */
+  webAuth?: BetterAuthWebAuth;
+
+  /**
+   * Where `webAuth: "bearer"` keeps the token, under the key `${storagePrefix}_bearer_token`.
+   * Pass `window.sessionStorage` on shared devices so the token ends with the browser session.
+   * @default window.localStorage
+   */
+  bearerStorage?: BetterAuthBearerStorage;
+}
+
+/**
+ * Web authentication modes for `createBetterAuthClient`.
+ */
+export type BetterAuthWebAuth = "cookie" | "bearer";
+
+/**
+ * Synchronous key-value storage for the web bearer token. `window.localStorage` and
+ * `window.sessionStorage` both satisfy it.
+ */
+export interface BetterAuthBearerStorage {
+  getItem: (key: string) => string | null;
+  removeItem: (key: string) => void;
+  setItem: (key: string, value: string) => void;
 }
 
 /**

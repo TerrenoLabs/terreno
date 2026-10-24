@@ -169,7 +169,7 @@ non-PR branch builds.
 | `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
 The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
@@ -239,7 +239,8 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 | `terreno-e2e` | `E2E_TOKEN_SECRET`, `E2E_REFRESH_TOKEN_SECRET`, `E2E_SESSION_SECRET` | `e2e`, `admin-spa-integration`, `maestro-e2e` |
 | `terreno-release` | `REPO_ADMIN_TOKEN`, `ZOOM_WEBHOOK_URL`, `ZOOM_WEBHOOK_TOKEN` | stable version bump + release notification |
 | `terreno-agentic` | `CURSOR_API_KEY`, optional `CURSOR_MODEL` | `architectural-pr-review` |
-| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review` |
+| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review`, `approve` |
+| `terreno-approve` | `TERRENO_APP_ID`, `TERRENO_APP_PRIVATE_KEY` (the terreno-approval-agent GitHub App), `ANTHROPIC_API_KEY` | `approve` |
 | `terreno-github-deployments` | `GITHUB_DEPLOYMENTS_TOKEN`: fine-grained PAT on `TerrenoLabs/terreno` with **Deployments: read/write** and **Pull requests: read** only | GitHub Deployment records + preview PR lookup in every Netlify/GCP deploy job |
 
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
@@ -247,8 +248,9 @@ Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets on
 GitHub PAT) in project env vars — those are injected into every job, including
 `bun` scripts from the PR. `terreno-github-api` must hold the PAT as
 `GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
-The `always` workflow attaches it **only** to `dco` and `architectural-pr-review`
-(the latter also gets `terreno-agentic`). DCO skips if `GITHUB_TOKEN` is unset.
+The `always` workflow attaches it **only** to `dco`, `architectural-pr-review`
+(which also gets `terreno-agentic`), and `approve` (which also gets `terreno-approve`).
+DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.
@@ -267,7 +269,7 @@ the `deploy-docs` run that commit starts can unpack the archive under
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and
-`circleci_gcp_context_id` in `terraform/terraform.tfvars`, apply once with an
+`circleci_gcp_context_id` in `infra/flourish/terraform.tfvars`, apply once with an
 existing Terraform admin identity, then copy `circleci_workload_identity_provider`
 into the context as `GCP_WIF_PROVIDER_PROD`. The WIF condition requires the
 `terreno-gcp` context UUID so a PR job without that context cannot exchange the
@@ -293,6 +295,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
 | `dco` | `dco` |
+| (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |
 | Admin backend lint, compile, coverage | `packages-ci` (`admin-backend`) |
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
@@ -338,6 +341,39 @@ CD replacement map:
 | Netlify demo / frontend / docs deploys | production + `*-preview` jobs |
 | Publish on tag (`publish-on-tag.yml`) | `publish-release` |
 | Appium Android / iOS | Not ported (Maestro web is `maestro-e2e`) |
+
+## Approval agent
+
+`approve` runs `brewery approve` from
+[joshgachnang/brewery](https://github.com/joshgachnang/brewery) on every same-repo PR
+pipeline and posts one review as the **terreno-approval-agent** GitHub App plus a
+`terreno/approve` check run. Policy lives in `.brewery.json` (`approve` block: levels
+the App may approve, path rules that floor, cap, or forbid approval; when a file matches
+both a floor and a lower ceiling, the floor wins) and
+`docs/approval-rubric.md` (what the model scores). Both are read from `origin/master`,
+so a PR cannot change the rules it is judged by, and a PR that edits either file is
+never approved. The job resets its working tree to `origin/master` right after
+checkout, so the PR-number script, `bunfig.toml`, and the agent's working directory all
+come from master and nothing from the PR tree runs while the App key is in the
+environment; brewery reads the head through `git show <sha>:`. Brewery itself is
+pinned to a commit (`BREWERY_REF`) and cloned into `$HOME`; the model runs read-only
+with an allowlisted environment that holds no GitHub or App credential. The job waits
+(`--wait-checks`, up to 45 minutes) for every other check on the head before judging,
+ignoring its own `ci/circleci: approve` check (`selfChecks` in `.brewery.json`), and
+skips a red or still-pending head without spending a model, so it runs once per push,
+last.
+
+To teach the agent from what reviewers actually say, run
+`brewery calibrate TerrenoLabs/terreno` (optionally `--reviewer <login>` or `--notes
+<file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
+path rules from the review comments since the last pass.
+
+Rollout: `approveLevels` is `[]`, so every PR gets a `COMMENT` review that says the
+risk level and why, and nothing approves. After a dozen PRs, compare the levels with
+how humans reviewed them, tune the path rules and rubric, then set
+`"approveLevels": ["low"]` in a one-line PR. The prompts and answers behind each
+verdict are stored as the `brewery-approve` job artifact. Full reference:
+[brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
 
 ## Manual pipelines
 

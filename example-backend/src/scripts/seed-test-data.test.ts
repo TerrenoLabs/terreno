@@ -1,4 +1,4 @@
-import {describe, it} from "bun:test";
+import {afterEach, describe, it} from "bun:test";
 import {LocalDatasetStore, LocalEvaluatorStore, LocalPromptStore} from "@terreno/ai";
 import {ConsentForm, Membership, Notification, Organization, runSeeds} from "@terreno/api";
 import {CommsMessage} from "@terreno/comms";
@@ -8,7 +8,12 @@ import {FakePatientChart} from "../models/fakePatientChart";
 import {Project} from "../models/project";
 import {Todo} from "../models/todo";
 import {User} from "../models/user";
-import {EXAMPLE_SUMMARIZE_PROMPT, seedDefaultData, seedSteps} from "./seed-test-data";
+import {
+  EXAMPLE_SUMMARIZE_PROMPT,
+  seedDefaultData,
+  seedDefaultDataOnBoot,
+  seedSteps,
+} from "./seed-test-data";
 
 describe("seedDefaultData", () => {
   it("idempotently seeds the default users and example records", async () => {
@@ -182,6 +187,37 @@ describe("seedDefaultData", () => {
       preview.changes.map((change) => change.model),
       ["ObsPrompt", "ObsEvaluator"]
     );
+    assert.equal(await User.countDocuments({}), 0);
+  });
+});
+
+describe("seedDefaultDataOnBoot", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(process.env, "SEED_DEFAULTS");
+  });
+
+  it("does not seed when SEED_DEFAULTS is unset", async () => {
+    const result = await seedDefaultDataOnBoot({isDeployed: false});
+
+    assert.isUndefined(result);
+    assert.equal(await User.countDocuments({}), 0);
+  });
+
+  it("seeds the default users locally when SEED_DEFAULTS=true", async () => {
+    process.env.SEED_DEFAULTS = "true";
+
+    const result = await seedDefaultDataOnBoot({isDeployed: false});
+
+    assert.exists(result);
+    assert.exists(await User.findByEmail("superadmin@example.com"));
+  });
+
+  it("refuses to seed fixed-password accounts into a deployed process", async () => {
+    process.env.SEED_DEFAULTS = "true";
+
+    const result = await seedDefaultDataOnBoot({isDeployed: true});
+
+    assert.isUndefined(result);
     assert.equal(await User.countDocuments({}), 0);
   });
 });

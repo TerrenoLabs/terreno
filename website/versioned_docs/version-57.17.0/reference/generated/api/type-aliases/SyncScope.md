@@ -1,0 +1,1 @@
+> **SyncScope** = [`SyncScopeOwner`](../interfaces/SyncScopeOwner.md) \| [`SyncScopeTenant`](../interfaces/SyncScopeTenant.md) \| [`SyncScopeBroadcast`](../interfaces/SyncScopeBroadcast.md) \| [`SyncScopeResolver`](SyncScopeResolver.md)

@@ -4,6 +4,8 @@ Deploy a Terreno `@terreno/api` backend (for example `example-backend`) to Googl
 
 Replace placeholders: `$PROJECT_ID`, `$REGION`, `$SERVICE_NAME`, `$REPOSITORY`.
 
+Steps 1, 3, and 4 create infrastructure with `gcloud`, which suits a first deploy. For production, create the same resources with Terraform instead — see [Manage with Terraform](#manage-with-terraform).
+
 ## Prerequisites
 
 - [gcloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated
@@ -54,7 +56,7 @@ echo -n 'mongodb+srv://user:pass@cluster.example/terreno?retryWrites=true&w=majo
 
 Repeat for `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, and `SESSION_SECRET`.
 
-For Better Auth, also create `better-auth-secret` and set `AUTH_PROVIDER=better-auth` plus `BETTER_AUTH_URL` at deploy time. See [Configure Better Auth](configure-better-auth.md).
+For Better Auth, also create `better-auth-secret` and set `AUTH_PROVIDER=better-auth` plus `BETTER_AUTH_URL` at deploy time. See [Configure Better Auth](configure-better-auth.md). The example backend uses Better Auth when `AUTH_PROVIDER` is unset, and with `NODE_ENV=production` it refuses to start unless `BETTER_AUTH_SECRET` is set to a value other than its published development secret.
 
 ## 4. Runtime service account
 
@@ -96,6 +98,22 @@ curl -s "$SERVICE_URL/health" | jq .
 ```
 
 Expect `"healthy": true`.
+
+## Manage with Terraform
+
+The [`terreno-backend` module](https://github.com/TerrenoLabs/terreno/tree/master/terraform/modules/terreno-backend) replaces steps 1, 3, and 4. It creates the Artifact Registry repository, the runtime service account, empty secrets with the names used above, and the Cloud Run service with session affinity, a 3600s timeout, and one minimum instance.
+
+```hcl
+module "backend" {
+  source = "github.com/TerrenoLabs/terreno//terraform/modules/terreno-backend?ref=<release-tag>"
+
+  project_id   = "your-project-id"
+  region       = "us-central1"
+  service_name = "your-service-name"
+}
+```
+
+After `terraform apply`, add a version to **every** secret in the module's `secret_ids` output, including `better-auth-secret` (the module creates it by default; `gcloud run deploy` fails while any mounted secret has no version). Then build, push, and deploy (steps 2 and 5), using the `registry_path`, `service_account_email`, and `set_secrets_flag` outputs. Terraform ignores the image and env vars after creation, so deploys never conflict with `terraform apply`. Set `github_deploy` to add a keyless GitHub Actions deployer through Workload Identity Federation. Leave `--allow-unauthenticated` off in CI deploys: the module already makes the service public, and that flag needs IAM permissions the deployer does not have.
 
 ## Production constraints
 

@@ -12,6 +12,7 @@ import mongoose, {type Document, type Model} from "mongoose";
 import {
   assertNoActionCollisions,
   type CollectionActionConfig,
+  hasMCPActions,
   type InstanceActionConfig,
   registerActionRoutes,
 } from "./actions";
@@ -35,7 +36,7 @@ import {
   passthroughOrWrapWrite,
 } from "./errors";
 import {logger} from "./logger";
-import {registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
+import {registerMCPActionModel, registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
 import type {MCPConfig} from "./mcp/types";
 import {
   createOpenApiMiddleware,
@@ -54,8 +55,10 @@ import {checkPermissions, permissionMiddleware, type RESTPermissions} from "./pe
 import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 import {warnRealtimeDeprecated} from "./realtime/deprecation";
 import type {RealtimeConfig} from "./realtime/types";
+import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
   type ExecutorConcurrencyCheck,
   executeCreate,
@@ -211,6 +214,13 @@ export interface ModelRouterOptions<T> {
    * Note: you should have an index field on these fields or Mongo may slow down considerably.
    * */
   sort?: string | {[key: string]: "ascending" | "descending"};
+  /**
+   * Extra fields that list requests may sort by. A client `sort` may name only fields in
+   * `queryFields`, fields named in `sort`, and fields listed here; any other field returns
+   * 400 `sort-field-not-allowed`. Do not list fields that some readers cannot see (RBAC
+   * field views, responseHandler stripping): sort order reveals their values.
+   */
+  sortFields?: string[];
   /**
    * Default queries to provide to Mongo before any user queries or transforms happen when making
    * list queries. Accepts any Mongoose-style queries, and runs for all user types.
@@ -532,6 +542,39 @@ const checkQueryParamAllowed = (
   }
 };
 
+// Sorting by a field discloses its order even when responses hide it, so list sorts are
+// limited to fields the router declares sortable (queryFields, options.sort, sortFields).
+const checkListSortAllowed = <T>(
+  sort: unknown,
+  options: ModelRouterOptions<T>,
+  modelName: string
+): void => {
+  const allowed = getAllowedSortFields(options);
+  const result = checkSortFields(sort, allowed);
+  if (result.allowed) {
+    return;
+  }
+  if (result.error === "invalid-sort") {
+    throw new BadRequestError({
+      code: "invalid-sort",
+      detail: "sort must be a space-separated list of fields, each optionally prefixed with -.",
+      source: {parameter: "sort"},
+      title: "Invalid sort",
+    });
+  }
+  const allowedList = allowed.length > 0 ? allowed.join(", ") : "(none)";
+  throw new BadRequestError({
+    code: "sort-field-not-allowed",
+    detail:
+      `${result.field} is not allowed as a sort field. ` +
+      `Add "${result.field}" to sortFields or queryFields on the ${modelName} modelRouter ` +
+      `to sort on it. Allowed: ${allowedList}.`,
+    meta: {allowedSortFields: allowed, model: modelName, sortField: result.field},
+    source: {parameter: "sort"},
+    title: "Sort field not allowed",
+  });
+};
+
 // Handles dot notation patches, creates a normal object to be used for updates.
 // function flattenDotNotationPatch(data: any) {
 //   const result = {};
@@ -696,6 +739,8 @@ export function modelRouter<T>(
   // owns the catalog entry and MCP shares that routePath key.
   if (options.mcp && path === undefined) {
     registerMCPModel(model, options.mcp, options);
+  } else if (path === undefined && hasMCPActions(options)) {
+    registerMCPActionModel(model, options);
   }
 
   const shouldDeferBuild = path !== undefined && Boolean(options.access) && !options.accessControl;
@@ -775,7 +820,8 @@ const _buildModelRouter = <T>(
   if (routePath) {
     replaceCollectionOptions(routePath, options as unknown as ModelRouterOptions<unknown>);
   }
-  if (options.mcp) {
+  // A routed router's catalog entry was replaced by routePath above; only pathless ones need this.
+  if (options.mcp || (!routePath && hasMCPActions(options))) {
     updateMCPRegistryOptions(model.modelName, options as unknown as ModelRouterOptions<unknown>);
   }
 
@@ -840,6 +886,9 @@ const _buildModelRouter = <T>(
       // Runs before query validation so a field missing from queryFields is always
       // reported with this error, whatever the validator's settings.
       (req: Request, _res: Response, next: NextFunction): void => {
+        if (req.query.sort !== undefined) {
+          checkListSortAllowed(req.query.sort, options, model.modelName);
+        }
         for (const queryParam of Object.keys(req.query)) {
           if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
             continue;
@@ -1270,6 +1319,13 @@ const _buildModelRouter = <T>(
       });
     }
 
+    await assertCanWriteTargetUser({
+      accessControl: options.accessControl,
+      actor: req.user,
+      modelName: model.modelName,
+      target: doc,
+    });
+
     const field = req.params.field as string;
     const itemId = req.params.itemId as string;
 
@@ -1317,9 +1373,17 @@ const _buildModelRouter = <T>(
         });
       }
       // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument.
+      // other parts of the subdocument. Merge into a detached copy: the array elements are the
+      // loaded document's live subdocuments, and only the body that survives the hooks below
+      // may change the document.
       if (operation === "PATCH" && isValidObjectId(itemId)) {
-        Object.assign(array[index] as object, req.body[field]);
+        const current = array[index] as {$clone?: () => object} | object;
+        const detached =
+          typeof (current as {$clone?: unknown}).$clone === "function"
+            ? (current as {$clone: () => object}).$clone()
+            : {...current};
+        Object.assign(detached, req.body[field]);
+        array[index] = detached;
       } else if (operation === "PATCH") {
         // For PATCHing a string array, we can replace the whole object.
         array[index] = req.body[field];
@@ -1335,6 +1399,14 @@ const _buildModelRouter = <T>(
       });
     }
     let body = await applyArrayOperationUpdateHooks({[field]: array} as unknown as Partial<T>, req);
+
+    await assertCanWriteUserIdentity({
+      accessControl: options.accessControl,
+      actor: req.user,
+      body,
+      modelName: model.modelName,
+      target: doc,
+    });
 
     body = omitUserRolesFromWriteBody(
       model.modelName,

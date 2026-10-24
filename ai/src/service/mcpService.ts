@@ -1,4 +1,5 @@
 import {createMCPClient} from "@ai-sdk/mcp";
+import {logger} from "@terreno/api";
 import type {Tool} from "ai";
 
 import type {MCPServerConfig} from "../types";
@@ -97,11 +98,21 @@ export class MCPService {
   async getTools(): Promise<Record<string, Tool>> {
     const allTools: Record<string, Tool> = {};
 
-    for (const [, connection] of this.connections) {
+    for (const [serverName, connection] of this.connections) {
       if (connection.connected && connection.client) {
         try {
           const tools = await connection.client.tools();
-          Object.assign(allTools, tools);
+          // The first server to offer a name keeps it, so a later server cannot replace it.
+          for (const [name, serverTool] of Object.entries(tools)) {
+            if (Object.hasOwn(allTools, name)) {
+              logger.warn("Dropping an MCP tool whose name another server already uses", {
+                server: serverName,
+                tool: name,
+              });
+              continue;
+            }
+            allTools[name] = serverTool;
+          }
         } catch {
           // Skip tools from failed servers
         }

@@ -30,6 +30,7 @@ import {
   freshSessionMiddleware,
   sensitiveSessionMiddleware,
 } from "better-auth/api";
+import {DateTime} from "luxon";
 import {z} from "zod";
 
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
@@ -110,8 +111,14 @@ interface CredentialRow {
   providerId: string;
 }
 
-const createdAtOf = (row: CredentialRow): number =>
-  row.createdAt ? new Date(row.createdAt).getTime() : 0;
+const createdAtOf = (row: CredentialRow): number => {
+  if (!row.createdAt) {
+    return 0;
+  }
+  return typeof row.createdAt === "string"
+    ? DateTime.fromISO(row.createdAt).toMillis()
+    : DateTime.fromJSDate(row.createdAt).toMillis();
+};
 
 /** The credential row that wins when concurrent requests each created one: the oldest. */
 const firstCredential = (rows: CredentialRow[]): CredentialRow | undefined =>
@@ -168,7 +175,7 @@ export const createSetPasswordPlugin = ({
         // Only fills a row that still has no password, so a concurrent set cannot be overwritten.
         const filled = await ctx.context.adapter.update<CredentialRow>({
           model: "account",
-          update: {password: passwordHash, updatedAt: new Date()},
+          update: {password: passwordHash, updatedAt: DateTime.now().toJSDate()},
           where: [
             {field: "id", value: account.id},
             {field: "password", value: null},

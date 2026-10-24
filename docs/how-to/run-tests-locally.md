@@ -93,7 +93,7 @@ failed.
 The cross-site specs (`CROSS_SITE_SPEC_FILES` in `playwright.config.ts`:
 `e2e/crossSiteBearer.spec.ts`, `e2e/crossSiteOAuth.spec.ts`, `e2e/authMethods.spec.ts`,
 `e2e/crossSiteChallenges.spec.ts`, `e2e/crossSiteLogin.spec.ts`,
-`e2e/account-linking.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
+`e2e/account-linking.spec.ts`, `e2e/account-security.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
 check, rather than in an `e2e` shard: they need
 a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
 `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
@@ -103,7 +103,21 @@ a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
 `127.0.0.1:4555`. Naming any of those spec files (or
 setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
-`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. A new spec that needs
+`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. CI serves a static
+export instead of a Metro dev server, which gets OOM-killed bundling beside the backend and
+Chromium. To run the specs exactly as `e2e-cross-site` does:
+
+```bash
+cd example-frontend
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+  bun expo export --platform web --output-dir dist-cross-site --clear
+bunx serve dist-cross-site -s -l 8082 &
+CI=true E2E_CROSS_SITE_BEARER=true MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
+  bunx playwright test --config playwright.circleci.config.ts --reporter=list
+```
+
+`--clear` matters: Metro's cache keeps the `EXPO_PUBLIC_*` values of an earlier export. A new
+spec that needs
 the mock provider or cookie-less sessions joins `CROSS_SITE_SPEC_FILES` and the
 `cross-site-bearer` shard in `scripts/ci/e2eAffected/shards.ts`.
 

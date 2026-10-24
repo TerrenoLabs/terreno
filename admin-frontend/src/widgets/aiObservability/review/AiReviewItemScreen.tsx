@@ -5,6 +5,7 @@ import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {AiReviewItemView} from "./AiReviewItemView";
+import {openBatchItems} from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
   firstUnanswered,
@@ -30,13 +31,10 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const detailQuery = useDetailQuery(id ?? "", {skip: !id});
   const detail = useMemo(() => unwrapReviewDetail(detailQuery.data), [detailQuery.data]);
   const batchId = detail?.batchId;
-  // Batch items walk their own batch; everything else walks the whole pending queue.
+  // Batch items walk their own open items (pending or in progress, matching the batch
+  // screen's remaining count); everything else walks the whole pending queue.
   const globalPendingQuery = useListQuery("pending");
-  const batchPendingQuery = useBatchQueueQuery(
-    {batchId: batchId ?? "", status: "pending"},
-    {skip: !batchId}
-  );
-  const pendingQuery = batchId ? batchPendingQuery : globalPendingQuery;
+  const batchQueueQuery = useBatchQueueQuery({batchId: batchId ?? ""}, {skip: !batchId});
   const currentUserQuery = useCurrentUserQuery();
   const statusQuery = useStatusQuery();
   const [runAction, actionState] = useActionMutation();
@@ -45,7 +43,13 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const [submitError, setSubmitError] = useState("");
   const toast = useToast();
 
-  const pending = useMemo(() => unwrapReviewList(pendingQuery.data), [pendingQuery.data]);
+  const pending = useMemo(
+    () =>
+      batchId
+        ? openBatchItems(unwrapReviewList(batchQueueQuery.data))
+        : unwrapReviewList(globalPendingQuery.data),
+    [batchId, batchQueueQuery.data, globalPendingQuery.data]
+  );
   const currentUserId = useMemo(
     () => unwrapCurrentUserId(currentUserQuery.data),
     [currentUserQuery.data]
@@ -206,7 +210,8 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     );
   }
 
-  if (detailQuery.isLoading || pendingQuery.isLoading) {
+  const isQueueLoading = batchId ? batchQueueQuery.isLoading : globalPendingQuery.isLoading;
+  if (detailQuery.isLoading || isQueueLoading) {
     return (
       <AiObservabilityChrome
         {...props}

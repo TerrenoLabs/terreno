@@ -78,9 +78,9 @@ const createReviewApi = (api: AdminApi) => {
       }),
       [BATCH_QUEUE_KEY]: build.query({
         providesTags: ["aiObservabilityReview"],
-        query: ({batchId, status}: {batchId: string; status: ReviewStatus}) => ({
+        query: ({batchId, status}: {batchId: string; status?: ReviewStatus}) => ({
           method: "GET",
-          params: {batchId, status},
+          params: status ? {batchId, status} : {batchId},
           url: "/ai/observability/review",
         }),
       }),
@@ -154,7 +154,7 @@ export const useAiObservabilityReviewApi = (api: AdminApi) => {
       refetch: () => void;
     },
     useBatchQueueQuery: hooks.useAiObservabilityReviewBatchQueueQuery as (
-      args: {batchId: string; status: ReviewStatus},
+      args: {batchId: string; status?: ReviewStatus},
       options?: QueryOptions
     ) => {
       data?: unknown;

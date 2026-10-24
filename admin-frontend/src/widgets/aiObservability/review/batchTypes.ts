@@ -1,4 +1,4 @@
-import type {EvaluatorDimension, ReviewStatus} from "./reviewTypes";
+import type {EvaluatorDimension, ReviewListItem, ReviewStatus} from "./reviewTypes";
 
 export type ScoreValue = boolean | number | string;
 
@@ -77,6 +77,10 @@ export interface ReviewBatchDetail extends ReviewBatchListItem {
 }
 
 export const DEFAULT_BATCH_SIZE = 10;
+
+/** Batch items still awaiting an answer: pending or in progress, in batch order. */
+export const openBatchItems = (items: ReviewListItem[]): ReviewListItem[] =>
+  items.filter((item) => item.status === "pending" || item.status === "in_progress");
 
 // Agreement at or above this rate is treated as "matches the humans".
 const AGREEMENT_TRUSTED = 0.9;

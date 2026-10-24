@@ -5,6 +5,7 @@ import {
   agreementVerdict,
   formatAnswer,
   formatPercent,
+  openBatchItems,
   previewText,
   unwrapBatchDetail,
   unwrapBatchList,
@@ -13,6 +14,17 @@ import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {dimensionLabel, firstUnanswered} from "./reviewTypes";
 
 describe("batchTypes", () => {
+  it("keeps pending and in-progress batch items in order as remaining work", () => {
+    const base = {enqueuedAt: "2026-01-01T00:00:00.000Z", evaluatorId: "e1", reason: "manual"};
+    const items = [
+      {...base, id: "r1", status: "done" as const, traceId: "t1", traceName: "a"},
+      {...base, id: "r2", status: "in_progress" as const, traceId: "t2", traceName: "b"},
+      {...base, id: "r3", status: "skipped" as const, traceId: "t3", traceName: "c"},
+      {...base, id: "r4", status: "pending" as const, traceId: "t4", traceName: "d"},
+    ];
+    expect(openBatchItems(items).map((item) => item.id)).toEqual(["r2", "r4"]);
+  });
+
   it("formats agreement as a percent with a traffic-light status", () => {
     expect(formatPercent(31 / 32)).toBe("97%");
     expect(formatPercent(undefined)).toBe("—");

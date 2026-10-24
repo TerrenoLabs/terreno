@@ -1,9 +1,26 @@
 import {Platform} from "react-native";
 
 import type {DataTableCellData, DataTableColumn} from "./Common";
+import {textFontSizes} from "./textFontSizes";
 
-/** Horizontal padding on each header and body cell (16px per side). */
-export const DATA_TABLE_CELL_HORIZONTAL_PADDING = 32;
+// Layout values DataTable renders with. DataTable.tsx and TableTitle import these, so the width
+// estimate below and the rendered table cannot drift apart.
+
+/** Padding on every side of each header and body cell. */
+export const DATA_TABLE_CELL_PADDING = 16;
+/** Horizontal padding on each header and body cell (both sides). */
+export const DATA_TABLE_CELL_HORIZONTAL_PADDING = DATA_TABLE_CELL_PADDING * 2;
+/** Font size of the uppercase, bold column title in the header. */
+export const DATA_TABLE_HEADER_FONT_SIZE = 10;
+/** Diameter of the round sort button in a sortable column's header. */
+export const DATA_TABLE_SORT_BUTTON_SIZE = 16;
+/** Gap between the header title and the sort button. */
+export const DATA_TABLE_SORT_BUTTON_MARGIN = 8;
+/** Width of the fixed "more" column drawn when `moreContentComponent` is set. */
+export const DATA_TABLE_MORE_COLUMN_WIDTH = 48;
+/** Border around the table body. */
+export const DATA_TABLE_BORDER_WIDTH = 1;
+
 /** Narrowest an auto-sized column starts at, before any fill is added. */
 export const DATA_TABLE_AUTO_MIN_COLUMN_WIDTH = 80;
 /** Widest an auto-sized column starts at, before any fill is added. Longer text wraps or clips. */
@@ -13,13 +30,16 @@ export const DATA_TABLE_AUTO_WIDTH_SAMPLE_ROWS = 50;
 /** Content width assumed for a custom cell whose value is not a string or number. */
 export const DATA_TABLE_AUTO_CUSTOM_CONTENT_WIDTH = 120;
 
-const HEADER_FONT_SIZE = 10;
-const HEADER_SORT_ICON_WIDTH = 24;
+const HEADER_SORT_ICON_WIDTH = DATA_TABLE_SORT_BUTTON_SIZE + DATA_TABLE_SORT_BUTTON_MARGIN;
+// InfoModalIcon and DataTableColumnFilterWeb size themselves; these are their rendered widths.
 const HEADER_INFO_ICON_WIDTH = 26;
 const HEADER_FILTER_ICON_WIDTH = 40;
 const BOOLEAN_ICON_WIDTH = 20;
 
-const CELL_FONT_SIZES = Platform.OS === "web" ? {lg: 18, md: 16, sm: 12} : {lg: 16, md: 14, sm: 10};
+// Font families registered by TerrenoFontProvider, as Text picks them for sm/md cells and
+// TableTitle's bold header.
+const HEADER_FONT_FAMILY = "text-bold";
+const CELL_FONT_FAMILY = "text-regular";
 
 // Average glyph width as a share of font size, for Nunito. Native has no synchronous text
 // measurement, so it estimates; web measures with a canvas.
@@ -46,42 +66,69 @@ interface CanvasTextContext {
   measureText: (text: string) => {width: number};
 }
 
-let canvasContext: CanvasTextContext | null | undefined;
+interface CanvasDocument {
+  createElement?: (tag: string) => unknown;
+}
 
-const getCanvasContext = (): CanvasTextContext | null => {
-  if (canvasContext !== undefined) {
+export interface CreateDataTableTextMeasurerArgs {
+  /** Document to create the measuring canvas from. Defaults to the global document. */
+  getDocument?: () => CanvasDocument | undefined;
+  /** Whether to measure with a canvas. Defaults to `Platform.OS === "web"`. */
+  isWeb?: () => boolean;
+}
+
+const getGlobalDocument = (): CanvasDocument | undefined =>
+  (globalThis as {document?: CanvasDocument}).document;
+
+const isWebPlatform = (): boolean => Platform.OS === "web";
+
+/**
+ * Builds a measurer that uses one shared canvas on web (no layout or reflow) and estimates
+ * everywhere else, or when no canvas is available.
+ */
+export const createDataTableTextMeasurer = ({
+  getDocument = getGlobalDocument,
+  isWeb = isWebPlatform,
+}: CreateDataTableTextMeasurerArgs = {}): MeasureDataTableText => {
+  let canvasContext: CanvasTextContext | null | undefined;
+
+  const getCanvasContext = (): CanvasTextContext | null => {
+    if (canvasContext !== undefined) {
+      return canvasContext;
+    }
+    const doc = getDocument();
+    if (!doc?.createElement) {
+      canvasContext = null;
+      return canvasContext;
+    }
+    try {
+      const canvas = doc.createElement("canvas") as {getContext?: (kind: string) => unknown};
+      canvasContext = (canvas.getContext?.("2d") as CanvasTextContext | null) ?? null;
+    } catch {
+      canvasContext = null;
+    }
     return canvasContext;
-  }
-  const doc = (globalThis as {document?: {createElement?: (tag: string) => unknown}}).document;
-  if (!doc?.createElement) {
-    canvasContext = null;
-    return canvasContext;
-  }
-  try {
-    const canvas = doc.createElement("canvas") as {getContext?: (kind: string) => unknown};
-    canvasContext = (canvas.getContext?.("2d") as CanvasTextContext | null) ?? null;
-  } catch {
-    canvasContext = null;
-  }
-  return canvasContext;
+  };
+
+  return (args) => {
+    const context = isWeb() ? getCanvasContext() : null;
+    if (!context) {
+      return estimateDataTableTextWidth(args);
+    }
+    const family = args.isHeader ? HEADER_FONT_FAMILY : CELL_FONT_FAMILY;
+    const weight = args.isHeader ? 700 : 400;
+    context.font = `${weight} ${args.fontSize}px ${family}, Nunito, sans-serif`;
+    const measured = context.measureText(args.isHeader ? args.text.toUpperCase() : args.text).width;
+    // Fall back if the canvas is a stub (jsdom returns 0).
+    if (!measured && args.text.length > 0) {
+      return estimateDataTableTextWidth(args);
+    }
+    return Math.ceil(measured);
+  };
 };
 
-/** Measures with one shared canvas on web (no layout or reflow); estimates everywhere else. */
-export const measureDataTableTextWidth: MeasureDataTableText = (args) => {
-  const context = Platform.OS === "web" ? getCanvasContext() : null;
-  if (!context) {
-    return estimateDataTableTextWidth(args);
-  }
-  const family = args.isHeader ? "text-bold" : "text-regular";
-  const weight = args.isHeader ? 700 : 400;
-  context.font = `${weight} ${args.fontSize}px ${family}, Nunito, sans-serif`;
-  const measured = context.measureText(args.isHeader ? args.text.toUpperCase() : args.text).width;
-  // Fall back if the canvas is a stub (jsdom returns 0).
-  if (!measured && args.text.length > 0) {
-    return estimateDataTableTextWidth(args);
-  }
-  return Math.ceil(measured);
-};
+/** Default measurer: canvas on web, estimate on native. */
+export const measureDataTableTextWidth: MeasureDataTableText = createDataTableTextMeasurer();
 
 const sampleRowIndexes = (rowCount: number): number[] => {
   if (rowCount <= DATA_TABLE_AUTO_WIDTH_SAMPLE_ROWS) {
@@ -143,7 +190,7 @@ export const getDataTableNaturalWidths = ({
     }
 
     let headerWidth = column.title
-      ? measureText({fontSize: HEADER_FONT_SIZE, isHeader: true, text: column.title})
+      ? measureText({fontSize: DATA_TABLE_HEADER_FONT_SIZE, isHeader: true, text: column.title})
       : 0;
     if (column.sortable) {
       headerWidth += HEADER_SORT_ICON_WIDTH;
@@ -172,7 +219,7 @@ export const getDataTableNaturalWidths = ({
           }
           continue;
         }
-        const fontSize = CELL_FONT_SIZES[cell.textSize ?? defaultTextSize];
+        const fontSize = textFontSizes[cell.textSize ?? defaultTextSize].size;
         contentWidth = Math.max(contentWidth, measureText({fontSize, isHeader: false, text}));
         if (contentWidth >= DATA_TABLE_AUTO_MAX_COLUMN_WIDTH) {
           // Already at the cap; the rest of the sample cannot change the result.

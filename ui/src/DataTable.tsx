@@ -35,7 +35,15 @@ import type {
 } from "./Common";
 import {readableTextColor} from "./colorContrast";
 import {DataTableHeaderInfoMarkdown} from "./DataTableHeaderInfoMarkdown";
-import {fitDataTableColumnWidths, getDataTableNaturalWidths} from "./dataTableColumnWidths";
+import {
+  DATA_TABLE_BORDER_WIDTH,
+  DATA_TABLE_CELL_PADDING,
+  DATA_TABLE_MORE_COLUMN_WIDTH,
+  DATA_TABLE_SORT_BUTTON_MARGIN,
+  DATA_TABLE_SORT_BUTTON_SIZE,
+  fitDataTableColumnWidths,
+  getDataTableNaturalWidths,
+} from "./dataTableColumnWidths";
 import {
   DataTableAdditionalFiltersWeb,
   DataTableColumnFilterWeb,
@@ -64,8 +72,6 @@ const DATA_TABLE_INITIAL_NUM_TO_RENDER = 15;
 const DATA_TABLE_MAX_TO_RENDER_PER_BATCH = 10;
 const DATA_TABLE_WINDOW_SIZE = 5;
 const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
-const DATA_TABLE_MORE_COLUMN_WIDTH = 48;
-const DATA_TABLE_BORDER_WIDTH = 1;
 
 /** A column after auto-sizing: every column has a resolved pixel width. */
 type SizedDataTableColumn = DataTableColumn & {width: number};
@@ -206,7 +212,7 @@ const DataTableCellComponent: FC<InternalDataTableCellProps> = ({
         height,
         justifyContent: "center",
         overflow: "hidden",
-        padding: 16,
+        padding: DATA_TABLE_CELL_PADDING,
         position: "relative",
         width: columnDef.width,
         zIndex: 1,
@@ -330,7 +336,7 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
         borderBottomWidth: 1,
         height: rowHeight ?? 54,
         justifyContent: "center",
-        width: 48,
+        width: DATA_TABLE_MORE_COLUMN_WIDTH,
       }}
     >
       <Pressable
@@ -397,7 +403,7 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
         flexDirection: "row",
         height: headerHeight ?? rowHeight,
         justifyContent: isNumberColumn ? "flex-end" : "space-between",
-        padding: 16,
+        padding: DATA_TABLE_CELL_PADDING,
         width: column.width,
         ...(isPinnedHorizontal && {
           left: pinnedLeft,
@@ -438,10 +444,10 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
                   alignItems: "center",
                   backgroundColor: sort ? theme.surface.primary : theme.surface.neutralLight,
                   borderRadius: theme.radius.rounded,
-                  height: 16,
+                  height: DATA_TABLE_SORT_BUTTON_SIZE,
                   justifyContent: "center",
-                  marginLeft: 8,
-                  width: 16,
+                  marginLeft: DATA_TABLE_SORT_BUTTON_MARGIN,
+                  width: DATA_TABLE_SORT_BUTTON_SIZE,
                 }}
               >
                 <FontAwesome6
@@ -507,7 +513,7 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
             borderBottomColor: theme.border.default,
             borderBottomWidth: 1,
             height: headerHeight ?? rowHeight,
-            width: 48,
+            width: DATA_TABLE_MORE_COLUMN_WIDTH,
             zIndex: 11,
           }}
         />
@@ -859,7 +865,7 @@ const DataTableContentComponent: FC<DataTableContentProps> = ({
               left: 0,
               position: "absolute",
               top: 0,
-              width: 48,
+              width: DATA_TABLE_MORE_COLUMN_WIDTH,
               zIndex: 1,
             }}
           >

@@ -1,12 +1,15 @@
 import {describe, expect, it, mock} from "bun:test";
+import {Platform} from "react-native";
 
 import type {DataTableCellData, DataTableColumn} from "./Common";
 import {
+  createDataTableTextMeasurer,
   DATA_TABLE_AUTO_CUSTOM_CONTENT_WIDTH,
   DATA_TABLE_AUTO_MAX_COLUMN_WIDTH,
   DATA_TABLE_AUTO_MIN_COLUMN_WIDTH,
   DATA_TABLE_AUTO_WIDTH_SAMPLE_ROWS,
   DATA_TABLE_CELL_HORIZONTAL_PADDING,
+  estimateDataTableTextWidth,
   fitDataTableColumnWidths,
   getDataTableNaturalWidths,
   type MeasureDataTableText,
@@ -92,6 +95,131 @@ describe("getDataTableNaturalWidths", () => {
     // 10,000 rows / 50 samples = every 200th row, so the last sample is row 9,800.
     expect(measuredRows[0]).toBe("row 0");
     expect(measuredRows.at(-1)).toBe("row 9800");
+  });
+});
+
+describe("getDataTableNaturalWidths header and cell extras", () => {
+  it("makes room for the filter button only on web when filters are wired up", () => {
+    const column: DataTableColumn = {
+      columnType: "text",
+      filter: {field: "status", kind: "text"},
+      title: "t".repeat(100),
+    };
+    const originalOS = Platform.OS;
+    try {
+      Platform.OS = "web";
+      expect(naturalWidths([column], [[{value: "a"}]], {hasFilters: true})).toEqual([
+        100 + 40 + PAD,
+      ]);
+      expect(naturalWidths([column], [[{value: "a"}]], {hasFilters: false})).toEqual([100 + PAD]);
+      Platform.OS = "ios";
+      expect(naturalWidths([column], [[{value: "a"}]], {hasFilters: true})).toEqual([100 + PAD]);
+    } finally {
+      Platform.OS = originalOS;
+    }
+  });
+
+  it("sizes a boolean column to its icon rather than its value", () => {
+    const widths = naturalWidths(
+      [{columnType: "boolean", title: "B"}],
+      [[{value: "a very long value that is never drawn as text"}]]
+    );
+    expect(widths).toEqual([DATA_TABLE_AUTO_MIN_COLUMN_WIDTH]);
+  });
+
+  it("skips missing cells and non-text values in plain columns", () => {
+    const widths = naturalWidths([{columnType: "text", title: "T"}], [[], [{value: {a: 1}}]]);
+    expect(widths).toEqual([DATA_TABLE_AUTO_MIN_COLUMN_WIDTH]);
+  });
+});
+
+interface FakeCanvas {
+  fonts: string[];
+  texts: string[];
+  getContext: (kind: string) => unknown;
+}
+
+const fakeCanvas = (width: number): FakeCanvas => {
+  const canvas: FakeCanvas = {
+    fonts: [],
+    getContext: () => ({
+      set font(value: string) {
+        canvas.fonts.push(value);
+      },
+      measureText: (text: string) => {
+        canvas.texts.push(text);
+        return {width};
+      },
+    }),
+    texts: [],
+  };
+  return canvas;
+};
+
+describe("createDataTableTextMeasurer", () => {
+  const header = {fontSize: 10, isHeader: true, text: "Name"};
+  const cell = {fontSize: 16, isHeader: false, text: "Ada Lovelace"};
+
+  it("estimates when not on web", () => {
+    const getDocument = mock(() => ({createElement: () => fakeCanvas(99)}));
+    const measure = createDataTableTextMeasurer({getDocument, isWeb: () => false});
+    expect(measure(cell)).toBe(estimateDataTableTextWidth(cell));
+    expect(getDocument).not.toHaveBeenCalled();
+  });
+
+  it("measures with one cached canvas on web, using the header and cell fonts", () => {
+    const canvas = fakeCanvas(41.2);
+    const createElement = mock(() => canvas);
+    const measure = createDataTableTextMeasurer({
+      getDocument: () => ({createElement}),
+      isWeb: () => true,
+    });
+    expect(measure(header)).toBe(42);
+    expect(measure(cell)).toBe(42);
+    expect(createElement).toHaveBeenCalledTimes(1);
+    expect(canvas.fonts).toEqual([
+      "700 10px text-bold, Nunito, sans-serif",
+      "400 16px text-regular, Nunito, sans-serif",
+    ]);
+    // Headers render uppercase, so they are measured that way.
+    expect(canvas.texts).toEqual(["NAME", "Ada Lovelace"]);
+  });
+
+  it("falls back to the estimate when the canvas is a stub that measures 0", () => {
+    const measure = createDataTableTextMeasurer({
+      getDocument: () => ({createElement: () => fakeCanvas(0)}),
+      isWeb: () => true,
+    });
+    expect(measure(cell)).toBe(estimateDataTableTextWidth(cell));
+    expect(measure({...cell, text: ""})).toBe(0);
+  });
+
+  it("estimates when there is no document, no canvas context, or canvas creation throws", () => {
+    const noDocument = createDataTableTextMeasurer({
+      getDocument: () => undefined,
+      isWeb: () => true,
+    });
+    const noContext = createDataTableTextMeasurer({
+      getDocument: () => ({createElement: () => ({})}),
+      isWeb: () => true,
+    });
+    const getDocument = mock(() => ({
+      createElement: (): unknown => {
+        throw new Error("no canvas");
+      },
+    }));
+    const throwing = createDataTableTextMeasurer({getDocument, isWeb: () => true});
+    for (const measure of [noDocument, noContext, throwing]) {
+      expect(measure(cell)).toBe(estimateDataTableTextWidth(cell));
+    }
+    // A failed lookup is cached rather than retried on every cell.
+    throwing(cell);
+    expect(getDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it("defaults to the global document and Platform.OS", () => {
+    const measure = createDataTableTextMeasurer();
+    expect(measure(cell)).toBeGreaterThan(0);
   });
 });
 

@@ -356,7 +356,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: blocks/e2e/smoke.ts, blocks/package.json, docs/testing/e2e/blocks.md
   - Acceptance: `bun run --cwd blocks smoke` exits 0. The compiled `terreno-blocks` binary accepts a valid document with exit code 0, and rejects an invalid one with a non-zero exit code and an error message.
 
-- [ ] **T25** — Smoke test for `@terreno/cli`
+- [x] **T25** — Smoke test for `@terreno/cli`
   - Depends on: T8
   - Files: cli/e2e/smoke.ts, cli/package.json, docs/testing/e2e/cli.md
   - Acceptance: `bun run --cwd cli smoke` exits 0. The compiled `terreno` binary prints its version and runs one offline subcommand that exits 0.

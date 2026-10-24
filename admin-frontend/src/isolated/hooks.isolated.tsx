@@ -10,8 +10,14 @@
  *  - the returned hook functions correspond to the generated hook names
  */
 import {describe, expect, it, mock} from "bun:test";
+import {configureStore} from "@reduxjs/toolkit";
+import {createApi} from "@reduxjs/toolkit/query/react";
+import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
+import {Provider} from "react-redux";
 import {renderWithTheme} from "../../../ui/src/test-utils";
+import {adminOrgScopedArg} from "../orgs/adminModelEndpoints";
+import {OrgContextProvider, useOrgContext} from "../orgs/useOrgContext";
 import {useAdminApi} from "../useAdminApi";
 import {useAdminBackgroundTaskMutation} from "../useAdminBackgroundTask";
 import {useAdminConfig} from "../useAdminConfig";
@@ -231,6 +237,97 @@ describe("useAdminApi", () => {
       url: "/admin/todos/bulk-patch",
     });
     expect(typeof result.useBulkPatchMutation).toBe("function");
+  });
+});
+
+describe("useAdminApi organization switches", () => {
+  // A real RTK Query store whose server answers with the organization header it was sent.
+  const buildStore = () => {
+    const requests: {orgId?: string; url: string}[] = [];
+    const api = createApi({
+      baseQuery: async (args: {headers?: Record<string, string>; url: string}) => {
+        const orgId = args.headers?.["X-Organization-Id"];
+        requests.push({orgId, url: args.url});
+        return {data: {_id: "user-1", org: orgId ?? "none"}};
+      },
+      endpoints: () => ({}),
+      reducerPath: "terreno-rtk",
+    });
+    const store = configureStore({
+      middleware: (getDefault) => getDefault({serializableCheck: false}).concat(api.middleware),
+      reducer: {[api.reducerPath]: api.reducer},
+    });
+    return {api, requests, store};
+  };
+
+  it("reads the record again for the organization chosen after the first read started", async () => {
+    const {api, requests, store} = buildStore();
+    let selectOrganization: (organization: {_id: string; name: string}) => void = () => {};
+    let latest: {data?: {org?: string}; isLoading?: boolean} = {};
+    const Probe: React.FC = () => {
+      selectOrganization = useOrgContext().selectOrganization;
+      const {useReadQuery} = useAdminApi(api as never, "/admin/users", "User");
+      latest = useReadQuery("user-1");
+      return null;
+    };
+    renderWithTheme(
+      <Provider store={store}>
+        <OrgContextProvider>
+          <Probe />
+        </OrgContextProvider>
+      </Provider>
+    );
+    await waitFor(() => expect(latest.data?.org).toBe("none"));
+
+    // The org switcher settles on a default organization after the screen's first read.
+    act(() => {
+      selectOrganization({_id: "org-a", name: "Alpha"});
+    });
+
+    await waitFor(() => expect(latest.data?.org).toBe("org-a"));
+    expect(latest.isLoading).toBe(false);
+    expect(requests).toEqual([
+      {orgId: undefined, url: "/admin/users/user-1"},
+      {orgId: "org-a", url: "/admin/users/user-1"},
+    ]);
+  });
+
+  it("keys list and read entries by the organization carried in the argument", () => {
+    const api = makeMockApi();
+    runHook(() => useAdminApi(api, "/admin/users", "User"));
+    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints & {
+      [key: string]: {
+        serializeQueryArgs: (args: {endpointName: string; queryArgs: unknown}) => string;
+      };
+    };
+    const read = injected.adminRead_User;
+    const list = injected.adminList_User;
+
+    expect(read.query(adminOrgScopedArg("abc", "org-b"))).toEqual({
+      headers: {"X-Organization-Id": "org-b"},
+      method: "GET",
+      url: "/admin/users/abc",
+    });
+    expect(read.providesTags(null, null, adminOrgScopedArg("abc", "org-b"))).toEqual([
+      {id: "abc", type: "admin_User"},
+    ]);
+    expect(
+      read.serializeQueryArgs({
+        endpointName: "adminRead_User",
+        queryArgs: adminOrgScopedArg("abc", "org-b"),
+      })
+    ).toBe("adminRead_User:org-b:abc");
+    expect(list.query(adminOrgScopedArg({limit: 1}, undefined))).toEqual({
+      headers: undefined,
+      method: "GET",
+      url: "/admin/users?limit=1",
+    });
+    expect(
+      list.serializeQueryArgs({
+        endpointName: "adminList_User",
+        queryArgs: adminOrgScopedArg({limit: 1}, "org-b"),
+      })
+    ).toBe('adminList_User:org-b:{"limit":1}');
   });
 });
 

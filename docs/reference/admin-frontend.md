@@ -82,7 +82,10 @@ Wrap organization-aware admin routes with `OrgContextProvider` and render
 organization navigates to `{routeBase}/orgs/:orgId` and adds
 `X-Organization-Id` to subsequent `useAdminApi` requests. Query cache keys also
 include the organization id, preventing rows cached for one org from appearing
-in another. Derive `initialOrganization` from the current pathname so context
+in another. `useAdminApi`'s `useListQuery` and `useReadQuery` carry the organization
+in the query argument, so a switch after a request started (such as the switcher
+settling on a default organization) fetches the new organization's rows instead of
+leaving the screen loading. Derive `initialOrganization` from the current pathname so context
 follows URL changes after mount without overriding a switcher selection while
 navigation is in progress.
 
@@ -593,6 +596,10 @@ When RBAC is enabled, `/admin/config` is filtered for the current user. `AdminSh
 `platformTools` flags to hide denied Scripts, Roles, Version, and Configuration links, and only
 renders model or custom-screen links returned by the server. The shell lifts Audit Log, Feature
 Flags, and Jobs into the Platform section (Jobs still comes from `customScreens`).
+
+A user record's `roles` field loads the role catalog (`GET /rbac/roles`, `rbac:read`) only when
+it is editable. A read-only record, such as an operator's view with `adminUser:read`, lists the
+assigned role names without requesting the catalog.
 
 ### Custom screen page chrome
 

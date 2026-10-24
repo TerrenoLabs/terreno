@@ -311,7 +311,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: announcements/e2e/smoke.ts, announcements/package.json, docs/testing/e2e/announcements.md
   - Acceptance: `bun run --cwd announcements smoke` exits 0. An announcement created over HTTP shows up in a signed-in user's list.
 
-- [ ] **T16** — Smoke test for `@terreno/comms`
+- [x] **T16** — Smoke test for `@terreno/comms`
   - Depends on: T8
   - Files: comms/e2e/smoke.ts, comms/package.json, docs/testing/e2e/comms.md
   - Acceptance: `bun run --cwd comms smoke` exits 0. A message sent through a real server with an in-memory or console adapter is recorded as delivered, with no external calls.

@@ -254,7 +254,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - prepush prints the smoke command as a hint, and run-tests-locally maps the job to it.
   - Acceptance: The CircleCI `smoke` job is green on the PR. `admin-spa-ci` no longer runs the smoke.
 
-- [ ] **T10** — E2E guide at the standardized spot
+- [x] **T10** — E2E guide at the standardized spot
   - Depends on: T8
   - Files: docs/testing/e2e.md, docs/testing/e2e/api.md, website/sidebars.ts
   - Delivers: `docs/testing/e2e.md` explains:

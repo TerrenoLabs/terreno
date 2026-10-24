@@ -19,7 +19,24 @@ https://<stable backend>/api/auth/callback/<provider>
   (`terreno-backend-example-7knxlrnpqq-uc.a.run.app` for the example).
 - After the move ([below](#move-stable-onto-one-domain)), it is `api.<domain>`. Register both
   during the move and drop the Cloud Run one afterwards.
-- Previews never get their own callback. They borrow stable's through oauth-proxy.
+- Previews never get their own callback. They borrow stable's through oauth-proxy, unless one
+  preview owns them for a while ([below](#register-on-a-preview-first)).
+
+## Register on a preview first
+
+Stable only exchanges codes once it runs a release with this setup. To try the providers before
+then, let one preview own the callbacks:
+
+1. Set `OAUTH_CALLBACK_TAG=pr-<n>` in the `terreno-gcp` CircleCI context.
+2. Register every provider below with `<stable backend>` replaced by that preview's backend,
+   `pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app`.
+3. Add the secrets, then rerun that PR's `gcp-cd-preview` job.
+
+That preview mounts every OAuth secret, including client secrets and the Apple key, and
+exchanges codes itself. Other previews proxy through it, and stable gets only the client IDs, so
+stable has no social sign-in while the variable is set. Only name a preview whose code you have
+reviewed: it holds the real secrets. When stable runs the release, register the stable callbacks,
+remove the variable, and redeploy stable.
 
 ## Register each provider
 

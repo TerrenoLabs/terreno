@@ -283,6 +283,25 @@ describe("backend-auth-env.sh", (): void => {
     });
   });
 
+  it("lets a named preview own the callbacks and proxies the other previews through it", async (): Promise<void> => {
+    const owner = await runAuthEnv(["env", "pr-7"], {OAUTH_CALLBACK_TAG: "pr-7"});
+    const other = await runAuthEnv(["env", "pr-42"], {OAUTH_CALLBACK_TAG: "pr-7"});
+    const stable = await runAuthEnv(["env", "prod"], {OAUTH_CALLBACK_TAG: "pr-7"});
+
+    const ownerBackend = "https://pr-7---terreno-backend-example-7knxlrnpqq-uc.a.run.app";
+    assert.equal(owner.env.BETTER_AUTH_URL, ownerBackend);
+    assert.equal(owner.env.OAUTH_PROXY_PRODUCTION_URL, ownerBackend);
+    assert.equal(other.env.OAUTH_PROXY_PRODUCTION_URL, ownerBackend);
+    assert.equal(stable.env.OAUTH_PROXY_PRODUCTION_URL, STABLE_RUN_APP);
+  });
+
+  it("refuses an OAUTH_CALLBACK_TAG that is not prod or pr-<number>", async (): Promise<void> => {
+    const result = await runAuthEnv(["env", "prod"], {OAUTH_CALLBACK_TAG: "staging"});
+
+    assert.equal(result.exitCode, 2);
+    assert.include(result.stderr, "Unknown deploy tag");
+  });
+
   it("moves stable onto one domain with two variables", async (): Promise<void> => {
     const result = await runAuthEnv(["env", "prod"], {
       STABLE_BACKEND_URL: "https://api.example.com/",
@@ -327,7 +346,10 @@ describe("backend-auth-env.sh", (): void => {
   });
 
   // Runs `secrets <tag>` with a fake gcloud that finds a version only for the listed names.
-  const runSecrets = async (tag: string): Promise<AuthEnvResult> => {
+  const runSecrets = async (
+    tag: string,
+    extraEnv: Record<string, string> = {}
+  ): Promise<AuthEnvResult> => {
     const bin = mkdtempSync(join(tmpdir(), "fake-gcloud-"));
     try {
       const fakeGcloud = join(bin, "gcloud");
@@ -354,6 +376,7 @@ describe("backend-auth-env.sh", (): void => {
         ].join(" "),
         GCP_BACKEND_SERVICE: "svc",
         PATH: `${bin}:${Bun.env.PATH ?? ""}`,
+        ...extraEnv,
       });
     } finally {
       rmSync(bin, {force: true, recursive: true});
@@ -379,6 +402,19 @@ describe("backend-auth-env.sh", (): void => {
 
     assert.equal(result.exitCode, 0, result.stderr);
     assert.deepEqual(result.env, {
+      APPLE_CLIENT_ID: "svc-apple-client-id:latest",
+      GITHUB_CLIENT_ID: "svc-github-client-id:latest",
+    });
+  });
+
+  it("mounts every secret on the preview named by OAUTH_CALLBACK_TAG and only client IDs on stable", async (): Promise<void> => {
+    const owner = await runSecrets("pr-7", {OAUTH_CALLBACK_TAG: "pr-7"});
+    const stable = await runSecrets("prod", {OAUTH_CALLBACK_TAG: "pr-7"});
+
+    assert.equal(owner.exitCode, 0, owner.stderr);
+    assert.equal(owner.env.GITHUB_CLIENT_SECRET, "svc-github-client-secret:latest");
+    assert.equal(owner.env.APPLE_PRIVATE_KEY, "svc-apple-private-key:latest");
+    assert.deepEqual(stable.env, {
       APPLE_CLIENT_ID: "svc-apple-client-id:latest",
       GITHUB_CLIENT_ID: "svc-github-client-id:latest",
     });

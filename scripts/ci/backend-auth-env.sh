@@ -17,6 +17,9 @@
 # (Better Auth oauth-proxy). STABLE_BACKEND_URL and STABLE_FRONTEND_URL default to today's
 # run.app and netlify.app hosts, so moving stable onto one domain is a two-variable change.
 # STABLE_PASSKEY_RP_ID overrides the stable passkey rpID the script would derive.
+# OAUTH_CALLBACK_TAG (default prod) names the deploy that owns the registered callbacks. Set it to
+# pr-N to register the providers on that preview before stable runs this code: that preview then
+# gets every OAuth secret and exchanges codes itself, and other previews proxy through it.
 set -euo pipefail
 
 cloud_run_backend_url="${CLOUD_RUN_BACKEND_URL:-https://terreno-backend-example-7knxlrnpqq-uc.a.run.app}"
@@ -24,6 +27,7 @@ legacy_frontend_url="https://terreno-frontend.netlify.app"
 netlify_site_host="terreno-frontend.netlify.app"
 stable_backend_url="${STABLE_BACKEND_URL:-$cloud_run_backend_url}"
 stable_frontend_url="${STABLE_FRONTEND_URL:-$legacy_frontend_url}"
+oauth_callback_tag="${OAUTH_CALLBACK_TAG:-prod}"
 
 # Hosting suffixes where every customer gets a subdomain; a passkey can never be bound to one.
 public_suffixes=" netlify.app run.app a.run.app web.app firebaseapp.com vercel.app pages.dev "
@@ -109,11 +113,22 @@ print_env() {
 
   local pr_number="${tag#pr-}"
   local preview_frontend="https://pr-${pr_number}--${netlify_site_host}"
+  local preview_backend
+  preview_backend="$(preview_backend_url "$tag")"
   echo "CORS_ORIGINS=${preview_frontend}"
   # Passkeys on a preview bind to its own host: netlify.app is a public suffix.
   echo "FRONTEND_URL=${preview_frontend}"
-  echo "BETTER_AUTH_URL=https://${tag}---${cloud_run_backend_url#https://}"
-  echo "OAUTH_PROXY_PRODUCTION_URL=${stable_backend}"
+  echo "BETTER_AUTH_URL=${preview_backend}"
+  if [ "$oauth_callback_tag" = "prod" ]; then
+    echo "OAUTH_PROXY_PRODUCTION_URL=${stable_backend}"
+  else
+    # The callback-owning preview names itself, as stable does; the others proxy through it.
+    echo "OAUTH_PROXY_PRODUCTION_URL=$(preview_backend_url "$oauth_callback_tag")"
+  fi
+}
+
+preview_backend_url() {
+  echo "https://${1}---${cloud_run_backend_url#https://}"
 }
 
 # Env var -> secret name suffix. Terraform (infra/flourish/main.tf) creates the containers.
@@ -134,9 +149,10 @@ print_secrets() {
   local entry name secret
   for entry in "${oauth_secrets[@]}"; do
     name="${entry%%=*}"
-    # A preview only starts sign-ins, which need the client ID; stable exchanges the code, so
-    # client secrets and the Apple key never reach a pr-* revision.
-    if [ "$tag" != "prod" ] && [[ "$name" != *_CLIENT_ID ]]; then
+    # A preview only starts sign-ins, which need the client ID; the callback owner (stable unless
+    # OAUTH_CALLBACK_TAG names a preview) exchanges the code, so only it gets client secrets and
+    # the Apple key.
+    if [ "$tag" != "$oauth_callback_tag" ] && [[ "$name" != *_CLIENT_ID ]]; then
       continue
     fi
     secret="${service}-${entry#*=}"
@@ -153,6 +169,8 @@ check_tag() {
     exit 2
   fi
 }
+
+check_tag "$oauth_callback_tag"
 
 case "${1:-}" in
   env)

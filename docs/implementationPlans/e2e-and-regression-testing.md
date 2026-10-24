@@ -301,7 +301,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: api-health/e2e/smoke.ts, api-health/package.json, docs/testing/e2e/api-health.md
   - Acceptance: `bun run --cwd api-health smoke` exits 0. A real server with the plugin answers its health route with a healthy status.
 
-- [ ] **T14** — Smoke test for `@terreno/feature-flags`
+- [x] **T14** — Smoke test for `@terreno/feature-flags`
   - Depends on: T8
   - Files: feature-flags/e2e/smoke.ts, feature-flags/package.json, docs/testing/e2e/feature-flags.md
   - Acceptance: `bun run --cwd feature-flags smoke` exits 0. A flag created over HTTP evaluates as on for a user.

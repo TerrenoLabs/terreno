@@ -181,22 +181,37 @@ Apple on stable.
 ## Store the secrets
 
 The example keeps each value in Secret Manager, in containers Terraform creates
-(`infra/flourish/main.tf`, `backend_secret_oauth`). With the default project set:
+(`infra/flourish/main.tf`, `backend_secret_oauth`). The source values live in OpenBao under
+`terreno`; `secret terreno <KEY>` (from the ops dotfiles) prints one. With the default project
+set, copy each into its Secret Manager container:
 
 ```bash
 S=terreno-backend-example
-printf '%s' "<github client id>"     | gcloud secrets versions add $S-github-client-id --data-file=-
-printf '%s' "<github client secret>" | gcloud secrets versions add $S-github-client-secret --data-file=-
-printf '%s' "<google client id>"     | gcloud secrets versions add $S-google-client-id --data-file=-
-printf '%s' "<google client secret>" | gcloud secrets versions add $S-google-client-secret --data-file=-
-printf '%s' "com.example.web"        | gcloud secrets versions add $S-apple-client-id --data-file=-
-printf '%s' "<team id>"              | gcloud secrets versions add $S-apple-team-id --data-file=-
-printf '%s' "<key id>"               | gcloud secrets versions add $S-apple-key-id --data-file=-
-gcloud secrets versions add $S-apple-private-key --data-file=AuthKey_<key id>.p8
+while read -r key name; do
+  value="$(secret terreno "$key")" || { echo "skip $key: not in OpenBao"; continue; }
+  [ -n "$value" ] || { echo "skip $key: empty"; continue; }
+  printf '%s' "$value" | gcloud secrets versions add "$S-$name" --data-file=- >/dev/null \
+    && echo "added $S-$name"
+done <<'EOF'
+GITHUB_OAUTH_CLIENT_ID      github-client-id
+GITHUB_OAUTH_CLIENT_SECRET  github-client-secret
+GOOGLE_OAUTH_CLIENT_ID      google-client-id
+GOOGLE_OAUTH_CLIENT_SECRET  google-client-secret
+APPLE_OAUTH_CLIENT_ID       apple-client-id
+APPLE_OAUTH_TEAM_ID         apple-team-id
+APPLE_OAUTH_KEY_ID          apple-key-id
+APPLE_OAUTH_SECERT          apple-private-key
+EOF
 ```
 
-`printf '%s'` keeps a trailing newline out of the value. Check one with
-`gcloud secrets versions access latest --secret=$S-github-client-id`.
+- `APPLE_OAUTH_SECERT` (spelled as stored) holds the `.p8` key's contents, `-----BEGIN PRIVATE
+  KEY-----` included. `APPLE_OAUTH_CLIENT_ID` is the Services ID, such as `com.example.web`.
+- The loop never prints a value, and skips a key that is missing or empty instead of storing an
+  empty version, which would mount a blank secret.
+- `printf '%s'` keeps a trailing newline out of the value. Check one with
+  `gcloud secrets versions access latest --secret=$S-github-client-id`.
+- Without OpenBao, replace `secret terreno "$key"` with your own store's read command, or pipe
+  each value in by hand (`--data-file=AuthKey_<key id>.p8` for the Apple key).
 
 The deploy mounts only the secrets that have a version, so a provider turns on when both of its
 values exist (all four for Apple). **Redeploy after adding a version.** The example reads them as

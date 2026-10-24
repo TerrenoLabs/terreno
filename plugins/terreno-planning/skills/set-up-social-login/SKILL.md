@@ -46,8 +46,9 @@ CI context without naming each one and getting a yes.
    the Apple Services ID plus key.
 5. **Hand over the secrets.** Check `gcloud config get-value project` first; if it is not the
    project that holds the backend secrets, give `gcloud config set project <id>`. Then give the
-   `printf '%s' ... | gcloud secrets versions add` lines from "Store the secrets", with the app's
-   secret names. Secrets mount at deploy, so a redeploy follows.
+   copy loop from "Store the secrets", with the app's secret names. It reads each value with
+   `secret terreno <KEY>` from OpenBao, so no value passes through the chat; for an app without
+   OpenBao, swap in its store's read command. Secrets mount at deploy, so a redeploy follows.
 6. **Preview first, when stable does not run this code yet.** For the example, the user sets
    `OAUTH_CALLBACK_TAG=pr-<n>` in the `terreno-gcp` CircleCI context, registers the preview's
    backend as the callback host, adds the secrets, and approves the PR's `approve` hold. Say

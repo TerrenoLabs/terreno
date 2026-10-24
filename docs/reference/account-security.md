@@ -98,6 +98,8 @@ Each route runs the same steps before its handler:
      (`Target holds permissions you lack`): a superadmin unless the caller is a superadmin, an
      `admin: true` user unless the caller is one, and under RBAC any role grant the caller does
      not also hold. Recovery can never be used to take over a more privileged account.
+   - When a permission source is down and the target's grants from it are unknown, the check
+     answers `503 Permission source unavailable` rather than judging the target without them.
 
 Routes mounted with `mountSecurityRoutes` (such as the org-admin prefix) run the same steps.
 Each user's permissions are resolved in their own context. On the platform routes both are

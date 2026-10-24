@@ -511,7 +511,9 @@ export class AccountSecurityApp implements TerrenoPlugin {
         orgScope
           ? {membership: orgScope.targetMembership, organization: orgScope.organization}
           : {},
-        () => accessControl.getPermissions({user: target})
+        // A target missing a failed source's grants would look less privileged than it is and
+        // let the actor through, so an incomplete target set refuses with 503.
+        () => accessControl.getPermissions({requireComplete: true, user: target})
       ),
     ]);
     const missing = missingPermissions(actorPermissions, targetPermissions);

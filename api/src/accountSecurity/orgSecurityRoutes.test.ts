@@ -584,9 +584,14 @@ describe("org-admin recovery routes", () => {
 
   describe("org-scoped permissions in the reach check (D9)", () => {
     let extraGrant: {orgId: string; userId: string} | undefined;
+    // The user whose lookups the source fails, as during an outage.
+    let failingUserId: string | undefined;
     /** Grants `user:delete` to one user, but only under their own membership in one org. */
     const orgScopedSource: PermissionSource = {
-      getGrants: async (): Promise<PermissionSourceGrants | null> => {
+      getGrants: async ({user}): Promise<PermissionSourceGrants | null> => {
+        if (failingUserId && String(user.id) === failingUserId) {
+          throw new Error("permission source down");
+        }
         const membership = getOrgContext()?.membership;
         if (!membership || !extraGrant) {
           return null;
@@ -621,6 +626,28 @@ describe("org-admin recovery routes", () => {
 
     afterEach(() => {
       extraGrant = undefined;
+      failingUserId = undefined;
+    });
+
+    it("refuses with 503 when the target's grants cannot be resolved, not with their grants dropped", async () => {
+      const {app, orgA, orgAdmin} = await buildScopedApp();
+      const target = await signUpWithTwoFactor(app, "scoped-source-down");
+      await addMember(orgA, target.id);
+      extraGrant = {orgId: orgA, userId: target.id};
+      // One good fetch first, so the outage is not a cold failure the source would fail closed on.
+      expect((await orgSummary(app, orgAdmin.token, orgA, target.id)).status).toBe(403);
+
+      failingUserId = target.id;
+      scopedAccess.invalidateCache({userId: target.id});
+
+      await expectRefused({
+        app,
+        orgId: orgA,
+        status: 503,
+        targetId: target.id,
+        title: "Permission source unavailable",
+        token: orgAdmin.token,
+      });
     });
 
     it("refuses a target whose own membership in the org grants more than the actor holds", async () => {

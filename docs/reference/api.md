@@ -1395,6 +1395,12 @@ source's deny posture for the user. Under every policy:
   role mappings, membership lookups). Their cold failure then drops only their grants and local
   roles apply. The built-in organization membership source (`createAccess({organizations: true})`)
   sets it.
+- Dropped grants make a user look less privileged, which is safe for the user being authorized
+  but not for the target of "may this actor act on that user?". Pass
+  `access.getPermissions({user, requireComplete: true})` for such a target: when a failed source's
+  grants were dropped (not served from a `"use-stale"` cache), it throws 503
+  `Permission source unavailable` instead of returning the partial set. The account-security
+  reach check and the RBAC user-write guard resolve their target this way.
 
 ## Request Validation
 

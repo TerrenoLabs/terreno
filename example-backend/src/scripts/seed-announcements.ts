@@ -5,6 +5,13 @@ import {DateTime} from "luxon";
 /** Stable title for the legacy welcome announcement archived on seed when present. */
 export const LEGACY_WELCOME_ANNOUNCEMENT_TITLE = "Welcome to Terreno announcements";
 
+/**
+ * Example announcements are seeded as drafts so fresh databases (local dev, every PR preview)
+ * do not interrupt sign-in. Admins can publish them from the announcements screen. Release
+ * notes reach users through the what's new banner instead.
+ */
+const SEEDED_ANNOUNCEMENT_STATUS = "draft";
+
 /** Stable title for the staff-only required modal seeded in the example app. */
 export const STAFF_MODAL_ANNOUNCEMENT_TITLE = "Example staff operations bulletin";
 
@@ -65,6 +72,7 @@ const seedStaffModalAnnouncement = async (): Promise<void> => {
     existing.body = STAFF_MODAL_BODY;
     existing.displayMode = "modal";
     existing.primaryAction = {label: "Read the announcement docs", url: ANNOUNCEMENTS_DOCS_URL};
+    existing.status = SEEDED_ANNOUNCEMENT_STATUS;
     await existing.save();
     logger.info("Updated staff announcement launch example");
     return;
@@ -77,13 +85,12 @@ const seedStaffModalAnnouncement = async (): Promise<void> => {
     displayMode: "modal",
     primaryAction: {label: "Read the announcement docs", url: ANNOUNCEMENTS_DOCS_URL},
     priority: 20,
-    publishedAt: DateTime.utc().toJSDate(),
-    status: "published",
+    status: SEEDED_ANNOUNCEMENT_STATUS,
     title: STAFF_MODAL_ANNOUNCEMENT_TITLE,
     version: 1,
   });
 
-  logger.info("Seeded staff modal announcement");
+  logger.info("Seeded staff modal announcement draft");
 };
 
 const seedPatientBannerAnnouncement = async (): Promise<void> => {
@@ -95,6 +102,7 @@ const seedPatientBannerAnnouncement = async (): Promise<void> => {
     existing.audienceType = "patient";
     existing.body = PATIENT_BANNER_BODY;
     existing.displayMode = "banner";
+    existing.status = SEEDED_ANNOUNCEMENT_STATUS;
     await existing.save();
     logger.info("Updated patient announcement launch example");
     return;
@@ -106,13 +114,12 @@ const seedPatientBannerAnnouncement = async (): Promise<void> => {
     body: PATIENT_BANNER_BODY,
     displayMode: "banner",
     priority: 5,
-    publishedAt: DateTime.utc().toJSDate(),
-    status: "published",
+    status: SEEDED_ANNOUNCEMENT_STATUS,
     title: PATIENT_BANNER_ANNOUNCEMENT_TITLE,
     version: 1,
   });
 
-  logger.info("Seeded patient banner announcement");
+  logger.info("Seeded patient banner announcement draft");
 };
 
 export const seedAnnouncements = async (_context: SeedContext): Promise<void> => {

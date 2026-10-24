@@ -2,6 +2,7 @@ import {
   type AdminContribution,
   APIError,
   logger,
+  type TerrenoApp,
   type TerrenoPlugin,
   type WebhooksApp,
 } from "@terreno/api";
@@ -39,9 +40,10 @@ export class CommsApp implements TerrenoPlugin {
     this.service = new CommsService(this.options);
   }
 
-  register(app: express.Application, openApi?: unknown): void {
+  register(app: express.Application, openApi?: unknown, terrenoApp?: TerrenoApp): void {
     const basePath = this.options.basePath ?? "/comms";
     registeredCommsService = this.service;
+    this.service.setUserModel(terrenoApp?.getUserModel());
 
     // Atomic push-token registration depends on the unique token index to reject concurrent
     // claims, so build it explicitly instead of relying on Mongoose autoIndex being enabled.

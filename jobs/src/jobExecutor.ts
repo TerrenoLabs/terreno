@@ -1,4 +1,4 @@
-import {createScopedLogger, runWithRequestContext} from "@terreno/api";
+import {createScopedLogger, logger, runWithRequestContext} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -28,22 +28,19 @@ export type ExecuteJobOutcome =
 
 const TERMINAL_NOOP_STATUSES = new Set(["cancelled", "completed", "dead", "failed"]);
 
+const LEASE_EXPIRED_ERROR = "Lease expired before the previous attempt finished";
+const LEASE_EXPIRED_ERROR_CLASS = "LeaseExpired";
+
+/** Result of an atomic claim: a row to run, or a reclaimed row dead-lettered with no attempts left. */
+export type JobClaimResult =
+  | {claim: JobClaimLock; job: JobDocument; kind: "claimed"}
+  | {job: JobDocument; kind: "dead"};
+
 const buildLockExpiry = (lockTtlMs: number, now: Date): Date =>
   DateTime.fromJSDate(now, {zone: "utc"}).minus({milliseconds: lockTtlMs}).toJSDate();
 
 const isLiveLock = (lockedAt: Date | undefined, lockExpiry: Date): boolean =>
   Boolean(lockedAt && lockedAt > lockExpiry);
-
-const readClaimLock = (job: JobDocument): JobClaimLock => {
-  if (!job.lockedAt || !job.lockedBy) {
-    throw new Error(`Job ${job._id.toString()} is missing claim lock metadata`);
-  }
-
-  return {
-    lockedAt: job.lockedAt,
-    lockedBy: job.lockedBy,
-  };
-};
 
 const classifyConflict = (job: JobDocument, lockExpiry: Date, now: Date): ExecuteJobOutcome => {
   if (job.runAt > now) {
@@ -203,6 +200,87 @@ const recordHandlerFailure = async ({
   return pending;
 };
 
+const buildLeaseRenewalIntervalMs = (lockTtlMs: number): number =>
+  Math.max(1, Math.floor(lockTtlMs / 3));
+
+interface LeaseHeartbeat {
+  getClaim: () => JobClaimLock;
+  isLeaseLost: () => boolean;
+  stop: () => Promise<void>;
+}
+
+/**
+ * Renews the claim's lockedAt while a handler runs so no other consumer treats the live job as
+ * abandoned. Renewals run one at a time; when a renewal no longer matches the claim, the lease is
+ * lost and the handler signal is aborted.
+ */
+const startLeaseHeartbeat = ({
+  claim,
+  jobId,
+  leaseController,
+  lockTtlMs,
+}: {
+  claim: JobClaimLock;
+  jobId: JobDocument["_id"];
+  leaseController: AbortController;
+  lockTtlMs: number;
+}): LeaseHeartbeat => {
+  let currentClaim = claim;
+  let leaseLost = false;
+  let stopped = false;
+  let renewal: Promise<void> = Promise.resolve();
+
+  const renew = async (): Promise<void> => {
+    if (stopped || leaseLost) {
+      return;
+    }
+
+    const renewedAt = DateTime.utc().toJSDate();
+    const renewed = await Job.findOneAndUpdate(
+      {...buildClaimOwnershipFilter(jobId, currentClaim), status: "running"},
+      {$set: {lockedAt: renewedAt}},
+      {returnDocument: "after"}
+    );
+
+    if (!renewed) {
+      leaseLost = true;
+      clearInterval(timer);
+      logger.warn(`[jobs] Lost the claim lease for job ${jobId.toString()}; aborting handler`);
+      leaseController.abort();
+      return;
+    }
+
+    currentClaim = {lockedAt: renewedAt, lockedBy: currentClaim.lockedBy};
+  };
+
+  const timer = setInterval(() => {
+    renewal = renewal.then(renew).catch((error: unknown) => {
+      logger.warn(
+        `[jobs] Failed to renew the claim lease for job ${jobId.toString()}: ${String(error)}`
+      );
+    });
+  }, buildLeaseRenewalIntervalMs(lockTtlMs));
+
+  return {
+    getClaim: (): JobClaimLock => currentClaim,
+    isLeaseLost: (): boolean => leaseLost,
+    stop: async (): Promise<void> => {
+      stopped = true;
+      clearInterval(timer);
+      await renewal;
+    },
+  };
+};
+
+const linkAbortSignal = (parent: AbortSignal, controller: AbortController): void => {
+  if (parent.aborted) {
+    controller.abort();
+    return;
+  }
+
+  parent.addEventListener("abort", () => controller.abort(), {once: true});
+};
+
 export const runClaimedJob = async ({
   claim,
   host,
@@ -224,7 +302,18 @@ export const runClaimedJob = async ({
     labels: {jobId: job._id.toString(), jobName: job.name},
     prefix: "[Job]",
   });
-  const executionSignal = beginActiveJobExecution(job._id.toString(), signal);
+  const leaseController = new AbortController();
+  linkAbortSignal(signal, leaseController);
+  const executionSignal = beginActiveJobExecution(job._id.toString(), leaseController.signal);
+  const heartbeat = startLeaseHeartbeat({
+    claim,
+    jobId: job._id,
+    leaseController,
+    lockTtlMs: host.getLockTtlMs(),
+  });
+
+  let handlerError: unknown;
+  let handlerFailed = false;
 
   try {
     await runWithRequestContext({jobId: job._id.toString()}, async () => {
@@ -234,45 +323,123 @@ export const runClaimedJob = async ({
         signal: executionSignal,
       });
     });
-
-    return recordHandlerSuccess(job._id, claim);
   } catch (error: unknown) {
-    return recordHandlerFailure({claim, error, job, signal: executionSignal});
+    handlerFailed = true;
+    handlerError = error;
+  }
+
+  try {
+    await heartbeat.stop();
+
+    // Another consumer owns the row now; its result is the one that counts.
+    if (heartbeat.isLeaseLost()) {
+      return Job.findExactlyOne({_id: job._id});
+    }
+
+    const currentClaim = heartbeat.getClaim();
+    if (handlerFailed) {
+      return await recordHandlerFailure({
+        claim: currentClaim,
+        error: handlerError,
+        job,
+        signal: executionSignal,
+      });
+    }
+
+    return await recordHandlerSuccess(job._id, currentClaim);
   } finally {
     endActiveJobExecution(job._id.toString());
   }
 };
 
-const claimJobById = async ({
-  host,
-  jobId,
+/**
+ * Atomically claims one due job matching `filter`. An expired `running` row is reclaimed first and
+ * the lost attempt is counted; once that exhausts `maxAttempts` the row is dead-lettered instead of
+ * run again.
+ */
+export const claimDueJob = async ({
+  filter = {},
+  lockTtlMs,
   now = DateTime.utc().toJSDate(),
+  sort,
 }: {
-  host: JobExecutionHost;
-  jobId: string;
+  filter?: Record<string, unknown>;
+  lockTtlMs: number;
   now?: Date;
-}): Promise<JobDocument | undefined> => {
-  const lockExpiry = buildLockExpiry(host.getLockTtlMs(), now);
-  const claim = createClaimLock(now);
+  sort?: Record<string, 1 | -1>;
+}): Promise<JobClaimResult | undefined> => {
+  const lockExpiry = buildLockExpiry(lockTtlMs, now);
+  const unlockedOrExpired = [
+    {lockedAt: {$exists: false}},
+    {lockedAt: null},
+    {lockedAt: {$lte: lockExpiry}},
+  ];
+  const queryOptions = {returnDocument: "after" as const, ...(sort ? {sort} : {})};
 
+  const reclaimLock = createClaimLock(now);
+  const reclaimed = await Job.findOneAndUpdate(
+    {...filter, $or: unlockedOrExpired, runAt: {$lte: now}, status: "running"},
+    {
+      $inc: {attemptCount: 1},
+      $push: {
+        attempts: {at: now, error: LEASE_EXPIRED_ERROR, errorClass: LEASE_EXPIRED_ERROR_CLASS},
+      },
+      $set: {
+        lastError: LEASE_EXPIRED_ERROR,
+        lockedAt: reclaimLock.lockedAt,
+        lockedBy: reclaimLock.lockedBy,
+      },
+    },
+    queryOptions
+  );
+
+  if (reclaimed) {
+    if (reclaimed.attemptCount < reclaimed.maxAttempts) {
+      return {claim: reclaimLock, job: reclaimed, kind: "claimed"};
+    }
+
+    const dead = await Job.findOneAndUpdate(
+      buildClaimOwnershipFilter(reclaimed._id, reclaimLock),
+      {
+        $set: {status: "dead"},
+        $unset: {lockedAt: "", lockedBy: ""},
+      },
+      {returnDocument: "after"}
+    );
+
+    if (!dead) {
+      throw new Error(`Failed to record dead status for job ${reclaimed._id.toString()}`);
+    }
+
+    logger.warn(
+      `[jobs] Job ${reclaimed._id.toString()} (${reclaimed.name}) lost its lease with no attempts left; marked dead`
+    );
+    return {job: dead, kind: "dead"};
+  }
+
+  const claimLock = createClaimLock(now);
   const claimed = await Job.findOneAndUpdate(
     {
-      _id: jobId,
-      $or: [{lockedAt: {$exists: false}}, {lockedAt: null}, {lockedAt: {$lte: lockExpiry}}],
+      ...filter,
+      $or: unlockedOrExpired,
       runAt: {$lte: now},
-      status: {$in: ["pending", "running", "scheduled"]},
+      status: {$in: ["pending", "scheduled"]},
     },
     {
       $set: {
-        lockedAt: claim.lockedAt,
-        lockedBy: claim.lockedBy,
+        lockedAt: claimLock.lockedAt,
+        lockedBy: claimLock.lockedBy,
         status: "running",
       },
     },
-    {returnDocument: "after"}
+    queryOptions
   );
 
-  return claimed ?? undefined;
+  if (!claimed) {
+    return undefined;
+  }
+
+  return {claim: claimLock, job: claimed, kind: "claimed"};
 };
 
 export const executeJobById = async ({
@@ -308,7 +475,11 @@ export const executeJobById = async ({
     return {kind: "conflict", reason: "locked"};
   }
 
-  const claimed = await claimJobById({host, jobId, now});
+  const claimed = await claimDueJob({
+    filter: {_id: jobId},
+    lockTtlMs: host.getLockTtlMs(),
+    now,
+  });
   if (!claimed) {
     const refreshed = await Job.findOneOrNone({_id: jobId});
     if (!refreshed) {
@@ -322,10 +493,14 @@ export const executeJobById = async ({
     return classifyConflict(refreshed, lockExpiry, now);
   }
 
+  if (claimed.kind === "dead") {
+    return {job: claimed.job, kind: "executed"};
+  }
+
   const executed = await runClaimedJob({
-    claim: readClaimLock(claimed),
+    claim: claimed.claim,
     host,
-    job: claimed,
+    job: claimed.job,
     signal,
   });
 

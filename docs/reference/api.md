@@ -110,7 +110,7 @@ new TerrenoApp({
 | Option | Default | Meaning |
 |--------|---------|---------|
 | `store` | `"memory"` | `"memory"` \| `"redis"` \| `"mongo"` |
-| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback |
+| `limits.authMax` | 20 / 15 min | login, signup, refresh, OTP, GitHub OAuth, Better Auth sign-in / sign-up / password reset / OAuth callback / OAuth handoff |
 | `betterAuthBasePath` | `BetterAuthApp` `config.basePath` or `/api/auth` | Prefix used to classify Better Auth credential routes |
 | `limits.apiMax` | 600 / 15 min | modelRouter and other HTTP |
 | `trustProxy` | `false` | Express `trust proxy`. Use `1` on Cloud Run. Unauthenticated key is `req.ip` |
@@ -228,6 +228,40 @@ export const todoRouter = modelRouter("/todos", Todo, {
 Do not add `endpoints: (router) => { router.get(...) }` when an action fits.
 Action config supports `allowAnonymous: true` as a per-action override; it does not change authentication for CRUD or sibling actions.
 
+| Option | Meaning |
+| --- | --- |
+| `method` | `"GET"` or `"POST"` |
+| `permissions` | Required unless `access` is set. `[]` disables the action (405) |
+| `access` | RBAC `{resource, action}` checked with the router's `accessControl` |
+| `allowAnonymous` | Accept unauthenticated calls for this action only |
+| `body` / `query` | Zod schemas; failures are 400 `Validation failed` with `meta.fields` |
+| `response` | Zod schema for OpenAPI |
+| `status` | Success status (default 200) |
+| `summary` / `description` / `tag` | OpenAPI metadata |
+| `mcp` | `{name, description?}` — also expose the action as an MCP tool named `name` |
+| `unwrapResponse` | REST only. Send the return value as the body instead of `{data: …}`; `undefined` sends an empty body |
+
+An action with `mcp` runs the same permission chain (including RBAC `access`) over `/mcp`. Its input is `{id, ...body}` for an instance POST, `{id, ...query}` for an instance GET, and the body or query alone for a collection action, so `body` / `query` must be a `z.object()`, and an instance action's schema cannot define `id`. A collection action's `id` field passes through to its body or query. The handler receives `req.isMCPRequest === true` and a `res` that throws if touched. See [modelRouter actions → MCP tools](../explanation/model-router-actions.md#mcp-tools).
+
+## modelRouter write scope
+
+Create and update check the document as it will be written, not only as it was loaded. REST,
+MCP tools, and sync mutations all share this check. A non-admin caller gets `403` with title
+`Write scope violation on {Model}` when:
+
+- The router uses `Permissions.IsOwner` or `Permissions.IsOwnerOrReadOnly` on any method, and
+  a create (after `preCreate`) sets `ownerId` to someone other than the caller. A create that
+  leaves `ownerId` unset is still allowed.
+- The router's `update` permissions use `IsOwner` or `IsOwnerOrReadOnly`, and the update would
+  set `ownerId` to someone else or clear it.
+- The router uses RBAC `access`, and the written document fails the role check or the router
+  `access.scope` for that method. For example, with `scope: OwnerScope()`, a create or update
+  must leave `ownerId` set to the caller. Entries in `access.also` other than `IsOwner` /
+  `IsOwnerOrReadOnly` run only against the loaded document.
+
+Admins pass `IsOwner`, so they can still reassign records. Admin-window sync writes skip this
+check, as they skip the other modelRouter permissions.
+
 ## modelRouter list queries
 
 `GET /{path}` accepts filters on fields listed in `queryFields` (qs syntax, so operators work:
@@ -252,6 +286,35 @@ it can never be stripped and silently ignored:
 `@terreno/syncdb` raises this as `QueryFieldNotAllowedError` (see
 [Query windows](syncdb.md#query-windows)).
 
+`sort` is allowlisted the same way. A client sort (`?sort=-created name`, or the object form
+`?sort[created]=-1`) may name only fields in `queryFields`, fields named in the router's own
+`sort`, and fields in `sortFields`. Any other field, or a repeated `sort` parameter, returns 400
+before the query runs:
+
+```json
+{
+  "status": 400,
+  "code": "sort-field-not-allowed",
+  "title": "Sort field not allowed",
+  "source": {"parameter": "sort"},
+  "meta": {"sortField": "priority", "model": "Todo", "allowedSortFields": ["completed", "created", "ownerId"]}
+}
+```
+
+Use `sortFields` for columns clients may order by but not filter on:
+
+```typescript
+modelRouter("/todos", Todo, {
+  queryFields: ["completed", "ownerId"],
+  sort: "-created",
+  sortFields: ["title", "priority"],
+});
+```
+
+Sort order reveals a field's values (one compound sort exposes a hidden boolean), so keep
+fields hidden from some readers (RBAC field views, `responseHandler` stripping) out of
+`queryFields` and `sortFields`. `AdminApp` passes each model's `sortableFields` as `sortFields`.
+
 ## modelRouter array operations
 
 When a model has at least one array field, `modelRouter` provides subroutes for adding,
@@ -262,6 +325,11 @@ updating, and removing array items:
 | `POST` | `/:id/:field` | Append an item |
 | `PATCH` | `/:id/:field/:itemId` | Replace or merge an item |
 | `DELETE` | `/:id/:field/:itemId` | Remove an item |
+
+Each operation runs like a `PATCH` that replaces the whole field. The transform, `preUpdate`,
+and RBAC write checks see `{[field]: newArray}`, and only the body they return is saved. A
+`PATCH` of a subdocument merges into a copy of the item, so a hook (or admin `readonlyFields`)
+that drops the field leaves the stored item unchanged.
 
 `:id` must be an ObjectId. Any other id leaves this router so a later route on the same
 prefix can handle it. `POST /ai/observability/evaluators` is not an array push on a model
@@ -286,7 +354,7 @@ const todoRouter = modelRouter("/todos", Todo, {
 });
 ```
 
-Cross-model tools use `registerMCPTool` (see the example backend's `users_todo_statuses`). How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
+Named operations become tools with `mcp: {name}` on a `collectionActions` / `instanceActions` entry (see [modelRouter actions](#modelrouter-actions)). Cross-model tools use `registerMCPTool` (see the example backend's `users_todo_statuses`). How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
 
 Create, update, and delete tools share REST permission, hook, and persistence semantics: they call the same `executeCreate` / `executeUpdate` / `executeDelete` pipeline. MCP error results use `APIError.title` (for example `Create not allowed`, `preCreate hook error`). User-role stripping for RBAC User writes happens in the executor after hooks; MCP supplies the registry `modelName` for that check. List and read stay MCP handlers. `excludeFields` and `mcpResponseHandler` still apply after the executor returns. Invalid ids on instance writes 404 only when the document `_id` cannot be cast, not when a populate ref fails.
 
@@ -304,7 +372,7 @@ const {mcpServiceToken, token} = await McpServiceToken.issueFor(
 // Store or show `token` once. Only its SHA-256 hash is persisted.
 ```
 
-The token begins with `mcp_` followed by 32 random bytes encoded as hex. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
+The token begins with `mcp_` followed by 32 random bytes encoded as hex. `issueFor` records the user's `tokenEpoch` (pass it on the user argument; default 0). `/mcp` refuses a token whose recorded epoch differs from the user's current `tokenEpoch` and sets its `revokedAt`, so a password reset, Better Auth password change, or session revocation ends every key minted before it. A row stored without `tokenEpoch` counts as epoch 0. `revokeOutdatedForUser(user)` revokes the user's keys from earlier epochs; the list and create routes call it so the list shows them as revoked. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. Document `deleteOne` (admin DELETE) also sets `revokedAt` and leaves the row for audit. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
 
 Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint or list tokens.
 
@@ -315,6 +383,61 @@ Self-serve HTTP routes live at `/mcp/service-tokens`. `TerrenoApp` mounts them w
 | DELETE | `/mcp/service-tokens/:id` | — | `{data: {id, revokedAt}}` — owner only |
 
 `expiresAt` is an optional ISO-8601 datetime (Luxon `DateTime.fromISO`). Omit it for a token that does not expire. Create returns `mcpUrl` from `publicMcpUrl`, else `BETTER_AUTH_URL`, else the request host, with `/mcp` appended when missing. An 11th **active** token for the same user is `400`. Revoke and cross-owner access are `404`. List includes revoked rows for the owner so the UI can show history. Default page size is 100 (maximum 100).
+
+### MCP OAuth
+
+Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai custom connectors, ChatGPT apps) can connect to an app that signs users in with Terreno JWTs. Everything is off by default. Omitted or `enabled: false` mounts no `/oauth/*` route and no `.well-known/oauth-*` document, and `/mcp` sends no OAuth challenge. Dynamic client registration is a second opt-in on top of `enabled`.
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  mcpOAuth: {
+    allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost"],
+    consentUrl: "https://app.example.com/oauth/consent",
+    dynamicClientRegistration: true, // omit to accept only clients you create
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `issuer` | — | Public origin of the API (no path). RFC 8414 `issuer` and base of every endpoint URL. Must be https outside localhost |
+| `consentUrl` | — | App page that hosts the consent screen; receives `?request=<id>` |
+| `enabled` | — | Turns the authorization server on. Every other option is ignored while false |
+| `dynamicClientRegistration` | `false` | Mount `POST /oauth/register` and advertise `registration_endpoint`. The endpoint is unauthenticated, so anyone who can reach the API can create a client; leave it off unless clients you cannot pre-register must connect |
+| `allowedRedirectHosts` | `[]` | Hostnames a registering client may put redirect URIs on. Required (non-empty) with `dynamicClientRegistration`, unused without it. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
+| `resource` | `${issuer}/mcp` | RFC 8707 resource identifier |
+| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes. Terreno does not map scopes to tools: a token may call every tool its user can. Enforce scopes in permissions with `requireOAuthScope` (see [Request credential](#request-credential)) |
+| `accessTokenTtlSeconds` | 3600 | Access token lifetime |
+| `refreshTokenTtlSeconds` | 30 days | Refresh token lifetime |
+| `authorizationRequestTtlSeconds` | 600 | How long a request waits for a consent decision |
+| `authorizationCodeTtlSeconds` | 60 | How long a code can be exchanged |
+
+Misconfiguration (an issuer with a path, a non-URL `consentUrl`, registration on with no redirect hosts) throws at boot. With registration off, create clients yourself as `McpOAuthClient` documents (`clientId`, `clientName`, `redirectUris`, `grantTypes: ["authorization_code", "refresh_token"]`, `responseTypes: ["code"]`); `/oauth/register` is then 404 and the metadata has no `registration_endpoint`.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/mcp` | none | RFC 9728 metadata: `resource`, `authorization_servers`, `bearer_methods_supported`, `scopes_supported` |
+| GET | `/.well-known/oauth-authorization-server` | none | RFC 8414 metadata: `issuer`, endpoints, `response_types_supported: ["code"]`, `grant_types_supported`, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]` |
+| POST | `/oauth/register` | none | Only with `dynamicClientRegistration`. RFC 7591 dynamic client registration. Public clients only. 201 with `client_id`; `invalid_redirect_uri` for a redirect outside `allowedRedirectHosts`, non-https (except loopback), or with a fragment |
+| GET | `/oauth/authorize` | none | Validates `client_id`, `redirect_uri`, `response_type=code`, PKCE (`S256` only), `scope`, and `resource`, stores a pending request, and redirects to `consentUrl?request=<id>`. An unknown client or unregistered redirect is a 400 in place; other errors redirect with `error` and `state` |
+| GET | `/oauth/authorize/:request` | JWT or session | What the consent screen shows: `{data: {clientId, clientName, redirectUri, redirectHost, scope, resource, expiresAt}}` |
+| POST | `/oauth/authorize/:request/approve` | JWT or session | `{data: {redirectUrl}}` carrying `code`, `state`, and `iss` |
+| POST | `/oauth/authorize/:request/deny` | JWT or session | `{data: {redirectUrl}}` carrying `error=access_denied` and `state` |
+| POST | `/oauth/token` | `client_id` | `authorization_code` (with `code`, `redirect_uri`, `code_verifier`) or `refresh_token`. Returns `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}` with `Cache-Control: no-store` |
+| POST | `/oauth/revoke` | `client_id` | RFC 7009. Always 200. Revoking a refresh token revokes its whole chain |
+
+The consent endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`) and refuse `mcp_` and `mcpat_` bearers, so an agent cannot approve its own grants. A pending request that expired is 400 `Authorization request expired`; one already decided is 409. Protocol endpoints answer `{error, error_description}` per RFC 6749 and never carry the `requestId` member TerrenoApp adds to other JSON bodies. `/oauth/register`, `/oauth/authorize`, `/oauth/token`, and `/oauth/revoke` count against the `auth` rate-limit bucket.
+
+Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256 hashes in `McpOAuthToken`. Each refresh rotates the pair; reusing a rotated refresh token revokes every pair issued from that authorization (its family). Codes are single-use: a failed exchange burns the code, and replaying a used code revokes the tokens it issued. The code exchange fixes the family id when it consumes the code, so a replay can revoke the family before its tokens exist.
+
+`McpOAuthToken.revokeFamily(familyId)` first writes an `McpOAuthRevokedFamily` tombstone, then revokes every pair in the family. `McpOAuthToken.issue` refuses a tombstoned family with `McpOAuthFamilyRevokedError` (the token endpoint answers `invalid_grant`), and checks again after creating the pair, revoking it if a revoke landed meanwhile. A request that won a rotation or code exchange before a concurrent revoke therefore cannot leave a live pair behind. Tombstones expire after the family's last refresh expiry, and at least one hour after the revoke.
+
+Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
+
+With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Each approval, and every pair issued from it, records the user's `tokenEpoch`; after it changes (password reset, Better Auth password change, or session revocation), the code exchange and refresh answer `invalid_grant` and `/mcp` refuses the access token, and the whole family is revoked. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
 
 ## Authentication
 
@@ -347,16 +470,76 @@ setupServer({
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
-- `PATCH /auth/me` — Update current user profile
+- `PATCH /auth/me` — Update current user profile. It does not change passwords: a body with
+  `password` or `newPassword` gets 400 and nothing is saved. Change a password through
+  `POST /auth/forgotPassword` and `POST /auth/resetPassword`, or Better Auth change-password.
+  Changing the email needs the current password; see [Changing the email on PATCH /auth/me](#changing-the-email-on-patch-authme)
+
+#### Changing the email on PATCH /auth/me
+
+A body whose `email` differs from the stored email (compared after trimming and lowercasing)
+must also send `currentPassword`. An unchanged email echoed back, or one that differs only in
+letter case, needs no password. `currentPassword` is never saved.
+
+| Case | Response | Saved |
+|------|----------|-------|
+| `currentPassword` missing or empty | 403 `Enter your current password to change your email.` | Nothing |
+| Wrong `currentPassword` | 403 `The current password is incorrect.` | Nothing |
+| passport-local-mongoose lockout reached (`limitAttempts`) | 403 with the lockout message | Nothing |
+| User has no password (for example GitHub-only or social-only) | 400 `Set a password on your account before changing your email. …` | Nothing |
+| Right `currentPassword` | 200 with the updated user | The whole body |
+
+The status is 403, not 401, so `@terreno/rtk` does not treat a wrong password as an expired
+session and log the user out.
+
+The password is checked against the passport-local-mongoose hash first. A wrong password
+counts toward the model's passport lockout when `limitAttempts` is on, the same counter
+`POST /auth/login` uses. When the user has no passport hash and `BetterAuthApp` is registered,
+the password is checked against the user's Better Auth credential account (found through
+`betterAuthId`). TerrenoApp wires that check as `authOptions.verifyBetterAuthPassword`; hosts
+that call `addMeRoutes` themselves can set it with `verifyBetterAuthCredentialPassword(auth,
+user, password)`, which returns `"verified"`, `"wrong"`, or `"no-password"`.
+
+After the change is saved, the old address gets a notice through `authOptions.sendMail` with
+`sensitive: true`, subject `Your account email was changed`. It names the new address partially
+masked (`r***@e***.com`), tells the reader to contact support if they did not make the change,
+and carries no link or token. With no `sendMail`, the server logs a warning and still completes
+the change; a delivery failure is logged and does not undo it. The change does not bump
+`tokenEpoch`, and it does not change the Better Auth user's email.
+
+An access JWT is read only from the `jwt` cookie or an `Authorization: Bearer <token>`
+header; any other scheme is not a JWT credential. A user with `disabled: true` gets 401 on
+every JWT-authenticated route, and `POST /auth/login`, `POST /auth/refresh_token`,
+`POST /auth/resetPassword`, and `GET /auth/github/callback` refuse to issue tokens to them.
 
 JWT recovery routes default on. In `authOptions`, set `passwordReset: false` to omit
 forgot-password and both token-reset paths, `emailVerification: false` to omit send/verify
 email, or `legacyResetPasswordRoute: false` to omit only the deprecated
 `POST /resetPassword` alias while retaining `POST /auth/resetPassword`.
 
-Signup and `PATCH /auth/me` drop privileged fields: `admin`, `roles`, `organizationIds`,
-`emailVerified`, and `tokenEpoch`. Request logs redact `password`, `newPassword`,
-`oldPassword`, `token`, and `refreshToken` in request bodies and in URL query strings. Changing the mailbox through `PATCH /auth/me`
+Signup and `PATCH /auth/me` drop the fields in `SELF_SERVICE_BLOCKED_USER_FIELDS`: the
+privileged fields `admin`, `roles`, `organizationIds`, `emailVerified`, and `tokenEpoch`
+(`PRIVILEGED_USER_FIELDS`), the identity-binding fields `betterAuthId`, `githubId`,
+`githubUsername`, `githubProfileUrl`, `githubAvatarUrl`, and `oauthProvider`, the
+passport-local-mongoose fields `hash`, `salt`, `attempts`, and `last`, and `disabled`. Only the
+Better Auth sync, GitHub link, and password flows write those. Dotted paths into a dropped
+field (`roles.0`, `organizationIds.1`) are dropped too, because Mongoose applies a dotted key
+as a path into the field. With `accessControl` set, modelRouter, sync, and MCP writes to the user
+model (compiled as `"User"`, or the `userModel` passed to `createAccess` under any name) drop
+`PRIVILEGED_USER_FIELDS`, the passport fields `hash`, `salt`, `attempts`, and `last` (`USER_CREDENTIAL_FIELDS`), and dotted paths into them the same way; assign
+roles with `access.roles.assign`. Those writes, plus array operations and POST instance actions on
+the user model, also apply the RoleManager target-privilege rule: an actor whose permissions do not
+cover the target user's gets 403 `Cannot modify a user with permissions you do not hold` on update
+or delete. This runs on REST, sync (including admin-window mutations), and MCP. Writes to the
+actor's own record and writes by legacy `admin: true` users are not checked. Changing another
+user's identity fields also needs `user:updateIdentity`; see
+[RBAC user identity writes](#rbac-user-identity-writes).
+
+Request logs redact credential values at any depth in request bodies and in URL query strings:
+any key whose name contains `password`, `passwd`, `passphrase`, `passcode`, `token`, `secret`,
+`verifier`, `signature`, `apikey`, `authorization`, `credential`, or `privatekey` (case and `_`/`-`
+ignored, so `currentPassword`, `refresh_token`, `client_secret`, and `idToken.token` all match), or
+that has `code`, `otp`, or `pin` as a word (`code`, `zipCode`, `otp_code`). Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also
 sets `emailVerified` to false and invalidates unused `emailVerification` tokens; changing letter
@@ -371,15 +554,25 @@ marks one unused, unexpired row. TTL is 1 hour for `passwordReset` and 24 hours 
 
 Wire `authOptions.publicAppUrl` and `authOptions.sendMail` (typically
 `getCommsService().sendMail`) so forgot-password can deliver the link
-`${publicAppUrl}/resetPassword?token=...`. Forgot-password skips issuing a token when
+`${publicAppUrl}/resetPassword?token=...`. Reset and verification mail (JWT and Better Auth)
+has `sensitive: true` so the transport keeps no copy of the one-time link; `@terreno/comms`
+stores no payload for it. Forgot-password skips issuing a token when
 `publicAppUrl` is missing. Authenticated `POST /auth/sendVerification` returns 501 in that
 case instead of 202. Email lookup is case-insensitive. Successful reset calls `setPassword`, increments
-`tokenEpoch` so outstanding **refresh** tokens fail, and returns new JWT tokens. When
+`tokenEpoch` so outstanding **refresh** tokens and MCP credentials (`mcp_` service tokens and
+`mcpat_`/`mcprt_` OAuth grants) fail, and returns new JWT tokens. When
 `BetterAuthApp` is registered, JWT reset also updates that user's Better Auth password
 and deletes Better Auth sessions. Better Auth password reset updates the JWT password
 and `tokenEpoch` for the matching app User. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
 matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
+
+For any other server-side password change, such as an admin "set password" action, call
+`changeUserPassword(user, password, {adminId, app: req.app})`. It does what reset does: sets the
+passport password, increments `tokenEpoch`, saves, and, when `BetterAuthApp` is registered (or
+`authOptions.syncPasswordResetToBetterAuth` is set), sets the Better Auth password and deletes
+that user's Better Auth sessions. `adminId` adds the audit log line. Pass `authOptions` instead
+of `app` outside a request. `setPasswordForUser` alone only sets the hash and revokes nothing.
 
 Add `tokenEpoch` (number, default 0) on the User schema so epoch bumps persist under
 `strict: "throw"`. See `example-backend` User. Opt in to `emailVerified` with
@@ -414,15 +607,27 @@ setupServer({
     callbackURL: process.env.GITHUB_CALLBACK_URL!,
     scope: ["user:email"],
     allowAccountLinking: true,
+    allowedReturnTo: ["https://app.example.com", "myapp://auth"],
   },
 });
 ``````
 
+`allowedReturnTo` lists the exact http(s) origins or custom-scheme authorities that
+`GET /auth/github?returnTo=` may name. A value outside the list returns 400, the callback checks
+it again before redirecting, and tokens go in the URL fragment. Without `allowedReturnTo`,
+`returnTo` is ignored and the callback returns JSON.
+
 **Endpoints (when configured):**
 - `GET /auth/github` — Initiate OAuth flow
 - `GET /auth/github/callback` — OAuth callback handler
-- `GET /auth/github/link` — Link GitHub to authenticated user (requires JWT)
+- `GET /auth/github/link` — Link GitHub to authenticated user (requires JWT; the user ID is bound into the OAuth state)
 - `DELETE /auth/github/unlink` — Unlink GitHub from account (requires JWT)
+
+The flow sets a signed, HttpOnly, `SameSite=Lax` `terreno_github_oauth_state` cookie (10 minute
+lifetime, signed with `SESSION_SECRET`, falling back to `TOKEN_SECRET`). The callback accepts the
+GitHub response only with a matching, unexpired, single-use state, and links an account only to
+the user recorded by `/auth/github/link`. `findOrCreateUser`'s `existingUser` argument is that
+user, not the callback request's `req.user`.
 
 **Learn more:** [Add GitHub OAuth authentication](../how-to/add-github-oauth.md)
 
@@ -459,6 +664,11 @@ Those hooks throw 501 and do not send when `publicAppUrl` is missing, so links a
 relative. Password reset also sets `revokeSessionsOnPasswordReset`, so existing Better Auth sessions
 are deleted when that reset path succeeds. JWT `POST /auth/resetPassword` updates the
 Better Auth password and deletes those sessions when `BetterAuthApp` is registered.
+With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
+password and bumps `tokenEpoch`. `change-password` sets the new JWT password only on an app
+`User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`
+bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens and MCP credentials issued
+before the change stop working.
 Optional `authMailTemplates` overrides
 subject/text/html per template id.
 
@@ -467,6 +677,64 @@ In-process seed helpers (for example `seedBetterAuthUserInProcess`) should pass
 turns its built-in limiter on when `NODE_ENV=production`, so seeding six demo
 users during a preview smoke test otherwise 429s on the fourth signup. Do not
 set this on the public `BetterAuthApp`.
+
+`options` passes any other Better Auth option, deep-merged over Terreno's defaults (arrays
+replaced, explicit values win), and `plugins` appends Better Auth plugins after `bearer()`.
+See [Pass other Better Auth options and plugins](../how-to/configure-better-auth.md#pass-other-better-auth-options-and-plugins)
+for the defaults each override replaces.
+
+`createBetterAuthSessionMiddleware` does not set `req.user` from a session cookie on a `POST`,
+`PUT`, `PATCH`, or `DELETE` whose `Origin` (or `Referer` origin) is `null` or is not a Better Auth
+trusted origin (`trustedOrigins` plus the API's own origin), or that has neither header but
+`Sec-Fetch-Site: cross-site`. Bearer session requests, safe methods, and requests without those
+browser headers are unchanged; `advanced.disableCSRFCheck` disables the check.
+
+On first contact, `syncBetterAuthUser` finds the app `User` by `betterAuthId` and creates it
+when missing. It links an existing app `User` that has the same email only when Better Auth has
+verified that email and the row has no other `betterAuthId`. Otherwise the session does not set
+`req.user` and the socket handshake is refused, until the address is verified. When a verified
+email links a row whose own `emailVerified` is not `true`, its legacy passport password is removed
+and `tokenEpoch` is bumped, because whoever set that password never proved the mailbox. Seeds
+that create the Better Auth account themselves pass `{trustEmail: true}` as the fourth argument
+to skip these checks; `seedBetterAuthUser` does.
+
+A session whose app `User` has `disabled: true` does not set `req.user`, so protected routes
+answer 401 while Better Auth's own routes, such as sign-out, still work. `RealtimeApp` uses the
+registered `BetterAuthApp` instance for socket sessions. With a user model (its own or the
+`TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
+The legacy JWT socket handshake loads the same user model and refuses a token whose user is
+disabled or missing (`createSocketAuthMiddleware({tokenSecret, userModel})`).
+
+**Social sign-in for a web app on another site (`oauthHandoff`):**
+
+`oauthHandoff: {webOrigins, callbackPaths?}` lets a bearer-mode web client on another site
+finish a social or generic OAuth sign-in without cookies. Unset by default, which adds no
+routes. See [Social sign-in in bearer mode](../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode).
+
+- `webOrigins` — Exact `http(s)` origins of the web apps that may receive the token. Patterns,
+  paths, other schemes, and an empty list are rejected when Better Auth is created. Each origin
+  must also be in `trustedOrigins`.
+- `callbackPaths` — Exact paths on those origins that may receive the token, in normal form.
+  Default `["/"]`. The query is free. List only the page that reads the token; it must never
+  redirect before it strips the fragment.
+- Production: the framework applies the same rules in every environment, so list only the
+  deployed origins. Leave loopback origins (`localhost`, `127.0.0.1`, `[::1]`) out of a
+  production `webOrigins`: a token sent there reaches whatever runs on the visitor's machine.
+  example-backend drops them when `NODE_ENV=production` and refuses to start when none is left.
+
+Endpoints it adds, under `basePath` (default `/api/auth`):
+- `GET {basePath}/oauth-handoff/start?provider=<id>&callbackURL=<url>&errorCallbackURL=<url>` —
+  Starts the sign-in as a top-level page navigation, so the OAuth state cookie is first-party
+  on the API's origin. Answers 400 with no redirect unless `callbackURL` is one of
+  `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of
+  `webOrigins`, and `trustedOrigins` allows both. It also answers 400 when `Sec-Fetch-Dest` is
+  set and is not `document`. The OAuth callback then redirects to `callbackURL` with
+  `#ott=<token>`, a single-use token that expires in three minutes.
+- `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
+  session and the `set-auth-token` header, and sets no cookie. `GET
+  {basePath}/one-time-token/generate` is refused.
+
+With the opt-in `rateLimit`, both paths are in the auth bucket.
 
 **Endpoints (when enabled):**
 - `POST /api/auth/signup/email` — Email/password signup
@@ -658,6 +926,11 @@ const deleted = await Todo.find({deleted: true});
 todo.deleted = true;
 await todo.save();
 ``````
+
+modelRouter create and update (REST, MCP tools, and sync mutations) drop `deleted` from the
+client body. Only `DELETE` sets it, so soft delete always needs `delete` permission and runs
+`preDelete` / `postDelete`. A `preCreate` or `preUpdate` hook can still set `deleted` on
+purpose.
 
 ### isDisabledPlugin
 
@@ -907,6 +1180,77 @@ the mapped resource action. Callers with `user.admin === true` still receive ful
 (legacy compatibility). RBAC-only operators need `admin:access` plus the exact action for
 mutations. Route mapping (for example prompt label moves → `aiPrompt:promote`, review
 submit → `aiReview:score`) is documented in [AI reference — Observability](ai.md#observability).
+
+### RBAC role edits
+
+`PATCH /rbac/roles/:name` (`access.roles.update`) requires `rbac:manageRoles` and never lets the
+actor hand out permissions it does not hold. A `permissions` key must be an object of action lists
+valid for the statements; any other value (`false`, `0`, `""`, `null`, an array) is a 400
+`Invalid permissions`. The actor must hold the role's current grants plus the new ones, so emptying
+a role (`{permissions: {}}`) still needs every permission the role had. Users hold roles by name,
+so a rename (`{name}`) is checked like a permission edit:
+
+- Locked and sealed roles cannot be renamed (400).
+- The actor must hold every permission of the role being renamed (403 `Cannot grant permissions
+  you do not hold`).
+- The new name must not belong to another role or appear in any user's `roles` (409).
+- Users holding the old name, and other roles' `excludesRoles` entries, move to the new name, so
+  holders keep the same grants.
+
+A `PermissionSource` that returns role names keeps returning the old name after a rename; update
+the source's mapping in the same change.
+
+### RBAC user identity writes
+
+`terrenoStatements.user` includes `updateIdentity`. With `accessControl` set, a write that changes
+another user's identity field needs `user:updateIdentity` in addition to `user:update`. Without it
+the write fails with 403 `Missing user:updateIdentity permission`. The field is not silently
+dropped. The identity fields are `USER_IDENTITY_FIELDS`: `email`, `disabled`, `betterAuthId`,
+`githubId`, and `emailVerified`, plus dotted paths into them.
+
+- The check runs on modelRouter `PATCH`, array operations, non-GET instance actions (on the
+  request body), sync and MCP updates (including admin-window mutations that skip modelRouter
+  permissions), and AdminApp `PATCH` and bulk-patch.
+- A key whose value equals the target's current value is not a change. A client that sends the
+  whole record back, unchanged email included, still succeeds. Unset, `null`, `""`, and `false`
+  count as the same empty value.
+- Not checked: writes to the actor's own record (`PATCH /auth/me` has its own guards), writes
+  without an actor (server-internal calls), legacy `admin: true` actors, and creates. A
+  `user:create` holder can still create a user with an email.
+
+| Role | `user:updateIdentity` |
+| --- | --- |
+| `superadmin` | Yes, through `*` |
+| `admin` (seeded) | Yes, for new seeds |
+| `operator` (organizations) | No |
+| `auditor`, `member` | No |
+
+`seedDefaults` does not add new `user` actions to an `admin` role that is already stored. It only
+merges observability actions. In an existing deployment, add `updateIdentity` to the stored `admin`
+role's `user` actions (and to any custom role that should manage identities) with
+`PATCH /rbac/roles/admin` or a migration. Until then, RBAC `admin` holders get 403 when they change
+another user's email or disabled flag. An app that overrides the `user` statement in its own
+statements must list `updateIdentity` for any role to hold it.
+
+### RBAC permission sources
+
+`createAccess({sources})` adds `PermissionSource`s (IdP or ABAC lookups) whose `getGrants` returns
+`roles`, `permissions`, and `deny`. When `getGrants` throws, the source's `staleOnFailure` applies
+(default `"deny"`: drop its additive grants, keep local `user.roles`) once this process knows the
+source's deny posture for the user. Under every policy:
+
+- The last `deny` set a source returned for a user stays in force while the source is down. It is
+  kept apart from the grant caches, so `invalidateCache` (every role edit) and permission-cache
+  eviction do not lift it. A later successful fetch without `deny` clears it.
+- A permission set resolved while any source was failing is not cached, so recovery takes effect
+  on the next check.
+- A process with no last-known deny for the user (a new instance, or the posture was evicted)
+  fails closed by default: the check throws 503 `Permission source unavailable`, because the
+  source's deny is unknown. `failClosedWhenDenyUnknown` defaults to `true`.
+- Set `failClosedWhenDenyUnknown: false` on additive-only sources that never return `deny` (IdP
+  role mappings, membership lookups). Their cold failure then drops only their grants and local
+  roles apply. The built-in organization membership source (`createAccess({organizations: true})`)
+  sets it.
 
 ## Request Validation
 
@@ -1176,8 +1520,8 @@ background job can be followed across many log lines, both in plain-text console
 transports (Google Cloud Logging, Sentry).
 
 > Never use `console.log` for permanent server logs — use `logger` or a scoped logger. Request
-> logging already redacts `password` on bodies; never log secrets, full auth tokens, or raw
-> passwords.
+> logging already redacts password, token, secret, and code fields in bodies and query strings;
+> never log secrets, full auth tokens, or raw passwords.
 
 ### Quick reference
 
@@ -1305,6 +1649,8 @@ What you get:
   and `sessionId` are added.
 - **Correlation fields**: `requestId`, `jobId`, `sessionId`, `userId`, `traceId`, `spanId` (when
   available) are merged onto every line as top-level Winston metadata.
+- **Credential type**: `getCurrentRequestContext()?.credential` records how the caller
+  authenticated (see [Request credential](#request-credential)). It is also a Sentry tag.
 - **Structured object**: every line also carries **`terrenoRequestLog`**: `{requestId, userId}`
   (with `userId: null` for anonymous requests) so Log Explorer and BigQuery can always filter on a
   single nested object. This object is structured metadata only — it is not repeated in the
@@ -1333,7 +1679,59 @@ import {getCurrentRequestContextAttributes} from "@terreno/api";
 await fetch(downstreamUrl, {headers: getCurrentRequestContextAttributes()});
 ``````
 
+### Request credential
+
+`getCurrentRequestContext()?.credential` says which credential authenticated `userId`. Permission
+functions receive only `(method, user, obj)`, so read it from the request context when an
+operation must tell the user's own session apart from a delegated agent:
+
+| Value | Set when |
+| --- | --- |
+| `"jwt"` | A Terreno JWT bearer authenticated the request (REST or `/mcp`) |
+| `"better-auth-session"` | A Better Auth session authenticated the request (REST or `/mcp`) |
+| `"mcp-service-token"` | An `mcp_` service token authenticated a `/mcp` call |
+| `"oauth"` | An MCP OAuth access token (`mcpat_`) authenticated a `/mcp` call |
+
+It is `undefined` for anonymous requests and for jobs. The JWT and Better Auth middlewares set it
+for REST; the MCP server sets it on `/mcp` before any tool runs. `extractAuthFromHeaders` returns
+the same `{user, credential}` pair for custom MCP mounts, plus `scopes` for an OAuth token.
+
+For an `"oauth"` credential, `getCurrentRequestContext()?.oauthScopes` lists the scopes the
+token was granted. Terreno does not limit tools by scope on its own. With more than one entry in
+`mcpOAuth.scopesSupported`, add `requireOAuthScope(scope)` to the permissions of each action or
+method that needs it: it refuses an OAuth token without `scope` and lets every other credential
+through.
+
+``````typescript
+import {Permissions, requireOAuthScope} from "@terreno/api";
+
+permissions: {
+  create: [Permissions.IsAuthenticated, requireOAuthScope("write")],
+  list: [Permissions.IsAuthenticated],
+  // ...
+},
+``````
+
+``````typescript
+import {getCurrentRequestContext, type PermissionMethod} from "@terreno/api";
+
+const DELEGATED = new Set(["mcp-service-token", "oauth"]);
+
+// Admins may act on any workspace from their own session, but not through an agent's token.
+const IsWorkspaceMemberOrAdmin: PermissionMethod<Workspace> = (method, user, obj) => {
+  const credential = getCurrentRequestContext()?.credential;
+  if (user?.admin && !DELEGATED.has(credential ?? "")) {
+    return true;
+  }
+  return Boolean(obj?.memberIds.some((id) => String(id) === String(user?._id)));
+};
+``````
+
 ### Configuring transports
+
+Request logging (one debug line per request with method, URL, user, and redacted body) is on by
+default. Turn it off with `logRequests: false` on `TerrenoApp` or `loggingOptions: {logRequests: false}`;
+either one disables it.
 
 `setupLogging` is called for you by `TerrenoApp` / `setupServer` (pass `loggingOptions`). Console
 and file transports are enabled by default; add custom transports (such as Google Cloud Logging) to

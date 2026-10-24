@@ -54,7 +54,7 @@ A dataset name matches `^[a-z][a-z0-9_]{0,63}$`. A document has at most 8 datase
 | `image` | `alt`, `src` | `id` |
 | `details` | `title`, `text` | `id` |
 
-`src` (on an `image` block, on each `gallery` tile, and on a `list` item's `image`) is a `data:image` URL, a `file:` ref (`file:` plus an id), or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image. A ref dataset `id` uses 1–80 letters, digits, underscores, or hyphens. A block or action-element `id` stays lowercase and starts with a letter. `limit` of `0` is `INVALID_TYPE` (an integer of at least 1), not `TOO_SHORT`.
+`src` (on an `image` block, on each `gallery` tile, and on a `list` item's `image`) is a `data:image` URL, a `file:` ref (`file:` plus an id), or an `https` URL. `https` is allowed only when the hostname is in `validateBlocks` `imageHosts` (the server option is `uiBlocks.imageHosts`). Anything else is `IMAGE_HOST_NOT_ALLOWED`. An empty list rejects every `https` image. `imageHosts` covers only these three image sources: a Markdown image inside a `text` block (or a plain assistant reply) renders through `MarkdownView` and loads from any URL, so the allowlist does not stop it; see [Agent UI asks: the image allowlist does not cover Markdown](../explanation/agent-ui-asks.md). A ref dataset `id` uses 1–80 letters, digits, underscores, or hyphens. A block or action-element `id` stays lowercase and starts with a letter. `limit` of `0` is `INVALID_TYPE` (an integer of at least 1), not `TOO_SHORT`.
 
 Warnings do not block rendering:
 

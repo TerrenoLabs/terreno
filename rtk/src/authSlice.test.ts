@@ -6,7 +6,7 @@ import {renderHook} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {Provider} from "react-redux";
-
+import {onAuthChange} from "./authEvents";
 import {
   type EmailLoginRequest,
   generateAuthSlice,
@@ -419,7 +419,63 @@ describe("generateProfileEndpoints", () => {
   });
 });
 
+describe("logout cache reset", () => {
+  it("purges cached query responses on logout", async () => {
+    const withMe = api.injectEndpoints({
+      endpoints: (builder) => ({
+        getCachedMe: builder.query<{id: string}, void>({
+          queryFn: () => ({data: {id: "alice"}}),
+        }),
+      }),
+      overrideExisting: true,
+    });
+    const {logout, setUserId, store} = createTestStore();
+    const cachedQueries = (): string[] =>
+      Object.keys(
+        (store.getState() as Record<string, {queries: Record<string, unknown>}>)["terreno-rtk"]
+          .queries
+      );
+    const subscription = store.dispatch(withMe.endpoints.getCachedMe.initiate());
+    await subscription;
+    subscription.unsubscribe();
+
+    // A logout while already signed out (a query failing without a token) keeps the cache, so
+    // the reset cannot drive a refetch loop.
+    store.dispatch(logout());
+    expect(cachedQueries()).toHaveLength(1);
+
+    store.dispatch(setUserId({userId: "alice"}));
+    store.dispatch(logout());
+
+    expect(cachedQueries()).toEqual([]);
+  });
+});
+
 describe("listener middleware side effects", () => {
+  it("emits a JWT auth change after login and after logout", async () => {
+    const {logout, store} = createTestStore();
+    let calls = 0;
+    const unsubscribe = onAuthChange(() => {
+      calls += 1;
+    });
+
+    try {
+      store.dispatch({
+        meta: {arg: {endpointName: "emailLogin", type: "mutation"}, requestId: "listener-emit-1"},
+        payload: {refreshToken: "refresh-token", token: "auth-token", userId: "user-123"},
+        type: "terreno-rtk/executeMutation/fulfilled",
+      });
+      await flushAsyncListeners();
+      expect(calls).toBe(1);
+
+      store.dispatch(logout());
+      await flushAsyncListeners();
+      expect(calls).toBe(2);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("stores tokens in AsyncStorage on web login when window exists", async () => {
     const {store} = createTestStore();
     const setItemCalls: Array<[string, string]> = [];

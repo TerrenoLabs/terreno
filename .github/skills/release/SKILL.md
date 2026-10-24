@@ -114,7 +114,7 @@ PRs do not edit `CHANGELOG.md` as they land. User-facing work lands as one file 
 Before creating the tag:
 
 1. Preview pending notes: `bun run changelog:preview`. If there are no fragments, stop — do not cut an empty release (see Step 2). If a user-facing feature in the commit range has no fragment, add one before assembling so the changelog matches what shipped.
-2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files.
+2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files. It also regenerates the example app's what's new data (`example-frontend/constants/whatsNew.generated.json`); if you edit `CHANGELOG.md` afterwards (for example to add an upgrade note line), rerun `bun run whats-new:generate`. Commit it with `CHANGELOG.md`, or `bun run check:whats-new` fails in CI.
 3. Confirm the new version section is **non-empty** and grouped under Keep a Changelog headings.
 4. If the new section has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` heading, write `mcp-server/src/docs/upgrades/X.Y.Z.md` **in the same commit as the assembled changelog**, using the template in [`mcp-server/src/docs/upgrades/README.md`](../../mcp-server/src/docs/upgrades/README.md). Add a changelog line `Upgrade note: [\`mcp-server/src/docs/upgrades/X.Y.Z.md\`](mcp-server/src/docs/upgrades/X.Y.Z.md).` under the version heading. The tag-time upgrade-docs check fails the release without the file. Verify locally with `bun run check:upgrade-docs X.Y.Z`.
 5. If this skill (or another `.rulesync/` source) needs to change, edit `.rulesync/` in this same commit, run `bun run rules`, then run `bun run skills:sync` so `skills/release/SKILL.md` matches. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
@@ -130,7 +130,7 @@ Never commit the release directly to master, and never tag before this pull requ
    gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
    ```
 
-3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again.
+3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
 
    ```bash
    gh pr checks --watch

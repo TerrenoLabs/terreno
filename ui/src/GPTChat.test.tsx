@@ -124,6 +124,24 @@ describe("GPTChat", () => {
     assert.isOk(getByText("New Chat"));
   });
 
+  it("shows the history sidebar by default", () => {
+    const {getByTestId} = renderChat();
+
+    assert.isOk(getByTestId("gpt-history-sidebar"));
+    assert.isOk(getByTestId("gpt-new-chat-button"));
+  });
+
+  it("leaves out the history sidebar when showHistory is false", () => {
+    const {getByTestId, queryByTestId, queryByText} = renderChat({showHistory: false});
+
+    assert.isNull(queryByTestId("gpt-history-sidebar"));
+    assert.isNull(queryByTestId("gpt-new-chat-button"));
+    assert.isNull(queryByText("Chats"));
+    assert.isNull(queryByText("First chat"));
+    assert.isOk(getByTestId("gpt-messages"));
+    assert.isOk(getByTestId("gpt-chat"));
+  });
+
   it("selects, creates, and deletes histories", async () => {
     const onSelectHistory = mock((_id: string) => {});
     const onCreateHistory = mock(() => {});

@@ -941,6 +941,29 @@ export const seedDefaultData = async (): Promise<SeedRunResult> => {
   return runSeeds({name: "example-backend", steps: seedSteps});
 };
 
+/**
+ * Seeds the default example data at server start when `SEED_DEFAULTS=true`. A deployed process
+ * never seeds on boot: the default accounts, admins included, use a password published in this
+ * repository.
+ */
+export const seedDefaultDataOnBoot = async ({
+  isDeployed,
+}: {
+  isDeployed: boolean;
+}): Promise<SeedRunResult | undefined> => {
+  if (process.env.SEED_DEFAULTS !== "true") {
+    return undefined;
+  }
+  if (isDeployed) {
+    logger.warn(
+      "SEED_DEFAULTS ignored: a deployed process does not seed accounts with published passwords"
+    );
+    return undefined;
+  }
+  logger.info("Seeding default example data after sync collections are registered");
+  return seedDefaultData();
+};
+
 const main = async (): Promise<void> => {
   const cli = await runSeedCli({
     allowProductionReset: () => process.env.ALLOW_SEED_RESET === "true",

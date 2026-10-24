@@ -51,12 +51,15 @@ to work while clients migrate.
 Point any MCP client at `POST /mcp`. Auth order on the Bearer header is:
 
 1. `mcp_…` service token, when `mcpServiceTokens` is enabled
-2. Better Auth session
-3. JWT
+2. `mcpat_…` OAuth access token, when `mcpOAuth` is enabled
+3. Better Auth session
+4. JWT
+
+The credential type that won is recorded as `getCurrentRequestContext()?.credential` (`"mcp-service-token"`, `"oauth"`, `"better-auth-session"`, or `"jwt"`), so a permission function can refuse delegated agent tokens where it would trust the user's own session. Remote clients that need OAuth (Claude.ai connectors, ChatGPT apps) are covered in [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md).
 
 The resolved user is what permission checks run against, so an LLM never sees more than that user could see over REST. Mint and paste a static key with [Connect an MCP client with a service token](connect-mcp-service-token.md).
 
-`initialize` and `tools/list` are the unauthenticated catalog. Identity is enforced on `tools/call`. GET `/mcp` is Streamable HTTP **405** (`Method not allowed.`) — there is no GET SSE stream; Perplexity still uses that 405 as a successful probe.
+`initialize` and `tools/list` are the unauthenticated catalog (unless `mcpOAuth` is enabled, which makes every unauthenticated `/mcp` request a 401 challenge). Identity is enforced on `tools/call`. GET `/mcp` is Streamable HTTP **405** (`Method not allowed.`) — there is no GET SSE stream; Perplexity still uses that 405 as a successful probe.
 
 Authentication is required by default, matching REST. A tool call with no resolvable user is refused before any permission check unless the model router sets `allowAnonymous: true` — the same flag REST passes to `authenticateMiddleware`. That matters for read-only helpers like `IsAuthenticatedOrReadOnly`, which would otherwise pass for an anonymous `list`. Disabled accounts are refused too, as they are over HTTP. Service tokens are MCP-only: they are rejected on `/mcp/service-tokens` and are not accepted on REST, sync, or admin.
 
@@ -116,6 +119,8 @@ populatePaths: [{fields: ["name", "email"], path: "ownerId"}],
 - A bare name (`"hash"`) is removed at **every depth**, including inside arrays and populated refs, so a redacted name cannot leak through a nested document.
 - A dot path (`"metadata.secretKey"`) removes exactly that location, following arrays of subdocuments element-wise.
 
+The list tool's `sort` argument accepts only the router's sortable fields (`queryFields`, fields in the router's `sort`, and `sortFields`) minus `excludeFields`. Sorting on any other field returns an error that lists the allowed fields, because result order would reveal the hidden values.
+
 ## Customizing responses
 
 `mcpResponseHandler` shapes MCP responses independently of the REST `responseHandler`, which is useful for returning compact summaries to an LLM:
@@ -174,9 +179,43 @@ Unexpected exceptions and caught internal causes are also captured with
 receives the stable MCP error text — internal exceptions and stack traces stay
 server-side. Tool arguments are not logged.
 
+## Actions as tools
+
+A verb that is not CRUD belongs in a [modelRouter action](../explanation/model-router-actions.md). Add `mcp` to the action to expose the same implementation as a tool, instead of writing it twice:
+
+```typescript
+export const todoRouter = modelRouter("/todos", Todo, {
+  collectionActions: {
+    bulkComplete: {
+      body: z.object({ids: z.array(z.string()).min(1)}).strict(),
+      handler: async ({body, user}) => completeTodos(body.ids, user),
+      mcp: {description: "Mark several todos complete", name: "todos_bulk_complete"},
+      method: "POST",
+      permissions: [Permissions.IsAuthenticated],
+    },
+  },
+  instanceActions: {
+    markComplete: {
+      handler: async ({doc}) => markComplete(doc),
+      mcp: {name: "todos_mark_complete"},
+      method: "POST",
+      permissions: [Permissions.IsOwner],
+    },
+  },
+  permissions: { /* CRUD */ },
+});
+```
+
+- `todos_mark_complete` takes `{id}`; an instance action's tool input is `{id, ...body}` (or `{id, ...query}` for GET). `todos_bulk_complete` takes `{ids}`.
+- The tool runs the action's own `permissions` and RBAC `access`, before and after loading the document, exactly as REST does. It does not need `mcp` on the router, and the router's CRUD permissions do not apply.
+- The handler sees `req.isMCPRequest === true`. Its return value is the tool's JSON text. Touching `res` fails the call, so return values instead of writing to `res`.
+- `body` / `query` must be a `z.object()`, and instance actions cannot define `id` in it. Tool names must be unique; a duplicate fails at boot.
+
+Audit log lines for action tools carry `mcpTool`, `mcpModel`, and `mcpAction` labels.
+
 ## Custom tools
 
-CRUD tools cover one model at a time. For a query that spans models, register a custom tool with `registerMCPTool`. It shows up on `POST /mcp` and in `getMCPTools` next to the generated CRUD tools:
+CRUD tools cover one model at a time, and actions cover one model's verbs. For a query that spans models, register a custom tool with `registerMCPTool`. It shows up on `POST /mcp` and in `getMCPTools` next to the generated CRUD tools:
 
 ```typescript
 import {registerMCPTool} from "@terreno/api";

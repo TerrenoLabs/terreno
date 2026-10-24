@@ -46,7 +46,10 @@ entrypoint.
 When `JobsApp` is registered **before** `AdminApp`, `POST {adminBase}/scripts/:name/run`
 enqueues job `admin/script` (`maxAttempts: 1`) and still returns `{taskId}` for the existing
 Scripts poll UI (`BackgroundTask`). Progress, logs, dry/wet, and cancel stay on that row.
-Cancel also cancels the job so `ctx.signal` aborts.
+Cancel also cancels the job so `ctx.signal` aborts. The job handler starts the script only
+when it moves the task from `pending` to `running`; a delivery for a task that already
+started fails with 409 and the script is not run again. Start a new run instead of retrying
+a dead `admin/script` job.
 
 Apps without `JobsApp` keep the previous in-process `void` runner. The CLI
 (`runScriptCli` / `bun run script`) stays process-local.
@@ -114,8 +117,17 @@ On shutdown, call `jobsApp.stopWorker()` so in-flight handlers receive `ctx.sign
 
 ## Mongo runner: restart, retry, idempotency, schedules
 
-**Restart:** Jobs are Mongo documents. A crashed worker leaves `running` rows; after
-`lockTtlMs` (default 15 minutes) another worker reclaims them via `lockedAt` expiry.
+**Lease:** A claimed job holds a lease on its row (`lockedAt` / `lockedBy`). While the
+handler runs, the worker renews `lockedAt` every `lockTtlMs / 3`, so a long handler keeps its
+claim and no other worker or execute dispatch runs it at the same time. If a renewal finds
+that another consumer owns the row, the worker aborts `ctx.signal` and discards its own
+result. A finalize failure on one job is logged and does not stop the poll loop.
+
+**Restart:** Jobs are Mongo documents. A crashed worker leaves `running` rows; once their
+lease is older than `lockTtlMs` (default 15 minutes) another worker reclaims them. A reclaim
+counts as an attempt (`attemptCount++`, `attempts[]` entry with `errorClass: "LeaseExpired"`).
+When that exhausts `maxAttempts`, the job goes to `status: "dead"` instead of running again,
+so a `maxAttempts: 1` job never runs twice.
 
 **Retry:** Handler throws → `attemptCount++`, `attempts[]` entry, exponential backoff with
 equal jitter, `status: "pending"` and future `runAt`. At `maxAttempts` (default 5) →
@@ -130,8 +142,9 @@ tick when a child for that schedule is still `pending` / `running` / `scheduled`
 
 ## At-least-once handlers
 
-Delivery is **at-least-once**: lock expiry, Cloud Task retries, or Vercel queue redelivery
-can run a handler more than once.
+Delivery is **at-least-once**: a reclaim after a worker crash (within `maxAttempts`),
+Cloud Task retries, or Vercel queue redelivery can run a handler more than once. A live
+handler is never run concurrently by a second consumer while its lease renews.
 
 - Make handlers idempotent (stable keys, upserts, “already processed” checks).
 - Use `idempotencyKey` on enqueue to prevent duplicate **rows**, not duplicate execution after admin retry/requeue.

@@ -5,9 +5,10 @@ import mongoose from "mongoose";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User} from "../auth";
 import {BadRequestError, NotFoundError, UnauthorizedError} from "../errors";
-import {McpServiceToken} from "../models/mcpServiceToken";
+import {MCP_SERVICE_TOKEN_PREFIX, McpServiceToken} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
 import type {McpServiceTokenDocument} from "../types/mcpServiceToken";
+import {userTokenEpoch} from "./auth";
 
 export const MAX_ACTIVE_MCP_SERVICE_TOKENS = 10;
 
@@ -51,7 +52,7 @@ const bearerFromRequest = (req: Request): string | undefined => {
 
 const rejectMcpServiceTokenBearer = (req: Request, _res: Response, next: NextFunction): void => {
   const token = bearerFromRequest(req);
-  if (token?.startsWith("mcp_")) {
+  if (token?.startsWith(MCP_SERVICE_TOKEN_PREFIX)) {
     next(new UnauthorizedError("MCP service tokens cannot manage service tokens"));
     return;
   }
@@ -193,6 +194,10 @@ export const addMcpServiceTokenRoutes = (
       const user = requireAuthenticatedUser(req);
       const name = parseName(req.body?.name);
       const expiresAt = parseExpiresAt(req.body?.expiresAt);
+      await McpServiceToken.revokeOutdatedForUser({
+        _id: user._id,
+        tokenEpoch: userTokenEpoch(user),
+      });
       const activeCount = await McpServiceToken.countActiveForUser(
         new mongoose.Types.ObjectId(String(user._id))
       );
@@ -201,7 +206,10 @@ export const addMcpServiceTokenRoutes = (
           title: `Maximum of ${MAX_ACTIVE_MCP_SERVICE_TOKENS} active MCP service tokens`,
         });
       }
-      const issued = await McpServiceToken.issueFor({_id: user._id}, {expiresAt, name});
+      const issued = await McpServiceToken.issueFor(
+        {_id: user._id, tokenEpoch: userTokenEpoch(user)},
+        {expiresAt, name}
+      );
       return res.json({
         data: {
           created: issued.mcpServiceToken.created.toISOString(),
@@ -244,6 +252,11 @@ export const addMcpServiceTokenRoutes = (
       const user = requireAuthenticatedUser(req);
       const page = parsePage(req.query.page);
       const limit = parseLimit(req.query.limit);
+      // Tokens from before a password reset or session revocation no longer work; list them so.
+      await McpServiceToken.revokeOutdatedForUser({
+        _id: user._id,
+        tokenEpoch: userTokenEpoch(user),
+      });
       const filter = {userId: new mongoose.Types.ObjectId(String(user._id))};
       const total = await McpServiceToken.countDocuments(filter);
       const docs = await McpServiceToken.find(filter)

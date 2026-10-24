@@ -25,13 +25,5 @@ url: http://localhost:8082/login
 
 - extendedWaitUntil:
     visible:
-      id: "announcement-screen"
-    timeout: 30000
-
-- tapOn:
-    text: "Got it"
-
-- extendedWaitUntil:
-    visible:
       id: "todos-screen"
     timeout: 30000

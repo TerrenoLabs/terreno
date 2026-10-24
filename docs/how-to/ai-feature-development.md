@@ -1,6 +1,6 @@
 # Develop an AI feature
 
-Work this loop in **Terreno admin** when observability primaries are `local`. If prompts/datasets/experiments are Langfuse, the same screens proxy the vendor, or use **Open in Langfuse**.
+Work this loop in **Terreno admin**. Observability primaries are always `local`.
 
 Architecture: [AI observability](../explanation/ai-observability.md). Routes and models: [AI reference](../reference/ai.md). Register plugins: [Observe LLM calls](./observe-llm-calls.md).
 

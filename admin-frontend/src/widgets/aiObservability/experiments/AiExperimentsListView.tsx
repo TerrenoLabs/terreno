@@ -110,8 +110,7 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
     <Box gap={3} testID="ai-experiments-list">
       <Box direction="row" gap={2} justifyContent="between" wrap>
         <Text color="secondaryDark" size="sm">
-          Experiments run via BackgroundTask locally. Langfuse deep-links when the remote plugin is
-          primary.
+          Experiments run via BackgroundTask locally.
         </Text>
         {canCreate ? (
           <Button onClick={onCreate} testID="ai-experiments-create" text="New experiment" />

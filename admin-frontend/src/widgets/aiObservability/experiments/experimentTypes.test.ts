@@ -2,6 +2,7 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 import type {ExperimentRecord} from "./experimentTypes";
 import {
+  experimentItemColumnWidths,
   experimentProgressPercent,
   failingGateCount,
   gatesForVersion,
@@ -96,5 +97,19 @@ describe("experimentTypes helpers", () => {
     assert.isTrue(isValidExperimentVersionCount(2));
     assert.isTrue(isValidExperimentVersionCount(3));
     assert.isFalse(isValidExperimentVersionCount(4));
+  });
+
+  it("stretches output columns to fill the measured table width", () => {
+    assert.deepEqual(experimentItemColumnWidths({containerWidth: 1200, versionCount: 2}), {
+      item: 120,
+      output: 460,
+      pass: 80,
+    });
+    assert.equal(experimentItemColumnWidths({containerWidth: 1200, versionCount: 3}).output, 280);
+  });
+
+  it("keeps output columns readable when the table is narrow or unmeasured", () => {
+    assert.equal(experimentItemColumnWidths({containerWidth: 0, versionCount: 2}).output, 180);
+    assert.equal(experimentItemColumnWidths({containerWidth: 500, versionCount: 3}).output, 180);
   });
 });

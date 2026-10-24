@@ -2,7 +2,7 @@
 
 AI service layer for Terreno apps - GPT chat, request logging, and admin tools.
 
-AI service layer for Terreno backends — provider-agnostic chat, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
+AI service layer for Terreno backends — provider-agnostic chat, request logging, GPT history, projects, file uploads, MCP tools, and built-in observability (prompt registry, traces, evaluators).
 
 ## Install
 
@@ -27,7 +27,7 @@ new TerrenoApp({userModel: User})
   .start();
 ```
 
-This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), projects, and the admin AI request explorer. Add `LangfuseApp`, `FileStorageService`, and `MCPService` when you need those features.
+This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), projects, and the admin AI request explorer. Add `ObservabilityApp`, `FileStorageService`, and `MCPService` when you need those features.
 
 ## What's included
 
@@ -36,7 +36,7 @@ This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), proj
 - Mongoose models: `AIRequest`, `GptHistory`, `Project`, `FileAttachment`
 - Route registrars: `addGptRoutes`, `addGptHistoryRoutes`, `addProjectRoutes`, `addFileRoutes`, `addMcpRoutes`, `addAiRequestsExplorerRoutes`
 - Agent UI Asks (opt-in `asks` option on `AiApp` / `addGptRoutes`) — the agent pauses a turn to ask a typed question (`choice`, `confirm`, `markdown`, `form`, `files`), server-enforced approval for tools with `needsApproval`, and headless `pendingAsks` / `turn` endpoints for watches and other small clients. See [Agent UI Asks](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/agent-ui-asks.md)
-- `LangfuseApp` — optional Langfuse tracing and admin UI routes
+- `ObservabilityApp` — prompt registry, traces, evaluators, datasets, experiments, and review queue
 - `FileStorageService` — GCS uploads with signed URLs
 - `MCPService` — SSE MCP client for tool calling
 - `getMCPTools` — wrap registered `modelRouter` MCP tools as Vercel AI SDK tools for in-process `streamText` / `generateText`

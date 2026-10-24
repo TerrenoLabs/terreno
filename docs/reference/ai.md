@@ -1,6 +1,6 @@
 # @terreno/ai
 
-AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
+AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and built-in observability (prompt registry, traces, evaluators).
 
 ## Table of Contents
 
@@ -15,10 +15,8 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
 - [Cost and abuse limits](#cost-and-abuse-limits)
-- [LangfuseApp plugin](#langfuseapp-plugin)
 - [Observability](#observability)
 - [Durable agent harness](#durable-agent-harness)
-- [Langfuse integration](#langfuse-integration)
 - [FileStorageService](#filestorageservice)
 - [MCPService](#mcpservice)
 - [Gemini and Vertex helpers](#gemini-and-vertex-helpers)
@@ -54,12 +52,6 @@ bun run lint:fix   # Fix lint issues
 src/
   index.ts                 # Public exports
   aiApp.ts                 # AiApp TerrenoPlugin
-  langfuseApp.ts           # LangfuseApp TerrenoPlugin
-  langfuseClient.ts        # Langfuse SDK client lifecycle
-  langfuseCache.ts         # Prompt/trace caching
-  langfusePrompts.ts       # Prompt compile/fetch helpers
-  langfuseTracing.ts       # OpenTelemetry tracing setup
-  langfuseVercelAi.ts      # Bridge Langfuse prompts to Vercel AI SDK
   models/
     aiRequest.ts           # AI request logging model
     gptHistory.ts          # Conversation history model
@@ -89,7 +81,7 @@ src/
 
 ## Key exports
 
-- **Plugins:** `AiApp`, `LangfuseApp`
+- **Plugins:** `AiApp`, `ObservabilityApp`
 - **Service:** `AIService`, `TemperaturePresets`, `FileStorageService`, `MCPService`,
   `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
   prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
@@ -97,7 +89,6 @@ src/
 - **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
-- **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
 - **Prompts:** `COMPACT_SURFACE_SYSTEM_PROMPT`, `CONTENT_SUMMARY_PROMPT`, `DEFAULT_GPT_MEMORY`, `JSON_VALUE_SYSTEM_PROMPT`, `REMIX_PROMPT`, `TERRENO_ASKS_SYSTEM_PROMPT`, `TITLE_GENERATION_PROMPT`, `TRANSLATION_PROMPT`
 - **Block host actions:** `scaleStepperHostAction`, `toggleChecklistHostAction`, `findAgentBlock`, types `HostAction`, `HostActionContext`, `HostActionResult` ([Host actions](#host-actions))
@@ -348,7 +339,7 @@ With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add 
 | `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
 | `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
 | `surface` | `"full"` \| `"compact"`? | Where the user reads and answers. Default `"full"`. `"compact"` is a watch or another small screen: the model gets only button-sized asks and is asked for replies of at most two short sentences. Any other value returns 400. See [Compact surface](agent-ui-asks.md#compact-surface). |
-| `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
+| `systemPrompt` | string? | System prompt for this turn; project context and the registry `systemPromptName` prompt are prepended |
 | `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
 | `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
 | `projectId` | string? | Project whose context and memories are prepended to the system prompt; saved on a history that has none |
@@ -493,6 +484,8 @@ new AiApp({
 | `toolChoice` | `"auto"` \| `"none"` \| `"required"` (default `"auto"` when tools present) |
 | `maxSteps` | Max tool-calling steps (default 5) |
 | `titleModelId` | Cheaper model for conversation title generation |
+| `systemPromptName` | Observability prompt registry name used as the default system prompt. Its body is prepended to the request's system prompt, and the trace records the version. Skipped when no `ObservabilityApp` is registered, the label has no version, or an admin request selects `promptName` |
+| `systemPromptLabel` | Registry label read for `systemPromptName` (default `production`) |
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
@@ -535,40 +528,6 @@ Before exposing AI routes to users, do both:
    budget alert and Vertex AI or Gemini API quotas), so a runaway caller or bug is caught by the
    provider even when the app's own limits are loose.
 
-## LangfuseApp plugin
-
-Optional Langfuse admin UI and tracing:
-
-```typescript
-import {LangfuseApp} from "@terreno/ai";
-
-new LangfuseApp({
-  publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-  secretKey: process.env.LANGFUSE_SECRET_KEY!,
-  baseUrl: process.env.LANGFUSE_BASE_URL,
-  adminPath: "/admin/langfuse",
-  enableTracing: true,
-  enableAdminUI: true,
-  evaluation: {enabled: true, scoringFunctions: [...]},
-}).register(app);
-```
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `publicKey`, `secretKey` | — | Langfuse API keys (required) |
-| `baseUrl` | — | Langfuse host |
-| `adminPath` | `"/admin/langfuse"` | Admin route prefix |
-| `organization` | maintainer default | Langfuse organization slug — set your own |
-| `project` | `"terreno"` | Langfuse project slug — set your own |
-| `enableTracing` | `true` | OpenTelemetry via `@langfuse/otel` |
-| `enableAdminUI` | `true` | Prompt, trace, playground, evaluation routes |
-| `evaluation.enabled` | — | Register evaluation scoring routes |
-| `cache` | — | Prompt/trace TTL overrides |
-
-Client construction failures log a warning and skip the plugin so the API process still listens. Tracing init failures log and leave admin routes mounted. example-backend does not register `LangfuseApp` when `MONGO_DB_NAME` is a PR preview database (`terreno-example-pr-*`). GitHub Actions preview deploys omit Langfuse secrets and use `secrets_update_strategy: overwrite` so a previous revision cannot merge those keys into the preview.
-
-Calls `shutdownLangfuseClient()` and `shutdownTracing()` on `SIGTERM`.
-
 ## Observability
 
 In-app prompt versions, nested traces, evaluators, datasets, experiments, review queue, and in-app feedback. Operator loop: [Develop an AI feature](../how-to/ai-feature-development.md). Register plugins: [Observe LLM calls](../how-to/observe-llm-calls.md). Why two planes: [AI observability](../explanation/ai-observability.md). Locked design: [implementation plan](../implementationPlans/ai-observability.md).
@@ -606,7 +565,9 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 | `ObsSpan` | Nested span with `kind`, `status`, optional `error`, offsets, usage |
 | `ObsScore` | Scores on a trace/span; many per trace, **no unique index** |
 | `ObsEvaluator` | Evaluator: `type` (`human` \| `llm-judge` \| `json-assert`), `target`, `dimensions[]`, `runModes`, `instructions`, `judgePromptName` (judge), `assertion` (json-assert), `confidenceAlertBelow` (default 0.7) |
-| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment |
+| `ObsReviewItem` | Review queue item: status, evaluator, trace, reason, scores, comment, optional `batchId` |
+| `ObsReviewBatch` | Review batch: `name`, human question-set `evaluatorId`, `traceIds[]`, optional `promptName` and `description` |
+| `ObsJudgeRun` | One LLM judge's answers for every trace in a batch: `batchId`, `evaluatorId`, `modelId`, `results[]` (`traceId`, `scores`, `confidence`, `error`) |
 | `ObsDataset` | Named dataset with optional `inputSchemaPromptName` and `expectedOutputSchema` |
 | `ObsDatasetItem` | Item with `input`, `expectedOutput`, `origin`, `proofread`, `tags`, `outcomeClass`, `sourceTraceId`, `metadata` |
 | `ObsExperiment` | Compares 2–3 prompt versions on a dataset with thresholds and aggregates |
@@ -614,6 +575,8 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 
 `POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
 `dimensions[]` render as reviewer score fields and `instructions` render above the review form.
+Each dimension may set `question`, which the review screen shows instead of the key; yes/no
+questions render as Yes / No rows with keyboard shortcuts on web.
 Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
 requires every dimension marked `required`; omitted optional dimensions do not create empty score
 rows. The local score store remains the fallback when no external score sink is configured.
@@ -652,6 +615,8 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 `PromptRegistry.get({name, label})` (default label `production`) reads the labelled local version. `createLocalObservabilityPlugin()` wires `LocalPromptStore` as that registry and local `TraceSink` / `ScoreSink`.
 
+Prompt references: a `system` or `template` may contain `{{> <name>}}`, with an optional `label=<label>` (default `production`) or `version=<n>`, not both: `{{> base-rules}}`, `{{> base-rules label=staging}}`, `{{> base-rules version=3}}`. `PromptRegistry.get` returns `body` with every reference resolved (nested up to 5 levels) and `includes`: one `{includedBy, label?, name, version}` per referenced version. The trace records `prompts: [<called prompt>, ...includes]`; harness prompt refs record `includes` the same way. Every reference must resolve when it is saved: create, version, and label routes return 400 `Invalid prompt reference` for a malformed tag, an unknown prompt or version, or a label the referenced prompt does not have yet, 400 `Prompt reference cycle` when the save or label move would close a cycle (a new version counts as `latest`), and 400 `Prompt references nested too deeply` when it would nest any prompt that includes it past 5 levels. Prompt detail returns the stored, unresolved text. See [Share instructions across prompts](../how-to/observe-llm-calls.md#share-instructions-across-prompts).
+
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt`, `status`, `userId`, `sessionId`, `scope`, `hasScore`, `sensitive`, `flaggedForDataset`, `page`, `limit`. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
@@ -671,6 +636,16 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | GET | `/ai/observability/review` | Queue by `status` with counts; oldest-first. Response includes `more: false` so RTK preserves the count envelope. Rows include `traceName`, `promptName`, assignee, reason, and enqueue time |
 | GET | `/ai/observability/review/:id` | Item + evaluator dimensions + `given` / `wrote` panels and `rawInput` / `rawOutput` for the Raw JSON disclosure |
 | POST | `/ai/observability/review/:id` | `submit` (scores via ScoreSinks, status `done`), `skip`, or `assign` |
+| GET | `/ai/observability/review/batches` | Batches with `counts` (`done`, `pending`, `skipped`, `total`), `judgeCount`, and `bestJudge` (`aiReview:list`) |
+| POST | `/ai/observability/review/batches` | Create a batch for a human evaluator from `traceIds`, or from the newest `limit` (default 10, max 50) successful traces with output not already batched for that evaluator, optionally filtered by `promptName`. Enqueues one review item per trace. 404 `Unknown trace ids` when any id is missing; a failed enqueue removes the batch so its traces stay available (`aiReview:assign`) |
+| GET | `/ai/observability/review/batches/:id` | Batch detail: question `dimensions`, `items[]` (input, output, status, human `scores`, `judgeAnswers` by judge id), and `judges[]` with `agreement` (`rate`, `matches`, `compared`, `itemsCompared`, `errors`, per-question `questions[]`, `disagreements[]`) sorted best first (`aiReview:read`) |
+| POST | `/ai/observability/review/batches/:id/judgeRuns` | Run an `llm-judge` evaluator over every batch trace (five at a time) and store an `ObsJudgeRun`. 400 when the judge shares no dimension keys with the question set; 503 without an AI client (`aiReview:assign`) |
+
+Judge agreement compares only items with `done` human answers and only dimension keys the judge
+also returns. Booleans and categories must match exactly (case-insensitive for categories);
+numbers match within 10% of the dimension's range (default 0–1). A judge error or missing answer
+counts as a disagreement. `computeJudgeAgreement` and `answersAgree` are exported for custom
+reports. `GET /ai/observability/review` also accepts `batchId` to scope the queue to one batch.
 
 `createLocalObservabilityPlugin()` wires `LocalDatasetStore` and `LocalExperimentRunner` when datasets/experiments primaries are `local`.
 
@@ -720,17 +695,6 @@ API: [AI harness reference](ai-harness.md).
 Why: [Durable agent harness](../explanation/durable-agent-harness.md).
 How-to: [Build a durable workflow](../how-to/build-a-durable-workflow.md),
 [Ship a new task version](../how-to/ship-a-new-task-version.md).
-
-## Langfuse integration
-
-Low-level exports (also used by `addGptRoutes` when `langfuseSystemPromptName` is set):
-
-- **Client:** `initLangfuseClient`, `getLangfuseClient`, `isLangfuseInitialized`, `shutdownLangfuseClient`
-- **Prompts:** `getPrompt`, `createPrompt`, `compilePrompt`, `invalidatePromptCache`, `preparePromptForAI`
-- **Tracing:** `initTracing`, `shutdownTracing`, `createTelemetryConfig`
-- **Cache:** `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`
-
-Subpath imports for tree-shaking: `@terreno/ai/langfuseClient`, `@terreno/ai/langfuseApp`.
 
 ## Subpath exports
 
@@ -840,19 +804,13 @@ Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `globa
 
 ```typescript
 import {TerrenoApp} from "@terreno/api";
-import {AiApp, AIService, LangfuseApp} from "@terreno/ai";
+import {AiApp, AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 
 const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService, openApiOptions: {}}))
-  .register(
-    new LangfuseApp({
-      publicKey: process.env.LANGFUSE_PUBLIC_KEY!,
-      secretKey: process.env.LANGFUSE_SECRET_KEY!,
-    })
-  )
   .start();
 ```
 
@@ -864,9 +822,7 @@ Legacy `setupServer` pattern: call `addGptHistoryRoutes`, `addGptRoutes`, etc. i
 |----------|---------|-------------|
 | `GOOGLE_VERTEX_PROJECT` | `createVertexProvider` | GCP project for Vertex models |
 | `GOOGLE_VERTEX_LOCATION` | `createVertexProvider` | Vertex region (default `global`) |
-| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost || `LANGFUSE_PUBLIC_KEY` | `LangfuseApp` | Langfuse public key |
-| `LANGFUSE_SECRET_KEY` | `LangfuseApp` | Langfuse secret key |
-| `LANGFUSE_BASE_URL` | Langfuse client | Langfuse host URL |
+| `AI_OBS_PRICE_MAP_JSON` | `ObservabilityApp` | JSON model map with non-negative `inputPerMTok` / `outputPerMTok`; omitted models have tokens but no USD cost |
 
 GCS credentials use standard Google Cloud Application Default Credentials for `FileStorageService`.
 

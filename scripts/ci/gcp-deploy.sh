@@ -99,7 +99,7 @@ deploy_backend() {
   fi
   docker push "$image"
 
-  secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
+  secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   # The Netlify web build uses Better Auth's bearer scheme; its social sign-in returns through the
   # OAuth one-time-token handoff to CORS_ORIGINS' /login. Cookie builds keep CROSS_DOMAIN_AUTH_COOKIES.
   env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,BETTER_AUTH_OAUTH_HANDOFF=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
@@ -191,7 +191,7 @@ deploy_tasks() {
   fi
   args+=(
     "--set-env-vars=$env_vars"
-    "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
+    "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   )
   gcloud "${args[@]}"
 }

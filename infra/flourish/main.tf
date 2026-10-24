@@ -190,36 +190,6 @@ module "backend_secret_mongodb_uri" {
   depends_on = [module.bootstrap]
 }
 
-module "backend_secret_langfuse_secret_key" {
-  source = "./modules/secret"
-
-  project_id = var.project_id
-  secret_id  = "${var.backend_service_name}-langfuse-secret-key"
-  labels     = local.common_labels
-
-  accessor_members = {
-    api-runtime   = "serviceAccount:${google_service_account.backend_runtime.email}"
-    tasks-runtime = "serviceAccount:${var.project_number}-compute@developer.gserviceaccount.com"
-  }
-
-  depends_on = [module.bootstrap]
-}
-
-module "backend_secret_langfuse_public_key" {
-  source = "./modules/secret"
-
-  project_id = var.project_id
-  secret_id  = "${var.backend_service_name}-langfuse-public-key"
-  labels     = local.common_labels
-
-  accessor_members = {
-    api-runtime   = "serviceAccount:${google_service_account.backend_runtime.email}"
-    tasks-runtime = "serviceAccount:${var.project_number}-compute@developer.gserviceaccount.com"
-  }
-
-  depends_on = [module.bootstrap]
-}
-
 module "backend_secret_better_auth" {
   source = "./modules/secret"
 
@@ -288,8 +258,6 @@ module "backend_service" {
   depends_on = [
     module.backend_artifact_registry,
     module.backend_secret_mongodb_uri,
-    module.backend_secret_langfuse_secret_key,
-    module.backend_secret_langfuse_public_key,
     module.backend_secret_better_auth,
     module.backend_secret_announcements_upload,
   ]
@@ -319,8 +287,6 @@ module "tasks_service" {
   depends_on = [
     module.tasks_artifact_registry,
     module.backend_secret_mongodb_uri,
-    module.backend_secret_langfuse_secret_key,
-    module.backend_secret_langfuse_public_key,
   ]
 }
 

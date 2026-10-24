@@ -52,6 +52,7 @@ import {connectToMongoDB} from "../utils/database";
 import {CHAT_SAFETY_DATASET_NAME, seedChatSafetyDataset} from "./chatSafetyDataset";
 import {seedAnnouncements} from "./seed-announcements";
 import {seedFeatureFlags} from "./seed-feature-flags";
+import {seedAiObservabilityDemo} from "./seedAiObservabilityDemo";
 import {seedFakeEhr} from "./seedFakeEhr";
 
 const ensureNotificationSyncRegistered = (): void => {
@@ -788,6 +789,9 @@ const seedObservability = async (context: SeedContext): Promise<void> => {
     key: JSON.stringify({name: CHAT_SAFETY_DATASET_NAME}),
     model: "ObsDataset",
   });
+
+  const demo = await seedAiObservabilityDemo({dryRun: context.dryRun});
+  context.changes.push(...demo.changes);
 };
 
 export const seedSteps: SeedStep[] = [

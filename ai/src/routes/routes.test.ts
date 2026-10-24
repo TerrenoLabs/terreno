@@ -23,15 +23,6 @@ import {addGptHistoryRoutes} from "./gptHistories";
 
 type SseResponse = supertest.Response & {body: string};
 
-// Mock langfuseVercelAi to avoid transitive langfuse SDK import in tests.
-// Spread the real module so later-loaded test files still see the real exports.
-const realLangfuseVercelAi = await import("../langfuseVercelAi");
-mock.module("../langfuseVercelAi", () => ({
-  ...realLangfuseVercelAi,
-  createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-  preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-}));
-
 const realAi = await import("ai");
 type StreamTextOptions = Parameters<typeof realAi.streamText>[0];
 type StreamTextResult = ReturnType<typeof realAi.streamText>;
@@ -354,6 +345,107 @@ describe("AI Routes", () => {
       assert.equal(res.status, 200);
       assert.equal(sink.traces.length, 1);
       assert.isTrue(sink.traces[0]?.sensitive);
+    });
+
+    it("prepends the route registry system prompt and records its version", async () => {
+      const sink = new MemoryTraceSink();
+      const lookups: Array<{label?: string; name: string}> = [];
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async (args) => {
+            lookups.push(args);
+            return {
+              body: "Registry assistant prompt",
+              label: "staging",
+              name: "chat-assistant",
+              version: 2,
+            };
+          },
+        },
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      const model = createMockModel();
+      const registryApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {
+            aiService: new AIService({model: model as unknown as LanguageModel}),
+            openApiOptions: options,
+            systemPromptLabel: "staging",
+            systemPromptName: "chat-assistant",
+          });
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+
+      const agent = await authAsUser(registryApp, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi", systemPrompt: "Caller context"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(lookups, [{label: "staging", name: "chat-assistant"}]);
+      const callOptions = model.doStream.mock.calls[0]?.[0] as unknown as {
+        prompt: Array<{content: unknown; role: string}>;
+      };
+      const system = callOptions.prompt.find((message) => message.role === "system");
+      assert.match(String(system?.content), /^Registry assistant prompt\n\nCaller context/);
+      assert.deepEqual(sink.traces[0]?.prompts, [
+        {label: "staging", name: "chat-assistant", version: 2},
+      ]);
+    });
+
+    it("keeps chatting without a prompt when the route registry prompt is missing", async () => {
+      const sink = new MemoryTraceSink();
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {get: async () => undefined},
+        reviewQueue: {},
+        traceSink: sink,
+      };
+      new ObservabilityApp({plugins: [plugin]});
+      const registryApp = new TerrenoApp({
+        configureApp: (router, options) => {
+          addGptRoutes(router, {aiService, openApiOptions: options, systemPromptName: "absent"});
+        },
+        skipListen: true,
+        userModel: UserModel,
+      }).build();
+
+      const agent = await authAsUser(registryApp, "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({prompt: "Hi"})
+        .buffer(true)
+        .parse(sseCollect);
+
+      assert.equal(res.status, 200);
+      assert.deepEqual(sink.traces[0]?.prompts, []);
     });
 
     it("emits a memory-sink trace with userId and sessionId", async () => {
@@ -791,27 +883,6 @@ describe("AI Routes", () => {
       const res = await agent
         .post("/gpt/prompt")
         .send({prompt: "Draw a cat"})
-        .buffer(true)
-        .parse(sseCollect);
-      expect(res.status).toBe(200);
-    });
-
-    it("uses the langfuse system prompt when configured", async () => {
-      const customApp = new TerrenoApp({
-        configureApp: (router, options) => {
-          addGptRoutes(router, {
-            aiService,
-            langfuseSystemPromptName: "missing-prompt-name",
-            openApiOptions: options,
-          });
-        },
-        skipListen: true,
-        userModel: UserModel,
-      }).build();
-      const agent = await authAsUser(customApp, "notAdmin");
-      const res = await agent
-        .post("/gpt/prompt")
-        .send({prompt: "Hi"})
         .buffer(true)
         .parse(sseCollect);
       expect(res.status).toBe(200);
@@ -2127,52 +2198,6 @@ describe("AI Routes", () => {
         expect(body).toContain("done");
       } finally {
         AIRequest.logRequest = originalLogRequest;
-      }
-    });
-
-    it("swallows preparePromptForAI failure when langfuse prompt loading throws", async () => {
-      // Re-mock preparePromptForAI to throw, exercising the catch branch that
-      // logs `Langfuse system prompt skipped: ...` and continues without it.
-      mock.module("../langfuseVercelAi", () => ({
-        ...realLangfuseVercelAi,
-        createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-        preparePromptForAI: async () => {
-          throw new Error("langfuse offline");
-        },
-      }));
-      try {
-        const customApp = new TerrenoApp({
-          configureApp: (router, options) => {
-            addGptRoutes(router, {
-              aiService,
-              langfuseSystemPromptName: "broken-prompt",
-              openApiOptions: options,
-            });
-          },
-          skipListen: true,
-          userModel: UserModel,
-        }).build();
-        const agent = await authAsUser(customApp, "notAdmin");
-        const res = await agent
-          .post("/gpt/prompt")
-          .send({prompt: "Hi"})
-          .buffer(true)
-          .parse(sseCollect);
-        // Failure is silently caught; request still completes successfully.
-        expect(res.status).toBe(200);
-        const body = (res as SseResponse).body;
-        expect(body).toContain("done");
-      } finally {
-        // Restore the original happy-path mock for subsequent tests.
-        mock.module("../langfuseVercelAi", () => ({
-          ...realLangfuseVercelAi,
-          createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-          preparePromptForAI: async () => ({
-            config: {},
-            prompt: "test",
-            telemetry: {isEnabled: false},
-          }),
-        }));
       }
     });
 

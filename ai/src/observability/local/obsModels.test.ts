@@ -6,6 +6,7 @@ import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
+import {registerObsReviewItem} from "./models/obsReviewItem";
 import {registerObsScore} from "./models/obsScore";
 import {registerObsTrace} from "./models/obsTrace";
 
@@ -109,6 +110,12 @@ describe("local observability models", () => {
     expect(serialized).toContain('{"status":1,"created":-1}');
     expect(serialized).toContain('{"prompts.name":1,"prompts.version":1}');
     expect(serialized).toContain('{"flaggedForDataset":1,"created":-1}');
+  });
+
+  it("declares an ObsReviewItem batch index for batch queues and counts", () => {
+    const ObsReviewItem = registerObsReviewItem();
+    const serialized = ObsReviewItem.schema.indexes().map(([fields]) => JSON.stringify(fields));
+    expect(serialized).toContain('{"batchId":1,"status":1}');
   });
 
   it("declares ObsExperiment promptName list index", () => {

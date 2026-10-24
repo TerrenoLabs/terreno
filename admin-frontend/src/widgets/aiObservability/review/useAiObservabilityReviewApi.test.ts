@@ -30,9 +30,14 @@ const createApiDouble = () => {
       Object.assign(endpoints, build(builder));
       return {
         useAiObservabilityCurrentUserQuery: mock(() => ({isLoading: false})),
+        useAiObservabilityReviewBatchesQuery: mock(() => ({isLoading: false})),
+        useAiObservabilityReviewBatchQuery: mock(() => ({isLoading: false})),
+        useAiObservabilityReviewBatchQueueQuery: mock(() => ({isLoading: false})),
         useAiObservabilityReviewItemQuery: mock(() => ({isLoading: false})),
         useAiObservabilityReviewQuery: mock(() => ({isLoading: false})),
         useAiObservabilityStatusQuery: mock(() => ({isLoading: false})),
+        useCreateAiObservabilityReviewBatchMutation: mock(() => [mock(() => ({})), {}]),
+        useRunAiObservabilityReviewBatchJudgeMutation: mock(() => [mock(() => ({})), {}]),
         useUpdateAiObservabilityReviewItemMutation: mock(() => [mock(() => ({})), {}]),
       };
     },
@@ -75,6 +80,58 @@ describe("useAiObservabilityReviewApi", () => {
     });
   });
 
+  it("injects batch list, detail, queue, create, and judge-run routes", () => {
+    const {endpoints, api} = createApiDouble();
+    renderHook(() => useAiObservabilityReviewApi(api));
+    expect(endpoints.aiObservabilityReviewBatches.query(undefined as never)).toEqual({
+      method: "GET",
+      url: "/ai/observability/review/batches",
+    });
+    expect(endpoints.aiObservabilityReviewBatch.query("b 1" as never)).toEqual({
+      method: "GET",
+      url: "/ai/observability/review/batches/b%201",
+    });
+    expect(
+      endpoints.aiObservabilityReviewBatchQueue.query({batchId: "b1", status: "pending"} as never)
+    ).toEqual({
+      method: "GET",
+      params: {batchId: "b1", status: "pending"},
+      url: "/ai/observability/review",
+    });
+    expect(
+      endpoints.createAiObservabilityReviewBatch.query({evaluatorId: "e1", limit: 10} as never)
+    ).toEqual({
+      body: {evaluatorId: "e1", limit: 10},
+      method: "POST",
+      url: "/ai/observability/review/batches",
+    });
+    expect(
+      endpoints.runAiObservabilityReviewBatchJudge.query({
+        batchId: "b1",
+        evaluatorId: "j1",
+      } as never)
+    ).toEqual({
+      body: {evaluatorId: "j1"},
+      method: "POST",
+      url: "/ai/observability/review/batches/b1/judgeRuns",
+    });
+    expect(
+      endpoints.runAiObservabilityReviewBatchJudge.query({
+        apiKey: "k",
+        batchId: "b1",
+        evaluatorId: "j1",
+      } as never)
+    ).toEqual({
+      body: {evaluatorId: "j1"},
+      headers: {"x-ai-api-key": "k"},
+      method: "POST",
+      url: "/ai/observability/review/batches/b1/judgeRuns",
+    });
+    expect(endpoints.runAiObservabilityReviewBatchJudge.invalidatesTags).toEqual([
+      "aiObservabilityReview",
+    ]);
+  });
+
   it("exposes review hooks for queue and item screens", () => {
     const {api} = createApiDouble();
     const {result} = renderHook(() => useAiObservabilityReviewApi(api));
@@ -83,5 +140,7 @@ describe("useAiObservabilityReviewApi", () => {
     expect(typeof result.current.useActionMutation).toBe("function");
     expect(typeof result.current.useCurrentUserQuery).toBe("function");
     expect(typeof result.current.useStatusQuery).toBe("function");
+    expect(typeof result.current.useBatchesQuery).toBe("function");
+    expect(typeof result.current.useRunJudgeMutation).toBe("function");
   });
 });

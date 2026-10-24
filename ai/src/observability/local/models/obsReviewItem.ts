@@ -10,6 +10,11 @@ const obsReviewItemSchema = new mongoose.Schema<ObsReviewItemDocument, ObsReview
       ref: "User",
       type: mongoose.Schema.Types.ObjectId,
     },
+    batchId: {
+      description: "Review batch this item belongs to, when it was created as part of one",
+      ref: "ObsReviewBatch",
+      type: mongoose.Schema.Types.ObjectId,
+    },
     comment: {description: "Reviewer comment submitted with scores", type: String},
     datasetItemId: {
       description: "Optional dataset item this review is bound to",
@@ -67,6 +72,8 @@ const reviewIndexSpec: Array<[string, 1]> = [
   ["enqueuedAt", 1],
 ];
 obsReviewItemSchema.index(Object.fromEntries(reviewIndexSpec));
+// Batch list, detail, queue, and rollback all scope reads by batchId (and count by status).
+obsReviewItemSchema.index({batchId: 1, status: 1});
 
 export const registerObsReviewItem = (): ObsReviewItemModel => {
   if (mongoose.models.ObsReviewItem) {

@@ -39,6 +39,8 @@ export const AI_OBSERVABILITY_SCREENS: Record<string, AiObservabilityScreenMeta>
   "ai-prompt-editor": {leaf: "Detail", section: "Prompts", title: "Prompt detail"},
   "ai-prompts": {leaf: "Library", section: "Prompts", title: "Prompts"},
   "ai-review": {leaf: "Queue", section: "Review", title: "Review queue"},
+  "ai-review-batch": {leaf: "Batch", section: "Review", title: "Review batch"},
+  "ai-review-batches": {leaf: "Batches", section: "Review", title: "Review batches"},
   "ai-review-item": {leaf: "Item", section: "Review", title: "Review item"},
   "ai-trace-detail": {leaf: "Detail", section: "Traces", title: "Trace"},
   "ai-traces": {leaf: "List", section: "Traces", title: "Traces"},

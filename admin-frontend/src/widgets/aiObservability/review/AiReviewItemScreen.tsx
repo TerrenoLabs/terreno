@@ -5,7 +5,14 @@ import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {AiReviewItemView} from "./AiReviewItemView";
-import {unwrapCurrentUserId, unwrapReviewDetail, unwrapReviewList} from "./reviewTypes";
+import {openBatchItems} from "./batchTypes";
+import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
+import {
+  firstUnanswered,
+  unwrapCurrentUserId,
+  unwrapReviewDetail,
+  unwrapReviewList,
+} from "./reviewTypes";
 import {type ReviewActionBody, useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
 
 export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
@@ -13,10 +20,21 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useActionMutation, useCurrentUserQuery, useDetailQuery, useListQuery, useStatusQuery} =
-    useAiObservabilityReviewApi(api);
+  const {
+    useActionMutation,
+    useBatchQueueQuery,
+    useCurrentUserQuery,
+    useDetailQuery,
+    useListQuery,
+    useStatusQuery,
+  } = useAiObservabilityReviewApi(api);
   const detailQuery = useDetailQuery(id ?? "", {skip: !id});
-  const pendingQuery = useListQuery("pending");
+  const detail = useMemo(() => unwrapReviewDetail(detailQuery.data), [detailQuery.data]);
+  const batchId = detail?.batchId;
+  // Batch items walk their own open items (pending or in progress, matching the batch
+  // screen's remaining count); everything else walks the whole pending queue.
+  const globalPendingQuery = useListQuery("pending");
+  const batchQueueQuery = useBatchQueueQuery({batchId: batchId ?? ""}, {skip: !batchId});
   const currentUserQuery = useCurrentUserQuery();
   const statusQuery = useStatusQuery();
   const [runAction, actionState] = useActionMutation();
@@ -25,8 +43,13 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const [submitError, setSubmitError] = useState("");
   const toast = useToast();
 
-  const detail = useMemo(() => unwrapReviewDetail(detailQuery.data), [detailQuery.data]);
-  const pending = useMemo(() => unwrapReviewList(pendingQuery.data), [pendingQuery.data]);
+  const pending = useMemo(
+    () =>
+      batchId
+        ? openBatchItems(unwrapReviewList(batchQueueQuery.data))
+        : unwrapReviewList(globalPendingQuery.data),
+    [batchId, batchQueueQuery.data, globalPendingQuery.data]
+  );
   const currentUserId = useMemo(
     () => unwrapCurrentUserId(currentUserQuery.data),
     [currentUserQuery.data]
@@ -36,7 +59,9 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const previous = currentIndex > 0 ? pending[currentIndex - 1] : undefined;
   const next = currentIndex >= 0 ? pending[currentIndex + 1] : pending[0];
   const prefix = (routeBase ?? "").replace(/\/$/, "");
-  const queueHref = `${prefix}/ai-review`;
+  const queueHref = batchId
+    ? `${prefix}/ai-review-batch?id=${encodeURIComponent(batchId)}`
+    : `${prefix}/ai-review`;
 
   // Reset reviewer input when navigation loads a different queue item.
   useEffect(() => {
@@ -55,7 +80,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   const finishAndNavigate = useCallback(
     (remaining: number, nextId?: string): void => {
       if (remaining === 0) {
-        toast.success("Queue clear");
+        toast.success(batchId ? "Batch complete" : "Queue clear");
         router.push(queueHref);
         return;
       }
@@ -66,7 +91,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
       }
       router.push(queueHref);
     },
-    [openItem, queueHref, toast]
+    [batchId, openItem, queueHref, toast]
   );
 
   const submitAction = useCallback(
@@ -85,6 +110,18 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     setScores((current) => ({...current, [key]: value}));
   }, []);
 
+  const handleAnswerRestYes = useCallback((): void => {
+    setScores((current) => {
+      const next = {...current};
+      for (const dimension of detail?.dimensions ?? []) {
+        if (dimension.dataType === "boolean" && next[dimension.key] === undefined) {
+          next[dimension.key] = true;
+        }
+      }
+      return next;
+    });
+  }, [detail?.dimensions]);
+
   const handleSubmit = useCallback(async (): Promise<void> => {
     if (!detail) {
       return;
@@ -93,7 +130,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
       (dimension) => dimension.required && scores[dimension.key] === undefined
     );
     if (missing) {
-      setSubmitError(`Score ${missing.key} before submitting.`);
+      setSubmitError(`Answer "${missing.question ?? missing.key}" before submitting.`);
       return;
     }
     setSubmitError("");
@@ -130,6 +167,32 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     }
   }, [currentUserId, id, runAction, toast]);
 
+  const handleShortcut = useCallback(
+    (action: ReviewShortcutAction): void => {
+      if (actionState.isLoading || !detail) {
+        return;
+      }
+      if (action === "submit") {
+        void handleSubmit();
+        return;
+      }
+      if (action === "skip") {
+        void handleSkip();
+        return;
+      }
+      const nextKey = firstUnanswered(
+        detail.dimensions.filter((dimension) => dimension.dataType === "boolean"),
+        scores
+      );
+      if (nextKey) {
+        handleScoreChange(nextKey, action === "yes");
+      }
+    },
+    [actionState.isLoading, detail, handleScoreChange, handleSkip, handleSubmit, scores]
+  );
+
+  useReviewShortcuts({enabled: Boolean(detail), onAction: handleShortcut});
+
   if (!id) {
     return (
       <AiObservabilityChrome
@@ -147,7 +210,8 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     );
   }
 
-  if (detailQuery.isLoading || pendingQuery.isLoading) {
+  const isQueueLoading = batchId ? batchQueueQuery.isLoading : globalPendingQuery.isLoading;
+  if (detailQuery.isLoading || isQueueLoading) {
     return (
       <AiObservabilityChrome
         {...props}
@@ -196,6 +260,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         detail={detail}
         isPending={currentIndex >= 0}
         isSaving={actionState.isLoading}
+        onAnswerRestYes={handleAnswerRestYes}
         onAssign={handleAssign}
         onCommentChange={setComment}
         onNext={next ? () => openItem(next.id) : undefined}

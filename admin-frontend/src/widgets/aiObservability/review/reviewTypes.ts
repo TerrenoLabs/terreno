@@ -4,6 +4,7 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 
 export interface ReviewListItem {
   assigneeId?: string;
+  batchId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
@@ -17,6 +18,8 @@ export interface ReviewListItem {
 export interface EvaluatorDimension {
   dataType: "boolean" | "categorical" | "numeric";
   key: string;
+  /** Question shown to human reviewers in place of the score key. */
+  question?: string;
   range?: string;
   required: boolean;
 }
@@ -29,6 +32,8 @@ export interface ReviewPanelField {
 }
 
 export interface ReviewDetail {
+  batchId?: string;
+  batchName?: string;
   comment?: string;
   dimensions: EvaluatorDimension[];
   evaluatorId: string;
@@ -151,4 +156,17 @@ export const categoricalOptions = (range?: string): string[] => {
     .split(/[|,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+};
+
+/** Reviewer-facing label for a score: its question when set, otherwise the key. */
+export const dimensionLabel = (dimension: EvaluatorDimension): string => {
+  return dimension.question?.trim() || dimension.key;
+};
+
+/** Key of the first required-or-optional dimension still missing an answer. */
+export const firstUnanswered = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
 };

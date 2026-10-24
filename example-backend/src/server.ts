@@ -1,13 +1,7 @@
 import * as Sentry from "@sentry/bun";
 import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
-import {
-  AIAdminApp,
-  AIService,
-  createLocalObservabilityPlugin,
-  LangfuseApp,
-  ObservabilityApp,
-} from "@terreno/ai";
+import {AIAdminApp, AIService, createLocalObservabilityPlugin, ObservabilityApp} from "@terreno/ai";
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
@@ -523,25 +517,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           // Compiled deploys (Cloud Run) must point at the bundled SPA export, since the
           // plugin's __dirname-relative default cannot resolve inside a bun-compiled binary.
           distDir: process.env.ADMIN_SPA_DIST_DIR,
-        })
-      );
-    }
-
-    // Langfuse OTEL/client init has crashed Cloud Run preview revisions before PORT
-    // opens. Smoke tests omit these keys; production deploy still registers Langfuse.
-    if (
-      process.env.LANGFUSE_SECRET_KEY &&
-      process.env.LANGFUSE_PUBLIC_KEY &&
-      !process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
-    ) {
-      terraApp.register(
-        new LangfuseApp({
-          baseUrl: process.env.LANGFUSE_BASE_URL,
-          organization: process.env.LANGFUSE_ORGANIZATION,
-          project: process.env.LANGFUSE_PROJECT,
-          projectId: process.env.LANGFUSE_PROJECT_ID,
-          publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-          secretKey: process.env.LANGFUSE_SECRET_KEY,
         })
       );
     }

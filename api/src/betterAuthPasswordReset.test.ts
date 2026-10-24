@@ -1,6 +1,7 @@
 /**
  * Better Auth's `POST {basePath}/reset-password` over HTTP with a user model: Terreno copies the
- * new password to the app User's passport hash and bumps `tokenEpoch`. Better Auth has already
+ * new password to the app User's passport hash (only when it already has one) and bumps
+ * `tokenEpoch`. Better Auth has already
  * read the request body by the time its `onPasswordReset` hook runs, so the password must come
  * from the parsed endpoint body, not from the request.
  */
@@ -18,6 +19,7 @@ import {
   signInWithPassword,
   signUp,
 } from "./tests/accountSecurityTestApp";
+import {newStubIdentity, stubGoogleIdTokenOptions} from "./tests/betterAuthStubs";
 
 const NEW_PASSWORD = "new-password-654321";
 
@@ -39,6 +41,18 @@ const jwtPasswordMatches = async (userId: string, password: string): Promise<boo
   return Boolean(result.user);
 };
 
+const OLD_JWT_PASSWORD = "old-jwt-password-123";
+
+/** Gives the app User a legacy JWT (passport) password, as a dual-enrolled account has. */
+const giveJwtPassword = async (userId: string): Promise<void> => {
+  const user = (await SecurityUser.findById(userId)) as unknown as {
+    save: () => Promise<unknown>;
+    setPassword: (password: string) => Promise<unknown>;
+  };
+  await user.setPassword(OLD_JWT_PASSWORD);
+  await user.save();
+};
+
 describe("Better Auth password reset over HTTP", () => {
   beforeAll(async () => {
     await access.roles.seedDefaults();
@@ -52,6 +66,7 @@ describe("Better Auth password reset over HTTP", () => {
     const mail = captureMail();
     const {app} = buildApp({config: mail.config});
     const user = await signUp(app, "http-reset");
+    await giveJwtPassword(user.id);
     mail.sent.length = 0;
 
     const request = await supertest(app)
@@ -80,12 +95,14 @@ describe("Better Auth password reset over HTTP", () => {
     const appUser = await SecurityUser.findById(user.id);
     expect(appUser?.tokenEpoch).toBe(1);
     expect(await jwtPasswordMatches(user.id, NEW_PASSWORD)).toBe(true);
+    expect(await jwtPasswordMatches(user.id, OLD_JWT_PASSWORD)).toBe(false);
   });
 
   it("syncs the JWT hash for a direct auth.api.resetPassword call with no request", async () => {
     const mail = captureMail();
     const {app, betterAuthApp} = buildApp({config: mail.config});
     const user = await signUp(app, "direct-reset");
+    await giveJwtPassword(user.id);
     mail.sent.length = 0;
     await supertest(app)
       .post("/api/auth/request-password-reset")
@@ -101,6 +118,48 @@ describe("Better Auth password reset over HTTP", () => {
     expect(result).toEqual({status: true});
     expect((await SecurityUser.findById(user.id))?.tokenEpoch).toBe(1);
     expect(await jwtPasswordMatches(user.id, NEW_PASSWORD)).toBe(true);
+  });
+
+  it("does not give a social-only account a JWT password", async () => {
+    const identity = newStubIdentity("social-reset");
+    const mail = captureMail();
+    const {app} = buildApp({
+      config: {
+        ...mail.config,
+        googleOAuth: {clientId: "google-client", clientSecret: "google-secret"},
+        options: stubGoogleIdTokenOptions(identity),
+      },
+    });
+    await supertest(app)
+      .post("/api/auth/sign-in/social")
+      .send({idToken: {token: "stub-id-token"}, provider: "google"})
+      .expect(200);
+    await supertest(app)
+      .post("/api/auth/request-password-reset")
+      .set("content-type", "application/json")
+      .send({email: identity.email})
+      .expect(200);
+    const token = resetTokenFrom(mail.sent[mail.sent.length - 1]);
+
+    await supertest(app)
+      .post("/api/auth/reset-password")
+      .set("content-type", "application/json")
+      .send({newPassword: NEW_PASSWORD, token})
+      .expect(200);
+
+    // Better Auth takes the new password; JWT login, which has no second factor, does not.
+    await supertest(app)
+      .post("/api/auth/sign-in/email")
+      .set("content-type", "application/json")
+      .send({email: identity.email, password: NEW_PASSWORD})
+      .expect(200);
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: identity.email, password: NEW_PASSWORD});
+    expect(login.status).toBe(401);
+    const stored = await SecurityUser.collection.findOne({email: identity.email});
+    expect(stored?.hash).toBeUndefined();
+    expect(stored?.tokenEpoch).toBe(1);
   });
 
   it("refuses a reused reset token and leaves tokenEpoch alone", async () => {

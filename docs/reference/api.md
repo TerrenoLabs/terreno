@@ -563,8 +563,8 @@ case instead of 202. Email lookup is case-insensitive. Successful reset calls `s
 `tokenEpoch` so outstanding **refresh** tokens and MCP credentials (`mcp_` service tokens and
 `mcpat_`/`mcprt_` OAuth grants) fail, and returns new JWT tokens. When
 `BetterAuthApp` is registered, JWT reset also updates that user's Better Auth password
-and deletes Better Auth sessions. Better Auth password reset updates the JWT password
-and `tokenEpoch` for the matching app User. Access
+and deletes Better Auth sessions. Better Auth password reset updates the JWT password of the
+matching app User when it already has one, and bumps its `tokenEpoch`. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
 matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
 
@@ -666,7 +666,7 @@ relative. Password reset also sets `revokeSessionsOnPasswordReset`, so existing 
 are deleted when that reset path succeeds. JWT `POST /auth/resetPassword` updates the
 Better Auth password and deletes those sessions when `BetterAuthApp` is registered.
 With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
-password and bumps `tokenEpoch`. `change-password` sets the new JWT password only on an app
+password when that `User` already has one, and bumps `tokenEpoch` either way. `change-password` sets the new JWT password only on an app
 `User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`
 bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens and MCP credentials issued
 before the change stop working.
@@ -733,7 +733,9 @@ the app `User` as each Better Auth session is created
   Other sync failures are logged and the session proceeds; the session middleware retries.
 
 With a user model, Terreno's `onPasswordReset` sets the same password on the app `User`'s
-passport hash and bumps `tokenEpoch`. It reads the new password (`newPassword`, or `password` for
+passport hash when it already has one, and bumps `tokenEpoch` either way. A `User` without a JWT
+password (a social-only account) does not gain one, since `POST /auth/login` has no second
+factor. It reads the new password (`newPassword`, or `password` for
 the email-OTP and phone-number resets) from the parsed body of the Better Auth endpoint being
 served, through Better Auth's endpoint context. Better Auth reads an HTTP body before the hook
 runs, so the request it passes cannot be read again. HTTP requests and direct `auth.api` calls

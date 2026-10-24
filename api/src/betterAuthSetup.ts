@@ -620,7 +620,9 @@ export const readPasswordFromBetterAuthResetRequest = async (
 /**
  * After Better Auth password reset, update the JWT/passport hash and bump
  * `tokenEpoch` so a dual-enrolled account cannot keep the old password or
- * outstanding refresh tokens.
+ * outstanding refresh tokens. Only an app User that already has a JWT password gets the new one:
+ * `POST /auth/login` has no second factor, so a Better Auth only (social) account must not gain a
+ * way to sign in there. Its `tokenEpoch` is still bumped.
  *
  * `capturedPassword` is the new password from the parsed body of the reset endpoint being served
  * (`newPassword`, or `password` for the email-OTP and phone-number resets). Without it the
@@ -639,6 +641,14 @@ export const applyBetterAuthPasswordResetToJwt = async (
     appUser = await findOneOrNoneFor(userModel, {email} as never);
   }
   if (!appUser) {
+    return;
+  }
+  const hasLegacyPassword =
+    userModel.schema.path("hash") !== undefined &&
+    Boolean(await userModel.exists({_id: appUser._id, hash: {$exists: true, $ne: null}} as never));
+  if (!hasLegacyPassword) {
+    appUser.tokenEpoch = (appUser.tokenEpoch ?? 0) + 1;
+    await appUser.save();
     return;
   }
   const password = capturedPassword || (await readPasswordFromBetterAuthResetRequest(request));

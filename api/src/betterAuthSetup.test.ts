@@ -455,6 +455,25 @@ describe("applyBetterAuthPasswordResetToJwt", () => {
     assert.equal(reloaded?.tokenEpoch, 1);
   });
 
+  it("does not give an account without a JWT password one, but still bumps tokenEpoch", async () => {
+    await setup;
+    await DualAuthUser.create({betterAuthId: "ba-social-only", email: "social-only@example.com"});
+    const request = new globalThis.Request("http://localhost/api/auth/reset-password", {
+      body: JSON.stringify({newPassword: "new-password-123"}),
+      headers: {"Content-Type": "application/json"},
+      method: "POST",
+    });
+    await applyBetterAuthPasswordResetToJwt(
+      DualAuthUser,
+      {email: "social-only@example.com", id: "ba-social-only"},
+      request
+    );
+    const stored = await DualAuthUser.collection.findOne({email: "social-only@example.com"});
+    assert.isUndefined(stored?.hash);
+    assert.isUndefined(stored?.salt);
+    assert.equal(stored?.tokenEpoch, 1);
+  });
+
   it("skips JWT sync when no app user exists", async () => {
     await setup;
     const request = new globalThis.Request("http://localhost/api/auth/reset-password", {
@@ -473,10 +492,14 @@ describe("applyBetterAuthPasswordResetToJwt", () => {
 
   it("throws when the reset request does not carry a password", async () => {
     await setup;
-    await DualAuthUser.create({
-      betterAuthId: "ba-dual-nopw",
-      email: "nopw-jwt@example.com",
-    });
+    await (
+      DualAuthUser as unknown as {
+        register: (
+          user: {betterAuthId: string; email: string},
+          password: string
+        ) => Promise<unknown>;
+      }
+    ).register({betterAuthId: "ba-dual-nopw", email: "nopw-jwt@example.com"}, "old-password-123");
     const request = new globalThis.Request("http://localhost/api/auth/reset-password", {
       body: JSON.stringify({token: "reset-token"}),
       headers: {"Content-Type": "application/json"},

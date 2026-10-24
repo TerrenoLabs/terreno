@@ -99,13 +99,14 @@ use their own renderer rather than `renderAuthMail` (see
 [Account security: Notifications](../reference/account-security.md#notifications)). The hooks throw 501 and do not send when
 `publicAppUrl` is missing. JWT `POST /auth/resetPassword` updates the Better Auth password and
 deletes Better Auth sessions when this plugin is registered. Better Auth password reset updates
-the JWT password and `tokenEpoch` for the matching app User so dual-enrolled accounts cannot keep
-the old passport hash. Terreno reads the new password from Better Auth's parsed request body, so
+the JWT password of a matching app User that already has one, so dual-enrolled accounts cannot
+keep the old passport hash, and bumps `tokenEpoch` for every matching app User. Terreno reads the new password from Better Auth's parsed request body, so
 this works over HTTP (`POST {basePath}/reset-password`). Better Auth `change-password` does the
 same for an app User that already has a JWT password, and bumps `tokenEpoch` for every app User.
 `revoke-sessions` and `revoke-other-sessions` bump `tokenEpoch`, so JWT refresh tokens issued
 before them stop working. An account with only a Better Auth password does not gain a JWT
-password, and neither does one that adds its first password with `terreno/set-password`.
+password, and neither does a social-only account that resets its password or adds its first one
+with `terreno/set-password`: `POST /auth/login` has no second factor.
 
 ```typescript
 import {getCommsService, renderAuthMail} from "@terreno/comms";

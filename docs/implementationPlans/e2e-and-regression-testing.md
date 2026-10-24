@@ -296,7 +296,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: test/e2e/smoke.ts, test/package.json, docs/testing/e2e/test.md
   - Acceptance: `bun run --cwd test smoke` exits 0. It gets a replica-set URI, opens a change stream, spawns a trivial HTTP child, and waits until the child is ready.
 
-- [ ] **T13** — Smoke test for `@terreno/api-health`
+- [x] **T13** — Smoke test for `@terreno/api-health`
   - Depends on: T8
   - Files: api-health/e2e/smoke.ts, api-health/package.json, docs/testing/e2e/api-health.md
   - Acceptance: `bun run --cwd api-health smoke` exits 0. A real server with the plugin answers its health route with a healthy status.

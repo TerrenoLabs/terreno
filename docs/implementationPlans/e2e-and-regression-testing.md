@@ -321,7 +321,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: jobs/e2e/smoke.ts, jobs/package.json, docs/testing/e2e/jobs.md
   - Acceptance: `bun run --cwd jobs smoke` exits 0. A job that one process enqueues is completed by a separate worker process.
 
-- [ ] **T18** — Smoke test for `@terreno/ai`
+- [x] **T18** — Smoke test for `@terreno/ai`
   - Depends on: T8
   - Files: ai/e2e/smoke.ts, ai/package.json, docs/testing/e2e/ai.md
   - Acceptance: `bun run --cwd ai smoke` exits 0 with no provider keys set. A chat request to a real server that uses a deterministic fake provider returns the fake provider's text.

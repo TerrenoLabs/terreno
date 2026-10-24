@@ -1,4 +1,5 @@
 import {AdminScreenPage, UserSecurityScreen} from "@terreno/admin-frontend";
+import type {PermissionSet} from "@terreno/rtk";
 import {Box, Spinner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
@@ -6,13 +7,35 @@ import {ADMIN_ROUTE} from "@/constants/adminConstants";
 import {useGetMeQuery} from "@/store/sdk";
 import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
+interface SecurityProfile {
+  admin?: boolean;
+  permissions?: PermissionSet;
+}
+
+interface AdminUserSecurityRouteDependencies {
+  useProfile: () => {data?: SecurityProfile; isLoading: boolean};
+  useUserId: () => string;
+}
+
+const defaultDependencies: AdminUserSecurityRouteDependencies = {
+  useProfile: () => useGetMeQuery(),
+  useUserId: () => useLocalSearchParams<{id: string}>().id,
+};
+
+interface AdminUserSecurityRouteProps {
+  /** @internal Test seam for the route's hook-backed inputs. */
+  dependencies?: AdminUserSecurityRouteDependencies;
+}
+
 /**
  * Platform account recovery for one user, linked from the admin User record. Only staff holding
  * `user:manageSecurity` (superadmin, operator) see it; the server enforces the same rule.
  */
-const AdminUserSecurityRoute: React.FC = () => {
-  const {id} = useLocalSearchParams<{id: string}>();
-  const {data: profile, isLoading} = useGetMeQuery();
+const AdminUserSecurityRoute: React.FC<AdminUserSecurityRouteProps> = ({
+  dependencies = defaultDependencies,
+}) => {
+  const id = dependencies.useUserId();
+  const {data: profile, isLoading} = dependencies.useProfile();
 
   if (isLoading) {
     return (

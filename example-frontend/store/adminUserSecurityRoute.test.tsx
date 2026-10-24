@@ -1,95 +1,122 @@
-import {afterEach, beforeAll, beforeEach, describe, it, mock} from "bun:test";
+import {afterEach, describe, it} from "bun:test";
+import {configureStore} from "@reduxjs/toolkit";
+import {AdminScreenPage, UserSecurityScreen} from "@terreno/admin-frontend";
+import type {PermissionSet} from "@terreno/rtk";
 import {assert} from "chai";
+import {useLocalSearchParams} from "expo-router";
 import React from "react";
-import {renderToString} from "react-dom/server";
+import {Provider} from "react-redux";
+import TestRenderer, {act, type ReactTestRenderer} from "react-test-renderer";
 
-// Bun's mock.module replaces a module for every file in this process. Each stub spreads the
-// module it replaces and overrides only what this test needs, and useGetMeQuery falls through
-// to the real hook unless a test sets a profile, so sibling suites are unaffected.
-const realAdminFrontend = await import("@terreno/admin-frontend");
-const preloadExpoRouter = await import("expo-router");
-const preloadSdk = await import("@/store/sdk");
+import AdminUserSecurityRoute from "../app/admin/users/[id]/security";
+import {terrenoApi} from "./sdk";
 
-interface Captured {
-  page?: {backHref?: string; testID?: string};
-  screen?: {routeBase?: string; userId?: string; userModelName?: string};
+interface Profile {
+  _id: string;
+  admin?: boolean;
+  permissions?: PermissionSet;
 }
 
-interface MeState {
-  override?: {
-    data?: {_id: string; admin?: boolean; permissions?: Record<string, readonly string[]>};
-    isLoading: boolean;
-  };
-}
+// The package preload registers useLocalSearchParams as a mock; this file only swaps its
+// implementation and puts the preload's default back afterwards.
+const searchParams = useLocalSearchParams as unknown as {
+  mockImplementation: (impl: () => Record<string, string>) => void;
+};
 
-const captured: Captured = {};
-const meState: MeState = {};
-const searchParamsState: {id?: string} = {id: "user-7"};
-
-mock.module("@terreno/admin-frontend", () => ({
-  ...realAdminFrontend,
-  AdminScreenPage: (props: {backHref?: string; testID?: string}) => {
-    captured.page = props;
-    return null;
-  },
-  UserSecurityScreen: (props: {routeBase?: string; userId?: string; userModelName?: string}) => {
-    captured.screen = props;
-    return null;
-  },
-}));
-mock.module("expo-router", () => ({
-  ...preloadExpoRouter,
-  useLocalSearchParams: () => searchParamsState,
-}));
-mock.module("@/store/sdk", () => ({
-  ...preloadSdk,
-  useGetMeQuery: (...args: Parameters<typeof preloadSdk.useGetMeQuery>) =>
-    meState.override ?? preloadSdk.useGetMeQuery(...args),
-}));
-
-let AdminUserSecurityRoute: React.FC;
+const renderRoute = ({
+  isLoading = false,
+  profile,
+  userId = "user-7",
+}: {
+  isLoading?: boolean;
+  profile?: Profile;
+  userId?: string;
+}): ReactTestRenderer => {
+  let renderer: ReactTestRenderer | undefined;
+  act(() => {
+    renderer = TestRenderer.create(
+      <AdminUserSecurityRoute
+        dependencies={{
+          useProfile: () => ({data: profile, isLoading}),
+          useUserId: () => userId,
+        }}
+      />
+    );
+  });
+  if (!renderer) {
+    throw new Error("route did not render");
+  }
+  return renderer;
+};
 
 describe("AdminUserSecurityRoute", () => {
-  beforeAll(async () => {
-    ({default: AdminUserSecurityRoute} = await import("../app/admin/users/[id]/security"));
-  });
-
-  beforeEach(() => {
-    captured.page = undefined;
-    captured.screen = undefined;
-    searchParamsState.id = "user-7";
-  });
+  let mounted: ReactTestRenderer | undefined;
 
   afterEach(() => {
-    meState.override = undefined;
+    act(() => {
+      mounted?.unmount();
+    });
+    mounted = undefined;
+    searchParams.mockImplementation(() => ({}));
   });
 
   it("shows the security screen to staff holding user:manageSecurity", () => {
-    meState.override = {
-      data: {_id: "operator-1", permissions: {admin: ["access"], user: ["manageSecurity"]}},
-      isLoading: false,
-    };
-
-    renderToString(<AdminUserSecurityRoute />);
-
-    assert.deepEqual(captured.screen, {
-      routeBase: "/admin",
-      userId: "user-7",
-      userModelName: "User",
+    mounted = renderRoute({
+      profile: {_id: "operator-1", permissions: {admin: ["access"], user: ["manageSecurity"]}},
     });
-    assert.isUndefined(captured.page);
+
+    const screen = mounted.root.findByType(UserSecurityScreen);
+    assert.deepEqual(screen.props, {routeBase: "/admin", userId: "user-7", userModelName: "User"});
+    assert.lengthOf(mounted.root.findAllByProps({testID: "admin-user-security-forbidden"}), 0);
   });
 
   it("shows the forbidden page, with a back link to the record and no panel, to other staff", () => {
-    meState.override = {
-      data: {_id: "viewer-1", admin: true, permissions: {admin: ["access"], user: ["read"]}},
-      isLoading: false,
-    };
+    mounted = renderRoute({
+      profile: {_id: "viewer-1", admin: true, permissions: {admin: ["access"], user: ["read"]}},
+    });
 
-    renderToString(<AdminUserSecurityRoute />);
+    const page = mounted.root.findByType(AdminScreenPage);
+    assert.equal(page.props.testID, "admin-user-security-forbidden");
+    assert.equal(page.props.backHref, "/admin/User/user-7");
+    assert.lengthOf(mounted.root.findAllByType(UserSecurityScreen), 0);
+  });
 
-    assert.equal(captured.page?.testID, "admin-user-security-forbidden");
-    assert.equal(captured.page?.backHref, "/admin/User/user-7");
-    assert.isUndefined(captured.screen);
+  it("falls back to admin: true when the profile carries no RBAC permissions", () => {
+    mounted = renderRoute({profile: {_id: "admin-1", admin: true}});
+
+    assert.equal(mounted.root.findByType(UserSecurityScreen).props.userId, "user-7");
+  });
+
+  it("shows a spinner and no screen while the profile loads", () => {
+    mounted = renderRoute({isLoading: true});
+
+    assert.isNotEmpty(mounted.root.findAllByProps({testID: "admin-user-security-loading"}));
+    assert.lengthOf(mounted.root.findAllByType(UserSecurityScreen), 0);
+    assert.lengthOf(mounted.root.findAllByType(AdminScreenPage), 0);
+  });
+
+  it("reads the user id from the route and the profile from the me query by default", async () => {
+    searchParams.mockImplementation(() => ({id: "user-9"}));
+    const store = configureStore({
+      middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(terrenoApi.middleware),
+      reducer: {[terrenoApi.reducerPath]: terrenoApi.reducer},
+    });
+    // Seed the me query so the route decides access from it without a backend.
+    await store.dispatch(
+      terrenoApi.util.upsertQueryData("getMe", undefined, {
+        _id: "operator-1",
+        permissions: {admin: ["access"], user: ["manageSecurity"]},
+      } as never)
+    );
+
+    act(() => {
+      mounted = TestRenderer.create(
+        <Provider store={store}>
+          <AdminUserSecurityRoute />
+        </Provider>
+      );
+    });
+
+    assert.equal(mounted?.root.findByType(UserSecurityScreen).props.userId, "user-9");
   });
 });

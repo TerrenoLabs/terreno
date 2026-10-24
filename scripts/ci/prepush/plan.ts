@@ -99,6 +99,10 @@ const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
     name: "repo-policies: planning + CI tools",
   },
   {command: "bun run skills:check", name: "repo-policies: generated skills in sync"},
+  {
+    command: "bun run check:regression-suites && bun test scripts/regression/",
+    name: "repo-policies: regression suites",
+  },
   {command: "bun run check:licenses", name: "repo-policies: license coverage"},
   {command: "bun run check:circleci-parity", name: "repo-policies: CircleCI path-filter parity"},
   {

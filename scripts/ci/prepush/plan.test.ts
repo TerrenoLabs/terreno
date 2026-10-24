@@ -35,6 +35,14 @@ describe("planPrepush", () => {
     expect(names).toContain("repo-policies: generated skills in sync");
   });
 
+  it("checks the regression suites when a suite file changes", () => {
+    const names = stepNames(["docs/regression/auth.md"]);
+    expect(names).toContain("repo-policies: regression suites");
+    expect(stepNames(["scripts/regression/checkSuites.ts"])).toContain(
+      "repo-policies: regression suites"
+    );
+  });
+
   it("runs example-backend tests when api changes (OpenAPI snapshot regression)", () => {
     const names = stepNames(["api/src/api.ts"]);
     expect(names).toContain("api-ci: test:coverage");

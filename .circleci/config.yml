@@ -240,6 +240,8 @@ workflows:
             scripts/check-source-rules/.* run-repo-policies true
             scripts/check-license-coverage/.* run-repo-policies true
             scripts/changelog/.* run-repo-policies true
+            scripts/regression/.* run-repo-policies true
+            docs/regression/.* run-repo-policies true
             scripts/check-new-file-coverage\.ts run-new-file-coverage true
             scripts/ci/check-new-file-coverage-lcov\.sh run-new-file-coverage true
             changelog/.* run-repo-policies true

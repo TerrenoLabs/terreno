@@ -185,6 +185,10 @@ stable case IDs such as `AUTH-004`. An IP lists the cases it adds under `## Regr
 and Brew writes them into the suite with real IDs before it opens the PR. A case belongs there
 only when no unit test, smoke, or e2e spec can check it.
 
+The [regression suites index](../regression/README.md) lists the areas, restates the suite
+format, and describes `bun run check:regression-suites`, which CI runs on every change to a
+suite.
+
 ## Package pages
 
 Each package page covers the package's test tiers, its smoke, how to add an e2e spec to it,

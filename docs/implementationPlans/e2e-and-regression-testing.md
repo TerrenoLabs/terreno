@@ -396,7 +396,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
 
 ### Phase 3 — Regression suites, docs join, proof
 
-- [ ] **T32** — Regression suite README, seed area files, and suite checker
+- [x] **T32** — Regression suite README, seed area files, and suite checker
   - Depends on: T1, T8, T9
   - Files: docs/regression/README.md, docs/regression/planning.md, docs/regression/auth.md, docs/regression/admin.md, docs/regression/syncdb.md, docs/regression/ui-native.md, scripts/regression/checkSuites.ts, scripts/regression/checkSuites.test.ts, package.json (`check:regression-suites`), .circleci/continue-config.yml (the check added to the existing lint job), scripts/ci/prepush/plan.ts
   - Delivers:

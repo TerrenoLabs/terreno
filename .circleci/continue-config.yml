@@ -1332,6 +1332,11 @@ jobs:
             bun test scripts/planning/
             bun run test:ci-tools
       - run:
+          name: Regression suites
+          command: |
+            bun run check:regression-suites
+            bun test scripts/regression/
+      - run:
           name: License coverage
           command: bun run check:licenses
       - run:

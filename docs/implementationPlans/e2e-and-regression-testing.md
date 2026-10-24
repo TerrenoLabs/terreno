@@ -346,7 +346,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: rtk/e2e/smoke.ts, rtk/package.json, docs/testing/e2e/rtk.md
   - Acceptance: `bun run --cwd rtk smoke` exits 0. A store built from the compiled rtk package signs in through Better Auth against `spawnExampleBackend()`, and an authenticated query returns the signed-in user. The runtime follows D6: Bun, with rtk's existing native-module shims. The package page names the shims.
 
-- [ ] **T23** — Smoke test for `@terreno/syncdb`
+- [x] **T23** — Smoke test for `@terreno/syncdb`
   - Depends on: T8
   - Files: syncdb/e2e/smoke.ts, syncdb/package.json, docs/testing/e2e/syncdb.md
   - Acceptance: `bun run --cwd syncdb smoke` exits 0. Two clients built from the compiled syncdb connect to `spawnExampleBackend()`. A todo written by client A appears in client B's store within 5 s.

@@ -410,7 +410,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Docs: docs/regression/README.md
   - Skills: update-docs
 
-- [ ] **T33** — Link every package page from the guide and run the full smoke
+- [x] **T33** — Link every package page from the guide and run the full smoke
   - Depends on: T9, T10, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29, T30, T31, T32
   - Files: docs/testing/e2e.md, docs/README.md, changelog/unreleased/package-smoke-tests.md
   - Delivers: The guide's table links all 21 package pages, with each smoke's measured time, and links `docs/regression/`. `docs/README.md` indexes the Testing and Regression pages.

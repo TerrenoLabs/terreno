@@ -68,9 +68,9 @@ test fails at once and asks for `bun run smoke`. `scripts/ci/e2eAffected/shards.
 the spec, in its own `smoke` shard with `blocksPullRequest: false`, because the shard check
 requires every `*.spec.ts` file to have one. CircleCI's `smoke` job runs it.
 
-**Measured time:** timed in the integrated run that adds it to the
-[package table](../e2e.md#package-pages). The driver prints the total and the time without the
-export. Budget: 30 s, excluding the compile and the web export.
+**Measured time:** timed by the CircleCI `smoke` job, which prints each package's time on every
+run. Its row in the [package table](../e2e.md#package-pages) points there. The driver prints the
+total and the time without the export. Budget: 30 s, excluding the compile and the web export.
 
 ## Add an e2e test
 

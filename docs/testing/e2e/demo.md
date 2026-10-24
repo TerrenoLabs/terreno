@@ -57,9 +57,9 @@ The driver prints one `✅` line per step and exits 1 on the first failure, afte
 static server's output and Playwright's report. The smoke needs Chromium
 (`bunx playwright install chromium`) but no backend, database, or secrets.
 
-**Measured time:** timed in the integrated run that adds it to the
-[package table](../e2e.md#package-pages). Budget: 30 s, excluding the compile and the web
-export.
+**Measured time:** timed by the CircleCI `smoke` job, which prints each package's time on every
+run. Its row in the [package table](../e2e.md#package-pages) points there. Budget: 30 s,
+excluding the compile and the web export.
 
 ## Add an e2e test
 

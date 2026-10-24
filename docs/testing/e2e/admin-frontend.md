@@ -53,12 +53,13 @@ example-backend's output and Playwright's report.
 The smoke needs Chromium (`bunx playwright install chromium`) but no secrets: the backend
 uses fixed dev values from `spawnExampleBackend()`.
 
-**Measured time:** without the browser step, the in-memory replica set took 5 s,
-example-backend took 75 s to answer `/health`, and the seed took 7 s. That run shared four
-CPUs with several other suites, so the boot time reflects the load, not the budget. The
-driver therefore waits up to 120 s for `/health`. The full smoke, including Chromium, is
-timed in the integrated run that adds it to the [package table](../e2e.md#package-pages).
-Budget: 30 s, excluding the compile and the web export.
+**Measured time:** without the browser step, the in-memory replica set took 5 s, example-backend
+took 75 s to answer `/health`, and the seed took 7 s. That run shared four CPUs with several
+other suites, so the boot time reflects the load, not the budget. The driver therefore waits up
+to 120 s for `/health`. The full smoke, including Chromium, is timed by the CircleCI `smoke`
+job, which prints each package's time on every run. Its row in the [package
+table](../e2e.md#package-pages) points there. Budget: 30 s, excluding the compile and the web
+export.
 
 ## Add an e2e test
 

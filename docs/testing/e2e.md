@@ -192,13 +192,48 @@ suite.
 ## Package pages
 
 Each package page covers the package's test tiers, its smoke, how to add an e2e spec to it,
-and the smoke's measured time.
+and the smoke's measured time. Every smoke's budget is 30 s, excluding the build.
 
 | Package | Smoke | Layer | Measured time |
 | --- | --- | --- | --- |
-| [`@terreno/api`](e2e/api.md) | `api/e2e/smoke.ts` | http | 13 s idle, up to 26 s under load |
+| [`@terreno/admin-backend`](e2e/admin-backend.md) | `admin-backend/e2e/smoke.ts` | http | 5.5–12.5 s |
+| [`@terreno/admin-frontend`](e2e/admin-frontend.md) | `admin-frontend/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [`@terreno/admin-spa`](e2e/admin-spa.md) | `admin-spa/e2e/smoke.ts` | http | 4–4.5 s |
+| [`@terreno/ai`](e2e/ai.md) | `ai/e2e/smoke.ts` | http | 7–7.5 s |
+| [`@terreno/announcements`](e2e/announcements.md) | `announcements/e2e/smoke.ts` | http | 4.5–8 s |
+| [`@terreno/api`](e2e/api.md) | `api/e2e/smoke.ts` | http | 5–10 s |
+| [`@terreno/api-health`](e2e/api-health.md) | `api-health/e2e/smoke.ts` | http | 2 s |
+| [`@terreno/blocks`](e2e/blocks.md) | `blocks/e2e/smoke.ts` | process | 1–1.5 s |
+| [`@terreno/cli`](e2e/cli.md) | `cli/e2e/smoke.ts` | process | 2 s |
+| [`@terreno/comms`](e2e/comms.md) | `comms/e2e/smoke.ts` | http | 5–6.5 s |
+| [`create-terreno-app`](e2e/create-terreno-app.md) | `create-terreno-app/e2e/smoke.ts` | process | 2.5 s |
+| [demo](e2e/demo.md) | `demo/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [example-backend](e2e/example-backend.md) | `example-backend/e2e/smoke.ts` | http | 16–20 s |
+| [example-frontend](e2e/example-frontend.md) | `example-frontend/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [`@terreno/feature-flags`](e2e/feature-flags.md) | `feature-flags/e2e/smoke.ts` | http | 5–5.5 s |
+| [`@terreno/jobs`](e2e/jobs.md) | `jobs/e2e/smoke.ts` | http | 7.5–8.5 s |
+| [`@terreno/mcp`](e2e/mcp-server.md) | `mcp-server/e2e/smoke.ts` | process, http | 5.5–6 s |
+| [`@terreno/rtk`](e2e/rtk.md) | `rtk/e2e/smoke.ts` | http | 15–18 s |
+| [`@terreno/syncdb`](e2e/syncdb.md) | `syncdb/e2e/smoke.ts` | http, websocket | 15–19 s |
+| [`@terreno/test`](e2e/test.md) | `test/e2e/smoke.ts` | http | 2.5–3 s |
+| [`@terreno/ui`](e2e/ui.md) | `ui/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
 
-Each remaining package is added here as its smoke lands.
+The times are what `bun run smoke` printed for each package across three root runs (the runs
+after the first one after a compile, described below) on a 4-CPU container, against a
+single-node replica set (`TERRENO_TEST_MONGODB_URI`), after `bun run compile` and
+`bun run --cwd admin-spa build:web` (admin-spa's time is from the two runs after its build). Each package page
+records how its own time splits. The browser smokes were not run locally; the CircleCI `smoke`
+job prints their times.
+
+The first root run after a compile was slower for four packages: example-backend took 48 s,
+syncdb 33 s, and create-terreno-app 21 s, and comms failed because its server did not answer
+within its 20 s readiness timeout. All four were back within their usual times on the next run.
+Run on its own right after the same compile, example-backend took 27 s on an empty database, and
+ai and admin-backend took 5.5–7 s, though an earlier run after a compile had measured 41 s and
+31.5 s for them. The cause of these first-run overruns was not isolated.
+
+Manual cases that no smoke or e2e spec can check live in the
+[regression suites](../regression/README.md).
 
 ## Related
 

@@ -130,7 +130,11 @@ test.describe("Platform user security", () => {
     expect(await meStatus(playwright, target.token), "the target starts signed in").toBe(200);
   });
 
-  test("operator disables and re-enables a user", async ({consoleGuard, page, playwright}) => {
+  test("operator disables and re-enables a user", async ({
+    consoleGuard,
+    page,
+    playwright,
+  }, testInfo) => {
     await loginAs(page, operator);
     await page.goto(`/admin/User/${target.userId}`);
     await page.getByTestId("admin-user-security-link").waitFor({state: "visible"});
@@ -150,7 +154,7 @@ test.describe("Platform user security", () => {
       timeout: ACTION_TIMEOUT_MS,
     });
     await expect(page.getByTestId(`${PANEL}-disabled`)).toBeVisible();
-    await page.screenshot({path: "/opt/cursor/artifacts/admin-user-security-disabled.png"});
+    await page.screenshot({path: testInfo.outputPath("admin-user-security-disabled.png")});
 
     // Disable also revokes sessions, so the old token alone does not prove "disabled": a fresh
     // sign-in while disabled must not yield a working session either.

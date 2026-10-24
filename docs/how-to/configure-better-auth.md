@@ -1133,37 +1133,18 @@ export const authClient = createBetterAuthClient({
 
 ## OAuth Provider Setup
 
-### Google OAuth
+[Set up social login](set-up-social-login.md) registers Google, GitHub, and Sign in with Apple
+step by step: the callback URL for local dev, previews, and the stable deploy, the secrets to
+store, how to try the providers on one preview first, and how to check the result. In short:
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select existing
-3. Enable Google+ API
-4. Create OAuth 2.0 credentials
-5. Add authorized redirect URIs:
-   - `http://localhost:4000/api/auth/callback/google` (development)
-   - `https://yourapp.com/api/auth/callback/google` (production)
-6. Copy Client ID and Client Secret to `.env`
-
-### GitHub OAuth
-
-1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
-2. Create a new OAuth App
-3. Set Authorization callback URL:
-   - `http://localhost:4000/api/auth/callback/github` (development)
-   - `https://yourapp.com/api/auth/callback/github` (production)
-4. Copy Client ID and generate Client Secret
-5. Add to `.env`
-
-### Apple Sign In
-
-1. Go to [Apple Developer Console](https://developer.apple.com/)
-2. Create a new Services ID
-3. Configure Sign in with Apple
-4. Add return URLs (similar to above)
-5. Generate a Sign in with Apple key and download the `.p8` file
-6. Pass the Services ID, team ID, key ID, and key contents as `appleOAuth: {clientId, teamId,
-   keyId, privateKey}`; Terreno signs the client secret at startup (see
-   [Auth features](#auth-features))
+- **Callback:** `https://<backend>/api/auth/callback/<provider>` (`http://localhost:4000/...`
+  in development; Apple accepts https only).
+- **Google:** an OAuth client ID of type Web application, with that redirect URI.
+- **GitHub:** an OAuth App with that authorization callback URL.
+- **Apple:** a Services ID with the backend and web hosts under Domains and that return URL,
+  plus a Sign in with Apple key. Pass the Services ID, team ID, key ID, and key contents as
+  `appleOAuth: {clientId, teamId, keyId, privateKey}`; Terreno signs the client secret at
+  startup (see [Auth features](#auth-features)).
 
 ## Generated Endpoints
 

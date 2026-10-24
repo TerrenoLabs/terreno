@@ -1,98 +1,231 @@
 # Set up social login
 
-Register Google, GitHub, and Sign in with Apple once, on the stable deploy, and let every preview
-sign in through it. This page uses the example app's deploy (`scripts/ci/gcp-deploy.sh`) as the
-worked case; a consumer app follows the same steps with its own hosts.
+Turn on Google, GitHub, and Sign in with Apple for a Terreno app, on local dev, on per-PR
+previews, and on the stable deploy. Register each provider once, on the stable backend, and let
+every preview sign in through it. The example app's deploy (`scripts/ci/gcp-deploy.sh`) is the
+worked case; a consumer app follows the same steps with its own hosts and secret names.
 
 Config fields used here (`googleOAuth`, `githubOAuth`, `appleOAuth`, `oauthProxy`, `passkey`) are
-listed in [Configure Better Auth](configure-better-auth.md#auth-features).
+listed in [Configure Better Auth](configure-better-auth.md#auth-features). Agents can follow the
+`set-up-social-login` skill, which walks the same steps.
 
-## One callback per provider
+## Before you start
 
-Each provider gets exactly one redirect URI, on the stable backend:
+1. **Point gcloud at the project** that holds the backend's secrets, once per machine:
 
-```text
-https://<stable backend>/api/auth/callback/<provider>
+   ```bash
+   gcloud config set project flourish-terreno   # the example's project; use your own
+   gcloud config get-value project              # check
+   ```
+
+   Every `gcloud` command below then uses it. Pass `--project=<id>` to override it for one
+   command.
+2. **Share one `BETTER_AUTH_SECRET`** between stable and previews. oauth-proxy encrypts the
+   forwarded profile with it, and a preview refuses a profile encrypted under another secret.
+3. **Choose the hosts** ([below](#choose-the-hosts)). The provider callbacks go on the stable
+   backend's final host, so decide it before registering.
+
+## Choose the hosts
+
+Put the stable web app and backend on subdomains of one domain you own, such as
+`app.<domain>` and `api.<domain>`.
+
+- **They are same-site.** A browser treats hosts as one site when they share a registrable
+  domain (the part just below a public suffix such as `.com` or `.app`). Safari blocks only
+  cross-site cookies, so the host-only session cookie on `api.<domain>` is sent on the web app's
+  requests, and the web app can use cookie mode.
+- **Keep the cookie host-only.** Leave Better Auth's `crossSubDomainCookies` off; it would send
+  the session cookie to every subdomain.
+- **Passkeys.** Set `PASSKEY_RP_ID=<domain>` so a passkey works on `app.<domain>` and any other
+  web origin you list on `<domain>`.
+- **Safari's 7-day cap.** Safari caps a cookie at 7 days when the server that sets it answers
+  from an IP address unlike the web app's, as when a CDN serves `app.` and Cloud Run serves
+  `api.`. A user who stays away longer than 7 days signs in again. Serving both hosts from one
+  load balancer removes the cap.
+
+**Previews:** leave them on their hosting domains (`pr-<n>--<site>.netlify.app` and the Cloud
+Run tag URL `pr-<n>---<service>.run.app`). They are cross-site to their backend, so their web
+build runs in [bearer mode](configure-better-auth.md#frontend-and-api-on-different-sites), which
+needs no third-party cookies and works in Safari. Do not put previews under the stable domain:
+a preview runs unreviewed PR code, and on the same site it could send requests that carry a
+visitor's stable session cookie and request passkey assertions for the stable rpID. Same-site
+previews need a separate domain of their own.
+
+## Turn the providers on in the server
+
+A provider turns on when its config field is set. The login and security screens read
+`GET {basePath}/terreno/methods` and show a provider's button only once the server lists it.
+
+```typescript
+const config: BetterAuthConfig = {
+  enabled: true,
+  baseURL: process.env.BETTER_AUTH_URL, // this backend's public origin
+  secret: process.env.BETTER_AUTH_SECRET,
+  trustedOrigins: [...webOrigins, "https://appleid.apple.com", "myapp://"],
+  googleOAuth: {clientId: process.env.GOOGLE_CLIENT_ID!, clientSecret: process.env.GOOGLE_CLIENT_SECRET!},
+  githubOAuth: {clientId: process.env.GITHUB_CLIENT_ID!, clientSecret: process.env.GITHUB_CLIENT_SECRET!},
+  appleOAuth: {
+    clientId: process.env.APPLE_CLIENT_ID!, // the Services ID
+    keyId: process.env.APPLE_KEY_ID!,
+    privateKey: process.env.APPLE_PRIVATE_KEY!, // the .p8 contents
+    teamId: process.env.APPLE_TEAM_ID!,
+  },
+  accountLinking: {mode: "verified-email"},
+  oauthProxy: process.env.OAUTH_PROXY_PRODUCTION_URL
+    ? {productionURL: process.env.OAUTH_PROXY_PRODUCTION_URL}
+    : undefined,
+  nativeApps: true,
+};
 ```
 
-- Before the move to one domain, `<stable backend>` is the Cloud Run URL
-  (`terreno-backend-example-7knxlrnpqq-uc.a.run.app` for the example).
-- After the move ([below](#move-stable-onto-one-domain)), it is `api.<domain>`. Register both
-  during the move and drop the Cloud Run one afterwards.
+- Add a provider's field only when its env vars are set; example-backend's
+  `src/utils/betterAuthConfig.ts` shows the pattern, including the preview placeholder secret.
+- `https://appleid.apple.com` must be in `trustedOrigins` for Apple
+  ([why](#sign-in-with-apple)).
+- `accountLinking.mode` decides whether a Google sign-in with the same verified email joins an
+  existing account. See [Account linking](../explanation/account-linking.md).
+- `signUp: {mode: "closed"}` stops social sign-in from creating users; stable decides this for
+  previews too.
+
+## Callback URLs
+
+Each provider gets one redirect URI per backend that exchanges codes:
+
+```text
+https://<backend that owns the callbacks>/api/auth/callback/<provider>
+```
+
+| Stage | Backend that owns the callbacks | Example |
+| --- | --- | --- |
+| Local dev (Google and GitHub only) | `http://localhost:4000` | `http://localhost:4000/api/auth/callback/github` |
+| Preview first ([below](#register-on-a-preview-first)) | The preview's Cloud Run tag URL | `https://pr-1613---terreno-backend-example-7knxlrnpqq-uc.a.run.app/api/auth/callback/google` |
+| Stable before the domain move | The Cloud Run URL | `https://terreno-backend-example-7knxlrnpqq-uc.a.run.app/api/auth/callback/google` |
+| Stable after the move | `api.<domain>` | `https://api.<domain>/api/auth/callback/google` |
+
+- During the move, register both stable URLs, and drop the Cloud Run one afterwards
+  ([below](#move-stable-onto-one-domain)).
 - Previews never get their own callback. They borrow stable's through oauth-proxy, unless one
-  preview owns them for a while ([below](#register-on-a-preview-first)).
+  preview owns them for a while.
+- Apple accepts only https return URLs on a real host, so it has no local dev callback. Test
+  Apple on a preview or on stable.
+- Keep local dev on its own OAuth apps (a "dev" GitHub app and Google client), so a dev secret
+  never sits next to the stable ones.
 
 ## Register on a preview first
 
-Stable only exchanges codes once it runs a release with this setup. To try the providers before
+Stable exchanges codes only once it runs a release with this setup. To try the providers before
 then, let one preview own the callbacks:
 
-1. Set `OAUTH_CALLBACK_TAG=pr-<n>` in the `terreno-gcp` CircleCI context.
-2. Register every provider below with `<stable backend>` replaced by that preview's backend,
-   `pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app`.
-3. Add the secrets, then rerun that PR's `gcp-cd-preview` job.
+1. **Name the preview.** In CircleCI, Organization Settings → Contexts → `terreno-gcp`, add
+   `OAUTH_CALLBACK_TAG` = `pr-<n>`.
+2. **Register every provider** ([below](#register-each-provider)) with the preview's backend,
+   `https://pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app`, as the callback host.
+   For Apple, list both preview hosts under Domains:
+   `pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app` and
+   `pr-<n>--terreno-frontend.netlify.app`.
+3. **Add the secrets** ([below](#store-the-secrets)).
+4. **Redeploy the preview.** Approve the PR's `approve` hold in CircleCI (or rerun its
+   `gcp-cd-preview` job), so the new revision mounts the secrets.
+5. **Sign in** at `https://pr-<n>--terreno-frontend.netlify.app`.
 
-That preview mounts every OAuth secret, including client secrets and the Apple key, and
-exchanges codes itself. Other previews proxy through it, and stable gets only the client IDs, so
-stable has no social sign-in while the variable is set. Only name a preview whose code you have
-reviewed: it holds the real secrets. When stable runs the release, register the stable callbacks,
-remove the variable, and redeploy stable.
+While the variable is set:
+
+- That preview mounts every OAuth secret, including client secrets and the Apple key, and
+  exchanges codes itself. Only name a preview whose code you have reviewed.
+- Other previews proxy through it.
+- Stable gets only the client IDs, so stable has no social sign-in.
+
+When stable runs the release, register the stable callbacks, delete `OAUTH_CALLBACK_TAG`,
+redeploy stable, and remove the preview callbacks from each provider.
 
 ## Register each provider
 
 ### GitHub
 
-1. GitHub → Settings → Developer settings → OAuth Apps → New OAuth App.
-2. Homepage URL: the stable web app. Authorization callback URL:
-   `https://<stable backend>/api/auth/callback/github`.
-3. Generate a client secret, then add both values:
+1. GitHub → Settings → Developer settings → OAuth Apps → New OAuth App. For an organization app,
+   use the organization's Settings → Developer settings instead.
+2. Homepage URL: the web app. Authorization callback URL:
+   `https://<callback host>/api/auth/callback/github`.
+3. Generate a client secret. GitHub shows it once.
 
-```bash
-printf '%s' "<client id>" | gcloud secrets versions add terreno-backend-example-github-client-id --data-file=-
-printf '%s' "<client secret>" | gcloud secrets versions add terreno-backend-example-github-client-secret --data-file=-
-```
+A GitHub OAuth app has one callback URL. To move it (preview to stable, or to `api.<domain>`),
+edit it, or create a second app for the overlap.
 
 ### Google
 
-1. Google Cloud console → APIs & Services → Credentials → Create credentials → OAuth client ID →
-   Web application.
-2. Authorized redirect URI: `https://<stable backend>/api/auth/callback/google`.
-3. Add the values to `terreno-backend-example-google-client-id` and
-   `terreno-backend-example-google-client-secret` the same way.
+1. Google Cloud console → APIs & Services → OAuth consent screen. Set the app name, support
+   email, and authorized domains. While the screen is in **Testing**, only the test users you
+   list can sign in; add yours.
+2. Credentials → Create credentials → OAuth client ID → Web application.
+3. Authorized redirect URI: `https://<callback host>/api/auth/callback/google`. A client can list
+   several, so the preview, Cloud Run, and `api.<domain>` URIs can sit side by side.
+4. Copy the client ID and secret.
 
 ### Sign in with Apple
 
 1. Apple Developer → Certificates, Identifiers & Profiles → Identifiers → add a **Services ID**
    (this is the `clientId`, such as `com.example.web`). Turn on Sign in with Apple and configure
    it:
-   - Domains: the stable backend and web hosts (`api.<domain>` and `app.<domain>` after the move).
-   - Return URL: `https://<stable backend>/api/auth/callback/apple`.
+   - Domains: the backend and web hosts (`api.<domain>` and `app.<domain>` after the move).
+   - Return URL: `https://<callback host>/api/auth/callback/apple`.
 2. Keys → add a key with Sign in with Apple, download the `.p8` file (once only), and note the
    key ID. Your team ID is in the top right of the developer portal.
-3. Add the four values:
+
+Apple needs `https://appleid.apple.com` in `trustedOrigins`. It returns with a cross-site
+`POST` (`form_post`) from that origin, and a browser that holds a `SameSite=None` cookie for the
+API sends it, which makes Better Auth check the POST's `Origin`.
+
+If Apple refuses a preview's `run.app` host, try Google and GitHub on the preview and register
+Apple on stable.
+
+## Store the secrets
+
+The example keeps each value in Secret Manager, in containers Terraform creates
+(`infra/flourish/main.tf`, `backend_secret_oauth`). With the default project set:
 
 ```bash
-printf '%s' "com.example.web" | gcloud secrets versions add terreno-backend-example-apple-client-id --data-file=-
-printf '%s' "<team id>" | gcloud secrets versions add terreno-backend-example-apple-team-id --data-file=-
-printf '%s' "<key id>" | gcloud secrets versions add terreno-backend-example-apple-key-id --data-file=-
-gcloud secrets versions add terreno-backend-example-apple-private-key --data-file=AuthKey_<key id>.p8
+S=terreno-backend-example
+printf '%s' "<github client id>"     | gcloud secrets versions add $S-github-client-id --data-file=-
+printf '%s' "<github client secret>" | gcloud secrets versions add $S-github-client-secret --data-file=-
+printf '%s' "<google client id>"     | gcloud secrets versions add $S-google-client-id --data-file=-
+printf '%s' "<google client secret>" | gcloud secrets versions add $S-google-client-secret --data-file=-
+printf '%s' "com.example.web"        | gcloud secrets versions add $S-apple-client-id --data-file=-
+printf '%s' "<team id>"              | gcloud secrets versions add $S-apple-team-id --data-file=-
+printf '%s' "<key id>"               | gcloud secrets versions add $S-apple-key-id --data-file=-
+gcloud secrets versions add $S-apple-private-key --data-file=AuthKey_<key id>.p8
 ```
 
-The example reads them as `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and
-`APPLE_PRIVATE_KEY`, and adds `https://appleid.apple.com` to `trustedOrigins`. Apple posts its
-return from that origin, and a browser that holds a `SameSite=None` cookie for the API sends
-it, which makes Better Auth check the POST's `Origin`.
+`printf '%s'` keeps a trailing newline out of the value. Check one with
+`gcloud secrets versions access latest --secret=$S-github-client-id`.
 
-Terraform (`infra/flourish/main.tf`, `backend_secret_oauth`) creates the eight empty secret
-containers. The deploy mounts only the ones that have a version, so a provider turns on when both
-of its values exist (all four for Apple). Redeploy after adding a version.
+The deploy mounts only the secrets that have a version, so a provider turns on when both of its
+values exist (all four for Apple). **Redeploy after adding a version.** The example reads them as
+`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
+`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and `APPLE_PRIVATE_KEY`.
 
-Previews get only the `*_CLIENT_ID` secrets: starting a sign-in needs the client ID, and stable
-exchanges every code. No client secret or `.p8` reaches a `pr-*` revision. Better Auth refuses
-to configure Google or GitHub without some secret, so on a preview (`OAUTH_PROXY_PRODUCTION_URL`
-on another origin than `BETTER_AUTH_URL`) the example fills in the placeholder
-`OAUTH_PROXY_PREVIEW_CLIENT_SECRET` (`"unused-on-oauth-proxy-preview"`). It is never sent to a
-provider.
+Previews get only the `*_CLIENT_ID` secrets: starting a sign-in needs the client ID, and the
+callback owner exchanges every code. No client secret or `.p8` reaches a `pr-*` revision other
+than the one `OAUTH_CALLBACK_TAG` names. Better Auth refuses to configure Google or GitHub
+without some secret, so on a preview (`OAUTH_PROXY_PRODUCTION_URL` on another origin than
+`BETTER_AUTH_URL`) the example fills in the placeholder `OAUTH_PROXY_PREVIEW_CLIENT_SECRET`
+(`"unused-on-oauth-proxy-preview"`). It is never sent to a provider.
+
+For local dev, put the dev app's values in `example-backend/.env` under the same names.
+
+## Check it
+
+1. **The server lists the providers:**
+
+   ```bash
+   curl -s https://<backend>/api/auth/terreno/methods | jq .
+   ```
+
+   Each configured provider appears. A missing one means its secrets have no version, or the
+   revision predates them: redeploy.
+2. **Sign in** on the web app with each provider. The button sits on the login screen; the
+   Security screen's Linked accounts card links more providers to the same account.
+3. **On a redirect mismatch,** compare the `redirect_uri` in the provider's error with the URI
+   you registered, character for character (scheme, host, no trailing slash).
 
 ## Rotate Apple's key and client secret
 

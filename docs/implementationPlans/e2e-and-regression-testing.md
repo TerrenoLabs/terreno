@@ -169,7 +169,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - PLAN-new-4 holds in T34.
   - Skills: update-agent-docs
 
-- [ ] **T4** — Brew merges regression cases into the suite and gates on planned specs
+- [x] **T4** — Brew merges regression cases into the suite and gates on planned specs
   - Depends on: T1
   - Files: plugins/terreno-planning/skills/terreno-4-brew/SKILL.md, plugins/terreno-planning/references/github-attention-contract.md, generated copies
   - Delivers: In its final gates, Brew:

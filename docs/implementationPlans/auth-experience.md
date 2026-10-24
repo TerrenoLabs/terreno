@@ -532,6 +532,8 @@ Open risks:
 - [ ] **T28** — Live social sign-in on a preview and on the stable deploy
   - Depends on: T11
   - Blocked by: H1
+  - Status: deferred past PR #1613 and tracked as X10. It needs the H1 OAuth apps; every other
+    proof uses the mock provider.
   - Files: example-frontend/e2e/live-social-login.spec.ts
   - Proof:
     - On this PR's preview and on the stable deploy, after H1:
@@ -768,6 +770,8 @@ Open risks:
 
 - [ ] **T29** — Android example signs in with the mock provider (device-proven native)
   - Depends on: T22
+  - Status: deferred past PR #1613 and tracked as X11. The emulator companion never stayed up.
+    The flow and the native proxy fix shipped, so only the device run is left.
   - Blocked by: an Android emulator companion (`hive-companion start`). If none is
     available, return BLOCKED, environment.
   - Files: example-frontend/maestro/native-social-login.yaml, docs/how-to/set-up-social-login.md
@@ -923,6 +927,8 @@ Open risks:
 | X7 | Account lockout after repeated failed attempts | "Locked out" recovery | S | T8 |
 | X9 | Previews under the shared domain (Netlify deploy subdomains plus a load balancer for Cloud Run tag URLs), making previews same-site too | D6 makes stable same-site; previews stay cross-site | M | T11, H3 |
 | X8 | Implement the empty `PasswordField` stub; fix the stale rtk rule doc (`betterAuthReducer`) | Found during research | S | none |
+| X10 | Finish T28: the live GitHub sign-in on a preview and on stable, plus the Google and Apple consent-page checks, then H2 | T28 waits on H1 (OAuth apps and secrets); deferred past PR #1613 | S | H1, T11 |
+| X11 | Finish T29: run `example-frontend/maestro/native-social-login.yaml` on an Android emulator and save a screenshot | The emulator companion never stayed up; the flow and the native proxy fix shipped in PR #1613 | S | T22 |
 
 ## Decisions
 

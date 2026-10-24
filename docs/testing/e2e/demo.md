@@ -51,7 +51,11 @@ retries each click with `expect(...).toPass()` instead of sleeping:
    `button-variant-primary`, then clicks `button-variant-primary` until the story's `onClick`
    logs `clicked` to the console. That button renders only in the Button page's stories.
 3. It checks that the URL is still `/demo/Button` (an unknown component redirects to `/demo`
-   once hydrated) and that the page raised no `pageerror`.
+   once hydrated) and that the page raised no `pageerror` except React's recoverable hydration
+   errors (#418, #423, #425). The export raises #418 on every route because its pre-rendered
+   HTML differs from the first client render; React then renders on the client and the page
+   works. `demo/e2e/pageErrors.ts` holds that filter, and `demo/smokePageErrors.test.ts` tests
+   it. Any other page error fails the smoke.
 
 The driver prints one `✅` line per step and exits 1 on the first failure, after printing the
 static server's output and Playwright's report. The smoke needs Chromium

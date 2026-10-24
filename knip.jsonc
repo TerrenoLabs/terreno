@@ -296,6 +296,12 @@
         "chartVisual/**/*.test.ts",
         "chartVisual/fixtures.tsx",
         "app/demo/chart-visual-gallery.tsx"
+      ],
+      // e2e/ holds the Bun-driven smoke and its helpers, which never ship; production mode
+      // skips them, and default mode still checks them from the smoke entry.
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!e2e/**!"
       ]
     },
     "announcements": {

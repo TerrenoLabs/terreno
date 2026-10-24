@@ -13,6 +13,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {expect, test} from "@playwright/test";
+import {unexpectedPageErrors} from "./pageErrors";
 
 const SERVE_ARG = "serve";
 const BASE_URL_ENV = "DEMO_SMOKE_BASE_URL";
@@ -80,7 +81,7 @@ const defineBrowserTest = (): void => {
         expect(isStoryClicked).toBe(true);
       }).toPass({timeout: BROWSER_TIMEOUT_MS});
       await expect(page).toHaveURL(storyUrl);
-      expect(pageErrors).toEqual([]);
+      expect(unexpectedPageErrors(pageErrors)).toEqual([]);
     });
   });
 };

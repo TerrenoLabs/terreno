@@ -17,6 +17,7 @@ import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
 import {acceptPendingConsentForms} from "./helpers/consentForms";
 import {loginAs} from "./helpers/login";
 import {listTodosAs} from "./helpers/todosApi";
+import {assertExportTargetsApi, webExportEnv} from "./helpers/webExport";
 
 const BASE_URL_ENV = "EXAMPLE_FRONTEND_SMOKE_BASE_URL";
 const SMOKE_USER = {
@@ -124,6 +125,7 @@ const run = async (): Promise<void> => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "example-frontend-smoke-"));
   const exportDir = path.join(tempDir, "dist");
   const outputDir = path.join(tempDir, "playwright");
+  const metroCacheDir = path.join(tempDir, "metro");
   let keepOutput = false;
 
   try {
@@ -145,16 +147,12 @@ const run = async (): Promise<void> => {
     console.info(`✅ example-backend is healthy at ${apiUrl} and trusts ${webUrl}`);
 
     const exportStartedAt = performance.now();
+    fs.mkdirSync(metroCacheDir);
     const webExport = await runBin({
       args: ["expo", "export", "--platform", "web", "--output-dir", exportDir],
       bin: process.execPath,
       cwd: PACKAGE_DIR,
-      env: {
-        CI: "true",
-        EXPO_NO_TELEMETRY: "1",
-        EXPO_PUBLIC_API_URL: apiUrl,
-        NODE_OPTIONS: process.env.NODE_OPTIONS ?? "--max-old-space-size=3072",
-      },
+      env: webExportEnv({apiUrl, cacheDir: metroCacheDir}),
       timeoutMs: EXPORT_TIMEOUT_MS,
     });
     if (webExport.exitCode !== 0) {
@@ -162,6 +160,7 @@ const run = async (): Promise<void> => {
         `expo export exited ${webExport.exitCode}:\n${webExport.stdout}${webExport.stderr}`
       );
     }
+    assertExportTargetsApi({apiUrl, exportDir});
     const exportMs = Math.round(performance.now() - exportStartedAt);
     console.info(`✅ Web export built in ${exportMs} ms against ${apiUrl}, served at ${webUrl}`);
 

@@ -32,7 +32,11 @@ Run with Bun (`bun e2e/smoke.spec.ts`), it is the driver:
    cookie works as it does in the main suite on ports 8082 and 4000. The backend starts before
    the export so it holds its port while the export bakes that port in.
 3. It runs `expo export --platform web` into a temp dir with `EXPO_PUBLIC_API_URL` set to the
-   API URL, because the export bakes the API URL in. This is the slow step.
+   API URL, because the export bakes the API URL in. This is the slow step. Metro's transform
+   cache key ignores `EXPO_PUBLIC_*` values, so a shared warm cache would ship an earlier run's
+   API port and the sign-in would fail. The export therefore gets its own Metro cache (`TMPDIR`
+   points into the temp dir), and the driver checks that the bundle contains the API URL before
+   it opens a browser. Every run is a cold export, as it is in CI.
 4. It runs the root-locked Playwright CLI on Node against this same file with `--config=e2e`.
    That names a directory with no config file, so `playwright.config.ts` and its Metro and
    backend web servers stay out, and the default Chromium project runs only the smoke. It passes

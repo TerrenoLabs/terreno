@@ -253,7 +253,7 @@ before anything else has confirmed one.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, stop persistence, clear timers and listeners. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). |
+| `stop()` | Disconnect, stop persistence, clear timers and listeners. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). A stream discovery (`GET /sync/streams`) that was still reading the token when `stop()` ran is not sent, so it never reaches the server with a session the app is signing out of. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |

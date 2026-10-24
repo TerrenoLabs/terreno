@@ -20,7 +20,12 @@ import {bootstrapStream, bootstrapStreamsBatch} from "./sync/bootstrap";
 import {getAllCursors} from "./sync/cursor";
 import {applyDelta} from "./sync/deltaApplier";
 import {repairMarkedEntities} from "./sync/entityRepair";
-import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
+import {
+  AuthRequiredError,
+  createHttpChannel,
+  type HttpChannel,
+  RequestSupersededError,
+} from "./sync/httpChannel";
 import {createReplayCoordinator, type ReplayCoordinator} from "./sync/replayCoordinator";
 import {createSocketTransport} from "./sync/socketTransport";
 import type {SendMutationBatchResult, SendMutationResult, SyncTransport} from "./sync/transport";
@@ -823,8 +828,13 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     }
     let serverStreams: {stream: string; collection: string}[];
     try {
-      serverStreams = await httpChannel.fetchStreams();
+      // A reconcile fired just before a stop() is still reading the token when the app signs
+      // out; dropping its request here keeps it from reaching the server with the revoked one.
+      serverStreams = await httpChannel.fetchStreams({isSuperseded});
     } catch (error) {
+      if (error instanceof RequestSupersededError) {
+        return undefined;
+      }
       if (error instanceof AuthRequiredError) {
         // INV-2: a 401 is NOT a leave. Pause; leave every stream/entity intact.
         setAuthPaused(true);

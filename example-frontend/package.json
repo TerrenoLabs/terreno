@@ -43,6 +43,7 @@
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
     "@rtk-query/codegen-openapi": "^2.2.0",
+    "@terreno/test": "workspace:*",
     "@types/luxon": "catalog:",
     "@types/react": "catalog:",
     "babel-preset-expo": "catalog:",

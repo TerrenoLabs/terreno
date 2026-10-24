@@ -26,6 +26,8 @@ Expected values come from a literal worked example, the IP, or another independe
 ## Repository composition
 
 Load applicable repository testing skills before choosing commands, harnesses, fixtures,
-databases, assertion libraries, or runtime probes. Match established tests near the
+databases, assertion libraries, or runtime probes. In Terreno apps those are
+`terreno-backend-tests`, `terreno-frontend-tests`, and `terreno-mobile-tests`; run
+`terreno-test-setup` first when the layer has no test setup. Match established tests near the
 changed public seam. The lifecycle plugin does not prescribe a framework or package
 layout.

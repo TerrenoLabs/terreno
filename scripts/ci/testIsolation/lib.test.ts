@@ -33,6 +33,8 @@ describe("isSharedSuiteTestFile", () => {
     expect(isSharedSuiteTestFile("ui/src/Box.tsx")).toBe(false);
     expect(isSharedSuiteTestFile("admin-frontend/src/Form.isolated.tsx")).toBe(false);
     expect(isSharedSuiteTestFile("scripts/ci/prepush/plan.test.ts")).toBe(false);
+    expect(isSharedSuiteTestFile("test/src/cli/testHygieneRules.test.ts")).toBe(false);
+    expect(isSharedSuiteTestFile("test/src/expo/authTokenStorage.test.ts")).toBe(true);
   });
 });
 

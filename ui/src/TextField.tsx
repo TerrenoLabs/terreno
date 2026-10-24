@@ -8,6 +8,7 @@ import {
   type StyleProp,
   TextInput,
   type TextInputChangeEvent,
+  type TextInputProps,
   View,
 } from "react-native";
 
@@ -64,6 +65,51 @@ const textContentMap: {
   username: "username",
 };
 
+type TextFieldAutoComplete = NonNullable<TextFieldProps["autoComplete"]>;
+
+/**
+ * Native autofill hints for each `autoComplete` value. `autoComplete` goes to React Native, which
+ * maps the web token to Android's autofill hint; `textContentType` is iOS's hint. "on" means "no
+ * opinion", so the field falls back to the hint for its `type`.
+ */
+const NATIVE_AUTOFILL: Record<
+  TextFieldAutoComplete,
+  Pick<TextInputProps, "autoComplete" | "textContentType"> | undefined
+> = {
+  "current-password": {autoComplete: "current-password", textContentType: "password"},
+  email: {autoComplete: "email", textContentType: "emailAddress"},
+  "new-password": {autoComplete: "new-password", textContentType: "newPassword"},
+  off: {autoComplete: "off", textContentType: "none"},
+  on: undefined,
+  "one-time-code": {autoComplete: "one-time-code", textContentType: "oneTimeCode"},
+  username: {autoComplete: "username", textContentType: "username"},
+  // Passkey autofill is web only; native platforms get the plain username hint.
+  "username webauthn": {autoComplete: "username", textContentType: "username"},
+};
+
+/**
+ * The input's autofill props: the raw token on web (react-native-web writes it to the
+ * `autocomplete` attribute, which accepts token lists such as "username webauthn"), or the
+ * Android and iOS hints on native.
+ */
+const getAutofillProps = ({
+  autoComplete,
+  type,
+}: {
+  autoComplete: TextFieldProps["autoComplete"];
+  type: string;
+}): Pick<TextInputProps, "autoComplete" | "textContentType"> => {
+  const textContentType = textContentMap[type];
+  if (Platform.OS === "web") {
+    return {
+      ...(autoComplete ? ({autoComplete} as unknown as Pick<TextInputProps, "autoComplete">) : {}),
+      textContentType,
+    };
+  }
+  const nativeHints = autoComplete ? NATIVE_AUTOFILL[autoComplete] : undefined;
+  return nativeHints ?? {textContentType};
+};
+
 interface WebTextInputRef {
   focus: () => void;
   selectionEnd: number | null;
@@ -100,6 +146,7 @@ export const TextField: FC<TextFieldProps> = ({
   testIDs,
   id,
   aiSuggestion,
+  accessibilityLabel,
 }) => {
   const {theme} = useTheme();
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
@@ -260,8 +307,8 @@ export const TextField: FC<TextFieldProps> = ({
     onChangeRef.current(text);
   }, []);
 
+  const autofillProps = getAutofillProps({autoComplete, type: type || "text"});
   const keyboardType = keyboardMap[type];
-  const textContentType = textContentMap[type || "text"];
 
   return (
     <View
@@ -299,9 +346,10 @@ export const TextField: FC<TextFieldProps> = ({
         >
           <TextInput
             {...(Platform.OS === "web" ? {spellCheck: false} : {})}
+            {...autofillProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}
-            aria-label="Text input field"
+            aria-label={accessibilityLabel ?? "Text input field"}
             autoCapitalize={type === "text" ? "sentences" : "none"}
             autoCorrect={shouldAutocorrect}
             blurOnSubmit={blurOnSubmit}
@@ -363,7 +411,6 @@ export const TextField: FC<TextFieldProps> = ({
             secureTextEntry={isPasswordField && !isValueRevealed}
             style={defaultTextInputStyles}
             testID={fieldTestIDs.input}
-            textContentType={textContentType}
             underlineColorAndroid="transparent"
             value={value}
           />

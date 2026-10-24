@@ -98,6 +98,20 @@ describe("SocialLoginButton", () => {
     expect(button.props.disabled).toBe(true);
   });
 
+  it("follows later changes to the loading prop", () => {
+    const onPress = createMockOnPress();
+    const {getByTestId, rerender} = renderWithTheme(
+      <SocialLoginButton onPress={onPress} provider="google" />
+    );
+    expect(getByTestId("social-login-google").props.disabled).toBeFalsy();
+
+    rerender(<SocialLoginButton loading onPress={onPress} provider="google" />);
+    expect(getByTestId("social-login-google").props.disabled).toBe(true);
+
+    rerender(<SocialLoginButton loading={false} onPress={onPress} provider="google" />);
+    expect(getByTestId("social-login-google").props.disabled).toBeFalsy();
+  });
+
   it("uses correct testID", () => {
     const onPress = createMockOnPress();
     const {getByTestId} = renderWithTheme(

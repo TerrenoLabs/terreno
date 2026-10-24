@@ -9,7 +9,9 @@ import {
 } from "../plugins";
 
 export type AuditEventVerb = "created" | "deleted" | "updated";
-export type AuditEventSource = "admin" | "modelRouter" | "rbac";
+/** Every framework surface that writes `AuditEvent` rows. `security` is AccountSecurityApp. */
+export const AUDIT_EVENT_SOURCES = ["admin", "modelRouter", "rbac", "security"] as const;
+export type AuditEventSource = (typeof AUDIT_EVENT_SOURCES)[number];
 export type AuditEventOperation =
   | "arrayPush"
   | "arrayRemove"
@@ -96,7 +98,7 @@ const auditEventSchema: AuditEventSchema = new mongoose.Schema<
     },
     source: {
       description: "Which framework surface wrote this event",
-      enum: ["admin", "modelRouter", "rbac"],
+      enum: [...AUDIT_EVENT_SOURCES],
       index: true,
       required: true,
       type: String,

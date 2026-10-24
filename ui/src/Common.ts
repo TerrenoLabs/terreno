@@ -1019,7 +1019,24 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
    */
   showVisibilityToggle?: boolean;
 
-  autoComplete?: "current-password" | "on" | "off" | "username";
+  /**
+   * Autofill hint. On web it is set as the input's `autocomplete` attribute; `"username webauthn"`
+   * asks the browser to offer saved passkeys in the field's autofill. On native it is sent as
+   * React Native's `autoComplete` (Android's autofill hint) and as the matching iOS
+   * `textContentType`: `username` → `username`, `email` → `emailAddress`, `current-password` →
+   * `password`, `new-password` → `newPassword` (iOS offers a strong password), `one-time-code` →
+   * `oneTimeCode`, `off` → `none`. Without it (or with `"on"`) the field's `type` picks the iOS
+   * hint.
+   */
+  autoComplete?:
+    | "current-password"
+    | "email"
+    | "new-password"
+    | "on"
+    | "off"
+    | "one-time-code"
+    | "username"
+    | "username webauthn";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
@@ -1035,6 +1052,11 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   trimOnBlur?: boolean;
 
   aiSuggestion?: AiSuggestionProps;
+
+  /**
+   * Accessible name for the input. Screen readers otherwise announce "Text input field".
+   */
+  accessibilityLabel?: string;
 }
 
 export interface TextAreaProps extends Omit<TextFieldProps, "multiline" | "type"> {}
@@ -1143,6 +1165,12 @@ export interface HeadingProps extends WithTestID {
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   color?: TextColor;
+  /**
+   * Outline level, 1 for the page title. When set, the heading is exposed to assistive
+   * technology as a heading: `role="heading"` with `aria-level` (an `<h1>`–`<h6>` on web, the
+   * header accessibility role on native). When omitted, the heading is plain text.
+   */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false
@@ -2185,6 +2213,11 @@ export interface ButtonProps extends WithTestID {
  * Used for OAuth social login buttons (Google, GitHub, Apple).
  */
 export interface SocialLoginButtonProps extends WithTestID {
+  /**
+   * Accessible name. Defaults to the button text.
+   */
+  accessibilityLabel?: string;
+
   /**
    * The OAuth provider for the social login.
    */

@@ -74,7 +74,7 @@ describe("organization RBAC", () => {
     assert.isTrue(operator.isLocked);
     assert.deepEqual(operator.permissions.organization, [...terrenoStatements.organization]);
     assert.deepEqual(operator.permissions.admin, ["access"]);
-    assert.deepEqual(operator.permissions.user, ["list", "read", "update"]);
+    assert.deepEqual(operator.permissions.user, ["list", "read", "update", "manageSecurity"]);
 
     const orgAdminRole = await RbacRole.findOne({name: "org-admin"});
     assert.isNull(orgAdminRole);

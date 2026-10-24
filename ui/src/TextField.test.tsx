@@ -3,6 +3,7 @@ import {act, fireEvent, userEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import type {ReactElement} from "react";
 import type {TextInput} from "react-native";
+import type {TextFieldProps} from "./Common";
 import {TextField} from "./TextField";
 import {renderWithTheme} from "./test-utils";
 
@@ -579,6 +580,14 @@ describe("TextField", () => {
       expect(input.props["aria-label"]).toBe("Text input field");
     });
 
+    it("uses accessibilityLabel as the input's accessible name", () => {
+      const {getByDisplayValue} = renderWithTheme(
+        <TextField accessibilityLabel="Backup code" onChange={mockOnChange} value="" />
+      );
+
+      expect(getByDisplayValue("").props["aria-label"]).toBe("Backup code");
+    });
+
     it("should indicate disabled state in accessibility", () => {
       const {getByDisplayValue} = renderWithTheme(
         <TextField disabled onChange={mockOnChange} value="" />
@@ -1014,6 +1023,147 @@ describe("TextField", () => {
       } finally {
         performance.now = originalNow;
         PlatformModule.OS = savedOS;
+      }
+    });
+  });
+
+  describe("autoComplete", () => {
+    const setOS = (os: string): string => {
+      const reactNative = require("react-native") as {Platform: {OS: string}};
+      const originalOS = reactNative.Platform.OS;
+      reactNative.Platform.OS = os;
+      return originalOS;
+    };
+
+    it("sets autoComplete on the input on web", () => {
+      const originalOS = setOS("web");
+      try {
+        const {getByTestId} = renderWithTheme(
+          <>
+            <TextField
+              autoComplete="current-password"
+              onChange={() => {}}
+              testID="password"
+              type="password"
+              value=""
+            />
+            <TextField
+              autoComplete="username webauthn"
+              onChange={() => {}}
+              testID="email"
+              type="email"
+              value=""
+            />
+          </>
+        );
+        expect(getByTestId("password").props.autoComplete).toBe("current-password");
+        expect(getByTestId("email").props.autoComplete).toBe("username webauthn");
+      } finally {
+        setOS(originalOS);
+      }
+    });
+
+    const nativeCases: {
+      autoComplete: TextFieldProps["autoComplete"];
+      expectedAutoComplete: string | undefined;
+      expectedTextContentType: string;
+      type: TextFieldProps["type"];
+    }[] = [
+      {
+        autoComplete: "username",
+        expectedAutoComplete: "username",
+        expectedTextContentType: "username",
+        type: "email",
+      },
+      {
+        autoComplete: "username webauthn",
+        expectedAutoComplete: "username",
+        expectedTextContentType: "username",
+        type: "email",
+      },
+      {
+        autoComplete: "email",
+        expectedAutoComplete: "email",
+        expectedTextContentType: "emailAddress",
+        type: "email",
+      },
+      {
+        autoComplete: "current-password",
+        expectedAutoComplete: "current-password",
+        expectedTextContentType: "password",
+        type: "password",
+      },
+      {
+        autoComplete: "new-password",
+        expectedAutoComplete: "new-password",
+        expectedTextContentType: "newPassword",
+        type: "password",
+      },
+      {
+        autoComplete: "one-time-code",
+        expectedAutoComplete: "one-time-code",
+        expectedTextContentType: "oneTimeCode",
+        type: "text",
+      },
+      {
+        autoComplete: "off",
+        expectedAutoComplete: "off",
+        expectedTextContentType: "none",
+        type: "search",
+      },
+      {
+        autoComplete: "on",
+        expectedAutoComplete: undefined,
+        expectedTextContentType: "password",
+        type: "password",
+      },
+    ];
+
+    for (const testCase of nativeCases) {
+      it(`forwards autoComplete="${testCase.autoComplete}" to native autofill hints`, () => {
+        const {getByTestId} = renderWithTheme(
+          <TextField
+            autoComplete={testCase.autoComplete}
+            onChange={() => {}}
+            testID="field"
+            type={testCase.type}
+            value=""
+          />
+        );
+        const input = getByTestId("field");
+        expect(input.props.autoComplete).toBe(testCase.expectedAutoComplete);
+        expect(input.props.textContentType).toBe(testCase.expectedTextContentType);
+      });
+    }
+
+    it("falls back to the type's text content hint on native without autoComplete", () => {
+      const {getByTestId} = renderWithTheme(
+        <>
+          <TextField onChange={() => {}} testID="email" type="email" value="" />
+          <TextField onChange={() => {}} testID="password" type="password" value="" />
+        </>
+      );
+      expect(getByTestId("email").props.autoComplete).toBeUndefined();
+      expect(getByTestId("email").props.textContentType).toBe("emailAddress");
+      expect(getByTestId("password").props.autoComplete).toBeUndefined();
+      expect(getByTestId("password").props.textContentType).toBe("password");
+    });
+
+    it("sets the web autofill token on web and leaves the iOS hint to the type map", () => {
+      const originalOS = setOS("web");
+      try {
+        const {getByTestId} = renderWithTheme(
+          <TextField
+            autoComplete="one-time-code"
+            onChange={() => {}}
+            testID="code"
+            type="text"
+            value=""
+          />
+        );
+        expect(getByTestId("code").props.autoComplete).toBe("one-time-code");
+      } finally {
+        setOS(originalOS);
       }
     });
   });

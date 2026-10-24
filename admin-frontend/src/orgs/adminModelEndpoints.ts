@@ -20,6 +20,28 @@ export const adminOrganizationHeaders = (
   return {"X-Organization-Id": organizationId};
 };
 
+/**
+ * A list or read argument that carries the organization it was asked under. `useAdminApi` passes
+ * this shape so an organization switch changes the query argument itself: RTK Query then
+ * subscribes to the new organization's cache entry instead of waiting on one it never requests.
+ * A bare argument (direct endpoint callers) uses the organization the endpoints were built with.
+ */
+interface AdminOrgScopedArg<T> {
+  adminOrganizationScope: true;
+  args: T;
+  organizationId: string | undefined;
+}
+
+export const adminOrgScopedArg = <T>(
+  args: T,
+  organizationId: string | undefined
+): AdminOrgScopedArg<T> => ({adminOrganizationScope: true, args, organizationId});
+
+const isAdminOrgScopedArg = <T>(value: unknown): value is AdminOrgScopedArg<T> =>
+  typeof value === "object" &&
+  value !== null &&
+  (value as {adminOrganizationScope?: unknown}).adminOrganizationScope === true;
+
 export const buildAdminModelEndpoints = (
   build: EndpointBuilder,
   context: AdminModelEndpointContext
@@ -31,28 +53,47 @@ export const buildAdminModelEndpoints = (
   const deleteKey = `adminDelete_${context.modelName}`;
   const bulkPatchKey = `adminBulkPatch_${context.modelName}`;
   const {headers, organizationId, routePath} = context;
+  // The arguments and organization one list or read call was asked with.
+  const unwrap = <T>(
+    value: T | AdminOrgScopedArg<T>
+  ): {args: T; headers: Record<string, string> | undefined; organizationId: string | undefined} =>
+    isAdminOrgScopedArg<T>(value)
+      ? {
+          args: value.args,
+          headers: adminOrganizationHeaders(value.organizationId),
+          organizationId: value.organizationId,
+        }
+      : {args: value, headers, organizationId};
 
   return {
     [listKey]: build.query({
       providesTags: [`admin_${context.modelName}`],
-      query: (params: Record<string, unknown> | undefined) => ({
-        ...buildAdminApiListQueryRequest(routePath, params),
-        headers,
-      }),
-      serializeQueryArgs: ({endpointName, queryArgs}) =>
-        `${endpointName}:${organizationId ?? ""}:${JSON.stringify(queryArgs ?? {})}`,
+      query: (
+        arg:
+          | Record<string, unknown>
+          | undefined
+          | AdminOrgScopedArg<Record<string, unknown> | undefined>
+      ) => {
+        const scoped = unwrap(arg);
+        return {...buildAdminApiListQueryRequest(routePath, scoped.args), headers: scoped.headers};
+      },
+      serializeQueryArgs: ({endpointName, queryArgs}) => {
+        const scoped = unwrap(queryArgs);
+        return `${endpointName}:${scoped.organizationId ?? ""}:${JSON.stringify(scoped.args ?? {})}`;
+      },
     }),
     [readKey]: build.query({
-      providesTags: (_result: TagArg, _error: TagArg, id: string) => [
-        {id, type: `admin_${context.modelName}`},
+      providesTags: (_result: TagArg, _error: TagArg, arg: string | AdminOrgScopedArg<string>) => [
+        {id: unwrap(arg).args, type: `admin_${context.modelName}`},
       ],
-      query: (id: string) => ({
-        headers,
-        method: "GET",
-        url: `${routePath}/${id}`,
-      }),
-      serializeQueryArgs: ({endpointName, queryArgs}) =>
-        `${endpointName}:${organizationId ?? ""}:${String(queryArgs)}`,
+      query: (arg: string | AdminOrgScopedArg<string>) => {
+        const scoped = unwrap(arg);
+        return {headers: scoped.headers, method: "GET", url: `${routePath}/${scoped.args}`};
+      },
+      serializeQueryArgs: ({endpointName, queryArgs}) => {
+        const scoped = unwrap(queryArgs);
+        return `${endpointName}:${scoped.organizationId ?? ""}:${String(scoped.args)}`;
+      },
     }),
     [createKey]: build.mutation({
       invalidatesTags: [`admin_${context.modelName}`],

@@ -231,3 +231,61 @@ describe("rbacRouter", () => {
     expect(missingUserResponse.body.title).toBe("User not found");
   });
 });
+
+describe("rbacRouter role assignment against a partially resolved target", () => {
+  it("refuses PUT /rbac/users/:id/roles with 503 when the target's source grants are unknown", async () => {
+    await setupDb();
+    const routeUserModel = getRouteUserModel();
+    await routeUserModel.deleteMany({});
+    const target = await routeUserModel.create({email: "source-target@example.com", roles: []});
+    let isDown = false;
+    const access = createAccess({
+      connection: mongoose.connection,
+      // The signed-in actor may assign roles but does not hold user:delete.
+      resolvePermissions: async ({user}) =>
+        String(user.id) === target.id ? {} : {rbac: ["read", "assignRoles"]},
+      sources: [
+        {
+          // Additive only, so an outage drops its grants instead of failing every request.
+          failClosedWhenDenyUnknown: false,
+          getGrants: async ({user}) => {
+            if (String(user.id) !== target.id) {
+              return null;
+            }
+            if (isDown) {
+              throw new Error("idp down");
+            }
+            return {permissions: {user: ["delete"]}};
+          },
+          name: "idp-grants",
+          ttlMs: 0,
+        },
+      ],
+      statements: appStatements,
+      userModel: routeUserModel as unknown as AuthUserModel,
+    });
+    await access.roles.seedDefaults();
+    const app = getBaseServer();
+    setupAuth(app, authUserModel);
+    addAuthRoutes(app, authUserModel);
+    rbacRouter({
+      access,
+      basePath: "/rbac",
+      userModel: routeUserModel as unknown as AuthUserModel,
+    }).register(app);
+    app.use(apiErrorMiddleware);
+    const agent = await authAsUser(app, "notAdmin");
+
+    const healthy = await agent.put(`/rbac/users/${target.id}/roles`).send({roleNames: ["member"]});
+    expect(healthy.status).toBe(403);
+    expect(healthy.body.title).toBe("Cannot modify a user with permissions you do not hold");
+
+    isDown = true;
+    access.invalidateCache({userId: target.id});
+
+    const down = await agent.put(`/rbac/users/${target.id}/roles`).send({roleNames: ["member"]});
+    expect(down.status).toBe(503);
+    expect(down.body.title).toBe("Permission source unavailable");
+    expect((await routeUserModel.findById(target.id))?.roles).toEqual([]);
+  });
+});

@@ -47,6 +47,11 @@ interface StatementsQueryResult {
  */
 export type RolesQueryData = RbacRoleRow[] | {data?: RbacRoleRow[]} | undefined;
 
+/** Options for `useListRolesQuery`. `skip` leaves `/rbac/roles` unrequested. */
+interface ListRolesQueryOptions {
+  skip?: boolean;
+}
+
 /** @internal */
 export interface RolesQueryResult {
   data: RolesQueryData;
@@ -148,9 +153,10 @@ export const useAdminRoles = (api: AdminApi, apiBase: string) => {
           meta,
         ] as CreateRoleMutation;
       },
-      useListRolesQuery: () =>
+      useListRolesQuery: (_arg?: undefined, options?: ListRolesQueryOptions) =>
         useAdminRpcQuery<RolesQueryData>({
           rpc,
+          skip: options?.skip,
           url: `${rbacBase}/rbac/roles`,
         }),
       useListStatementsQuery: () =>
@@ -176,8 +182,10 @@ export const useAdminRoles = (api: AdminApi, apiBase: string) => {
   return {
     useCreateRoleMutation: (enhanced?.useAdminCreateRbacRoleMutation ??
       EMPTY_CREATE_MUTATION_HOOK) as () => CreateRoleMutation,
-    useListRolesQuery: (enhanced?.useAdminListRbacRolesQuery ??
-      EMPTY_ROLES_HOOK) as () => RolesQueryResult,
+    useListRolesQuery: (enhanced?.useAdminListRbacRolesQuery ?? EMPTY_ROLES_HOOK) as (
+      arg?: undefined,
+      options?: ListRolesQueryOptions
+    ) => RolesQueryResult,
     useListStatementsQuery: (enhanced?.useAdminListRbacStatementsQuery ??
       EMPTY_STATEMENTS_HOOK) as () => StatementsQueryResult,
     useUpdateRoleMutation: (enhanced?.useAdminUpdateRbacRoleMutation ??

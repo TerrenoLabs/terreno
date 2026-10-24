@@ -56,6 +56,9 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `GITHUB_CLIENT_ID` | `@terreno/api` | ❌ | — | No | server |
 | `GITHUB_CLIENT_SECRET` | `@terreno/api` | ❌ | — | Yes | server |
 | `GITHUB_CALLBACK_URL` | `@terreno/api` | ❌ | — | No | server |
+| `AUTH_ACCOUNT_LINKING` | example-backend `accountLinking.mode`: `verified-email`, `explicit`, or `never` ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | `verified-email` | No | server |
+| `AUTH_SIGN_UP` | example-backend `signUp.mode`: `open` or `closed` ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | `open` | No | server |
+| `PASSKEY_RP_ID` | example-backend `passkey.rpID`: the `FRONTEND_URL` host or a parent domain of it ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | the `FRONTEND_URL` host | No | server |
 
 ## Server configuration
 
@@ -67,7 +70,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `ENABLE_SWAGGER` | `@terreno/api` | ❌ | `false` | No | server |
 | `APP_ENV` | example-backend | ❌ | `development` | No | server |
 | `BACKEND_URL` | scripts, deploy | ❌ | — | No | server |
-| `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
+| `FRONTEND_URL` | example-backend `publicAppUrl` (auth mail links), the first passkey origin, and the default `PASSKEY_RP_ID` (its host). In production a loopback value turns passkeys off ([Auth features in example-backend](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ (✅ for passkeys on a deploy) | `http://localhost:8082` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
 | `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |

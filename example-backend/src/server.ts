@@ -11,6 +11,7 @@ import {
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
+  AccountSecurityApp,
   AuditApp,
   BetterAuthApp,
   backfillAdmins,
@@ -87,7 +88,12 @@ import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
-import {buildBetterAuthConfig, getAuthProvider, getWebOrigins} from "./utils/betterAuthConfig";
+import {
+  buildBetterAuthConfig,
+  getAuthProvider,
+  getFrontendUrl,
+  getWebOrigins,
+} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
@@ -178,7 +184,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     const terraApp = new TerrenoApp({
       accessControl: access,
       authOptions: {
-        publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+        publicAppUrl: getFrontendUrl(),
         sendMail: async (message) => {
           await getCommsService().sendMail(message);
         },
@@ -426,6 +432,9 @@ export const start = async (skipListen = false): Promise<express.Application> =>
         })
       )
       .register(new AuditApp())
+      // Platform account recovery at /users/:id/security/* (operators and superadmins).
+      // Needs AuditApp: every recovery action writes a security AuditEvent.
+      .register(new AccountSecurityApp({accessControl: access}))
       .register(new AIAdminApp());
 
     const exampleJobsApp = createExampleJobsApp({accessControl: access});

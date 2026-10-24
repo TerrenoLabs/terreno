@@ -74,6 +74,8 @@ export const terrenoStatements = {
     "impersonate",
     "setPassword",
     "updateIdentity",
+    "manageSecurity",
+    "issueSignInLink",
   ],
 } as const;
 
@@ -141,6 +143,9 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
     read: "View trace detail and run trace test helpers",
   },
   user: {
+    issueSignInLink:
+      "Create a sign-in account for a legacy user and hand them a set-password link (AccountSecurityApp)",
+    manageSecurity: "View any user's sign-in methods and run account recovery (AccountSecurityApp)",
     updateIdentity:
       "Change another user's email, disabled flag, email verification, or linked Better Auth and GitHub ids",
   },

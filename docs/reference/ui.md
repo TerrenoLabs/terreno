@@ -5,13 +5,14 @@ React Native UI component library (a large component library). Layout (Box, Page
 ## Key exports
 
 - Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
-- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`
+- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`, `OtpField`, `FormContainer`
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
-- Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
+- Authentication: `SocialLoginButton`, `LoginScreen`, `TwoFactorChallengeScreen`, `SignUpScreen`
+- Account security: `LinkedAccountsCard`, `PasswordCard`, `PasskeysCard`, `SessionsCard`, `TwoFactorSettingsCard`, `AccountSecurityScreen`
 - Theming: `TerrenoProvider`, `useTheme`, custom icon registry (`icons` prop)
 - **Type re-exports:** `StyleProp`, `ViewStyle` (re-exported from react-native to avoid version conflicts)
 
@@ -376,6 +377,102 @@ overrides it:
 | Error | `{testID}.error` |
 | Helper | `{testID}.helper` |
 | Show/hide toggle | `{testID}.visibility-toggle` |
+
+### TextField accessibilityLabel
+
+`accessibilityLabel` sets the input's accessible name (`aria-label`). Without it screen readers
+announce "Text input field", so pass it when the visible `title` is missing or not specific.
+
+### TextField autoComplete
+
+`autoComplete` is the field's autofill hint: `"on"`, `"off"`, `"username"`, `"email"`,
+`"current-password"`, `"new-password"`, `"one-time-code"`, or `"username webauthn"`.
+
+On web it is written to the input's `autocomplete` attribute. On native it is sent as React
+Native's `autoComplete` (Android's autofill hint) with the matching iOS `textContentType`:
+
+| `autoComplete` | Android `autoComplete` | iOS `textContentType` |
+| --- | --- | --- |
+| `"username"`, `"username webauthn"` | `username` | `username` |
+| `"email"` | `email` | `emailAddress` |
+| `"current-password"` | `current-password` (password) | `password` |
+| `"new-password"` | `new-password` (new password) | `newPassword` (iOS offers a strong password) |
+| `"one-time-code"` | `one-time-code` (SMS code) | `oneTimeCode` |
+| `"off"` | `off` | `none` |
+| `"on"` or unset | not set | from `type`: `emailAddress` for `email`, `password` for `password`, `username` for `username`, else `none` |
+
+Passkey autofill (`"username webauthn"`) is web only; native gets the plain username hint.
+
+- `"off"` turns autofill off for the field. Use `"username"` on the email field of a login or
+  sign-up form, so password managers save it with the password.
+- `Field type="password"` defaults to `"current-password"`. Pass `autoComplete="new-password"`
+  (directly or through `TapToEdit`) on fields that set a new password, so password managers
+  offer to generate one.
+- `SignUpScreen` password fields default to `"new-password"`; `LoginScreen` password fields
+  default to `"current-password"`. Both default the email field to `"username"`.
+- `"username webauthn"` asks the browser to offer saved passkeys in the field's autofill;
+  `LoginScreen` sets it on the email field when `passkeyAutofill` is on.
+
+### FormContainer
+
+Groups a form's fields. On web it renders a real `<form>` around them, so browsers and password
+managers pair a username with its password, autofill saved credentials, and offer to save new
+ones. react-native-web never renders a `<form>` on its own, and Chrome logs "Password field is not
+contained in a form" for every password input outside one. On native it renders a `Box`.
+
+``````typescript
+import {Button, FormContainer, type FormContainerHandle, TextField} from "@terreno/ui";
+
+const formRef = useRef<FormContainerHandle>(null);
+const passwordRef = useRef<TextInput | null>(null);
+
+<FormContainer accessibilityLabel="Sign in" gap={4} onSubmit={signIn} ref={formRef}>
+  <TextField
+    autoComplete="username"
+    blurOnSubmit={false}
+    onChange={setEmail}
+    onEnter={() => passwordRef.current?.focus()}
+    returnKeyType="next"
+    title="Email"
+    type="email"
+    value={email}
+  />
+  <TextField
+    autoComplete="current-password"
+    inputRef={(ref) => {
+      passwordRef.current = ref;
+    }}
+    onChange={setPassword}
+    onEnter={() => formRef.current?.requestSubmit()}
+    returnKeyType="go"
+    title="Password"
+    type="password"
+    value={password}
+  />
+  <Button onClick={() => formRef.current?.requestSubmit()} text="Log In" />
+</FormContainer>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `onSubmit` | `() => void \| Promise<void>` | Called on `ref.requestSubmit()` and, on web, when the browser submits the form. The page reload is always prevented. |
+| `ref` | `Ref<FormContainerHandle>` | `requestSubmit(): Promise<void>`. On web it calls the form element's `requestSubmit()`, so the browser fires a real submit event (password managers watch for it to offer "Save password") and the submit handler calls `onSubmit`; it resolves when `onSubmit` settles. On native, and in browsers without `requestSubmit`, it calls `onSubmit` directly. |
+| `username` | `string` | For forms without a username field, such as change password: on web a hidden, read-only `autocomplete="username"` input names the account so password managers update its saved password. Ignored on native. |
+| `accessibilityLabel` | `string` | Names the form; on web a named form is a `form` landmark. |
+| Box layout props | | `gap`, `padding`, `width`, and the rest of `Box`'s layout props apply to the inner `Box`. |
+
+The `<form>` uses `display: contents` and `noValidate`, so it adds no layout box and no browser
+validation bubbles. `TextField` stops the browser's implicit Enter submission (it handles Enter
+through `onEnter`), so Enter never submits twice: give earlier fields `returnKeyType="next"`, an
+`onEnter` that focuses the next field, and `blurOnSubmit={false}`, and call
+`ref.requestSubmit()` from the last field and the submit button. A `FormContainer` inside another
+one renders a `Box`, since HTML forms cannot nest; its `requestSubmit` calls its own `onSubmit`.
+
+`LoginScreen`, `SignUpScreen`, `PasswordCard`, the password step of `TwoFactorSettingsCard`, and
+`GPTChat`'s API key modal already use it.
+
+**Test IDs:** the form is `{testID}` on web and the `Box` is `{testID}` on native; the hidden
+username input is `{testID}-username`.
 
 ### DropdownPanel
 
@@ -974,14 +1071,19 @@ Branded social login buttons for OAuth authentication with Google, GitHub, and A
 import {SocialLoginButton} from "@terreno/ui";
 import {authClient} from "@/store/authClient";
 
+// The Better Auth client resolves {data, error} rather than throwing, and SocialLoginButton only
+// logs a rejected onPress, so show the error yourself.
 <SocialLoginButton
   provider="google"  // "google" | "github" | "apple"
   variant="primary"  // "primary" | "outline"
   onPress={async () => {
-    await authClient.signIn.social({
+    const {error} = await authClient.signIn.social({
       provider: "google",
       callbackURL: "yourapp://auth/callback",
     });
+    if (error) {
+      setError(error.message ?? "Couldn't sign in with Google.");
+    }
   }}
   loading={isLoading}
   fullWidth
@@ -992,29 +1094,211 @@ import {authClient} from "@/store/authClient";
 - Proper brand colors for each provider (follows brand guidelines)
 - Built-in icons (FontAwesome 6)
 - Primary and outline variants
-- Loading states with spinner
+- Loading states with spinner; the spinner follows later changes to the `loading` prop
 - Automatic text: "Continue with {Provider}"
 
 ### LoginScreen
 
-Complete login screen with email/password and optional social providers.
+Presentational login screen: email/password fields, branded and generic OAuth providers,
+passkeys, a last-used badge, one-tap "Continue" cards, and a notice slot. It renders the methods
+and accounts it is given and reports presses through callbacks; it never calls an auth client
+itself. Without the optional props below it renders the plain email/password form.
 
 ``````typescript
 import {LoginScreen} from "@terreno/ui";
-import {authClient} from "@/store/authClient";
+
+// The Better Auth client resolves {data, error} rather than throwing, and LoginScreen does not
+// catch a rejected onSubmit, so put the error in state and pass it as `error`.
+// signInWithSocial and the other handlers below are app helpers that do the same.
+const [error, setError] = useState<string | undefined>(undefined);
 
 <LoginScreen
-  onEmailLogin={async ({email, password}) => {
-    await authClient.signIn.email({email, password});
+  error={error}
+  fields={[
+    {name: "email", label: "Email", type: "email", required: true},
+    {name: "password", label: "Password", type: "password", required: true},
+  ]}
+  onSubmit={async ({email = "", password = ""}) => {
+    setError(undefined);
+    const {error: signInError} = await authClient.signIn.email({email, password});
+    if (signInError) {
+      setError(signInError.message ?? "Couldn't sign in.");
+    }
   }}
-  onSocialLogin={async (provider) => {
-    await authClient.signIn.social({provider, callbackURL: "yourapp://auth"});
-  }}
-  socialProviders={["google", "github", "apple"]}
-  onForgotPassword={() => navigation.navigate("ForgotPassword")}
-  onSignUp={() => navigation.navigate("SignUp")}
+  oauthProviders={[
+    {provider: "google", onPress: () => signInWithSocial("google")},
+    {provider: "github", onPress: () => signInWithSocial("github"), loading: isGitHubLoading},
+  ]}
+  genericProviders={[
+    {id: "mock-oidc", label: "Mock OIDC", iconName: "key", onPress: () => signInWithSocial("mock-oidc")},
+  ]}
+  lastUsedMethod="github"            // provider id, "email", or "passkey"
+  onPasskeyPress={signInWithPasskey}
+  passkeyAutofill                    // web: email field gets autocomplete="username webauthn"
+  currentSessions={deviceSessions}   // signed-in sessions on this device
+  rememberedAccounts={remembered}    // accounts remembered from earlier sign-ins
+  onContinue={(account, source) => (source === "session" ? switchTo(account) : reauth(account))}
+  onForget={(account) => forget(account.id)}
+  notice={{tone: "warning", text: "Sign in with Google to link GitHub.", actionLabel: "Continue with Google", onAction: () => signInWithSocial("google")}}
+  onForgotPassword={() => router.push("/forgot-password")}
+  onSignUpPress={() => router.push("/signup")}
 />
 ``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. An empty array leaves out the whole form block: fields, the Log In button, the forgot-password link, and the "Or log in with email" dividers, for apps without email and password sign-in. |
+| `oauthProviders` | `OAuthProviderConfig[]` | Branded Google, GitHub, and Apple buttons (`SocialLoginButton`). |
+| `genericProviders` | `GenericOAuthProviderConfig[]` | Providers without a brand, such as a generic OIDC provider: `{id, label, onPress, loading?, disabled?, iconName?}`. Each renders an outline button "Continue with {label}" after the branded ones. |
+| `lastUsedMethod` | `string` | The method this device signed in with last. It gets a "Last used" badge. A provider moves above the form and to the front of the provider list; `"passkey"` moves the passkey button above the form; `"email"` badges the form in place. A method the screen does not offer is ignored. |
+| `lastUsedLabel` | `string` | Badge text. Defaults to "Last used". |
+| `currentSessions` | `LoginAccountOption[]` | Sessions already signed in on this device. Each renders a "Continue" card; one tap calls `onContinue(account, "session")`. |
+| `rememberedAccounts` | `LoginAccountOption[]` | Accounts remembered on this device. Each renders a "Continue" card (`onContinue(account, "remembered")`) and, with `onForget`, a Forget button. |
+| `onContinue` / `onForget` | callbacks | Cards render only when `onContinue` is set. Sessions never get a Forget button. |
+| `onPasskeyPress` | `() => void \| Promise<void>` | Shows a "Sign in with a passkey" button (text via `passkeyButtonText`). |
+| `passkeyAutofill` | `boolean` | On web, sets the email field's `autocomplete` to `username webauthn` so browsers offer saved passkeys (conditional mediation). Ignored on native. |
+| `notice` | `LoginNotice` | `{tone: "info" \| "warning", text, actionLabel?, onAction?}`, shown above the form; a warning is `role="alert"` (announced at once), info is `role="status"`. |
+| `initialValues` | `Record<string, string>` | Values the form starts with, keyed by field `name`. Passing a new object later replaces those fields and keeps what the user typed in the others, so a "Continue" card can prefill the email. |
+
+Accessibility: the button a "Last used" badge marks gets the badge in its accessible name
+("Continue with GitHub, last used"; for email, the Log In button). A `warning` notice has
+`role="alert"` and an `info` notice `role="status"`. Session cards read "Signed in on this
+device · {method}".
+
+Keyboard and autofill: the fields sit in a `FormContainer` (`{testID}-form`), so on web they are
+in a real `<form>` that password managers recognize. The email field defaults to
+`autoComplete="username"` (or `"username webauthn"` with `passkeyAutofill` on web) and password
+fields to `"current-password"`; each input's accessible name is its field `label`. Enter in a
+field moves focus to the next field (`returnKeyType="next"`); Enter in the last field
+(`returnKeyType="go"`) submits once when Log In is enabled, and does nothing while `loading` or
+while a required field is empty. Enter and the Log In button both submit through the form's
+`requestSubmit()`, so browsers see a real submit and offer to save the password. A second submit
+while `onSubmit` is pending is ignored. Tab order on web follows the screen: email, password, the
+password's show/hide button, Log In, forgot password, sign up, then providers.
+
+`LoginAccountOption` is `{id, name?, email?, image?, method}`. Name, email, and image are
+optional because apps remember only the method by default; a card without them reads
+"Continue with {method}". Show identity only when the app opted in to remembering it.
+
+**Test IDs** (with the default `testID="login-screen"`):
+
+| Element | testID |
+| --- | --- |
+| Branded or generic provider button | `login-screen-oauth-{provider}` (e.g. `login-screen-oauth-github`, `login-screen-oauth-mock-oidc`) |
+| Last-used badge | `login-screen-last-used-{method}` |
+| Continue card (sessions first, then remembered accounts) | `login-screen-continue-{index}` |
+| Forget button | `login-screen-forget-{index}` (same index as its card) |
+| Passkey button | `login-screen-passkey-button` |
+| Notice / its action | `login-screen-notice` / `login-screen-notice-action` |
+| Continue-as card list | `login-screen-accounts` |
+
+`OAuthButtons`, which `LoginScreen` and `SignUpScreen` use, takes the same `genericProviders`, a
+`lastUsed={{provider, label?, testID?}}` badge, and `dividerPosition` (`"above"` by default,
+`"below"` when the buttons sit above a form, `"none"` for no divider).
+
+### OtpField
+
+One-time code input with one cell per digit. Typing fills the cells left to right, pasting or
+autofilling a whole code into any cell fills every cell, and backspace in an empty cell deletes
+the previous digit and moves back. `onComplete(code)` fires when every cell holds a digit.
+Non-digits are dropped, so a pasted `123 456` or `123-456` works.
+
+``````typescript
+import {OtpField} from "@terreno/ui";
+
+<OtpField
+  autoFocus
+  length={6}                       // default 6
+  value={code}                     // optional; omit to let the field keep its own state
+  onChange={setCode}
+  onComplete={(code) => verifyTotp({code})}
+  errorText={error}
+  testID="verify-otp"
+/>
+``````
+
+Each cell is its own input. Every cell carries the one-time-code autofill hint
+(`autocomplete="one-time-code"` on web, `textContentType="oneTimeCode"` on iOS, `"sms-otp"` on
+Android) and a numeric keyboard, and a full-length code that lands in any cell fills the whole
+field, so platform code suggestions work whichever cell has focus. A full code pasted into a
+filled cell drops that cell's old digit. Tapping a cell past the first empty one moves focus back
+to that empty cell. Only the cell that takes the next digit is a tab stop (roving `tabIndex`), so
+Tab and Shift+Tab move past the field in one step.
+
+`onEnter(code)` is called with the digits entered so far when the user presses Enter in a cell
+(the cells' `enterKeyHint` is `"done"`).
+
+Accessibility: the cells sit in a `role="group"` named by `accessibilityLabel` (default
+"Verification code"); each cell is labelled "Digit k of N". With `errorText`, cells get
+`aria-invalid`.
+
+**Test IDs:** the group is `{testID}`; cells are `{testID}-cell-{k}` with `k` from 1 to
+`length`; error, title, and helper are `{testID}-error`, `{testID}-title`, `{testID}-helper`.
+
+### TwoFactorChallengeScreen
+
+Presentational second sign-in step for two-factor authentication. TOTP mode shows an `OtpField`
+and submits on its own once the code is complete; a toggle switches to a backup-code text field
+(backup codes contain letters). It reports `onSubmit({code, kind, trustDevice})` and never calls
+an auth client itself.
+
+``````typescript
+import {TwoFactorChallengeScreen} from "@terreno/ui";
+
+// The Better Auth client resolves {data, error} rather than throwing; show its error through the
+// `error` prop (a rejected onSubmit only clears the code).
+const [error, setError] = useState<string | undefined>(undefined);
+
+<TwoFactorChallengeScreen
+  error={error}                    // e.g. "That code didn't work"; a new error clears the code
+  loading={isVerifying}
+  onCancel={() => router.replace("/login")}
+  onSubmit={async ({code, kind, trustDevice}) => {
+    setError(undefined);
+    const result =
+      kind === "totp"
+        ? await authClient.twoFactor.verifyTotp({code, trustDevice})
+        : await authClient.twoFactor.verifyBackupCode({code, trustDevice});
+    if (result.error) {
+      setError(result.error.message ?? "That code didn't work.");
+    }
+  }}
+  trustDeviceDays={30}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `onSubmit` | `(values: TwoFactorChallengeSubmission) => void \| Promise<void>` | Receives `{code, kind: "totp" \| "backup", trustDevice}`. Backup codes are trimmed. Not called while `loading` or while an earlier call is still pending. A rejection is caught, logged with `console.warn`, and clears the code. |
+| `error` | `string` | Shown under the form with `role="alert"`. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
+| `loading` | `boolean` | Disables every control and shows a spinner on Verify. |
+| `trustDeviceDays` | `number` | Shows a "Don't ask again on this device for N days" checkbox. Unset hides it and `trustDevice` is always `false`. Better Auth trusts a device for 30 days by default. |
+| `onCancel` / `cancelText` | `() => void` / `string` | Shows a "Use another method" button (custom text via `cancelText`). |
+| `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
+| `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. |
+| `autoFocus` | `boolean` | Focuses the first code cell on mount. Defaults to `true`. Set `false` where the screen is a preview rather than the page's task, since the focus scrolls the page to the cells; a rejected code still refocuses the first cell. |
+| `title` / `logo` | `string` / `ReactNode` | Heading (default "Two-factor authentication") and an optional logo. |
+
+Enter in a code cell submits a complete code (the same guard as Verify applies); Enter in the
+backup-code field submits it.
+
+Accessibility: the trust-device control is a `role="checkbox"` with `aria-checked` and its full
+sentence as the accessible name, and toggles with Space or Enter on web; the error is
+`role="alert"`; the code cells are labelled "Digit k of N"; the backup input is named "Backup
+code".
+
+**Test IDs** (with the default `testID="two-factor-challenge"`):
+
+| Element | testID |
+| --- | --- |
+| Screen root | `two-factor-challenge` |
+| TOTP cells | `two-factor-challenge-otp-cell-{k}` (1-based) |
+| Backup code input | `two-factor-challenge-backup-input` |
+| TOTP / backup toggle | `two-factor-challenge-backup-toggle` |
+| Trust-device checkbox | `two-factor-challenge-trust-device` |
+| Error | `two-factor-challenge-error` |
+| Verify button | `two-factor-challenge-submit` |
+| Use another method | `two-factor-challenge-cancel` |
 
 ### SignUpScreen
 
@@ -1024,21 +1308,753 @@ Complete signup screen with email/password and optional social providers.
 import {SignUpScreen} from "@terreno/ui";
 import {authClient} from "@/store/authClient";
 
+// The Better Auth client resolves {data, error} rather than throwing, and SignUpScreen does not
+// catch a rejected onSubmit, so put the error in state and pass it as `error`.
+const [error, setError] = useState<string | undefined>(undefined);
+
+const signUpWithGoogle = async (): Promise<void> => {
+  setError(undefined);
+  const {error: socialError} = await authClient.signIn.social({
+    provider: "google",
+    callbackURL: "yourapp://auth",
+  });
+  if (socialError) {
+    setError(socialError.message ?? "Couldn't sign up with Google.");
+  }
+};
+
 <SignUpScreen
-  onEmailSignUp={async ({email, password, name}) => {
-    await authClient.signUp.email({email, password, name});
+  error={error}
+  fields={[
+    {name: "name", label: "Name", required: true},
+    {name: "email", label: "Email", type: "email", required: true},
+    {name: "password", label: "Password", type: "password", required: true},
+  ]}
+  onSubmit={async ({name = "", email = "", password = ""}) => {
+    setError(undefined);
+    const {error: signUpError} = await authClient.signUp.email({email, password, name});
+    if (signUpError) {
+      setError(signUpError.message ?? "Couldn't create your account.");
+    }
   }}
-  onSocialLogin={async (provider) => {
-    await authClient.signIn.social({provider, callbackURL: "yourapp://auth"});
-  }}
-  socialProviders={["google", "github"]}
-  onSignIn={() => navigation.navigate("Login")}
-  requireName
-  requireTermsAcceptance
+  oauthProviders={[{provider: "google", onPress: signUpWithGoogle}]}
+  onLoginPress={() => router.push("/login")}
 />
 ``````
 
+Keyboard and autofill: the fields sit in a `FormContainer` (`{testID}-form`). The email field
+defaults to `autoComplete="username"` and password fields to `"new-password"`, so password
+managers offer a strong password and save it with the email; each input's accessible name is its
+field `label`. Enter moves to the next field and submits from the last one once Sign Up is
+enabled (required fields filled, password requirements met), through the form's
+`requestSubmit()`. A second submit while `onSubmit` is pending is ignored.
+
 **Learn more:** [Configure Better Auth](../how-to/configure-better-auth.md)
+
+## Account security
+
+Presentational cards for an account security screen, and `AccountSecurityScreen`, which
+composes them (see [AccountSecurityScreen](#accountsecurityscreen)). Each card takes plain data
+and reports actions through callbacks; none of them calls an auth client. Each card's title
+is a level 2 heading and `AccountSecurityScreen`'s title is level 1, through `Heading`'s `level`
+prop: with `level` set, `Heading` renders `role="heading"` and `aria-level` (an `<h1>`–`<h6>`
+on web, the header accessibility role on native); without it, `Heading` stays plain text. The data types are built from
+Better Auth's responses, but they are not a one-to-one copy: `listAccounts()` returns `id`,
+`providerId`, `accountId` and `createdAt` per account and no email, so a connected screen renames
+`createdAt` to `linkedAt` and fills `email` from elsewhere (the session user, or a per-account
+info call) when it wants one shown. Dates may be `Date` objects (the Better Auth client parses
+them) or ISO 8601 strings; Luxon formats both.
+
+**Callbacks must throw to show an error.** Each card catches a rejected callback and shows its
+message as a `role="alert"` card error. The Better Auth client does not reject on failure: its
+calls resolve `{data, error}`. Unwrap every call, as the examples below do:
+
+``````typescript
+const {error} = await authClient.unlinkAccount({accountId: account.id});
+if (error) {
+  throw new Error(error.message ?? "Couldn't unlink that account.");
+}
+``````
+
+Shared types (exported from the package root):
+
+| Type | Shape |
+| --- | --- |
+| `LinkedAccount` | `{id, providerId, accountId?, email?, linkedAt?}`. `id` is Better Auth's own account row id, the value `unlinkAccount({accountId})` takes; `accountId` is the id at the provider (display only). A password is an account with `providerId: "credential"` (`CREDENTIAL_PROVIDER_ID`). `linkedAt` (`string \| Date`) is Better Auth's `createdAt`. |
+| `LinkableProvider` | `{id, label?, iconName?}`. Branded ids (`google`, `github`, `apple`) get their brand name and icon; other ids show `label` (or the id) with a key icon. |
+| `AccountPasskey` | `{id, name?, authenticatorName?, createdAt?, lastUsedAt?, backedUp?}`. A subset of `@better-auth/passkey`'s `Passkey`, so `authClient.passkey.listUserPasskeys()` items pass as is. `authenticatorName` labels an unnamed passkey; a connected screen can fill it with `getAuthenticatorName(aaguid)` from `@better-auth/passkey` (ui does not depend on it). Better Auth stores no last-used time; pass `lastUsedAt` only when the app records one. |
+| `AccountSession` | `{id, token?, userAgent?, ipAddress?, location?, createdAt?, updatedAt?, expiresAt?}`. A subset of Better Auth's session, so `listSessions()` items pass as is. `location` is for a place name the app looks up; Better Auth has none. `updatedAt` moves only once per `session.updateAge` (a day by default), so the card labels it "Last refreshed", not "Last active". |
+| `TwoFactorEnrollment` | `{totpURI, backupCodes}`: the TOTP branch of Better Auth's `twoFactor.enable()` data. `enable()` resolves `{method: "otp"}` \| `{method: "totp", totpURI, backupCodes}`, so `onStartEnroll` narrows it with `"totpURI" in data` (see the example below). |
+
+`hasPasswordCredential(accounts)` returns whether the user has a password.
+`parseUserAgent(userAgent)` returns `{browser?, os?, deviceType}` (`deviceType` is `desktop`,
+`mobile`, `tablet` or `unknown`) for common browsers and for the HTTP clients React Native apps
+send (`CFNetwork`/`Darwin` reads as "App" on iOS, `okhttp` as "App" on Android). Two limits
+of user agent sniffing: iPadOS Safari asks for desktop sites by default and reports itself as
+`Macintosh`, so it reads as Safari on macOS; and a macOS native app also sends
+`CFNetwork`/`Darwin`, so it reads as an iOS app.
+`describeUserAgent(userAgent)` turns that into "Chrome on macOS", whichever part is known, or
+"Unknown device". Neither adds a dependency.
+
+### LinkedAccountsCard
+
+Lists every linked account (with its email, when given, and linked date) under the providers
+the app offers, with a Link row for each offered provider that has no account. Each linked
+account is its own row, so two Google accounts are each unlinkable. A linked account whose
+provider the app no longer offers still shows as a linked row. The password account is not a row (see PasswordCard), but it counts as a
+sign-in method.
+
+``````typescript
+import {LinkedAccountsCard} from "@terreno/ui";
+
+<LinkedAccountsCard
+  accounts={accounts}                      // every account, including "credential"
+  providers={[{id: "google"}, {id: "github"}, {id: "mock-oidc", label: "Company SSO"}]}
+  otherMethodCount={passkeys.length}       // passkeys count as sign-in methods
+  onLink={async (providerId) => {
+    const {error} = await authClient.linkSocial({provider: providerId, callbackURL});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't link that account.");
+    }
+  }}
+  onUnlink={async (_providerId, account) => {
+    const {error} = await authClient.unlinkAccount({accountId: account.id});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't unlink that account.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `accounts` | `LinkedAccount[]` | Every linked account, including the `credential` password account. |
+| `providers` | `LinkableProvider[]` | Row order. A provider gets one row per linked account, or one Link row when it has none. |
+| `onLink` | `(providerId) => void \| Promise<void>` | Link button on unlinked rows. The row shows a spinner and every row is disabled until the promise settles. A rejection's message shows as the card error. |
+| `onUnlink` | `(providerId, account) => void \| Promise<void>` | Unlink button on linked rows. Pressing it opens a confirm `Modal`; the callback runs only after the user confirms, with that row's account. Pass `account.id` to `unlinkAccount({accountId})`. Same spinner and error handling as `onLink`. |
+| `otherMethodCount` | `number` | Sign-in methods that are not accounts, such as passkeys. Defaults to 0. Pass 0 unless the server sets `allowUnlinkingAll` (see below). |
+| `canUnlinkLast` | `boolean` | Allows unlinking the last sign-in method. Defaults to `false`. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every row, for example while accounts load. |
+| `title` / `description` | `string` | Heading (default "Linked accounts") and the text under it. |
+
+**Last sign-in method.** The card counts `accounts.length + otherMethodCount`. When that is 1
+and `canUnlinkLast` is false, the only linked provider's Unlink is disabled and a sentence under
+the row explains why (`{testID}-last-method-{id}`). Passing the `credential` account is what
+lets a user with a password unlink their only provider. Better Auth enforces its own version of
+the rule: `unlinkAccount` refuses a user's last account (passkeys do not count) unless
+`account.accountLinking.allowUnlinkingAll` is set. So only pass the passkey count as
+`otherMethodCount` when the server allows unlinking every account; otherwise pass 0 and the card
+matches the server.
+
+Accessibility: Link and Unlink are named after their provider and, when known, the account's
+email ("Link GitHub", "Unlink Google (ada@example.com)"); a disabled Unlink has a visible
+explanation; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="linked-accounts-card"`). `{id}` is the provider id for an
+unlinked row and for a provider's first linked account; a provider's later accounts add `-2`,
+`-3`, and so on (`linked-accounts-card-unlink-google-2`), in `accounts` order:
+
+| Element | testID |
+| --- | --- |
+| Card root | `linked-accounts-card` |
+| Row / name / status | `linked-accounts-card-row-{id}`, `-name-{id}`, `-status-{id}` |
+| Link / Unlink buttons | `linked-accounts-card-link-{id}`, `linked-accounts-card-unlink-{id}` |
+| Last-method explanation | `linked-accounts-card-last-method-{id}` |
+| Confirm modal, confirm, cancel | `linked-accounts-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `linked-accounts-card-error` |
+
+### PasswordCard
+
+Shows "Change password" (current, new and confirm, plus an optional "Sign out of other devices"
+checkbox) when the user has a password, and "Set a password" (new and confirm) for a user who
+only signs in with a provider. It checks the minimum length and the confirmation inline before
+calling `onSubmit`.
+
+``````typescript
+import {hasPasswordCredential, PasswordCard} from "@terreno/ui";
+
+<PasswordCard
+  hasPassword={hasPasswordCredential(accounts)}
+  onSubmit={async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
+    if (mode === "change") {
+      const {error} = await authClient.changePassword({
+        currentPassword: currentPassword ?? "",
+        newPassword,
+        revokeOtherSessions,
+      });
+      if (error) {
+        throw new Error(error.message ?? "Couldn't change your password.");
+      }
+    } else {
+      await setPassword({newPassword});      // Better Auth's setPassword is server-only
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `hasPassword` | `boolean` | `true` shows change mode; `false` shows set mode. When it flips (after a first password is set), the form clears. |
+| `onSubmit` | `(values: PasswordCardSubmission) => Promise<void>` | Receives `{mode, currentPassword?, newPassword, revokeOtherSessions}`. `currentPassword` is present only in change mode; `revokeOtherSessions` is always `false` in set mode. Resolving clears the form and shows a success message (`role="status"`). Rejecting keeps the form and shows the error's message (`role="alert"`). |
+| `showRevokeOtherSessions` | `boolean` | Shows the sign-out checkbox in change mode. Defaults to `true`. |
+| `minLength` | `number` | Minimum new-password length. Defaults to 8, Better Auth's default. |
+| `error` | `string` | Error with `role="alert"`; overrides a rejection message. |
+| `loading` | `boolean` | Disables the form and shows a spinner on the submit button. |
+| `username` | `string` | The signed-in user's email or username. On web it goes in a hidden `autocomplete="username"` field of the card's form, so password managers update that account's saved password. `useAccountSecurity` passes the session user's email. |
+
+Inline errors: "Enter your current password.", "Use at least N characters.", and "Passwords
+don't match." show under their field after a submit attempt and clear when that field changes.
+A failed attempt also focuses the first invalid field and shows a `role="alert"` summary ("Fix the
+2 highlighted fields.", `{testID}-validation-error`) that updates as fields are fixed. Enter in
+the current or new password field moves to the next field; Enter in the confirm field submits
+through the card's `FormContainer` (`{testID}-form`), like the submit button. A second submit
+while `onSubmit` is pending is ignored.
+
+Accessibility: inputs are named "Current password", "New password" and "Confirm new password";
+on web they carry `autocomplete="current-password"` / `"new-password"` so password managers fill
+and save correctly; the sign-out control is a `role="checkbox"` that toggles with Space or Enter.
+
+**Test IDs** (with the default `testID="password-card"`):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `password-card`, `password-card-title` |
+| Current / new / confirm inputs | `password-card-current`, `password-card-new`, `password-card-confirm` |
+| Sign-out checkbox | `password-card-revoke-other-sessions` |
+| Submit | `password-card-submit` |
+| Validation summary | `password-card-validation-error` |
+| Error / success | `password-card-error`, `password-card-success` |
+
+### PasskeysCard
+
+Lists the user's passkeys, each with its name (else `authenticatorName`, else "Unnamed passkey"), the date it
+was added, the date it was last used (when given), and a "Synced" badge when `backedUp` is true.
+Add, Rename and Remove each open a dialog. A device that can't create passkeys gets an
+explanation instead of the Add button.
+
+``````typescript
+import {PasskeysCard} from "@terreno/ui";
+
+<PasskeysCard
+  passkeys={passkeys}                      // authClient.passkey.listUserPasskeys() data
+  supported={typeof window !== "undefined" && "PublicKeyCredential" in window}
+  onAdd={async (name) => {
+    const {error} = await authClient.passkey.addPasskey({name});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't add a passkey.");
+    }
+  }}
+  onRename={async (id, name) => {
+    const {error} = await authClient.passkey.updatePasskey({id, name});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't rename that passkey.");
+    }
+  }}
+  onRemove={async (passkey) => {
+    const {error} = await authClient.passkey.deletePasskey({id: passkey.id});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't remove that passkey.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `passkeys` | `AccountPasskey[]` | One row per passkey, keyed by `id`. An empty list shows "You haven't added a passkey yet." |
+| `onAdd` | `(name?) => void \| Promise<void>` | Add opens a dialog with an optional name field; Continue calls `onAdd` with the trimmed name, or `undefined` when blank. The Add button shows a spinner and every row is disabled until the promise settles. A rejection (for example, the user cancelling the browser prompt) shows its message as the card error. |
+| `onRename` | `(id, name) => void \| Promise<void>` | Rename opens a dialog with the current name; Save is disabled while the name is blank or unchanged and calls `onRename` with the trimmed name. Same pending and error handling. |
+| `onRemove` | `(passkey) => void \| Promise<void>` | Remove opens a confirm `Modal`; the callback runs only after the user confirms. The row's Remove shows a spinner. |
+| `supported` | `boolean` | `false` hides Add and explains that this device or browser can't create passkeys. Existing passkeys can still be renamed and removed. Defaults to `true`. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every button, for example while passkeys load. |
+| `title` / `description` | `string` | Heading (default "Passkeys") and the text under it. |
+
+A button whose callback is not passed is not rendered.
+
+Accessibility: Rename and Remove are named after their passkey ("Rename passkey Work laptop",
+"Remove passkey Work laptop"); dialog inputs are named "Passkey name"; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="passkeys-card"`; `{id}` is the passkey id):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `passkeys-card`, `passkeys-card-title` |
+| Row / name / dates / synced badge | `passkeys-card-row-{id}`, `-name-{id}`, `-status-{id}`, `-synced-{id}` |
+| Rename / Remove buttons | `passkeys-card-rename-{id}`, `passkeys-card-remove-{id}` |
+| Add button | `passkeys-card-add` |
+| Empty state / unsupported explanation | `passkeys-card-empty`, `passkeys-card-unsupported` |
+| Add dialog, name input, Continue, Cancel | `passkeys-card-add-dialog`, `-add-dialog-name`, `-add-dialog-submit`, `-add-dialog-cancel` |
+| Rename dialog, name input, Save, Cancel | `passkeys-card-rename-dialog`, `-rename-dialog-name`, `-rename-dialog-submit`, `-rename-dialog-cancel` |
+| Remove confirm, confirm, cancel | `passkeys-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `passkeys-card-error` |
+
+### SessionsCard
+
+Lists the user's signed-in sessions. Each row shows the browser and OS parsed from the session's
+user agent ("Safari on iOS") with a desktop, phone or tablet icon, the location and IP address
+when known, "Signed in 3 days ago" from `createdAt`, and "Last refreshed 2 hours ago" from
+`updatedAt` (Luxon `toRelative`; anything under a minute old or in the future reads "just now").
+Better Auth refreshes `updatedAt` only once per `session.updateAge` (a day by default), so it is
+not shown as a live "last active" time. The current session is listed first, marked "This
+device", reads "Active now", and has no Sign out button: sign the current device out with the
+app's own sign-out action. The rest follow, most recently refreshed first. Without `now`, the card
+recomputes relative times every minute.
+
+``````typescript
+import {SessionsCard} from "@terreno/ui";
+
+<SessionsCard
+  sessions={sessions}                      // authClient.listSessions() data
+  currentSessionId={session.data?.session.id}
+  onRevoke={async (revoked) => {
+    if (!revoked.token) {
+      throw new Error("This session can't be signed out.");
+    }
+    const {error} = await authClient.revokeSession({token: revoked.token});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't sign out that session.");
+    }
+  }}
+  onRevokeOthers={async () => {
+    const {error} = await authClient.revokeOtherSessions();
+    if (error) {
+      throw new Error(error.message ?? "Couldn't sign out your other sessions.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `sessions` | `AccountSession[]` | One row per session, keyed by `id`. |
+| `currentSessionId` / `currentSessionToken` | `string` | Identify the current session by `id` or by `token`; either match marks the row. |
+| `onRevoke` | `(session) => void \| Promise<void>` | Sign out on every non-current row. No confirm. The row shows a spinner and every other button is disabled until the promise settles; a rejection's message shows as the card error. |
+| `onRevokeOthers` | `() => void \| Promise<void>` | "Sign out everywhere else" opens a confirm `Modal` that names how many sessions it ends; the callback runs after the user confirms. Disabled, with "You're not signed in anywhere else.", when no other session exists. |
+| `now` | `Date` | The time relative times are measured from. When omitted, the card uses the current time and recomputes it every 60 seconds (the interval is cleared on unmount or when `now` is passed); pass it in tests and screenshots. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables every button, for example while sessions load. |
+| `title` / `description` | `string` | Heading (default "Where you're signed in") and the text under it. |
+
+Accessibility: each Sign out button names its session and when it signed in ("Sign out Safari
+on iOS, signed in 3 days ago"), so two sessions on the same browser stay distinguishable; "This device" is visible text; errors are `role="alert"`.
+
+**Test IDs** (with the default `testID="sessions-card"`; `{id}` is the session id):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading | `sessions-card`, `sessions-card-title` |
+| Row / device name / location and IP | `sessions-card-row-{id}`, `-name-{id}`, `-details-{id}` |
+| "Signed in" / "Active now" or "Last refreshed" | `sessions-card-signed-in-{id}`, `sessions-card-activity-{id}` |
+| "This device" badge | `sessions-card-current-{id}` |
+| Sign out (one session) | `sessions-card-revoke-{id}` |
+| Sign out everywhere else | `sessions-card-revoke-others` |
+| Confirm, confirm, cancel | `sessions-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| No other sessions / empty | `sessions-card-no-others`, `sessions-card-empty` |
+| Error | `sessions-card-error` |
+
+### TwoFactorSettingsCard
+
+Turns two-factor authentication with an authenticator app (TOTP) on and off and manages backup
+codes. While off, the card shows "Status: Off" and **Turn on**, which walks through four steps
+("Step 1 of 4"):
+
+1. **Password.** Better Auth asks for it before `twoFactor.enable`.
+2. **Scan.** A QR code of `totpURI` (`react-native-qrcode-svg`, drawn black on white so it scans
+   in dark mode), plus the setup key (the URI's `secret`, in groups of four) with **Copy key**
+   for users who can't scan. `parseTotpSecret(totpURI)` and `parseTotpDigits(totpURI)` are
+   exported for connected screens.
+3. **Verify.** An `OtpField` with one cell per digit (the URI's `digits`, else 6). A full code submits itself; **Verify** does the
+   same. A rejection clears the code and shows the error. **Back** returns to the QR code.
+4. **Backup codes.** The codes from `onStartEnroll`, with **Copy** (one code per line, through
+   `expo-clipboard`) and **Download** on web (a `two-factor-backup-codes.txt` file) or **Share**
+   on native (the system share sheet). **Finish** stays disabled until the user checks "I saved
+   these backup codes". This step has no Cancel: two-factor is already on, and the codes are shown
+   only once.
+
+**Cancel** on steps 1–3 returns to the card without verifying. Better Auth keeps an unverified
+secret until the next `enable`, which replaces it; `user.twoFactorEnabled` stays false.
+
+While on, the card shows "Status: On", the backup codes left (when `backupCodesRemaining` is given,
+with a warning below 3), **Get new backup codes** (password, then the new codes with the same "I
+saved these" gate) and **Turn off** (password, then a destructive confirm `Modal`). A flow in
+progress keeps showing when `enabled` changes underneath it, so refetching the session in
+`onVerify` doesn't hide the backup codes.
+
+**Password and OAuth-only users.** Better Auth's `enable`, `generateBackupCodes`, `getTotpUri` and
+`disable` require the user's password unless its two-factor plugin sets `allowPasswordless`.
+Terreno's `twoFactor` config does not set it, so by default a user who signed up with a social
+provider must set a password first: pass `hasPassword={hasPasswordCredential(accounts)}` and the
+card disables **Turn on** (or, when two-factor is already on, **Get new backup codes** and
+**Turn off**) and says so. A consumer that adds `twoFactor({allowPasswordless: true})`
+through `config.plugins` passes `requirePassword={hasPassword}`: Better Auth still asks users who
+have a password for it, and skips it for the rest. Without `requirePassword` the password steps are
+skipped and the callbacks get `undefined`.
+
+``````typescript
+import {TwoFactorSettingsCard, hasPasswordCredential} from "@terreno/ui";
+
+<TwoFactorSettingsCard
+  enabled={Boolean(session.data?.user.twoFactorEnabled)}
+  hasPassword={hasPasswordCredential(accounts)}
+  onStartEnroll={async (password) => {
+    const {data, error} = await authClient.twoFactor.enable({password: password ?? ""});
+    // enable() resolves {method: "otp"} for the email/SMS OTP method; only TOTP has a URI.
+    if (error || !data || !("totpURI" in data)) {
+      throw new Error(error?.message ?? "Couldn't start two-factor setup.");
+    }
+    return {backupCodes: data.backupCodes, totpURI: data.totpURI};
+  }}
+  onVerify={async (code) => {
+    const {error} = await authClient.twoFactor.verifyTotp({code});
+    if (error) {
+      throw new Error(error.message ?? "That code didn't work.");
+    }
+  }}
+  onRegenerateBackupCodes={async (password) => {
+    const {data, error} = await authClient.twoFactor.generateBackupCodes({password: password ?? ""});
+    if (error || !data) {
+      throw new Error(error?.message ?? "Couldn't create new backup codes.");
+    }
+    return data.backupCodes;
+  }}
+  onDisable={async (password) => {
+    const {error} = await authClient.twoFactor.disable({password: password ?? ""});
+    if (error) {
+      throw new Error(error.message ?? "Couldn't turn off two-factor authentication.");
+    }
+  }}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `enabled` | `boolean` | Better Auth's `user.twoFactorEnabled`. False offers Turn on; true offers new backup codes and Turn off. |
+| `backupCodesRemaining` | `number` | Shown as "8 backup codes left" while on; below 3 adds a warning. Better Auth does not put this on the session; pass it when the app knows it. |
+| `onStartEnroll` | `(password?) => Promise<TwoFactorEnrollment>` | Called after the password step (or at once without `requirePassword`). Resolve `{totpURI, backupCodes}`, narrowed from `enable()`'s TOTP branch; a rejection stays on the password step with the error. |
+| `onVerify` | `(code) => Promise<void>` | Called with the full code. Resolve to move to the backup codes; reject to clear the code and show the error. |
+| `onRegenerateBackupCodes` | `(password?) => Promise<string[]>` | Called after the password step. Resolve the new codes to show them; hidden when not passed. |
+| `onDisable` | `(password?) => Promise<void>` | Called after the password step and the confirm. Hidden when not passed. |
+| `requirePassword` | `boolean` | Ask for the password before each action. Defaults to `true`; see above. |
+| `hasPassword` | `boolean` | With `requirePassword`, `false` disables Turn on, Get new backup codes and Turn off, and asks the user to set a password first. Defaults to `true`. |
+| `digits` | `number` | Cells in the code field: Better Auth's `totpOptions.digits`. Defaults to the `digits` parameter of the enrollment's `totpURI`, else 6. |
+| `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
+| `disabled` | `boolean` | Disables Turn on, Get new backup codes, Turn off and the password step, for example while the user loads. |
+| `title` / `description` | `string` | Heading (default "Two-factor authentication") and the text under it. |
+| `username` | `string` | The signed-in user's email or username. On web the password step's form gets a hidden `autocomplete="username"` field, so password managers fill that account's password. `useAccountSecurity` passes the session user's email. |
+
+The card never logs the codes or the URI; a rejection is logged with `console.warn` as the
+callback threw it, so don't put secrets in error messages.
+
+Accessibility:
+
+- Each step replaces the content that had focus, so the card moves focus when the step changes.
+  On web, focus goes to the step's heading (a `tabIndex={-1}` view holding "Step N of M" and the
+  step's lead text), or to the field on the password and code steps. On native, where a view
+  can't take focus, the card calls `AccessibilityInfo.announceForAccessibility` with the step
+  ("Step 2 of 4. Scan this QR code…"), and announces the outcome when it returns to the card
+  ("Two-factor authentication is on.", "Two-factor authentication is off."). Nothing moves on
+  first render.
+- The QR code is an image named "QR code for your authenticator app".
+- Copy results ("Copied", "Couldn't copy") are in a polite live region (`aria-live` on web,
+  `accessibilityLiveRegion` on Android); iOS VoiceOver ignores live regions, so the card also
+  announces them there.
+- "I saved these backup codes" is a `role="checkbox"` control that Space toggles; the backup codes
+  are a list; errors are `role="alert"`.
+- The password is dropped from the card's state as soon as `onStartEnroll` or
+  `onRegenerateBackupCodes` resolves; the Turn off flow keeps it until the confirm.
+
+**Test IDs** (with the default `testID="two-factor-settings-card"`):
+
+| Element | testID |
+| --- | --- |
+| Card root / heading / status ("On" / "Off") | `two-factor-settings-card`, `-title`, `-status` |
+| Turn on / Get new backup codes / Turn off | `two-factor-settings-card-enable`, `-regenerate`, `-disable` |
+| Backup codes left / low warning / set-a-password note | `two-factor-settings-card-backup-codes-remaining`, `-backup-codes-low`, `-needs-password` |
+| Step heading (focus target) / step indicator / Cancel | `two-factor-settings-card-step-heading`, `-step`, `-cancel` |
+| Password prompt, field, submit | `two-factor-settings-card-password-prompt`, `-password`, `-password-submit` |
+| Password step form (web `<form>`) | `two-factor-settings-card-password-form` |
+| QR code / setup key / Copy key / Next | `two-factor-settings-card-qr`, `-secret`, `-copy-secret`, `-next` |
+| Code field (cells `-otp-cell-1`…) / Verify / Back | `two-factor-settings-card-otp`, `-verify`, `-back` |
+| Codes heading / list / code N (from 1) | `two-factor-settings-card-codes-title`, `-backup-codes`, `-backup-code-{n}` |
+| Copy / Download or Share / copy status | `two-factor-settings-card-copy-codes`, `-download-codes`, `-copy-codes-status` (`-copy-secret-status` for the key) |
+| "I saved these" / Finish | `two-factor-settings-card-saved`, `-finish` |
+| Turn-off confirm, confirm, cancel | `two-factor-settings-card-confirm`, `-confirm-submit`, `-confirm-cancel` |
+| Error | `two-factor-settings-card-error` |
+
+### AccountSecurityScreen
+
+The account security cards composed into one screen. Each card's props go in as one object, and
+a card renders only when its object is given, so a feature the server has off simply leaves its
+prop out. The order is fixed:
+
+1. **Sign-in methods:** `LinkedAccountsCard`, then `PasswordCard`, grouped in
+   `{testID}-sign-in-methods` when either is given.
+2. `PasskeysCard`.
+3. `TwoFactorSettingsCard`.
+4. `SessionsCard`.
+
+Above the cards is a heading (`title`, default "Security"), an optional `description`, and an
+optional `header` node (for example, "Signed in as ada@example.com"). `children` render after the
+cards, for an app-specific card. The cards stack in one column at every width, and the content
+stops growing at `maxWidth` (720px by default) and centers on wide screens. At 768px wide and
+below, `Card` draws edge to edge, so the screen drops its own side padding there and insets the
+heading, `header` and empty text to line up with the cards' content.
+
+By default the screen wraps itself in a scrolling ui `Page` (the same `Page` LoginScreen uses),
+so it works as a route on its own on native and web. Inside your own `Page`, `ScrollView` or tab
+layout, pass `withPage={false}`: the screen then renders only its content and leaves scrolling to
+the parent, so scroll views don't nest.
+
+``````typescript
+import {AccountSecurityScreen, hasPasswordCredential} from "@terreno/ui";
+
+// Two-factor is off on this server, so `twoFactor` is left out and its card is hidden.
+<AccountSecurityScreen
+  isLoading={isLoading}
+  error={loadError}
+  onRetry={reload}
+  linkedAccounts={{accounts, providers, onLink, onUnlink}}
+  password={{hasPassword: hasPasswordCredential(accounts), onSubmit: onPasswordSubmit}}
+  passkeys={{passkeys, onAdd, onRename, onRemove}}
+  sessions={{sessions, currentSessionId, onRevoke, onRevokeOthers}}
+/>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `linkedAccounts` | `LinkedAccountsCardProps` | Props for `LinkedAccountsCard`. Omit to hide it. |
+| `password` | `PasswordCardProps` | Props for `PasswordCard`. Omit to hide it. |
+| `passkeys` | `PasskeysCardProps` | Props for `PasskeysCard`. Omit to hide it, for example when the server has no passkey plugin. |
+| `twoFactor` | `TwoFactorSettingsCardProps` | Props for `TwoFactorSettingsCard`. Omit to hide it. |
+| `sessions` | `SessionsCardProps` | Props for `SessionsCard`. Omit to hide it. |
+| `title` / `description` | `string` | Heading (default "Security") and the text under it. |
+| `header` | `ReactNode` | Content under the heading and above the cards. Shown in every state. |
+| `children` | `ReactNode` | Content after the cards. Hidden with the cards while loading or in the error state. |
+| `isLoading` | `boolean` | Shows a spinner and "Loading your security settings…" instead of the cards. Takes precedence over `error`, so a retry in flight shows as loading. |
+| `error` | `string` | A page-level error, such as the data failing to load, shown in a `role="alert"` card instead of the cards. A card action's error belongs in that card's own `error` prop (or a rejected callback), not here. |
+| `onRetry` | `() => void` | The error card's **Try again** button. Hidden when not passed. |
+| `withPage` | `boolean` | Wrap the screen in a scrolling `Page`. Defaults to `true`. |
+| `maxWidth` | `number` | The widest the content grows, in pixels. Defaults to 720. |
+
+With no card props and no `children`, the screen says "There are no security settings to
+manage." (`{testID}-empty`).
+
+Accessibility: the title is a level 1 heading and each card's title is level 2, so screen
+reader heading navigation lists Security, then each card; the loading state is a `progressbar`
+named "Loading security settings" with visible text; the page error is an alert.
+
+**Test IDs** (with the default `testID="account-security-screen"`; each card keeps its own default
+testID, unless you pass `testID` in its props):
+
+| Element | testID |
+| --- | --- |
+| Root / heading block / title / description | `account-security-screen`, `-heading`, `-title`, `-description` |
+| Sign-in methods group | `account-security-screen-sign-in-methods` |
+| Loading | `account-security-screen-loading` |
+| Error card / message / Try again | `account-security-screen-error`, `-error-message`, `-retry` |
+| No cards | `account-security-screen-empty` |
+
+#### A connected screen
+
+`@terreno/rtk` ships the connected version: `TerrenoAccountSecurityScreen` (and the
+`useAccountSecurity` hook behind it) wires every card to the Better Auth client, refetches the
+affected section after each change, and links in bearer mode through the OAuth handoff. See
+[Drop-in security screen](../how-to/configure-better-auth.md#6-drop-in-security-screen). To connect
+the presentational screen yourself instead, work along the lines below. It needs a client created
+with the passkey and two-factor client plugins (for `authClient.passkey` and
+`authClient.twoFactor`), reads which features are on from `useAuthMethods`, and unwraps every
+Better Auth call, because the client resolves `{data, error}` instead of rejecting. Better Auth's
+`setPassword` is server-only, so "Set a password" posts to `@terreno/api`'s
+`POST {basePath}/terreno/set-password`.
+
+``````typescript
+import {useAuthMethods} from "@terreno/rtk";
+import type {AccountPasskey, AccountSession, LinkedAccount} from "@terreno/ui";
+import {AccountSecurityScreen, hasPasswordCredential, Text} from "@terreno/ui";
+import {type FC, useCallback, useEffect, useState} from "react";
+
+import {authClient} from "@/store/authClient";
+
+/** Throws the Better Auth error, so the card that called shows its message. */
+const unwrap = <T,>(result: {data: T | null; error: {message?: string} | null}, fallback: string): T => {
+  if (result.error || result.data === null) {
+    throw new Error(result.error?.message ?? fallback);
+  }
+  return result.data;
+};
+
+export const SecurityScreen: FC = () => {
+  const {
+    methods,
+    isLoading: isMethodsLoading,
+    error: methodsError,
+    refetch: refetchMethods,
+  } = useAuthMethods(authClient);
+  const session = authClient.useSession();
+  const [accounts, setAccounts] = useState<LinkedAccount[]>([]);
+  const [passkeys, setPasskeys] = useState<AccountPasskey[]>([]);
+  const [sessions, setSessions] = useState<AccountSession[]>([]);
+  // False until the first load settles, so the cards never flash empty and a methods failure
+  // (no load runs) is not stuck behind a spinner.
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | undefined>();
+
+  const loadAccounts = useCallback(async (): Promise<void> => {
+    const data = unwrap(await authClient.listAccounts(), "Couldn't load your accounts.");
+    setAccounts(data.map((account) => ({...account, linkedAt: account.createdAt})));
+  }, []);
+  const loadPasskeys = useCallback(async (): Promise<void> => {
+    setPasskeys(unwrap(await authClient.passkey.listUserPasskeys(), "Couldn't load passkeys."));
+  }, []);
+  const loadSessions = useCallback(async (): Promise<void> => {
+    setSessions(unwrap(await authClient.listSessions(), "Couldn't load your sessions."));
+  }, []);
+
+  const load = useCallback(async (): Promise<void> => {
+    setIsLoading(true);
+    setLoadError(undefined);
+    try {
+      await Promise.all([loadAccounts(), methods?.passkey ? loadPasskeys() : null, loadSessions()]);
+    } catch (error) {
+      setLoadError((error as Error).message);
+    } finally {
+      setIsLoading(false);
+      setHasLoaded(true);
+    }
+  }, [loadAccounts, loadPasskeys, loadSessions, methods?.passkey]);
+
+  // Load the cards' data once the server says which features are on.
+  useEffect(() => {
+    if (methods) {
+      void load();
+    }
+  }, [load, methods]);
+
+  const hasPassword = hasPasswordCredential(accounts);
+  const user = session.data?.user;
+
+  return (
+    <AccountSecurityScreen
+      error={methodsError ?? loadError}
+      header={user ? <Text color="secondaryLight">Signed in as {user.email}</Text> : undefined}
+      isLoading={
+        isMethodsLoading || session.isPending || isLoading || (Boolean(methods) && !hasLoaded)
+      }
+      onRetry={methods ? load : refetchMethods}
+      linkedAccounts={
+        methods && methods.providers.length > 0
+          ? {
+              accounts,
+              providers: methods.providers.map((id) => ({id})),
+              // Bearer-mode web clients link through linkSocialWithHandoff instead.
+              onLink: async (provider) => {
+                unwrap(await authClient.linkSocial({callbackURL: "/security", provider}), "Couldn't link that account.");
+              },
+              onUnlink: async (_providerId, account) => {
+                unwrap(await authClient.unlinkAccount({accountId: account.id}), "Couldn't unlink that account.");
+                await loadAccounts();
+              },
+            }
+          : undefined
+      }
+      password={
+        methods?.emailPassword
+          ? {
+              hasPassword,
+              onSubmit: async ({mode, currentPassword, newPassword, revokeOtherSessions}) => {
+                if (mode === "change") {
+                  unwrap(
+                    await authClient.changePassword({currentPassword: currentPassword ?? "", newPassword, revokeOtherSessions}),
+                    "Couldn't change your password."
+                  );
+                  return;
+                }
+                const result = await authClient.$fetch("/terreno/set-password", {
+                  body: {newPassword},
+                  method: "POST",
+                });
+                if (result.error) {
+                  throw new Error(result.error.message ?? "Couldn't set your password.");
+                }
+                await loadAccounts();
+              },
+            }
+          : undefined
+      }
+      passkeys={
+        methods?.passkey
+          ? {
+              passkeys,
+              supported: typeof window !== "undefined" && "PublicKeyCredential" in window,
+              onAdd: async (name) => {
+                unwrap(await authClient.passkey.addPasskey({name}), "Couldn't add a passkey.");
+                await loadPasskeys();
+              },
+              onRename: async (id, name) => {
+                unwrap(await authClient.passkey.updatePasskey({id, name}), "Couldn't rename that passkey.");
+                await loadPasskeys();
+              },
+              onRemove: async (passkey) => {
+                unwrap(await authClient.passkey.deletePasskey({id: passkey.id}), "Couldn't remove that passkey.");
+                await loadPasskeys();
+              },
+            }
+          : undefined
+      }
+      twoFactor={
+        methods?.twoFactor
+          ? {
+              enabled: Boolean(user?.twoFactorEnabled),
+              hasPassword,
+              onStartEnroll: async (password) => {
+                const data = unwrap(await authClient.twoFactor.enable({password: password ?? ""}), "Couldn't start two-factor setup.");
+                if (!("totpURI" in data)) {
+                  throw new Error("Couldn't start two-factor setup.");
+                }
+                return {backupCodes: data.backupCodes, totpURI: data.totpURI};
+              },
+              onVerify: async (code) => {
+                unwrap(await authClient.twoFactor.verifyTotp({code}), "That code didn't work.");
+                await session.refetch();
+              },
+              onRegenerateBackupCodes: async (password) => {
+                const data = unwrap(
+                  await authClient.twoFactor.generateBackupCodes({password: password ?? ""}),
+                  "Couldn't create new backup codes."
+                );
+                return data.backupCodes;
+              },
+              onDisable: async (password) => {
+                unwrap(await authClient.twoFactor.disable({password: password ?? ""}), "Couldn't turn off two-factor authentication.");
+                await session.refetch();
+              },
+            }
+          : undefined
+      }
+      sessions={{
+        currentSessionId: session.data?.session.id,
+        sessions,
+        onRevoke: async (revoked) => {
+          unwrap(await authClient.revokeSession({token: revoked.token ?? ""}), "Couldn't sign out that session.");
+          await loadSessions();
+        },
+        onRevokeOthers: async () => {
+          unwrap(await authClient.revokeOtherSessions(), "Couldn't sign out your other sessions.");
+          await loadSessions();
+        },
+      }}
+    />
+  );
+};
+``````
+
+`useAuthMethods` reports `passkey`, `twoFactor`, `emailPassword` and `providers`, so a card
+appears only for a feature the server has on. When the methods request fails, Try again calls its
+`refetch()`; when the methods loaded but the cards' data failed, Try again calls `load` again. Leave `sessions` out on apps that don't want to
+show it.
 
 ## Testing Utilities
 

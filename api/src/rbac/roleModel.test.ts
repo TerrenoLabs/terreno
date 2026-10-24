@@ -61,7 +61,127 @@ describe("rbac role model", () => {
     expect(operator.isLocked).toBe(true);
     expect(operator.permissions.organization).toEqual([...terrenoStatements.organization]);
     expect(operator.permissions.admin).toEqual(["access"]);
+    expect(operator.permissions.user).toEqual(["list", "read", "update", "manageSecurity"]);
+  });
+
+  it("adds manageSecurity to an operator seeded before it existed, keeping its other grants", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.create({
+      displayName: "Operator",
+      isLocked: true,
+      name: "operator",
+      permissions: {organization: ["list"], user: ["read"]},
+    });
+
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.user).toEqual(["read", "manageSecurity"]);
+    expect(operator.permissions.organization).toEqual(["list"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity"]);
+  });
+
+  it("keeps a revoked manageSecurity revoked across reseeds", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const seed = (): Promise<void> =>
+      RbacRole.seedDefaults({
+        extraRoles: [organizationOperatorRole],
+        statements: terrenoStatements,
+      });
+    // A row from before the grant existed gains it once.
+    await RbacRole.create({
+      displayName: "Operator",
+      isLocked: true,
+      name: "operator",
+      permissions: {user: ["read"]},
+    });
+    await seed();
+    await RbacRole.updateOne({name: "operator"}, {$set: {"permissions.user": ["read"]}});
+
+    await seed();
+    await seed();
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.user).toEqual(["read"]);
+  });
+
+  it("keeps a revoked manageSecurity revoked on an operator seeded with it", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const seed = (): Promise<void> =>
+      RbacRole.seedDefaults({
+        extraRoles: [organizationOperatorRole],
+        statements: terrenoStatements,
+      });
+    await seed();
+    await RbacRole.updateOne(
+      {name: "operator"},
+      {$set: {"permissions.user": ["list", "read", "update"]}}
+    );
+
+    await seed();
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
     expect(operator.permissions.user).toEqual(["list", "read", "update"]);
+  });
+
+  it("gives the operator admin read on users when the app declares adminUser", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: {...terrenoStatements, adminUser: ["read", "write", "writeOwned"]},
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toEqual(["read"]);
+    expect(operator.permissions.user).toEqual(["list", "read", "update", "manageSecurity"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity", "adminUser.read"]);
+  });
+
+  it("leaves adminUser off an operator in an app that does not declare it", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toBeUndefined();
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity"]);
+  });
+
+  it("adds adminUser read to an existing operator once the app declares adminUser", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const adminUserStatements = {...terrenoStatements, adminUser: ["read", "write", "writeOwned"]};
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: adminUserStatements,
+    });
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toEqual(["read"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity", "adminUser.read"]);
+
+    // A revoked grant stays revoked across reseeds.
+    await RbacRole.updateOne({name: "operator"}, {$unset: {"permissions.adminUser": ""}});
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: adminUserStatements,
+    });
+    const revoked = await RbacRole.findExactlyOne({name: "operator"});
+    expect(revoked.permissions.adminUser).toBeUndefined();
   });
 
   it("upserts default roles without duplicating", async () => {

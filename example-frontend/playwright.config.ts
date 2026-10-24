@@ -4,7 +4,7 @@ import {MOCK_OIDC_ISSUER} from "./e2e/helpers/mockOidcProvider";
 const chromium = {...devices["Desktop Chrome"]};
 
 /**
- * Cross-site bearer run (e2e/crossSiteBearer.spec.ts and e2e/crossSiteOAuth.spec.ts). The web
+ * Cross-site bearer run (the spec files in CROSS_SITE_SPEC_FILES). The web
  * app at localhost:8082 talks to the API at 127.0.0.1:4000, a different site, with
  * `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`. Those values are baked into the web bundle when
  * Metro starts, so this run gets its own web server and runs only the cross-site specs (other
@@ -14,11 +14,32 @@ const chromium = {...devices["Desktop Chrome"]};
  * `E2E_CROSS_SITE_BEARER=true`; the env var also carries the choice to the worker processes,
  * which load this config without the runner's arguments.
  */
-const CROSS_SITE_SPECS = /crossSite(Bearer|OAuth)\.spec\.ts/;
+const CROSS_SITE_SPEC_FILES = [
+  "crossSiteBearer.spec.ts",
+  "crossSiteOAuth.spec.ts",
+  // Auth-experience specs that need the mock OIDC provider or cookie-less sessions join here.
+  "authMethods.spec.ts",
+  "crossSiteChallenges.spec.ts",
+  "crossSiteLogin.spec.ts",
+  "account-linking.spec.ts",
+  "account-security.spec.ts",
+];
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const CROSS_SITE_SPECS = new RegExp(
+  `(^|[\\/])(${CROSS_SITE_SPEC_FILES.map(escapeRegExp).join("|")})`
+);
 if (process.argv.some((arg) => CROSS_SITE_SPECS.test(arg))) {
   process.env.E2E_CROSS_SITE_BEARER = "true";
 }
 const isCrossSiteBearerRun = process.env.E2E_CROSS_SITE_BEARER === "true";
+/**
+ * `E2E_ACCOUNT_LINKING=explicit` (or `never`) starts the backend with that
+ * `AUTH_ACCOUNT_LINKING` mode, for account-linking.spec.ts's backend-mode cases, which skip
+ * themselves unless the backend reports the mode they need. Every other spec assumes the default
+ * `verified-email`, so run it alone:
+ * `E2E_ACCOUNT_LINKING=explicit bunx playwright test e2e/account-linking.spec.ts`.
+ */
+const accountLinkingMode = process.env.E2E_ACCOUNT_LINKING;
 const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
 
 /**
@@ -158,6 +179,7 @@ export default defineConfig({
         SESSION_SECRET: process.env.SESSION_SECRET ?? "e2e-session-secret-dev",
         TOKEN_ISSUER: process.env.TOKEN_ISSUER ?? "terreno-e2e",
         TOKEN_SECRET: process.env.TOKEN_SECRET ?? "e2e-token-secret-dev",
+        ...(accountLinkingMode ? {AUTH_ACCOUNT_LINKING: accountLinkingMode} : {}),
         // The API's own URL is 127.0.0.1 in the cross-site run, so the OAuth callback (and the
         // state cookie it reads) stays on the site the app starts the sign-in on.
         ...(isCrossSiteBearerRun
@@ -178,7 +200,6 @@ export default defineConfig({
         ? {
             EXPO_PUBLIC_API_URL: CROSS_SITE_API_URL,
             EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true",
-            EXPO_PUBLIC_MOCK_OIDC_SIGN_IN: "true",
           }
         : {},
       // A web server already on 8082 was built for the same-site cookie run, so the cross-site

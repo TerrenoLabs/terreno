@@ -27,7 +27,9 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API
 - [Configure Better Auth](configure-better-auth.md) — Set up Better Auth with social OAuth (Google, GitHub, Apple)
+- [Set up social login](set-up-social-login.md) — Register Google, GitHub, and Apple once on the stable deploy, proxy previews through it, and move stable onto one domain
 - [Password reset and email verification](password-reset.md) — JWT routes, comms templates, Better Auth hooks
+- [Recover a locked-out user](recover-locked-out-user.md) — Platform and org-admin recovery: 2FA, passkeys, providers, sessions, suspend
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
 - [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools

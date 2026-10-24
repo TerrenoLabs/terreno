@@ -5,6 +5,7 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.118",
     "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/core": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
@@ -82,7 +83,7 @@
     "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
-    "compile": "tsc",
+    "compile": "tsc && tsc -p tsconfig.typetests.json",
     "compile:watch": "tsc -w",
     "dev": "tsc -w",
     "lint": "biome check .",

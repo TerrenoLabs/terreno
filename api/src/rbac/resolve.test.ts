@@ -515,6 +515,71 @@ describe("createPermissionResolver", () => {
       ).toEqual(["read", "update"]);
     });
 
+    it("throws 503 with requireComplete when a failed source's grants were dropped", async () => {
+      const RbacRole = await seedWriter();
+      let isDown = false;
+      const source: PermissionSource = {
+        failClosedWhenDenyUnknown: false,
+        getGrants: async () => {
+          if (isDown) {
+            throw new Error("idp down");
+          }
+          return {permissions: {todo: ["delete"]}};
+        },
+        name: "idp-grants",
+        staleOnFailure: "deny",
+        ttlMs: 0,
+      };
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      const user = createTestUser({roles: ["writer"]});
+      expect(
+        (await resolver.resolvePermissionsForUser(user, {requireComplete: true})).todo
+      ).toContain("delete");
+
+      isDown = true;
+
+      // Without requireComplete the source's grants drop out; with it the set is refused.
+      expect((await resolver.resolvePermissionsForUser(user)).todo).toEqual(["read", "update"]);
+      await expect(
+        resolver.resolvePermissionsForUser(user, {requireComplete: true})
+      ).rejects.toMatchObject({status: 503, title: "Permission source unavailable"});
+    });
+
+    it("accepts stale grants with requireComplete when the source serves them", async () => {
+      const RbacRole = await seedWriter();
+      let isDown = false;
+      const source: PermissionSource = {
+        getGrants: async () => {
+          if (isDown) {
+            throw new Error("idp down");
+          }
+          return {permissions: {todo: ["delete"]}};
+        },
+        name: "idp-stale",
+        staleOnFailure: "use-stale",
+        ttlMs: 0,
+      };
+      const resolver = createPermissionResolver({
+        cacheTtlMs: 0,
+        rbacRoleModel: RbacRole,
+        sources: [source],
+        statements: appStatements,
+      });
+      const user = createTestUser({roles: ["writer"]});
+      await resolver.resolvePermissionsForUser(user);
+
+      isDown = true;
+
+      expect(
+        (await resolver.resolvePermissionsForUser(user, {requireComplete: true})).todo
+      ).toContain("delete");
+    });
+
     it("keeps the built-in membership source open on a cold failure", () => {
       expect(membershipOrgAdminPermissionSource().failClosedWhenDenyUnknown).toBe(false);
     });

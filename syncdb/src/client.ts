@@ -20,7 +20,12 @@ import {bootstrapStream, bootstrapStreamsBatch} from "./sync/bootstrap";
 import {getAllCursors} from "./sync/cursor";
 import {applyDelta} from "./sync/deltaApplier";
 import {repairMarkedEntities} from "./sync/entityRepair";
-import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
+import {
+  AuthRequiredError,
+  createHttpChannel,
+  type HttpChannel,
+  RequestSupersededError,
+} from "./sync/httpChannel";
 import {createReplayCoordinator, type ReplayCoordinator} from "./sync/replayCoordinator";
 import {createSocketTransport} from "./sync/socketTransport";
 import type {SendMutationBatchResult, SendMutationResult, SyncTransport} from "./sync/transport";
@@ -823,8 +828,13 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     }
     let serverStreams: {stream: string; collection: string}[];
     try {
-      serverStreams = await httpChannel.fetchStreams();
+      // A reconcile fired just before a stop() is still reading the token when the app signs
+      // out; dropping its request here keeps it from reaching the server with the revoked one.
+      serverStreams = await httpChannel.fetchStreams({isSuperseded});
     } catch (error) {
+      if (error instanceof RequestSupersededError) {
+        return undefined;
+      }
       if (error instanceof AuthRequiredError) {
         // INV-2: a 401 is NOT a leave. Pause; leave every stream/entity intact.
         setAuthPaused(true);
@@ -1785,9 +1795,21 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    * handler itself is stale — e.g. it was queued behind a stop() while
    * `getUserId()` resolves, and by the time it runs a fresh generation has
    * already started up for a different user.
+   *
+   * An auth change only belongs to the run that subscribed to it. A callback
+   * that fires while a start() still holds the mutex queues behind any stop()
+   * called meanwhile, so it can run after that stop(): by then the client has
+   * no current user, and treating the still-signed-in session as a new
+   * identity would reconnect a stopped client (for example during a sign-out
+   * the app stopped syncdb for). It stands down unless the run it was queued
+   * under is still the started one.
    */
   const handleAuthChange = (): void => {
+    const queuedGeneration = generation;
     void withLifecycle(async (): Promise<void> => {
+      if (!isStarted || generation !== queuedGeneration) {
+        return;
+      }
       const myGeneration = generation;
       const userId = await config.authProvider.getUserId();
       if (generation !== myGeneration) {

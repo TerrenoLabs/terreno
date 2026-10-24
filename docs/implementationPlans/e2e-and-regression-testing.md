@@ -182,7 +182,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - PLAN-new-3 holds in T34.
   - Skills: update-agent-docs
 
-- [ ] **T5** — Taste re-checks both sections after fixes and renumbers ID collisions
+- [x] **T5** — Taste re-checks both sections after fixes and renumbers ID collisions
   - Depends on: T1
   - Files: plugins/terreno-planning/skills/terreno-5-taste/SKILL.md, generated copies
   - Delivers:

@@ -17,7 +17,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`PR deployments`](../../references/pr-deployments.md),
 [`product CI`](../../references/product-ci.md),
 [`async review bots`](../../references/async-review-bots.md),
-[`push ownership`](../../references/push-ownership.md), and
+[`push ownership`](../../references/push-ownership.md),
+[`testing plan`](../../references/testing-plan.md), and
 [`GitHub attention contract`](../../references/github-attention-contract.md).
 
 Taste owns the PR until it is clean or escalated. Never leave it red, pending with no
@@ -35,6 +36,9 @@ make it clean, stop and escalate per push ownership.
 ## Inputs
 
 - PR, base branch, current branch/head, IP/task, and execution state
+- The IP's `## E2E tests` and `## Regression cases` sections, the resolved `E2E guide`,
+  `Regression suites`, and `Smoke command` per the testing plan, and Brew's recorded
+  provisional-to-real regression ID mapping
 - Brew result and prior Taste results/attempted approaches
 - Current CI/job data from every discovered host, mergeability, review threads/comments, and artifacts
 - Repository instructions and available project skills
@@ -91,6 +95,21 @@ make it clean, stop and escalate per push ownership.
    - Do not push speculative code for unrelated/flaky/external failures. Rerun only
      the failed jobs instead (`gh run rerun <run-id> --failed`, or the host's
      rerun-from-failed). A rerun counts as a fix round.
+   - When a review or CI fix changes behaviour, re-check both testing-plan sections
+     before the push. Re-run every `## E2E tests` row whose `Proves` or spec covers the
+     changed behaviour, using the command the e2e guide gives for its layer. A missing
+     or failing row is `FAIL`; do not push it. A row this environment cannot run is
+     `deferred` with its exact command, per the testing-plan deferral rule. Taste never
+     accepts a deferred row: it withholds `PASS` until a terminal product-CI run of that
+     command on this head is green, and a red run is a branch-caused failure. A deferred
+     row whose command no product-CI job on a discovered host runs is `BLOCKED` naming
+     the row and its command. Then update the suite rows for each affected case in
+     `<Regression suites>/<area>.md`: edit `Steps`, `Expected`, `Platforms`, or
+     `Automated by` in place, keep the ID and `Added`, and hold each edit to the
+     testing-plan regression-step bar. Taste never invents a case: a fix that needs one
+     the IP does not plan is a human decision (`BLOCKED`) naming the case. Leave the IP
+     tables unchanged. An IP that lacks either section follows the testing-plan legacy
+     rule: warn once and skip that section.
 9. **Before any push, in this order: fetch latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
    1. Always fetch the latest `master` (use the PR base if it is not `master`). Merge it
       into this branch only when one of these holds:
@@ -103,6 +122,19 @@ make it clean, stop and escalate per push ownership.
       that merges the base on every reaction piles up merge commits without new
       signal. Preserve both intended changes. Never rewrite pushed history unless
       allowed. A merge that needs a design/behavior choice is `BLOCKED`.
+      After the fetch, whether or not this invocation merged, renumber regression ID
+      collisions before the gate. The branch's new rows are those it added to a suite
+      file (diff against the merge base) whose `Added` is the IP slug. A collision is a
+      branch row whose ID is also in the fetched base's copy of that suite file. The
+      base row keeps the ID. Taste renumbers each colliding branch row, in file order,
+      to the then-next free ID: one past the highest ID either copy of the file has
+      ever held, counting rows already renumbered. Resolve a suite-file merge conflict
+      by keeping both rows, then renumbering. Replace the old ID everywhere this branch
+      added it: the PR `Verification` row, the execution-state ID mapping, and any
+      spec or doc on the branch. Record each old-to-new ID in the Taste result. A
+      collision with a case the branch edited in place, not added, is a merge conflict
+      to resolve by content; never renumber a case the base owns. Commit suite edits
+      and renumbering together in one commit named for the cases, as Brew does.
    2. Re-verify last-run failed tests locally with the exact recorded commands. Do this
       even when a root `prepush` script exists; `prepush` is not a substitute. A still
       failing test is `FAIL`; do not push it. If the environment cannot run a recorded
@@ -112,19 +144,27 @@ make it clean, stop and escalate per push ownership.
       no parent conversation** and run it from the repository root using the
       repository's package manager (for example, `<package-manager> run prepush`). Do
       not duplicate or weaken its checks. Repository owners use this script to compose lint, typecheck,
-      static analysis, tests, or other required gates.
+      static analysis, tests, or other required gates. When the repository declares a
+      `Smoke command` (testing-plan Standardized spot), pass that command string in the
+      prompt and the same subagent also runs it unless `prepush` already does.
    4. If no root `prepush` script exists, map the uncommitted (and compared-to-base)
       changed files to affected packages: nearest directory with a `package.json` `lint`
       script and typecheck-capable `typecheck` or `compile` script. Spawn a **fresh
       subagent with no parent conversation**. The prompt may contain only the repo root,
-      affected package directories, changed files, and these orders:
+      affected package directories, changed files, the resolved `Smoke command` and
+      suite-check command strings, and these orders:
       - run the package manager's lint script in each affected package
       - run the package's typecheck script, preferring `typecheck` and otherwise using
         `compile` only when it performs a TypeScript typecheck
       - run the locally affected tests (closest package or file-level tests for those
         files; not the whole workspace unless the change is repo-wide)
+      - run the suite-check command when one was given and a suite file changed. The
+        suite check is the command the repository's CI or package scripts run against
+        `<Regression suites>`; pass none when the repository has none.
+      - run the declared `Smoke command` when the repository has one
    5. Do not push until last-run failed tests pass locally and the fresh subagent
-      reports pass with command output. If the harness cannot spawn one, run the same
+      reports pass with command output. A duplicate regression ID reported by the gate
+      sends Taste back to the renumbering in 9.1, then through 9.3 or 9.4 again. If the harness cannot spawn one, run the same
       root `prepush` command or fallback commands yourself and ignore prior
       conversational claims. Also run any mandatory domain, runtime, or UI
       verification. Update architecture/public docs when the fix changes behavior.
@@ -209,6 +249,10 @@ safety policy.
 - Product-CI wait-loop outcome (hosts, watch commands, terminal vs timeout)
 - Latest-`master` pull/merge outcome before push
 - Last-run failed test identities, local re-verify commands, and pass/fail outcomes
+- `## E2E tests` rows re-run after a behaviour-changing fix, with command and outcome
+  (or `deferred` with its command), and the suite rows updated
+- Each renumbered regression ID (old → new) with its suite file
+- Smoke command and outcome when the repository declares one
 - Fresh-subagent root `prepush` command and outcome, or fallback lint, typecheck, and
   affected-test commands and outcomes when that script is absent
 - Mergeability/conflict classification

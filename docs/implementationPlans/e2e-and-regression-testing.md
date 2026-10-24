@@ -326,7 +326,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: ai/e2e/smoke.ts, ai/package.json, docs/testing/e2e/ai.md
   - Acceptance: `bun run --cwd ai smoke` exits 0 with no provider keys set. A chat request to a real server that uses a deterministic fake provider returns the fake provider's text.
 
-- [ ] **T19** — Smoke test for `@terreno/admin-backend`
+- [x] **T19** — Smoke test for `@terreno/admin-backend`
   - Depends on: T8
   - Files: admin-backend/e2e/smoke.ts, admin-backend/package.json, docs/testing/e2e/admin-backend.md
   - Acceptance: `bun run --cwd admin-backend smoke` exits 0. Over HTTP, an admin lists the admin config and one model's documents, and a non-admin gets 403.

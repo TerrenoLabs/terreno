@@ -316,7 +316,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: comms/e2e/smoke.ts, comms/package.json, docs/testing/e2e/comms.md
   - Acceptance: `bun run --cwd comms smoke` exits 0. A message sent through a real server with an in-memory or console adapter is recorded as delivered, with no external calls.
 
-- [ ] **T17** — Smoke test for `@terreno/jobs`
+- [x] **T17** — Smoke test for `@terreno/jobs`
   - Depends on: T8
   - Files: jobs/e2e/smoke.ts, jobs/package.json, docs/testing/e2e/jobs.md
   - Acceptance: `bun run --cwd jobs smoke` exits 0. A job that one process enqueues is completed by a separate worker process.

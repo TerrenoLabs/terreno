@@ -131,6 +131,70 @@ browser to the preview with a normal redirect, so no `SameSite=Lax` cookie is ne
 The api test `betterAuthOAuthProxy.test.ts` proves this with the mock provider; the live check
 against Apple is T28 in the auth-experience plan.
 
+## Native
+
+The Expo app signs in with the same providers through the system browser, using Better Auth's
+Expo plugin. The provider still returns to the backend's own
+`/api/auth/callback/<provider>`, so a native app needs no extra redirect URI at the provider.
+
+1. **Turn on `nativeApps: true`** in the server config. Terreno adds `expo()` from
+   `@better-auth/expo`, which serves `GET {basePath}/expo-authorization-proxy`. The app opens
+   that URL in the browser; it sets the OAuth state cookie there and redirects to the provider.
+2. **Give the app a scheme.** Set `expo.scheme` in `app.json` (`frontend` in the example) and
+   pass the same value to `createBetterAuthClient({scheme})` from `@terreno/rtk`.
+3. **List the scheme in `trustedOrigins`**, as `frontend://`. After the callback, the backend
+   redirects the browser to the app's `callbackURL` (`frontend://.../login`), with the session in
+   a `cookie` query parameter. Better Auth refuses a callback URL that matches no trusted origin.
+   An entry with only the scheme matches every URL on that scheme, so `frontend://` also covers a
+   development build's `frontend://localhost:8081/login`. The example lists `frontend://`,
+   `terreno://` and `exp://`.
+4. **Pass a path as `callbackURL`** (`/login`). The Expo client turns it into the deep link, opens
+   the browser, waits for that link, and stores the session from it in `expo-secure-store`.
+
+`expo-web-browser` must be in the native build. The example gets it through `@terreno/ui`;
+check with `bunx expo-modules-autolinking resolve -p android`.
+
+Two limits:
+
+- **No oauth-proxy.** The Expo client sends `x-skip-oauth-proxy`, so a native sign-in uses the
+  backend it talks to as the provider's callback. Point native builds at the stable deploy, whose
+  callback is the registered one, not at a preview.
+- **https providers only.** The authorization proxy refuses an `http:` authorization URL. Real
+  providers are all https. The example's mock OIDC provider is plain http, so example-backend
+  serves the proxy for that one origin itself (`mock-oidc-native-proxy` in
+  `src/utils/betterAuthConfig.ts`). It exists only while `MOCK_OIDC_ISSUER` is set, which
+  production refuses.
+
+### Prove it on an Android emulator
+
+`example-frontend/maestro/native-social-login.yaml` signs in with the mock provider and lands on
+the todos screen. `localhost` has to mean the same machine to the backend and to the device's
+browser, so every server is reached through `adb reverse`:
+
+```bash
+# Mongo as a replica set, then the mock provider and the backend
+MOCK_OIDC_SERVE=true MOCK_OIDC_PORT=4655 MOCK_OIDC_ISSUER=http://localhost:4655 \
+  MOCK_OIDC_REDIRECT_URI=http://localhost:4000/api/auth/callback/mock-oidc \
+  bun example-frontend/e2e/helpers/mockOidcProvider.ts
+AUTH_PROVIDER=better-auth BETTER_AUTH_URL=http://localhost:4000 \
+  MOCK_OIDC_ISSUER=http://localhost:4655 MONGO_URI=... PORT=4000 bun run backend:dev
+
+# The development build and Metro
+cd example-frontend && bunx expo run:android   # or install an EAS development build
+EXPO_PUBLIC_API_URL=http://localhost:4000 bunx expo start --dev-client --port 8081
+
+adb -s 127.0.0.1:5555 reverse tcp:8081 tcp:8081
+adb -s 127.0.0.1:5555 reverse tcp:4000 tcp:4000
+adb -s 127.0.0.1:5555 reverse tcp:4655 tcp:4655
+maestro --device 127.0.0.1:5555 test example-frontend/maestro/native-social-login.yaml
+```
+
+To run beside a Playwright run that holds ports 4000 and 4555, start the backend on another host
+port and reverse to it (`adb reverse tcp:4000 tcp:4100`); the app and `BETTER_AUTH_URL` keep
+`localhost:4000`. `MOCK_OIDC_PORT`, `MOCK_OIDC_ISSUER` and `MOCK_OIDC_REDIRECT_URI` move the mock
+provider; unset, it keeps the Playwright defaults (`127.0.0.1:4555`, callback on
+`127.0.0.1:4000`).
+
 ## Passkeys on previews and stable
 
 A passkey is bound to an rpID, a domain the browser checks against the page's host.

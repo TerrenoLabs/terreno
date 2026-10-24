@@ -291,7 +291,10 @@ describe("buildBetterAuthConfig", () => {
   it("registers the mock OIDC provider when MOCK_OIDC_ISSUER is set outside production", () => {
     process.env.MOCK_OIDC_ISSUER = "http://127.0.0.1:4555";
     const config = buildBetterAuthConfig();
-    expect(config?.plugins?.map((plugin) => plugin.id)).toEqual(["generic-oauth"]);
+    expect(config?.plugins?.map((plugin) => plugin.id)).toEqual([
+      "generic-oauth",
+      "mock-oidc-native-proxy",
+    ]);
   });
 
   it("refuses to start with MOCK_OIDC_ISSUER in production", () => {
@@ -337,6 +340,97 @@ describe("buildBetterAuthConfig", () => {
         .get("/api/auth/oauth-handoff/start")
         .query({callbackURL: `${WEB_ORIGIN}/profile`, provider: MOCK_OIDC_PROVIDER_ID});
       expect(elsewhere.status).toBe(400);
+    } finally {
+      await discovery.close();
+    }
+  });
+});
+
+// A native app (Better Auth's Expo plugin) opens every provider through the server's
+// `/expo-authorization-proxy`, which takes only https authorization URLs. The mock provider is
+// plain http on this machine, so the example lets that one origin through.
+describe("native sign-in with the mock OIDC provider", () => {
+  const NATIVE_CALLBACK = "frontend:///login";
+
+  beforeEach(() => {
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_OAUTH_HANDOFF");
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(process.env, "MOCK_OIDC_ISSUER");
+  });
+
+  // Starts a sign-in the way the Expo client does, and returns the provider URL it must open.
+  const startNativeSignIn = async (app: express.Express): Promise<string> => {
+    const start = await supertest(app)
+      .post("/api/auth/sign-in/social")
+      .set("expo-origin", "frontend://")
+      .send({callbackURL: NATIVE_CALLBACK, provider: MOCK_OIDC_PROVIDER_ID});
+    expect(start.status).toBe(200);
+    return start.body.url as string;
+  };
+
+  const appFor = (issuer: string): express.Express => {
+    process.env.MOCK_OIDC_ISSUER = issuer;
+    const app = express();
+    new BetterAuthApp({
+      config: requireConfig(),
+      userModel: User as unknown as TerrenoAuthUserModel,
+    }).register(app);
+    return app;
+  };
+
+  it("sends the browser on to the mock provider with the state cookie set", async () => {
+    const discovery = await startDiscoveryServer();
+    try {
+      const app = appFor(discovery.issuer);
+      const authorizationURL = await startNativeSignIn(app);
+      expect(authorizationURL.startsWith(`${discovery.issuer}/authorize?`)).toBe(true);
+
+      const proxied = await supertest(app)
+        .get("/api/auth/expo-authorization-proxy")
+        .query({authorizationURL});
+      expect(proxied.status).toBe(302);
+      expect(proxied.headers.location).toBe(authorizationURL);
+      const cookies = ([] as string[]).concat(proxied.headers["set-cookie"] ?? []);
+      expect(cookies.some((cookie) => cookie.startsWith("better-auth.state="))).toBe(true);
+    } finally {
+      await discovery.close();
+    }
+  });
+
+  it("refuses a mock-provider URL without state and look-alike or non-http URLs", async () => {
+    const discovery = await startDiscoveryServer();
+    try {
+      const app = appFor(discovery.issuer);
+      const issuer = new URL(discovery.issuer);
+      const refused = [
+        `${discovery.issuer}/authorize?client_id=x`,
+        `http://${issuer.hostname}.evil.com:${issuer.port}/authorize?state=abc`,
+        `http://${issuer.host}@evil.com/authorize?state=abc`,
+        "javascript:alert(1)//?state=abc",
+        "data:text/html,<script>alert(1)</script>?state=abc",
+      ];
+      for (const authorizationURL of refused) {
+        const proxied = await supertest(app)
+          .get("/api/auth/expo-authorization-proxy")
+          .query({authorizationURL});
+        expect(proxied.status, authorizationURL).toBe(400);
+        expect(proxied.headers.location, authorizationURL).toBeUndefined();
+      }
+    } finally {
+      await discovery.close();
+    }
+  });
+
+  it("still refuses any other http authorization URL", async () => {
+    const discovery = await startDiscoveryServer();
+    try {
+      const app = appFor(discovery.issuer);
+      const proxied = await supertest(app)
+        .get("/api/auth/expo-authorization-proxy")
+        .query({authorizationURL: "http://127.0.0.1:1/authorize?state=abc"});
+      expect(proxied.status).toBe(400);
     } finally {
       await discovery.close();
     }

@@ -18,11 +18,33 @@ import {createHash, randomBytes} from "node:crypto";
 import {createServer, type IncomingMessage, type Server, type ServerResponse} from "node:http";
 import type {BrowserContext} from "@playwright/test";
 
-export const MOCK_OIDC_PORT = 4555;
-export const MOCK_OIDC_ISSUER = `http://127.0.0.1:${MOCK_OIDC_PORT}`;
+const DEFAULT_MOCK_OIDC_PORT = 4555;
 
-// The cross-site run's API (BETTER_AUTH_URL) callback; any other redirect is refused.
-const REDIRECT_URI = "http://127.0.0.1:4000/api/auth/callback/mock-oidc";
+const parsePort = (value: string | undefined): number => {
+  const port = Number(value);
+  return Number.isInteger(port) && port > 0 ? port : DEFAULT_MOCK_OIDC_PORT;
+};
+
+/**
+ * The provider's port: `MOCK_OIDC_PORT`, or 4555. The native run (maestro/native-social-login.yaml)
+ * moves it so it can share a host with a Playwright run.
+ */
+export const MOCK_OIDC_PORT = parsePort(process.env.MOCK_OIDC_PORT);
+
+/**
+ * The issuer discovery advertises: `MOCK_OIDC_ISSUER`, or `http://127.0.0.1:<port>`. A device that
+ * reaches the provider through `adb reverse` needs a host that resolves the same way on the
+ * device and on the backend's machine, such as `http://localhost:<port>`.
+ */
+export const MOCK_OIDC_ISSUER =
+  process.env.MOCK_OIDC_ISSUER || `http://127.0.0.1:${MOCK_OIDC_PORT}`;
+
+/**
+ * The only redirect the provider accepts: `MOCK_OIDC_REDIRECT_URI`, or the cross-site run's API
+ * (BETTER_AUTH_URL) callback. Any other redirect is refused.
+ */
+const REDIRECT_URI =
+  process.env.MOCK_OIDC_REDIRECT_URI || "http://127.0.0.1:4000/api/auth/callback/mock-oidc";
 
 // Matches example-backend/src/utils/betterAuthConfig.ts.
 const CLIENT_ID = "terreno-example-e2e";

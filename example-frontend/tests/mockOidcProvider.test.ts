@@ -1,8 +1,9 @@
 import {afterAll, beforeAll, describe, expect, it} from "bun:test";
 import {createHash} from "node:crypto";
 import {once} from "node:events";
-import type {Server} from "node:http";
+import {createServer, type Server} from "node:http";
 import type {AddressInfo} from "node:net";
+import {DateTime} from "luxon";
 import {
   MOCK_OIDC_IDENTITY_COOKIE,
   MOCK_OIDC_USER,
@@ -145,5 +146,87 @@ describe("mock OIDC provider identity selection", () => {
     expect((await authorize({identityCookie: "not-json"})).status).toBe(400);
     expect((await authorize({identity: {email: "no-at-sign"}})).status).toBe(400);
     expect((await authorize({loginHint: "no-at-sign"})).status).toBe(400);
+  });
+});
+
+// The native run (maestro/native-social-login.yaml) serves the provider beside a Playwright run,
+// on another port, with an issuer and callback a device can reach through `adb reverse`.
+describe("mock OIDC provider served with env overrides", () => {
+  const ISSUER_HOST = "localhost";
+  const NATIVE_REDIRECT_URI = "http://localhost:4000/api/auth/callback/mock-oidc";
+  let child: ReturnType<typeof Bun.spawn>;
+  let port: number;
+  let issuer: string;
+
+  const freePort = async (): Promise<number> => {
+    const probe = createServer();
+    probe.listen(0, "127.0.0.1");
+    await once(probe, "listening");
+    const {port: found} = probe.address() as AddressInfo;
+    probe.close();
+    await once(probe, "close");
+    return found;
+  };
+
+  beforeAll(async () => {
+    port = await freePort();
+    issuer = `http://${ISSUER_HOST}:${port}`;
+    child = Bun.spawn(["bun", "e2e/helpers/mockOidcProvider.ts"], {
+      cwd: `${import.meta.dir}/..`,
+      env: {
+        ...process.env,
+        MOCK_OIDC_ISSUER: issuer,
+        MOCK_OIDC_PORT: String(port),
+        MOCK_OIDC_REDIRECT_URI: NATIVE_REDIRECT_URI,
+        MOCK_OIDC_SERVE: "true",
+      },
+      stderr: "inherit",
+      stdout: "ignore",
+    });
+    const deadline = DateTime.now().plus({seconds: 4});
+    while (DateTime.now() < deadline) {
+      const ready = await fetch(`http://127.0.0.1:${port}/.well-known/openid-configuration`).catch(
+        () => null
+      );
+      if (ready?.ok) {
+        return;
+      }
+      await Bun.sleep(50);
+    }
+    throw new Error("mock OIDC provider did not start");
+  });
+
+  afterAll(async () => {
+    child.kill();
+    await child.exited;
+  });
+
+  it("listens on MOCK_OIDC_PORT and advertises MOCK_OIDC_ISSUER", async () => {
+    const discovery = await fetch(`http://127.0.0.1:${port}/.well-known/openid-configuration`);
+    const body = (await discovery.json()) as Record<string, string>;
+    expect(body.issuer).toBe(issuer);
+    expect(body.authorization_endpoint).toBe(`${issuer}/authorize`);
+    expect(body.token_endpoint).toBe(`${issuer}/token`);
+  });
+
+  it("accepts only MOCK_OIDC_REDIRECT_URI", async () => {
+    const authorize = (redirectUri: string): Promise<Response> => {
+      const url = new URL(`http://127.0.0.1:${port}/authorize`);
+      url.search = new URLSearchParams({
+        client_id: CLIENT_ID,
+        code_challenge: createHash("sha256").update(CODE_VERIFIER).digest("base64url"),
+        code_challenge_method: "S256",
+        redirect_uri: redirectUri,
+        response_type: "code",
+        state: "native-state",
+      }).toString();
+      return fetch(url, {redirect: "manual"});
+    };
+    const approved = await authorize(NATIVE_REDIRECT_URI);
+    expect(approved.status).toBe(302);
+    const redirect = new URL(approved.headers.get("location") ?? "");
+    expect(`${redirect.origin}${redirect.pathname}`).toBe(NATIVE_REDIRECT_URI);
+
+    expect((await authorize(REDIRECT_URI)).status).toBe(400);
   });
 });

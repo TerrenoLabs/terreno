@@ -9,6 +9,7 @@ import {
 } from "@terreno/api";
 import {getCommsService, renderAuthMail} from "@terreno/comms";
 import type {BetterAuthPlugin} from "better-auth";
+import {createAuthMiddleware} from "better-auth/api";
 import {genericOAuth} from "better-auth/plugins";
 
 const DEFAULT_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
@@ -53,11 +54,11 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 export const APPLE_SIGN_IN_ORIGIN = "https://appleid.apple.com";
 
 /**
- * The generic OAuth plugin for the mock OIDC provider at `MOCK_OIDC_ISSUER`, or undefined when
- * it is unset. Anyone who can run that issuer can sign in as anyone it names, so production
+ * The plugins for the mock OIDC provider at `MOCK_OIDC_ISSUER` (its generic OAuth provider and
+ * the native authorization proxy for it), or undefined when it is unset. Anyone who can run that issuer can sign in as anyone it names, so production
  * refuses to start with it set.
  */
-const buildMockOidcPlugin = (): BetterAuthPlugin | undefined => {
+const buildMockOidcPlugins = (): BetterAuthPlugin[] | undefined => {
   const issuer = process.env.MOCK_OIDC_ISSUER;
   if (!issuer) {
     return undefined;
@@ -82,18 +83,74 @@ const buildMockOidcPlugin = (): BetterAuthPlugin | undefined => {
       title: "MOCK_OIDC_ISSUER must be on 127.0.0.1, localhost, or [::1]",
     });
   }
-  return genericOAuth({
-    config: [
+  return [
+    genericOAuth({
+      config: [
+        {
+          clientId: MOCK_OIDC_CLIENT_ID,
+          clientSecret: MOCK_OIDC_CLIENT_SECRET,
+          discoveryUrl: `${issuerURL.origin}/.well-known/openid-configuration`,
+          pkce: true,
+          providerId: MOCK_OIDC_PROVIDER_ID,
+        },
+      ],
+    }),
+    buildMockOidcNativeProxyPlugin(issuerURL.origin),
+  ];
+};
+
+/** Path of `@better-auth/expo`'s authorization proxy, relative to the auth base path. */
+const EXPO_AUTHORIZATION_PROXY_PATH = "/expo-authorization-proxy";
+
+/**
+ * Lets a native app sign in with the mock OIDC provider. Better Auth's Expo client opens every
+ * provider through the server's `/expo-authorization-proxy`, which sets the OAuth state cookie in
+ * the system browser and then redirects to the provider. That proxy accepts only https
+ * authorization URLs, and the mock provider is plain http on this machine. For authorization URLs
+ * on the mock issuer's exact origin, this does the proxy's work itself; every other URL still
+ * goes to the Expo plugin and its https check. `buildMockOidcPlugins` adds it only beside the
+ * mock provider, which never runs in production.
+ */
+const buildMockOidcNativeProxyPlugin = (issuerOrigin: string): BetterAuthPlugin => ({
+  hooks: {
+    before: [
       {
-        clientId: MOCK_OIDC_CLIENT_ID,
-        clientSecret: MOCK_OIDC_CLIENT_SECRET,
-        discoveryUrl: `${issuerURL.origin}/.well-known/openid-configuration`,
-        pkce: true,
-        providerId: MOCK_OIDC_PROVIDER_ID,
+        handler: createAuthMiddleware(async (ctx) => {
+          const authorizationURL = ctx.query?.authorizationURL;
+          if (typeof authorizationURL !== "string" || authorizationURL.includes("#")) {
+            return;
+          }
+          let url: URL;
+          try {
+            url = new URL(authorizationURL);
+          } catch {
+            return;
+          }
+          if (url.origin !== issuerOrigin) {
+            return;
+          }
+          // Same cookies the Expo plugin's proxy sets: the client's stored OAuth state when it
+          // sends one, otherwise the signed state from the authorization URL.
+          const oauthState = ctx.query?.oauthState;
+          if (typeof oauthState === "string" && oauthState) {
+            const cookie = ctx.context.createAuthCookie("oauth_state", {maxAge: 600});
+            ctx.setCookie(cookie.name, oauthState, cookie.attributes);
+          } else {
+            const state = url.searchParams.get("state");
+            if (!state) {
+              return;
+            }
+            const cookie = ctx.context.createAuthCookie("state", {maxAge: 300});
+            await ctx.setSignedCookie(cookie.name, state, ctx.context.secret, cookie.attributes);
+          }
+          throw ctx.redirect(url.href);
+        }),
+        matcher: (context): boolean => context.path === EXPO_AUTHORIZATION_PROXY_PATH,
       },
     ],
-  });
-};
+  },
+  id: "mock-oidc-native-proxy",
+});
 
 /** The web app's public URL (`FRONTEND_URL`), used for auth mail links and passkeys. */
 export const getFrontendUrl = (): string => process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
@@ -366,9 +423,9 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     };
   }
 
-  const mockOidcPlugin = buildMockOidcPlugin();
-  if (mockOidcPlugin) {
-    config.plugins = [mockOidcPlugin];
+  const mockOidcPlugins = buildMockOidcPlugins();
+  if (mockOidcPlugins) {
+    config.plugins = mockOidcPlugins;
   }
 
   return config;

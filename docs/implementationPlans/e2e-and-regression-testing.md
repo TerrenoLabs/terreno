@@ -331,7 +331,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: admin-backend/e2e/smoke.ts, admin-backend/package.json, docs/testing/e2e/admin-backend.md
   - Acceptance: `bun run --cwd admin-backend smoke` exits 0. Over HTTP, an admin lists the admin config and one model's documents, and a non-admin gets 403.
 
-- [ ] **T20** — Align the `@terreno/admin-spa` smoke with the convention
+- [x] **T20** — Align the `@terreno/admin-spa` smoke with the convention
   - Depends on: T8
   - Files: admin-spa/e2e/smoke.ts, admin-spa/package.json, docs/testing/e2e/admin-spa.md
   - Acceptance: After `build:web`, `bun run --cwd admin-spa smoke` exits 0 and still serves the SPA through the Express plugin. The package page lists the existing `test:e2e` and `test:integration` suites.

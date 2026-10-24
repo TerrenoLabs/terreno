@@ -73,8 +73,7 @@ the build.**
 
 A server smoke hosts its own server by re-running its file with a `serve` argument, so each
 package keeps one smoke file. [`api/e2e/smoke.ts`](https://github.com/TerrenoLabs/terreno/blob/master/api/e2e/smoke.ts)
-is the reference. admin-spa's older `e2e/smoke.ts` uses a fixed port (4111) and needs
-`build:web` first; do not copy it.
+is the reference.
 
 ## Write a Playwright spec
 

@@ -47,6 +47,11 @@ Tenant isolation uses multiple checks rather than one convention:
 admin models whose schema contains `organizationId`. Models without that path
 remain platform-scoped.
 
+Adding, changing, or removing a membership through `POST` / `PATCH` / `DELETE
+/orgs/:id/members` clears that user's cached permissions, so a new org-admin can open the
+admin page (and a demoted or removed one loses it) on their next request instead of after
+the permission cache's 30-second TTL.
+
 ## Disabled organizations
 
 When `Organization.disabled` is `true`, tenant context and membership mutations

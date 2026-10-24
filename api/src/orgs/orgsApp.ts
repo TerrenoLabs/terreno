@@ -435,6 +435,8 @@ export class OrgsApp implements TerrenoPlugin {
           roleName,
           userId: userIdOf(target),
         });
+        // Membership grants (an org-admin's admin:access) apply at once, not after the cache TTL.
+        this.access.invalidateCache({userId: String(created.userId)});
         await emitOrgAudit({
           event: {
             actorId: user.id,
@@ -493,6 +495,7 @@ export class OrgsApp implements TerrenoPlugin {
           member.status = req.body.status === "suspended" ? "suspended" : "active";
         }
         await member.save();
+        this.access.invalidateCache({userId: String(member.userId)});
         await emitOrgAudit({
           event: {
             actorId: user.id,
@@ -533,6 +536,7 @@ export class OrgsApp implements TerrenoPlugin {
         }
         await assertNotLastOrgAdmin(member, "member", "suspended");
         await member.deleteOne();
+        this.access.invalidateCache({userId: String(member.userId)});
         await emitOrgAudit({
           event: {
             actorId: user.id,

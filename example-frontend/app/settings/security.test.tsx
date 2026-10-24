@@ -1,7 +1,6 @@
-import {afterEach, describe, it, type Mock, mock} from "bun:test";
+import {afterEach, describe, it, mock} from "bun:test";
 import {TerrenoAccountSecurityScreen} from "@terreno/rtk";
 import {assert} from "chai";
-import {useLocalSearchParams, useRouter} from "expo-router";
 import React from "react";
 import TestRenderer, {act, type ReactTestRenderer} from "react-test-renderer";
 
@@ -15,13 +14,6 @@ interface FakeRouter {
   replace: ReturnType<typeof mock>;
 }
 
-// The package preload registers these expo-router hooks as mocks; this file only swaps their
-// implementations and puts the preload's defaults back afterwards.
-const searchParams = useLocalSearchParams as unknown as Mock<() => Record<string, string>>;
-const routerHook = useRouter as unknown as Mock<() => unknown>;
-const preloadSearchParams = searchParams.getMockImplementation();
-const preloadRouter = routerHook.getMockImplementation();
-
 const fakeRouter = ({canGoBack}: {canGoBack: boolean}): FakeRouter => ({
   back: mock(() => {}),
   canGoBack: mock(() => canGoBack),
@@ -32,12 +24,14 @@ const renderScreen = async (
   router: FakeRouter,
   params: Record<string, string> = {}
 ): Promise<ReactTestRenderer> => {
-  routerHook.mockImplementation(() => router);
-  searchParams.mockImplementation(() => params);
   let renderer: ReactTestRenderer | undefined;
   // Async act lets the screen's sign-in methods request settle before assertions.
   await act(async () => {
-    renderer = TestRenderer.create(<SecurityScreen />);
+    renderer = TestRenderer.create(
+      <SecurityScreen
+        dependencies={{useLinkError: () => params.error, useSecurityRouter: () => router}}
+      />
+    );
   });
   if (!renderer) {
     throw new Error("security screen did not render");
@@ -68,12 +62,6 @@ describe("SecurityScreen", () => {
       mounted?.unmount();
     });
     mounted = undefined;
-    if (preloadSearchParams) {
-      searchParams.mockImplementation(preloadSearchParams);
-    }
-    if (preloadRouter) {
-      routerHook.mockImplementation(preloadRouter);
-    }
   });
 
   it("wires the account security screen to the app's Better Auth client and return URL", async () => {
@@ -114,5 +102,16 @@ describe("SecurityScreen", () => {
 
     assert.equal(router.back.mock.calls.length, 0);
     assert.deepEqual(router.replace.mock.calls, [["/(tabs)/profile"]]);
+  });
+
+  it("reads the router and link error from expo-router by default", async () => {
+    await act(async () => {
+      mounted = TestRenderer.create(<SecurityScreen />);
+    });
+
+    assert.equal(
+      mounted?.root.findByType(TerrenoAccountSecurityScreen).props.client,
+      betterAuthClient
+    );
   });
 });

@@ -66,6 +66,34 @@ const injectedRtkApi = api
           url: `/comms/dev/testPush`,
         }),
       }),
+      consentresponsesProvisional: build.mutation<
+        ConsentresponsesProvisionalRes,
+        ConsentresponsesProvisionalArgs
+      >({
+        invalidatesTags: ["consentresponses"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/consent-responses/provisional`,
+        }),
+      }),
+      consentresponsesStatus: build.query<ConsentresponsesStatusRes, ConsentresponsesStatusArgs>({
+        providesTags: ["consentresponses"],
+        query: (queryArg) => ({
+          params: {
+            userId: queryArg,
+          },
+          url: `/consent-responses/status`,
+        }),
+      }),
+      consentresponsesVoid: build.mutation<ConsentresponsesVoidRes, ConsentresponsesVoidArgs>({
+        invalidatesTags: ["consentresponses"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "POST",
+          url: `/consent-responses/${queryArg.id}/void`,
+        }),
+      }),
       createMcpServiceToken: build.mutation<CreateMcpServiceTokenRes, CreateMcpServiceTokenArgs>({
         invalidatesTags: ["mcp"],
         query: (queryArg) => ({
@@ -430,6 +458,7 @@ const injectedRtkApi = api
             limit: queryArg.limit,
             locale: queryArg.locale,
             page: queryArg.page,
+            provisional: queryArg.provisional,
             q: queryArg.q,
             sort: queryArg.sort,
             userId: queryArg.userId,
@@ -787,6 +816,24 @@ const injectedRtkApi = api
           url: `/comms/stats`,
         }),
       }),
+      getConsentResponses: build.query<GetConsentResponsesRes, GetConsentResponsesArgs>({
+        providesTags: ["consentresponses"],
+        query: (queryArg) => ({
+          params: {
+            _id: queryArg._id,
+            limit: queryArg.limit,
+            page: queryArg.page,
+            sort: queryArg.sort,
+          },
+          url: `/consent-responses/`,
+        }),
+      }),
+      getConsentResponsesById: build.query<GetConsentResponsesByIdRes, GetConsentResponsesByIdArgs>(
+        {
+          providesTags: ["consentresponses"],
+          query: (queryArg) => ({url: `/consent-responses/${queryArg}`}),
+        }
+      ),
       getFeatureFlagsFlags: build.query<GetFeatureFlagsFlagsRes, GetFeatureFlagsFlagsArgs>({
         providesTags: ["featureflags"],
         query: (queryArg) => ({
@@ -4914,8 +4961,15 @@ export type GetAdminAuditEventsRes = /** status 200 Successful list */ {
     before?: any;
     /** Mongoose model name of the affected document */
     modelName: string;
-    /** Fine-grained mutation kind */
-    operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "update";
+    /** Fine-grained mutation kind, or read for an audited read */
+    operation:
+      | "arrayPush"
+      | "arrayRemove"
+      | "arrayUpdate"
+      | "create"
+      | "delete"
+      | "read"
+      | "update";
     /** Tenant organization id when known */
     organizationId?: string;
     /** Primary key of the affected document */
@@ -4924,8 +4978,8 @@ export type GetAdminAuditEventsRes = /** status 200 Successful list */ {
     recordLabel?: string;
     /** Which framework surface wrote this event */
     source: "admin" | "modelRouter" | "rbac";
-    /** Widget-compatible mutation verb */
-    verb: "created" | "deleted" | "updated";
+    /** Widget-compatible mutation verb, or viewed for an audited read */
+    verb: "created" | "deleted" | "updated" | "viewed";
     _id: string;
     /** When this document was last updated */
     updated: string;
@@ -4959,7 +5013,7 @@ export type GetAdminAuditEventsArgs = {
         $lte?: string;
       };
   verb?:
-    | ("created" | "deleted" | "updated")
+    | ("created" | "deleted" | "updated" | "viewed")
     | {
         $in?: string[];
       };
@@ -4991,8 +5045,8 @@ export type GetAdminAuditEventsByIdRes = /** status 200 Successful read */ {
   before?: any;
   /** Mongoose model name of the affected document */
   modelName: string;
-  /** Fine-grained mutation kind */
-  operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "update";
+  /** Fine-grained mutation kind, or read for an audited read */
+  operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "read" | "update";
   /** Tenant organization id when known */
   organizationId?: string;
   /** Primary key of the affected document */
@@ -5001,8 +5055,8 @@ export type GetAdminAuditEventsByIdRes = /** status 200 Successful read */ {
   recordLabel?: string;
   /** Which framework surface wrote this event */
   source: "admin" | "modelRouter" | "rbac";
-  /** Widget-compatible mutation verb */
-  verb: "created" | "deleted" | "updated";
+  /** Widget-compatible mutation verb, or viewed for an audited read */
+  verb: "created" | "deleted" | "updated" | "viewed";
   _id: string;
   /** When this document was last updated */
   updated: string;
@@ -5421,6 +5475,20 @@ export type GetAdminConsentResponsesRes = /** status 200 Successful list */ {
     ipAddress?: string;
     /** Locale code of the content version the user viewed when responding */
     locale: string;
+    /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
+    provisional?: boolean;
+    /** Required note from the provisional signer explaining how consent was obtained */
+    provisionalNote: string;
+    provisionalSignedBy: {
+      /** The user's display name */
+      name?: string;
+      /** The user's email address, used for authentication */
+      email?: string;
+    };
+    /** IP address of the provisional signer, captured for audit purposes */
+    provisionalSignerIp?: string;
+    /** User-agent string of the provisional signer's browser or app */
+    provisionalSignerUserAgent?: string;
     /** Base64-encoded signature image or typed signature text, if captured */
     signature?: string;
     /** Timestamp when the user provided their signature */
@@ -5433,6 +5501,12 @@ export type GetAdminConsentResponsesRes = /** status 200 Successful list */ {
       /** The user's email address, used for authentication */
       email?: string;
     };
+    /** When a provisional signature was voided. Voided signatures no longer count as consent */
+    voidedAt?: string;
+    /** The user who voided this provisional signature */
+    voidedBy?: string;
+    /** Why the provisional signature was voided */
+    voidReason?: string;
     _id: string;
     /** When this document was last updated */
     updated: string;
@@ -5461,6 +5535,11 @@ export type GetAdminConsentResponsesArgs = {
         $in?: any[];
       };
   agreed?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
+  provisional?:
     | boolean
     | {
         $in?: boolean[];
@@ -5513,6 +5592,20 @@ export type GetAdminConsentResponsesByIdRes = /** status 200 Successful read */ 
   ipAddress?: string;
   /** Locale code of the content version the user viewed when responding */
   locale: string;
+  /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
+  provisional?: boolean;
+  /** Required note from the provisional signer explaining how consent was obtained */
+  provisionalNote: string;
+  provisionalSignedBy: {
+    /** The user's display name */
+    name?: string;
+    /** The user's email address, used for authentication */
+    email?: string;
+  };
+  /** IP address of the provisional signer, captured for audit purposes */
+  provisionalSignerIp?: string;
+  /** User-agent string of the provisional signer's browser or app */
+  provisionalSignerUserAgent?: string;
   /** Base64-encoded signature image or typed signature text, if captured */
   signature?: string;
   /** Timestamp when the user provided their signature */
@@ -5525,6 +5618,12 @@ export type GetAdminConsentResponsesByIdRes = /** status 200 Successful read */ 
     /** The user's email address, used for authentication */
     email?: string;
   };
+  /** When a provisional signature was voided. Voided signatures no longer count as consent */
+  voidedAt?: string;
+  /** The user who voided this provisional signature */
+  voidedBy?: string;
+  /** Why the provisional signature was voided */
+  voidReason?: string;
   _id: string;
   /** When this document was last updated */
   updated: string;
@@ -6758,6 +6857,203 @@ export type AdminMigrationsStatusRes = /** status 200 Successful response */ {
   data?: object;
 };
 export type AdminMigrationsStatusArgs = undefined;
+export type ConsentresponsesVoidRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type ConsentresponsesVoidArgs = {
+  id: string;
+  body: {
+    reason: string;
+  };
+};
+export type ConsentresponsesProvisionalRes = /** status 200 Successful response */ {
+  data?: object;
+};
+export type ConsentresponsesProvisionalArgs = {
+  consentFormId: string;
+  locale?: string;
+  note: string;
+  userId: string;
+};
+export type ConsentresponsesStatusRes = /** status 200 Successful response */ {
+  data: {
+    form: {
+      _id: string;
+      content: {
+        [key: string]: string;
+      };
+      id: string;
+      slug: string;
+      title: string;
+      type: string;
+      version: number;
+      [key: string]: any | null;
+    };
+    isConsented: boolean;
+    provisional?: {
+      note?: string;
+      responseId: string;
+      signedAt: string;
+      signedBy: {
+        email?: string;
+        id: string;
+        name?: string;
+      } | null;
+    };
+    respondedAt?: string;
+    status: "pending" | "provisional" | "signed" | "declined";
+  }[];
+};
+export type ConsentresponsesStatusArgs = string;
+export type GetConsentResponsesRes = /** status 200 Successful list */ {
+  data?: {
+    /** Whether the user agreed (true) or declined (false) the consent form */
+    agreed: boolean;
+    /** Timestamp when the user submitted their agreement or declination */
+    agreedAt: string;
+    /** Map of checkbox index to boolean indicating whether each checkbox was checked */
+    checkboxValues?: {
+      [key: string]: boolean;
+    };
+    consentFormId: {
+      /** Human-readable title of the consent form */
+      title?: string;
+      /** URL-safe identifier for this form, combined with version to uniquely identify a form */
+      slug?: string;
+      /** Version number of this form. Incrementing the version requires users to re-consent */
+      version?: number;
+      /** Category of consent form */
+      type?: "agreement" | "privacy" | "hipaa" | "research" | "terms" | "custom";
+    };
+    /** Snapshot of the form content in the user's locale at the time of response */
+    contentSnapshot?: string;
+    /** Version number of the form at the time the user responded */
+    formVersionSnapshot?: number;
+    /** IP address of the user at the time of response, captured for audit purposes */
+    ipAddress?: string;
+    /** Locale code of the content version the user viewed when responding */
+    locale: string;
+    /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
+    provisional?: boolean;
+    /** Required note from the provisional signer explaining how consent was obtained */
+    provisionalNote: string;
+    provisionalSignedBy: {
+      /** The user's display name */
+      name?: string;
+      /** The user's email address, used for authentication */
+      email?: string;
+    };
+    /** IP address of the provisional signer, captured for audit purposes */
+    provisionalSignerIp?: string;
+    /** User-agent string of the provisional signer's browser or app */
+    provisionalSignerUserAgent?: string;
+    /** Base64-encoded signature image or typed signature text, if captured */
+    signature?: string;
+    /** Timestamp when the user provided their signature */
+    signedAt?: string;
+    /** User-agent string of the browser or app used to submit the response */
+    userAgent?: string;
+    userId: {
+      /** The user's display name */
+      name?: string;
+      /** The user's email address, used for authentication */
+      email?: string;
+    };
+    /** When a provisional signature was voided. Voided signatures no longer count as consent */
+    voidedAt?: string;
+    /** The user who voided this provisional signature */
+    voidedBy?: string;
+    /** Why the provisional signature was voided */
+    voidReason?: string;
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetConsentResponsesArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetConsentResponsesByIdRes = /** status 200 Successful read */ {
+  /** Whether the user agreed (true) or declined (false) the consent form */
+  agreed: boolean;
+  /** Timestamp when the user submitted their agreement or declination */
+  agreedAt: string;
+  /** Map of checkbox index to boolean indicating whether each checkbox was checked */
+  checkboxValues?: {
+    [key: string]: boolean;
+  };
+  consentFormId: {
+    /** Human-readable title of the consent form */
+    title?: string;
+    /** URL-safe identifier for this form, combined with version to uniquely identify a form */
+    slug?: string;
+    /** Version number of this form. Incrementing the version requires users to re-consent */
+    version?: number;
+    /** Category of consent form */
+    type?: "agreement" | "privacy" | "hipaa" | "research" | "terms" | "custom";
+  };
+  /** Snapshot of the form content in the user's locale at the time of response */
+  contentSnapshot?: string;
+  /** Version number of the form at the time the user responded */
+  formVersionSnapshot?: number;
+  /** IP address of the user at the time of response, captured for audit purposes */
+  ipAddress?: string;
+  /** Locale code of the content version the user viewed when responding */
+  locale: string;
+  /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
+  provisional?: boolean;
+  /** Required note from the provisional signer explaining how consent was obtained */
+  provisionalNote: string;
+  provisionalSignedBy: {
+    /** The user's display name */
+    name?: string;
+    /** The user's email address, used for authentication */
+    email?: string;
+  };
+  /** IP address of the provisional signer, captured for audit purposes */
+  provisionalSignerIp?: string;
+  /** User-agent string of the provisional signer's browser or app */
+  provisionalSignerUserAgent?: string;
+  /** Base64-encoded signature image or typed signature text, if captured */
+  signature?: string;
+  /** Timestamp when the user provided their signature */
+  signedAt?: string;
+  /** User-agent string of the browser or app used to submit the response */
+  userAgent?: string;
+  userId: {
+    /** The user's display name */
+    name?: string;
+    /** The user's email address, used for authentication */
+    email?: string;
+  };
+  /** When a provisional signature was voided. Voided signatures no longer count as consent */
+  voidedAt?: string;
+  /** The user who voided this provisional signature */
+  voidedBy?: string;
+  /** Why the provisional signature was voided */
+  voidReason?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+};
+export type GetConsentResponsesByIdArgs = string;
 export type PostNotificationsMarkAllReadRes = /** status 200 Success */ {
   data?: {
     modified?: number;
@@ -7857,6 +8153,11 @@ export const {
   useDeleteAdminUsersByIdMutation,
   useAdminMigrationsRunMutation,
   useAdminMigrationsStatusQuery,
+  useConsentresponsesVoidMutation,
+  useConsentresponsesProvisionalMutation,
+  useConsentresponsesStatusQuery,
+  useGetConsentResponsesQuery,
+  useGetConsentResponsesByIdQuery,
   usePostNotificationsMarkAllReadMutation,
   useGetNotificationsQuery,
   useGetNotificationsByIdQuery,

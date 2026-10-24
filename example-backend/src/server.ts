@@ -480,6 +480,8 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       )
       .register(
         new ConsentApp({
+          // Staff whose roles grant consentResponse:signOnBehalf may sign consent for others.
+          accessControl: access,
           auditTrail: true,
           resolveConsentForms: (user, forms) => (user.admin ? [] : forms),
           supportedLocales: ["en", "es"],

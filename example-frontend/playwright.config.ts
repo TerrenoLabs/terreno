@@ -32,6 +32,7 @@ const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
  *
  *   setup → app (everything else, parallel)
  *         → consents      (active consent forms gate every user's login)
+ *         → provisional-consent (same reason; it must not overlap consents)
  *         → syncdb-*      (one project per file, chained — see below)
  *
  * The syncdb chain is no longer about the client lifecycle: Phase E1 (the generation
@@ -64,7 +65,12 @@ const localProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "app",
-    testIgnore: [/consents\.spec\.ts/, /syncdb-.*\.spec\.ts/, CROSS_SITE_SPECS],
+    testIgnore: [
+      /consents\.spec\.ts/,
+      /provisionalConsent\.spec\.ts/,
+      /syncdb-.*\.spec\.ts/,
+      CROSS_SITE_SPECS,
+    ],
     use: chromium,
   },
   {
@@ -73,8 +79,14 @@ const localProjects: Project[] = [
     testMatch: /consents\.spec\.ts/,
     use: chromium,
   },
+  {
+    dependencies: ["consents"],
+    name: "provisional-consent",
+    testMatch: /provisionalConsent\.spec\.ts/,
+    use: chromium,
+  },
   ...syncdbFiles.map((file, index) => ({
-    dependencies: [index === 0 ? "consents" : syncdbFiles[index - 1]],
+    dependencies: [index === 0 ? "provisional-consent" : syncdbFiles[index - 1]],
     name: file,
     testMatch: new RegExp(`${file}\\.spec\\.ts`),
     use: chromium,

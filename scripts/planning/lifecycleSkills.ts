@@ -141,7 +141,62 @@ const TASTE_UNBOUNDED_LOOP_PATTERNS = [
   /wait until all CI is green/i,
 ];
 
-const TESTING_PLAN_SECTIONS = ["## E2E tests", "## Regression cases"] as const;
+interface RequiredPhrase {
+  error: string;
+  phrase: string;
+}
+
+const TESTING_PLAN_LINK = "../../references/testing-plan.md";
+
+/** Phrases each stage needs to carry its part of the testing-plan contract. */
+const TESTING_PLAN_STAGE_PHRASES: Record<(typeof LIFECYCLE_STAGES)[number], RequiredPhrase[]> = {
+  brew: [
+    {error: "Brew must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Brew must gate on planned ## E2E tests rows", phrase: "## E2E tests"},
+    {
+      error: "Brew must merge ## Regression cases rows into the suite",
+      phrase: "## Regression cases",
+    },
+    {error: "Brew must write cases to the resolved Regression suites", phrase: "Regression suites"},
+    {error: "Brew must assign each new case the next free ID", phrase: "next free ID"},
+  ],
+  grow: [
+    {error: "Grow must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Grow must require the IP section ## E2E tests", phrase: "## E2E tests"},
+    {error: "Grow must require the IP section ## Regression cases", phrase: "## Regression cases"},
+    {
+      error: "Grow must forbid omitting a testing-plan section",
+      phrase: "neither may be missing",
+    },
+  ],
+  pick: [
+    {error: "Pick must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Pick must write the task's planned ## E2E tests rows", phrase: "## E2E tests"},
+    {error: "Pick must follow the e2e guide for planned specs", phrase: "e2e guide"},
+    {error: "Pick must write the rows whose Written in names this task", phrase: "Written in"},
+    {error: "Pick must never skip a planned row silently", phrase: "skip a row silently"},
+  ],
+  roast: [
+    {error: "Roast must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Roast must run the task's planned ## E2E tests rows", phrase: "## E2E tests"},
+    {error: "Roast must check ## Regression cases rows", phrase: "## Regression cases"},
+    {error: "Roast must record unreachable rows as `deferred`", phrase: "`deferred`"},
+    {
+      error: "Roast must hold regression rows to the regression-step bar",
+      phrase: "regression-step bar",
+    },
+  ],
+  taste: [
+    {error: "Taste must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Taste must re-run affected ## E2E tests rows after fixes", phrase: "## E2E tests"},
+    {
+      error: "Taste must re-check both testing-plan sections after fixes",
+      phrase: "re-check both testing-plan sections",
+    },
+    {error: "Taste must renumber regression ID collisions", phrase: "renumber regression ID"},
+    {error: "Taste must run the declared Smoke command before push", phrase: "Smoke command"},
+  ],
+};
 
 const TESTING_PLAN_REQUIRED_PHRASES = [
   "## Standardized spot",
@@ -252,17 +307,6 @@ export const validateStageContent = ({
     }
     if (!content.includes("question that prompted")) {
       errors.push(`${prefix}: Grow decisions must carry the question that prompted them`);
-    }
-    if (!content.includes("../../references/testing-plan.md")) {
-      errors.push(`${prefix}: Grow must load the testing-plan contract`);
-    }
-    for (const section of TESTING_PLAN_SECTIONS) {
-      if (!content.includes(section)) {
-        errors.push(`${prefix}: Grow must require the IP section ${section}`);
-      }
-    }
-    if (!content.includes("neither may be missing")) {
-      errors.push(`${prefix}: Grow must forbid omitting a testing-plan section`);
     }
     if (grillingContent) {
       errors.push(...validateGrillingProcedure(grillingContent));
@@ -479,6 +523,12 @@ export const validateStageContent = ({
       if (pattern.test(content)) {
         errors.push(`${prefix}: contains an unbounded waiting/loop pattern: ${pattern.source}`);
       }
+    }
+  }
+
+  for (const {error, phrase} of TESTING_PLAN_STAGE_PHRASES[definition.stage]) {
+    if (!content.includes(phrase)) {
+      errors.push(`${prefix}: ${error}`);
     }
   }
 

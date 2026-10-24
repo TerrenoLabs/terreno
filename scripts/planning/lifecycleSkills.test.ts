@@ -652,6 +652,181 @@ describe("lifecycle skill architecture", (): void => {
     });
   }
 
+  for (const [directory, stage, nextMarkers, search, replacement, expected] of [
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Pick must load the testing-plan contract",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Pick must write the task's planned ## E2E tests rows",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "e2e guide",
+      "test notes",
+      "Pick must follow the e2e guide for planned specs",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "skip a row silently",
+      "drop a row",
+      "Pick must never skip a planned row silently",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "Written in",
+      "Owned by",
+      "Pick must write the rows whose Written in names this task",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Roast must load the testing-plan contract",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Roast must run the task's planned ## E2E tests rows",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "## Regression cases",
+      "the manual list",
+      "Roast must check ## Regression cases rows",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "`deferred`",
+      "`skipped`",
+      "Roast must record unreachable rows as `deferred`",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "regression-step bar",
+      "case style",
+      "Roast must hold regression rows to the regression-step bar",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Brew must load the testing-plan contract",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Brew must gate on planned ## E2E tests rows",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "## Regression cases",
+      "the manual list",
+      "Brew must merge ## Regression cases rows into the suite",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "Regression suites",
+      "case folder",
+      "Brew must write cases to the resolved Regression suites",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "next free ID",
+      "any ID",
+      "Brew must assign each new case the next free ID",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Taste must load the testing-plan contract",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Taste must re-run affected ## E2E tests rows after fixes",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "re-check both testing-plan sections",
+      "glance at the plan",
+      "Taste must re-check both testing-plan sections after fixes",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "renumber regression ID",
+      "keep regression ID",
+      "Taste must renumber regression ID collisions",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "Smoke command",
+      "quick check",
+      "Taste must run the declared Smoke command before push",
+    ],
+  ] as const) {
+    it(`rejects ${stage} without ${search}`, (): void => {
+      const content = readStage(directory).replaceAll(search, replacement);
+
+      assert.deepEqual(
+        validateStageContent({
+          content,
+          definition: {directory, nextMarkers: [...nextMarkers], stage},
+        }),
+        [`${directory}: ${expected}`]
+      );
+    });
+  }
+
   it("rejects an approval brief without E2E and Regression lines", (): void => {
     const content = readGrilling()
       .replaceAll("E2E: <", "Specs: <")

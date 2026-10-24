@@ -28,6 +28,14 @@ on casual chat. Grow, Brew, and Taste never own the full orchestration. Pick and
 the inner loop that implements one task, roasts it, then picks the next until the list is
 done.
 
+Every IP carries a testing plan ([`references/testing-plan.md`](terreno-planning/references/testing-plan.md)):
+required `## E2E tests` and `## Regression cases` sections, the e2e guide at
+`docs/testing/e2e.md`, and one regression suite per area under `docs/regression/`. A repo
+overrides those paths with a `## Testing conventions` table in AGENTS.md or CLAUDE.md.
+Grow plans the rows, Pick writes each spec, Roast runs them, Brew gates on them and
+merges the cases into the suite with the next free ID, and Taste re-checks both after
+fixes and renumbers ID collisions.
+
 Three additional skills are **outer loops**, not stages. They invoke the five transitions
 and persist state:
 
@@ -114,6 +122,7 @@ The shared result/state format and outer state machine live in:
 - [`references/loop-engineering.md`](terreno-planning/references/loop-engineering.md)
 - [`references/github-attention-contract.md`](terreno-planning/references/github-attention-contract.md)
 - [`references/pr-deployments.md`](terreno-planning/references/pr-deployments.md)
+- [`references/testing-plan.md`](terreno-planning/references/testing-plan.md)
 - [`stage-result.schema.json`](terreno-planning/references/stage-result.schema.json)
 - [`execution-state.schema.json`](terreno-planning/references/execution-state.schema.json)
 

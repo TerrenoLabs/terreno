@@ -208,7 +208,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
     - Both generated skills contain "## E2E tests".
   - Skills: update-agent-docs, improve-rulesync
 
-- [ ] **T7** — Enforce the new stage phrases and document the contract
+- [x] **T7** — Enforce the new stage phrases and document the contract
   - Depends on: T2, T3, T4, T5
   - Files: scripts/planning/lifecycleSkills.ts, scripts/planning/lifecycleSkills.test.ts, plugins/terreno-planning/skills/update-docs/SKILL.md, plugins/README.md, docs/reference/lifecycle-plugin.md, docs/explanation/planning-plugins.md, plugins/terreno-planning/.cursor-plugin/plugin.json, plugins/terreno-planning/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .cursor-plugin/marketplace.json, regenerated plugins/terreno-claude/ and skills/ (never hand-edited), changelog/unreleased/lifecycle-e2e-and-regression.md
   - Delivers:

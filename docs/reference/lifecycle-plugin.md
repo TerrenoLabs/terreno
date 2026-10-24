@@ -1,6 +1,6 @@
 # Lifecycle plugin reference
 
-Plugin: `terreno-planning` (`2.12.0`)
+Plugin: `terreno-planning` (`2.13.0`)
 
 Planning skills are model-invocable: agents may select them from descriptions, not only
 from slash commands. Grow, Brew, and Taste each implement one bounded transition. Pick continues an inner loop until the
@@ -159,3 +159,76 @@ docs, upgrade, deployment, and UI-verification workflows, plus `pre-commit` and
 `ui-verifier` agents on Cursor and Claude Code. Codex consumes the combined skills
 without plugin-defined agents. Repository-local skills supply only project-specific
 roadmap, release, and maintenance conventions discovered at stage start.
+
+## Testing plan
+
+Every IP plans its e2e tests and its manual regression cases up front, per
+[testing-plan.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/testing-plan.md).
+Grow writes both sections; later stages read them and never invent rows.
+
+| Stage | Duty |
+| --- | --- |
+| Grow | Reads the spot, writes `## E2E tests` and `## Regression cases`, adds a guide-writing task when no e2e guide exists |
+| Pick | Writes each `## E2E tests` row whose `Written in` names the current task, at its path, following the e2e guide |
+| Roast | Runs the task's rows (missing or failing is `FAIL`, unreachable is `deferred`) and holds regression rows to the regression-step bar |
+| Brew | Gates on every row passing, merges regression rows into the suite with the next free ID, lists the IDs in the PR `Verification` section |
+| Taste | Re-runs affected rows after a behaviour-changing fix, renumbers regression ID collisions with the base, runs the declared `Smoke command` before push |
+
+### Standardized spot
+
+The e2e guide is `docs/testing/e2e.md` and the suites live in `docs/regression/`. A repo
+with a different layout overrides them with a `## Testing conventions` table in AGENTS.md
+or CLAUDE.md:
+
+```markdown
+## Testing conventions
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke |
+```
+
+### IP sections
+
+Both sections are required. Either may be `None — <reason>`; neither may be missing. An
+IP approved before the contract reads as `None — predates contract`, and stages warn
+instead of failing. Regression IDs in an IP are provisional (`<AREA>-new-<n>`).
+
+```markdown
+## E2E tests
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | `e2e/todos-due-date.spec.ts` | browser | A user sets a due date and sees it in the list | T2 |
+
+## Regression cases
+
+Destination: TODO → docs/regression/todos.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| TODO-new-1 | Due date survives a reinstall | Signed in on a phone with one dated todo, delete and reinstall the app, then sign in | The todo shows the same due date | iOS, Android | manual | todos-due-date |
+```
+
+A stage that cannot reach a row's layer records it `deferred` with its exact command.
+Only Brew accepts a deferred row, and only after that command passes locally or in
+product CI on the branch.
+
+### Suite file format
+
+One living file per area at `<Regression suites>/<area>.md`. IDs are `<AREA>-NNN` and
+never reused; Brew assigns the next free ID when it writes the case.
+
+```markdown
+# Todos regression suite
+
+Area: TODO
+Owner: mobile team
+Last full run: never
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| TODO-001 | Due date survives a reinstall | Signed in on a phone with one dated todo, delete and reinstall the app, then sign in | The todo shows the same due date | iOS, Android | manual | todos-due-date |
+```

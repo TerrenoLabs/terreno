@@ -361,7 +361,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: cli/e2e/smoke.ts, cli/package.json, docs/testing/e2e/cli.md
   - Acceptance: `bun run --cwd cli smoke` exits 0. The compiled `terreno` binary prints its version and runs one offline subcommand that exits 0.
 
-- [ ] **T26** — Smoke test for `@terreno/mcp`
+- [x] **T26** — Smoke test for `@terreno/mcp`
   - Depends on: T8
   - Files: mcp-server/e2e/smoke.ts, mcp-server/package.json, docs/testing/e2e/mcp-server.md
   - Acceptance: `bun run --cwd mcp-server smoke` exits 0. The compiled `terreno-mcp` binary completes MCP `initialize` and `tools/list` over stdio, and the list has at least one tool.

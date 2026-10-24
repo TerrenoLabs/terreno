@@ -68,6 +68,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
+    "smoke": "bun e2e/smoke.spec.ts",
     "test": "bash scripts/run-tests.sh",
     "test:agent": "AGENT=1 bash scripts/run-tests.sh agent",
     "test:ci": "bun run test",

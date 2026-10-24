@@ -73,6 +73,9 @@ the build.**
 
 A server smoke hosts its own server by re-running its file with a `serve` argument, so each
 package keeps one smoke file. [`api/e2e/smoke.ts`](https://github.com/TerrenoLabs/terreno/blob/master/api/e2e/smoke.ts)
+is the reference. A browser smoke that needs a backend works the same way: Bun runs
+`smoke.spec.ts` as the driver, starts the server, then runs Playwright on Node against the same
+file, which defines the browser test. [`admin-frontend/e2e/smoke.spec.ts`](https://github.com/TerrenoLabs/terreno/blob/master/admin-frontend/e2e/smoke.spec.ts)
 is the reference.
 
 ## Write a Playwright spec

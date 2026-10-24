@@ -336,7 +336,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: admin-spa/e2e/smoke.ts, admin-spa/package.json, docs/testing/e2e/admin-spa.md
   - Acceptance: After `build:web`, `bun run --cwd admin-spa smoke` exits 0 and still serves the SPA through the Express plugin. The package page lists the existing `test:e2e` and `test:integration` suites.
 
-- [ ] **T21** — Smoke test for `@terreno/admin-frontend`
+- [x] **T21** — Smoke test for `@terreno/admin-frontend`
   - Depends on: T8
   - Files: admin-frontend/e2e/smoke.spec.ts, admin-frontend/package.json, docs/testing/e2e/admin-frontend.md
   - Acceptance: `bun run --cwd admin-frontend smoke` exits 0. In Chromium, an admin signs in to the admin-spa build against `spawnExampleBackend()`, and AdminHome lists at least one model, found by `testID`.

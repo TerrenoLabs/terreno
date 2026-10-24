@@ -195,6 +195,13 @@ export interface TwoFactorChallengeScreenProps {
    */
   initialKind?: TwoFactorCodeKind;
   /**
+   * Focuses the first code cell when the screen mounts. Turn it off when the screen is not the
+   * page's main task (a preview or gallery), since focusing scrolls the page to the cells. A
+   * rejected code still returns focus to the first cell.
+   * @default true
+   */
+  autoFocus?: boolean;
+  /**
    * Root testID; child testIDs are derived from it.
    * @default "two-factor-challenge"
    */

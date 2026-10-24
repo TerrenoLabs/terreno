@@ -1276,6 +1276,7 @@ const [error, setError] = useState<string | undefined>(undefined);
 | `onCancel` / `cancelText` | `() => void` / `string` | Shows a "Use another method" button (custom text via `cancelText`). |
 | `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
 | `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. |
+| `autoFocus` | `boolean` | Focuses the first code cell on mount. Defaults to `true`. Set `false` where the screen is a preview rather than the page's task, since the focus scrolls the page to the cells; a rejected code still refocuses the first cell. |
 | `title` / `logo` | `string` / `ReactNode` | Heading (default "Two-factor authentication") and an optional logo. |
 
 Enter in a code cell submits a complete code (the same guard as Verify applies); Enter in the

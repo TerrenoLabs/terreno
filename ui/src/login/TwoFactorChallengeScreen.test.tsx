@@ -1,11 +1,33 @@
 import {describe, expect, it, mock, spyOn} from "bun:test";
-import {act, fireEvent, waitFor} from "@testing-library/react-native";
+import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
+import type {ReactElement} from "react";
 
+import {ThemeProvider} from "../Theme";
 import {renderWithTheme} from "../test-utils";
 import type {TwoFactorChallengeSubmission} from "./loginTypes";
 import {TwoFactorChallengeScreen} from "./TwoFactorChallengeScreen";
 
 const makeOnSubmit = () => mock((_values: TwoFactorChallengeSubmission) => Promise.resolve());
+
+/** Renders with a node mock per code cell and records the cells focused (1-based), in order. */
+const renderWithFocusSpy = (ui: ReactElement): ReturnType<typeof render> & {focused: number[]} => {
+  const focused: number[] = [];
+  const result = render(ui, {
+    createNodeMock: (element: ReactElement) => {
+      const cellTestID = (element.props as {testID?: string}).testID ?? "";
+      const match = /-otp-cell-(\d+)$/.exec(cellTestID);
+      return {
+        focus: () => {
+          if (match) {
+            focused.push(Number(match[1]));
+          }
+        },
+      };
+    },
+    wrapper: ThemeProvider,
+  });
+  return Object.assign(result, {focused});
+};
 
 const pressButton = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
   await act(async () => {
@@ -113,6 +135,23 @@ describe("TwoFactorChallengeScreen", () => {
     const error = getByTestId("two-factor-challenge-error");
     expect(error.props.role).toBe("alert");
     expect(getByText("Invalid code")).toBeTruthy();
+  });
+
+  it("focuses the first code cell on mount by default", () => {
+    const {focused} = renderWithFocusSpy(<TwoFactorChallengeScreen onSubmit={makeOnSubmit()} />);
+    expect(focused).toEqual([1]);
+  });
+
+  it("autoFocus={false} leaves focus alone on mount but refocuses after a rejected code", () => {
+    const onSubmit = makeOnSubmit();
+    const {focused, rerender} = renderWithFocusSpy(
+      <TwoFactorChallengeScreen autoFocus={false} onSubmit={onSubmit} />
+    );
+    expect(focused).toEqual([]);
+    rerender(
+      <TwoFactorChallengeScreen autoFocus={false} error="Invalid code" onSubmit={onSubmit} />
+    );
+    expect(focused).toEqual([1]);
   });
 
   it("clears the entered code when a new error arrives", async () => {

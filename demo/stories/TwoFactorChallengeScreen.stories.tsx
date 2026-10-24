@@ -4,6 +4,9 @@ import {type ReactElement, useCallback, useState} from "react";
 
 const noop = async (): Promise<void> => {};
 
+// The demo shows these screens as previews on the catalog and the component page. Focusing the
+// code cells on mount would scroll that page down to them, so the stories leave focus alone.
+
 /** Accepts "123456" or any backup code; every other TOTP code shows the error state. */
 export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
   const [error, setError] = useState<string | undefined>(undefined);
@@ -22,6 +25,7 @@ export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
 
   return (
     <TwoFactorChallengeScreen
+      autoFocus={false}
       error={error}
       loading={loading}
       onCancel={() => {}}
@@ -32,12 +36,13 @@ export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
 };
 
 export const TwoFactorChallengeScreenBackupCode: React.FC = (): ReactElement => {
-  return <TwoFactorChallengeScreen initialKind="backup" onSubmit={noop} />;
+  return <TwoFactorChallengeScreen autoFocus={false} initialKind="backup" onSubmit={noop} />;
 };
 
 export const TwoFactorChallengeScreenError: React.FC = (): ReactElement => {
   return (
     <TwoFactorChallengeScreen
+      autoFocus={false}
       error="That code didn't work. Check your authenticator app and try again."
       onCancel={() => {}}
       onSubmit={noop}
@@ -47,5 +52,5 @@ export const TwoFactorChallengeScreenError: React.FC = (): ReactElement => {
 };
 
 export const TwoFactorChallengeScreenLoading: React.FC = (): ReactElement => {
-  return <TwoFactorChallengeScreen loading onSubmit={noop} />;
+  return <TwoFactorChallengeScreen autoFocus={false} loading onSubmit={noop} />;
 };

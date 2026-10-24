@@ -47,6 +47,7 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
   logo,
   codeLength = DEFAULT_CODE_LENGTH,
   initialKind = "totp",
+  autoFocus = true,
   testID = "two-factor-challenge",
 }) => {
   const [kind, setKind] = useState<TwoFactorCodeKind>(initialKind);
@@ -175,7 +176,8 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
             <Box alignItems="center" width="100%">
               <OtpField
                 accessibilityLabel="Authentication code"
-                autoFocus
+                // After a rejected code the cells remount (otpResetKey) and take focus back.
+                autoFocus={autoFocus || otpResetKey > 0}
                 disabled={loading}
                 key={otpResetKey}
                 length={codeLength}

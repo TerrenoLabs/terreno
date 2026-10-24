@@ -50,7 +50,9 @@ remain platform-scoped.
 Adding, changing, or removing a membership through `POST` / `PATCH` / `DELETE
 /orgs/:id/members` clears that user's cached permissions, so a new org-admin can open the
 admin page (and a demoted or removed one loses it) on their next request instead of after
-the permission cache's 30-second TTL.
+the permission cache's 30-second TTL. Disabling (`PATCH /orgs/:id` with `disabled: true`) or
+deleting (`DELETE /orgs/:id`) an organization suspends all of its memberships and clears the
+cached permissions of every member the same way.
 
 ## Disabled organizations
 

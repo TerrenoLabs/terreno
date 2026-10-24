@@ -135,6 +135,23 @@ const loadActiveMembership = async (
   return membership ?? undefined;
 };
 
+/**
+ * Suspend every membership in the organization and clear each member's cached permissions, so an
+ * org-admin of a disabled or deleted organization loses its grants on the next request instead of
+ * after the permission cache TTL. The members are read after the update so a membership added
+ * meanwhile is covered too.
+ */
+const suspendOrganizationMemberships = async (
+  access: AnyTerrenoAccess,
+  organizationId: OrganizationDocument["_id"]
+): Promise<void> => {
+  await Membership.updateMany({organizationId}, {status: "suspended"});
+  const userIds: unknown[] = await Membership.distinct("userId", {organizationId});
+  for (const userId of userIds) {
+    access.invalidateCache({userId: String(userId)});
+  }
+};
+
 const assertCan = async (args: {
   access: AnyTerrenoAccess;
   organization?: OrganizationDocument;
@@ -327,7 +344,7 @@ export class OrgsApp implements TerrenoPlugin {
         }
         await organization.save();
         if (wantsDisable) {
-          await Membership.updateMany({organizationId: organization._id}, {status: "suspended"});
+          await suspendOrganizationMemberships(this.access, organization._id);
         }
 
         await emitOrgAudit({
@@ -354,7 +371,7 @@ export class OrgsApp implements TerrenoPlugin {
         const organization = await loadOrganization(pathParam(req.params.id, "id is required"));
         organization.deleted = true;
         await organization.save();
-        await Membership.updateMany({organizationId: organization._id}, {status: "suspended"});
+        await suspendOrganizationMemberships(this.access, organization._id);
         await emitOrgAudit({
           event: {
             actorId: user.id,

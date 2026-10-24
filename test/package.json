@@ -1,5 +1,9 @@
 {
   "author": "Josh Gachnang",
+  "bin": {
+    "terreno-test-hygiene": "./dist/cli/testHygieneCli.js",
+    "terreno-test-shard": "./dist/cli/testShardCli.js"
+  },
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
@@ -12,21 +16,32 @@
     "mongodb-memory-server-global": "^11.0.1",
     "qs": "catalog:",
     "supertest": "catalog:",
+    "typescript": "catalog:",
     "winston": "catalog:"
   },
   "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures \u2014 part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@reduxjs/toolkit": "catalog:",
+    "@terreno/ui": "workspace:*",
+    "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",
+    "@types/react": "catalog:",
     "mongoose": "catalog:",
-    "typescript": "catalog:"
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-redux": "catalog:"
   },
   "exports": {
     ".": {
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./expo/*": {
+      "default": "./src/expo/*.ts",
+      "types": "./dist/expo/*.d.ts"
     },
     "./preload/memoryMongo": "./src/preload/memoryMongo.ts"
   },
@@ -49,7 +64,29 @@
   "main": "dist/index.js",
   "name": "@terreno/test",
   "peerDependencies": {
-    "mongoose": "^8.0.0 || ^9.0.0"
+    "@terreno/ui": "workspace:*",
+    "@testing-library/react-native": "catalog:",
+    "mongoose": "^8.0.0 || ^9.0.0",
+    "react": "catalog:",
+    "react-native": "catalog:",
+    "react-redux": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@terreno/ui": {
+      "optional": true
+    },
+    "@testing-library/react-native": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-redux": {
+      "optional": true
+    }
   },
   "publishConfig": {
     "access": "public"

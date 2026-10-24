@@ -4,23 +4,23 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@types/supertest": "catalog:",
     "express": "catalog:",
     "luxon": "catalog:",
+    "mongodb-memory-server": "catalog:",
+    "mongodb-memory-server-core": "^11.0.1",
+    "mongodb-memory-server-global": "^11.0.1",
     "qs": "catalog:",
+    "supertest": "catalog:",
     "winston": "catalog:"
   },
-  "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures — part of Terreno, the batteries-included TypeScript framework for universal apps.",
+  "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures \u2014 part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",
-    "@types/supertest": "catalog:",
-    "mongodb-memory-server": "catalog:",
-    "mongodb-memory-server-core": "^11.0.1",
-    "mongodb-memory-server-global": "^11.0.1",
     "mongoose": "catalog:",
-    "supertest": "catalog:",
     "typescript": "catalog:"
   },
   "exports": {
@@ -30,6 +30,13 @@
     },
     "./preload/memoryMongo": "./src/preload/memoryMongo.ts"
   },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "dist/**/*",
+    "src/**/*.ts",
+    "!src/**/*.test.ts"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "bun",

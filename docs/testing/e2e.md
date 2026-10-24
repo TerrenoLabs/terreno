@@ -3,7 +3,8 @@
 Run every package smoke from the repo root after the builds they test:
 
 ```bash
-bun run compile && bun run --cwd admin-spa build:web && bun run --cwd demo export && bun run smoke
+bun run compile && bun run --cwd admin-spa build:web && bun run --cwd demo export \
+  && bun run --cwd example-frontend export:smoke && bun run smoke
 ```
 
 This guide covers how Terreno builds and writes end-to-end tests: the test tiers, where each
@@ -197,7 +198,7 @@ and the smoke's measured time. Every smoke's budget is 30 s, excluding the build
 | Package | Smoke | Layer | Measured time |
 | --- | --- | --- | --- |
 | [`@terreno/admin-backend`](e2e/admin-backend.md) | `admin-backend/e2e/smoke.ts` | http | 5.5–12.5 s |
-| [`@terreno/admin-frontend`](e2e/admin-frontend.md) | `admin-frontend/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [`@terreno/admin-frontend`](e2e/admin-frontend.md) | `admin-frontend/e2e/smoke.spec.ts` | browser | 23–24.5 s (in-memory Mongo) |
 | [`@terreno/admin-spa`](e2e/admin-spa.md) | `admin-spa/e2e/smoke.ts` | http | 4–4.5 s |
 | [`@terreno/ai`](e2e/ai.md) | `ai/e2e/smoke.ts` | http | 7–7.5 s |
 | [`@terreno/announcements`](e2e/announcements.md) | `announcements/e2e/smoke.ts` | http | 4.5–8 s |
@@ -209,7 +210,7 @@ and the smoke's measured time. Every smoke's budget is 30 s, excluding the build
 | [`create-terreno-app`](e2e/create-terreno-app.md) | `create-terreno-app/e2e/smoke.ts` | process | 2.5 s |
 | [demo](e2e/demo.md) | `demo/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
 | [example-backend](e2e/example-backend.md) | `example-backend/e2e/smoke.ts` | http | 16–20 s |
-| [example-frontend](e2e/example-frontend.md) | `example-frontend/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [example-frontend](e2e/example-frontend.md) | `example-frontend/e2e/smoke.spec.ts` | browser | 22–26 s (in-memory Mongo) |
 | [`@terreno/feature-flags`](e2e/feature-flags.md) | `feature-flags/e2e/smoke.ts` | http | 5–5.5 s |
 | [`@terreno/jobs`](e2e/jobs.md) | `jobs/e2e/smoke.ts` | http | 7.5–8.5 s |
 | [`@terreno/mcp`](e2e/mcp-server.md) | `mcp-server/e2e/smoke.ts` | process, http | 5.5–6 s |
@@ -222,15 +223,31 @@ The times are what `bun run smoke` printed for each package across three root ru
 after the first one after a compile, described below) on a 4-CPU container, against a
 single-node replica set (`TERRENO_TEST_MONGODB_URI`), after `bun run compile` and
 `bun run --cwd admin-spa build:web` (admin-spa's time is from the two runs after its build). Each package page
-records how its own time splits. The browser smokes were not run locally; the CircleCI `smoke`
-job prints their times.
+records how its own time splits. The admin-frontend and example-frontend times come from
+separate runs of each smoke on an idle container, with the in-memory replica set. The other
+browser smokes were not timed locally; the CircleCI `smoke` job prints their times.
 
 The first root run after a compile was slower for four packages: example-backend took 48 s,
 syncdb 33 s, and create-terreno-app 21 s, and comms failed because its server did not answer
 within its 20 s readiness timeout. All four were back within their usual times on the next run.
 Run on its own right after the same compile, example-backend took 27 s on an empty database, and
 ai and admin-backend took 5.5–7 s, though an earlier run after a compile had measured 41 s and
-31.5 s for them. The cause of these first-run overruns was not isolated.
+31.5 s for them.
+
+Two causes outside the smokes were later measured on the same container, and either one stretches
+a smoke well past its budget:
+
+- **A compile running at the same time.** The agent `Stop` hook
+  (`.rulesync/hooks/quality-check.sh`) runs `bun run compile` at the end of each agent turn. That
+  keeps all four CPUs busy for about 4 minutes and rewrites `dist/` while smokes load it. In one
+  root run that overlapped it, api took 75 s and jobs 93 s; alone, they take 5.5–9 s and 8.5–12 s.
+  admin-spa's server also missed its 20 s readiness timeout once while the compile ran.
+- **Slow disk.** The in-memory replica set keeps its data under `TMPDIR`. When that disk slowed
+  to 20 MB fsyncs taking 2–122 s, mongod missed its 60 s start timeout in every later smoke.
+  `dd if=/dev/zero of=$TMPDIR/ddtest bs=1M count=20 conv=fsync` shows whether this is the cause.
+
+Time smokes on an otherwise idle machine. A smoke that is over budget only under one of these
+conditions is not a regression.
 
 Manual cases that no smoke or e2e spec can check live in the
 [regression suites](../regression/README.md).

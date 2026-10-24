@@ -69,7 +69,7 @@ Coverage gate for a published package: `cd <package> && bun run test:coverage`.
 ## Package smokes (`smoke`)
 
 The CircleCI `smoke` job runs on any package change. It compiles the workspace, builds
-the admin-spa and demo web exports, installs Playwright Chromium, then runs every
+the admin-spa, demo, and example-frontend smoke web exports, installs Playwright Chromium, then runs every
 workspace `smoke` script against the job's replica-set Mongo sidecar
 (`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
 running it.
@@ -77,6 +77,7 @@ running it.
 ```bash
 bun run compile
 (cd admin-spa && bun run build:web) && (cd demo && bun run export)
+(cd example-frontend && bun run export:smoke)
 bunx playwright install --with-deps chromium   # once
 bun run smoke              # every package; prints each one's time
 bun run smoke api rtk      # only these workspaces

@@ -124,6 +124,29 @@ describe("spawnUntilReady", () => {
     await spawned.stop();
   });
 
+  it("stop() kills a child that ignores SIGTERM once stopGraceMs passes", async () => {
+    const port = await freePort();
+    spawned = await spawnUntilReady({
+      cmd: [
+        process.execPath,
+        writeFixture(
+          "ignoresSigterm.ts",
+          `process.on("SIGTERM", () => {});
+Bun.serve({port: Number(process.env.PORT), fetch: () => new Response("ok")});`
+        ),
+      ],
+      env: {PORT: String(port)},
+      stopGraceMs: 200,
+      timeoutMs: 10000,
+      url: `http://127.0.0.1:${port}/`,
+    });
+
+    const startedAt = performance.now();
+    await spawned.stop();
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+    expect(await isGone(spawned.pid)).toBe(true);
+  });
+
   it("rejects with the child's output when the child exits before it is ready", async () => {
     const script = writeFixture(
       "crash.ts",
@@ -383,6 +406,23 @@ describe("spawnExampleBackend", () => {
     } finally {
       await backend.stop();
     }
+  });
+
+  it("stops a backend whose SIGTERM hook keeps it serving without the 5 s grace", async () => {
+    const backendDir = mkdtempSync(join(fixtureDir, "sigterm-backend-"));
+    writeFixture(
+      join(backendDir.slice(fixtureDir.length + 1), "src/index.ts"),
+      // Like example-backend's jobs hook: SIGTERM stops a worker, and the HTTP server keeps the
+      // process alive.
+      `process.once("SIGTERM", () => {});
+Bun.serve({port: Number(process.env.PORT), fetch: () => new Response("ok")});`
+    );
+    const backend = await spawnExampleBackend({backendDir, mongoUri: "mongodb://x/y"});
+
+    const startedAt = performance.now();
+    await backend.stop();
+    expect(performance.now() - startedAt).toBeLessThan(2000);
+    expect(await isGone(backend.pid)).toBe(true);
   });
 
   it("uses the requested port", async () => {

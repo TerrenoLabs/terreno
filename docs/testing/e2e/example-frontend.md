@@ -1,9 +1,10 @@
 # example-frontend e2e tests
 
-Run the example-frontend smoke after a compile, with Playwright's Chromium installed:
+Build the smoke's web export once after a compile, then run the smoke, with Playwright's
+Chromium installed:
 
 ```bash
-bun run compile && bun run --cwd example-frontend smoke
+bun run compile && bun run --cwd example-frontend export:smoke && bun run --cwd example-frontend smoke
 ```
 
 ## Test tiers
@@ -22,28 +23,38 @@ bun run compile && bun run --cwd example-frontend smoke
 runs at the `browser` layer. It proves the app as it ships: a production web export, not the
 Metro dev server the main suite uses locally. The one file has two roles.
 
-Run with Bun (`bun e2e/smoke.spec.ts`), it is the driver:
+Run with Bun, it is the driver. It has two modes.
 
-1. It picks a free port for the API and starts a static server for the export on another. The
-   server falls back to `index.html`, as `serve -s` does in CI.
-2. `spawnExampleBackend()` starts example-backend on the API port against `smokeMongoUri()`,
-   with `AUTH_PROVIDER=better-auth`, `BETTER_AUTH_URL` on `localhost`, and the web origin in
+`bun e2e/smoke.spec.ts export` (the `export:smoke` script) is the build step. Like demo's
+`export` and admin-spa's `build:web`, it runs outside the smoke's time budget; a cold export
+takes about 3 minutes.
+
+1. It runs `expo export --platform web` into `example-frontend/dist-smoke/` (git-ignored) with
+   `EXPO_PUBLIC_API_URL=http://localhost:4310`. The export bakes the API URL in, so the smoke
+   API always listens on that fixed port (`SMOKE_API_PORT` in `e2e/helpers/webExport.ts`).
+2. Metro's transform cache key ignores `EXPO_PUBLIC_*` values, so a cache shared with another
+   export (the main suite's, for example, built against port 4000) could ship the wrong API URL.
+   The export therefore keeps its own Metro cache in `example-frontend/.expo/smoke-metro-cache`
+   (`TMPDIR` points there). Only this export writes that cache, so it stays warm and right.
+3. It checks that the bundle contains the API URL.
+
+`bun e2e/smoke.spec.ts` (the `smoke` script) is the smoke:
+
+1. It exits 1 at once, naming `export:smoke`, when `dist-smoke/` has no bundle or its bundle
+   targets another API URL. It also exits 1 when anything already listens on port 4310, so the
+   smoke never mistakes a stale backend's `/health` for its own.
+2. It serves `dist-smoke/` on a free port with a static server that falls back to
+   `index.html`, as `serve -s` does in CI.
+3. `spawnExampleBackend()` starts example-backend on port 4310 against `smokeMongoUri()`, with
+   `AUTH_PROVIDER=better-auth`, `BETTER_AUTH_URL` on `localhost`, and the web origin in
    `CORS_ORIGINS`. The page and the API share the `localhost` site, so Better Auth's session
-   cookie works as it does in the main suite on ports 8082 and 4000. The backend starts before
-   the export so it holds its port while the export bakes that port in.
-3. It runs `expo export --platform web` into a temp dir with `EXPO_PUBLIC_API_URL` set to the
-   API URL, because the export bakes the API URL in. This is the slow step. Metro's transform
-   cache key ignores `EXPO_PUBLIC_*` values, so a shared warm cache would ship an earlier run's
-   API port and the sign-in would fail. The export therefore gets its own Metro cache (`TMPDIR`
-   points into the temp dir), and the driver checks that the bundle contains the API URL before
-   it opens a browser. Every run is a cold export, as it is in CI.
+   cookie works as it does in the main suite on ports 8082 and 4000.
 4. It runs the root-locked Playwright CLI on Node against this same file with `--config=e2e`.
    That names a directory with no config file, so `playwright.config.ts` and its Metro and
    backend web servers stay out, and the default Chromium project runs only the smoke. It passes
    the web URL in `EXAMPLE_FRONTEND_SMOKE_BASE_URL`, and the URLs the e2e helpers read in
-   `BACKEND_URL` and `FRONTEND_URL`. The export goes to a temp dir that the driver deletes. A
-   failed run keeps its Playwright trace there and prints the path; open it with
-   `bunx playwright show-trace`.
+   `BACKEND_URL` and `FRONTEND_URL`. A failed run keeps its Playwright trace in a temp dir and
+   prints the path; open it with `bunx playwright show-trace`.
 
 Loaded by Playwright, the file defines one test:
 
@@ -60,8 +71,8 @@ Loaded by Playwright, the file defines one test:
 The spec imports `test` from `@playwright/test`, not `./fixtures/test`: it is one happy path
 through a production build, and its own assertions fail on a broken flow.
 
-The driver prints one `✅` line per step, including the export's time, and exits 1 on the first
-failure, after printing example-backend's output and Playwright's report.
+The driver prints one `✅` line per step and exits 1 on the first failure, after printing
+example-backend's output and Playwright's report.
 
 The smoke needs Chromium (`bunx playwright install chromium`) but no secrets: the backend uses
 fixed dev values from `spawnExampleBackend()`.
@@ -70,18 +81,21 @@ fixed dev values from `spawnExampleBackend()`.
 `bun run frontend:e2e` and the e2e shards never run it. Loaded without the driver's env, the
 test fails at once and asks for `bun run smoke`. `scripts/ci/e2eAffected/shards.ts` still lists
 the spec, in its own `smoke` shard with `blocksPullRequest: false`, because the shard check
-requires every `*.spec.ts` file to have one. CircleCI's `smoke` job runs it.
+requires every `*.spec.ts` file to have one. CircleCI's `smoke` job runs `export:smoke` before
+it runs every smoke.
 
-**Measured time:** timed by the CircleCI `smoke` job, which prints each package's time on every
-run. Its row in the [package table](../e2e.md#package-pages) points there. The driver prints the
-total and the time without the export. Budget: 30 s, excluding the compile and the web export.
+**Measured time:** 21.9–25.6 s in three runs on an idle 4-CPU container, and 31.4 s in one
+where example-backend's first boot on an empty database took 20 s. Mongo plus that first boot
+take 12–20 s, Chromium 7.5–10 s, and teardown 1–2.5 s. The export itself took 167 s cold. Before
+the export moved to `export:smoke`, every run rebuilt it cold and took 196–207 s. Budget: 30 s,
+excluding the compile and the web export.
 
 ## Add an e2e test
 
 - **A screen, hook, or store helper changed:** add a unit test next to it. The smoke stays one
   happy path; do not add edge cases to it.
 - **Sign-in, the todos screen, or their `testID`s changed:** update
-  `example-frontend/e2e/smoke.spec.ts` and keep it within budget.
+  `example-frontend/e2e/smoke.spec.ts`, rerun `export:smoke`, and keep the smoke within budget.
 - **A user flow:** add a spec to the main suite and list it in a shard. Follow
   [Write a Playwright spec](../e2e.md#write-a-playwright-spec).
 - **A native-only flow:** add a Maestro flow. Follow

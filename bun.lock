@@ -75,6 +75,7 @@
         "@types/luxon": "catalog:",
         "@types/qs": "catalog:",
         "@types/react": "catalog:",
+        "mongoose": "catalog:",
         "react": "catalog:",
         "react-redux": "catalog:",
         "typescript": "catalog:",

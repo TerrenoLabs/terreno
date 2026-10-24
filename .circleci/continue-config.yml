@@ -1225,7 +1225,7 @@ jobs:
   # and Chromium are prepared up front so a new browser smoke needs no config edit.
   smoke:
     executor: node22_browsers_mongo_rs
-    # Two Expo web exports in one job need the large class (see executors).
+    # Three Expo web exports in one job need the large class (see executors).
     resource_class: large
     environment:
       CI: "true"
@@ -1247,6 +1247,11 @@ jobs:
           working_directory: ~/project/demo
           no_output_timeout: 20m
           command: bun run export
+      - run:
+          name: Export example-frontend web for its smoke
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          command: bun run export:smoke
       - run:
           name: Install Playwright Chromium
           command: bunx playwright install --with-deps chromium

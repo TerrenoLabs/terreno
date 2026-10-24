@@ -1,12 +1,15 @@
 /**
- * Real-process smoke for example-frontend. Run `bun e2e/smoke.spec.ts` after `bun run compile`.
+ * Real-process smoke for example-frontend. Run `bun e2e/smoke.spec.ts export` once after
+ * `bun run compile`, then `bun e2e/smoke.spec.ts`.
  *
- * Run with Bun, this file is the driver. It exports the web build with the API URL baked in,
- * serves the export on a free port, starts example-backend with `spawnExampleBackend()` and the
- * web origin trusted, then runs itself under Playwright. Loaded by Playwright, it defines the one
- * browser test: a user signs in with `loginAs`, reaches the todos screen, and creates a todo that
- * the API then lists. Exits non-zero on the first failed step. playwright.config.ts ignores this
- * file, so the main suite and its CI shards never run it.
+ * Run with Bun, this file is the driver. `export` builds the web export into `dist-smoke/` with a
+ * fixed API URL baked in; like demo's `export` and admin-spa's `build:web`, that build sits
+ * outside the smoke's time budget. The smoke itself serves that export on a free port, starts
+ * example-backend with `spawnExampleBackend()` on the baked-in port with the web origin trusted,
+ * then runs itself under Playwright. Loaded by Playwright, it defines the one browser test: a
+ * user signs in with `loginAs`, reaches the todos screen, and creates a todo that the API then
+ * lists. Exits non-zero on the first failed step. playwright.config.ts ignores this file, so the
+ * main suite and its CI shards never run it.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -17,9 +20,16 @@ import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
 import {acceptPendingConsentForms} from "./helpers/consentForms";
 import {loginAs} from "./helpers/login";
 import {listTodosAs} from "./helpers/todosApi";
-import {assertExportTargetsApi, webExportEnv} from "./helpers/webExport";
+import {
+  assertExportTargetsApi,
+  assertPortFree,
+  SMOKE_API_PORT,
+  smokeExportPaths,
+  webExportEnv,
+} from "./helpers/webExport";
 
 const BASE_URL_ENV = "EXAMPLE_FRONTEND_SMOKE_BASE_URL";
+const EXPORT_ARG = "export";
 const SMOKE_USER = {
   email: "e2e-smoke@terreno.dev",
   name: "Smoke User",
@@ -112,28 +122,50 @@ const serveExport = ({exportDir}: {exportDir: string}): ReturnType<typeof Bun.se
     port: 0,
   });
 
-/** Driver side: a web export, a static server, a real backend, then Playwright on this file. */
+/** Build step: the web export the smoke serves, with the smoke's API URL baked in. */
+const exportWeb = async (): Promise<void> => {
+  const startedAt = performance.now();
+  const {runBin} = await import("@terreno/test");
+  const {apiUrl, cacheDir, exportDir} = smokeExportPaths({packageDir: PACKAGE_DIR});
+  fs.rmSync(exportDir, {force: true, recursive: true});
+  fs.mkdirSync(cacheDir, {recursive: true});
+  const webExport = await runBin({
+    args: ["expo", "export", "--platform", "web", "--output-dir", exportDir],
+    bin: process.execPath,
+    cwd: PACKAGE_DIR,
+    env: webExportEnv({apiUrl, cacheDir}),
+    timeoutMs: EXPORT_TIMEOUT_MS,
+  });
+  if (webExport.exitCode !== 0) {
+    throw new Error(
+      `expo export exited ${webExport.exitCode}:\n${webExport.stdout}${webExport.stderr}`
+    );
+  }
+  assertExportTargetsApi({apiUrl, exportDir});
+  console.info(
+    `✅ Web export built in ${Math.round(performance.now() - startedAt)} ms against ${apiUrl}, in ${exportDir}`
+  );
+};
+
+/** Driver side: the prebuilt export on a static server, a real backend, then Playwright. */
 const run = async (): Promise<void> => {
   const startedAt = performance.now();
-  const {freePort, runBin, smokeMongoUri, spawnExampleBackend, stopSmokeMongo} = await import(
+  const {runBin, smokeMongoUri, spawnExampleBackend, stopSmokeMongo} = await import(
     "@terreno/test"
   );
+  const {apiUrl, exportDir} = smokeExportPaths({packageDir: PACKAGE_DIR});
   let backend: Awaited<ReturnType<typeof spawnExampleBackend>> | undefined;
   let webServer: ReturnType<typeof Bun.serve> | undefined;
-  // The export and traces go to a temp dir, not an untracked folder in the package. A failed
-  // run keeps its trace there for `bunx playwright show-trace`.
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "example-frontend-smoke-"));
-  const exportDir = path.join(tempDir, "dist");
-  const outputDir = path.join(tempDir, "playwright");
-  const metroCacheDir = path.join(tempDir, "metro");
+  // Traces go to a temp dir, not an untracked folder in the package. A failed run keeps its
+  // trace there for `bunx playwright show-trace`.
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), "example-frontend-smoke-"));
   let keepOutput = false;
 
   try {
+    assertExportTargetsApi({apiUrl, exportDir});
+    await assertPortFree(SMOKE_API_PORT);
     // The page and the API share the `localhost` site, so Better Auth's session cookie flows as
-    // it does in the e2e suite (8082 and 4000). The backend starts first so it holds its port
-    // while the export bakes that port in.
-    const apiPort = await freePort();
-    const apiUrl = `http://localhost:${apiPort}`;
+    // it does in the e2e suite (8082 and 4000).
     webServer = serveExport({exportDir});
     const webUrl = `http://localhost:${webServer.port}`;
 
@@ -141,28 +173,10 @@ const run = async (): Promise<void> => {
     backend = await spawnExampleBackend({
       env: {AUTH_PROVIDER: "better-auth", BETTER_AUTH_URL: apiUrl, CORS_ORIGINS: webUrl},
       mongoUri,
-      port: apiPort,
+      port: SMOKE_API_PORT,
       timeoutMs: BACKEND_READY_TIMEOUT_MS,
     });
     console.info(`✅ example-backend is healthy at ${apiUrl} and trusts ${webUrl}`);
-
-    const exportStartedAt = performance.now();
-    fs.mkdirSync(metroCacheDir);
-    const webExport = await runBin({
-      args: ["expo", "export", "--platform", "web", "--output-dir", exportDir],
-      bin: process.execPath,
-      cwd: PACKAGE_DIR,
-      env: webExportEnv({apiUrl, cacheDir: metroCacheDir}),
-      timeoutMs: EXPORT_TIMEOUT_MS,
-    });
-    if (webExport.exitCode !== 0) {
-      throw new Error(
-        `expo export exited ${webExport.exitCode}:\n${webExport.stdout}${webExport.stderr}`
-      );
-    }
-    assertExportTargetsApi({apiUrl, exportDir});
-    const exportMs = Math.round(performance.now() - exportStartedAt);
-    console.info(`✅ Web export built in ${exportMs} ms against ${apiUrl}, served at ${webUrl}`);
 
     // The root-locked Playwright CLI on Node, the runtime Playwright supports. `--config=e2e`
     // names a directory with no config file, so playwright.config.ts (and its Metro and backend
@@ -188,10 +202,8 @@ const run = async (): Promise<void> => {
       );
     }
     console.info("✅ In Chromium, the user signs in, reaches todos, and creates a todo");
-
-    const totalMs = Math.round(performance.now() - startedAt);
     console.info(
-      `example-frontend smoke passed in ${totalMs} ms (${totalMs - exportMs} ms without the export)`
+      `example-frontend smoke passed in ${Math.round(performance.now() - startedAt)} ms`
     );
   } catch (error: unknown) {
     if (backend) {
@@ -202,16 +214,15 @@ const run = async (): Promise<void> => {
     await backend?.stop();
     webServer?.stop(true);
     await stopSmokeMongo();
-    fs.rmSync(exportDir, {force: true, recursive: true});
     if (!keepOutput) {
-      fs.rmSync(tempDir, {force: true, recursive: true});
+      fs.rmSync(outputDir, {force: true, recursive: true});
     }
   }
 };
 
 // Bun runs the driver; Playwright (on Node) loads this file to collect the browser test.
 if (process.versions.bun && !process.env[BASE_URL_ENV]) {
-  run().then(
+  (process.argv[2] === EXPORT_ARG ? exportWeb : run)().then(
     () => process.exit(0),
     (error: unknown) => {
       console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);

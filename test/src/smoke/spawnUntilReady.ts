@@ -13,6 +13,8 @@ export interface SpawnUntilReadyOptions {
   cwd?: string;
   /** Merged over the parent environment. */
   env?: Record<string, string | undefined>;
+  /** How long `stop()` waits after SIGTERM before SIGKILL. Default 5 000 ms. */
+  stopGraceMs?: number;
 }
 
 export interface SpawnedProcess {
@@ -20,15 +22,15 @@ export interface SpawnedProcess {
   /** Everything the child wrote to stdout and stderr so far. */
   output: () => string;
   /**
-   * Sends SIGTERM to the child's process group, then SIGKILL after 5 s. Safe to call more
-   * than once.
+   * Sends SIGTERM to the child's process group, then SIGKILL after `stopGraceMs`. Safe to call
+   * more than once.
    */
   stop: () => Promise<void>;
 }
 
 const DEFAULT_TIMEOUT_MS = 20000;
 const POLL_INTERVAL_MS = 100;
-const STOP_GRACE_MS = 5000;
+const DEFAULT_STOP_GRACE_MS = 5000;
 const OUTPUT_TAIL_CHARS = 4000;
 
 const tail = (text: string): string =>
@@ -45,6 +47,7 @@ export const spawnUntilReady = async ({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   cwd,
   env,
+  stopGraceMs = DEFAULT_STOP_GRACE_MS,
 }: SpawnUntilReadyOptions): Promise<SpawnedProcess> => {
   const child = spawnTracked({cmd, cwd, env});
   const output = collectOutput(child);
@@ -58,7 +61,7 @@ export const spawnUntilReady = async ({
     killGroup(child, "SIGTERM");
     const exited = await Promise.race([
       child.exited.then(() => true),
-      timeout(STOP_GRACE_MS).then(() => false),
+      timeout(stopGraceMs).then(() => false),
     ]);
     // Anything the child started and left behind goes too.
     killGroup(child, "SIGKILL");

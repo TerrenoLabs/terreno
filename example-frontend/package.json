@@ -62,6 +62,7 @@
     "doctor": "bunx expo-doctor",
     "eas-build-post-install": "cd .. && bun run compile && bun run --filter '@terreno/ui' types",
     "export": "bun expo export --platform web",
+    "export:smoke": "bun e2e/smoke.spec.ts export",
     "ios": "EXPO_UNSTABLE_MCP_SERVER=1 bun expo start --ios --port 8082",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

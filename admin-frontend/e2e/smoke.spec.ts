@@ -6,8 +6,8 @@
  * consumer gets them: the admin-spa web export, which bundles the compiled package. Run with
  * Bun, this file is the driver. It starts example-backend with `spawnExampleBackend()` and
  * `ADMIN_SPA_ENABLED=true`, so the backend serves the export at `/console` beside Better Auth
- * and the admin API, seeds an admin with example-backend's own seed script, then runs itself
- * under Playwright. Loaded by Playwright, it defines the one browser test: the admin signs in
+ * and the admin API, seeds an admin in this process the way example-backend's
+ * `seed-admin-spa-admin.ts` does, then runs itself under Playwright. Loaded by Playwright, it defines the one browser test: the admin signs in
  * and AdminHome lists a model. Exits non-zero on the first failed step.
  */
 import fs from "node:fs";
@@ -19,16 +19,15 @@ const BASE_URL_ENV = "ADMIN_FRONTEND_SMOKE_BASE_URL";
 const ADMIN_EMAIL = "admin-frontend-smoke@example.com";
 const ADMIN_PASSWORD = "admin-frontend-smoke-password";
 const PACKAGE_DIR = path.resolve(__dirname, "..");
-const EXAMPLE_BACKEND_DIR = path.resolve(PACKAGE_DIR, "../example-backend");
 const ADMIN_SPA_INDEX = path.resolve(PACKAGE_DIR, "../admin-spa/dist/index.html");
-const SEED_SCRIPT = "src/scripts/seed-admin-spa-admin.ts";
+// example-backend's superadmin role (src/rbacRoles.ts), which the admin API requires.
+const SUPERADMIN_ROLE = "superadmin";
 const BROWSER_TIMEOUT_MS = 30000;
 /**
  * Headroom for a loaded machine, not the budget: example-backend boots in well under this when
  * idle, but several parallel suites on shared CPUs have pushed it past 60 s.
  */
 const BACKEND_READY_TIMEOUT_MS = 120000;
-const SEED_TIMEOUT_MS = 60000;
 const PLAYWRIGHT_TIMEOUT_MS = 150000;
 
 /** Browser side: the admin signs in to the SPA and AdminHome renders the models grid. */
@@ -58,6 +57,61 @@ const defineBrowserTest = (): void => {
   });
 };
 
+/** The `name=value` pairs of a response's cookies, for a `cookie` request header. */
+const cookieHeader = (res: Response): string =>
+  res.headers
+    .getSetCookie()
+    .map((cookie) => cookie.split(";")[0])
+    .join("; ");
+
+/**
+ * Signs the admin up through Better Auth (or in, against a database a previous run kept), lets
+ * the session middleware create the app's `User`, then promotes that user in the database. It
+ * mirrors example-backend's `seed-admin-spa-admin.ts` without a second process loading the
+ * backend's models.
+ */
+const seedAdmin = async ({
+  baseUrl,
+  mongoUri,
+}: {
+  baseUrl: string;
+  mongoUri: string;
+}): Promise<void> => {
+  const credentials = {
+    body: JSON.stringify({
+      email: ADMIN_EMAIL,
+      name: "Admin Frontend Smoke",
+      password: ADMIN_PASSWORD,
+    }),
+    headers: {"Content-Type": "application/json"},
+    method: "POST",
+  };
+  let session = await fetch(`${baseUrl}/api/auth/sign-up/email`, credentials);
+  if (!session.ok) {
+    session = await fetch(`${baseUrl}/api/auth/sign-in/email`, credentials);
+  }
+  if (!session.ok) {
+    throw new Error(
+      `Better Auth sign-up and sign-in failed: ${session.status} ${await session.text()}`
+    );
+  }
+  // The first authenticated request syncs the Better Auth user into `users`; its 403 is expected.
+  await fetch(`${baseUrl}/admin/config`, {headers: {cookie: cookieHeader(session)}});
+
+  const {default: mongoose} = await import("mongoose");
+  const connection = await mongoose.createConnection(mongoUri).asPromise();
+  try {
+    const result = await connection
+      .collection("users")
+      .updateOne({email: ADMIN_EMAIL}, {$set: {admin: true, roles: [SUPERADMIN_ROLE]}});
+    if (result.matchedCount === 0) {
+      throw new Error(`No users document for ${ADMIN_EMAIL}: the Better Auth sync did not run`);
+    }
+  } finally {
+    await connection.close();
+  }
+};
+
 /** Driver side: a real backend serving the SPA, a seeded admin, then Playwright on this file. */
 const run = async (): Promise<void> => {
   const startedAt = performance.now();
@@ -83,20 +137,7 @@ const run = async (): Promise<void> => {
     });
     console.info(`✅ example-backend is healthy at ${backend.baseUrl} with the SPA at /console`);
 
-    const seed = await runBin({
-      bin: SEED_SCRIPT,
-      cwd: EXAMPLE_BACKEND_DIR,
-      env: {
-        ADMIN_SPA_BACKEND_URL: backend.baseUrl,
-        ADMIN_SPA_E2E_EMAIL: ADMIN_EMAIL,
-        ADMIN_SPA_E2E_PASSWORD: ADMIN_PASSWORD,
-        MONGO_URI: mongoUri,
-      },
-      timeoutMs: SEED_TIMEOUT_MS,
-    });
-    if (seed.exitCode !== 0) {
-      throw new Error(`${SEED_SCRIPT} exited ${seed.exitCode}:\n${seed.stdout}${seed.stderr}`);
-    }
+    await seedAdmin({baseUrl: backend.baseUrl, mongoUri});
     console.info(`✅ ${ADMIN_EMAIL} signed up through Better Auth and promoted to admin`);
 
     // The root-locked Playwright CLI on Node, the runtime Playwright supports; no config file,

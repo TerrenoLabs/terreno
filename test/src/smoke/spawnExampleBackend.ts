@@ -21,6 +21,13 @@ export interface ExampleBackend extends SpawnedProcess {
   port: number;
 }
 
+/**
+ * example-backend's SIGTERM hook stops the jobs worker and leaves the HTTP server running, so the
+ * process never exits on SIGTERM alone. Its smoke database is disposable, so `stop()` waits only
+ * briefly before SIGKILL instead of the default 5 s.
+ */
+const STOP_GRACE_MS = 500;
+
 /** Same depth from `src/smoke` and `dist/smoke`, so source and compiled helpers agree. */
 const EXAMPLE_BACKEND_DIR = resolve(__dirname, "../../../example-backend");
 
@@ -53,6 +60,7 @@ export const spawnExampleBackend = async ({
       TOKEN_SECRET: "terreno-smoke-token-secret",
       ...env,
     },
+    stopGraceMs: STOP_GRACE_MS,
     timeoutMs,
     url: `${baseUrl}/health`,
   });

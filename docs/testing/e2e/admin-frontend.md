@@ -32,9 +32,13 @@ Run with Bun (`bun e2e/smoke.spec.ts`), it is the driver:
 2. `spawnExampleBackend()` starts example-backend against `smokeMongoUri()` with
    `ADMIN_SPA_ENABLED=true` and `AUTH_PROVIDER=better-auth`, so one origin serves the export
    at `/console`, Better Auth, and the admin API. The smoke never imports `@terreno/api`.
-3. It runs example-backend's `src/scripts/seed-admin-spa-admin.ts` with `runBin`. The script
-   signs `admin-frontend-smoke@example.com` up through Better Auth and promotes that user to
-   admin. A rerun against a persistent `TERRENO_TEST_MONGODB_URI` signs in instead.
+3. It seeds the admin in its own process, the way example-backend's
+   `src/scripts/seed-admin-spa-admin.ts` does. It signs `admin-frontend-smoke@example.com` up
+   through Better Auth, calls `/admin/config` once so the session middleware creates the app's
+   `User`, then sets `admin: true` and the `superadmin` role on that `users` document with
+   `mongoose`. A rerun against a persistent `TERRENO_TEST_MONGODB_URI` signs in instead.
+   Running the seed script as a second process cost about 4.5 s, mostly loading the backend's
+   models a second time; seeding in the driver takes under 0.5 s.
 4. It runs the root-locked Playwright CLI on Node against this same file, passing the backend
    URL in `ADMIN_FRONTEND_SMOKE_BASE_URL`. There is no Playwright config: admin-frontend has
    no other Playwright suite, so the default Chromium project runs only this spec. If the package
@@ -53,12 +57,12 @@ example-backend's output and Playwright's report.
 The smoke needs Chromium (`bunx playwright install chromium`) but no secrets: the backend
 uses fixed dev values from `spawnExampleBackend()`.
 
-**Measured time:** without the browser step, the in-memory replica set took 5 s, example-backend
-took 75 s to answer `/health`, and the seed took 7 s. That run shared four CPUs with several
-other suites, so the boot time reflects the load, not the budget. The driver therefore waits up
-to 120 s for `/health`. The full smoke, including Chromium, is timed by the CircleCI `smoke`
-job, which prints each package's time on every run. Its row in the [package
-table](../e2e.md#package-pages) points there. Budget: 30 s, excluding the compile and the web
+**Measured time:** 23–24.5 s in three runs on an idle 4-CPU container with the in-memory
+replica set: Mongo and example-backend's first boot on an empty database 16–18 s, the seed
+0.4 s, Chromium 5–6 s, and teardown 1 s. Before the seed moved in-process and
+`spawnExampleBackend()` stopped waiting 5 s on SIGTERM, the same runs took 27–29.5 s. Under
+load the boot stretches: one run that shared four CPUs with several other suites waited 75 s
+for `/health`, so the driver waits up to 120 s. Budget: 30 s, excluding the compile and the web
 export.
 
 ## Add an e2e test

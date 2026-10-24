@@ -214,27 +214,70 @@ describe("PasswordCard", () => {
   });
 
   describe("keyboard and focus", () => {
-    it("submits with Enter from the current and new password fields", async () => {
+    it("moves focus to the next field on Enter in the current and new password fields", async () => {
       const onSubmit = makeOnSubmit();
-      const {getByTestId} = renderWithTheme(<PasswordCard hasPassword onSubmit={onSubmit} />);
+      const {focused, getByTestId} = renderTrackingFocus(
+        <PasswordCard hasPassword onSubmit={onSubmit} />
+      );
+      expect(getByTestId("password-card-current").props.enterKeyHint).toBe("next");
+      expect(getByTestId("password-card-current").props.blurOnSubmit).toBe(false);
+      expect(getByTestId("password-card-new").props.enterKeyHint).toBe("next");
+      expect(getByTestId("password-card-confirm").props.enterKeyHint).toBe("done");
       fireEvent.changeText(getByTestId("password-card-current"), "old-password");
       fireEvent.changeText(getByTestId("password-card-new"), "new-password-1");
       fireEvent.changeText(getByTestId("password-card-confirm"), "new-password-1");
       await act(async () => {
         fireEvent(getByTestId("password-card-current"), "submitEditing");
       });
-      await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledTimes(1);
-      });
-      fireEvent.changeText(getByTestId("password-card-current"), "new-password-1");
-      fireEvent.changeText(getByTestId("password-card-new"), "new-password-2");
-      fireEvent.changeText(getByTestId("password-card-confirm"), "new-password-2");
       await act(async () => {
         fireEvent(getByTestId("password-card-new"), "submitEditing");
       });
-      await waitFor(() => {
-        expect(onSubmit).toHaveBeenCalledTimes(2);
+      expect(focused).toEqual(["password-card-new", "password-card-confirm"]);
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("moves from the new password to the confirm field on Enter in set mode", async () => {
+      const {focused, getByTestId} = renderTrackingFocus(
+        <PasswordCard hasPassword={false} onSubmit={makeOnSubmit()} />
+      );
+      await act(async () => {
+        fireEvent(getByTestId("password-card-new"), "submitEditing");
       });
+      expect(focused).toEqual(["password-card-confirm"]);
+    });
+
+    it("wraps the fields in a form on web with the account's username and submits through it", async () => {
+      const originalOS = setOS("web");
+      try {
+        const requestSubmit = mock(() => {});
+        const onSubmit = makeOnSubmit();
+        const {UNSAFE_getByType, getByTestId} = render(
+          <PasswordCard hasPassword onSubmit={onSubmit} username="ada@example.com" />,
+          {
+            createNodeMock: (element: ReactElement) =>
+              element.type === "form" ? {requestSubmit} : {focus: (): void => {}},
+            wrapper: ThemeProvider,
+          }
+        );
+        const form = UNSAFE_getByType("form" as never);
+        expect(form.props["data-testid"]).toBe("password-card-form");
+        expect(UNSAFE_getByType("input" as never).props.value).toBe("ada@example.com");
+        fireEvent.changeText(getByTestId("password-card-current"), "old-password");
+        fireEvent.changeText(getByTestId("password-card-new"), "new-password-1");
+        fireEvent.changeText(getByTestId("password-card-confirm"), "new-password-1");
+        await act(async () => {
+          fireEvent(getByTestId("password-card-confirm"), "submitEditing");
+        });
+        await press(getByTestId("password-card-submit"));
+        expect(requestSubmit).toHaveBeenCalledTimes(2);
+        expect(onSubmit).not.toHaveBeenCalled();
+        await act(async () => {
+          fireEvent(form, "submit", {preventDefault: () => {}});
+        });
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+      } finally {
+        setOS(originalOS);
+      }
     });
 
     it("submits with Enter from the confirm field without pressing the button", async () => {

@@ -57,6 +57,7 @@ export * from "./FilterBoolean";
 export * from "./FilterChangesBadge";
 export * from "./FilterSelectMenu";
 export * from "./FlatList";
+export * from "./FormContainer";
 export type * from "./GPTChat";
 export type * from "./GPTMemoryModal";
 export * from "./Heading";

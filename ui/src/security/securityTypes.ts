@@ -141,6 +141,11 @@ export interface PasswordCardProps {
   /** Disables the form and shows a spinner on the submit button. */
   loading?: boolean;
   /**
+   * The signed-in user's email or username. On web it goes in a hidden `autocomplete="username"`
+   * field so password managers update that account's saved password.
+   */
+  username?: string;
+  /**
    * Root testID; child testIDs are derived from it.
    * @default "password-card"
    */
@@ -386,6 +391,11 @@ export interface TwoFactorSettingsCardProps {
    * the user loads.
    */
   disabled?: boolean;
+  /**
+   * The signed-in user's email or username. On web it goes in a hidden `autocomplete="username"`
+   * field next to the password step so password managers fill the right account's password.
+   */
+  username?: string;
   /**
    * Heading text.
    * @default "Two-factor authentication"

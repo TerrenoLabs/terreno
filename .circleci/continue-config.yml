@@ -453,7 +453,7 @@ commands:
             source "$BASH_ENV"
             shard="<< parameters.spec >>"
             case "$shard" in
-              auth) specs="login signup consents forgot-password reset-password verify-email two-factor" ;;
+              auth) specs="login login-form signup consents forgot-password reset-password verify-email two-factor" ;;
               app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;

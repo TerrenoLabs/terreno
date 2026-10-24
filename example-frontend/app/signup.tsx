@@ -83,7 +83,7 @@ const SignUp: React.FC = () => {
       error={errorMessage}
       fields={[
         {label: "Name", name: "name", required: true, type: "text"},
-        {autoComplete: "email", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "username", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isLoading}

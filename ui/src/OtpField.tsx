@@ -37,6 +37,8 @@ export interface OtpFieldProps {
   onChange?: (value: string) => void;
   /** Called once every cell holds a digit, after typing, pasting, or one-time-code autofill. */
   onComplete?: (code: string) => void;
+  /** Called with the digits entered so far when the user presses Enter in a cell. */
+  onEnter?: (code: string) => void;
   /** Label above the cells. */
   title?: string;
   /**
@@ -135,6 +137,7 @@ export const OtpField: FC<OtpFieldProps> = ({
   value,
   onChange,
   onComplete,
+  onEnter,
   title,
   accessibilityLabel = "Verification code",
   helperText,
@@ -241,6 +244,7 @@ export const OtpField: FC<OtpFieldProps> = ({
         autoCapitalize="none"
         autoCorrect={false}
         editable={!disabled}
+        enterKeyHint="done"
         inputMode="numeric"
         key={index}
         keyboardType="number-pad"
@@ -248,6 +252,7 @@ export const OtpField: FC<OtpFieldProps> = ({
         onChangeText={(text: string) => handleChangeText(index, text)}
         onFocus={() => handleFocus(index)}
         onKeyPress={(event: TextInputKeyPressEvent) => handleKeyPress(index, event)}
+        onSubmitEditing={() => onEnter?.(code)}
         ref={(ref) => {
           inputRefs.current[index] = ref;
         }}

@@ -52,9 +52,13 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/resetPassword.tsx`,
       `${APP}/verifyEmail.tsx`,
       `${APP}/(tabs)/documents.tsx`,
+      // login-form checks the password forms on the profile and security screens too.
+      `${APP}/(tabs)/profile.tsx`,
+      `${APP}/settings/security.tsx`,
     ],
     specs: [
       "login",
+      "login-form",
       "signup",
       "consents",
       "forgot-password",

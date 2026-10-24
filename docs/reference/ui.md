@@ -5,7 +5,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 ## Key exports
 
 - Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
-- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`, `OtpField`
+- Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`, `OtpField`, `FormContainer`
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
@@ -385,19 +385,94 @@ announce "Text input field", so pass it when the visible `title` is missing or n
 
 ### TextField autoComplete
 
-On web, `autoComplete` is written to the input's `autocomplete` attribute: `"on"`, `"off"`,
-`"username"`, `"email"`, `"current-password"`, `"new-password"`, or `"username webauthn"`.
-Native ignores the prop apart from turning off autocorrect.
+`autoComplete` is the field's autofill hint: `"on"`, `"off"`, `"username"`, `"email"`,
+`"current-password"`, `"new-password"`, `"one-time-code"`, or `"username webauthn"`.
 
-- `"off"` turns autofill off for the field. Prefer `"username"` on a login email field and
-  `"email"` on a sign-up email field.
+On web it is written to the input's `autocomplete` attribute. On native it is sent as React
+Native's `autoComplete` (Android's autofill hint) with the matching iOS `textContentType`:
+
+| `autoComplete` | Android `autoComplete` | iOS `textContentType` |
+| --- | --- | --- |
+| `"username"`, `"username webauthn"` | `username` | `username` |
+| `"email"` | `email` | `emailAddress` |
+| `"current-password"` | `current-password` (password) | `password` |
+| `"new-password"` | `new-password` (new password) | `newPassword` (iOS offers a strong password) |
+| `"one-time-code"` | `one-time-code` (SMS code) | `oneTimeCode` |
+| `"off"` | `off` | `none` |
+| `"on"` or unset | not set | from `type`: `emailAddress` for `email`, `password` for `password`, `username` for `username`, else `none` |
+
+Passkey autofill (`"username webauthn"`) is web only; native gets the plain username hint.
+
+- `"off"` turns autofill off for the field. Use `"username"` on the email field of a login or
+  sign-up form, so password managers save it with the password.
 - `Field type="password"` defaults to `"current-password"`. Pass `autoComplete="new-password"`
   (directly or through `TapToEdit`) on fields that set a new password, so password managers
   offer to generate one.
 - `SignUpScreen` password fields default to `"new-password"`; `LoginScreen` password fields
-  default to `"current-password"`.
+  default to `"current-password"`. Both default the email field to `"username"`.
 - `"username webauthn"` asks the browser to offer saved passkeys in the field's autofill;
   `LoginScreen` sets it on the email field when `passkeyAutofill` is on.
+
+### FormContainer
+
+Groups a form's fields. On web it renders a real `<form>` around them, so browsers and password
+managers pair a username with its password, autofill saved credentials, and offer to save new
+ones. react-native-web never renders a `<form>` on its own, and Chrome logs "Password field is not
+contained in a form" for every password input outside one. On native it renders a `Box`.
+
+``````typescript
+import {Button, FormContainer, type FormContainerHandle, TextField} from "@terreno/ui";
+
+const formRef = useRef<FormContainerHandle>(null);
+const passwordRef = useRef<TextInput | null>(null);
+
+<FormContainer accessibilityLabel="Sign in" gap={4} onSubmit={signIn} ref={formRef}>
+  <TextField
+    autoComplete="username"
+    blurOnSubmit={false}
+    onChange={setEmail}
+    onEnter={() => passwordRef.current?.focus()}
+    returnKeyType="next"
+    title="Email"
+    type="email"
+    value={email}
+  />
+  <TextField
+    autoComplete="current-password"
+    inputRef={(ref) => {
+      passwordRef.current = ref;
+    }}
+    onChange={setPassword}
+    onEnter={() => formRef.current?.requestSubmit()}
+    returnKeyType="go"
+    title="Password"
+    type="password"
+    value={password}
+  />
+  <Button onClick={() => formRef.current?.requestSubmit()} text="Log In" />
+</FormContainer>
+``````
+
+| Prop | Type | Behavior |
+| --- | --- | --- |
+| `onSubmit` | `() => void \| Promise<void>` | Called on `ref.requestSubmit()` and, on web, when the browser submits the form. The page reload is always prevented. |
+| `ref` | `Ref<FormContainerHandle>` | `requestSubmit(): Promise<void>`. On web it calls the form element's `requestSubmit()`, so the browser fires a real submit event (password managers watch for it to offer "Save password") and the submit handler calls `onSubmit`; it resolves when `onSubmit` settles. On native, and in browsers without `requestSubmit`, it calls `onSubmit` directly. |
+| `username` | `string` | For forms without a username field, such as change password: on web a hidden, read-only `autocomplete="username"` input names the account so password managers update its saved password. Ignored on native. |
+| `accessibilityLabel` | `string` | Names the form; on web a named form is a `form` landmark. |
+| Box layout props | | `gap`, `padding`, `width`, and the rest of `Box`'s layout props apply to the inner `Box`. |
+
+The `<form>` uses `display: contents` and `noValidate`, so it adds no layout box and no browser
+validation bubbles. `TextField` stops the browser's implicit Enter submission (it handles Enter
+through `onEnter`), so Enter never submits twice: give earlier fields `returnKeyType="next"`, an
+`onEnter` that focuses the next field, and `blurOnSubmit={false}`, and call
+`ref.requestSubmit()` from the last field and the submit button. A `FormContainer` inside another
+one renders a `Box`, since HTML forms cannot nest; its `requestSubmit` calls its own `onSubmit`.
+
+`LoginScreen`, `SignUpScreen`, `PasswordCard`, the password step of `TwoFactorSettingsCard`, and
+`GPTChat`'s API key modal already use it.
+
+**Test IDs:** the form is `{testID}` on web and the `Box` is `{testID}` on native; the hidden
+username input is `{testID}-username`.
 
 ### DropdownPanel
 
@@ -1090,6 +1165,17 @@ Accessibility: the button a "Last used" badge marks gets the badge in its access
 `role="alert"` and an `info` notice `role="status"`. Session cards read "Signed in on this
 device · {method}".
 
+Keyboard and autofill: the fields sit in a `FormContainer` (`{testID}-form`), so on web they are
+in a real `<form>` that password managers recognize. The email field defaults to
+`autoComplete="username"` (or `"username webauthn"` with `passkeyAutofill` on web) and password
+fields to `"current-password"`; each input's accessible name is its field `label`. Enter in a
+field moves focus to the next field (`returnKeyType="next"`); Enter in the last field
+(`returnKeyType="go"`) submits once when Log In is enabled, and does nothing while `loading` or
+while a required field is empty. Enter and the Log In button both submit through the form's
+`requestSubmit()`, so browsers see a real submit and offer to save the password. A second submit
+while `onSubmit` is pending is ignored. Tab order on web follows the screen: email, password, the
+password's show/hide button, Log In, forgot password, sign up, then providers.
+
 `LoginAccountOption` is `{id, name?, email?, image?, method}`. Name, email, and image are
 optional because apps remember only the method by default; a card without them reads
 "Continue with {method}". Show identity only when the app opted in to remembering it.
@@ -1138,6 +1224,9 @@ field, so platform code suggestions work whichever cell has focus. A full code p
 filled cell drops that cell's old digit. Tapping a cell past the first empty one moves focus back
 to that empty cell. Only the cell that takes the next digit is a tab stop (roving `tabIndex`), so
 Tab and Shift+Tab move past the field in one step.
+
+`onEnter(code)` is called with the digits entered so far when the user presses Enter in a cell
+(the cells' `enterKeyHint` is `"done"`).
 
 Accessibility: the cells sit in a `role="group"` named by `accessibilityLabel` (default
 "Verification code"); each cell is labelled "Digit k of N". With `errorText`, cells get
@@ -1188,6 +1277,9 @@ const [error, setError] = useState<string | undefined>(undefined);
 | `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
 | `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. |
 | `title` / `logo` | `string` / `ReactNode` | Heading (default "Two-factor authentication") and an optional logo. |
+
+Enter in a code cell submits a complete code (the same guard as Verify applies); Enter in the
+backup-code field submits it.
 
 Accessibility: the trust-device control is a `role="checkbox"` with `aria-checked` and its full
 sentence as the accessible name, and toggles with Space or Enter on web; the error is
@@ -1248,6 +1340,13 @@ const signUpWithGoogle = async (): Promise<void> => {
   onLoginPress={() => router.push("/login")}
 />
 ``````
+
+Keyboard and autofill: the fields sit in a `FormContainer` (`{testID}-form`). The email field
+defaults to `autoComplete="username"` and password fields to `"new-password"`, so password
+managers offer a strong password and save it with the email; each input's accessible name is its
+field `label`. Enter moves to the next field and submits from the last one once Sign Up is
+enabled (required fields filled, password requirements met), through the form's
+`requestSubmit()`. A second submit while `onSubmit` is pending is ignored.
 
 **Learn more:** [Configure Better Auth](../how-to/configure-better-auth.md)
 
@@ -1401,12 +1500,15 @@ import {hasPasswordCredential, PasswordCard} from "@terreno/ui";
 | `minLength` | `number` | Minimum new-password length. Defaults to 8, Better Auth's default. |
 | `error` | `string` | Error with `role="alert"`; overrides a rejection message. |
 | `loading` | `boolean` | Disables the form and shows a spinner on the submit button. |
+| `username` | `string` | The signed-in user's email or username. On web it goes in a hidden `autocomplete="username"` field of the card's form, so password managers update that account's saved password. `useAccountSecurity` passes the session user's email. |
 
 Inline errors: "Enter your current password.", "Use at least N characters.", and "Passwords
 don't match." show under their field after a submit attempt and clear when that field changes.
 A failed attempt also focuses the first invalid field and shows a `role="alert"` summary ("Fix the
 2 highlighted fields.", `{testID}-validation-error`) that updates as fields are fixed. Enter in
-any of the password fields submits. A second submit while `onSubmit` is pending is ignored.
+the current or new password field moves to the next field; Enter in the confirm field submits
+through the card's `FormContainer` (`{testID}-form`), like the submit button. A second submit
+while `onSubmit` is pending is ignored.
 
 Accessibility: inputs are named "Current password", "New password" and "Confirm new password";
 on web they carry `autocomplete="current-password"` / `"new-password"` so password managers fill
@@ -1639,6 +1741,7 @@ import {TwoFactorSettingsCard, hasPasswordCredential} from "@terreno/ui";
 | `error` | `string` | Card error with `role="alert"`; overrides a rejection message. |
 | `disabled` | `boolean` | Disables Turn on, Get new backup codes, Turn off and the password step, for example while the user loads. |
 | `title` / `description` | `string` | Heading (default "Two-factor authentication") and the text under it. |
+| `username` | `string` | The signed-in user's email or username. On web the password step's form gets a hidden `autocomplete="username"` field, so password managers fill that account's password. `useAccountSecurity` passes the session user's email. |
 
 The card never logs the codes or the URI; a rejection is logged with `console.warn` as the
 callback threw it, so don't put secrets in error messages.
@@ -1670,6 +1773,7 @@ Accessibility:
 | Backup codes left / low warning / set-a-password note | `two-factor-settings-card-backup-codes-remaining`, `-backup-codes-low`, `-needs-password` |
 | Step heading (focus target) / step indicator / Cancel | `two-factor-settings-card-step-heading`, `-step`, `-cancel` |
 | Password prompt, field, submit | `two-factor-settings-card-password-prompt`, `-password`, `-password-submit` |
+| Password step form (web `<form>`) | `two-factor-settings-card-password-form` |
 | QR code / setup key / Copy key / Next | `two-factor-settings-card-qr`, `-secret`, `-copy-secret`, `-next` |
 | Code field (cells `-otp-cell-1`…) / Verify / Back | `two-factor-settings-card-otp`, `-verify`, `-back` |
 | Codes heading / list / code N (from 1) | `two-factor-settings-card-codes-title`, `-backup-codes`, `-backup-code-{n}` |

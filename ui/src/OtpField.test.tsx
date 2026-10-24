@@ -82,6 +82,14 @@ describe("OtpField", () => {
     expect(cell.props.textContentType).toBe("oneTimeCode");
   });
 
+  it("calls onEnter with the code on Enter in any cell", () => {
+    const onEnter = mock((_code: string) => {});
+    const {getByTestId} = renderWithTheme(<OtpField onEnter={onEnter} testID="otp" value="1234" />);
+    expect(getByTestId("otp-cell-5").props.enterKeyHint).toBe("done");
+    fireEvent(getByTestId("otp-cell-5"), "submitEditing");
+    expect(onEnter).toHaveBeenCalledWith("1234");
+  });
+
   it("pasting a full code fills every cell and fires onComplete", () => {
     const onComplete = mock((_code: string) => {});
     const {getByTestId} = renderWithTheme(<OtpField onComplete={onComplete} testID="otp" />);

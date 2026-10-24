@@ -1,8 +1,11 @@
 import type {FC} from "react";
-import {useCallback, useState} from "react";
+import {useCallback, useRef, useState} from "react";
+import type {TextInput} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
+import type {TextFieldProps} from "../Common";
+import {FormContainer, type FormContainerHandle} from "../FormContainer";
 import {Heading} from "../Heading";
 import {Page} from "../Page";
 import {Text} from "../Text";
@@ -10,7 +13,22 @@ import {TextField} from "../TextField";
 import {OAuthButtons} from "./OAuthButtons";
 import {PasswordRequirements} from "./PasswordRequirements";
 import {Swiper} from "./Swiper";
-import type {SignUpScreenProps} from "./signUpTypes";
+import type {SignUpFieldConfig, SignUpScreenProps} from "./signUpTypes";
+
+/**
+ * The autofill hint for a field: its own hint, else "username" for the email field (password
+ * managers save it with the new password) and "new-password" for password fields (browsers and
+ * iOS then offer a strong password).
+ */
+const getFieldAutoComplete = (field: SignUpFieldConfig): TextFieldProps["autoComplete"] => {
+  if (field.autoComplete) {
+    return field.autoComplete;
+  }
+  if (field.type === "email" || field.name === "email") {
+    return "username";
+  }
+  return field.type === "password" ? "new-password" : undefined;
+};
 
 /**
  * A configurable sign-up screen component with support for custom fields,
@@ -61,10 +79,6 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
     setFormValues((prev) => ({...prev, [fieldName]: value}));
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    await onSubmit(formValues);
-  }, [formValues, onSubmit]);
-
   const passwordField = fields.find((f) => f.type === "password");
   const passwordValue = passwordField ? (formValues[passwordField.name] ?? "") : "";
 
@@ -78,6 +92,36 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
     .every((f) => (formValues[f.name] ?? "").trim().length > 0);
 
   const isSubmitDisabled = loading || !requiredFieldsFilled || !allRequirementsMet;
+
+  const formRef = useRef<FormContainerHandle>(null);
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  // Blocks a second submission (Enter plus a press, or a double Enter) before `loading` lands.
+  const isSubmittingRef = useRef(false);
+
+  // Every submission (Enter, the Sign Up button, or the browser) arrives here through the form.
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    if (isSubmitDisabled || isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    try {
+      await onSubmit(formValues);
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  }, [formValues, isSubmitDisabled, onSubmit]);
+
+  // On web this goes through the <form>, so password managers see a real submit.
+  const requestSubmit = useCallback(async (): Promise<void> => {
+    if (isSubmitDisabled) {
+      return;
+    }
+    await formRef.current?.requestSubmit();
+  }, [isSubmitDisabled]);
+
+  const focusField = useCallback((fieldName: string): void => {
+    inputRefs.current[fieldName]?.focus();
+  }, []);
 
   return (
     <Page navigation={undefined}>
@@ -103,25 +147,41 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
           <Heading testID={`${testID}-title`}>{title}</Heading>
         </Box>
 
-        <Box gap={4} width="100%">
-          {fields.map((field) => (
-            <TextField
-              autoComplete={
-                field.autoComplete ?? (field.type === "password" ? "new-password" : undefined)
-              }
-              disabled={loading}
-              id={`${testID}-${field.name}-input`}
-              key={field.name}
-              onChange={(value: string) => handleFieldChange(field.name, value)}
-              placeholder={field.placeholder ?? field.label}
-              testID={`${testID}-${field.name}-input`}
-              title={field.label}
-              type={
-                field.type === "email" ? "email" : field.type === "password" ? "password" : "text"
-              }
-              value={formValues[field.name]}
-            />
-          ))}
+        <FormContainer
+          accessibilityLabel={title}
+          gap={4}
+          onSubmit={handleSubmit}
+          ref={formRef}
+          testID={`${testID}-form`}
+          width="100%"
+        >
+          {fields.map((field, index) => {
+            // Enter moves to the next field; in the last field it submits.
+            const nextField = fields[index + 1];
+            return (
+              <TextField
+                accessibilityLabel={field.label}
+                autoComplete={getFieldAutoComplete(field)}
+                blurOnSubmit={!nextField}
+                disabled={loading}
+                id={`${testID}-${field.name}-input`}
+                inputRef={(ref) => {
+                  inputRefs.current[field.name] = ref;
+                }}
+                key={field.name}
+                onChange={(value: string) => handleFieldChange(field.name, value)}
+                onEnter={nextField ? () => focusField(nextField.name) : requestSubmit}
+                placeholder={field.placeholder ?? field.label}
+                returnKeyType={nextField ? "next" : "go"}
+                testID={`${testID}-${field.name}-input`}
+                title={field.label}
+                type={
+                  field.type === "email" ? "email" : field.type === "password" ? "password" : "text"
+                }
+                value={formValues[field.name]}
+              />
+            );
+          })}
 
           {Boolean(passwordRequirements && passwordRequirements.length > 0 && passwordField) && (
             <PasswordRequirements
@@ -142,7 +202,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
               disabled={isSubmitDisabled}
               fullWidth
               loading={loading}
-              onClick={handleSubmit}
+              onClick={requestSubmit}
               testID={`${testID}-submit-button`}
               text="Sign Up"
             />
@@ -168,7 +228,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
               testID={`${testID}-oauth`}
             />
           )}
-        </Box>
+        </FormContainer>
       </Box>
     </Page>
   );

@@ -1,10 +1,11 @@
 import type {FC, ReactElement} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {Platform, View} from "react-native";
+import {Platform, type TextInput, View} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
 import type {TextFieldProps} from "../Common";
+import {FormContainer, type FormContainerHandle} from "../FormContainer";
 import {Heading} from "../Heading";
 import {Icon} from "../Icon";
 import {Page} from "../Page";
@@ -24,7 +25,8 @@ const isEmailField = (field: LoginFieldConfig): boolean => {
 
 /**
  * The autofill hint for a field: passkey autofill on a web email field, else the field's own hint,
- * else "current-password" for password fields.
+ * else "username" for the email field and "current-password" for password fields, so password
+ * managers pair the two.
  */
 const getFieldAutoComplete = ({
   field,
@@ -38,6 +40,9 @@ const getFieldAutoComplete = ({
   }
   if (field.autoComplete) {
     return field.autoComplete;
+  }
+  if (isEmailField(field)) {
+    return "username";
   }
   return field.type === "password" ? "current-password" : undefined;
 };
@@ -169,9 +174,10 @@ export const LoginScreen: FC<LoginScreenProps> = ({
     setFormValues((prev) => ({...prev, [fieldName]: value}));
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    await onSubmit(formValues);
-  }, [formValues, onSubmit]);
+  const formRef = useRef<FormContainerHandle>(null);
+  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  // Blocks a second submission (Enter plus a press, or a double Enter) before `loading` lands.
+  const isSubmittingRef = useRef(false);
 
   const handlePasskeyPress = useCallback(async (): Promise<void> => {
     await onPasskeyPress?.();
@@ -182,6 +188,31 @@ export const LoginScreen: FC<LoginScreenProps> = ({
     .every((f) => (formValues[f.name] ?? "").trim().length > 0);
 
   const isSubmitDisabled = loading || !requiredFieldsFilled;
+
+  // Every submission (Enter, the Log In button, or the browser) arrives here through the form.
+  const handleSubmit = useCallback(async (): Promise<void> => {
+    if (isSubmitDisabled || isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    try {
+      await onSubmit(formValues);
+    } finally {
+      isSubmittingRef.current = false;
+    }
+  }, [formValues, isSubmitDisabled, onSubmit]);
+
+  // On web this goes through the <form>, so password managers see a real submit.
+  const requestSubmit = useCallback(async (): Promise<void> => {
+    if (isSubmitDisabled) {
+      return;
+    }
+    await formRef.current?.requestSubmit();
+  }, [isSubmitDisabled]);
+
+  const focusField = useCallback((fieldName: string): void => {
+    inputRefs.current[fieldName]?.focus();
+  }, []);
 
   const brandedProviders = oauthProviders ?? [];
   const otherProviders = genericProviders ?? [];
@@ -287,7 +318,14 @@ export const LoginScreen: FC<LoginScreenProps> = ({
           <Heading testID={`${testID}-title`}>{title}</Heading>
         </Box>
 
-        <Box gap={4} width="100%">
+        <FormContainer
+          accessibilityLabel={title}
+          gap={4}
+          onSubmit={handleSubmit}
+          ref={formRef}
+          testID={`${testID}-form`}
+          width="100%"
+        >
           {Boolean(notice) && <NoticeBox notice={notice!} testID={`${testID}-notice`} />}
 
           {accountCards.length > 0 && (
@@ -314,23 +352,33 @@ export const LoginScreen: FC<LoginScreenProps> = ({
             <LastUsedBadge label={lastUsedLabel} testID={`${testID}-last-used-email`} />
           )}
 
-          {fields.map((field) => (
-            <TextField
-              accessibilityLabel={field.label}
-              autoComplete={getFieldAutoComplete({field, passkeyAutofill})}
-              disabled={loading}
-              id={`${testID}-${field.name}-input`}
-              key={field.name}
-              onChange={(value: string) => handleFieldChange(field.name, value)}
-              placeholder={field.placeholder ?? field.label}
-              testID={`${testID}-${field.name}-input`}
-              title={field.label}
-              type={
-                field.type === "email" ? "email" : field.type === "password" ? "password" : "text"
-              }
-              value={formValues[field.name]}
-            />
-          ))}
+          {fields.map((field, index) => {
+            // Enter moves to the next field; in the last field it submits.
+            const nextField = fields[index + 1];
+            return (
+              <TextField
+                accessibilityLabel={field.label}
+                autoComplete={getFieldAutoComplete({field, passkeyAutofill})}
+                blurOnSubmit={!nextField}
+                disabled={loading}
+                id={`${testID}-${field.name}-input`}
+                inputRef={(ref) => {
+                  inputRefs.current[field.name] = ref;
+                }}
+                key={field.name}
+                onChange={(value: string) => handleFieldChange(field.name, value)}
+                onEnter={nextField ? () => focusField(nextField.name) : requestSubmit}
+                placeholder={field.placeholder ?? field.label}
+                returnKeyType={nextField ? "next" : "go"}
+                testID={`${testID}-${field.name}-input`}
+                title={field.label}
+                type={
+                  field.type === "email" ? "email" : field.type === "password" ? "password" : "text"
+                }
+                value={formValues[field.name]}
+              />
+            );
+          })}
 
           {Boolean(error) && (
             <Text color="error" testID={`${testID}-error`}>
@@ -347,7 +395,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({
                 disabled={isSubmitDisabled}
                 fullWidth
                 loading={loading}
-                onClick={handleSubmit}
+                onClick={requestSubmit}
                 testID={`${testID}-submit-button`}
                 text="Log In"
               />
@@ -386,7 +434,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({
           )}
 
           {hasForm && isPasskeyBelow && renderPasskeyButton()}
-        </Box>
+        </FormContainer>
       </Box>
     </Page>
   );

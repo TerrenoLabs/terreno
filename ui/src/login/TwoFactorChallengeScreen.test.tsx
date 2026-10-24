@@ -149,6 +149,53 @@ describe("TwoFactorChallengeScreen", () => {
     });
   });
 
+  it("asks for one-time-code autofill and a numeric keyboard on the code cells", () => {
+    const {getByTestId} = renderWithTheme(<TwoFactorChallengeScreen onSubmit={makeOnSubmit()} />);
+    const cell = getByTestId("two-factor-challenge-otp-cell-1");
+    expect(cell.props.autoComplete).toBe("one-time-code");
+    expect(cell.props.textContentType).toBe("oneTimeCode");
+    expect(cell.props.keyboardType).toBe("number-pad");
+  });
+
+  it("submits a complete code on Enter, and ignores Enter on an incomplete one", async () => {
+    const onSubmit = makeOnSubmit();
+    const {getByTestId} = renderWithTheme(<TwoFactorChallengeScreen onSubmit={onSubmit} />);
+    await act(async () => {
+      fireEvent.changeText(getByTestId("two-factor-challenge-otp-cell-1"), "12345");
+    });
+    await act(async () => {
+      fireEvent(getByTestId("two-factor-challenge-otp-cell-6"), "submitEditing");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    // The last digit auto-submits; Enter on the completed code submits it again.
+    await act(async () => {
+      fireEvent.changeText(getByTestId("two-factor-challenge-otp-cell-6"), "6");
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent(getByTestId("two-factor-challenge-otp-cell-6"), "submitEditing");
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    expect(onSubmit).toHaveBeenLastCalledWith({code: "123456", kind: "totp", trustDevice: false});
+  });
+
+  it("submits the backup code on Enter", async () => {
+    const onSubmit = makeOnSubmit();
+    const {getByTestId} = renderWithTheme(
+      <TwoFactorChallengeScreen initialKind="backup" onSubmit={onSubmit} />
+    );
+    fireEvent.changeText(getByTestId("two-factor-challenge-backup-input"), "abcde-12345");
+    await act(async () => {
+      fireEvent(getByTestId("two-factor-challenge-backup-input"), "submitEditing");
+    });
+    expect(onSubmit).toHaveBeenCalledWith({
+      code: "abcde-12345",
+      kind: "backup",
+      trustDevice: false,
+    });
+  });
+
   it("submits once when Verify is pressed while the auto-submit is in flight", async () => {
     let resolveSubmit: () => void = () => {};
     const onSubmit = mock(

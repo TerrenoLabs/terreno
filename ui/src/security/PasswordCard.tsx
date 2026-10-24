@@ -4,6 +4,7 @@ import {type TextInput, View} from "react-native";
 import {Box} from "../Box";
 import {Button} from "../Button";
 import {Card} from "../Card";
+import {FormContainer, type FormContainerHandle} from "../FormContainer";
 import {Heading} from "../Heading";
 import {LabeledCheckBox} from "../LabeledCheckBox";
 import {Text} from "../Text";
@@ -82,6 +83,7 @@ export const PasswordCard: FC<PasswordCardProps> = ({
   minLength = DEFAULT_MIN_LENGTH,
   error,
   loading = false,
+  username,
   testID = "password-card",
 }) => {
   const mode: PasswordCardMode = hasPassword ? "change" : "set";
@@ -97,6 +99,7 @@ export const PasswordCard: FC<PasswordCardProps> = ({
   const isSubmittingRef = useRef(false);
   const previousModeRef = useRef(mode);
   const inputRefs = useRef<Partial<Record<keyof PasswordFieldErrors, TextInput | null>>>({});
+  const formRef = useRef<FormContainerHandle>(null);
 
   const setCurrentInputRef = useCallback((ref: TextInput | null): void => {
     inputRefs.current.currentPassword = ref;
@@ -212,9 +215,29 @@ export const PasswordCard: FC<PasswordCardProps> = ({
     validate,
   ]);
 
+  // On web this goes through the <form>, so password managers see a real submit.
+  const requestSubmit = useCallback(async (): Promise<void> => {
+    await formRef.current?.requestSubmit();
+  }, []);
+
+  // Enter moves down the fields; in the confirm field it submits.
+  const focusNewPassword = useCallback((): void => {
+    inputRefs.current.newPassword?.focus?.();
+  }, []);
+  const focusConfirmPassword = useCallback((): void => {
+    inputRefs.current.confirmPassword?.focus?.();
+  }, []);
+
   return (
     <Card testID={testID}>
-      <Box gap={4}>
+      <FormContainer
+        accessibilityLabel={copy.title}
+        gap={4}
+        onSubmit={handleSubmit}
+        ref={formRef}
+        testID={`${testID}-form`}
+        username={username}
+      >
         <Box gap={1}>
           <Heading level={2} size="md" testID={`${testID}-title`}>
             {copy.title}
@@ -226,11 +249,13 @@ export const PasswordCard: FC<PasswordCardProps> = ({
           <TextField
             accessibilityLabel="Current password"
             autoComplete="current-password"
+            blurOnSubmit={false}
             disabled={isBusy}
             errorText={fieldErrors.currentPassword}
             inputRef={setCurrentInputRef}
             onChange={handleCurrentChange}
-            onEnter={handleSubmit}
+            onEnter={focusNewPassword}
+            returnKeyType="next"
             testID={`${testID}-current`}
             title="Current password"
             type="password"
@@ -241,12 +266,14 @@ export const PasswordCard: FC<PasswordCardProps> = ({
         <TextField
           accessibilityLabel="New password"
           autoComplete="new-password"
+          blurOnSubmit={false}
           disabled={isBusy}
           errorText={fieldErrors.newPassword}
           helperText={fieldErrors.newPassword ? undefined : `At least ${minLength} characters.`}
           inputRef={setNewInputRef}
           onChange={handleNewChange}
-          onEnter={handleSubmit}
+          onEnter={focusConfirmPassword}
+          returnKeyType="next"
           testID={`${testID}-new`}
           title="New password"
           type="password"
@@ -260,7 +287,8 @@ export const PasswordCard: FC<PasswordCardProps> = ({
           errorText={fieldErrors.confirmPassword}
           inputRef={setConfirmInputRef}
           onChange={handleConfirmChange}
-          onEnter={handleSubmit}
+          onEnter={requestSubmit}
+          returnKeyType="done"
           testID={`${testID}-confirm`}
           title="Confirm new password"
           type="password"
@@ -303,12 +331,12 @@ export const PasswordCard: FC<PasswordCardProps> = ({
           <Button
             disabled={isBusy}
             loading={isBusy}
-            onClick={handleSubmit}
+            onClick={requestSubmit}
             testID={`${testID}-submit`}
             text={copy.submit}
           />
         </Box>
-      </Box>
+      </FormContainer>
     </Card>
   );
 };

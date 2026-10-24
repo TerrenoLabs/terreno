@@ -14,6 +14,7 @@ import {
   Box,
   Button,
   Card,
+  FormContainer,
   Heading,
   Page,
   Spinner,
@@ -283,7 +284,7 @@ const ProfileScreen: React.FC = () => {
         )}
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} testID="profile-account-form">
             <Heading size="lg">Account Details</Heading>
 
             <TapToEdit
@@ -310,6 +311,8 @@ const ProfileScreen: React.FC = () => {
 
             {isEmailChanged && (
               <TextField
+                accessibilityLabel="Current password"
+                autoComplete="current-password"
                 disabled={isUpdating}
                 helperText="Enter your current password to change your email"
                 onChange={setCurrentPassword}
@@ -345,7 +348,7 @@ const ProfileScreen: React.FC = () => {
                 variant="secondary"
               />
             </Box>
-          </Box>
+          </FormContainer>
         </Card>
 
         <Card marginBottom={6} testID="profile-roles-card">
@@ -377,14 +380,17 @@ const ProfileScreen: React.FC = () => {
         </Card>
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} onSubmit={handleSaveApiKey} testID="profile-gemini-form">
             <Heading size="lg">Gemini API Key</Heading>
             <Text color="secondaryLight" size="sm">
               Paste your Gemini API key to enable AI chat and the admin prompt playground. The key
               is stored locally on your device.
             </Text>
             <TextField
+              accessibilityLabel="Gemini API key"
+              autoComplete="off"
               onChange={setApiKeyInput}
+              onEnter={apiKeyInput.trim() ? handleSaveApiKey : undefined}
               placeholder="Enter your Gemini API key"
               testID="profile-gemini-key-input"
               title="API Key"
@@ -413,7 +419,7 @@ const ProfileScreen: React.FC = () => {
                 variant="destructive"
               />
             </Box>
-          </Box>
+          </FormContainer>
         </Card>
 
         <Card marginBottom={6} testID="profile-dark-mode-card">

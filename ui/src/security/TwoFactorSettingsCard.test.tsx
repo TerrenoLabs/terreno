@@ -179,6 +179,31 @@ describe("TwoFactorSettingsCard", () => {
       expect(getByTestId("two-factor-settings-card-backup-code-1")).toBeTruthy();
     });
 
+    it("puts the password step in a form on web with the account's username", async () => {
+      const originalOS = Platform.OS;
+      Object.defineProperty(Platform, "OS", {configurable: true, value: "web"});
+      try {
+        const {onStartEnroll, utils} = renderOffCard({username: "ada@example.com"});
+        const {UNSAFE_getByType, getByTestId} = utils;
+        await press(getByTestId("two-factor-settings-card-enable"));
+        const form = UNSAFE_getByType("form" as never);
+        expect(form.props["data-testid"]).toBe("two-factor-settings-card-password-form");
+        expect(UNSAFE_getByType("input" as never).props.value).toBe("ada@example.com");
+        const password = getByTestId("two-factor-settings-card-password");
+        expect(password.props.autoComplete).toBe("current-password");
+        expect(password.props["aria-label"]).toBe("Password");
+        await typeText(password, "hunter22");
+        await act(async () => {
+          fireEvent(form, "submit", {preventDefault: () => {}});
+        });
+        await waitFor(() => {
+          expect(onStartEnroll).toHaveBeenCalledWith("hunter22");
+        });
+      } finally {
+        Object.defineProperty(Platform, "OS", {configurable: true, value: originalOS});
+      }
+    });
+
     it("asks for the password before calling onStartEnroll", async () => {
       const {onStartEnroll, utils} = renderOffCard();
       await press(utils.getByTestId("two-factor-settings-card-enable"));

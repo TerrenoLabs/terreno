@@ -587,8 +587,9 @@ export const useAccountSecurity = ({
       hasPassword,
       onSubmit: onPasswordSubmit,
       ...(minPasswordLength !== undefined ? {minLength: minPasswordLength} : {}),
+      ...(user?.email ? {username: user.email} : {}),
     };
-  }, [hasPassword, methods?.emailPassword, minPasswordLength, onPasswordSubmit]);
+  }, [hasPassword, methods?.emailPassword, minPasswordLength, onPasswordSubmit, user?.email]);
 
   const passkeysProps = useMemo((): PasskeysCardProps | undefined => {
     if (!isPasskeyOn) {
@@ -623,6 +624,7 @@ export const useAccountSecurity = ({
       onRegenerateBackupCodes,
       onStartEnroll,
       onVerify: onVerifyTwoFactor,
+      ...(user?.email ? {username: user.email} : {}),
     };
   }, [
     hasPassword,
@@ -631,6 +633,7 @@ export const useAccountSecurity = ({
     onRegenerateBackupCodes,
     onStartEnroll,
     onVerifyTwoFactor,
+    user?.email,
     user?.twoFactorEnabled,
   ]);
 

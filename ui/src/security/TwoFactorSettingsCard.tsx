@@ -6,6 +6,7 @@ import QRCode from "react-native-qrcode-svg";
 import {Box} from "../Box";
 import {Button} from "../Button";
 import {Card} from "../Card";
+import {FormContainer} from "../FormContainer";
 import {Heading} from "../Heading";
 import {LabeledCheckBox} from "../LabeledCheckBox";
 import {Modal} from "../Modal";
@@ -210,6 +211,7 @@ export const TwoFactorSettingsCard: FC<TwoFactorSettingsCardProps> = ({
   disabled = false,
   title = "Two-factor authentication",
   description = "Sign in with a code from an authenticator app as well as your password.",
+  username,
   testID = "two-factor-settings-card",
 }) => {
   const [flow, setFlow] = useState<TwoFactorFlow>(IDLE);
@@ -613,8 +615,15 @@ export const TwoFactorSettingsCard: FC<TwoFactorSettingsCardProps> = ({
 
   const renderPassword = (purpose: PasswordPurpose): ReactElement => {
     const copy = PASSWORD_COPY[purpose];
+    // A form lets password managers fill the current password on web.
     return (
-      <Box gap={3}>
+      <FormContainer
+        accessibilityLabel={copy.submit}
+        gap={3}
+        onSubmit={handlePasswordSubmit}
+        testID={`${testID}-password-form`}
+        username={username}
+      >
         {renderStepHeading({
           children: <Text testID={`${testID}-password-prompt`}>{copy.prompt}</Text>,
           step: purpose === "enroll" ? 1 : undefined,
@@ -645,7 +654,7 @@ export const TwoFactorSettingsCard: FC<TwoFactorSettingsCardProps> = ({
           />
           {renderCancel()}
         </Box>
-      </Box>
+      </FormContainer>
     );
   };
 

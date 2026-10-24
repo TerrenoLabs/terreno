@@ -1,7 +1,9 @@
 import {describe, expect, it, mock} from "bun:test";
-import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
+import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
+import type {ReactElement} from "react";
 import {Platform} from "react-native";
 import {TextField} from "../TextField";
+import {ThemeProvider} from "../Theme";
 import {renderWithTheme} from "../test-utils";
 import {LoginScreen} from "./LoginScreen";
 import type {LoginAccountOption} from "./loginTypes";
@@ -750,5 +752,191 @@ describe("LoginScreen v2 snapshot", () => {
       />
     );
     expect(toJSON()).toMatchSnapshot();
+  });
+});
+
+/** Renders with host-node mocks: focus() records the input's testID; forms get requestSubmit. */
+const renderWithHostMocks = (
+  ui: ReactElement,
+  {requestSubmit}: {requestSubmit?: () => void} = {}
+): ReturnType<typeof render> & {focused: string[]} => {
+  const focused: string[] = [];
+  const result = render(ui, {
+    createNodeMock: (element: ReactElement<{testID?: string}>) => {
+      if (element.type === "form") {
+        return requestSubmit ? {requestSubmit} : {};
+      }
+      return {
+        blur: (): void => {},
+        focus: (): void => {
+          focused.push(element.props.testID ?? "");
+        },
+      };
+    },
+    wrapper: ThemeProvider,
+  });
+  return {...result, focused};
+};
+
+const fillLogin = (getByTestId: (id: string) => unknown): void => {
+  fireEvent.changeText(getByTestId("login-screen-email-input") as never, "user@test.com");
+  fireEvent.changeText(getByTestId("login-screen-password-input") as never, "secret123");
+};
+
+describe("LoginScreen keyboard and autofill", () => {
+  it("hints username and current-password autofill by default", () => {
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={mock(() => Promise.resolve())} />
+    );
+    const email = getByTestId("login-screen-email-input");
+    const password = getByTestId("login-screen-password-input");
+    expect(email.props.autoComplete).toBe("username");
+    expect(email.props.textContentType).toBe("username");
+    expect(password.props.autoComplete).toBe("current-password");
+    expect(password.props.textContentType).toBe("password");
+  });
+
+  it("marks the email field's return key next and the last field's go", () => {
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={mock(() => Promise.resolve())} />
+    );
+    expect(getByTestId("login-screen-email-input").props.enterKeyHint).toBe("next");
+    expect(getByTestId("login-screen-email-input").props.blurOnSubmit).toBe(false);
+    expect(getByTestId("login-screen-password-input").props.enterKeyHint).toBe("go");
+  });
+
+  it("moves focus to the password field on Enter in the email field without submitting", () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const {focused, getByTestId} = renderWithHostMocks(
+      <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
+    );
+    fillLogin(getByTestId);
+    fireEvent(getByTestId("login-screen-email-input"), "submitEditing");
+    expect(focused).toEqual(["login-screen-password-input"]);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("submits once on Enter in the password field", async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
+    );
+    fillLogin(getByTestId);
+    await act(async () => {
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]).toEqual([{email: "user@test.com", password: "secret123"}]);
+  });
+
+  it("ignores a second Enter while the first submission is pending", async () => {
+    let resolveSubmit: () => void = () => {};
+    const onSubmit = mock(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSubmit = resolve;
+        })
+    );
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
+    );
+    fillLogin(getByTestId);
+    await act(async () => {
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+      fireEvent.press(getByTestId("login-screen-submit-button"));
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolveSubmit();
+    });
+    await act(async () => {
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+    });
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+  });
+
+  it("does nothing on Enter while a required field is empty", async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
+    );
+    fireEvent.changeText(getByTestId("login-screen-password-input"), "secret123");
+    await act(async () => {
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("does nothing on Enter while loading", async () => {
+    const onSubmit = mock(() => Promise.resolve());
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen
+        fields={defaultFields}
+        initialValues={{email: "user@test.com", password: "secret123"}}
+        loading
+        onSubmit={onSubmit}
+      />
+    );
+    await act(async () => {
+      fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+    });
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  describe("web", () => {
+    it("wraps the fields in a form and submits through it so password managers see the submit", async () => {
+      const originalOS = Platform.OS;
+      Platform.OS = "web";
+      try {
+        const requestSubmit = mock(() => {});
+        const onSubmit = mock(() => Promise.resolve());
+        const {UNSAFE_getByType, getByTestId} = renderWithHostMocks(
+          <LoginScreen fields={defaultFields} onSubmit={onSubmit} />,
+          {requestSubmit}
+        );
+        const form = UNSAFE_getByType("form" as never);
+        expect(form.props["data-testid"]).toBe("login-screen-form");
+        expect(within(form).getByTestId("login-screen-email-input")).toBeTruthy();
+        expect(within(form).getByTestId("login-screen-password-input")).toBeTruthy();
+        fillLogin(getByTestId);
+
+        await act(async () => {
+          fireEvent(getByTestId("login-screen-password-input"), "submitEditing");
+        });
+        await act(async () => {
+          fireEvent.press(getByTestId("login-screen-submit-button"));
+        });
+        expect(requestSubmit).toHaveBeenCalledTimes(2);
+        expect(onSubmit).not.toHaveBeenCalled();
+
+        const preventDefault = mock(() => {});
+        await act(async () => {
+          fireEvent(form, "submit", {preventDefault});
+        });
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        expect(onSubmit).toHaveBeenCalledTimes(1);
+        expect(onSubmit.mock.calls[0]).toEqual([{email: "user@test.com", password: "secret123"}]);
+      } finally {
+        Platform.OS = originalOS;
+      }
+    });
+
+    it("ignores a browser submit while required fields are empty", async () => {
+      const originalOS = Platform.OS;
+      Platform.OS = "web";
+      try {
+        const onSubmit = mock(() => Promise.resolve());
+        const {UNSAFE_getByType} = renderWithHostMocks(
+          <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
+        );
+        await act(async () => {
+          fireEvent(UNSAFE_getByType("form" as never), "submit", {preventDefault: () => {}});
+        });
+        expect(onSubmit).not.toHaveBeenCalled();
+      } finally {
+        Platform.OS = originalOS;
+      }
+    });
   });
 });

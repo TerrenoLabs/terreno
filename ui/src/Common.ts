@@ -1021,7 +1021,12 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
 
   /**
    * Autofill hint. On web it is set as the input's `autocomplete` attribute; `"username webauthn"`
-   * asks the browser to offer saved passkeys in the field's autofill.
+   * asks the browser to offer saved passkeys in the field's autofill. On native it is sent as
+   * React Native's `autoComplete` (Android's autofill hint) and as the matching iOS
+   * `textContentType`: `username` → `username`, `email` → `emailAddress`, `current-password` →
+   * `password`, `new-password` → `newPassword` (iOS offers a strong password), `one-time-code` →
+   * `oneTimeCode`, `off` → `none`. Without it (or with `"on"`) the field's `type` picks the iOS
+   * hint.
    */
   autoComplete?:
     | "current-password"
@@ -1029,6 +1034,7 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
     | "new-password"
     | "on"
     | "off"
+    | "one-time-code"
     | "username"
     | "username webauthn";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";

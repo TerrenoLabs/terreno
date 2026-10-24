@@ -119,6 +119,16 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
     await submit(code, kind);
   }, [code, isCodeComplete, kind, submit]);
 
+  const handleOtpEnter = useCallback(
+    (enteredCode: string): void => {
+      if (enteredCode.length !== codeLength) {
+        return;
+      }
+      void submit(enteredCode, "totp");
+    },
+    [codeLength, submit]
+  );
+
   const handleOtpComplete = useCallback(
     (completedCode: string): void => {
       void submit(completedCode, "totp");
@@ -171,6 +181,7 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
                 length={codeLength}
                 onChange={setTotpCode}
                 onComplete={handleOtpComplete}
+                onEnter={handleOtpEnter}
                 testID={`${testID}-otp`}
                 value={totpCode}
               />
@@ -185,6 +196,7 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
               onChange={setBackupCode}
               onEnter={handleSubmitPress}
               placeholder="xxxxx-xxxxx"
+              returnKeyType="go"
               testID={`${testID}-backup-input`}
               title="Backup code"
               type="search"

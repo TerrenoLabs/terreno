@@ -206,6 +206,7 @@ exports[`Field renders password field 1`] = `
                 },
                 "aria-label": "Text input field",
                 "autoCapitalize": "none",
+                "autoComplete": "current-password",
                 "autoCorrect": false,
                 "blurOnSubmit": true,
                 "enterKeyHint": undefined,

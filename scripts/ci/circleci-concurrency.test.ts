@@ -33,6 +33,7 @@ const E2E_SHARDS: Record<string, string[]> = {
   app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   auth: [
     "login",
+    "login-form",
     "signup",
     "consents",
     "forgot-password",

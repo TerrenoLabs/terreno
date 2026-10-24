@@ -333,6 +333,9 @@ describe("useAccountSecurity", () => {
     expect(screenProps.passkeys?.supported).toBe(true);
     expect(screenProps.twoFactor?.enabled).toBe(false);
     expect(screenProps.twoFactor?.hasPassword).toBe(true);
+    // Password managers pair the password forms with the signed-in account.
+    expect(screenProps.password?.username).toBe("jane@example.com");
+    expect(screenProps.twoFactor?.username).toBe("jane@example.com");
     expect(screenProps.sessions?.sessions).toEqual([CURRENT, OTHER]);
     expect(screenProps.sessions?.currentSessionId).toBe("s-current");
     expect(result.current.user?.email).toBe("jane@example.com");

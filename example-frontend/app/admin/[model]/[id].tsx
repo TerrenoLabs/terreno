@@ -1,5 +1,5 @@
 import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
-import {Box, Button, Card, Text, TextField, useToast} from "@terreno/ui";
+import {Box, Button, Card, FormContainer, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import {terrenoApi, useGetMeQuery, useSetAdminUserPasswordMutation} from "@/store/sdk";
@@ -44,7 +44,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
 
   return (
     <Card color="base" padding={4} testID="admin-user-password-card">
-      <Box gap={3}>
+      <FormContainer gap={3} onSubmit={handleSetPassword} testID="admin-user-password-form">
         <Text bold size="lg">
           Set Password
         </Text>
@@ -52,6 +52,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           This updates the password immediately for this user.
         </Text>
         <TextField
+          accessibilityLabel="New Password"
           autoComplete="new-password"
           onChange={setPassword}
           placeholder="Enter a new password"
@@ -60,8 +61,10 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           value={password}
         />
         <TextField
+          accessibilityLabel="Confirm Password"
           autoComplete="new-password"
           onChange={setConfirmPassword}
+          onEnter={handleSetPassword}
           placeholder="Re-enter the new password"
           title="Confirm Password"
           type="password"
@@ -75,7 +78,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
             variant="primary"
           />
         </Box>
-      </Box>
+      </FormContainer>
     </Card>
   );
 };

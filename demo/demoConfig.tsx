@@ -39,6 +39,7 @@ import {ErrorBoundaryConfiguration} from "@story-config/ErrorBoundary.config";
 import {ErrorPageConfiguration} from "@story-config/ErrorPage.config";
 import {FieldConfiguration} from "@story-config/Field.config";
 import {FilePickerButtonConfiguration} from "@story-config/FilePickerButton.config";
+import {FormContainerConfiguration} from "@story-config/FormContainer.config";
 import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
@@ -333,6 +334,7 @@ const Config: DemoConfigurationBase[] = [
   ErrorPageConfiguration,
   FieldConfiguration,
   FilePickerButtonConfiguration,
+  FormContainerConfiguration,
   GPTChatConfiguration,
   GPTMemoryModalConfiguration,
   HeadingConfiguration,

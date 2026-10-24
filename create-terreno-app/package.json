@@ -48,8 +48,9 @@
   "scripts": {
     "compile": "tsc",
     "compile:watch": "tsc -w",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
+    "lint": "biome check src/ e2e/",
+    "lint:fix": "biome check --write src/ e2e/",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun run compile && bun test src/",
     "test:agent": "AGENT=1 bun test --only-failures src/",
     "test:ci": "bun run compile && bun test src/",

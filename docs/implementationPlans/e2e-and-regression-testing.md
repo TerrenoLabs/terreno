@@ -366,7 +366,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
   - Files: mcp-server/e2e/smoke.ts, mcp-server/package.json, docs/testing/e2e/mcp-server.md
   - Acceptance: `bun run --cwd mcp-server smoke` exits 0. The compiled `terreno-mcp` binary completes MCP `initialize` and `tools/list` over stdio, and the list has at least one tool.
 
-- [ ] **T27** — Smoke test for `create-terreno-app`
+- [x] **T27** — Smoke test for `create-terreno-app`
   - Depends on: T8
   - Files: create-terreno-app/e2e/smoke.ts, create-terreno-app/package.json, docs/testing/e2e/create-terreno-app.md
   - Acceptance: `bun run --cwd create-terreno-app smoke` exits 0. The compiled binary generates an app into a temp dir without prompts. The generated backend entry then builds with `bun build` against the workspace packages, with no network install.

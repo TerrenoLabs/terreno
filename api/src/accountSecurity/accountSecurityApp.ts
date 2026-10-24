@@ -440,6 +440,9 @@ export class AccountSecurityApp implements TerrenoPlugin {
             target,
           });
           if (result.changed) {
+            // An action such as suspend-membership can drop the target's grants, which must stop
+            // working at once rather than after the permission cache expires.
+            this.resolveAccessControl()?.invalidateCache({userId: userIdOf(target)});
             void recordSecurityAction({
               action: action.id,
               actor: {id: userIdOf(actor)},

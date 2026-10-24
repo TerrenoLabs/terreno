@@ -507,6 +507,23 @@ describe("org-admin recovery routes", () => {
       expect((await orgSummary(app, orgAdmin.token, orgA, target.id)).status).toBe(404);
     });
 
+    it("takes a suspended org-admin's grants away at once, not after the permission cache expires", async () => {
+      const {app, orgA, orgAdmin} = await buildOrgApp();
+      const target = await signUp(app, "suspended-co-admin");
+      await addMember(orgA, target.id, {roleName: "org-admin"});
+      const targetUser = await SecurityUser.findById(target.id);
+      const asAuthUser = targetUser as unknown as Parameters<
+        typeof access.getPermissions
+      >[0]["user"];
+      // Resolve (and cache) the co-admin's grants while the membership is active.
+      expect((await access.getPermissions({user: asAuthUser})).admin).toEqual(["access"]);
+
+      const res = await orgAction(app, orgAdmin.token, orgA, target.id, "suspend-membership");
+      expect(res.status).toBe(200);
+      expect(await membershipStatus(orgA, target.id)).toBe("suspended");
+      expect((await access.getPermissions({user: asAuthUser})).admin).toBeUndefined();
+    });
+
     it("refuses to suspend the last active org-admin", async () => {
       const {app, orgA, orgAdmin} = await buildOrgApp();
       const operator = await signUp(app, "operator-last-admin", ["operator"]);

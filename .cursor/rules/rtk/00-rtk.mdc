@@ -347,12 +347,14 @@ const {socket, isSocketConnected} = useSocketConnection({
   // Reads the registered token source; pass `tokenSource` to override it
   onConnect: () => console.info("Connected"),
   onDisconnect: () => console.warn("Disconnected"),
+  transports: ["websocket"],  // optional; default ["polling", "websocket"]
 });
 ```
 
 ### Features
 
-- Starts on polling and upgrades to WebSocket; reconnection with 5 attempts
+- Transports default to `["polling", "websocket"]` (polling first so dev server restarts don't fail the handshake, then upgrade). Pass `transports: ["websocket"]` on hosts without session affinity, such as Vercel Functions, where polling fails with `Session ID unknown` (`docs/how-to/vercel-function-websockets.md`)
+- Reconnection with 5 attempts (1-5s backoff)
 - Bearer token authentication via `socket.auth`, read from the token source on every handshake
 - Refreshes once per failure run (reset by a successful connect), then stops; stops at once
   when the source has no `refresh` or it fails; reconnects when `onAuthChange` brings a new token

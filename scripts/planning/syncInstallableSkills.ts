@@ -90,6 +90,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "update-dependencies",
       "upgrading-terreno",
       "deploy-gcp",
+      "deploy-vercel",
     ],
     title: "GitHub and shipping",
   },

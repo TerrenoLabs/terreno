@@ -68,11 +68,15 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `APP_ENV` | example-backend | ❌ | `development` | No | server |
 | `BACKEND_URL` | scripts, deploy | ❌ | — | No | server |
 | `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
+| `CORS_ORIGINS` | example-backend (`utils/betterAuthConfig.ts`) | ✅ for deployed web origins | localhost:8082 origins only | No | server |
+| `CROSS_DOMAIN_AUTH_COOKIES` | example-backend Better Auth config | ❌ | `false` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
 | `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
+
+`CORS_ORIGINS` is comma-separated. An entry may contain `*` (for example `https://*.preview.example.com`); use it only on a domain you control, never on a shared namespace like `vercel.app`. For `corsOrigin`, `*` becomes a `RegExp` that matches letters, digits, and hyphens but never a dot. Better Auth `trustedOrigins` receives the raw pattern and applies its own, broader wildcard matching. Never use `corsOrigin: true` in production; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#cors). Set `CROSS_DOMAIN_AUTH_COOKIES=true` when the web app and API are on different sites.
 
 ## Client / build-time
 
@@ -93,6 +97,7 @@ Configured in `expo.extra` and read via `expo-constants`:
 | `DEV_API_PORT` | `@terreno/rtk` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
 | `AUTH_DEBUG` | `@terreno/rtk` | `"true"` enables auth debug logs |
 | `WEBSOCKETS_DEBUG` | `@terreno/rtk` | `"true"` enables socket debug logs |
+| `SOCKET_TRANSPORTS` | example-frontend (`store/socketTransports.ts`) | Comma-separated Socket.IO transports passed to `useSocketConnection({transports})` and `createSyncDb({socketTransports})`. Unset keeps `polling,websocket`; the Vercel build sets `websocket` |
 | `APP_ENV` | `@terreno/rtk` | Logged at startup |
 
 Resolution order for API base URL (`rtk/src/constants.ts`):
@@ -100,6 +105,12 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 1. `EXPO_PUBLIC_API_URL` (production and dev)
 2. `extra.BASE_URL` (production only, when env unset)
 3. Dev fallbacks: `hostUri`, experience URL, `localhost`
+
+`EXPO_PUBLIC_API_URL` is inlined only into app source. Code under `node_modules`, including `@terreno/rtk`, does not see the inlined value in a production export and falls back to `extra.BASE_URL`, so set both for production web builds. `example-frontend/scripts/vercelBuild.ts` writes `extra.BASE_URL` from `EXPO_PUBLIC_API_URL` before `expo export`.
+
+### Per-environment values on hosting platforms
+
+Hosting platforms scope variables per environment. Vercel has **Production**, **Preview**, and **Development** scopes; set `EXPO_PUBLIC_API_URL` in each so each build points at its own backend. Because the value is inlined at build time, promoting a preview build to production keeps the preview backend URL. Rebuild for production instead. See [Deploy to Vercel](../how-to/deploy-to-vercel.md#configure-each-environment) and the [multi-environment checklist](../explanation/deployment-baseline.md#multi-environment-checklist).
 
 ## Development tooling
 
@@ -329,6 +340,7 @@ skips it, so no deployed revision, PR previews included, holds those accounts.
 
 - [Deployment baseline](../explanation/deployment-baseline.md)
 - [Build for web](../how-to/build-for-web.md)
+- [Deploy to Vercel](../how-to/deploy-to-vercel.md)
 - [Configure Better Auth](../how-to/configure-better-auth.md)
 - [Rate limiting](../how-to/rate-limiting.md)
 - [Durable background jobs](../how-to/background-jobs.md)

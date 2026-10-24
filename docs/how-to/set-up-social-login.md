@@ -185,6 +185,18 @@ The example keeps each value in Secret Manager, in containers Terraform creates
 `terreno`; `secret terreno <KEY>` (from the ops dotfiles) prints one. With the default project
 set, copy each into its Secret Manager container:
 
+**Before the first Terraform apply** (until the change that adds them merges), the containers do
+not exist and `put` fails with `NOT_FOUND`. Create them, with read access for the backend's
+runtime account, once:
+
+```bash
+S=terreno-backend-example
+for n in google-client-id google-client-secret github-client-id github-client-secret apple-client-id apple-team-id apple-key-id apple-private-key; do gcloud secrets create "$S-$n" --replication-policy=automatic --quiet && gcloud secrets add-iam-policy-binding "$S-$n" --member=serviceAccount:terreno-backend-runtime@flourish-terreno.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --quiet >/dev/null && echo "created $S-$n"; done
+```
+
+`infra/flourish/imports.tf` adopts these containers into Terraform on its next apply, so it does
+not fail on "already exists". Then copy the values:
+
 ```bash
 S=terreno-backend-example
 put() { local v; v="$(secret terreno "$1" </dev/null)" && [ -n "$v" ] && printf '%s' "$v" | gcloud secrets versions add "$S-$2" --data-file=- --quiet >/dev/null && echo "added $S-$2" || echo "skipped $1"; }

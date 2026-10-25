@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-18T16:51:45.310Z.
+> dates are promised. Last updated: 2026-10-25T20:55:41.087Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -54,7 +54,6 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### deploy
 
 - [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, In progress) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
-- [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Planned) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 
 ### dx
 
@@ -164,6 +163,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### deploy
 
+- [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Shipped) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 - [Deployment foundation](https://github.com/TerrenoLabs/terreno/issues/1011) (Improvement, Shipped) — IP: [deployment-foundation](docs/implementationPlans/deployment-foundation.md) · Tasks: [deployment-foundation](docs/tasks/deployment-foundation.md)
 
 ### examples

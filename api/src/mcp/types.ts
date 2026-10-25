@@ -33,10 +33,10 @@ export interface MCPToolInputSchema {
 export type MCPDocument = HydratedDocument<Record<string, unknown>>;
 
 /**
- * Express-shaped request handed to modelRouter lifecycle hooks and response handlers
- * during an MCP tool call. Built by `createMCPRequest` as a stub: only `user`
- * and `body` are populated. `headers`, `query`, and `params` are always empty
- * objects — MCP does not forward HTTP request fields.
+ * Express-shaped request handed to modelRouter lifecycle hooks, response handlers, and
+ * action handlers during an MCP tool call. Built by `createMCPRequest` as a stub: `user` and
+ * `body` are populated, and action tools also fill `params.id` (instance actions) and `query`
+ * (GET actions). `headers` is always empty — MCP does not forward HTTP request fields.
  */
 export interface MCPRequest {
   body: MCPToolArgs;

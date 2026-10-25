@@ -3,20 +3,17 @@ import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terren
 import {
   Badge,
   Banner,
+  BooleanField,
   Box,
   Button,
   Card,
   Heading,
   Page,
-  SelectField,
   Spinner,
   TapToEdit,
   Text,
   TextField,
-  type ThemeColorScheme,
-  themeColorSchemeOptions,
   useStoredState,
-  useTheme,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
@@ -24,8 +21,10 @@ import {useCallback, useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {logout, useAppDispatch} from "@/store/index";
+import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {
   terrenoApi,
+  useDeleteCommsPushTokensByIdMutation,
   useGetMeQuery,
   usePatchMeMutation,
   usePostAuthSendVerificationMutation,
@@ -41,7 +40,7 @@ const ProfileScreen: React.FC = () => {
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
-  const {colorScheme} = useTheme();
+  const [deletePushToken] = useDeleteCommsPushTokensByIdMutation();
   const {
     colorSchemeSetting,
     isLoading: isThemePreferenceLoading,
@@ -67,6 +66,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testPushMessage, setTestPushMessage] = useState<string | null>(null);
@@ -127,12 +127,21 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (profile?.email ?? "").trim().toLowerCase(),
+    [email, profile?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({email: value}).unwrap();
+        await updateProfile(
+          isEmailChanged ? {currentPassword, email: value} : {email: value}
+        ).unwrap();
+        setCurrentPassword("");
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
@@ -141,7 +150,7 @@ const ProfileScreen: React.FC = () => {
         );
       }
     },
-    [showSaveSuccess, updateProfile]
+    [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -165,9 +174,13 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
-  const handleLogout = useCallback((): void => {
+  const handleLogout = useCallback(async (): Promise<void> => {
+    // Release this device's push token while the session can still authenticate the request.
+    await releaseExpoPushTokenSafely({
+      deleteToken: async (id) => deletePushToken(id).unwrap(),
+    });
     dispatch(logout());
-  }, [dispatch]);
+  }, [deletePushToken, dispatch]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
@@ -303,6 +316,18 @@ const ProfileScreen: React.FC = () => {
               value={email}
             />
 
+            {isEmailChanged && (
+              <TextField
+                disabled={isUpdating}
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
+
             <TapToEdit
               disabled={isUpdating}
               editable={!isUpdating}
@@ -400,22 +425,15 @@ const ProfileScreen: React.FC = () => {
         <Card marginBottom={6} testID="profile-dark-mode-card">
           <Box gap={4}>
             <Heading size="lg">Appearance</Heading>
-            <SelectField
+            <BooleanField
               disabled={isThemePreferenceLoading}
-              onChange={(value): void => {
-                void setColorScheme(value as ThemeColorScheme);
+              onChange={(isDark): void => {
+                void setColorScheme(isDark ? "dark" : "light");
               }}
-              options={themeColorSchemeOptions}
-              requireValue
-              testID="profile-color-scheme"
-              title="Color scheme"
-              value={colorSchemeSetting}
+              testID="profile-dark-mode-toggle"
+              title="Dark mode"
+              value={colorSchemeSetting === "dark"}
             />
-            <Text color="secondaryLight" size="sm">
-              {colorSchemeSetting === "system"
-                ? `Following your system (${colorScheme})`
-                : `Using ${colorScheme} mode`}
-            </Text>
           </Box>
         </Card>
 

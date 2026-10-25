@@ -40,6 +40,10 @@ const pushTokenSchema: PushTokenSchema = new mongoose.Schema<PushTokenDocument, 
       type: String,
       unique: true,
     },
+    tokenEpoch: {
+      description: "The owner's tokenEpoch when the device registered; push stops after it changes",
+      type: Number,
+    },
     userId: {
       description: "User who owns the device token",
       index: true,

@@ -1,0 +1,44 @@
+---
+title: "Phone number field"
+description: "Use the phone number field to allow a user to input a valid phone number."
+sidebar_label: "Phone number field"
+slug: /reference/components/phone-number-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Phone number field
+
+Use the phone number field to allow a user to input a valid phone number.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `PhoneNumberFieldProps`  
+**Story source:** [`demo/stories/Phonenumberfield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Phonenumberfield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Phone number field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `OnChangeCallback` | Yes |  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `defaultCountryCode` | `CountryCode` |  | Defaults to "US" |
+| `disabled` | `boolean` |  |  |
+| `errorText` | `string` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `placeholder` | `string` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `value` | `string` |  |  |

@@ -33,7 +33,7 @@ Peers: `mongoose ^8.0.0 || ^9.0.0`; optional `@google-cloud/tasks`, `@vercel/que
 | `basePath` | `"/jobs"` | Admin routes and execute route prefix |
 | `runner` | `MongoJobRunner` | Dispatch + optional poll loop |
 | `timezone` | `"UTC"` | Default IANA zone for schedules without `schedule.timezone` |
-| `lockTtlMs` | `900_000` (15 min) | Stale `lockedAt` reclaim threshold |
+| `lockTtlMs` | `900_000` (15 min) | Claim lease length; renewed every `lockTtlMs / 3` while the handler runs, reclaimable once stale |
 | `pollIntervalMs` | `1_000` | Mongo runner idle sleep between polls |
 | `accessControl` | — | Terreno RBAC; jobs admin needs `admin:access` **and** `admin:jobs` |
 | `redactPayload` | — | Admin payload projection hook (see below) |
@@ -90,8 +90,10 @@ singleton (tests).
 
 `@terreno/admin-backend` `defineAdminScriptJob` registers handler name `admin/script` with
 `retry.maxAttempts: 1`. Payload: `{scriptName, taskId, wetRun, args, createdByName?}`.
-The Scripts UI still polls `BackgroundTask` by `taskId`. Without `JobsApp`, script HTTP
-runs stay in-process.
+The Scripts UI still polls `BackgroundTask` by `taskId`. The handler runs the script only
+when it wins the task's `pending` -> `running` transition: a task that already started
+throws a 409 `APIError` (the job goes `dead`), and a task cancelled before it started is
+skipped. Without `JobsApp`, script HTTP runs stay in-process.
 
 ## JobRunner
 
@@ -116,13 +118,13 @@ Built-in ids: `mongo`, `gcp-cloud-tasks`, `vercel-queues`.
 | `payload` | — | Handler input |
 | `payloadRedacted` | `false` | Admin omission flag |
 | `runAt` | — | Earliest claim (indexed) |
-| `attemptCount` | `0` | Executions so far |
+| `attemptCount` | `0` | Failed or lost (lease-expired) attempts so far |
 | `attempts` | `[]` | `{at, error?, errorClass?}` |
 | `maxAttempts` | `5` | From definition at enqueue |
 | `backoffMs` | `1_000` | Retry base |
 | `maxBackoffMs` | `900_000` | Retry cap |
 | `lastError` | — | Latest failure message; `$unset` when the job completes |
-| `lockedAt` / `lockedBy` | — | Claim lease |
+| `lockedAt` / `lockedBy` | — | Claim lease; `lockedAt` is renewed while the handler runs |
 | `idempotencyKey` | — | Partial unique with `name` |
 | `scheduleId` | — | Parent schedule ref |
 | `retriedFromId` / `retriedById` | — | Admin retry linkage |
@@ -138,7 +140,7 @@ Indexes: `(name, idempotencyKey)` partial unique; `(status, runAt)`; `(scheduleI
 | `running` | Claimed; handler executing |
 | `scheduled` | Reserved in schema / in-flight filter |
 | `completed` | Success |
-| `dead` | Exhausted `maxAttempts` |
+| `dead` | Exhausted `maxAttempts` (handler failures and lease-expired reclaims both count) |
 | `failed` | No handler registered at run time |
 | `cancelled` | Admin cancel |
 

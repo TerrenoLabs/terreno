@@ -5,4 +5,5 @@ coveragePathIgnorePatterns = [
   "**/*.test.tsx",
   "tests/**",
   "store/openApiSdk.ts",
+  "playwright*.config.ts",
 ]

@@ -183,6 +183,12 @@ export interface GPTChatProps {
   resolveImage?: BlocksViewProps["resolveImage"];
   selectedModel?: string;
   /**
+   * Renders the history sidebar (model selector, toolbar, new chat, and the history list).
+   * Defaults to true. Pass false on narrow layouts so the chat panel takes the full width; the
+   * host then owns history navigation and those sidebar controls.
+   */
+  showHistory?: boolean;
+  /**
    * Optional consumer-owned character for an empty chat. Terreno does not ship a
    * default mascot — pass an image, icon, Lottie view, or any React node. Hidden
    * once `currentMessages` is non-empty.
@@ -1429,6 +1435,7 @@ export const GPTChat = ({
   resolveDataset,
   resolveImage,
   selectedModel,
+  showHistory = true,
   mascot,
   suggestedPrompts,
   systemMemory,
@@ -1693,68 +1700,80 @@ export const GPTChat = ({
   return (
     <Box direction="row" flex="grow" testID={testID}>
       {/* Sidebar */}
-      <Box border="default" color="base" minWidth={250} overflow="scrollY" padding={3} width="30%">
-        <SidebarModelSelector
-          availableModels={availableModels}
-          onModelChange={onModelChange}
-          selectedModel={selectedModel}
-        />
+      {showHistory && (
+        <Box
+          border="default"
+          color="base"
+          minWidth={250}
+          overflow="scrollY"
+          padding={3}
+          testID="gpt-history-sidebar"
+          width="30%"
+        >
+          <SidebarModelSelector
+            availableModels={availableModels}
+            onModelChange={onModelChange}
+            selectedModel={selectedModel}
+          />
 
-        <Box alignItems="center" direction="row" justifyContent="between" marginBottom={3}>
-          <Heading size="sm">Chats</Heading>
-          <Box direction="row" gap={1}>
-            <SidebarToolbarButtons
-              handleOpenApiKeyModal={handleOpenApiKeyModal}
-              mcpServers={mcpServers}
-              onGeminiApiKeyChange={onGeminiApiKeyChange}
-              onMemoryEdit={onMemoryEdit}
-              systemMemory={systemMemory}
-            />
-            <IconButton
-              accessibilityLabel="New chat"
-              iconName="plus"
-              onClick={onCreateHistory}
-              testID="gpt-new-chat-button"
-            />
-          </Box>
-        </Box>
-
-        {histories.map((history) => (
-          <Box
-            accessibilityHint="Opens this chat history"
-            accessibilityLabel={`Select chat: ${history.title ?? "New Chat"}`}
-            alignItems="center"
-            color={history.id === currentHistoryId ? "primary" : undefined}
-            direction="row"
-            justifyContent="between"
-            key={history.id}
-            marginBottom={1}
-            onClick={() => onSelectHistory(history.id)}
-            padding={2}
-            rounding="md"
-          >
-            <HistoryItemTitle
-              currentHistoryId={currentHistoryId}
-              editingHistoryId={editingHistoryId}
-              editingTitle={editingTitle}
-              handleFinishRename={handleFinishRename}
-              history={history}
-              setEditingTitle={setEditingTitle}
-            />
-            <Box marginLeft={1}>
-              <HistoryItemActions
-                editingHistoryId={editingHistoryId}
-                handleFinishRename={handleFinishRename}
-                handleStartRename={handleStartRename}
-                history={history}
-                isSelected={history.id === currentHistoryId}
-                onDeleteHistory={onDeleteHistory}
-                onUpdateTitle={onUpdateTitle}
+          <Box alignItems="center" direction="row" justifyContent="between" marginBottom={3}>
+            <Heading size="sm">
+              <Text>Chats</Text>
+            </Heading>
+            <Box direction="row" gap={1}>
+              <SidebarToolbarButtons
+                handleOpenApiKeyModal={handleOpenApiKeyModal}
+                mcpServers={mcpServers}
+                onGeminiApiKeyChange={onGeminiApiKeyChange}
+                onMemoryEdit={onMemoryEdit}
+                systemMemory={systemMemory}
+              />
+              <IconButton
+                accessibilityLabel="New chat"
+                iconName="plus"
+                onClick={onCreateHistory}
+                testID="gpt-new-chat-button"
               />
             </Box>
           </Box>
-        ))}
-      </Box>
+
+          {histories.map((history) => (
+            <Box
+              accessibilityHint="Opens this chat history"
+              accessibilityLabel={`Select chat: ${history.title ?? "New Chat"}`}
+              alignItems="center"
+              color={history.id === currentHistoryId ? "primary" : undefined}
+              direction="row"
+              justifyContent="between"
+              key={history.id}
+              marginBottom={1}
+              onClick={() => onSelectHistory(history.id)}
+              padding={2}
+              rounding="md"
+            >
+              <HistoryItemTitle
+                currentHistoryId={currentHistoryId}
+                editingHistoryId={editingHistoryId}
+                editingTitle={editingTitle}
+                handleFinishRename={handleFinishRename}
+                history={history}
+                setEditingTitle={setEditingTitle}
+              />
+              <Box marginLeft={1}>
+                <HistoryItemActions
+                  editingHistoryId={editingHistoryId}
+                  handleFinishRename={handleFinishRename}
+                  handleStartRename={handleStartRename}
+                  history={history}
+                  isSelected={history.id === currentHistoryId}
+                  onDeleteHistory={onDeleteHistory}
+                  onUpdateTitle={onUpdateTitle}
+                />
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
 
       {/* Chat Panel */}
       <Box direction="column" flex="grow" padding={4}>

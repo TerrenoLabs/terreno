@@ -228,12 +228,12 @@ Grow when step 3 already `PASS`ed. Pick owns Roast per task.
 - On `BLOCKED` or unrecoverable `FAIL`: comment the evidence, leave `status:in-progress`, do not open a PR unless Brew already did, stop
 - After every in-scope task Roast `PASS`, invoke `terreno-4-brew`. PR body must include `Fixes #$NUMBER` (or `Closes #$NUMBER`)
 - If tests required by AGENTS.md cannot run, do not open a PR; comment the blocker on the issue
-- After Brew `PASS`, Taste. On Taste `PENDING`, wait then invoke Taste again (same issue/PR). Bound: eight Taste invocations. Then comment remaining `PENDING` and stop
+- After Brew `PASS`, Taste. On Taste `PENDING`, wait then invoke Taste again (same issue/PR). Taste owns the PR per [push ownership](references/push-ownership.md): it fixes red CI and answers every review-bot comment for at most three fix rounds, then returns `BLOCKED`. Bound: eight Taste invocations. Never stop on a red or unwatched PR without escalating: comment the failing jobs, rounds tried, and the one action needed on the PR and the issue, and start the final message with `BLOCKED — PR #<n> still red`
 - After Taste `PASS`, mark the PR ready for review (`draft: false`). Do not merge
 
 If Brew cannot open a PR, comment the blocker on the issue and stop.
 
-Completion: mergeable PR URL, or a GitHub comment explaining `FAIL` / `BLOCKED` / `PENDING`.
+Completion: mergeable PR URL with CI green and no unanswered bot thread, or an escalation comment explaining `FAIL` / `BLOCKED` / `PENDING`.
 
 ### 6. Report
 

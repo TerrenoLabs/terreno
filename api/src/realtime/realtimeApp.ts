@@ -3,13 +3,15 @@ import * as Sentry from "@sentry/bun";
 import type express from "express";
 import {Server, type Socket} from "socket.io";
 
-import type {User} from "../auth";
+import type {User, UserModel} from "../auth";
+import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import {APIError} from "../errors";
 import {logger} from "../logger";
 import {canSubscribeRealtime} from "../rbac/realtimeAccess";
 import {warnOnSyncScopesWithoutUserModel} from "../sync/registry";
 import {installSyncSocketHandlers} from "../sync/socketHandlers";
 import {getSyncAppOptions} from "../sync/syncApp";
+import type {TerrenoApp} from "../terrenoApp";
 import type {TerrenoPlugin} from "../terrenoPlugin";
 import {startChangeStreamWatcher, stopChangeStreamWatcher} from "./changeStreamWatcher";
 import {
@@ -24,7 +26,7 @@ import {
   type SessionRevalidationHandle,
   startSessionRevalidationSweep,
 } from "./sessionRevalidation";
-import {createSocketAuthMiddleware} from "./socketAuth";
+import {type BetterAuthSocketOptions, createSocketAuthMiddleware} from "./socketAuth";
 import {getSocketUser, type SocketDataBag, type SocketWithDecodedToken} from "./socketUser";
 import type {DocumentSubscription, QuerySubscription, RealtimeAppOptions} from "./types";
 
@@ -71,6 +73,44 @@ export interface RealtimeSocketLike extends SocketWithDecodedToken {
   emit: (event: string, payload: unknown) => void;
   on: (event: string, handler: (...args: never[]) => void | Promise<void>) => void;
 }
+
+const LOGICAL_QUERY_KEYS = new Set(["$and", "$or"]);
+
+const isPlainQueryObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Returns the first field a client query names outside `queryFields`, walking `$and` / `$or`
+ * clauses, or undefined when every field is allowed. A query room's event method reveals
+ * whether a document matches, so subscriptions may only filter on the fields REST list
+ * accepts.
+ */
+const findDisallowedQueryField = (
+  query: Record<string, unknown>,
+  queryFields: string[]
+): string | undefined => {
+  for (const [key, condition] of Object.entries(query)) {
+    if (LOGICAL_QUERY_KEYS.has(key)) {
+      if (!Array.isArray(condition)) {
+        return key;
+      }
+      for (const clause of condition) {
+        if (!isPlainQueryObject(clause)) {
+          return key;
+        }
+        const nested = findDisallowedQueryField(clause, queryFields);
+        if (nested) {
+          return nested;
+        }
+      }
+      continue;
+    }
+    if (!queryFields.includes(key)) {
+      return key;
+    }
+  }
+  return undefined;
+};
 
 const canSubscribe = async (
   entry: RealtimeRegistryEntry,
@@ -274,6 +314,18 @@ export const installRealtimeSocketHandlers = (
       return;
     }
 
+    const disallowedField = findDisallowedQueryField(
+      payload.query,
+      entry.options.queryFields ?? []
+    );
+    if (disallowedField) {
+      logInfo(
+        `[realtime] User ${userId} denied query subscription for ${payload.collection}: ` +
+          `${disallowedField} is not in queryFields`
+      );
+      return;
+    }
+
     let query = await getAuthorizedQuery(entry, {...payload.query}, currentUser());
     if (!query) {
       logInfo(
@@ -347,6 +399,7 @@ export class RealtimeApp implements TerrenoPlugin {
   private io: Server | null = null;
   private config: RealtimeAppOptions;
   private sessionRevalidation: SessionRevalidationHandle | null = null;
+  private terrenoApp: TerrenoApp | undefined;
 
   constructor(config: RealtimeAppOptions = {}) {
     this.config = config;
@@ -355,8 +408,9 @@ export class RealtimeApp implements TerrenoPlugin {
   /**
    * Register routes and middleware. Adds a /realtime/health endpoint.
    */
-  register(app: express.Application): void {
+  register(app: express.Application, _openApi?: unknown, terrenoApp?: TerrenoApp): void {
     this.app = app;
+    this.terrenoApp = terrenoApp;
     app.get("/realtime/health", (_req, res) => {
       const connected = this.io?.engine?.clientsCount ?? 0;
       res.json({
@@ -365,6 +419,33 @@ export class RealtimeApp implements TerrenoPlugin {
         status: this.io ? "running" : "not_started",
       });
     });
+  }
+
+  /**
+   * This RealtimeApp's `userModel`, else the TerrenoApp's, matching what `TerrenoApp({realtime})`
+   * passes to the RealtimeApp it registers.
+   */
+  private resolveUserModel(): UserModel | undefined {
+    return this.config.userModel ?? (this.terrenoApp?.getUserModel() as UserModel | undefined);
+  }
+
+  /**
+   * The Better Auth instance for socket sessions: the explicit `betterAuth` option, else the
+   * one from a Better Auth plugin (such as BetterAuthApp) registered on the same TerrenoApp,
+   * so apps do not have to build the instance early and pass it to both plugins. The socket
+   * validator falls back to the resolved `userModel`, so the handshake and the revalidation
+   * sweep resolve the same users.
+   */
+  private resolveBetterAuth(): BetterAuthSocketOptions | undefined {
+    const userModel = this.resolveUserModel();
+    if (this.config.betterAuth) {
+      return {...this.config.betterAuth, userModel: this.config.betterAuth.userModel ?? userModel};
+    }
+    const auth = getProvidedBetterAuth(findBetterAuthProvider(this.terrenoApp?.getPlugins() ?? []));
+    if (!auth) {
+      return undefined;
+    }
+    return {auth, userModel};
   }
 
   /**
@@ -395,7 +476,9 @@ export class RealtimeApp implements TerrenoPlugin {
 
       // Authentication middleware: legacy JWT first when configured, optionally Better Auth sessions.
       const tokenSecret = this.config.tokenSecret ?? process.env.TOKEN_SECRET;
-      if (!tokenSecret && !this.config.betterAuth) {
+      const userModel = this.resolveUserModel();
+      const betterAuth = this.resolveBetterAuth();
+      if (!tokenSecret && !betterAuth) {
         throw new APIError({
           status: 500,
           title:
@@ -415,13 +498,14 @@ export class RealtimeApp implements TerrenoPlugin {
 
       this.io.use(
         createSocketAuthMiddleware({
-          betterAuth: this.config.betterAuth,
+          betterAuth,
           issuer: resolveTokenIssuer,
           tokenSecret,
+          userModel,
         })
       );
 
-      const authKinds = [tokenSecret ? "JWT" : null, this.config.betterAuth ? "Better Auth" : null]
+      const authKinds = [tokenSecret ? "JWT" : null, betterAuth ? "Better Auth" : null]
         .filter(Boolean)
         .join(" + ");
       logInfo(`[realtime] Socket auth middleware added (${authKinds})`);
@@ -429,7 +513,7 @@ export class RealtimeApp implements TerrenoPlugin {
       // Task 9.21: tenant/custom sync scopes can only be resolved from the full user
       // document, so warn loudly here (once, at startup) rather than silently serving
       // empty tenant streams for the life of the process.
-      warnOnSyncScopesWithoutUserModel({userModel: this.config.userModel});
+      warnOnSyncScopesWithoutUserModel({userModel});
 
       // Configure adapter for multi-instance deployments
       this.setupAdapter(logInfo);
@@ -444,7 +528,7 @@ export class RealtimeApp implements TerrenoPlugin {
           // back to the synthetic shape until this resolves.
           void loadFullUserForSocket(
             socket as unknown as Socket & {data: SocketDataBag},
-            this.config.userModel
+            userModel
           );
           // The auth middleware adds `decodedToken` at runtime; cast through
           // RealtimeSocketLike (a structural subset) to keep socket handler logic testable.
@@ -479,11 +563,11 @@ export class RealtimeApp implements TerrenoPlugin {
       // re-resolves sync room membership (D4) for sockets that remain valid.
       // A thunk (not a snapshot) reads this app's SyncApp options fresh on every sweep.
       this.sessionRevalidation = startSessionRevalidationSweep(this.io, () => ({
-        betterAuth: this.config.betterAuth,
+        betterAuth,
         intervalMs: this.config.sessionRevalidationIntervalMs,
         logInfo,
         sync: this.config.sync ?? (this.app ? getSyncAppOptions(this.app) : undefined),
-        userModel: this.config.userModel,
+        userModel,
       }));
 
       logInfo("[realtime] Socket.io server setup complete");

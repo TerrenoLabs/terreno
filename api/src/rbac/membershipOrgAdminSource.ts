@@ -36,7 +36,12 @@ const shellOnlyOrgAdminGrants = (): PermissionSourceGrants => ({
   },
 });
 
+/**
+ * Additive-only: it never returns `deny`, so an outage drops only its org-admin grants and does
+ * not fail resolution closed.
+ */
 export const membershipOrgAdminPermissionSource = (): PermissionSource => ({
+  failClosedWhenDenyUnknown: false,
   getGrants: async ({user}): Promise<PermissionSourceGrants | null> => {
     const contextMembership = getOrgContext()?.membership;
     if (contextMembership) {

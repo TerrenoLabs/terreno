@@ -24,7 +24,7 @@ const runAnnouncementSeedsTwice = async (): Promise<void> => {
 };
 
 describe("seedAnnouncements", () => {
-  it("archives a pre-existing legacy welcome and seeds staff modal and patient banner once", async () => {
+  it("archives a pre-existing legacy welcome and seeds staff modal and patient banner drafts once", async () => {
     await Announcement.deleteMany({
       title: {
         $in: [
@@ -79,6 +79,8 @@ describe("seedAnnouncements", () => {
     assert.equal(patientBanner.audienceType, "patient");
     assert.equal(patientBanner.displayMode, "banner");
     assert.equal(patientBanner.acknowledgementPolicy, "dismiss-only");
+    assert.equal(staffModal.status, "draft");
+    assert.equal(patientBanner.status, "draft");
 
     assert.equal(await Announcement.countDocuments({title: STAFF_MODAL_ANNOUNCEMENT_TITLE}), 1);
     assert.equal(await Announcement.countDocuments({title: PATIENT_BANNER_ANNOUNCEMENT_TITLE}), 1);
@@ -105,5 +107,31 @@ describe("seedAnnouncements", () => {
     assert.exists(patientBanner);
     assert.equal(await Announcement.countDocuments({title: STAFF_MODAL_ANNOUNCEMENT_TITLE}), 1);
     assert.equal(await Announcement.countDocuments({title: PATIENT_BANNER_ANNOUNCEMENT_TITLE}), 1);
+  });
+
+  it("unpublishes seeded examples left published by an earlier seed", async () => {
+    await Announcement.deleteMany({
+      title: {$in: [STAFF_MODAL_ANNOUNCEMENT_TITLE, PATIENT_BANNER_ANNOUNCEMENT_TITLE]},
+    });
+    await Announcement.create({
+      acknowledgementPolicy: "required",
+      audienceType: "staff",
+      body: "Old staff body",
+      displayMode: "modal",
+      priority: 20,
+      publishedAt: DateTime.utc().toJSDate(),
+      status: "published",
+      title: STAFF_MODAL_ANNOUNCEMENT_TITLE,
+      version: 1,
+    });
+
+    await runAnnouncementSeedsTwice();
+
+    const published = await Announcement.countDocuments({
+      status: "published",
+      title: {$in: [STAFF_MODAL_ANNOUNCEMENT_TITLE, PATIENT_BANNER_ANNOUNCEMENT_TITLE]},
+    });
+    assert.equal(published, 0);
+    assert.equal(await Announcement.countDocuments({title: STAFF_MODAL_ANNOUNCEMENT_TITLE}), 1);
   });
 });

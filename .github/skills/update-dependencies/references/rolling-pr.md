@@ -1,7 +1,7 @@
 # Rolling daily PR
 
 This skill runs **daily**. There is at most one open dependency-update PR, and
-this skill pushes to it at most once per run (twice when step 7 reverts a bump).
+this skill pushes to it once per run, plus at most three fix rounds when step 7 finds red CI.
 
 Constants (do not invent a second name): `scripts/planning/updateDependenciesPr.ts`
 

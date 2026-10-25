@@ -62,7 +62,6 @@ const EXPECTED_PATHS = [
   "frontend/package.json",
   "frontend/scripts/generate-sdk.ts",
   "frontend/store/appState.ts",
-  "frontend/store/betterAuthApi.ts",
   "frontend/store/errors.ts",
   "frontend/store/index.ts",
   "frontend/store/openApiSdk.ts",
@@ -342,6 +341,20 @@ describe("generateAllFiles", () => {
     assert.notInclude(server, "return app;");
   });
 
+  test("generated backend server lets RealtimeApp use the registered BetterAuthApp", () => {
+    const server =
+      generateAllFiles({
+        appDisplayName: "Realtime App",
+        appName: "realtime-app",
+      }).find((file) => file.path === "backend/src/server.ts")?.content ?? "";
+
+    assert.include(server, "new BetterAuthApp(");
+    assert.include(server, "new RealtimeApp(");
+    assert.notInclude(server, "createBetterAuth(", "no second Better Auth instance");
+    assert.notInclude(server, "getMongoClientFromMongoose");
+    assert.notInclude(server, "betterAuth:", "RealtimeApp finds the registered BetterAuthApp");
+  });
+
   test("generated users router casts User for modelRouter compatibility", () => {
     const users = generateAllFiles({
       appDisplayName: "Users App",
@@ -440,21 +453,40 @@ describe("generated frontend Terreno 57 compatibility", () => {
     assert.notInclude(syncdb, "betterAuthClient as unknown as BetterAuthClientLike");
   });
 
-  test("OpenAPI SDK uses Better Auth base API, not JWT emptySplitApi", () => {
-    const openapiConfig = read("frontend/openapi-config.ts");
-    const openApiSdk = read("frontend/store/openApiSdk.ts");
-    const betterAuthApi = read("frontend/store/betterAuthApi.ts");
+  test("store registers the syncdb Better Auth adapter as the rtk token source", () => {
+    const storeIndex = read("frontend/store/index.ts");
+    const syncdb = read("frontend/store/syncdb.ts");
+    const betterAuthLib = read("frontend/lib/betterAuth.ts");
 
-    assert.include(openapiConfig, 'apiFile: "./store/betterAuthApi.ts"');
-    assert.include(openApiSdk, 'from "./betterAuthApi"');
-    assert.notInclude(openApiSdk, 'from "@terreno/rtk"');
-    assert.include(betterAuthApi, "readSessionToken");
-    assert.include(betterAuthApi, 'headers.set("authorization"');
-    assert.include(betterAuthApi, 'credentials: "include"');
-    assert.include(betterAuthApi, "betterAuthClient.getSession()");
+    assert.include(betterAuthLib, "createBetterAuthClient(");
+    assert.notInclude(betterAuthLib, "webAuth", "generated web client keeps cookie mode");
+    assert.notInclude(syncdb, "getBearerToken", "cookie mode reads the session, not a bearer");
+    assert.include(syncdb, "export const authProvider = betterAuthAdapter(syncAuthClient");
+    assert.include(storeIndex, 'import {authProvider} from "./syncdb"');
+    assert.match(storeIndex, /import \{[^}]*\bsetTokenSource\b[^}]*\} from "@terreno\/rtk"/);
+    assert.include(storeIndex, "setTokenSource(authProvider);");
+    assert.isBelow(
+      storeIndex.indexOf("setTokenSource(authProvider);"),
+      storeIndex.indexOf("configureStore({"),
+      "token source is registered before the store is built"
+    );
   });
 
-  test("profile screen reads unwrapped profile fields from Better Auth base query", () => {
+  test("OpenAPI SDK targets rtk's emptySplitApi and no base-query fork is generated", () => {
+    const openapiConfig = read("frontend/openapi-config.ts");
+    const openApiSdk = read("frontend/store/openApiSdk.ts");
+
+    assert.include(openapiConfig, 'apiFile: "@terreno/rtk"');
+    assert.include(openapiConfig, 'apiImport: "emptySplitApi"');
+    assert.include(openApiSdk, 'import {emptySplitApi as api} from "@terreno/rtk";');
+    assert.isUndefined(files.find((file) => file.path === "frontend/store/betterAuthApi.ts"));
+    for (const file of files) {
+      assert.notInclude(file.content, "betterAuthApi", file.path);
+      assert.notInclude(file.content, "readSessionToken", file.path);
+    }
+  });
+
+  test("profile screen reads unwrapped profile fields from rtk's base query", () => {
     const profile = read("frontend/app/(tabs)/profile.tsx");
     const sdk = read("frontend/store/sdk.ts");
 

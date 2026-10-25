@@ -23,6 +23,9 @@ interface SpanNodeLike {
   status: string;
 }
 
+/** Starting or stopping a single-node replica set can take several seconds under a full run. */
+const REPLICA_SET_HOOK_TIMEOUT_MS = 30_000;
+
 /**
  * The harness needs a replica set, but the example-backend preload connects a standalone
  * memory server. Swap the default connection to a single-node replica set for the calling
@@ -39,12 +42,12 @@ export const useReplicaSetConnection = (databaseName: string): void => {
       externalUriEnvVar: "TERRENO_EXAMPLE_HARNESS_TEST_MONGODB_URI",
       useReplSet: true,
     });
-  });
+  }, REPLICA_SET_HOOK_TIMEOUT_MS);
   afterAll(async () => {
     await mongoose.disconnect();
     await stopMongoServer();
     await mongoose.connect(originalUri);
-  });
+  }, REPLICA_SET_HOOK_TIMEOUT_MS);
 };
 
 /** Poll `read` until it returns a value (not `undefined`) or `timeoutMs` passes. */

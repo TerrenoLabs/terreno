@@ -118,4 +118,24 @@ describe("todo notifications", () => {
     assert.include(rejected.body.detail, 'Add "title" to queryFields on the Todo modelRouter');
     assert.deepEqual(rejected.body.meta.allowedQueryFields, ["completed", "created", "ownerId"]);
   });
+
+  it("runs bulkComplete over MCP with the same implementation as REST", async () => {
+    const user = await createUser(`todo-mcp-${crypto.randomUUID()}@example.com`);
+    const {token} = await generateTokens(user);
+    const todo = await Todo.create({ownerId: user._id, title: "Finish via MCP"});
+
+    const res = await supertest(app)
+      .post("/mcp")
+      .set("Authorization", `Bearer ${token}`)
+      .set("accept", "application/json, text/event-stream")
+      .send({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: {arguments: {ids: [String(todo._id)]}, name: "todos_bulk_complete"},
+      });
+
+    assert.include(res.text, '\\"modified\\":1');
+    assert.isTrue((await Todo.findById(todo._id))?.completed);
+  });
 });

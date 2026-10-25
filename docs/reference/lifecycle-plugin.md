@@ -68,6 +68,11 @@ fresh subagent with no parent conversation. If the repository root defines a `pr
 package script, Taste runs it as the authoritative local gate; otherwise it falls back
 to lint, typecheck, and locally affected tests in each affected package. Taste then
 pushes and watches product CI.
+Every stage that pushes follows `references/push-ownership.md`: it owns the PR until
+CI is green on every host and every review-bot comment is fixed, declined with a
+reply, or raised as a decision. After three fix rounds that leave the PR red, Taste
+stops pushing and escalates as `BLOCKED`; the final message starts with
+`BLOCKED — PR #<n> still red after <k> fix rounds`. No stage ends quietly on a red PR.
 Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
 Buildkite, and similar), not only GitHub checks. A documented not-applicable host
 counts as skipped; an unexplained untriggered host prevents Brew `PASS`. Brew still

@@ -70,6 +70,9 @@ case "$target" in
       '.expo.extra.BASE_URL = $url | .expo.extra.apiBaseUrl = $url' \
       example-frontend/app.json > example-frontend/app.json.tmp
     mv example-frontend/app.json.tmp example-frontend/app.json
+    # Netlify and Cloud Run are different sites, so Better Auth's session cookie would be a
+    # third-party cookie that Safari blocks. The web build signs in with a stored bearer token.
+    export EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true
     (cd example-frontend && bun run export)
     bash demo/scripts/fix-netlify-assets.sh example-frontend/dist
     printf '/*    /index.html   200\n' > example-frontend/dist/_redirects

@@ -503,8 +503,6 @@ import {HealthApp} from "@terreno/api-health";
 import {
   BetterAuthApp,
   checkModelsStrict,
-  createBetterAuth,
-  getMongoClientFromMongoose,
   logger,
   Membership,
   RealtimeApp,
@@ -537,15 +535,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
   await access.roles.seedDefaults();
 
   const betterAuthConfig = buildBetterAuthConfig();
-  const betterAuthInstance = betterAuthConfig
-    ? createBetterAuth({
-        config: betterAuthConfig,
-        mongoClient: getMongoClientFromMongoose(),
-        // noExplicitAny: User model type mismatch
-        // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-        userModel: User as any,
-      })
-    : undefined;
 
   const terraApp = new TerrenoApp({
     accessControl: access,
@@ -614,14 +603,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     )
     .register(
       new RealtimeApp({
-        betterAuth: betterAuthInstance
-          ? {
-              auth: betterAuthInstance,
-              // noExplicitAny: User model type mismatch
-              // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-              userModel: User as any,
-            }
-          : undefined,
         // noExplicitAny: User model type mismatch
         // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
         userModel: User as any,
@@ -1383,81 +1364,11 @@ const generateFrontendBiomeJsonc = (): string => {
 `;
 };
 
-const generateFrontendBetterAuthApi = (): string => {
-  return `/**
- * RTK Query API base for Better Auth session cookies.
- *
- * Unlike \`@terreno/rtk\`'s JWT \`emptySplitApi\`, this base query reads the Better Auth
- * session token on every request and sends it as a Bearer header with credentials.
- */
-import {createApi, fetchBaseQuery} from "@reduxjs/toolkit/query/react";
-import {baseUrl, IsWeb, type VersionCheckResponse} from "@terreno/rtk";
-import Constants from "expo-constants";
-import {betterAuthClient} from "@/lib/betterAuth";
-
-const readSessionToken = async (): Promise<string | null> => {
-  try {
-    const result = await betterAuthClient.getSession();
-    const envelope = (result as {data?: {session?: {token?: string}}})?.data ?? result;
-    const session = (envelope as {session?: {token?: string}})?.session;
-    return session?.token ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const betterAuthBaseQuery = fetchBaseQuery({
-  baseUrl,
-  credentials: "include",
-  prepareHeaders: async (headers) => {
-    const token = await readSessionToken();
-    if (token) {
-      headers.set("authorization", \`Bearer \${token}\`);
-    }
-    const version = Constants.expoConfig?.version;
-    if (version) {
-      headers.set("App-Version", version);
-    }
-    headers.set("App-Platform", IsWeb ? "web" : "mobile");
-    return headers;
-  },
-  responseHandler: async (response) => {
-    if (response.status === 204) {
-      return null;
-    }
-    const result = await response.json();
-    if (result && typeof result === "object" && "more" in result) {
-      return result;
-    }
-    if (result?.data) {
-      return result.data;
-    }
-    return result;
-  },
-});
-
-export const emptySplitApi = createApi({
-  baseQuery: betterAuthBaseQuery,
-  endpoints: (builder) => ({
-    getVersionCheck: builder.query<VersionCheckResponse, {platform: string; version: number}>({
-      query: ({platform, version}) => ({
-        params: {platform, version},
-        url: "/version-check",
-      }),
-    }),
-  }),
-  reducerPath: "terreno-rtk",
-});
-
-export const {useGetVersionCheckQuery, useLazyGetVersionCheckQuery} = emptySplitApi;
-`;
-};
-
 const generateFrontendOpenApiConfig = (): string => {
   return `import type {ConfigFile} from "@rtk-query/codegen-openapi";
 
 const config: ConfigFile = {
-  apiFile: "./store/betterAuthApi.ts",
+  apiFile: "@terreno/rtk",
   apiImport: "emptySplitApi",
   argSuffix: "Args",
   exportName: "openapi",
@@ -1842,9 +1753,9 @@ export default HomeScreen;
 };
 
 const generateFrontendTabsProfile = (): string => {
-  return `import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text} from "@terreno/ui";
+  return `import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {signOut} from "@/lib/betterAuth";
 import {logout, syncBetterAuthSession, useAppDispatch} from "@/store/index";
 import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk";
@@ -1856,6 +1767,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const user = profile;
@@ -1895,17 +1807,27 @@ const ProfileScreen: React.FC = () => {
     [updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase(),
+    [email, user?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       try {
-        await updateProfile({email: value}).unwrap();
+        const body = isEmailChanged ? {currentPassword, email: value} : {email: value};
+        await updateProfile(body).unwrap();
+        setCurrentPassword("");
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError("Failed to update email");
+        setSaveError(
+          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
+        );
       }
     },
-    [updateProfile]
+    [currentPassword, isEmailChanged, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -1955,6 +1877,16 @@ const ProfileScreen: React.FC = () => {
               type="email"
               value={email}
             />
+            {isEmailChanged && (
+              <TextField
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
             <TapToEdit
               helperText="Leave blank to keep your current password"
               onSave={handleSavePassword}
@@ -2054,6 +1986,7 @@ import {
   type BetterAuthClientInterface,
   generateBetterAuthSlice,
   registerTerrenoDevStore,
+  setTokenSource,
 } from "@terreno/rtk";
 import {DateTime} from "luxon";
 import {useDispatch} from "react-redux";
@@ -2064,6 +1997,11 @@ import {betterAuthClient} from "@/lib/betterAuth";
 import appState from "./appState";
 import {rtkQueryErrorMiddleware} from "./errors";
 import {terrenoApi} from "./sdk";
+import {authProvider} from "./syncdb";
+
+// Registered before the store exists, so the first RTK request already reads the Better Auth
+// token instead of rtk's default JWT source.
+setTokenSource(authProvider);
 
 const betterAuth = generateBetterAuthSlice({
   authClient: betterAuthClient as unknown as BetterAuthClientInterface,
@@ -2268,6 +2206,8 @@ export interface ProfileResponse {
 export interface UpdateProfileRequest {
   name?: string;
   email?: string;
+  /** Required by the server when \`email\` changes the mailbox. */
+  currentPassword?: string;
   password?: string;
 }
 
@@ -2339,7 +2279,7 @@ const generateFrontendStoreOpenApiSdk = (): string => {
   return `// THIS FILE IS AUTO-GENERATED. DO NOT EDIT.
 // Run "bun run sdk" to regenerate this file from the backend OpenAPI spec.
 
-import {emptySplitApi as api} from "./betterAuthApi";
+import {emptySplitApi as api} from "@terreno/rtk";
 export const addTagTypes = ["Users", "Auth", "profile"] as const;
 const injectedRtkApi = api
   .enhanceEndpoints({
@@ -2578,9 +2518,14 @@ const syncAuthClient: BetterAuthClientLike = {
     : {}),
 };
 
-// pollIntervalMs is only used as a fallback if the session atom bridge above is
-// unavailable (e.g. a future Better Auth client shape change); keep it slow.
-const authProvider = betterAuthAdapter(syncAuthClient, {pollIntervalMs: 60_000});
+/**
+ * The app's one token source: syncdb authenticates with it, and store/index.ts registers it
+ * with @terreno/rtk so RTK Query requests read the same Better Auth token.
+ *
+ * pollIntervalMs is only used as a fallback if the session atom bridge above is unavailable
+ * (e.g. a future Better Auth client shape change); keep it slow.
+ */
+export const authProvider = betterAuthAdapter(syncAuthClient, {pollIntervalMs: 60_000});
 
 export const syncDb: SyncDb = createSyncDb({
   authProvider,
@@ -2833,7 +2778,6 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateFrontendStoreAppState(), path: `${frontendDir}/store/appState.ts`},
     {content: generateFrontendStoreErrors(), path: `${frontendDir}/store/errors.ts`},
     {content: generateFrontendStoreSdk(), path: `${frontendDir}/store/sdk.ts`},
-    {content: generateFrontendBetterAuthApi(), path: `${frontendDir}/store/betterAuthApi.ts`},
     {content: generateFrontendStoreOpenApiSdk(), path: `${frontendDir}/store/openApiSdk.ts`},
     {content: generateFrontendBetterAuthLib(args), path: `${frontendDir}/lib/betterAuth.ts`},
     {content: generateFrontendSyncDb(args), path: `${frontendDir}/store/syncdb.ts`},

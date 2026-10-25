@@ -79,8 +79,8 @@ parallelism, job graph, test runners, and test code. It may **not**:
 
 Each iteration is one PR. Keep going until a stop rule fires.
 
-1. **Measure.** Run `scripts/ci/ciWallClock.ts` (iteration 0 adds it) for the
-   rolling median and the last-job histogram. Pull per-job step timings from
+1. **Measure.** Run `bun run ci:wall-clock --limit 20` for the rolling median
+   and the last-job histogram. Pull per-job step timings from
    the CircleCI API (`CIRCLECI_TOKEN`; slug in `docs/how-to/circleci.md`) for
    the top 2 critical-path jobs.
 2. **Pick the lever.** Take the job that is most often last. Choose the
@@ -145,8 +145,8 @@ timings.
 
 ### Iteration 0 — Instrumentation (½ day, required first)
 
-- Add `scripts/ci/ciWallClock.ts`, with tests, from the measurement used for
-  the baseline above.
+- Add `bun run ci:wall-clock` (`scripts/ci/ciWallClock/`), with tests, from
+  the measurement used for the baseline above.
 - Add `scripts/ci/bench/replay.ts`.
 - Pull step-level timings for `api-ci`, `e2e-prepare`, `e2e-app`,
   `maestro-e2e`, and `example-backend-docker`. Record how much of each is

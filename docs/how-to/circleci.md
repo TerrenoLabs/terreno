@@ -515,6 +515,29 @@ circleci config validate .circleci/config.yml
 circleci config validate .circleci/continue-config.yml
 ```
 
+## Measure PR CI speed
+
+```bash
+bun run ci:wall-clock                                  # last 60 merged PRs
+bun run ci:wall-clock --limit 20 --max-directories 3   # rolling window used by the speed loop
+bun run ci:wall-clock --json                           # per-PR rows for a ledger
+```
+
+The command needs an authenticated `gh`. It reads each merged PR's head-commit
+statuses and reports the median, p25, and p75 wall clock for average PRs and
+for all PRs. It also lists which job finished last.
+
+| Term | Definition |
+| --- | --- |
+| Wall clock | First `ci/circleci:` status to the last terminal status of a test or build job |
+| Not counted as the end | `approve`, `architectural-pr-review`, `dco`, `deploy-*`, `*-preview`, `serial-*` |
+| Average PR | Touches at most `--max-directories` top-level directories, not counting `docs/`, `website/`, dot-directories, or root files |
+| Rerun job | Its newest status counts; a job whose newest status is pending makes the PR unmeasured |
+| PRs over 100 files | Directories are counted from the first 100 files (`gh pr list` limit) |
+
+The speed goal and loop that use this metric are in
+[`circleci-pr-speed-loop.md`](../implementationPlans/circleci-pr-speed-loop.md).
+
 ## Disabled GitHub workflows
 
 Package CI, e2e, npm tag, and deploy workflows (`docs-deploy.yml`,

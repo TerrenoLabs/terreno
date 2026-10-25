@@ -36,15 +36,14 @@ Modern session-based authentication with built-in social OAuth support.
 2. User chooses social provider (Google, GitHub, Apple) or email/password
 3. Backend redirects to OAuth provider or validates credentials
 4. Better Auth creates session in MongoDB
-5. Frontend receives a session cookie (web, default), a bearer session token (native), or, on web with `webAuth: "bearer"`, a bearer token from the `set-auth-token` header. Bearer on web is the option when the web app and the API are on different sites, where browsers block the third-party session cookie. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
-6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). An email alone does not prove someone owns an existing account, so an existing app `User` with the same email is linked only after Better Auth verifies that email, and never when the row already belongs to another Better Auth account. Linking removes a legacy password the row never proved with a verified email. `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
+5. Frontend receives session cookie (web) or bearer session token (native)
+6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
 7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
 
 **Key properties:**
 - Session-based (cookies / bearer session) vs. stateless JWT
-- A session cookie is sent with requests other sites start, so a cookie-authenticated write counts only when it comes from a trusted origin. Bearer tokens are never sent automatically, so they need no such check
 - Built-in OAuth providers with PKCE
 - `betterAuthAdapter` for syncdb socket auth
 - `sync:auth-expired` socket event when the session is no longer valid
@@ -86,16 +85,10 @@ OAuth 2.0 authentication with GitHub.
 5. GitHub redirects back to `GET /auth/github/callback`
 6. Backend verifies authorization code with GitHub
 7. Backend finds/creates user, issues JWT tokens
-8. Backend redirects to `returnTo` with tokens in the URL fragment, only when `returnTo` matches
-   `githubAuth.allowedReturnTo`; otherwise it returns the tokens as JSON
-
-Every flow carries an OAuth `state` value bound to the starting browser by a signed, HttpOnly,
-short-lived cookie. The callback rejects a response without matching state.
+8. Backend redirects to `returnTo` URL with tokens as query params
 
 **Account Linking:**
-- Authenticated users can link their GitHub account via `GET /auth/github/link`. The bearer
-  user's ID is recorded in the signed state, and the callback links only to that user, never to
-  a session or token present on the callback request
+- Authenticated users can link their GitHub account via `GET /auth/github/link`
 - Multiple authentication methods can be attached to one user account
 - Users must have a password set before unlinking GitHub
 
@@ -105,7 +98,7 @@ short-lived cookie. The callback rejects a response without matching state.
 
 Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) that cannot hold a session cookie. `TerrenoApp` must set `mcpServiceTokens`. Users mint keys from `POST /mcp/service-tokens` or **Profile → MCP connections**. The plaintext secret is returned **once**; the database stores SHA-256 `tokenHash`.
 
-`extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user, and so does a key minted before the user's last password reset or session revocation (`tokenEpoch` changed since it was issued). MCP OAuth grants end the same way. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
+`extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
 
 This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not the hosted `@terreno/mcp` codegen server ([MCP server reference](../reference/mcp-server.md)).
 
@@ -113,11 +106,7 @@ This is not OAuth 2.1; interactive clients use MCP OAuth below. It is also not t
 
 ### MCP OAuth (opt-in, `/mcp` only)
 
-Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, get a client id (pre-created by the app, or through dynamic client registration), and run the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
-
-Every part of it is opt-in. Without `mcpOAuth.enabled` there are no OAuth routes, discovery documents, or challenge. Dynamic client registration is a second flag (`dynamicClientRegistration`) because an open registration endpoint lets anyone create a client, which leaves the consent screen as the only defense against a phishing client. With it off, the app creates its clients as `McpOAuthClient` documents.
-
-Revocation works on token families: every pair rotated from one approval shares a `familyId`. Revoking a family writes a tombstone before revoking its pairs, and issuing into a tombstoned family fails, checked again after the new pair is written. That closes the races where a refresh or code exchange that already passed its single-use check would otherwise issue a live pair after a concurrent reuse revoked the family.
+Claude.ai connectors and ChatGPT apps cannot paste a static key; they run OAuth 2.1 discovery, dynamic client registration, and the authorization-code flow with PKCE. With `mcpOAuth` on `TerrenoApp`, Terreno is that authorization server for a JWT app. Terreno is backend-only, so the app hosts the consent screen and approves or denies with the signed-in user's JWT. The client then gets opaque, short-lived `mcpat_` access tokens and rotating `mcprt_` refresh tokens, stored as hashes. On `/mcp`, `extractAuthFromHeaders` resolves `mcpat_` alongside the other credentials, and a request with none gets a `401` RFC 9728 challenge that starts discovery. OAuth access tokens are ignored on REST, like service tokens.
 
 **Learn more:** [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md)
 
@@ -152,11 +141,8 @@ modelRouter(Model, {
 **Access Token (short-lived)**
 - Default expiration: 15 minutes (`TOKEN_EXPIRES_IN`)
 - Used for API requests
-- Included in `Authorization: Bearer <token>` header (or the `jwt` cookie). Other
-  `Authorization` schemes are never read as a JWT
+- Included in `Authorization: Bearer <token>` header
 - Contains user ID and permissions in payload
-- Rejected with 401 once the user is `disabled`. Login, refresh, password reset, and GitHub
-  sign-in also stop issuing tokens to a disabled user, so disabling an account ends its access
 
 **Refresh Token (long-lived)**
 - Default expiration: 30 days (`REFRESH_TOKEN_EXPIRES_IN`)
@@ -272,15 +258,6 @@ permissions: {
 }
 ``````
 
-### Owner scope on writes
-
-Object permissions such as `IsOwner` first run against the document as it was loaded. On
-create and update, modelRouter also checks the document as it will be written. A user cannot
-create a record that names another user as `ownerId`, or move their own record to another
-user, even when the router has no `preUpdate` that strips `ownerId`. RBAC routers get the same
-check from their role scopes and `access.scope`. Admins can still reassign owners. See
-[modelRouter write scope](../reference/api.md#modelrouter-write-scope).
-
 ### Custom Permissions
 
 Create custom permission functions:
@@ -296,23 +273,6 @@ modelRouter(Model, {
   },
 });
 ``````
-
-### Why changing the email needs the current password
-
-The account email is where password-reset links go. If a session alone could change it, anyone
-holding a stolen or borrowed session could move the recovery address to a mailbox they control,
-request a reset, and keep the account after the session ends. So `PATCH /auth/me` asks for the
-current password before it changes the mailbox, and then tells the old address that the change
-happened. The notice holds no link or token, so forwarding it or leaving it in an inbox exposes
-nothing that acts on the account.
-
-The check uses whichever password the user has: the passport-local-mongoose hash, or, for a
-Better Auth user with no passport hash, the Better Auth credential. A user who signed up only
-through a social provider has no password to confirm, so they must set one through the reset
-flow first. Wrong attempts share the passport lockout with login rather than a separate counter.
-The new email is not held as pending and existing sessions are not ended; the notice to the old
-address is the signal that lets the owner react. Status codes and messages are in the
-[API reference](../reference/api.md#changing-the-email-on-patch-authme).
 
 ## Security Best Practices
 
@@ -344,7 +304,7 @@ address is the signal that lets the owner react. Status codes and messages are i
 - Validate tokens before making authenticated requests
 
 ❌ **Don't:**
-- Store tokens in localStorage on web when frontend and API share a site (use httpOnly cookies). When they are on different sites, Better Auth's `webAuth: "bearer"` mode is the supported way to keep a web token: it accepts the XSS and shared-device risk of web storage, and `bearerStorage: window.sessionStorage` narrows the second. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
+- Store tokens in localStorage on web (use httpOnly cookies in production)
 - Log tokens to console
 - Send tokens in URL query parameters (MCP service tokens included)
 - Ignore token refresh failures

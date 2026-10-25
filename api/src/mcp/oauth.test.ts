@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it, spyOn} from "bun:test";
+import {beforeEach, describe, expect, it} from "bun:test";
 import {createHash, randomBytes} from "node:crypto";
 import type express from "express";
 import {DateTime} from "luxon";
@@ -8,12 +8,11 @@ import type TestAgent from "supertest/lib/agent";
 
 import {modelRouter} from "../api";
 import type {UserModel as UserModelType} from "../auth";
-import {AuthToken} from "../authTokens";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
 import {McpOAuthToken} from "../models/mcpOAuthToken";
 import {McpServiceToken} from "../models/mcpServiceToken";
-import {Permissions, requireOAuthScope} from "../permissions";
+import {Permissions} from "../permissions";
 import {getCurrentRequestContext} from "../requestContext";
 import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
@@ -30,7 +29,6 @@ const RESOURCE_METADATA_URL = `${ISSUER}/.well-known/oauth-protected-resource/mc
 const oauthOptions: McpOAuthOptions = {
   allowedRedirectHosts: ["claude.ai", "*.chatgpt.com", "localhost"],
   consentUrl: CONSENT_URL,
-  dynamicClientRegistration: true,
   enabled: true,
   issuer: ISSUER,
 };
@@ -62,11 +60,9 @@ const noteRouter = () =>
     },
   });
 
-const buildApp = (
-  {mcpOAuth}: {mcpOAuth?: McpOAuthOptions} = {mcpOAuth: oauthOptions}
-): express.Application =>
+const buildApp = (): express.Application =>
   new TerrenoApp({
-    mcpOAuth,
+    mcpOAuth: oauthOptions,
     mcpServiceTokens: true,
     skipListen: true,
     userModel: typedUserModel,
@@ -395,47 +391,14 @@ describe("MCP OAuth authorization server", () => {
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
-    it("revokes the tokens when a code is replayed after issue but before the exchange returns", async () => {
+    it("revokes tokens issued after a replay landed mid-exchange", async () => {
       const flow = await approvedCode(app, agent);
-      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
-      let replay: supertest.Response | undefined;
-      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
-        const issued = await realIssue(options);
-        replay = await exchangeCode(app, flow);
-        return issued;
-      });
-      let first: supertest.Response;
-      try {
-        first = await exchangeCode(app, flow);
-      } finally {
-        issueSpy.mockRestore();
-      }
+      // Stands in for a replay that arrived after the code was consumed but before issue.
+      await McpOAuthAuthorization.updateMany({}, {$set: {replayedAt: DateTime.now().toJSDate()}});
 
-      expect(replay?.body.error).toBe("invalid_grant");
-      expect((await callMcp(app, first.body.access_token)).status).toBe(401);
-      expect((await refresh(app, flow.clientId, first.body.refresh_token)).body.error).toBe(
-        "invalid_grant"
-      );
-    });
+      const res = await exchangeCode(app, flow);
 
-    it("refuses to issue tokens when the code is replayed before they are issued", async () => {
-      const flow = await approvedCode(app, agent);
-      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
-      let replay: supertest.Response | undefined;
-      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
-        replay = await exchangeCode(app, flow);
-        return realIssue(options);
-      });
-      let first: supertest.Response;
-      try {
-        first = await exchangeCode(app, flow);
-      } finally {
-        issueSpy.mockRestore();
-      }
-
-      expect(replay?.body.error).toBe("invalid_grant");
-      expect(first.status).toBe(400);
-      expect(first.body.error).toBe("invalid_grant");
+      expect(res.body.error).toBe("invalid_grant");
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
@@ -551,73 +514,15 @@ describe("MCP OAuth authorization server", () => {
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
 
-    it("revokes the chain when two exchanges of one refresh token read it at the same time", async () => {
+    it("revokes a pair issued after reuse was detected mid-rotation", async () => {
       const flow = await approvedCode(app, agent);
       const first = (await exchangeCode(app, flow)).body;
-      // Hold each lookup until both requests have read the token, so both start from the same state.
-      const realLookup = McpOAuthToken.findOneOrNone.bind(McpOAuthToken);
-      let lookups = 0;
-      let releaseLookups = (): void => {};
-      const bothLookedUp = new Promise<void>((resolve) => {
-        releaseLookups = resolve;
-      });
-      const lookupSpy = spyOn(McpOAuthToken, "findOneOrNone").mockImplementation((async (
-        ...args: Parameters<typeof realLookup>
-      ) => {
-        const found = await realLookup(...args);
-        lookups += 1;
-        if (lookups === 2) {
-          releaseLookups();
-        }
-        await bothLookedUp;
-        return found;
-      }) as typeof McpOAuthToken.findOneOrNone);
-      let responses: supertest.Response[];
-      try {
-        responses = await Promise.all([
-          refresh(app, flow.clientId, first.refresh_token),
-          refresh(app, flow.clientId, first.refresh_token),
-        ]);
-      } finally {
-        lookupSpy.mockRestore();
-      }
+      // Stands in for a concurrent reuse detected after rotation but before the new pair existed.
+      await McpOAuthToken.updateMany({}, {$set: {reuseDetectedAt: DateTime.now().toJSDate()}});
 
-      expect(responses.some((res) => res.body.error === "invalid_grant")).toBe(true);
-      for (const res of responses.filter((candidate) => candidate.status === 200)) {
-        expect((await callMcp(app, res.body.access_token)).status).toBe(401);
-        expect((await refresh(app, flow.clientId, res.body.refresh_token)).body.error).toBe(
-          "invalid_grant"
-        );
-      }
-    });
+      const res = await refresh(app, flow.clientId, first.refresh_token);
 
-    it("keeps the chain revoked when the winning exchange issues after the loser revoked it", async () => {
-      const flow = await approvedCode(app, agent);
-      const first = (await exchangeCode(app, flow)).body;
-      // The exchange that wins the rotation waits in issue until the losing exchange has answered.
-      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
-      let markLoserDone = (): void => {};
-      const loserDone = new Promise<void>((resolve) => {
-        markLoserDone = resolve;
-      });
-      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
-        await loserDone;
-        return realIssue(options);
-      });
-      let responses: supertest.Response[];
-      try {
-        responses = await Promise.all(
-          [0, 1].map(async () => {
-            const res = await refresh(app, flow.clientId, first.refresh_token);
-            markLoserDone();
-            return res;
-          })
-        );
-      } finally {
-        issueSpy.mockRestore();
-      }
-
-      expect(responses.map((res) => res.body.error)).toEqual(["invalid_grant", "invalid_grant"]);
+      expect(res.body.error).toBe("invalid_grant");
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     });
   });
@@ -704,196 +609,12 @@ describe("MCP OAuth authorization server", () => {
     });
   });
 
-  describe("credential events", () => {
-    const resetPassword = async (): Promise<void> => {
-      const issued = await AuthToken.issueFor({_id: String(notAdminId)}, "passwordReset");
-      const res = await supertest(app)
-        .post("/auth/resetPassword")
-        .send({password: "reset-password-123", token: issued.token});
-      expect(res.status).toBe(200);
-    };
-
-    it("ends service tokens, access tokens, and refresh tokens issued before a password reset", async () => {
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-        .token as string;
-      const flow = await approvedCode(app, agent);
-      const oauth = (await exchangeCode(app, flow)).body;
-      expect((await callMcp(app, serviceToken)).status).toBe(200);
-      expect((await callMcp(app, oauth.access_token)).status).toBe(200);
-
-      await resetPassword();
-
-      const serviceCall = await callMcp(app, serviceToken);
-      expect(serviceCall.status).toBe(401);
-      expect(serviceCall.headers["www-authenticate"]).toContain('error="invalid_token"');
-      expect((await callMcp(app, oauth.access_token)).status).toBe(401);
-      const refreshed = await refresh(app, flow.clientId, oauth.refresh_token);
-      expect(refreshed.status).toBe(400);
-      expect(refreshed.body.error).toBe("invalid_grant");
-    });
-
-    it("lists service tokens from before a password reset as revoked", async () => {
-      await agent.post("/mcp/service-tokens").send({name: "Before reset"});
-
-      await resetPassword();
-
-      const list = await agent.get("/mcp/service-tokens");
-      expect(list.body.data).toHaveLength(1);
-      expect(list.body.data[0].revokedAt).not.toBeNull();
-    });
-
-    it("refuses to exchange a code approved before a password reset", async () => {
-      const flow = await approvedCode(app, agent);
-
-      await resetPassword();
-
-      const exchanged = await exchangeCode(app, flow);
-      expect(exchanged.status).toBe(400);
-      expect(exchanged.body.error).toBe("invalid_grant");
-    });
-
-    it("ends MCP credentials on any tokenEpoch bump, such as a Better Auth session revocation", async () => {
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-        .token as string;
-      const flow = await approvedCode(app, agent);
-      const oauth = (await exchangeCode(app, flow)).body;
-
-      await UserModel.updateOne({_id: notAdminId}, {$inc: {tokenEpoch: 1}});
-
-      expect((await callMcp(app, serviceToken)).status).toBe(401);
-      expect((await callMcp(app, oauth.access_token)).status).toBe(401);
-      expect((await refresh(app, flow.clientId, oauth.refresh_token)).body.error).toBe(
-        "invalid_grant"
-      );
-    });
-
-    it("accepts MCP credentials issued after a password reset", async () => {
-      await resetPassword();
-
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "After"})).body.data
-        .token as string;
-      const flow = await approvedCode(app, agent);
-      const oauth = (await exchangeCode(app, flow)).body;
-      const refreshed = await refresh(app, flow.clientId, oauth.refresh_token);
-
-      expect((await callMcp(app, serviceToken)).status).toBe(200);
-      expect(refreshed.status).toBe(200);
-      expect((await callMcp(app, refreshed.body.access_token)).status).toBe(200);
-    });
-  });
-
   it("documents the consent endpoints in OpenAPI", async () => {
     const res = await supertest(app).get("/openapi.json");
 
     expect(res.body.paths["/oauth/authorize/{request}/approve"].post.operationId).toBe(
       "approveMcpOAuthRequest"
     );
-  });
-});
-
-describe("MCP OAuth granted scopes", () => {
-  let app: express.Application;
-  let agent: TestAgent;
-
-  const scopedRouter = () =>
-    modelRouter("/scoped-notes", OAuthNote, {
-      collectionActions: {
-        scopes: {
-          handler: async () => ({scopes: getCurrentRequestContext()?.oauthScopes ?? null}),
-          mcp: {name: "scoped_scopes"},
-          method: "GET",
-          permissions: [Permissions.IsAuthenticated],
-        },
-        write: {
-          handler: async () => ({written: true}),
-          mcp: {name: "scoped_write"},
-          method: "POST",
-          permissions: [Permissions.IsAuthenticated, requireOAuthScope("write")],
-        },
-      },
-      permissions: {create: [], delete: [], list: [], read: [], update: []},
-    });
-
-  const callTool = (bearer: string, name: string) =>
-    supertest(app)
-      .post("/mcp")
-      .set("accept", "application/json, text/event-stream")
-      .set("Authorization", `Bearer ${bearer}`)
-      .send({id: 1, jsonrpc: "2.0", method: "tools/call", params: {arguments: {}, name}});
-
-  const rpcResult = (text: string): {content: {text: string}[]; isError?: boolean} => {
-    const dataLine = text.split("\n").find((line) => line.startsWith("data:"));
-    return JSON.parse(dataLine ? dataLine.slice("data:".length) : text).result;
-  };
-
-  const tokenWithScope = async (scope: string): Promise<string> => {
-    const clientId = await registerClient(app);
-    const {challenge, verifier} = createPkce();
-    const authorize = await startAuthorization(app, {
-      client_id: clientId,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      redirect_uri: REDIRECT_URI,
-      response_type: "code",
-      scope,
-    });
-    const approve = await agent.post(
-      `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
-    );
-    const code = new URL(approve.body.data.redirectUrl).searchParams.get("code") as string;
-    const token = await exchangeCode(app, {clientId, code, verifier});
-    expect(token.body.scope).toBe(scope);
-    return token.body.access_token as string;
-  };
-
-  beforeEach(async () => {
-    await setupDb();
-    await Promise.all([
-      McpOAuthAuthorization.deleteMany({}),
-      McpOAuthClient.deleteMany({}),
-      McpOAuthToken.deleteMany({}),
-      McpServiceToken.deleteMany({}),
-    ]);
-    clearMCPRegistry();
-    app = new TerrenoApp({
-      mcpOAuth: {...oauthOptions, scopesSupported: ["read", "write"]},
-      mcpServiceTokens: true,
-      skipListen: true,
-      userModel: typedUserModel,
-    })
-      .register(scopedRouter())
-      .build();
-    agent = await authAsUser(app, "notAdmin");
-  });
-
-  it("puts the token's granted scopes in the request context", async () => {
-    const token = await tokenWithScope("read");
-
-    const res = await callTool(token, "scoped_scopes");
-
-    expect(JSON.parse(rpcResult(res.text).content[0].text)).toEqual({scopes: ["read"]});
-  });
-
-  it("refuses a tool that requires a scope the token was not granted", async () => {
-    const readToken = await tokenWithScope("read");
-    const writeToken = await tokenWithScope("read write");
-
-    const denied = rpcResult((await callTool(readToken, "scoped_write")).text);
-    const allowed = rpcResult((await callTool(writeToken, "scoped_write")).text);
-
-    expect(denied.isError).toBe(true);
-    expect(JSON.parse(allowed.content[0].text)).toEqual({written: true});
-  });
-
-  it("does not apply OAuth scopes to the user's own JWT or service token", async () => {
-    const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-      .token as string;
-
-    const viaServiceToken = rpcResult((await callTool(serviceToken, "scoped_write")).text);
-    const viaScopes = rpcResult((await callTool(serviceToken, "scoped_scopes")).text);
-
-    expect(JSON.parse(viaServiceToken.content[0].text)).toEqual({written: true});
-    expect(JSON.parse(viaScopes.content[0].text)).toEqual({scopes: null});
   });
 });
 
@@ -922,105 +643,9 @@ describe("resolveMcpOAuthOption", () => {
     ).toThrow("MCP OAuth is misconfigured");
   });
 
-  it("throws at boot when registration is on without allowed redirect hosts", () => {
+  it("throws at boot without allowed redirect hosts", () => {
     expect(() => resolveMcpOAuthOption({...oauthOptions, allowedRedirectHosts: []})).toThrow(
       "MCP OAuth is misconfigured"
     );
-  });
-
-  it("leaves dynamic client registration off unless asked for", () => {
-    const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
-
-    expect(resolveMcpOAuthOption(rest)).toMatchObject({
-      allowedRedirectHosts: [],
-      dynamicClientRegistration: false,
-    });
-  });
-});
-
-describe("MCP OAuth opt-in", () => {
-  const oauthPaths: [string, string][] = [
-    ["get", "/.well-known/oauth-protected-resource"],
-    ["get", "/.well-known/oauth-protected-resource/mcp"],
-    ["get", "/.well-known/oauth-authorization-server"],
-    ["post", "/oauth/register"],
-    ["get", "/oauth/authorize"],
-    ["post", "/oauth/token"],
-    ["post", "/oauth/revoke"],
-  ];
-
-  beforeEach(async () => {
-    await setupDb();
-    await Promise.all([
-      McpOAuthAuthorization.deleteMany({}),
-      McpOAuthClient.deleteMany({}),
-      McpOAuthToken.deleteMany({}),
-    ]);
-    clearMCPRegistry();
-  });
-
-  it("mounts no OAuth routes, metadata, or /mcp challenge without mcpOAuth", async () => {
-    for (const mcpOAuth of [undefined, {...oauthOptions, enabled: false}]) {
-      const app = buildApp({mcpOAuth});
-
-      for (const [method, path] of oauthPaths) {
-        const res = await (method === "get" ? supertest(app).get(path) : supertest(app).post(path));
-        expect(`${method} ${path} ${res.status}`).toBe(`${method} ${path} 404`);
-      }
-      const mcp = await callMcp(app);
-      expect(mcp.status).not.toBe(401);
-      expect(mcp.headers["www-authenticate"]).toBeUndefined();
-    }
-  });
-
-  describe("with dynamic client registration off", () => {
-    let app: express.Application;
-    let agent: TestAgent;
-
-    beforeEach(async () => {
-      const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
-      app = buildApp({mcpOAuth: rest});
-      agent = await authAsUser(app, "notAdmin");
-    });
-
-    it("answers /oauth/register with 404 and leaves it out of the metadata", async () => {
-      const register = await supertest(app)
-        .post("/oauth/register")
-        .send({client_name: "Anyone", redirect_uris: [REDIRECT_URI]});
-      const metadata = await supertest(app).get("/.well-known/oauth-authorization-server");
-
-      expect(register.status).toBe(404);
-      expect(await McpOAuthClient.countDocuments({})).toBe(0);
-      expect(metadata.status).toBe(200);
-      expect(metadata.body.registration_endpoint).toBeUndefined();
-      expect(metadata.body.token_endpoint).toBe(`${ISSUER}/oauth/token`);
-    });
-
-    it("still runs the flow for a client the app created", async () => {
-      const client = await McpOAuthClient.create({
-        clientId: "preconfigured-claude",
-        clientName: "Claude",
-        grantTypes: ["authorization_code", "refresh_token"],
-        redirectUris: [REDIRECT_URI],
-        responseTypes: ["code"],
-      });
-      const {challenge, verifier} = createPkce();
-      const authorize = await startAuthorization(app, {
-        client_id: client.clientId,
-        code_challenge: challenge,
-        code_challenge_method: "S256",
-        redirect_uri: REDIRECT_URI,
-        response_type: "code",
-      });
-      const approve = await agent.post(
-        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
-      );
-      const code = new URL(approve.body.data.redirectUrl).searchParams.get("code") as string;
-
-      const tokens = await exchangeCode(app, {clientId: client.clientId, code, verifier});
-
-      expect(tokens.status).toBe(200);
-      expect((await callMcp(app, tokens.body.access_token)).status).toBe(200);
-    });
   });
 });

@@ -12,7 +12,6 @@ import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
   createBetterAuthSessionMiddleware,
-  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 import {addTerrenoDevBrowserLogsRoute} from "./browserLogsRoute";
 import {
@@ -140,10 +139,9 @@ export interface TerrenoAppOptions {
   mcpServiceTokens?: McpServiceTokensAppOption;
   /**
    * Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai
-   * connectors, ChatGPT apps) can connect to a JWT-auth app. Off unless `enabled: true`. Mounts
-   * RFC 9728 / RFC 8414 discovery, authorize + consent, token, and revocation endpoints, and makes
-   * `/mcp` answer credential-less requests with a 401 challenge. Dynamic client registration is a
-   * second opt-in (`dynamicClientRegistration: true`). See
+   * connectors, ChatGPT apps) can connect to a JWT-auth app. Mounts RFC 9728 / RFC 8414
+   * discovery, dynamic client registration, authorize + consent, token, and revocation
+   * endpoints, and makes `/mcp` answer credential-less requests with a 401 challenge. See
    * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
    */
   mcpOAuth?: McpOAuthAppOption;
@@ -443,7 +441,7 @@ export class TerrenoApp {
     const authOptions = options.authOptions;
     addAuthRoutes(app, options.userModel, authOptions);
 
-    if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
+    if (options.logRequests !== false) {
       app.use(logRequests);
     }
 
@@ -522,13 +520,6 @@ export class TerrenoApp {
     if (betterAuth) {
       authOptions.syncPasswordResetToBetterAuth = async (user, password): Promise<void> => {
         await applyJwtPasswordResetToBetterAuth(betterAuth, user, password);
-      };
-      authOptions.verifyBetterAuthPassword = async (user, password) => {
-        return verifyBetterAuthCredentialPassword(
-          betterAuth,
-          user as {betterAuthId?: string},
-          password
-        );
       };
     }
     const mcpServiceTokens = resolveMcpServiceTokensOption(options.mcpServiceTokens);

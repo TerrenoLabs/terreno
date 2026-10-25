@@ -38,12 +38,12 @@ export interface McpOAuthAuthorizationDocument extends mongoose.Document {
   expiresAt: Date;
   familyId?: string;
   redirectUri: string;
+  replayedAt?: Date;
   requestId: string;
   resource?: string;
   scope?: string;
   state?: string;
   status: McpOAuthAuthorizationStatus;
-  tokenEpoch?: number;
   updated: Date;
   usedAt?: Date;
   userId?: mongoose.Types.ObjectId;
@@ -57,24 +57,6 @@ export interface McpOAuthAuthorizationModel
   extends mongoose.Model<McpOAuthAuthorizationDocument>,
     McpOAuthAuthorizationStatics {}
 
-/** Tombstone written when a token family is revoked; blocks any later issue into it. */
-export interface McpOAuthRevokedFamilyDocument extends mongoose.Document {
-  _id: mongoose.Types.ObjectId;
-  created: Date;
-  expiresAt: Date;
-  familyId: string;
-  revokedAt: Date;
-  updated: Date;
-}
-
-interface McpOAuthRevokedFamilyStatics
-  extends FindExactlyOnePlugin<McpOAuthRevokedFamilyDocument>,
-    FindOneOrNonePlugin<McpOAuthRevokedFamilyDocument> {}
-
-export interface McpOAuthRevokedFamilyModel
-  extends mongoose.Model<McpOAuthRevokedFamilyDocument>,
-    McpOAuthRevokedFamilyStatics {}
-
 /** One issued access/refresh token pair. Rotation chains pairs together by `familyId`. */
 export interface McpOAuthTokenDocument extends mongoose.Document {
   _id: mongoose.Types.ObjectId;
@@ -86,10 +68,10 @@ export interface McpOAuthTokenDocument extends mongoose.Document {
   refreshExpiresAt: Date;
   refreshTokenHash: string;
   resource?: string;
+  reuseDetectedAt?: Date;
   revokedAt?: Date;
   rotatedAt?: Date;
   scope?: string;
-  tokenEpoch?: number;
   updated: Date;
   userId: mongoose.Types.ObjectId;
 }
@@ -101,8 +83,6 @@ export interface McpOAuthTokenIssueOptions {
   refreshTokenTtlSeconds: number;
   resource?: string;
   scope?: string;
-  /** The user's tokenEpoch when the grant was approved (default 0); a later bump ends the family. */
-  tokenEpoch?: number;
   userId: mongoose.Types.ObjectId;
 }
 

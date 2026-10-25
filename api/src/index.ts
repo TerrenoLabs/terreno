@@ -111,8 +111,7 @@ export * from "./models/consentForm";
 export * from "./models/consentResponse";
 export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
 export {McpOAuthClient} from "./models/mcpOAuthClient";
-export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
-export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
+export {McpOAuthToken} from "./models/mcpOAuthToken";
 export * from "./models/mcpServiceToken";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
@@ -202,14 +201,6 @@ export * from "./rbac/scopes";
 export * from "./rbac/statements";
 export * from "./rbac/types";
 export * from "./rbac/userPlugin";
-export {
-  assertCanWriteTargetUser,
-  assertCanWriteUserIdentity,
-  isRbacUserModelName,
-  isWriteKeyForField,
-  USER_IDENTITY_FIELDS,
-  USER_UPDATE_IDENTITY_ACTION,
-} from "./rbac/userWriteGuards";
 export {
   type AuthorizedEmitEntry,
   emitPayloadToAuthorizedRoom,
@@ -323,7 +314,6 @@ export type {
   McpOAuthAuthorizationDocument,
   McpOAuthAuthorizationStatus,
   McpOAuthClientDocument,
-  McpOAuthRevokedFamilyDocument,
   McpOAuthTokenDocument,
 } from "./types/mcpOAuth";
 export * from "./utils";

@@ -41,6 +41,10 @@ const mcpOAuthAuthorizationSchema = new mongoose.Schema<
       required: true,
       type: String,
     },
+    replayedAt: {
+      description: "When the authorization code was presented again after being exchanged",
+      type: Date,
+    },
     requestId: {
       description: "Opaque id handed to the consent screen to identify this request",
       required: true,
@@ -64,10 +68,6 @@ const mcpOAuthAuthorizationSchema = new mongoose.Schema<
       description: "pending, approved (code outstanding), denied, or used (code exchanged)",
       enum: ["pending", "approved", "denied", "used"],
       type: String,
-    },
-    tokenEpoch: {
-      description: "The approving user's tokenEpoch; a code is refused after it changes",
-      type: Number,
     },
     usedAt: {
       description: "When the authorization code was exchanged",

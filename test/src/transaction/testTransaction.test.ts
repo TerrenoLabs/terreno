@@ -277,4 +277,74 @@ describe("testTransaction", () => {
     await holder;
     expect(getTestSession()).toBeNull();
   });
+
+  it("aborts a leftover transaction when a new one starts", async () => {
+    installTransactionPatches();
+    try {
+      await startTestTransaction();
+      const session = getTestSession();
+      await startTestTransaction();
+      expect(getTestSession()).toBe(session);
+      expect(getTestSession()?.inTransaction()).toBe(true);
+    } finally {
+      await resetTestSessionAfterReconnect();
+    }
+    expect(getTestSession()).toBeNull();
+  });
+
+  it("replaces a session that fails to abort", async () => {
+    installTransactionPatches();
+    try {
+      await startTestTransaction();
+      const session = getTestSession();
+      if (!session) {
+        throw new Error("expected a test session");
+      }
+      session.inTransaction = () => {
+        throw new Error("bad session");
+      };
+      await startTestTransaction();
+      expect(getTestSession()).not.toBe(session);
+
+      const replacement = getTestSession();
+      if (!replacement) {
+        throw new Error("expected a replacement session");
+      }
+      replacement.abortTransaction = async () => {
+        throw new Error("abort failed");
+      };
+      await abortTestTransaction();
+      expect(getTestSession()).toBeNull();
+    } finally {
+      await resetTestSessionAfterReconnect();
+    }
+  });
+
+  it("restarts the transaction once after a transient transaction error", async () => {
+    installTransactionPatches();
+    let attempts = 0;
+    const schema = new mongoose.Schema({name: String}, {collection: "tx_retry_widgets"});
+    schema.pre("save", () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw Object.assign(new Error("transient"), {errorLabels: ["TransientTransactionError"]});
+      }
+    });
+    const RetryWidget = mongoose.models.TxRetryWidget ?? mongoose.model("TxRetryWidget", schema);
+    try {
+      await startTestTransaction();
+      await new RetryWidget({name: "retry"}).save();
+      expect(attempts).toBe(2);
+    } finally {
+      await abortTestTransaction();
+      await resetTestSessionAfterReconnect();
+    }
+  });
+
+  it("uses the driver's startSession when no test session is active", async () => {
+    installTransactionPatches();
+    const session = await TxWidget.startSession();
+    expect(session.inTransaction()).toBe(false);
+    await session.endSession();
+  });
 });

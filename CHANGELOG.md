@@ -20,6 +20,19 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.18.0] - 2026-10-25
+
+### Added
+
+- Vercel hosting: `example-backend` runs on Vercel Functions (exported `http.Server` with Socket.IO, full Bun bundle), and `example-frontend` and `demo` deploy as static Expo exports. CircleCI deploys all three to the `terrenolabs` Vercel team alongside Cloud Run and Netlify. See `docs/how-to/deploy-to-vercel.md` and `docs/how-to/vercel-function-websockets.md`.
+- `@terreno/rtk`: `useSocketConnection({transports})` chooses the Socket.IO transports (default unchanged: polling, then websocket). Use `["websocket"]` on hosts without session affinity, such as Vercel Functions.
+- `@terreno/syncdb`: `createSyncDb({socketTransports})` does the same for the default socket transport.
+- New `deploy-vercel` agent skill.
+
+### Fixed
+
+- `@terreno/syncdb`'s tests now cover the debug-recorder paths (replay failures, retries, rate-limit and auth nacks, batch sends, stream join/leave/skip, cursor migration, tombstone compaction, snapshot-batch fallback, `forceResync`, and subscribe catch-up), so the 95% coverage gate passes again on Bun 1.4.4, which counts the lines of debug event objects that never run without a recorder.
+
 ## [57.17.0] - 2026-10-23
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.17.0.md`](mcp-server/src/docs/upgrades/57.17.0.md).

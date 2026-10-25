@@ -70,6 +70,7 @@ import {PhoneNumberConfiguration} from "@story-config/PhoneNumberField.config";
 import {PopoverConfiguration} from "@story-config/Popover.config";
 import {RadioConfiguration} from "@story-config/Radio.config";
 import {RadioFieldConfiguration} from "@story-config/RadioField.config";
+import {RichTextMarkdownConfiguration} from "@story-config/RichTextMarkdown.config";
 import {ScorecardConfiguration} from "@story-config/Scorecard.config";
 import {SectionDividerConfiguration} from "@story-config/SectionDivider.config";
 import {SegmentedControlConfiguration} from "@story-config/SegmentedControl.config";
@@ -341,6 +342,7 @@ const Config: DemoConfigurationBase[] = [
   MarkdownEditorConfiguration,
   MarkdownEditorFieldConfiguration,
   MarkdownViewConfiguration,
+  RichTextMarkdownConfiguration,
   // FilteredItemConfiguration,
   // MessageConfiguration,
   ModalConfiguration,

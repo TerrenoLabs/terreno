@@ -106,7 +106,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
 
 - [x] **T1** — Render the list pane beside a never-remounted Stack on wide layouts
   - Depends on: none
-  - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, ui/src/Common.ts, ui/src/index.tsx, ui/src/SplitPage.tsx, ui/src/SplitPage.native.tsx, scripts/check-demo-coverage.ts, docs/reference/ui.md
+  - Files: ui/src/ListDetailLayout.tsx, ui/src/isolated/ListDetailLayout.isolated.tsx, ui/src/Common.ts, ui/src/index.tsx, ui/src/SplitPage.tsx, ui/src/SplitPage.native.tsx, scripts/check-demo-coverage.ts, docs/reference/ui.md
   - Delivers: `ListDetailLayout`, `ListDetailIndex`, `useListDetail().isSplit`, and the props in the Contract table except selection. `ListDetailLayout` and `ListDetailIndex` get temporary `DEMO_COVERAGE_ALLOWLIST` entries ("story lands in T4") so `check:demo-coverage` stays green.
   - Criteria:
     - `list-detail-detail-pane` wraps the `<Stack>` at every width.
@@ -124,11 +124,11 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - The `### SplitPage` section and the `SplitPage` JSDoc (`ui/src/SplitPage.tsx`) say `ListDetailLayout` is preferred for new screens.
     - In `ui/src/SplitPage.native.tsx`, the stale tablet TODO on line 1 is replaced by the same note.
     - SplitPage keeps working and is not marked `@deprecated`.
-  - Verification: `cd ui && bun test --only-failures src/ListDetailLayout.test.tsx` passes, using the mocked `useWindowDimensions` and `expo-router` from `ui/src/bunSetup.ts` and firing `layout` events. `bun run compile` and `bun run lint` pass.
+  - Verification: `cd ui && bun test ./src/isolated/ListDetailLayout.isolated.tsx` passes, using the mocked `useWindowDimensions` and `expo-router` from `ui/src/bunSetup.ts` and firing `layout` events. `bun run compile` and `bun run lint` pass.
 
 - [x] **T2** — Keep the selected item in the route with useListDetail
   - Depends on: T1
-  - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, ui/src/Common.ts, ui/src/Box.tsx, ui/src/Box.test.tsx, docs/reference/ui.md, docs/how-to/build-list-detail-screens.md, docs/how-to/README.md
+  - Files: ui/src/ListDetailLayout.tsx, ui/src/isolated/ListDetailLayout.isolated.tsx, ui/src/Common.ts, ui/src/Box.tsx, ui/src/Box.test.tsx, docs/reference/ui.md, docs/how-to/build-list-detail-screens.md, docs/how-to/README.md
   - Added in Pick: `Box` `accessibilityState.selected`, sent as `aria-current="true"` on a clickable row (ARIA forbids `aria-selected` on a button) and as `aria-selected` on selectable roles (`tab`, `option`, `row`, ...), so list rows can report selection; T4/T5 rows rely on it.
   - Criteria:
     - With `useSegments` mocked to end in `[id]` and `useGlobalSearchParams` returning `{id: "3"}`, `selectedId` is `"3"`.
@@ -148,18 +148,18 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
       - selecting rows with `accessibilityState.selected`
       - nesting inside `SidebarNavigation`
       - when to use SplitPage instead (non-route list/detail)
-  - Verification: `bun test --only-failures src/ListDetailLayout.test.tsx` asserts the router mock calls and screen options at 375 and 1024 px.
+  - Verification: `bun test ./src/isolated/ListDetailLayout.isolated.tsx` asserts the router mock calls and screen options at 375 and 1024 px.
 
 - [x] **T3** — Keep the open item when crossing the breakpoint
   - Depends on: T2
-  - Files: ui/src/ListDetailLayout.tsx, ui/src/ListDetailLayout.test.tsx, docs/reference/ui.md
+  - Files: ui/src/ListDetailLayout.tsx, ui/src/isolated/ListDetailLayout.isolated.tsx, docs/reference/ui.md
   - Criteria:
     - With a detail open (segments `[id]`, `id: "3"`), layout events 1024 → 375 → 1024 leave `selectedId` `"3"` throughout.
     - At 375 with segments ending in `[id]`, there is no list pane and the detail route stays mounted. The mocked Stack renders no routes; T5's Playwright resize check proves the rendered detail.
     - Changed in Pick: `ListDetailIndex` keeps rendering `list` at 375 while the detail is open, because it is the index screen under the detail and swipe-back must reveal the list.
     - No router call is made during a resize.
   - Docs: the `ui.md` section notes that rotation and resize keep the open item, and that the list pane remounts (its scroll position resets; X5).
-  - Verification: `bun test --only-failures src/ListDetailLayout.test.tsx`.
+  - Verification: `bun test ./src/isolated/ListDetailLayout.isolated.tsx`.
 
 - [x] **T4** — Add the demo mail example, standalone and inside SidebarNavigation
   - Depends on: T2

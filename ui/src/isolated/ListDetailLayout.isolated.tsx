@@ -4,11 +4,11 @@ import * as expoRouterModule from "expo-router";
 import {useEffect} from "react";
 import {Text, useWindowDimensions} from "react-native";
 
-import type {ListDetailState} from "./Common";
-import {renderWithTheme} from "./test-utils";
+import type {ListDetailState} from "../Common";
+import {renderWithTheme} from "../test-utils";
 
-// Other test files replace the global expo-router mock without every hook this layout reads,
-// so this file installs its own route and router doubles and restores the original afterwards.
+// This file runs in its own process (src/isolated), so it can install route and router doubles
+// for the hooks this layout reads without affecting other suites.
 const originalExpoRouter = {...expoRouterModule};
 const mockedPathname = mock((): string => "/");
 const mockedSegments = mock((): string[] => []);
@@ -26,7 +26,7 @@ mock.module("expo-router", () => ({
   useSegments: mockedSegments,
 }));
 
-import {ListDetailIndex, ListDetailLayout, useListDetail} from "./ListDetailLayout";
+import {ListDetailIndex, ListDetailLayout, useListDetail} from "../ListDetailLayout";
 
 const mockedWindowDimensions = useWindowDimensions as unknown as Mock<typeof useWindowDimensions>;
 

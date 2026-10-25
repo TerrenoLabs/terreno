@@ -11,7 +11,7 @@ import {
   unwrapBatchList,
 } from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
-import {dimensionLabel, firstUnanswered, firstUnansweredBoolean} from "./reviewTypes";
+import {dimensionLabel, firstUnansweredBoolean} from "./reviewTypes";
 
 describe("batchTypes", () => {
   it("keeps pending and in-progress batch items in order as remaining work", () => {
@@ -66,9 +66,9 @@ describe("review question helpers", () => {
   it("labels by question and finds the next unanswered question", () => {
     expect(dimensionLabel(dimensions[0] as never)).toBe("Is A true?");
     expect(dimensionLabel(dimensions[1] as never)).toBe("b");
-    expect(firstUnanswered(dimensions, {})).toBe("a");
-    expect(firstUnanswered(dimensions, {a: false})).toBe("b");
-    expect(firstUnanswered(dimensions, {a: false, b: true})).toBeUndefined();
+    expect(firstUnansweredBoolean(dimensions, {})).toBe("a");
+    expect(firstUnansweredBoolean(dimensions, {a: false})).toBe("b");
+    expect(firstUnansweredBoolean(dimensions, {a: false, b: true})).toBeUndefined();
   });
 
   it("finds the next unanswered yes/no question past score fields", () => {

@@ -164,7 +164,7 @@ export const dimensionLabel = (dimension: EvaluatorDimension): string => {
 };
 
 /** Key of the first required-or-optional dimension still missing an answer. */
-export const firstUnanswered = (
+const firstUnanswered = (
   dimensions: EvaluatorDimension[],
   scores: Record<string, boolean | number | string>
 ): string | undefined => {

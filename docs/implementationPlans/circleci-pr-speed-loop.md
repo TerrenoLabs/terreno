@@ -114,24 +114,26 @@ Each iteration is one PR. Keep going until a stop rule fires.
 
 ### Benchmark set
 
-Five PRs replayed as branches. They are chosen to match the average-PR package
-mix. Refresh the set every 10 iterations.
+Five recent average PRs whose code still reverts cleanly on `master`. They
+cover the jobs that most often finish last (`api-ci` and the e2e chain). Refresh
+them with `bun run ci:bench --suggest-cases` every 10 iterations, or sooner when
+a case replays as `invalid`.
 
-| Case | Shape | Example from history |
+| Case | Shape | PR |
 |---|---|---|
-| `api-only` | `api` plus changelog and docs | #1596 |
-| `ui-only` | `ui` coverage and test change | #1612 |
-| `syncdb-only` | `syncdb` tests plus changelog | #1615 |
-| `api-example` | `api` plus `example-backend` | #1592 |
-| `small-package` | one small package (`test`) | #1620 |
+| `api-only` | `api` feature (plus changelog and docs) | #1491 |
+| `api-syncdb` | `api` plus `syncdb` | #1555 |
+| `ui-only` | `ui` component fix | #1567 |
+| `admin-example` | `admin-frontend` plus `example-frontend` | #1540 |
+| `small-package` | `create-terreno-app` | #1599 |
 
 Mechanics: `bun run ci:bench --branch <branch> --label <iteration>` (see
 [benchmark a CI change](../how-to/circleci.md#benchmark-a-ci-change)). For each
 case it opens two draft PRs labelled `ci-bench`, waits for CircleCI to settle,
 records the metric, and closes both PRs:
 
-- **Control:** `master`, with the case's files rewound.
-- **Treatment:** the branch under test, with the case's files rewound.
+- **Control:** `master` with the case's code hunks reverted.
+- **Treatment:** the branch under test with the case's code hunks reverted.
 
 The case list lives in `scripts/ci/bench/cases.ts`.
 

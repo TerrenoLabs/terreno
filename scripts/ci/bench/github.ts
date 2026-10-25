@@ -23,18 +23,32 @@ const parseNameStatus = (output: string): FileChange[] => {
 };
 
 const exec = ({args, command, cwd}: {args: string[]; command: string; cwd: string}): string =>
-  execFileSync(command, args, {cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024});
+  execFileSync(command, args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
 
 export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter => {
   const git = (args: string[], cwd = repoRoot): string => exec({args, command: "git", cwd});
   const gh = (args: string[]): string => exec({args, command: "gh", cwd: repoRoot});
   const statuses = githubPullRequestSource({cwd: repoRoot});
+  const caseDiff = ({
+    mergeSha,
+    parentSha,
+    paths,
+  }: {
+    mergeSha: string;
+    parentSha: string;
+    paths: string[];
+  }): string => git(["diff", "--binary", "--no-renames", parentSha, mergeSha, "--", ...paths]);
   let isLabelReady = false;
 
   return {
     caseChanges: async (
       pullRequest: number
-    ): Promise<{changes: FileChange[]; parentSha: string}> => {
+    ): Promise<{changes: FileChange[]; mergeSha: string; parentSha: string}> => {
       const mergeSha = gh([
         "pr",
         "view",
@@ -51,7 +65,7 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
       const changes = parseNameStatus(
         git(["diff", "-z", "--no-renames", "--name-status", parentSha, mergeSha])
       );
-      return {changes, parentSha};
+      return {changes, mergeSha, parentSha};
     },
     closePullRequest: async ({number}: {branch: string; number: number}): Promise<void> => {
       gh(["pr", "close", String(number), "--delete-branch"]);
@@ -108,22 +122,30 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
       const worktree = mkdtempSync(join(tmpdir(), "ci-bench-"));
       try {
         git(["worktree", "add", "--quiet", "--detach", worktree, baseRef]);
+        // Revert first, then pick touch targets from the reverted tree, so a touch never
+        // lands on a file the revert just removed.
+        for (const operation of operations) {
+          if (operation.kind === "revert") {
+            execFileSync("git", ["apply", "-R", "--index"], {
+              cwd: worktree,
+              input: caseDiff(operation),
+              stdio: ["pipe", "pipe", "pipe"],
+            });
+          }
+        }
         const trackedFiles = git(["ls-files", "-z"], worktree).split("\0").filter(Boolean);
         const touched = new Set<string>();
         for (const operation of operations) {
-          if (operation.kind === "restore") {
-            git(["checkout", operation.sha, "--", operation.path], worktree);
-          } else if (operation.kind === "remove") {
-            git(["rm", "--quiet", "--ignore-unmatch", "--", operation.path], worktree);
-          } else {
-            const target = nearestTouchTarget({path: operation.path, trackedFiles});
-            if (target === undefined || touched.has(target)) {
-              continue;
-            }
-            touched.add(target);
-            appendFileSync(join(worktree, target), touchLine(target));
-            git(["add", "--", target], worktree);
+          if (operation.kind !== "touch") {
+            continue;
           }
+          const target = nearestTouchTarget({path: operation.path, trackedFiles});
+          if (target === undefined || touched.has(target)) {
+            continue;
+          }
+          touched.add(target);
+          appendFileSync(join(worktree, target), touchLine(target));
+          git(["add", "--", target], worktree);
         }
         git(
           ["commit", "--quiet", "--allow-empty", "--no-verify", "-m", `ci-bench: ${name}`],
@@ -134,6 +156,26 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
       } finally {
         git(["worktree", "remove", "--force", worktree]);
         rmSync(worktree, {force: true, recursive: true});
+      }
+    },
+    revertConflicts: async ({mergeSha, parentSha, paths}): Promise<string | undefined> => {
+      // Check against a throwaway index of master: no checkout needed.
+      const indexDirectory = mkdtempSync(join(tmpdir(), "ci-bench-index-"));
+      const env = {...process.env, GIT_INDEX_FILE: join(indexDirectory, "index")};
+      try {
+        execFileSync("git", ["read-tree", MASTER_REF], {cwd: repoRoot, env});
+        execFileSync("git", ["apply", "-R", "--cached", "--check"], {
+          cwd: repoRoot,
+          env,
+          input: caseDiff({mergeSha, parentSha, paths}),
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        return undefined;
+      } catch (error) {
+        const stderr = (error as {stderr?: Buffer}).stderr?.toString().trim();
+        return stderr?.split("\n")[0] || String(error);
+      } finally {
+        rmSync(indexDirectory, {force: true, recursive: true});
       }
     },
     sleep: (milliseconds: number): Promise<void> =>

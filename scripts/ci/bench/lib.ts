@@ -2,17 +2,22 @@
  * Benchmark replay for the CircleCI PR speed loop
  * (docs/implementationPlans/circleci-pr-speed-loop.md).
  *
- * A bench case is a past average PR. Replaying it opens a draft PR whose diff against
- * `master` touches the same files with real code: every file the case changed is rewound
- * to its content before the case merged. Cherry-picking the case would be a no-op on
- * current master, and comment-only edits would not trigger the e2e affected gate, which
- * strips comments.
+ * A bench case is a past average PR. Replaying it opens a draft PR that reverts the case's
+ * hunks, so its diff against `master` touches the same files with real code. Cherry-picking
+ * the case would be a no-op on current master, and comment-only edits would not trigger the
+ * e2e affected gate, which strips comments.
  *
  * The treatment PR branches from the branch under test. The control PR branches from
  * `master` and touches the files the branch under test changes, so path filtering starts
  * the same workflows for both.
  */
-import {type CommitStatus, finalTestJobStatuses, measureCiWallClock} from "../ciWallClock/lib";
+import {
+  type CommitStatus,
+  finalTestJobStatuses,
+  type MergedPullRequest,
+  measureCiWallClock,
+  topLevelDirectories,
+} from "../ciWallClock/lib";
 
 export interface BenchCase {
   name: string;
@@ -26,8 +31,8 @@ export interface FileChange {
 }
 
 export type BranchOperation =
-  | {kind: "restore"; path: string; sha: string}
-  | {kind: "remove"; path: string}
+  /** Reverse-apply the case PR's diff (`parentSha..mergeSha`), limited to `paths`. */
+  | {kind: "revert"; mergeSha: string; parentSha: string; paths: string[]}
   | {kind: "touch"; path: string};
 
 export type BenchRole = "control" | "treatment";
@@ -47,11 +52,19 @@ export interface BenchResult {
 
 /** git and GitHub side effects, injected so the replay logic is testable. */
 export interface BenchAdapter {
-  caseChanges: (pullRequest: number) => Promise<{changes: FileChange[]; parentSha: string}>;
+  caseChanges: (
+    pullRequest: number
+  ) => Promise<{changes: FileChange[]; mergeSha: string; parentSha: string}>;
   closePullRequest: (pullRequest: {branch: string; number: number}) => Promise<void>;
   deleteBranch: (branch: string) => Promise<void>;
   /** Files the branch under test changes relative to master, with their status. */
   experimentFiles: (branch: string) => Promise<FileChange[]>;
+  /** Why the case's reverse patch does not apply cleanly to master; undefined when it does. */
+  revertConflicts: (revert: {
+    mergeSha: string;
+    parentSha: string;
+    paths: string[];
+  }) => Promise<string | undefined>;
   listStatuses: (sha: string) => Promise<CommitStatus[]>;
   now: () => number;
   openDraftPullRequest: (pullRequest: {branch: string; title: string}) => Promise<number>;
@@ -126,28 +139,37 @@ export const nearestTouchTarget = ({
 };
 
 /**
- * Files the branch under test changes keep the branch's version in both roles. Rewinding
- * them would undo the experiment.
+ * Docs, changelog, and website edits only drive the docs preview, which the metric ignores,
+ * and later docs work makes most old reverts conflict. Replays leave them out.
+ */
+const NON_REPLAYED_PREFIXES = ["docs/", "changelog/", "website/"];
+
+const replayPaths = (changes: FileChange[]): string[] =>
+  changes
+    .map((change) => change.path)
+    .filter((path) => !NON_REPLAYED_PREFIXES.some((prefix) => path.startsWith(prefix)));
+
+/**
+ * Both roles undo the case PR's own hunks, keeping any later work in the same files. Files
+ * the branch under test changes are left alone: reverting them would undo the experiment.
  */
 export const planBenchBranch = ({
   changes,
   experimentFiles,
+  mergeSha,
   parentSha,
   role,
 }: {
   changes: FileChange[];
   experimentFiles: FileChange[];
+  mergeSha: string;
   parentSha: string;
   role: BenchRole;
 }): BranchOperation[] => {
   const experiment = new Set(experimentFiles.map((change) => change.path));
-  const operations: BranchOperation[] = changes
-    .filter((change) => !experiment.has(change.path))
-    .map((change) =>
-      change.status === "A"
-        ? {kind: "remove", path: change.path}
-        : {kind: "restore", path: change.path, sha: parentSha}
-    );
+  const paths = replayPaths(changes).filter((path) => !experiment.has(path));
+  const operations: BranchOperation[] =
+    paths.length > 0 ? [{kind: "revert", mergeSha, parentSha, paths}] : [];
   if (role === "treatment") {
     return operations;
   }
@@ -270,7 +292,20 @@ export const runBenchCase = async ({
   runIndex: number;
   timeoutMs: number;
 }): Promise<BenchResult[]> => {
-  const {changes, parentSha} = await adapter.caseChanges(benchCase.pullRequest);
+  const {changes, mergeSha, parentSha} = await adapter.caseChanges(benchCase.pullRequest);
+  // A case whose reverse patch conflicts with later work cannot be replayed. Refuse before
+  // pushing anything.
+  const conflict = await adapter.revertConflicts({
+    mergeSha,
+    parentSha,
+    paths: replayPaths(changes),
+  });
+  if (conflict !== undefined) {
+    throw new Error(
+      `#${benchCase.pullRequest} no longer reverts cleanly on master (${conflict}). ` +
+        "Run `bun run ci:bench --suggest-cases` and update scripts/ci/bench/cases.ts"
+    );
+  }
   const isMaster = branch === MASTER_REF;
   const experimentFiles = isMaster ? [] : await adapter.experimentFiles(branch);
   const roles: BenchRole[] = isMaster ? ["control"] : ["control", "treatment"];
@@ -285,7 +320,7 @@ export const runBenchCase = async ({
       const {headSha} = await adapter.prepareBranch({
         baseRef: role === "control" ? MASTER_REF : branch,
         name,
-        operations: planBenchBranch({changes, experimentFiles, parentSha, role}),
+        operations: planBenchBranch({changes, experimentFiles, mergeSha, parentSha, role}),
       });
       const entry: (typeof pushed)[number] = {branch: name, headSha, role};
       pushed.push(entry);
@@ -327,12 +362,58 @@ export const runBenchCase = async ({
     }
   }
   if (failure !== undefined) {
-    throw failure;
+    if (cleanupErrors.length === 0) {
+      throw failure;
+    }
+    throw new Error(`${errorMessage(failure)}; cleanup failed: ${cleanupErrors.join("; ")}`, {
+      cause: failure,
+    });
   }
   if (cleanupErrors.length === 0) {
     return results;
   }
   return results.map((result) => ({...result, cleanupError: cleanupErrors.join("; ")}));
+};
+
+/**
+ * Recent average PRs that can be replayed: they touch 1 to `maxDirectories` top-level
+ * directories and their diff still reverse-applies cleanly to master.
+ */
+export const suggestBenchCases = async ({
+  adapter,
+  limit,
+  maxDirectories,
+  pullRequests,
+}: {
+  adapter: Pick<BenchAdapter, "caseChanges" | "revertConflicts">;
+  limit: number;
+  maxDirectories: number;
+  pullRequests: MergedPullRequest[];
+}): Promise<{directories: string[]; pullRequest: number}[]> => {
+  const suggestions: {directories: string[]; pullRequest: number}[] = [];
+  for (const pullRequest of pullRequests) {
+    if (suggestions.length >= limit) {
+      break;
+    }
+    const directories = topLevelDirectories(pullRequest.files);
+    if (directories.length === 0 || directories.length > maxDirectories) {
+      continue;
+    }
+    try {
+      const {changes, mergeSha, parentSha} = await adapter.caseChanges(pullRequest.number);
+      const conflict = await adapter.revertConflicts({
+        mergeSha,
+        parentSha,
+        paths: replayPaths(changes),
+      });
+      if (conflict === undefined) {
+        suggestions.push({directories, pullRequest: pullRequest.number});
+      }
+    } catch {
+      // Merged into another branch (a stacked PR), so it has no merge commit on master.
+    }
+  }
+  return suggestions;
 };
 
 const median = (values: number[]): number => {

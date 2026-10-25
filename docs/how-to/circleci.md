@@ -544,6 +544,7 @@ The speed goal and loop that use this metric are in
 bun run ci:bench --branch origin/master --label baseline           # master only
 bun run ci:bench --branch ci-speed/1-cache --label iter1           # control vs treatment
 bun run ci:bench --branch ci-speed/1-cache --label iter1 --cases api-only --runs 1
+bun run ci:bench --suggest-cases                                   # replayable cases for cases.ts
 ```
 
 The command needs an authenticated `gh` and push access. The branch under test
@@ -551,13 +552,17 @@ must contain `origin/master`; otherwise it would run an older job set. For each
 case in `scripts/ci/bench/cases.ts`, run by run, it:
 
 1. Builds `ci-bench/<label>/<case>-<run>-control` from `master` and
-   `…-treatment` from the branch under test, in a temporary worktree. Every
-   file the case PR changed is rewound to its content before that PR merged,
-   so the replay diff touches the same files with real code. The control also
+   `…-treatment` from the branch under test, in a temporary worktree. Both
+   reverse-apply the case PR's diff, so the replay touches the same files with
+   real code and keeps later work in those files. `docs/`, `changelog/`, and
+   `website/` are left out: they only drive the docs preview. A case whose code
+   no longer reverts cleanly on `master` is refused before anything is pushed. The control also
    appends a comment to each file the branch under test changes, so path
    filtering starts the same workflows for both. A file `master` does not have
    yet maps to the nearest existing file with comment syntax in the same
-   directory or a parent. If there is none, the touch is skipped.
+   directory or a parent. If there is none, the touch is skipped. This mirror
+   is best-effort: a touch that lands in a parent directory can start a
+   different set of path filters than the new file does.
 2. Opens both as draft PRs labelled `ci-bench`. Preview deploys skip
    `ci-bench/*` branches.
 3. Waits until every counted job has finished and no status has changed for
@@ -570,7 +575,7 @@ case in `scripts/ci/bench/cases.ts`, run by run, it:
 | Result | Meaning |
 | --- | --- |
 | `ok` | Every counted job succeeded; the run counts |
-| `invalid` | A counted job failed, usually because the rewound code no longer builds on current master. Swap the case in `cases.ts` |
+| `invalid` | A counted job failed, usually because later code depends on what the replay reverted. Swap the case in `cases.ts` |
 | `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
 
 Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary

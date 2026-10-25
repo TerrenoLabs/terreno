@@ -6,6 +6,7 @@
  * Usage:
  *   bun run ci:bench --branch ci-speed/1-cache --label iter1
  *   bun run ci:bench --branch origin/master --label baseline --cases api-only,ui-only --runs 1
+ *   bun run ci:bench --suggest-cases            # replayable recent average PRs for cases.ts
  *
  * Results append to .terreno/ci-bench/<label>.jsonl. See
  * docs/how-to/circleci.md#benchmark-a-ci-change.
@@ -14,9 +15,10 @@ import {execFileSync} from "node:child_process";
 import {appendFileSync, mkdirSync} from "node:fs";
 import {join} from "node:path";
 
+import {githubPullRequestSource} from "../ciWallClock/github";
 import {BENCH_CASES} from "./cases";
 import {githubBenchAdapter} from "./github";
-import {type BenchResult, MASTER_REF, runBenchCase, summarizeBench} from "./lib";
+import {type BenchResult, MASTER_REF, runBenchCase, suggestBenchCases, summarizeBench} from "./lib";
 
 const REPO_ROOT = join(import.meta.dir, "..", "..", "..");
 const MINUTE = 60_000;
@@ -25,6 +27,21 @@ const readOption = (name: string): string | undefined => {
   const index = process.argv.indexOf(`--${name}`);
   return index === -1 ? undefined : process.argv[index + 1];
 };
+
+if (process.argv.includes("--suggest-cases")) {
+  execFileSync("git", ["fetch", "--quiet", "origin", "master"], {cwd: REPO_ROOT});
+  const suggestions = await suggestBenchCases({
+    adapter: githubBenchAdapter({repoRoot: REPO_ROOT}),
+    limit: 10,
+    maxDirectories: 3,
+    pullRequests: await githubPullRequestSource({cwd: REPO_ROOT}).listMergedPullRequests(200),
+  });
+  console.info("Replayable recent average PRs (newest first):");
+  for (const {directories, pullRequest} of suggestions) {
+    console.info(`  #${pullRequest}  ${directories.join(", ")}`);
+  }
+  process.exit(0);
+}
 
 const branch = readOption("branch");
 const label = readOption("label");

@@ -108,7 +108,7 @@ export const finalTestJobStatuses = ({
 };
 
 /** Directories a PR touches, not counting docs, the website, dot-directories, or root files. */
-export const countTopLevelDirectories = (paths: string[]): number => {
+export const topLevelDirectories = (paths: string[]): string[] => {
   const directories = new Set<string>();
   for (const path of paths) {
     const [first, ...rest] = path.split("/");
@@ -117,8 +117,11 @@ export const countTopLevelDirectories = (paths: string[]): number => {
     }
     directories.add(first);
   }
-  return directories.size;
+  return [...directories].sort();
 };
+
+export const countTopLevelDirectories = (paths: string[]): number =>
+  topLevelDirectories(paths).length;
 
 const medianOf = (sorted: number[]): number => {
   const middle = Math.floor(sorted.length / 2);

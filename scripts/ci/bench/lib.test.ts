@@ -7,6 +7,7 @@ import {
   nearestTouchTarget,
   planBenchBranch,
   runBenchCase,
+  suggestBenchCases,
   summarizeBench,
   touchLine,
 } from "./lib";
@@ -31,6 +32,10 @@ interface FakeRun {
 interface FakeFailures {
   /** Branch names whose PR close throws. */
   closeFails?: string[];
+  /** Branch deletion throws. */
+  deleteFails?: boolean;
+  /** Why the case's reverse patch does not apply to master. */
+  revertConflict?: string;
   /** Role whose PR fails to open after its branch was pushed. */
   openFailsFor?: "control" | "treatment";
   /** Head shas whose status reads throw: a number of times, or always. */
@@ -55,6 +60,7 @@ const fakeAdapter = ({
         {path: "api/src/api.ts", status: "M"},
         {path: "api/src/newThing.ts", status: "A"},
       ],
+      mergeSha: "merge1",
       parentSha: "parent1",
     }),
     closePullRequest: async (pullRequest) => {
@@ -64,6 +70,9 @@ const fakeAdapter = ({
       run.closed.push(pullRequest);
     },
     deleteBranch: async (branch) => {
+      if (failures.deleteFails) {
+        throw new Error(`git push --delete ${branch} failed`);
+      }
       run.deleted.push(branch);
     },
     experimentFiles: async () => [{path: ".circleci/continue-config.yml", status: "M"}],
@@ -90,6 +99,7 @@ const fakeAdapter = ({
       run.prepared.push({baseRef, name, operations});
       return {headSha: name.endsWith("control") ? "control-sha" : "treatment-sha"};
     },
+    revertConflicts: async () => failures.revertConflict,
     sleep: async (milliseconds) => {
       clock += milliseconds;
     },
@@ -124,26 +134,39 @@ describe("touchLine", () => {
 });
 
 describe("planBenchBranch", () => {
-  it("rewinds the case PR's files in both roles and mirrors the experiment's files in the control", () => {
+  it("reverts the case PR's code hunks in both roles and mirrors the experiment's files in the control", () => {
     const changes = [
       {path: "api/src/api.ts", status: "M"},
       {path: "api/src/newThing.ts", status: "A"},
       {path: ".circleci/continue-config.yml", status: "M"},
+      {path: "docs/reference/api.md", status: "M"},
+      {path: "changelog/unreleased/x.md", status: "A"},
     ];
     const experimentFiles = [
       {path: ".circleci/continue-config.yml", status: "M"},
       {path: "scripts/ci/bench/lib.ts", status: "A"},
     ];
 
-    expect(planBenchBranch({changes, experimentFiles, parentSha: "p1", role: "treatment"})).toEqual(
-      [
-        {kind: "restore", path: "api/src/api.ts", sha: "p1"},
-        {kind: "remove", path: "api/src/newThing.ts"},
-      ]
-    );
-    expect(planBenchBranch({changes, experimentFiles, parentSha: "p1", role: "control"})).toEqual([
-      {kind: "restore", path: "api/src/api.ts", sha: "p1"},
-      {kind: "remove", path: "api/src/newThing.ts"},
+    const revert = {
+      kind: "revert",
+      mergeSha: "m1",
+      parentSha: "p1",
+      paths: ["api/src/api.ts", "api/src/newThing.ts"],
+    };
+
+    expect(
+      planBenchBranch({
+        changes,
+        experimentFiles,
+        mergeSha: "m1",
+        parentSha: "p1",
+        role: "treatment",
+      })
+    ).toEqual([revert]);
+    expect(
+      planBenchBranch({changes, experimentFiles, mergeSha: "m1", parentSha: "p1", role: "control"})
+    ).toEqual([
+      revert,
       {kind: "touch", path: ".circleci/continue-config.yml"},
       {kind: "touch", path: "scripts/ci/bench/lib.ts"},
     ]);
@@ -380,6 +403,70 @@ describe("runBenchCase failure handling", () => {
     expect(results.map((result) => result.cleanupError)).toEqual([
       "ci-bench/iter1/api-only-1-control: gh pr close 901 failed",
       "ci-bench/iter1/api-only-1-control: gh pr close 901 failed",
+    ]);
+  });
+});
+
+describe("runBenchCase stale cases", () => {
+  it("refuses a case that no longer reverts cleanly on master, before pushing anything", async () => {
+    const {adapter, run} = fakeAdapter({
+      failures: {revertConflict: "error: patch failed: api/src/api.ts:12"},
+      timelines: {},
+    });
+
+    await expect(runBenchCase({adapter, ...BENCH})).rejects.toThrow(
+      "#1596 no longer reverts cleanly on master (error: patch failed: api/src/api.ts:12). Run `bun run ci:bench --suggest-cases` and update scripts/ci/bench/cases.ts"
+    );
+    expect(run.prepared).toEqual([]);
+  });
+
+  it("reports a cleanup failure together with the error that stopped the case", async () => {
+    const {adapter} = fakeAdapter({
+      failures: {deleteFails: true, openFailsFor: "treatment"},
+      timelines: {},
+    });
+
+    await expect(runBenchCase({adapter, ...BENCH})).rejects.toThrow(
+      "gh pr create failed; cleanup failed: ci-bench/iter1/api-only-1-treatment: git push --delete ci-bench/iter1/api-only-1-treatment failed"
+    );
+  });
+});
+
+describe("suggestBenchCases", () => {
+  it("lists recent average PRs on master that still revert cleanly", async () => {
+    const {adapter} = fakeAdapter({timelines: {}});
+    const conflicts: Record<string, string> = {"merge-11": "error: patch failed: api/src/api.ts:3"};
+    const suggestions = await suggestBenchCases({
+      adapter: {
+        ...adapter,
+        caseChanges: async (pullRequest) => {
+          if (pullRequest === 9) {
+            throw new Error("merge commit is not on master");
+          }
+          return {
+            changes: [{path: "api/src/api.ts", status: "M"}],
+            mergeSha: `merge-${pullRequest}`,
+            parentSha: `parent-${pullRequest}`,
+          };
+        },
+        revertConflicts: async ({mergeSha}) => conflicts[mergeSha],
+      },
+      limit: 2,
+      maxDirectories: 3,
+      pullRequests: [
+        {files: ["rtk/src/stacked.ts"], headSha: "h9", number: 9},
+        {files: ["api/src/api.ts"], headSha: "h10", number: 10},
+        {files: ["api/src/api.ts"], headSha: "h11", number: 11},
+        {files: ["docs/how-to/x.md", "website/a.ts"], headSha: "h12", number: 12},
+        {files: ["a/x.ts", "b/x.ts", "c/x.ts", "d/x.ts"], headSha: "h13", number: 13},
+        {files: ["ui/src/Box.tsx", "changelog/x.md"], headSha: "h14", number: 14},
+        {files: ["rtk/src/a.ts"], headSha: "h15", number: 15},
+      ],
+    });
+
+    expect(suggestions).toEqual([
+      {directories: ["api"], pullRequest: 10},
+      {directories: ["changelog", "ui"], pullRequest: 14},
     ]);
   });
 });

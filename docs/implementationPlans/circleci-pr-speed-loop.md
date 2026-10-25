@@ -125,10 +125,15 @@ mix. Refresh the set every 10 iterations.
 | `api-example` | `api` plus `example-backend` | #1592 |
 | `small-package` | one small package (`test`) | #1620 |
 
-Mechanics: `scripts/ci/bench/replay.ts <case> <branch>` creates
-`ci-bench/<n>/<case>`. That branch is the branch under test plus the case's
-diff. The script opens it as a draft PR labelled `ci-bench`, waits for
-CircleCI, records the metric, and closes the PR.
+Mechanics: `bun run ci:bench --branch <branch> --label <iteration>` (see
+[benchmark a CI change](../how-to/circleci.md#benchmark-a-ci-change)). For each
+case it opens two draft PRs labelled `ci-bench`, waits for CircleCI to settle,
+records the metric, and closes both PRs:
+
+- **Control:** `master`, with the case's files rewound.
+- **Treatment:** the branch under test, with the case's files rewound.
+
+The case list lives in `scripts/ci/bench/cases.ts`.
 
 ### Ledger
 
@@ -147,7 +152,7 @@ timings.
 
 - Add `bun run ci:wall-clock` (`scripts/ci/ciWallClock/`), with tests, from
   the measurement used for the baseline above.
-- Add `scripts/ci/bench/replay.ts`.
+- Add `bun run ci:bench` (`scripts/ci/bench/`).
 - Pull step-level timings for `api-ci`, `e2e-prepare`, `e2e-app`,
   `maestro-e2e`, and `example-backend-docker`. Record how much of each is
   checkout, `bun install`, dependency compile, lint, typecheck, and tests.

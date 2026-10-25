@@ -81,6 +81,7 @@ website/node_modules/
 .terreno-skills-sync/
 .terreno/pipeline/
 .terreno/scan/
+.terreno/ci-bench/
 .roast-probe/
 demo/chart-visual-output/
 .terreno/brewery/

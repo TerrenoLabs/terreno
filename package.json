@@ -237,6 +237,7 @@
     "check:whats-new": "bun run scripts/whats-new/generate.ts --check",
     "changelog:assemble": "bun run scripts/changelog/assemble.ts",
     "changelog:preview": "bun run scripts/changelog/preview.ts",
+    "ci:bench": "bun run scripts/ci/bench/check.ts",
     "ci:wall-clock": "bun run scripts/ci/ciWallClock/check.ts",
     "whats-new:generate": "bun run scripts/whats-new/generate.ts",
     "cli:compile": "bun run --filter '@terreno/cli' compile",

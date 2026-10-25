@@ -62,22 +62,9 @@ export const measureCiWallClock = ({
   }
   const start = Math.min(...circleStatuses.map((status) => Date.parse(status.created_at)));
 
-  // Statuses for one job, newest first: the newest decides whether the job is still running.
-  const byJob = new Map<string, CommitStatus[]>();
-  for (const status of circleStatuses) {
-    const job = status.context.slice(CIRCLECI_PREFIX.length);
-    if (!isTestJob(job)) {
-      continue;
-    }
-    byJob.set(job, [...(byJob.get(job) ?? []), status]);
-  }
-
   let lastJob: string | undefined;
   let end = 0;
-  for (const [job, jobStatuses] of byJob) {
-    const newest = [...jobStatuses].sort(
-      (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || (b.id ?? 0) - (a.id ?? 0)
-    )[0];
+  for (const [job, newest] of finalTestJobStatuses({statuses})) {
     if (newest.state === "pending") {
       return undefined;
     }
@@ -91,6 +78,33 @@ export const measureCiWallClock = ({
     return undefined;
   }
   return {lastJob, minutes: roundMinutes(end - start)};
+};
+
+/** The newest status of each CircleCI test or build job: it says whether the job is still running. */
+export const finalTestJobStatuses = ({
+  statuses,
+}: {
+  statuses: CommitStatus[];
+}): Map<string, CommitStatus> => {
+  const newestByJob = new Map<string, CommitStatus>();
+  for (const status of statuses) {
+    if (!status.context.startsWith(CIRCLECI_PREFIX)) {
+      continue;
+    }
+    const job = status.context.slice(CIRCLECI_PREFIX.length);
+    if (!isTestJob(job)) {
+      continue;
+    }
+    const current = newestByJob.get(job);
+    const isNewer =
+      !current ||
+      Date.parse(status.created_at) - Date.parse(current.created_at) > 0 ||
+      (status.created_at === current.created_at && (status.id ?? 0) > (current.id ?? 0));
+    if (isNewer) {
+      newestByJob.set(job, status);
+    }
+  }
+  return newestByJob;
 };
 
 /** Directories a PR touches, not counting docs, the website, dot-directories, or root files. */

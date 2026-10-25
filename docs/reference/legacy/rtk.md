@@ -284,6 +284,7 @@ useEffect(() => {
 - `onConnectError` (function) — Callback on connection error
 - `onReconnectFailed` (function) — Callback after all reconnection attempts fail
 - `captureEvent` (function) — Analytics event tracking (optional)
+- `transports` (string[]) — Socket.IO transports in order. Default `["polling", "websocket"]`. Pass `["websocket"]` for hosts without session affinity, such as Vercel Functions ([details](../../how-to/vercel-function-websockets.md))
 
 **Returns:**
 - `socket` (Socket | null) — Socket.io client instance

@@ -191,7 +191,7 @@ example-backend Dockerfile with CI validation.
 **Title:** `Deploy to Vercel`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Released`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Shipped`
 
 Documents Expo web export on Vercel, preview-deployment CORS and Better Auth origin handling,
 Vercel Functions WebSockets (Public Beta) operator docs, and a deploy-vercel skill with

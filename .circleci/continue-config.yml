@@ -2500,7 +2500,7 @@ workflows:
     jobs:
       - packages-ci:
           package: test
-          compile-deps: blocks ui
+          compile-deps: blocks ui api
 
   repo-policies:
     when: << pipeline.parameters.run-repo-policies >>

@@ -37,7 +37,12 @@ const hapticsOverride = mock(() => Promise.resolve());
 const sharedOptions = {
   expoConfig: {extra: {AUTH_DEBUG: true}, scheme: "terrenotest"},
   overrides: {
-    "expo-haptics": () => ({impactAsync: hapticsOverride}),
+    // Bun shares module mocks across files in one run, so the override keeps the
+    // full expo-haptics shape that @terreno/ui's Button relies on in later files.
+    "expo-haptics": () => ({
+      ImpactFeedbackStyle: {Heavy: "heavy", Light: "light", Medium: "medium"},
+      impactAsync: hapticsOverride,
+    }),
     "terreno-nested-only": () => ({source: "mock"}),
   },
   skip: ["expo-updates"],
@@ -76,7 +81,7 @@ describe("registerExpoTestEnvironment", () => {
 
   it("uses overrides in place of the defaults", async () => {
     const haptics = await import("expo-haptics");
-    await haptics.impactAsync(haptics.ImpactFeedbackStyle?.Light);
+    await haptics.impactAsync(haptics.ImpactFeedbackStyle.Light);
     expect(hapticsOverride).toHaveBeenCalled();
   });
 

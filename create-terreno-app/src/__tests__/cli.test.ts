@@ -406,4 +406,20 @@ describe("isEntryPoint", () => {
       rmSync(dir, {force: true, recursive: true});
     }
   });
+
+  test("matches when the module URL itself goes through a symlinked directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cta-entry-"));
+    try {
+      const realDir = join(dir, "real");
+      mkdirSync(realDir);
+      writeFileSync(join(realDir, "cli.js"), "");
+      const linkedDir = join(dir, "linked");
+      symlinkSync(realDir, linkedDir);
+      const moduleUrl = pathToFileURL(join(linkedDir, "cli.js")).href;
+      assert.isTrue(isEntryPoint(moduleUrl, join(realDir, "cli.js")));
+      assert.isTrue(isEntryPoint(moduleUrl, join(linkedDir, "cli.js")));
+    } finally {
+      rmSync(dir, {force: true, recursive: true});
+    }
+  });
 });

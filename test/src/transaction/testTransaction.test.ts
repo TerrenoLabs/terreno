@@ -155,6 +155,21 @@ describe("testTransaction", () => {
     await abortTestTransaction();
   });
 
+  it("saves varargs creates in order as the first write of a transaction", async () => {
+    installTransactionPatches();
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await startTestTransaction();
+      const created = (await TxWidget.create(
+        {name: "tx-v1"},
+        {name: "tx-v2"},
+        {name: "tx-v3"}
+      )) as unknown as Array<{name: string}>;
+      expect(created.map((doc) => doc.name)).toEqual(["tx-v1", "tx-v2", "tx-v3"]);
+      expect(await TxWidget.countDocuments({name: /^tx-v/})).toBe(3);
+      await abortTestTransaction();
+    }
+  });
+
   it("runs document deleteOne middleware inside a test transaction", async () => {
     installTransactionPatches();
     await startTestTransaction();
@@ -211,6 +226,37 @@ describe("testTransaction", () => {
     await startTestTransaction();
     expect(getTestSession()).toBeTruthy();
     expect(await TxWidget.countDocuments({})).toBe(0);
+    await abortTestTransaction();
+  });
+
+  it("ignores a quarantined holder's release once the next test owns the mutex", async () => {
+    installTransactionPatches();
+    await startTestTransaction();
+    const staleGate = createGate();
+    findGate = staleGate.promise;
+    const staleHolder = settle(TxHoldWidget.find({}).exec());
+    await settle(abortTestTransaction({drainTimeoutMs: 50}));
+
+    // The next test takes the mutex and queues a second operation behind it.
+    await startTestTransaction();
+    const freshGate = createGate();
+    findGate = freshGate.promise;
+    const freshHolder = settle(TxHoldWidget.find({}).exec());
+    let isQueuedSettled = false;
+    const queued = settle(TxWidget.countDocuments({}).exec()).then((result) => {
+      isQueuedSettled = true;
+      return result;
+    });
+
+    // The stale holder finishing must not hand the mutex to the queued operation.
+    staleGate.open();
+    await staleHolder;
+    await Promise.race([queued, new Promise((resolve) => setTimeout(resolve, 200))]);
+    expect(isQueuedSettled).toBe(false);
+
+    freshGate.open();
+    expect((await freshHolder).error).toBeUndefined();
+    expect((await queued).value).toBe(0);
     await abortTestTransaction();
   });
 

@@ -111,7 +111,7 @@ const serializationContext = new AsyncLocalStorage<{owner: object}>();
 
 interface MutexWaiter {
   reject: (error: Error) => void;
-  resolve: () => void;
+  resolve: (generation: number) => void;
 }
 
 /**
@@ -121,21 +121,31 @@ interface MutexWaiter {
 class AsyncMutex {
   private queue: MutexWaiter[] = [];
   private locked = false;
+  /**
+   * Bumped by {@link reset}. A holder releases with the generation it acquired
+   * in, so a holder stranded by a reset cannot unlock (or hand off) a mutex that
+   * a later test now owns.
+   */
+  private generation = 0;
 
-  async acquire(): Promise<void> {
+  /** Resolves with the generation the lock was granted in; pass it to {@link release}. */
+  async acquire(): Promise<number> {
     if (!this.locked) {
       this.locked = true;
-      return;
+      return this.generation;
     }
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<number>((resolve, reject) => {
       this.queue.push({reject, resolve});
     });
   }
 
-  release(): void {
+  release(generation: number): void {
+    if (generation !== this.generation) {
+      return;
+    }
     const next = this.queue.shift();
     if (next) {
-      next.resolve();
+      next.resolve(this.generation);
     } else {
       this.locked = false;
     }
@@ -153,6 +163,7 @@ class AsyncMutex {
     const stranded = this.queue;
     this.queue = [];
     this.locked = false;
+    this.generation++;
     for (const waiter of stranded) {
       waiter.reject(new TestTransactionOperationCancelledError());
     }
@@ -405,7 +416,7 @@ const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
     let hasRetried = false;
 
     while (true) {
-      await sessionMutex.acquire();
+      const generation = await sessionMutex.acquire();
       const owner = {};
       currentMutexOwner = owner;
       try {
@@ -442,7 +453,7 @@ const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
         if (currentMutexOwner === owner) {
           currentMutexOwner = null;
         }
-        sessionMutex.release();
+        sessionMutex.release(generation);
       }
     }
   };
@@ -490,7 +501,7 @@ export const startTestTransaction = async (): Promise<void> => {
 };
 
 export interface AbortTestTransactionOptions {
-  /** How long to wait for in-flight and queued operations to settle. Defaults to 5000ms. */
+  /** How long to wait for in-flight and queued operations to settle. Defaults to 3000ms. */
   drainTimeoutMs?: number;
 }
 
@@ -730,6 +741,16 @@ export const installTransactionPatches = (): void => {
   // match any in-progress transactions"). Mongoose enforces the same constraint
   // itself for explicitly-passed sessions — our session is injected lower down,
   // at `$save`, so that guard never sees it.
+  // Varargs (`create(doc1, doc2)`) cannot carry options, so multi-document
+  // calls are rewritten to the equivalent array form, which also returns an array.
+  const toOrderedCreateArgs = (args: unknown[]): unknown[] => {
+    if (Array.isArray(args[0])) {
+      return [args[0], {...((args[1] as object) ?? {}), ordered: true}, ...args.slice(2)];
+    }
+    // Mongoose drops a trailing falsy argument from varargs creates.
+    const docs = args.length > 1 && !args[args.length - 1] ? args.slice(0, -1) : args;
+    return docs.length > 1 ? [docs, {ordered: true}] : args;
+  };
   const originalCreate = mongoose.Model.create as unknown as (
     this: unknown,
     ...args: unknown[]
@@ -739,10 +760,7 @@ export const installTransactionPatches = (): void => {
       if (!shouldAttachTestSessionToConnection(this.db)) {
         return originalCreate.apply(this, args);
       }
-      const createArgs = Array.isArray(args[0])
-        ? [args[0], {...((args[1] as object) ?? {}), ordered: true}, ...args.slice(2)]
-        : args;
-      return serialized(() => originalCreate.apply(this, createArgs));
+      return serialized(() => originalCreate.apply(this, toOrderedCreateArgs(args)));
     }
     return originalCreate.apply(this, args);
   } as unknown as typeof mongoose.Model.create;

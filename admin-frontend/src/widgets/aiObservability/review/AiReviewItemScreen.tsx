@@ -8,7 +8,7 @@ import {AiReviewItemView} from "./AiReviewItemView";
 import {openBatchItems} from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
-  firstUnanswered,
+  firstUnansweredBoolean,
   unwrapCurrentUserId,
   unwrapReviewDetail,
   unwrapReviewList,
@@ -180,10 +180,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         void handleSkip();
         return;
       }
-      const nextKey = firstUnanswered(
-        detail.dimensions.filter((dimension) => dimension.dataType === "boolean"),
-        scores
-      );
+      const nextKey = firstUnansweredBoolean(detail.dimensions, scores);
       if (nextKey) {
         handleScoreChange(nextKey, action === "yes");
       }

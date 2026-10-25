@@ -170,3 +170,14 @@ export const firstUnanswered = (
 ): string | undefined => {
   return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
 };
+
+/** Key of the first unanswered yes/no question: the one the list highlights and Y or N answers. */
+export const firstUnansweredBoolean = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return firstUnanswered(
+    dimensions.filter((dimension) => dimension.dataType === "boolean"),
+    scores
+  );
+};

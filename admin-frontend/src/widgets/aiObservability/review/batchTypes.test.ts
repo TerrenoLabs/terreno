@@ -11,7 +11,7 @@ import {
   unwrapBatchList,
 } from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
-import {dimensionLabel, firstUnanswered} from "./reviewTypes";
+import {dimensionLabel, firstUnanswered, firstUnansweredBoolean} from "./reviewTypes";
 
 describe("batchTypes", () => {
   it("keeps pending and in-progress batch items in order as remaining work", () => {
@@ -69,6 +69,16 @@ describe("review question helpers", () => {
     expect(firstUnanswered(dimensions, {})).toBe("a");
     expect(firstUnanswered(dimensions, {a: false})).toBe("b");
     expect(firstUnanswered(dimensions, {a: false, b: true})).toBeUndefined();
+  });
+
+  it("finds the next unanswered yes/no question past score fields", () => {
+    const mixed = [
+      {dataType: "categorical" as const, key: "tone", range: "safe|unsafe", required: true},
+      ...dimensions,
+    ];
+    expect(firstUnansweredBoolean(mixed, {})).toBe("a");
+    expect(firstUnansweredBoolean(mixed, {a: true})).toBe("b");
+    expect(firstUnansweredBoolean(mixed, {a: true, b: false})).toBeUndefined();
   });
 
   it("maps keys to shortcuts and ignores typing", () => {

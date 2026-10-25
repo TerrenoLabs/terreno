@@ -1,6 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
+import {StyleSheet} from "react-native";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiReviewBatchesView} from "./AiReviewBatchesView";
 import {AiReviewBatchView} from "./AiReviewBatchView";
@@ -104,6 +105,29 @@ describe("ReviewQuestionList", () => {
     expect(onAnswerRestYes).toHaveBeenCalled();
     await press(getByTestId("ai-review-question-faithful-yes"));
     expect(onAnswer).toHaveBeenCalledWith("faithful", true);
+  });
+
+  it("highlights the yes/no question that Y and N answer when a score field comes first", () => {
+    const {getByTestId} = renderWithTheme(
+      <ReviewQuestionList
+        dimensions={[
+          {
+            dataType: "categorical",
+            key: "tone",
+            question: "What is the tone?",
+            range: "safe|unsafe",
+            required: true,
+          },
+          ...QUESTIONS,
+        ]}
+        onAnswer={() => {}}
+        onAnswerRestYes={() => {}}
+        scores={{}}
+      />
+    );
+    const rowStyle = (key: string): unknown =>
+      StyleSheet.flatten(getByTestId(`ai-review-question-${key}`).props.style);
+    expect(rowStyle("faithful")).not.toEqual(rowStyle("concise"));
   });
 
   it("answers non-boolean questions through the score field", async () => {

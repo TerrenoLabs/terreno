@@ -12,6 +12,8 @@ coveragePathIgnorePatterns = [
   "**/*.test.tsx",
   "**/*.stories.{ts,tsx}",
   "**/node_modules/**",
+  # Sibling workspace packages (e.g. ../blocks/dist) are scored by their own package gates.
+  "../**",
 ]
 # Enforced by scripts/check-coverage.ts; Bun parses this key but does not
 # fail the run when coverage is below threshold. See

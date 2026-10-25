@@ -1,0 +1,29 @@
+---
+title: "DashboardGridItem"
+description: "Optional child of DashboardGrid that occupies more than one column. Span is per breakpoint and plain children stay one column."
+sidebar_label: "DashboardGridItem"
+slug: /reference/components/dashboardgriditem
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# DashboardGridItem
+
+Optional child of DashboardGrid that occupies more than one column. Span is per breakpoint and plain children stay one column.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `DashboardGridItemProps`  
+**Story source:** [`demo/stories/DashboardGridItem.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/DashboardGridItem.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="DashboardGridItem" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` |  |  |
+| `span` | `reflection` |  | Number of grid columns occupied at each breakpoint. Defaults to one. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

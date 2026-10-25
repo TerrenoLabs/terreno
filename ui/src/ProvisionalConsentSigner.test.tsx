@@ -157,7 +157,7 @@ describe("ProvisionalConsentSigner", () => {
     expect(
       getByText(`Signed provisionally by dana@example.com on ${formatted(signedAt)}`)
     ).toBeTruthy();
-    expect(getByText(`Signed provisionally by staff on ${formatted(signedAt)}`)).toBeTruthy();
+    expect(getByText(`Signed provisionally by Staff on ${formatted(signedAt)}`)).toBeTruthy();
   });
 
   it("uses the form _id when the row has no id", () => {
@@ -394,7 +394,7 @@ describe("ProvisionalConsentSigner", () => {
       });
       await waitFor(() => {
         expect(
-          getByText(`Telehealth signed provisionally by staff on ${formatted(signedAt)}`)
+          getByText(`Telehealth signed provisionally by Staff on ${formatted(signedAt)}`)
         ).toBeTruthy();
       });
     });

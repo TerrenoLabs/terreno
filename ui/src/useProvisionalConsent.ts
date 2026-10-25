@@ -10,6 +10,16 @@ export interface ProvisionalConsentSignedBy {
   email?: string;
 }
 
+/** Label for whoever signed provisionally: their name, then their email, then "Staff". */
+export const provisionalSignerName = (
+  signer?: {name?: string; email?: string} | string | null
+): string => {
+  if (!signer || typeof signer !== "object") {
+    return "Staff";
+  }
+  return signer.name || signer.email || "Staff";
+};
+
 /** One row of `GET /consent-responses/status`: a form and where the user stands on it. */
 export interface ProvisionalConsentStatusRow {
   form: ConsentFormPublic & {_id?: string};

@@ -55,6 +55,8 @@ interface MongooseSchemaPath {
   getEmbeddedSchemaType?: () => MongooseSchemaPath | undefined;
   instance?: string;
   isRequired?: boolean;
+  /** What the schema passed as `required`; a function means the field is only sometimes required. */
+  originalRequiredValue?: unknown;
   options?: {
     default?: unknown;
     description?: string;
@@ -143,6 +145,14 @@ const describeCaster = (caster: MongooseSchemaPath): FieldDescription => {
   };
 };
 
+/**
+ * Whether a path is required on every document. A conditional `required` (a function) only
+ * applies to some documents, so clients must not treat the field as always present.
+ */
+const isAlwaysRequired = (schemaPath: MongooseSchemaPath): boolean => {
+  return Boolean(schemaPath.isRequired) && typeof schemaPath.originalRequiredValue !== "function";
+};
+
 const describeSchemaPath = (path: string, schemaPath: MongooseSchemaPath): FieldDescription => {
   const enumValues = schemaPath.enumValues?.length
     ? (schemaPath.enumValues as string[])
@@ -153,7 +163,7 @@ const describeSchemaPath = (path: string, schemaPath: MongooseSchemaPath): Field
     enum: enumValues?.length ? enumValues : undefined,
     kind: normalizeKind(schemaPath.instance),
     ref: schemaPath.options?.ref,
-    required: Boolean(schemaPath.isRequired),
+    required: isAlwaysRequired(schemaPath),
     system: isSystemField(path),
   };
 

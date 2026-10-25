@@ -4,6 +4,7 @@ import {act, renderHook} from "@testing-library/react-native";
 import {
   type ProvisionalConsentApi,
   type ProvisionalConsentStatusRow,
+  provisionalSignerName,
   useProvisionalConsent,
 } from "./useProvisionalConsent";
 
@@ -235,5 +236,21 @@ describe("useProvisionalConsent", () => {
     expect(result.current.statuses).toEqual([]);
     expect(result.current.isLoading).toBe(true);
     expect(result.current.error).toBe(error);
+  });
+});
+
+describe("provisionalSignerName", () => {
+  it("prefers the signer's name, then their email", () => {
+    expect(provisionalSignerName({email: "dana@example.com", name: "Dana Rivera"})).toBe(
+      "Dana Rivera"
+    );
+    expect(provisionalSignerName({email: "dana@example.com"})).toBe("dana@example.com");
+  });
+
+  it("falls back to Staff when the signer is unknown or not populated", () => {
+    expect(provisionalSignerName({})).toBe("Staff");
+    expect(provisionalSignerName(null)).toBe("Staff");
+    expect(provisionalSignerName(undefined)).toBe("Staff");
+    expect(provisionalSignerName("64b7f0c2a1b2c3d4e5f60718")).toBe("Staff");
   });
 });

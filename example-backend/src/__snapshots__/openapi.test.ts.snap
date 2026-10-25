@@ -6086,8 +6086,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "agreedAt",
                           "consentFormId",
                           "locale",
-                          "provisionalNote",
-                          "provisionalSignedBy",
                           "userId",
                           "_id",
                           "created",
@@ -6437,8 +6435,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "agreedAt",
                     "consentFormId",
                     "locale",
-                    "provisionalNote",
-                    "provisionalSignedBy",
                     "userId",
                     "_id",
                     "created",
@@ -17438,8 +17434,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "agreedAt",
                           "consentFormId",
                           "locale",
-                          "provisionalNote",
-                          "provisionalSignedBy",
                           "userId",
                           "_id",
                           "created",
@@ -17564,9 +17558,113 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "additionalProperties": {
+                        "nullable": true,
+                      },
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "agreed": {
+                          "type": "boolean",
+                        },
+                        "agreedAt": {
+                          "type": "string",
+                        },
+                        "consentFormId": {
+                          "type": "string",
+                        },
+                        "contentSnapshot": {
+                          "type": "string",
+                        },
+                        "formVersionSnapshot": {
+                          "type": "number",
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "locale": {
+                          "type": "string",
+                        },
+                        "provisional": {
+                          "type": "boolean",
+                        },
+                        "provisionalNote": {
+                          "type": "string",
+                        },
+                        "provisionalSignedBy": {
+                          "additionalProperties": {
+                            "nullable": true,
+                          },
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                            },
+                            "email": {
+                              "type": "string",
+                            },
+                            "id": {
+                              "type": "string",
+                            },
+                            "name": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "_id",
+                          ],
+                          "type": "object",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                        "voidReason": {
+                          "type": "string",
+                        },
+                        "voidedAt": {
+                          "type": "string",
+                        },
+                        "voidedBy": {
+                          "additionalProperties": {
+                            "nullable": true,
+                          },
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                            },
+                            "email": {
+                              "type": "string",
+                            },
+                            "id": {
+                              "type": "string",
+                            },
+                            "name": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "_id",
+                          ],
+                          "type": "object",
+                        },
+                      },
+                      "required": [
+                        "_id",
+                        "agreed",
+                        "agreedAt",
+                        "consentFormId",
+                        "id",
+                        "locale",
+                        "provisional",
+                        "provisionalSignedBy",
+                        "userId",
+                      ],
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "data",
+                  ],
                   "type": "object",
                 },
               },
@@ -17982,8 +18080,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "agreedAt",
                     "consentFormId",
                     "locale",
-                    "provisionalNote",
-                    "provisionalSignedBy",
                     "userId",
                     "_id",
                     "created",
@@ -18086,9 +18182,113 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "additionalProperties": {
+                        "nullable": true,
+                      },
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "agreed": {
+                          "type": "boolean",
+                        },
+                        "agreedAt": {
+                          "type": "string",
+                        },
+                        "consentFormId": {
+                          "type": "string",
+                        },
+                        "contentSnapshot": {
+                          "type": "string",
+                        },
+                        "formVersionSnapshot": {
+                          "type": "number",
+                        },
+                        "id": {
+                          "type": "string",
+                        },
+                        "locale": {
+                          "type": "string",
+                        },
+                        "provisional": {
+                          "type": "boolean",
+                        },
+                        "provisionalNote": {
+                          "type": "string",
+                        },
+                        "provisionalSignedBy": {
+                          "additionalProperties": {
+                            "nullable": true,
+                          },
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                            },
+                            "email": {
+                              "type": "string",
+                            },
+                            "id": {
+                              "type": "string",
+                            },
+                            "name": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "_id",
+                          ],
+                          "type": "object",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                        "voidReason": {
+                          "type": "string",
+                        },
+                        "voidedAt": {
+                          "type": "string",
+                        },
+                        "voidedBy": {
+                          "additionalProperties": {
+                            "nullable": true,
+                          },
+                          "properties": {
+                            "_id": {
+                              "type": "string",
+                            },
+                            "email": {
+                              "type": "string",
+                            },
+                            "id": {
+                              "type": "string",
+                            },
+                            "name": {
+                              "type": "string",
+                            },
+                          },
+                          "required": [
+                            "_id",
+                          ],
+                          "type": "object",
+                        },
+                      },
+                      "required": [
+                        "_id",
+                        "agreed",
+                        "agreedAt",
+                        "consentFormId",
+                        "id",
+                        "locale",
+                        "provisional",
+                        "provisionalSignedBy",
+                        "userId",
+                      ],
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "data",
+                  ],
                   "type": "object",
                 },
               },
@@ -19842,7 +20042,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                 },
                               },
                               "required": [
-                                "text",
                                 "type",
                               ],
                               "type": "object",
@@ -20160,7 +20359,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                       },
                       "required": [
-                        "text",
                         "type",
                       ],
                       "type": "object",
@@ -20407,7 +20605,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                         },
                         "required": [
-                          "text",
                           "type",
                         ],
                         "type": "object",
@@ -21034,7 +21231,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                         },
                         "required": [
-                          "text",
                           "type",
                         ],
                         "type": "object",
@@ -21345,7 +21541,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         },
                       },
                       "required": [
-                        "text",
                         "type",
                       ],
                       "type": "object",
@@ -21592,7 +21787,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                         },
                         "required": [
-                          "text",
                           "type",
                         ],
                         "type": "object",

@@ -18,6 +18,7 @@ import {applyConsentVariables, detectLocale, resolveConsentLocale} from "./useCo
 import {
   type ProvisionalConsentResponse,
   type ProvisionalConsentStatusRow,
+  provisionalSignerName,
   useProvisionalConsent,
 } from "./useProvisionalConsent";
 
@@ -63,8 +64,7 @@ const onDate = (iso?: string): string => {
 /** The status line for a row, e.g. "Signed provisionally by Dana Rivera on Oct 20, 2026, 3:30 PM". */
 const provisionalConsentStatusLabel = (row: ProvisionalConsentStatusRow): string => {
   if (row.status === "provisional") {
-    const signer = row.provisional?.signedBy;
-    const signerName = signer?.name || signer?.email || "staff";
+    const signerName = provisionalSignerName(row.provisional?.signedBy);
     return `Signed provisionally by ${signerName}${onDate(row.provisional?.signedAt)}`;
   }
   if (row.status === "signed") {
@@ -82,14 +82,6 @@ const errorMessage = (error: unknown, fallback: string): string => {
     return title;
   }
   return fallback;
-};
-
-const signerNameOf = (response: ProvisionalConsentResponse): string => {
-  const signer = response.provisionalSignedBy;
-  if (signer && typeof signer === "object") {
-    return signer.name || signer.email || "staff";
-  }
-  return "staff";
 };
 
 // Only pending forms can be signed on the user's behalf: the user's own answer always decides
@@ -112,7 +104,6 @@ const rowPrintHtml = (
   row: ProvisionalConsentStatusRow,
   variables?: Record<string, string>
 ): string => {
-  const signer = row.provisional?.signedBy;
   return buildConsentPdfHtml({
     contentSnapshot: contentFor(row, variables),
     fields: [
@@ -124,7 +115,7 @@ const rowPrintHtml = (
       ? {
           note: row.provisional.note,
           signedAt: row.provisional.signedAt,
-          signedByName: signer?.name || signer?.email || "Staff",
+          signedByName: provisionalSignerName(row.provisional.signedBy),
         }
       : undefined,
     responseId: row.provisional?.responseId,
@@ -194,7 +185,7 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
     setSubmitError(null);
     try {
       const response = await sign({consentFormId: rowFormId(openRow), locale, note: note.trim()});
-      const signerName = signerNameOf(response);
+      const signerName = provisionalSignerName(response.provisionalSignedBy);
       setSigned({
         formId: rowFormId(openRow),
         formTitle: openRow.form.title,

@@ -127,6 +127,36 @@ const consentStatusRows = z.array(
   })
 );
 
+const consentResponseUser = z
+  .object({
+    _id: z.string(),
+    email: z.string().optional(),
+    id: z.string().optional(),
+    name: z.string().optional(),
+  })
+  .passthrough();
+
+/** OpenAPI shape of the provisional `ConsentResponse` the sign and void actions return. */
+const provisionalConsentResponse = z
+  .object({
+    _id: z.string(),
+    agreed: z.boolean(),
+    agreedAt: z.string(),
+    consentFormId: z.string(),
+    contentSnapshot: z.string().optional(),
+    formVersionSnapshot: z.number().optional(),
+    id: z.string(),
+    locale: z.string(),
+    provisional: z.boolean(),
+    provisionalNote: z.string().optional(),
+    provisionalSignedBy: consentResponseUser,
+    userId: z.string(),
+    voidedAt: z.string().optional(),
+    voidedBy: consentResponseUser.optional(),
+    voidReason: z.string().optional(),
+  })
+  .passthrough();
+
 export interface ConsentAppOptions {
   /**
    * RBAC access control. When set, users whose roles grant `consentResponse:signOnBehalf` may
@@ -461,7 +491,8 @@ export class ConsentApp implements TerrenoPlugin {
     app.use(
       "/consent-responses",
       modelRouter(ConsentResponse, {
-        // Documented in OpenAPI so client SDKs get the provisional signing actions.
+        // Documented in OpenAPI so client SDKs get the provisional signing actions. The admin
+        // list and read routes are documented too; they are the same admin-only CRUD reads.
         ...(openApi ? {openApi: openApi as OpenApiMiddleware} : {}),
         collectionActions: {
           provisional: {
@@ -539,6 +570,7 @@ export class ConsentApp implements TerrenoPlugin {
             },
             method: "POST",
             permissions: signOnBehalfPermissions,
+            response: provisionalConsentResponse,
             summary: "Sign a consent form provisionally on behalf of another user",
           },
           status: {
@@ -628,6 +660,7 @@ export class ConsentApp implements TerrenoPlugin {
             },
             method: "POST",
             permissions: signOnBehalfPermissions,
+            response: provisionalConsentResponse,
             summary: "Void a provisional consent signature",
           },
         },

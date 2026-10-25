@@ -2170,7 +2170,7 @@ export type PostGptHistoriesRes = /** status 201 Successful create */ {
     /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
     streamId?: string;
     /** Text content of the prompt or response */
-    text: string;
+    text?: string;
     /** Identifier linking a tool result to its originating call */
     toolCallId?: string;
     /** Name of the tool that was invoked */
@@ -2233,7 +2233,7 @@ export type PostGptHistoriesArgs = {
     /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
     streamId?: string;
     /** Text content of the prompt or response */
-    text: string;
+    text?: string;
     /** Identifier linking a tool result to its originating call */
     toolCallId?: string;
     /** Name of the tool that was invoked */
@@ -2316,7 +2316,7 @@ export type GetGptHistoriesRes = /** status 200 Successful list */ {
       /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
       streamId?: string;
       /** Text content of the prompt or response */
-      text: string;
+      text?: string;
       /** Identifier linking a tool result to its originating call */
       toolCallId?: string;
       /** Name of the tool that was invoked */
@@ -2421,7 +2421,7 @@ export type GetGptHistoriesByIdRes = /** status 200 Successful read */ {
     /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
     streamId?: string;
     /** Text content of the prompt or response */
-    text: string;
+    text?: string;
     /** Identifier linking a tool result to its originating call */
     toolCallId?: string;
     /** Name of the tool that was invoked */
@@ -2504,7 +2504,7 @@ export type PatchGptHistoriesByIdRes = /** status 200 Successful update */ {
     /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
     streamId?: string;
     /** Text content of the prompt or response */
-    text: string;
+    text?: string;
     /** Identifier linking a tool result to its originating call */
     toolCallId?: string;
     /** Name of the tool that was invoked */
@@ -2569,7 +2569,7 @@ export type PatchGptHistoriesByIdArgs = {
       /** Identifier of the /gpt/prompt reply, used to resume an in-flight stream */
       streamId?: string;
       /** Text content of the prompt or response */
-      text: string;
+      text?: string;
       /** Identifier linking a tool result to its originating call */
       toolCallId?: string;
       /** Name of the tool that was invoked */
@@ -3400,6 +3400,8 @@ export type GetCommsPushTokensByIdRes = /** status 200 Successful read */ {
   platform: "android" | "ios" | "web";
   /** Push provider token identifying the device */
   token: string;
+  /** The owner's tokenEpoch when the device registered; push stops after it changes */
+  tokenEpoch?: number;
   /** User who owns the device token */
   userId: string;
   _id: string;
@@ -4465,6 +4467,8 @@ export type GetAdminMcpServiceTokensRes = /** status 200 Successful list */ {
     name: string;
     /** When this MCP service token was revoked; unset while it remains active */
     revokedAt?: string;
+    /** The user's tokenEpoch when the token was issued; the token stops working after it changes */
+    tokenEpoch?: number;
     /** SHA-256 hash of the full MCP service token plaintext */
     tokenHash: string;
     /** First eight characters after mcp_ used to identify the token safely */
@@ -4567,6 +4571,8 @@ export type GetAdminMcpServiceTokensByIdRes = /** status 200 Successful read */ 
   name: string;
   /** When this MCP service token was revoked; unset while it remains active */
   revokedAt?: string;
+  /** The user's tokenEpoch when the token was issued; the token stops working after it changes */
+  tokenEpoch?: number;
   /** SHA-256 hash of the full MCP service token plaintext */
   tokenHash: string;
   /** First eight characters after mcp_ used to identify the token safely */
@@ -5478,8 +5484,8 @@ export type GetAdminConsentResponsesRes = /** status 200 Successful list */ {
     /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
     provisional?: boolean;
     /** Required note from the provisional signer explaining how consent was obtained */
-    provisionalNote: string;
-    provisionalSignedBy: {
+    provisionalNote?: string;
+    provisionalSignedBy?: {
       /** The user's display name */
       name?: string;
       /** The user's email address, used for authentication */
@@ -5595,8 +5601,8 @@ export type GetAdminConsentResponsesByIdRes = /** status 200 Successful read */ 
   /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
   provisional?: boolean;
   /** Required note from the provisional signer explaining how consent was obtained */
-  provisionalNote: string;
-  provisionalSignedBy: {
+  provisionalNote?: string;
+  provisionalSignedBy?: {
     /** The user's display name */
     name?: string;
     /** The user's email address, used for authentication */
@@ -6858,7 +6864,36 @@ export type AdminMigrationsStatusRes = /** status 200 Successful response */ {
 };
 export type AdminMigrationsStatusArgs = undefined;
 export type ConsentresponsesVoidRes = /** status 200 Successful response */ {
-  data?: object;
+  data: {
+    _id: string;
+    agreed: boolean;
+    agreedAt: string;
+    consentFormId: string;
+    contentSnapshot?: string;
+    formVersionSnapshot?: number;
+    id: string;
+    locale: string;
+    provisional: boolean;
+    provisionalNote?: string;
+    provisionalSignedBy: {
+      _id: string;
+      email?: string;
+      id?: string;
+      name?: string;
+      [key: string]: any | null;
+    };
+    userId: string;
+    voidedAt?: string;
+    voidedBy?: {
+      _id: string;
+      email?: string;
+      id?: string;
+      name?: string;
+      [key: string]: any | null;
+    };
+    voidReason?: string;
+    [key: string]: any | null;
+  };
 };
 export type ConsentresponsesVoidArgs = {
   id: string;
@@ -6867,7 +6902,36 @@ export type ConsentresponsesVoidArgs = {
   };
 };
 export type ConsentresponsesProvisionalRes = /** status 200 Successful response */ {
-  data?: object;
+  data: {
+    _id: string;
+    agreed: boolean;
+    agreedAt: string;
+    consentFormId: string;
+    contentSnapshot?: string;
+    formVersionSnapshot?: number;
+    id: string;
+    locale: string;
+    provisional: boolean;
+    provisionalNote?: string;
+    provisionalSignedBy: {
+      _id: string;
+      email?: string;
+      id?: string;
+      name?: string;
+      [key: string]: any | null;
+    };
+    userId: string;
+    voidedAt?: string;
+    voidedBy?: {
+      _id: string;
+      email?: string;
+      id?: string;
+      name?: string;
+      [key: string]: any | null;
+    };
+    voidReason?: string;
+    [key: string]: any | null;
+  };
 };
 export type ConsentresponsesProvisionalArgs = {
   consentFormId: string;
@@ -6936,8 +7000,8 @@ export type GetConsentResponsesRes = /** status 200 Successful list */ {
     /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
     provisional?: boolean;
     /** Required note from the provisional signer explaining how consent was obtained */
-    provisionalNote: string;
-    provisionalSignedBy: {
+    provisionalNote?: string;
+    provisionalSignedBy?: {
       /** The user's display name */
       name?: string;
       /** The user's email address, used for authentication */
@@ -7016,8 +7080,8 @@ export type GetConsentResponsesByIdRes = /** status 200 Successful read */ {
   /** Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves */
   provisional?: boolean;
   /** Required note from the provisional signer explaining how consent was obtained */
-  provisionalNote: string;
-  provisionalSignedBy: {
+  provisionalNote?: string;
+  provisionalSignedBy?: {
     /** The user's display name */
     name?: string;
     /** The user's email address, used for authentication */

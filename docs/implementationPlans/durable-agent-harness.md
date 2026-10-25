@@ -36,7 +36,7 @@ job is one opaque handler with no checkpoints. The harness fills that gap.
 
 | Question | Decision |
 |----------|----------|
-| Build our own harness or adopt pi-durable? | Own harness on Mongo + Vercel `ai` SDK, copying Pi's concepts (tasks, checkpoints, replay-safe tools, hooks, memos, documents, compaction, forks). |
+| Build our own harness or adopt pi-durable? | Own harness on Mongo + the Vercel AI SDK (`ai`), copying Pi's concepts (tasks, checkpoints, replay-safe tools, hooks, memos, documents, compaction, forks). |
 | Where should the harness live? | Inside `@terreno/ai`, as subpath `@terreno/ai/harness`. |
 | How should the `@terreno/jobs` dependency be wired? | Optional peer. Jobs integration is optional; a single process can own execution. |
 | Who executes a run? | Pluggable `Runner`: `InProcessRunner` (single owner, default) and `JobsRunner` (leased, multi-instance). |

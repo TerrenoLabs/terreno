@@ -227,6 +227,7 @@ before anything else has confirmed one.
 | `authProvider` | `AuthProvider` | — (required) | `{getToken, getUserId, onAuthChange, refresh?}` |
 | `baseUrl` | `string` | — | Server origin; required unless both `transport` and `httpChannel` are injected |
 | `transport` | `SyncTransport` | socket transport from `baseUrl` | Override for tests or custom wiring |
+| `socketTransports` | `string[]` | `["polling", "websocket"]` | Socket.IO transports for the default socket transport. Use `["websocket"]` on hosts without session affinity, such as Vercel Functions ([details](../how-to/vercel-function-websockets.md)) |
 | `httpChannel` | `HttpChannel` | built from `baseUrl` | HTTP fallback channel override |
 | `persisterFactory` | `PersisterFactory` | platform default (IndexedDB web, expo-sqlite native) | Storage backend override |
 | `keyProvider` | `KeyProvider` | server-derived via `GET /sync/key` | Web encryption key provider |

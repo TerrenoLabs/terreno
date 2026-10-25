@@ -58,6 +58,7 @@
   "private": true,
   "scripts": {
     "android": "bun expo start --android --port 8082",
+    "build:vercel": "bun scripts/vercelBuild.ts",
     "doctor": "bunx expo-doctor",
     "eas-build-post-install": "cd .. && bun run compile && bun run --filter '@terreno/ui' types",
     "export": "bun expo export --platform web",

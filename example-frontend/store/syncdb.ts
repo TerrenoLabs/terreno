@@ -11,6 +11,7 @@ import {
   type SyncDb,
 } from "@terreno/syncdb";
 import {betterAuthClient, getStoredBearerToken} from "@/lib/betterAuth";
+import {socketTransports} from "@/store/socketTransports";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
 export const SYNC_DB_NAME = "terreno-example";
@@ -60,6 +61,7 @@ export const syncDb: SyncDb = createSyncDb({
   // Todos stay fully synced; `fullSync` also enables server-filtered query windows
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
   queryCollections: [{collection: "todos", fullSync: true}],
+  socketTransports,
 });
 
 let adminOrganizationId: string | undefined;
@@ -79,6 +81,7 @@ export const adminSyncDb: SyncDb = createSyncDb({
   collections: [...SYNC_COLLECTIONS],
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
+  socketTransports,
   windowCollections: [...SYNC_COLLECTIONS],
 });
 

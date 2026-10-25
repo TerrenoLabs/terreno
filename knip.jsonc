@@ -374,6 +374,8 @@
       ],
       "entry": [
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",

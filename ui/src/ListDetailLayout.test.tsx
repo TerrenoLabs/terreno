@@ -468,22 +468,54 @@ describe("useListDetail selection", () => {
 });
 
 describe("ListDetailLayout split screen options", () => {
+  type ScreenOptionsFn = (props: unknown) => Record<string, unknown>;
+
   const stackOptions = (rendered: ReturnType<typeof renderLayout>): unknown => {
     return rendered.UNSAFE_getByType("Stack" as unknown as React.ComponentType).props.screenOptions;
+  };
+
+  // Screen options for a screen whose parent navigator can (or cannot) go back.
+  const resolveSplitOptions = (
+    rendered: ReturnType<typeof renderLayout>,
+    parent: {canGoBack: () => boolean; goBack: () => void} | undefined
+  ): Record<string, unknown> => {
+    const options = stackOptions(rendered) as ScreenOptionsFn;
+    return options({navigation: {getParent: () => parent}, route: {key: "detail", name: "[id]"}});
   };
 
   beforeEach(() => {
     setWindowWidth(375);
   });
 
-  it("hides the back button and the push animation when split", () => {
+  it("turns off the push animation and the back-to-list button when split", () => {
     setWindowWidth(1024);
-    const options = stackOptions(renderLayout()) as Record<string, unknown>;
+    const options = resolveSplitOptions(renderLayout(), undefined);
 
     expect(options.animation).toBe("none");
     expect(options.headerBackVisible).toBe(false);
-    // The web header ignores headerBackVisible, so an empty headerLeft hides its back button.
+    // With no parent history, headerLeft draws nothing (the web header would otherwise draw back).
     expect((options.headerLeft as () => unknown)()).toBeNull();
+  });
+
+  it("offers a back button that leaves the group when the parent can go back", () => {
+    setWindowWidth(1024);
+    const goBack = mock((): void => {});
+    const options = resolveSplitOptions(renderLayout(), {canGoBack: () => true, goBack});
+    // bunSetup.ts mocks IconButton to render nothing, so check the element it is given.
+    const button = (
+      options.headerLeft as () => React.ReactElement<{
+        accessibilityLabel: string;
+        onClick: () => void;
+        testID: string;
+      }>
+    )();
+    expect(button.props.testID).toBe("list-detail-leave");
+    expect(button.props.accessibilityLabel).toBe("Back");
+
+    button.props.onClick();
+
+    expect(goBack).toHaveBeenCalledTimes(1);
+    expect(mockedRouter.dismissTo).not.toHaveBeenCalled();
   });
 
   it("leaves screen options untouched when stacked", () => {
@@ -497,7 +529,7 @@ describe("ListDetailLayout split screen options", () => {
     setWindowWidth(1024);
     const rendered = renderLayout({screenOptions: {animation: "fade", title: "Inbox"}});
 
-    expect(stackOptions(rendered)).toMatchObject({
+    expect(resolveSplitOptions(rendered, undefined)).toMatchObject({
       animation: "fade",
       headerBackVisible: false,
       title: "Inbox",
@@ -507,9 +539,8 @@ describe("ListDetailLayout split screen options", () => {
   it("merges into function screen options when split", () => {
     setWindowWidth(1024);
     const rendered = renderLayout({screenOptions: () => ({animation: "fade", title: "Inbox"})});
-    const options = stackOptions(rendered) as (props: unknown) => Record<string, unknown>;
 
-    expect(options({})).toMatchObject({
+    expect(resolveSplitOptions(rendered, undefined)).toMatchObject({
       animation: "fade",
       headerBackVisible: false,
       title: "Inbox",
@@ -519,12 +550,9 @@ describe("ListDetailLayout split screen options", () => {
   it("keeps the caller's headerLeft when split", () => {
     setWindowWidth(1024);
     const headerLeft = (): string => "menu";
-    const options = stackOptions(renderLayout({screenOptions: {headerLeft}})) as Record<
-      string,
-      unknown
-    >;
+    const rendered = renderLayout({screenOptions: {headerLeft}});
 
-    expect(options.headerLeft).toBe(headerLeft);
+    expect(resolveSplitOptions(rendered, undefined).headerLeft).toBe(headerLeft);
   });
 });
 

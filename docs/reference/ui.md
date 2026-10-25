@@ -933,8 +933,10 @@ has no `Stack` header, so it applies safe-area insets on its top, left, and bott
 - `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it pops back to the
   index inside this `Stack` and never leaves the group. It does nothing when no item is open.
 
-When split, the `Stack` screens get `headerBackVisible: false`, `headerLeft: () => null` (the web
-header ignores `headerBackVisible`), and `animation: "none"`. Your
+When split, the list is already on screen, so the header's back never returns to it: `Stack`
+screens get `headerBackVisible: false`, `animation: "none"`, and a `headerLeft` back button
+(`list-detail-leave`) that leaves the group through the parent navigator, or nothing when the
+parent cannot go back. The web header ignores `headerBackVisible`, so `headerLeft` draws it. Your
 `screenOptions` win where they set the same key. Mark the open row with
 `accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
 it as `aria-current="true"` on web). See

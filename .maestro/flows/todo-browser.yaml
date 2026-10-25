@@ -17,7 +17,10 @@ url: http://localhost:8082/
       id: "todo-browser-list"
     timeout: 30000
 
-- tapOn: "Buy groceries"
+# Tap the first browser row by id so a hidden copy of the title on the todos screen never matches.
+- tapOn:
+    id: "todo-browser-item-.*-clickable"
+    index: 0
 
 - extendedWaitUntil:
     visible:

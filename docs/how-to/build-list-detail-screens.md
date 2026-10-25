@@ -96,7 +96,8 @@ export const MailRow: React.FC<{id: string; subject: string}> = ({id, subject}) 
 | `clear()`, nothing open | Does nothing | Does nothing |
 
 Because split mode replaces the open detail, the stack is never deeper than the list plus one
-detail, so back returns to the list after a rotation too.
+detail, so back returns to the list after a rotation too. When split, the header's back button
+(`list-detail-leave`) leaves the whole group instead, since the list is already on screen.
 
 When another screen opens a detail directly, push it with `withAnchor` so the list sits below it
 and back lands on the list instead of leaving the group:

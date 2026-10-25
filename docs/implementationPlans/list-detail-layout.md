@@ -139,7 +139,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
     - When split with a detail open, `select(id)` calls `router.replace(detailHref(id))`, so the stack is never deeper than index + one detail (D6).
     - When split, `select(selectedId)` is a no-op.
     - `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it never leaves the group, and does nothing when none is open. (Changed in Pick: `router.back()` asks the root navigator and can leave the group.)
-    - When split, Stack screens get `headerBackVisible: false` and `animation: "none"`. (Added in T4: also `headerLeft: () => null`, because expo-router's web header ignores `headerBackVisible`.) The caller's `screenOptions` win where they set the same key.
+    - When split, Stack screens get `headerBackVisible: false` and `animation: "none"`. (Added in T4: also a `headerLeft`, because expo-router's web header ignores `headerBackVisible`. Changed after T5's Roast: that `headerLeft` is a `list-detail-leave` back button that leaves the group through the parent navigator, or nothing when the parent cannot go back, so a tablet is never stuck inside the group.) The caller's `screenOptions` win where they set the same key.
   - Docs:
     - The `ui.md` section documents `useListDetail` and the history rule.
     - New `docs/how-to/build-list-detail-screens.md`, linked from `docs/how-to/README.md`, covers:

@@ -109,6 +109,18 @@ test.describe("Todo browser on a tablet", () => {
     await expect(page).toHaveURL(new RegExp(`/todo-browser/${ids.first}$`));
   });
 
+  test("user leaves the todo browser from the open todo", async ({page}) => {
+    await openTodoBrowser(page);
+    await row(page, ids.first).click();
+    await detail(page, ids.first).waitFor({state: "visible"});
+
+    // The index screen under the open todo has its own (hidden) header button.
+    await page.getByTestId("list-detail-leave").filter({visible: true}).click();
+
+    await page.getByTestId("todos-screen").waitFor({state: "visible"});
+    await expect(page).not.toHaveURL(/todo-browser/);
+  });
+
   test("user tabs from the list into the open todo", async ({page}) => {
     await openTodoBrowser(page);
     await row(page, ids.first).click();

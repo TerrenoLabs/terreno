@@ -12,6 +12,7 @@ import {type LayoutChangeEvent, useWindowDimensions, View} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 
 import type {ListDetailLayoutProps, ListDetailState} from "./Common";
+import {IconButton} from "./IconButton";
 import {useTheme} from "./Theme";
 
 const DEFAULT_SPLIT_AT_WIDTH = 768;
@@ -19,20 +20,41 @@ const DEFAULT_LIST_WIDTH = 360;
 const DEFAULT_DETAIL_ROUTE = "[id]";
 const DEFAULT_PARAM_NAME = "id";
 
-// With the list already on screen, the detail needs no back button or push animation. The web
-// header ignores headerBackVisible and draws a back button unless headerLeft is set.
-const SPLIT_SCREEN_OPTIONS = {
-  animation: "none",
-  headerBackVisible: false,
-  headerLeft: () => null,
-} as const;
-
 type StackScreenOptions = ComponentProps<typeof Stack>["screenOptions"];
+type StackScreenOptionsProps = Parameters<
+  Extract<StackScreenOptions, (...args: never[]) => unknown>
+>[0];
 
 interface ListDetailContextValue extends ListDetailState {
   emptyDetail?: ReactElement;
   list: ReactElement;
 }
+
+// With the list already on screen, back never returns to it: the header's back button leaves the
+// list/detail group instead, and the push animation is off. The web header ignores
+// headerBackVisible and draws its own back button unless headerLeft is set.
+const splitScreenOptions = ({navigation}: StackScreenOptionsProps) => {
+  const parent = navigation.getParent();
+  return {
+    animation: "none" as const,
+    headerBackVisible: false,
+    headerLeft: (): ReactElement | null => {
+      if (!parent?.canGoBack()) {
+        return null;
+      }
+      return (
+        <IconButton
+          accessibilityHint="Leaves this list"
+          accessibilityLabel="Back"
+          iconName="arrow-left"
+          onClick={() => parent.goBack()}
+          testID="list-detail-leave"
+          variant="navigation"
+        />
+      );
+    },
+  };
+};
 
 const mergeSplitScreenOptions = (
   isSplit: boolean,
@@ -41,10 +63,10 @@ const mergeSplitScreenOptions = (
   if (!isSplit) {
     return screenOptions;
   }
-  if (typeof screenOptions === "function") {
-    return (props) => ({...SPLIT_SCREEN_OPTIONS, ...screenOptions(props)});
-  }
-  return {...SPLIT_SCREEN_OPTIONS, ...screenOptions};
+  return (props: StackScreenOptionsProps) => ({
+    ...splitScreenOptions(props),
+    ...(typeof screenOptions === "function" ? screenOptions(props) : screenOptions),
+  });
 };
 
 // The open item is the detail route directly below the group's index; an `id` from a parent

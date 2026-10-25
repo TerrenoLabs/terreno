@@ -1,5 +1,6 @@
 import {describe, expect, it} from "bun:test";
 
+import {createSyncDebugLog, type SyncDebugEvent, type SyncDebugLog} from "../debug/debugLog";
 import {getConflict} from "../mutations/conflicts";
 import {createOutbox, type Outbox} from "../mutations/outbox";
 import {createSyncStore, type SyncStore} from "../storage/store";
@@ -26,7 +27,8 @@ interface Harness {
   clock: {value: number};
 }
 
-const makeHarness = (): Harness => {
+/** Single-send harness (no batch transport), plus optional coordinator overrides. */
+const makeHarness = (overrides: Partial<CreateReplayCoordinatorArgs> = {}): Harness => {
   const store = createSyncStore({collections: ["notes", "todos"]});
   const outbox = createOutbox({store});
   const transport = createFakeTransport();
@@ -36,6 +38,7 @@ const makeHarness = (): Harness => {
     outbox,
     sendMutation: transport.sendMutation,
     store,
+    ...overrides,
   });
   return {clock, coordinator, outbox, store, transport};
 };
@@ -1793,6 +1796,315 @@ describe("createReplayCoordinator", () => {
       expect(resumed).toEqual({});
       expect(harness.outbox.getMutation({mutationId: "m1"})?.status).toBe("acked");
       expect(harness.outbox.getMutation({mutationId: "m2"})?.status).toBe("acked");
+    });
+  });
+  describe("debug event stream", () => {
+    const DEBUG_CLOCK = "2026-01-01T00:00:00.000Z";
+
+    /** Fixed random source: every jittered backoff is half its cap. */
+    const halfRandom = (): number => 0.5;
+
+    const makeDebugLog = (): SyncDebugLog => createSyncDebugLog({clock: () => DEBUG_CLOCK});
+
+    const eventsOfType = (debug: SyncDebugLog, type: SyncDebugEvent["type"]): SyncDebugEvent[] =>
+      debug.getEvents().filter((event) => event.type === type);
+
+    it("a validation nack records a failed event with the parsed mutation body and the reason", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug});
+      enqueue(harness, {data: {title: "draft"}, entityId: "t1", mutationId: "m1"});
+      harness.transport.respondWithNack({code: "validation", message: "title too short"});
+
+      await harness.coordinator.replay({userId: USER});
+
+      const [failed] = eventsOfType(debug, "failed");
+      expect(failed).toMatchObject({
+        collection: "todos",
+        detail: {data: {title: "draft"}, reason: "validation"},
+        direction: "inbound",
+        entityId: "t1",
+        label: "failed todos/t1 (validation)",
+        mutationId: "m1",
+        ok: false,
+        operation: "create",
+      });
+      expect(eventsOfType(debug, "failed")).toHaveLength(1);
+    });
+
+    it("records the raw stored args when they are not valid JSON", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug});
+      harness.store.upsertEntity({
+        collection: "todos",
+        data: null,
+        id: "t1",
+        pendingMutationId: "m1",
+      });
+      harness.outbox.enqueue({
+        args: {},
+        collection: "todos",
+        entityId: "t1",
+        mutationId: "m1",
+        operation: "create",
+        userId: USER,
+      });
+      harness.store.raw.setCell("_outbox", "m1", "args", "{not json");
+      harness.transport.respondWithNack({code: "validation"});
+
+      await harness.coordinator.replay({userId: USER});
+
+      // The debug stream shows exactly what was stored, so a corrupt row is
+      // visible to whoever is inspecting the failure.
+      expect(eventsOfType(debug, "send")[0]?.detail?.data).toBe("{not json");
+      expect(eventsOfType(debug, "failed")[0]?.detail?.data).toBe("{not json");
+    });
+
+    it("an unauthorized nack records a nack event that marks the drain as paused", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+      harness.transport.respondWithNack({code: "unauthorized"});
+
+      const result = await harness.coordinator.replay({userId: USER});
+
+      expect(result).toEqual({paused: "auth"});
+      const nacks = eventsOfType(debug, "nack");
+      expect(nacks).toHaveLength(1);
+      expect(nacks[0]).toMatchObject({
+        detail: {code: "unauthorized", data: {title: "t1"}, paused: true},
+        direction: "inbound",
+        label: "nack todos/t1 (unauthorized)",
+        mutationId: "m1",
+        ok: false,
+      });
+      expect(nacks[0]?.detail).not.toHaveProperty("source");
+    });
+
+    it("an AuthRequiredError from the send channel records an unauthorized nack sourced to HTTP", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+      harness.transport.respondWith(() => {
+        throw new AuthRequiredError();
+      });
+
+      const result = await harness.coordinator.replay({userId: USER});
+
+      expect(result).toEqual({paused: "auth"});
+      expect(eventsOfType(debug, "nack")).toEqual([
+        expect.objectContaining({
+          detail: {code: "unauthorized", data: {title: "t1"}, paused: true, source: "http"},
+          label: "nack todos/t1 (unauthorized)",
+          mutationId: "m1",
+          ok: false,
+        }),
+      ]);
+    });
+
+    it("an error nack records a retry event with the attempt number and the backoff it armed", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug, random: halfRandom});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+      harness.transport.respondWithNack({code: "error"});
+
+      await harness.coordinator.replay({userId: USER});
+
+      const backoffMs = ERROR_NACK_BASE_BACKOFF_MS / 2;
+      expect(eventsOfType(debug, "retry")).toEqual([
+        expect.objectContaining({
+          detail: {attempt: 1, backoffMs, data: {title: "t1"}, reason: "error"},
+          direction: "system",
+          entityId: "t1",
+          label: `retry todos/t1 (error, ${backoffMs}ms)`,
+          mutationId: "m1",
+          operation: "create",
+        }),
+      ]);
+      expect(eventsOfType(debug, "failed")).toHaveLength(0);
+    });
+
+    it("a transport failure records a retry event whose attempt count grows on each failure", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug, random: halfRandom});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+      harness.transport.setDefaultResponder(() => {
+        throw new Error("timeout");
+      });
+
+      await harness.coordinator.replay({userId: USER});
+      harness.clock.value += MAX_BACKOFF_MS;
+      await harness.coordinator.replay({userId: USER});
+
+      const retries = eventsOfType(debug, "retry");
+      expect(retries.map((event) => event.detail)).toEqual([
+        {attempt: 1, backoffMs: 500, data: {title: "t1"}, reason: "transport"},
+        {attempt: 2, backoffMs: 1_000, data: {title: "t1"}, reason: "transport"},
+      ]);
+      expect(retries.map((event) => event.label)).toEqual([
+        "retry todos/t1 (transport, 500ms)",
+        "retry todos/t1 (transport, 1000ms)",
+      ]);
+    });
+
+    it("a rate_limited nack records the server's nack, then a retry floored at retryAfterMs", async () => {
+      const debug = makeDebugLog();
+      const harness = makeHarness({debug, random: halfRandom});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+      harness.transport.respondWithNack({
+        code: "rate_limited",
+        message: "slow down",
+        retryAfterMs: 10_000,
+      });
+
+      await harness.coordinator.replay({userId: USER});
+
+      const outcomes = debug
+        .getEvents()
+        .filter((event) => event.type === "nack" || event.type === "retry");
+      expect(outcomes).toEqual([
+        expect.objectContaining({
+          detail: {
+            code: "rate_limited",
+            data: {title: "t1"},
+            message: "slow down",
+            retryAfterMs: 10_000,
+          },
+          direction: "inbound",
+          label: "nack todos/t1 (rate_limited)",
+          ok: false,
+          type: "nack",
+        }),
+        expect.objectContaining({
+          detail: {attempt: 1, backoffMs: 10_000, data: {title: "t1"}, reason: "rate_limited"},
+          label: "retry todos/t1 (rate_limited, 10000ms)",
+          type: "retry",
+        }),
+      ]);
+    });
+
+    it("a batched chunk records one send event per mutation, flagged as part of a batch", async () => {
+      const debug = makeDebugLog();
+      const harness = makeBatchHarness({debug});
+      enqueue(harness, {entityId: "e1", mutationId: "m1"});
+      enqueue(harness, {data: {title: "second"}, entityId: "e2", mutationId: "m2"});
+
+      await harness.coordinator.replay({userId: USER});
+
+      expect(harness.transport.sentBatches).toEqual([["m1", "m2"]]);
+      expect(eventsOfType(debug, "send")).toEqual([
+        expect.objectContaining({
+          detail: {attempt: 1, batch: true, data: {title: "e1"}},
+          direction: "outbound",
+          label: "send create todos/e1",
+          mutationId: "m1",
+        }),
+        expect.objectContaining({
+          detail: {attempt: 1, batch: true, data: {title: "second"}},
+          label: "send create todos/e2",
+          mutationId: "m2",
+        }),
+      ]);
+      expect(eventsOfType(debug, "ack").map((event) => event.mutationId)).toEqual(["m1", "m2"]);
+    });
+
+    it("a batch transport failure records a transport retry for every mutation in the chunk", async () => {
+      const debug = makeDebugLog();
+      const harness = makeBatchHarness({debug, random: halfRandom});
+      enqueue(harness, {entityId: "e1", mutationId: "m1"});
+      enqueue(harness, {entityId: "e2", mutationId: "m2"});
+      harness.transport.setBatchResponder(() => {
+        throw new Error("socket disconnected mid-batch");
+      });
+
+      await harness.coordinator.replay({userId: USER});
+
+      expect(
+        eventsOfType(debug, "retry").map((event) => [event.mutationId, event.detail?.reason])
+      ).toEqual([
+        ["m1", "transport"],
+        ["m2", "transport"],
+      ]);
+    });
+  });
+
+  describe("batch edge cases", () => {
+    it("a mutation with unparseable args still joins the chunk alongside other entities", async () => {
+      const harness = makeBatchHarness();
+      enqueue(harness, {entityId: "e1", mutationId: "m1"});
+      enqueue(harness, {entityId: "e2", mutationId: "m2"});
+      harness.store.raw.setCell("_outbox", "m2", "args", "{not json");
+
+      await harness.coordinator.replay({userId: USER});
+
+      // The reference-blocking scan cannot inspect corrupt args, so it treats
+      // them as referencing nothing rather than holding the mutation back.
+      expect(harness.transport.sentBatches).toEqual([["m1", "m2"]]);
+      expect(harness.outbox.getMutation({mutationId: "m2"})?.status).toBe("acked");
+    });
+
+    it("ignores a batch response that resolves after reset()", async () => {
+      const harness = makeBatchHarness();
+      enqueue(harness, {entityId: "e1", mutationId: "m1"});
+      enqueue(harness, {entityId: "e2", mutationId: "m2"});
+      let release: (() => void) | undefined;
+      harness.transport.respondBatchWith(
+        (request) =>
+          new Promise((resolve) => {
+            release = (): void =>
+              resolve({
+                results: request.mutations.map((mutation, index) => ({
+                  ack: {id: mutation.id ?? "", mutationId: mutation.mutationId, seq: index + 1},
+                  type: "ack" as const,
+                })),
+                type: "results",
+              });
+          })
+      );
+
+      const replay = harness.coordinator.replay({userId: USER});
+      await Promise.resolve();
+      expect(release).toBeDefined();
+      harness.coordinator.reset();
+      release?.();
+
+      expect(await replay).toEqual({});
+      // The stale acks never land: neither mutation is finalized.
+      expect(harness.outbox.getMutation({mutationId: "m1"})?.status).toBe("inFlight");
+      expect(harness.outbox.getMutation({mutationId: "m2"})?.status).toBe("inFlight");
+    });
+
+    it("ignores a batch transport failure that rejects after reset()", async () => {
+      const harness = makeBatchHarness();
+      enqueue(harness, {entityId: "e1", mutationId: "m1"});
+      enqueue(harness, {entityId: "e2", mutationId: "m2"});
+      let fail: (() => void) | undefined;
+      harness.transport.respondBatchWith(
+        () =>
+          new Promise((_resolve, reject) => {
+            fail = (): void => reject(new Error("socket closed"));
+          })
+      );
+
+      const replay = harness.coordinator.replay({userId: USER});
+      await Promise.resolve();
+      expect(fail).toBeDefined();
+      harness.coordinator.reset();
+      fail?.();
+
+      expect(await replay).toEqual({});
+      // No backoff is armed for the old lifecycle's failure: the rows are left
+      // exactly as the reset found them.
+      expect(harness.outbox.getMutation({mutationId: "m1"})?.status).toBe("inFlight");
+      expect(harness.outbox.getMutation({mutationId: "m1"})?.errorNackCount).toBe(0);
+    });
+
+    it("sends nothing while the host has gated draining off", async () => {
+      const harness = makeHarness({shouldDrain: () => false});
+      enqueue(harness, {entityId: "t1", mutationId: "m1"});
+
+      expect(await harness.coordinator.replay({userId: USER})).toEqual({});
+      expect(harness.transport.sentMutations).toHaveLength(0);
+      expect(harness.outbox.getMutation({mutationId: "m1"})?.status).toBe("queued");
     });
   });
 });

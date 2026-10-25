@@ -4,6 +4,7 @@ import type {CommitStatus} from "../ciWallClock/lib";
 import {
   type BenchAdapter,
   type BenchResult,
+  nearestTouchTarget,
   planBenchBranch,
   runBenchCase,
   summarizeBench,
@@ -22,17 +23,30 @@ const status = (job: string, state: string, minutesAfterStart: number, id = 0): 
 
 interface FakeRun {
   closed: {branch: string; number: number}[];
+  deleted: string[];
   opened: {branch: string; title: string}[];
   prepared: {baseRef: string; name: string; operations: unknown[]}[];
 }
 
+interface FakeFailures {
+  /** Branch names whose PR close throws. */
+  closeFails?: string[];
+  /** Role whose PR fails to open after its branch was pushed. */
+  openFailsFor?: "control" | "treatment";
+  /** Head shas whose status reads throw: a number of times, or always. */
+  statusFailures?: Record<string, number | "always">;
+}
+
 /** Fake GitHub + git: each prepared branch gets a head sha whose statuses follow `timelines`. */
 const fakeAdapter = ({
+  failures = {},
   timelines,
 }: {
+  failures?: FakeFailures;
   timelines: Record<string, CommitStatus[]>;
 }): {adapter: BenchAdapter; run: FakeRun} => {
-  const run: FakeRun = {closed: [], opened: [], prepared: []};
+  const run: FakeRun = {closed: [], deleted: [], opened: [], prepared: []};
+  const statusFailures = {...failures.statusFailures};
   let clock = T0;
   let nextPullRequest = 900;
   const adapter: BenchAdapter = {
@@ -44,13 +58,30 @@ const fakeAdapter = ({
       parentSha: "parent1",
     }),
     closePullRequest: async (pullRequest) => {
+      if (failures.closeFails?.includes(pullRequest.branch)) {
+        throw new Error(`gh pr close ${pullRequest.number} failed`);
+      }
       run.closed.push(pullRequest);
     },
-    experimentFiles: async () => [".circleci/continue-config.yml"],
-    listStatuses: async (sha) =>
-      (timelines[sha] ?? []).filter((entry) => Date.parse(entry.created_at) <= clock),
+    deleteBranch: async (branch) => {
+      run.deleted.push(branch);
+    },
+    experimentFiles: async () => [{path: ".circleci/continue-config.yml", status: "M"}],
+    listStatuses: async (sha) => {
+      const remaining = statusFailures[sha];
+      if (remaining === "always" || (typeof remaining === "number" && remaining > 0)) {
+        if (typeof remaining === "number") {
+          statusFailures[sha] = remaining - 1;
+        }
+        throw new Error("gh api: HTTP 502");
+      }
+      return (timelines[sha] ?? []).filter((entry) => Date.parse(entry.created_at) <= clock);
+    },
     now: () => clock,
     openDraftPullRequest: async ({branch, title}) => {
+      if (failures.openFailsFor && branch.endsWith(failures.openFailsFor)) {
+        throw new Error("gh pr create failed");
+      }
       run.opened.push({branch, title});
       nextPullRequest += 1;
       return nextPullRequest;
@@ -64,6 +95,16 @@ const fakeAdapter = ({
     },
   };
   return {adapter, run};
+};
+
+const BENCH = {
+  benchCase: {name: "api-only", pullRequest: 1596},
+  branch: "ci-speed/1-cache",
+  label: "iter1",
+  pollMs: MINUTE,
+  quietMs: 3 * MINUTE,
+  runIndex: 1,
+  timeoutMs: 60 * MINUTE,
 };
 
 const greenRun = (lastJobMinutes: number): CommitStatus[] => [
@@ -89,7 +130,10 @@ describe("planBenchBranch", () => {
       {path: "api/src/newThing.ts", status: "A"},
       {path: ".circleci/continue-config.yml", status: "M"},
     ];
-    const experimentFiles = [".circleci/continue-config.yml", "scripts/ci/bench/lib.ts"];
+    const experimentFiles = [
+      {path: ".circleci/continue-config.yml", status: "M"},
+      {path: "scripts/ci/bench/lib.ts", status: "A"},
+    ];
 
     expect(planBenchBranch({changes, experimentFiles, parentSha: "p1", role: "treatment"})).toEqual(
       [
@@ -235,6 +279,108 @@ describe("runBenchCase", () => {
       status: "timeout",
     });
     expect(run.closed).toEqual([{branch: "ci-bench/baseline/api-only-1-control", number: 901}]);
+  });
+});
+
+describe("nearestTouchTarget", () => {
+  const tracked = [
+    ".circleci/continue-config.yml",
+    "package.json",
+    "scripts/ci/bun-install-uncached.test.ts",
+    "scripts/ci/docs-archive.sh",
+    "scripts/ci/e2eAffected/git.ts",
+    "scripts/ci/prepush/plan.json",
+  ];
+
+  it("touches the file itself when the base has it", () => {
+    expect(nearestTouchTarget({path: ".circleci/continue-config.yml", trackedFiles: tracked})).toBe(
+      ".circleci/continue-config.yml"
+    );
+  });
+
+  it("touches the nearest existing file with comment syntax when the branch adds a new path", () => {
+    expect(nearestTouchTarget({path: "scripts/ci/bench/lib.ts", trackedFiles: tracked})).toBe(
+      "scripts/ci/bun-install-uncached.test.ts"
+    );
+    expect(nearestTouchTarget({path: "scripts/ci/prepush/new.ts", trackedFiles: tracked})).toBe(
+      "scripts/ci/bun-install-uncached.test.ts"
+    );
+  });
+
+  it("skips the touch when no directory up to the root has a file with comment syntax", () => {
+    expect(
+      nearestTouchTarget({path: "newpkg/src/a.ts", trackedFiles: ["package.json"]})
+    ).toBeUndefined();
+  });
+});
+
+describe("runBenchCase failure handling", () => {
+  it("keeps measuring through a transient status read error", async () => {
+    const {adapter} = fakeAdapter({
+      failures: {statusFailures: {"control-sha": 2}},
+      timelines: {"control-sha": greenRun(9), "treatment-sha": greenRun(6)},
+    });
+
+    const results = await runBenchCase({adapter, ...BENCH});
+
+    expect(results.map(({minutes, role, status: state}) => ({minutes, role, state}))).toEqual([
+      {minutes: 9, role: "control", state: "ok"},
+      {minutes: 6, role: "treatment", state: "ok"},
+    ]);
+  });
+
+  it("reports a role whose statuses keep failing as an error, measures the other, and closes both", async () => {
+    const {adapter, run} = fakeAdapter({
+      failures: {statusFailures: {"treatment-sha": "always"}},
+      timelines: {"control-sha": greenRun(9)},
+    });
+
+    const results = await runBenchCase({adapter, ...BENCH});
+
+    expect(results).toEqual([
+      {
+        case: "api-only",
+        lastJob: "api-ci",
+        minutes: 9,
+        pullRequest: 901,
+        role: "control",
+        run: 1,
+        status: "ok",
+      },
+      {
+        case: "api-only",
+        pullRequest: 902,
+        reason: "reading statuses failed 3 times in a row: gh api: HTTP 502",
+        role: "treatment",
+        run: 1,
+        status: "error",
+      },
+    ]);
+    expect(run.closed.map(({number}) => number)).toEqual([901, 902]);
+  });
+
+  it("deletes a pushed branch whose PR failed to open, closes the PR that did open, and rethrows", async () => {
+    const {adapter, run} = fakeAdapter({failures: {openFailsFor: "treatment"}, timelines: {}});
+
+    await expect(runBenchCase({adapter, ...BENCH})).rejects.toThrow("gh pr create failed");
+
+    expect(run.closed).toEqual([{branch: "ci-bench/iter1/api-only-1-control", number: 901}]);
+    expect(run.deleted).toEqual(["ci-bench/iter1/api-only-1-treatment"]);
+  });
+
+  it("keeps closing PRs after one close fails and reports the cleanup failure on the results", async () => {
+    const {adapter, run} = fakeAdapter({
+      failures: {closeFails: ["ci-bench/iter1/api-only-1-control"]},
+      timelines: {"control-sha": greenRun(9), "treatment-sha": greenRun(6)},
+    });
+
+    const results = await runBenchCase({adapter, ...BENCH});
+
+    expect(run.closed).toEqual([{branch: "ci-bench/iter1/api-only-1-treatment", number: 902}]);
+    expect(results.map((result) => result.cleanupError)).toEqual([
+      "ci-bench/iter1/api-only-1-control: gh pr close 901 failed",
+      "ci-bench/iter1/api-only-1-control: gh pr close 901 failed",
+    ]);
   });
 });
 

@@ -555,19 +555,23 @@ case in `scripts/ci/bench/cases.ts`, run by run, it:
    file the case PR changed is rewound to its content before that PR merged,
    so the replay diff touches the same files with real code. The control also
    appends a comment to each file the branch under test changes, so path
-   filtering starts the same workflows for both.
+   filtering starts the same workflows for both. A file `master` does not have
+   yet maps to the nearest existing file with comment syntax in the same
+   directory or a parent. If there is none, the touch is skipped.
 2. Opens both as draft PRs labelled `ci-bench`. Preview deploys skip
    `ci-bench/*` branches.
 3. Waits until every counted job has finished and no status has changed for
    3 minutes (time out at 60 minutes). Then it measures each with the
    [PR CI speed](#measure-pr-ci-speed) metric.
-4. Closes both PRs and deletes their branches, even on failure.
+4. Closes both PRs and deletes their branches, even on failure. A branch whose
+   PR never opened is deleted directly. A cleanup that still fails is
+   reported as `cleanupError` on the results, so you can remove it by hand.
 
 | Result | Meaning |
 | --- | --- |
 | `ok` | Every counted job succeeded; the run counts |
 | `invalid` | A counted job failed, usually because the rewound code no longer builds on current master. Swap the case in `cases.ts` |
-| `timeout` / `error` | CI never settled, or git or `gh` failed |
+| `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
 
 Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary
 compares the median of per-case medians for control and treatment. Only `ok`

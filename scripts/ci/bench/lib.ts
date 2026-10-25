@@ -34,6 +34,8 @@ export type BenchRole = "control" | "treatment";
 
 export interface BenchResult {
   case: string;
+  /** Set when closing a PR or deleting a bench branch failed; clean it up by hand. */
+  cleanupError?: string;
   lastJob?: string;
   minutes?: number;
   pullRequest?: number;
@@ -47,7 +49,9 @@ export interface BenchResult {
 export interface BenchAdapter {
   caseChanges: (pullRequest: number) => Promise<{changes: FileChange[]; parentSha: string}>;
   closePullRequest: (pullRequest: {branch: string; number: number}) => Promise<void>;
-  experimentFiles: (branch: string) => Promise<string[]>;
+  deleteBranch: (branch: string) => Promise<void>;
+  /** Files the branch under test changes relative to master, with their status. */
+  experimentFiles: (branch: string) => Promise<FileChange[]>;
   listStatuses: (sha: string) => Promise<CommitStatus[]>;
   now: () => number;
   openDraftPullRequest: (pullRequest: {branch: string; title: string}) => Promise<number>;
@@ -81,6 +85,46 @@ export const touchLine = (path: string): string => {
   return COMMENT_BY_EXTENSION[extension] ?? "\n";
 };
 
+const hasCommentSyntax = (path: string): boolean => touchLine(path) !== "\n";
+
+const parentDirectory = (path: string): string | undefined => {
+  const slash = path.lastIndexOf("/");
+  return slash === -1 ? undefined : path.slice(0, slash);
+};
+
+/**
+ * The file a control branch appends to for a path the branch under test changes. A path
+ * master does not have yet maps to the nearest existing file with comment syntax in the
+ * same directory or a parent, so the same path filters still fire. Undefined when there
+ * is none, which skips the touch.
+ */
+export const nearestTouchTarget = ({
+  path,
+  trackedFiles,
+}: {
+  path: string;
+  trackedFiles: string[];
+}): string | undefined => {
+  if (trackedFiles.includes(path)) {
+    return path;
+  }
+  let directory = parentDirectory(path);
+  while (true) {
+    const prefix = directory === undefined ? "" : `${directory}/`;
+    const candidate = trackedFiles
+      .filter((file) => file.startsWith(prefix) && !file.slice(prefix.length).includes("/"))
+      .filter(hasCommentSyntax)
+      .sort()[0];
+    if (candidate) {
+      return candidate;
+    }
+    if (directory === undefined) {
+      return undefined;
+    }
+    directory = parentDirectory(directory);
+  }
+};
+
 /**
  * Files the branch under test changes keep the branch's version in both roles. Rewinding
  * them would undo the experiment.
@@ -92,11 +136,11 @@ export const planBenchBranch = ({
   role,
 }: {
   changes: FileChange[];
-  experimentFiles: string[];
+  experimentFiles: FileChange[];
   parentSha: string;
   role: BenchRole;
 }): BranchOperation[] => {
-  const experiment = new Set(experimentFiles);
+  const experiment = new Set(experimentFiles.map((change) => change.path));
   const operations: BranchOperation[] = changes
     .filter((change) => !experiment.has(change.path))
     .map((change) =>
@@ -109,9 +153,14 @@ export const planBenchBranch = ({
   }
   return [
     ...operations,
-    ...experimentFiles.map((path): BranchOperation => ({kind: "touch", path})),
+    ...experimentFiles.map((change): BranchOperation => ({kind: "touch", path: change.path})),
   ];
 };
+
+const MAX_STATUS_FAILURES = 3;
+
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 const waitForSettledCi = async ({
   adapter,
@@ -127,8 +176,23 @@ const waitForSettledCi = async ({
   timeoutMs: number;
 }): Promise<CommitStatus[] | undefined> => {
   const deadline = adapter.now() + timeoutMs;
+  let consecutiveFailures = 0;
   while (adapter.now() <= deadline) {
-    const statuses = await adapter.listStatuses(headSha);
+    let statuses: CommitStatus[];
+    try {
+      statuses = await adapter.listStatuses(headSha);
+      consecutiveFailures = 0;
+    } catch (error) {
+      // One bad `gh api` call should not end a 15-minute measurement.
+      consecutiveFailures += 1;
+      if (consecutiveFailures >= MAX_STATUS_FAILURES) {
+        throw new Error(
+          `reading statuses failed ${MAX_STATUS_FAILURES} times in a row: ${errorMessage(error)}`
+        );
+      }
+      await adapter.sleep(pollMs);
+      continue;
+    }
     const finals = [...finalTestJobStatuses({statuses}).values()];
     const lastChange = Math.max(0, ...finals.map((status) => Date.parse(status.created_at)));
     // Dependent jobs post their first status only when they start, so all-finished is not
@@ -162,7 +226,13 @@ const replayRole = async ({
   timeoutMs: number;
 }): Promise<BenchResult> => {
   const base = {case: benchCase.name, pullRequest, role, run: runIndex};
-  const statuses = await waitForSettledCi({adapter, ...wait});
+  let statuses: CommitStatus[] | undefined;
+  try {
+    statuses = await waitForSettledCi({adapter, ...wait});
+  } catch (error) {
+    // Report this role and let the other role finish its own measurement.
+    return {...base, reason: errorMessage(error), status: "error"};
+  }
   if (!statuses) {
     return {
       ...base,
@@ -205,7 +275,10 @@ export const runBenchCase = async ({
   const experimentFiles = isMaster ? [] : await adapter.experimentFiles(branch);
   const roles: BenchRole[] = isMaster ? ["control"] : ["control", "treatment"];
 
-  const opened: {branch: string; headSha: string; number: number; role: BenchRole}[] = [];
+  // Every pushed branch, with its PR once opened, so cleanup never leaks one.
+  const pushed: {branch: string; headSha: string; number?: number; role: BenchRole}[] = [];
+  let results: BenchResult[] = [];
+  let failure: unknown;
   try {
     for (const role of roles) {
       const name = `ci-bench/${label}/${benchCase.name}-${runIndex}-${role}`;
@@ -214,21 +287,22 @@ export const runBenchCase = async ({
         name,
         operations: planBenchBranch({changes, experimentFiles, parentSha, role}),
       });
-      const number = await adapter.openDraftPullRequest({
+      const entry: (typeof pushed)[number] = {branch: name, headSha, role};
+      pushed.push(entry);
+      entry.number = await adapter.openDraftPullRequest({
         branch: name,
         title: `[ci-bench] ${label}: replay #${benchCase.pullRequest} (${role}, run ${runIndex})`,
       });
-      opened.push({branch: name, headSha, number, role});
     }
     // Wait on both roles at once so they run under the same CircleCI load.
-    return await Promise.all(
-      opened.map(({headSha, number, role}) =>
+    results = await Promise.all(
+      pushed.map(({headSha, number, role}) =>
         replayRole({
           adapter,
           benchCase,
           headSha,
           pollMs,
-          pullRequest: number,
+          pullRequest: number as number,
           quietMs,
           role,
           runIndex,
@@ -236,11 +310,29 @@ export const runBenchCase = async ({
         })
       )
     );
-  } finally {
-    for (const {branch: openedBranch, number} of opened) {
-      await adapter.closePullRequest({branch: openedBranch, number});
+  } catch (error) {
+    failure = error;
+  }
+
+  const cleanupErrors: string[] = [];
+  for (const {branch: pushedBranch, number} of pushed) {
+    try {
+      if (number === undefined) {
+        await adapter.deleteBranch(pushedBranch);
+      } else {
+        await adapter.closePullRequest({branch: pushedBranch, number});
+      }
+    } catch (error) {
+      cleanupErrors.push(`${pushedBranch}: ${errorMessage(error)}`);
     }
   }
+  if (failure !== undefined) {
+    throw failure;
+  }
+  if (cleanupErrors.length === 0) {
+    return results;
+  }
+  return results.map((result) => ({...result, cleanupError: cleanupErrors.join("; ")}));
 };
 
 const median = (values: number[]): number => {

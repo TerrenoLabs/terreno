@@ -8,9 +8,19 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 
 import {githubPullRequestSource} from "../ciWallClock/github";
-import {type BenchAdapter, type FileChange, MASTER_REF, touchLine} from "./lib";
+import {type BenchAdapter, type FileChange, MASTER_REF, nearestTouchTarget, touchLine} from "./lib";
 
 const BENCH_LABEL = "ci-bench";
+
+/** `git diff -z --name-status` output: status and path alternate, NUL-separated, unquoted. */
+const parseNameStatus = (output: string): FileChange[] => {
+  const fields = output.split("\0").filter((field) => field.length > 0);
+  const changes: FileChange[] = [];
+  for (let index = 0; index + 1 < fields.length; index += 2) {
+    changes.push({path: fields[index + 1], status: fields[index]});
+  }
+  return changes;
+};
 
 const exec = ({args, command, cwd}: {args: string[]; command: string; cwd: string}): string =>
   execFileSync(command, args, {cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024});
@@ -38,22 +48,21 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
         throw new Error(`#${pullRequest} has no merge commit`);
       }
       const parentSha = git(["rev-parse", `${mergeSha}^`]).trim();
-      const changes = git(["diff", "--no-renames", "--name-status", parentSha, mergeSha])
-        .split("\n")
-        .filter((line) => line.length > 0)
-        .map((line) => {
-          const [status, path] = line.split("\t");
-          return {path, status};
-        });
+      const changes = parseNameStatus(
+        git(["diff", "-z", "--no-renames", "--name-status", parentSha, mergeSha])
+      );
       return {changes, parentSha};
     },
     closePullRequest: async ({number}: {branch: string; number: number}): Promise<void> => {
       gh(["pr", "close", String(number), "--delete-branch"]);
     },
-    experimentFiles: async (branch: string): Promise<string[]> =>
-      git(["diff", "--name-only", `${MASTER_REF}...${branch}`])
-        .split("\n")
-        .filter((line) => line.length > 0),
+    deleteBranch: async (branch: string): Promise<void> => {
+      git(["push", "--quiet", "origin", "--delete", branch]);
+    },
+    experimentFiles: async (branch: string): Promise<FileChange[]> =>
+      parseNameStatus(
+        git(["diff", "-z", "--no-renames", "--name-status", `${MASTER_REF}...${branch}`])
+      ),
     listStatuses: statuses.listStatuses,
     now: (): number => Date.now(),
     openDraftPullRequest: async ({
@@ -89,20 +98,31 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
         "--body",
         "Benchmark replay for docs/implementationPlans/circleci-pr-speed-loop.md. Do not review or merge; `bun run ci:bench` closes it.",
       ]).trim();
-      return Number(url.split("/").pop());
+      const number = Number(url.split("/").pop());
+      if (!Number.isInteger(number)) {
+        throw new Error(`gh pr create returned no PR URL: ${url}`);
+      }
+      return number;
     },
     prepareBranch: async ({baseRef, name, operations}): Promise<{headSha: string}> => {
       const worktree = mkdtempSync(join(tmpdir(), "ci-bench-"));
       try {
         git(["worktree", "add", "--quiet", "--detach", worktree, baseRef]);
+        const trackedFiles = git(["ls-files", "-z"], worktree).split("\0").filter(Boolean);
+        const touched = new Set<string>();
         for (const operation of operations) {
           if (operation.kind === "restore") {
             git(["checkout", operation.sha, "--", operation.path], worktree);
           } else if (operation.kind === "remove") {
             git(["rm", "--quiet", "--ignore-unmatch", "--", operation.path], worktree);
           } else {
-            appendFileSync(join(worktree, operation.path), touchLine(operation.path));
-            git(["add", "--", operation.path], worktree);
+            const target = nearestTouchTarget({path: operation.path, trackedFiles});
+            if (target === undefined || touched.has(target)) {
+              continue;
+            }
+            touched.add(target);
+            appendFileSync(join(worktree, target), touchLine(target));
+            git(["add", "--", target], worktree);
           }
         }
         git(

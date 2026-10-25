@@ -100,6 +100,24 @@ describe("githubBenchAdapter git operations", () => {
     ).toBe("error: patch failed: api/b.ts:1");
   });
 
+  it("treats bracketed Expo Router paths literally when reverting", async () => {
+    const repo = createRepo();
+    commitFiles(repo, {"app/[model].tsx": "1\n", "app/m.tsx": "1\n"}, "base");
+    const parentSha = git(repo, ["rev-parse", "HEAD"]);
+    const mergeSha = commitFiles(repo, {"app/[model].tsx": "2\n", "app/m.tsx": "2\n"}, "case");
+    pushMaster(repo);
+    const adapter = githubBenchAdapter({repoRoot: repo});
+
+    const {headSha} = await adapter.prepareBranch({
+      baseRef: "origin/master",
+      name: "ci-bench/test/brackets-1-treatment",
+      operations: [{kind: "revert", mergeSha, parentSha, paths: ["app/[model].tsx"]}],
+    });
+
+    git(repo, ["fetch", "--quiet", "origin"]);
+    expect(git(repo, ["diff", "--name-only", "origin/master", headSha])).toBe("app/[model].tsx");
+  });
+
   it("deletes a pushed bench branch", async () => {
     const repo = createRepo();
     commitFiles(repo, {"README.md": "# repo\n"}, "base");

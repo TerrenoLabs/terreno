@@ -293,13 +293,13 @@ export const runBenchCase = async ({
   timeoutMs: number;
 }): Promise<BenchResult[]> => {
   const {changes, mergeSha, parentSha} = await adapter.caseChanges(benchCase.pullRequest);
+  const paths = replayPaths(changes);
+  if (paths.length === 0) {
+    throw new Error(`#${benchCase.pullRequest} has no code changes to replay`);
+  }
   // A case whose reverse patch conflicts with later work cannot be replayed. Refuse before
   // pushing anything.
-  const conflict = await adapter.revertConflicts({
-    mergeSha,
-    parentSha,
-    paths: replayPaths(changes),
-  });
+  const conflict = await adapter.revertConflicts({mergeSha, parentSha, paths});
   if (conflict !== undefined) {
     throw new Error(
       `#${benchCase.pullRequest} no longer reverts cleanly on master (${conflict}). ` +
@@ -401,11 +401,11 @@ export const suggestBenchCases = async ({
     }
     try {
       const {changes, mergeSha, parentSha} = await adapter.caseChanges(pullRequest.number);
-      const conflict = await adapter.revertConflicts({
-        mergeSha,
-        parentSha,
-        paths: replayPaths(changes),
-      });
+      const paths = replayPaths(changes);
+      if (paths.length === 0) {
+        continue;
+      }
+      const conflict = await adapter.revertConflicts({mergeSha, parentSha, paths});
       if (conflict === undefined) {
         suggestions.push({directories, pullRequest: pullRequest.number});
       }

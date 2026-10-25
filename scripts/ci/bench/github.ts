@@ -42,7 +42,18 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
     mergeSha: string;
     parentSha: string;
     paths: string[];
-  }): string => git(["diff", "--binary", "--no-renames", parentSha, mergeSha, "--", ...paths]);
+  }): string =>
+    // Literal pathspecs: Expo Router paths such as `app/[model].tsx` are not globs.
+    git([
+      "--literal-pathspecs",
+      "diff",
+      "--binary",
+      "--no-renames",
+      parentSha,
+      mergeSha,
+      "--",
+      ...paths,
+    ]);
   let isLabelReady = false;
 
   return {

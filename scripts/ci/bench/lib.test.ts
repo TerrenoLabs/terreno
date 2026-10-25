@@ -420,6 +420,26 @@ describe("runBenchCase stale cases", () => {
     expect(run.prepared).toEqual([]);
   });
 
+  it("refuses a case with no code changes to replay, before pushing anything", async () => {
+    const {adapter, run} = fakeAdapter({timelines: {}});
+    const docsOnly: BenchAdapter = {
+      ...adapter,
+      caseChanges: async () => ({
+        changes: [
+          {path: "docs/how-to/x.md", status: "M"},
+          {path: "changelog/unreleased/x.md", status: "A"},
+        ],
+        mergeSha: "merge1",
+        parentSha: "parent1",
+      }),
+    };
+
+    await expect(runBenchCase({adapter: docsOnly, ...BENCH})).rejects.toThrow(
+      "#1596 has no code changes to replay"
+    );
+    expect(run.prepared).toEqual([]);
+  });
+
   it("reports a cleanup failure together with the error that stopped the case", async () => {
     const {adapter} = fakeAdapter({
       failures: {deleteFails: true, openFailsFor: "treatment"},

@@ -9,6 +9,8 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Deploy to Google Cloud Platform](deploy-to-gcp.md) — index for GCP guides
 - [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md) — container + Secret Manager + Cloud Run
 - [Deploy web to GCS + CDN](deploy-web-to-gcs-cdn.md) — static hosting with SPA routing
+- [Deploy to Vercel](deploy-to-vercel.md) — web on Vercel, backend on Cloud Run or Vercel Functions; previews, CORS, CI
+- [Run WebSockets on Vercel Functions](vercel-function-websockets.md) — Socket.IO and syncdb on Vercel's WebSocket beta: transports, reconnects, state
 
 ## Contents
 

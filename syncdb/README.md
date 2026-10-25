@@ -161,6 +161,7 @@ const client = createSyncDb({
   collections,                    // string[] — synced collections
   authProvider,                   // {getToken, getUserId, onAuthChange}
   baseUrl?,                       // server origin (required unless transport + httpChannel injected)
+  socketTransports?,              // Socket.io transports for the default socket (default ["polling", "websocket"]; ["websocket"] on Vercel)
   keyProvider?,                   // web encryption key provider (default: server-derived via GET /sync/key)
   persisterFactory?,              // platform persister override
   transport?, httpChannel?,       // test/DI overrides

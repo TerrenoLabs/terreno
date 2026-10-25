@@ -67,6 +67,8 @@ export const syncDb = createSyncDb({
 });
 ```
 
+The default socket transport uses `["polling", "websocket"]`. On hosts without session affinity (Vercel Functions), pass `socketTransports: ["websocket"]`; see `docs/how-to/vercel-function-websockets.md`.
+
 Call `syncDb.start()` when the user is authenticated and `syncDb.stop()` on logout. Gate `mutate()` until `start()` resolves.
 
 ## React hooks (`@terreno/syncdb/react`)

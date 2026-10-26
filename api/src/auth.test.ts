@@ -2,6 +2,8 @@ import {afterEach, beforeEach, describe, expect, it, setSystemTime, spyOn} from 
 import {assert} from "chai";
 import express from "express";
 import type jwt from "jsonwebtoken";
+import mongoose, {Schema} from "mongoose";
+import passportLocalMongoose from "passport-local-mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
@@ -15,13 +17,18 @@ import {
   MAX_PASSWORD_LENGTH,
   omitUserRolesFromWriteBody,
   PRIVILEGED_USER_FIELDS,
+  SELF_SERVICE_BLOCKED_USER_FIELDS,
   setPasswordForUser,
   setupAuth,
   signupUser,
   stripPrivilegedUserFields,
 } from "./auth";
+import {apiUnauthorizedMiddleware} from "./errors";
+import type {AuthOptions, AuthRecoveryMail} from "./expressServer";
+import {githubUserPlugin} from "./githubAuth";
 import {logger} from "./logger";
 import {Permissions} from "./permissions";
+import {isRbacUserModelName} from "./rbac/userWriteGuards";
 import {getCurrentRequestContext} from "./requestContext";
 import {TerrenoApp} from "./terrenoApp";
 import {type Food, FoodModel, getBaseServer, setupDb, setupTestData, UserModel} from "./tests";
@@ -195,7 +202,7 @@ describe("auth tests", () => {
 
     const mePatchRes = await agent
       .patch("/auth/me")
-      .send({email: "new2@example.com"})
+      .send({currentPassword: "123", email: "new2@example.com"})
       .set("authorization", `Bearer ${token}`)
       .expect(200);
     expect(mePatchRes.body.data._id).toBeDefined();
@@ -375,7 +382,7 @@ describe("auth tests", () => {
 
     const mePatchRes = await agent
       .patch("/auth/me")
-      .send({email: "admin2@example.com"})
+      .send({currentPassword: "securePassword", email: "admin2@example.com"})
       .expect(200);
     expect(mePatchRes.body.data._id).toBeDefined();
     expect(mePatchRes.body.data.id).toBeDefined();
@@ -1106,6 +1113,62 @@ describe("privileged user fields", () => {
     expect((user as unknown as {roles?: string[]}).roles ?? []).toEqual([]);
   });
 
+  it("drops dotted-path forms of privileged fields from self-service and RBAC write bodies", () => {
+    const body = {
+      "emailVerified.flag": true,
+      name: "Someone",
+      "organizationIds.0": "other-tenant",
+      "profile.nickname": "kept",
+      "roles.0": "superadmin",
+      "roles.1": "superadmin",
+      rolesNote: "kept",
+    };
+    expect(stripPrivilegedUserFields(body, "test")).toEqual({
+      name: "Someone",
+      "profile.nickname": "kept",
+      rolesNote: "kept",
+    });
+    expect(omitUserRolesFromWriteBody("User", {}, body)).toEqual({
+      name: "Someone",
+      "profile.nickname": "kept",
+      rolesNote: "kept",
+    });
+    expect(omitUserRolesFromWriteBody("User", {}, {admin: true, "admin.flag": true}, true)).toEqual(
+      {admin: true}
+    );
+  });
+
+  it("recognizes the createAccess user model by its compiled name", () => {
+    const access = {userModel: {modelName: "Account"}};
+    expect(isRbacUserModelName("Account", access)).toBe(true);
+    expect(isRbacUserModelName("User", access)).toBe(true);
+    expect(isRbacUserModelName("Todo", access)).toBe(false);
+    expect(isRbacUserModelName("Account", undefined)).toBe(false);
+    expect(omitUserRolesFromWriteBody("Account", access, {name: "a", roles: ["x"]})).toEqual({
+      name: "a",
+    });
+    expect(omitUserRolesFromWriteBody("Account", {}, {roles: ["x"]})).toEqual({roles: ["x"]});
+  });
+
+  it("does not let anonymous signup self-assign roles through dotted paths", async () => {
+    await agent
+      .post("/auth/signup")
+      .send({
+        email: "dotted-escalate@example.com",
+        "organizationIds.0": "other-tenant",
+        password: "Password123!",
+        "roles.0": "superadmin",
+      })
+      .expect(200);
+
+    const created = await UserModel.findOne({email: "dotted-escalate@example.com"});
+    expect(created).toBeTruthy();
+    expect((created as unknown as {roles?: string[]})?.roles ?? []).toEqual([]);
+    expect(
+      (created as unknown as {organizationIds?: string[]})?.organizationIds ?? []
+    ).not.toContain("other-tenant");
+  });
+
   it("does not let PATCH /auth/me escalate to admin or join organizations", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;
@@ -1148,7 +1211,7 @@ describe("privileged user fields", () => {
     await agent
       .patch("/auth/me")
       .set("authorization", `Bearer ${token}`)
-      .send({email: "unproven@example.com"})
+      .send({currentPassword: "password", email: "unproven@example.com"})
       .expect(200);
 
     const reloaded = await UserModel.findById(notAdminId);
@@ -1172,6 +1235,372 @@ describe("privileged user fields", () => {
 
     const reloaded = await UserModel.findById(notAdminId);
     expect((reloaded as unknown as {emailVerified?: boolean})?.emailVerified).toBe(true);
+  });
+});
+
+describe("PATCH /auth/me email change step-up", () => {
+  let agent: TestAgent;
+  let sentMail: AuthRecoveryMail[];
+  let token: string;
+  let notAdminId: string;
+
+  const buildAgent = (authOptions: AuthOptions): TestAgent => {
+    const app = new TerrenoApp({
+      authOptions,
+      configureApp: () => {},
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    return supertest.agent(app);
+  };
+
+  const signToken = async (id: string): Promise<string> => {
+    const jwtLib = (await import("jsonwebtoken")).default;
+    return jwtLib.sign({id}, process.env.TOKEN_SECRET as string, {
+      issuer: process.env.TOKEN_ISSUER,
+    });
+  };
+
+  const reloadNotAdmin = async (): Promise<Record<string, unknown> | null> => {
+    return (await UserModel.findById(notAdminId).lean()) as Record<string, unknown> | null;
+  };
+
+  beforeEach(async () => {
+    setSystemTime();
+    const [_admin, notAdmin] = await setupDb();
+    notAdminId = String((notAdmin as unknown as {_id: {toString(): string}})._id);
+    token = await signToken(notAdminId);
+    sentMail = [];
+    agent = buildAgent({
+      sendMail: async (message) => {
+        sentMail.push(message);
+      },
+    });
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("rejects an email change without the current password and writes nothing", async () => {
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({email: "taken-over@example.com", name: "Should Not Save"})
+      .expect(403);
+    expect(res.body.message).toContain("current password");
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+    expect(reloaded?.name).toBe("Not Admin");
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("rejects an email change with a wrong current password and counts the attempt", async () => {
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "wrong-password", email: "taken-over@example.com"})
+      .expect(403);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+    expect(reloaded?.attempts).toBe(1);
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("reports the passport lockout once wrong current passwords reach maxAttempts", async () => {
+    const messages: string[] = [];
+    // The test user model locks after three wrong attempts.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await agent
+        .patch("/auth/me")
+        .set("authorization", `Bearer ${token}`)
+        .send({currentPassword: "wrong-password", email: "taken-over@example.com"})
+        .expect(403);
+      messages.push(res.body.message);
+    }
+    expect(messages.slice(0, 2)).toEqual([
+      "The current password is incorrect.",
+      "The current password is incorrect.",
+    ]);
+    expect(messages[2]).not.toBe("The current password is incorrect.");
+    const locked = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "taken-over@example.com"})
+      .expect(403);
+    expect(locked.body.message).not.toBe("The current password is incorrect.");
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("notAdmin@example.com");
+  });
+
+  it("changes the email with the right current password and notifies the old address", async () => {
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "renamed@example.com"})
+      .expect(200);
+    expect(res.body.data.email).toBe("renamed@example.com");
+    expect(res.body.data.currentPassword).toBeUndefined();
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("renamed@example.com");
+    expect(reloaded?.currentPassword).toBeUndefined();
+    expect(reloaded?.tokenEpoch ?? 0).toBe(0);
+
+    expect(sentMail).toHaveLength(1);
+    const [notice] = sentMail;
+    expect(notice.to).toBe("notAdmin@example.com");
+    expect(notice.sensitive).toBe(true);
+    expect(notice.text).not.toContain("renamed@example.com");
+    expect(notice.text).toContain("r***@e***.com");
+    expect(notice.text).toContain("support");
+    expect(`${notice.text} ${notice.html ?? ""}`).not.toMatch(/https?:|token=/i);
+
+    // The new address now signs in with the same password.
+    await agent
+      .post("/auth/login")
+      .send({email: "renamed@example.com", password: "password"})
+      .expect(200);
+  });
+
+  it("accepts an unchanged email echoed back without a password", async () => {
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({email: " NOTADMIN@example.com ", name: "Renamed"})
+      .expect(200);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.name).toBe("Renamed");
+    expect(sentMail).toHaveLength(0);
+  });
+
+  it("returns 400 for a user with no password to confirm", async () => {
+    const passwordless = await UserModel.create({
+      email: "github-only@example.com",
+      name: "GitHub Only",
+    });
+    const passwordlessToken = await signToken(String(passwordless._id));
+
+    const res = await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${passwordlessToken}`)
+      .send({currentPassword: "anything", email: "moved@example.com"})
+      .expect(400);
+    expect(res.body.message).toContain("Set a password");
+
+    const reloaded = await UserModel.findById(passwordless._id).lean();
+    expect((reloaded as unknown as {email?: string})?.email).toBe("github-only@example.com");
+  });
+
+  it("verifies a passwordless app user against the Better Auth credential", async () => {
+    const checked: Array<{password: string; userId: string}> = [];
+    const betterAuthAgent = buildAgent({
+      sendMail: async (message) => {
+        sentMail.push(message);
+      },
+      verifyBetterAuthPassword: async (user, password) => {
+        checked.push({password, userId: String(user._id)});
+        return password === "better-auth-password" ? "verified" : "wrong";
+      },
+    });
+    const betterAuthUser = await UserModel.create({
+      email: "better-auth@example.com",
+      name: "Better Auth",
+    });
+    const betterAuthToken = await signToken(String(betterAuthUser._id));
+
+    await betterAuthAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${betterAuthToken}`)
+      .send({currentPassword: "wrong-password", email: "moved@example.com"})
+      .expect(403);
+    await betterAuthAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${betterAuthToken}`)
+      .send({currentPassword: "better-auth-password", email: "moved@example.com"})
+      .expect(200);
+
+    expect(checked).toEqual([
+      {password: "wrong-password", userId: String(betterAuthUser._id)},
+      {password: "better-auth-password", userId: String(betterAuthUser._id)},
+    ]);
+    const reloaded = await UserModel.findById(betterAuthUser._id).lean();
+    expect((reloaded as unknown as {email?: string})?.email).toBe("moved@example.com");
+    expect(sentMail.map((message) => message.to)).toEqual(["better-auth@example.com"]);
+  });
+
+  it("completes the change and logs a warning when no mail sender is configured", async () => {
+    const warnSpy = spyOn(logger, "warn");
+    const noMailAgent = buildAgent({});
+
+    await noMailAgent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({currentPassword: "password", email: "renamed@example.com"})
+      .expect(200);
+
+    const reloaded = await reloadNotAdmin();
+    expect(reloaded?.email).toBe("renamed@example.com");
+    expect(warnSpy.mock.calls.some((call) => String(call[0]).includes("email change notice"))).toBe(
+      true
+    );
+    warnSpy.mockRestore();
+  });
+});
+
+// A user schema that declares the identity-binding fields Better Auth and GitHub linking add.
+const identityUserSchema = new Schema({
+  admin: {default: false, description: "Admin flag", type: Boolean},
+  betterAuthId: {description: "Better Auth user id", type: String},
+  email: {description: "Email", type: String},
+  name: {description: "Name", type: String},
+  oauthProvider: {description: "Social provider", type: String},
+  tokenEpoch: {default: 0, description: "Refresh token epoch", type: Number},
+});
+identityUserSchema.plugin(
+  passportLocalMongoose as unknown as (schema: Schema, options?: Record<string, unknown>) => void,
+  {usernameCaseInsensitive: true, usernameField: "email"}
+);
+identityUserSchema.plugin(githubUserPlugin);
+const IdentityUserModel =
+  (mongoose.models.AuthIdentityUser as mongoose.Model<Record<string, unknown>> | undefined) ??
+  mongoose.model("AuthIdentityUser", identityUserSchema);
+
+describe("self-service identity and credential fields", () => {
+  const identityFields = {
+    attempts: 0,
+    betterAuthId: "victim-better-auth-id",
+    disabled: false,
+    githubAvatarUrl: "https://example.com/avatar.png",
+    githubId: "gh-victim-1",
+    githubProfileUrl: "https://example.com/victim",
+    githubUsername: "victim",
+    hash: "attacker-hash",
+    last: new Date(0).toISOString(),
+    oauthProvider: "github",
+    salt: "attacker-salt",
+  };
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    await IdentityUserModel.deleteMany({});
+    const app = new TerrenoApp({
+      configureApp: () => {},
+      skipListen: true,
+      userModel: IdentityUserModel as unknown as AuthUserModel,
+    }).build();
+    agent = supertest.agent(app);
+  });
+
+  it("drops identity-binding and credential fields from self-service bodies", () => {
+    expect(stripPrivilegedUserFields({...identityFields, name: "Someone"}, "test")).toEqual({
+      name: "Someone",
+    });
+  });
+
+  it("blocks the privileged fields plus identity and credential fields", () => {
+    expect([...SELF_SERVICE_BLOCKED_USER_FIELDS]).toEqual([
+      ...PRIVILEGED_USER_FIELDS,
+      "betterAuthId",
+      "githubId",
+      "githubUsername",
+      "githubProfileUrl",
+      "githubAvatarUrl",
+      "oauthProvider",
+      "hash",
+      "salt",
+      "attempts",
+      "last",
+      "disabled",
+    ]);
+  });
+
+  it("does not let anonymous signup bind another person's credentials", async () => {
+    await agent
+      .post("/auth/signup")
+      .send({...identityFields, email: "signup-binder@example.com", password: "Password123!"})
+      .expect(200);
+
+    const created = await IdentityUserModel.findOne({email: "signup-binder@example.com"}).lean();
+    assert.isUndefined(created?.betterAuthId);
+    assert.isUndefined(created?.githubId);
+    assert.isUndefined(created?.githubUsername);
+    assert.isUndefined(created?.oauthProvider);
+  });
+
+  it("does not let PATCH /auth/me bind credentials or overwrite the password hash", async () => {
+    const signup = await agent
+      .post("/auth/signup")
+      .send({email: "patch-binder@example.com", password: "Password123!"})
+      .expect(200);
+    const token = signup.body.data.token as string;
+    const before = await IdentityUserModel.findOne({email: "patch-binder@example.com"})
+      .select("+hash +salt")
+      .lean();
+
+    await agent
+      .patch("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .send({...identityFields, name: "Renamed"})
+      .expect(200);
+
+    const after = await IdentityUserModel.findOne({email: "patch-binder@example.com"})
+      .select("+hash +salt")
+      .lean();
+    assert.equal(after?.name, "Renamed");
+    assert.isUndefined(after?.betterAuthId);
+    assert.isUndefined(after?.githubId);
+    assert.isUndefined(after?.oauthProvider);
+    assert.equal(after?.hash, before?.hash);
+    assert.equal(after?.salt, before?.salt);
+    await agent
+      .post("/auth/login")
+      .send({email: "patch-binder@example.com", password: "Password123!"})
+      .expect(200);
+  });
+});
+
+describe("PATCH /auth/me password changes", () => {
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    await setupTestData();
+    const app = new TerrenoApp({
+      configureApp: () => {},
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    agent = supertest.agent(app);
+  });
+
+  it("rejects a password in the profile body instead of reporting success", async () => {
+    const login = await agent
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    const token = login.body.data.token as string;
+
+    for (const body of [
+      {password: "brand-new-password-1"},
+      {newPassword: "brand-new-password-1"},
+    ]) {
+      const res = await agent
+        .patch("/auth/me")
+        .set("authorization", `Bearer ${token}`)
+        .send({...body, name: "Should Not Save"});
+      expect(res.status).toBe(400);
+    }
+
+    const reloaded = await UserModel.findOne({email: "notAdmin@example.com"}).lean();
+    expect((reloaded as unknown as {name?: string})?.name).toBe("Not Admin");
+    await agent
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
   });
 });
 
@@ -1413,6 +1842,95 @@ describe("login error and disabled user paths", () => {
       .set("authorization", `Bearer ${token}`)
       .expect(401);
     expect(res.body.title).toContain("disabled");
+  });
+});
+
+describe("disabled users on the legacy JWT stack", () => {
+  let app: express.Application;
+  let token: string;
+  let refreshToken: string;
+  let userId: string;
+
+  beforeEach(async () => {
+    setSystemTime();
+    await setupTestData();
+    app = new TerrenoApp({
+      configureApp: (router: express.Router) => {
+        router.use(
+          "/food",
+          modelRouter(FoodModel, {
+            permissions: {
+              create: [Permissions.IsAuthenticated],
+              delete: [],
+              list: [Permissions.IsAuthenticated],
+              read: [Permissions.IsAuthenticated],
+              update: [],
+            },
+          })
+        );
+      },
+      skipListen: true,
+      userModel: UserModel as unknown as AuthUserModel,
+    }).build();
+    const loginRes = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    ({refreshToken, token, userId} = loginRes.body.data);
+    assert.isString(refreshToken);
+    await UserModel.findByIdAndUpdate(userId, {disabled: true});
+  });
+
+  afterEach(() => {
+    setSystemTime();
+  });
+
+  it("rejects the access JWT under a non-Bearer authorization scheme", async () => {
+    await supertest(app).get("/auth/me").set("authorization", `Secret ${token}`).expect(401);
+  });
+
+  it("rejects a modelRouter create sent with a non-Bearer authorization scheme", async () => {
+    await supertest(app)
+      .post("/food")
+      .set("authorization", `Secret ${token}`)
+      .send({calories: 1, name: "disabled-user-food"})
+      .expect(401);
+    const count = await FoodModel.countDocuments({name: "disabled-user-food"});
+    expect(count).toBe(0);
+  });
+
+  it("rejects the jwt cookie when the decode middleware is skipped", async () => {
+    const cookieApp = getBaseServer();
+    cookieApp.use((req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      req.cookies = {jwt: token};
+      next();
+    });
+    setupAuth(cookieApp, UserModel as unknown as AuthUserModel);
+    addMeRoutes(cookieApp, UserModel as unknown as AuthUserModel);
+    cookieApp.use(apiUnauthorizedMiddleware);
+    await supertest(cookieApp).get("/auth/me").set("authorization", "Secret not-a-jwt").expect(401);
+  });
+
+  it("refuses to log in a disabled user", async () => {
+    const res = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(401);
+    expect(res.body.data?.token).toBeUndefined();
+  });
+
+  it("refuses to refresh tokens for a disabled user", async () => {
+    const res = await supertest(app).post("/auth/refresh_token").send({refreshToken}).expect(401);
+    expect(res.body.data?.token).toBeUndefined();
+  });
+
+  it("still authenticates an enabled user's Bearer token", async () => {
+    await UserModel.findByIdAndUpdate(userId, {disabled: false});
+    const res = await supertest(app)
+      .get("/auth/me")
+      .set("authorization", `Bearer ${token}`)
+      .expect(200);
+    expect(res.body.data.email).toBe("notAdmin@example.com");
   });
 });
 

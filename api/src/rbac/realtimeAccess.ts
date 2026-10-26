@@ -40,6 +40,21 @@ const resolveActionForMethod = (
   return DEFAULT_METHOD_ACTIONS[method];
 };
 
+// REST and snapshot permissions append access.also[method] to the RBAC role and scope checks
+// (buildAccessPermissions), so realtime decisions must apply them too.
+const checkAlsoPermissions = async (
+  access: ModelRouterAccessOptions,
+  method: "list" | "read",
+  user?: User,
+  doc?: Record<string, unknown>
+): Promise<boolean> => {
+  const also = access.also?.[method] ?? [];
+  if (also.length === 0) {
+    return true;
+  }
+  return checkPermissions(method, also, user, doc);
+};
+
 export const canSubscribeRealtime = async (
   entry: RealtimeAccessEntry,
   method: "list" | "read",
@@ -58,7 +73,10 @@ export const canSubscribeRealtime = async (
       permissions: {[access.resource]: [action]},
       user,
     });
-    return result.allowed;
+    if (!result.allowed) {
+      return false;
+    }
+    return checkAlsoPermissions(access, method, user);
   }
 
   const permissions = entry.options.permissions?.[method] ?? [];
@@ -106,10 +124,12 @@ export const canReadDocumentRealtime = async (
           permissions: scopeResult as never,
           user,
         });
-        return extra.allowed;
+        if (!extra.allowed) {
+          return false;
+        }
       }
     }
-    return true;
+    return checkAlsoPermissions(access, "read", user, doc);
   }
 
   return checkPermissions("read", entry.options.permissions?.read ?? [], user, doc);

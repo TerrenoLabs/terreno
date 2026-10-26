@@ -593,6 +593,27 @@ commands:
               exit 1
             fi
 
+  require_vercel_context:
+    description: Fail before checkout/install when terreno-vercel is missing the token or project id
+    parameters:
+      project-id-var:
+        type: string
+    steps:
+      - run:
+          name: Validate terreno-vercel context
+          command: |
+            set -euo pipefail
+            project_id_var="<< parameters.project-id-var >>"
+            missing=()
+            for name in VERCEL_TOKEN VERCEL_ORG_ID "$project_id_var"; do
+              if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+            done
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "terreno-vercel is missing required variables: ${missing[*]}"
+              echo "Fill the context (see docs/how-to/deploy-to-vercel.md) and rerun."
+              exit 1
+            fi
+
   resolve_affected_e2e_shards:
     description: Record which Playwright shards the branch can break (fails open)
     steps:
@@ -730,7 +751,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui
+          packages: blocks syncdb ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -850,7 +871,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -1028,7 +1049,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend syncdb
+          packages: blocks ui syncdb rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1113,7 +1134,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1183,7 +1204,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -1968,7 +1989,8 @@ jobs:
           command: scripts/ci/netlify-deploy.sh demo preview "pr-${PR_NUMBER}"
 
   deploy-frontend-preview:
-    executor: node22
+    # The browsers image carries Chromium's system libraries for the deployed smoke.
+    executor: node22_browsers
     resource_class: large
     steps:
       - skip_if_fork_deploy
@@ -1987,6 +2009,37 @@ jobs:
             export EXPO_PUBLIC_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
             export NETLIFY_WAIT_FOR_HEALTH_URL="$EXPO_PUBLIC_API_URL"
             scripts/ci/netlify-deploy.sh frontend preview "pr-${PR_NUMBER}"
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          # Signs up a fresh user on this PR's isolated backend, so it never runs on production.
+          # The deploy waits only for a healthy backend tag, so on a re-push it can still be the
+          # previous revision while gcp-cd-preview rolls out; rerun the job if that races.
+          name: Smoke the deployed preview in web bearer mode
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            missing=()
+            if [ -z "${PR_NUMBER:-}" ]; then missing+=("PR_NUMBER"); fi
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "Missing required environment variables: ${missing[*]}" >&2
+              exit 1
+            fi
+            export SMOKE_BASE_URL="https://pr-${PR_NUMBER}--terreno-frontend.netlify.app"
+            export SMOKE_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+            export SMOKE_RUN_ID="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-local}"
+            bun run smoke:deployed
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: deployed-bearer-smoke-playwright-report
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: deployed-bearer-smoke-test-results
 
   deploy-docs-preview:
     executor: node22
@@ -2036,6 +2089,39 @@ jobs:
             - run:
                 name: Deploy backend and isolated tasks preview
                 command: scripts/ci/gcp-deploy.sh backend-preview
+
+  # Runs beside the Netlify and Cloud Run deploys while Vercel hosting is evaluated.
+  vercel-deploy:
+    executor: node22
+    resource_class: large
+    parameters:
+      target:
+        type: enum
+        enum: [backend, frontend, demo]
+      mode:
+        type: enum
+        enum: [production, preview]
+      project-id-var:
+        type: string
+    steps:
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - skip_if_fork_deploy
+      - require_vercel_context:
+          project-id-var: << parameters.project-id-var >>
+      - checkout
+      - install_bun_and_deps
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - resolve_preview_pr_number
+      - run:
+          name: Deploy << parameters.target >> << parameters.mode >> to Vercel
+          no_output_timeout: 25m
+          command: scripts/ci/vercel-deploy.sh << parameters.target >> << parameters.mode >> "${PR_NUMBER:-}"
 
   deploy-preview-manual:
     executor: node22
@@ -2328,11 +2414,18 @@ workflows:
     jobs:
       - dco:
           context: [terreno-github-api]
+      # ci-bench/* are benchmark replays (scripts/ci/bench); they are never reviewed or merged.
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
       - approve:
           context: [terreno-github-api, terreno-approve]
           requires: [dco, architectural-pr-review]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>
@@ -2468,6 +2561,7 @@ workflows:
     jobs:
       - packages-ci:
           package: test
+          compile-deps: blocks ui api
 
   repo-policies:
     when: << pipeline.parameters.run-repo-policies >>
@@ -2555,6 +2649,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-production
+          target: demo
+          mode: production
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-frontend-production:
     when:
@@ -2565,6 +2671,18 @@ workflows:
       - deploy-frontend:
           context: [terreno-netlify, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/netlify-frontend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-production
+          target: frontend
+          mode: production
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-production
           filters:
             branches:
               only: master
@@ -2604,6 +2722,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-production
+          target: backend
+          mode: production
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-demo-preview:
     when: << pipeline.parameters.run-deploy-demo >>
@@ -2613,7 +2743,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-preview
+          target: demo
+          mode: preview
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2625,7 +2768,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-preview
+          target: frontend
+          mode: preview
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2637,7 +2793,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-docs-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2652,7 +2809,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/gcp-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-preview
+          target: backend
+          mode: preview
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 

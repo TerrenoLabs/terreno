@@ -28,10 +28,20 @@
         "generate-sdk",
         "building-terreno-apps",
         "building-admin-interfaces",
-        "backend-test-env",
         "ai-prompt-governance"
       ],
       "title": "Terreno apps"
+    },
+    {
+      "description": "Bootstrap backend, frontend, and mobile test setups, then write Bun, Playwright, and Maestro tests.",
+      "skills": [
+        "terreno-test-setup",
+        "terreno-backend-tests",
+        "terreno-frontend-tests",
+        "terreno-mobile-tests",
+        "backend-test-env"
+      ],
+      "title": "Testing"
     },
     {
       "description": "Read architecture docs first; write and regenerate them in the same slice.",
@@ -62,7 +72,8 @@
         "generate-release-announcements",
         "update-dependencies",
         "upgrading-terreno",
-        "deploy-gcp"
+        "deploy-gcp",
+        "deploy-vercel"
       ],
       "title": "GitHub and shipping"
     },

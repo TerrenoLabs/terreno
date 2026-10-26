@@ -56,7 +56,7 @@ echo -n 'mongodb+srv://user:pass@cluster.example/terreno?retryWrites=true&w=majo
 
 Repeat for `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, and `SESSION_SECRET`.
 
-For Better Auth, also create `better-auth-secret` and set `AUTH_PROVIDER=better-auth` plus `BETTER_AUTH_URL` at deploy time. See [Configure Better Auth](configure-better-auth.md).
+For Better Auth, also create `better-auth-secret` and set `AUTH_PROVIDER=better-auth` plus `BETTER_AUTH_URL` at deploy time. See [Configure Better Auth](configure-better-auth.md). The example backend uses Better Auth when `AUTH_PROVIDER` is unset, and with `NODE_ENV=production` it refuses to start unless `BETTER_AUTH_SECRET` is set to a value other than its published development secret.
 
 ## 4. Runtime service account
 

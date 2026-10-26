@@ -339,6 +339,9 @@ export const serializeDoc = async (
   return ensureApiId(maskedFallback);
 };
 
+/** Returned by a `buildPayload` callback to send nothing to that socket. */
+const SKIP_EMISSION = Symbol("skipEmission");
+
 /**
  * Generalized authorized-room emitter: iterates the sockets in `room`, runs the per-socket
  * read-permission check against `fullDocument`, builds the payload per socket (so
@@ -361,7 +364,10 @@ export const emitPayloadToAuthorizedRoom = async ({
   eventName: string;
   entry: AuthorizedEmitEntry;
   fullDocument: Record<string, unknown> | undefined;
-  /** Build the per-socket payload; a throw drops the emission for that socket only. */
+  /**
+   * Build the per-socket payload; a throw drops the emission for that socket only, and
+   * returning SKIP_EMISSION sends nothing to it.
+   */
   buildPayload: (user: User | undefined) => Promise<unknown> | unknown;
   logDebug: (msg: string) => void;
 }): Promise<void> => {
@@ -384,7 +390,10 @@ export const emitPayloadToAuthorizedRoom = async ({
           continue;
         }
         if (adminDecision === "allow") {
-          socket.emit(eventName, await buildPayload(user));
+          const adminPayload = await buildPayload(user);
+          if (adminPayload !== SKIP_EMISSION) {
+            socket.emit(eventName, adminPayload);
+          }
           continue;
         }
       }
@@ -394,7 +403,11 @@ export const emitPayloadToAuthorizedRoom = async ({
         continue;
       }
 
-      socket.emit(eventName, await buildPayload(user));
+      const payload = await buildPayload(user);
+      if (payload === SKIP_EMISSION) {
+        continue;
+      }
+      socket.emit(eventName, payload);
     } catch (error) {
       logger.error(
         `[realtime] Failed to emit ${eventName} for ${entry.modelName} to socket ${socket.id}: ${error}`
@@ -428,6 +441,167 @@ export const emitToAuthorizedRoom = async (
     logDebug,
     room,
   });
+
+/**
+ * Query-room fan-out for routers with RBAC field views. Each recipient's match is evaluated
+ * against the document as masked for that recipient, so a field hidden from them cannot
+ * decide whether they receive a create, update, or delete.
+ */
+const emitMaskedQueryRoomEvent = async ({
+  io,
+  queryRoom,
+  event,
+  entry,
+  fullDocument,
+  query,
+  logDebug,
+}: {
+  io: Server;
+  queryRoom: string;
+  event: RealtimeEvent;
+  entry: RealtimeRegistryEntry;
+  fullDocument: Record<string, unknown>;
+  query: Record<string, unknown>;
+  logDebug: (msg: string) => void;
+}): Promise<void> =>
+  emitPayloadToAuthorizedRoom({
+    buildPayload: async (user) => {
+      const masked = await maskRealtimeDocument(entry, user, fullDocument, "read");
+      const matches =
+        typeof masked === "object" &&
+        masked !== null &&
+        !Array.isArray(masked) &&
+        matchesQuery(masked as Record<string, unknown>, query);
+      let method: RealtimeEvent["method"] | undefined;
+      if (event.method === "update") {
+        method = matches ? "update" : "delete";
+      } else if (matches) {
+        method = event.method;
+      }
+      if (!method) {
+        return SKIP_EMISSION;
+      }
+      const data = await serializeDoc(entry, fullDocument, method, user);
+      return {...event, data, method};
+    },
+    entry,
+    eventName: "sync",
+    fullDocument,
+    io,
+    logDebug,
+    room: queryRoom,
+  });
+
+/** Fan one change out to one query room. */
+const emitToQueryRoom = async ({
+  io,
+  queryRoom,
+  query,
+  event,
+  fullDocument,
+  entry,
+  hasFieldViews,
+  isOwnerStrategy,
+  logDebug,
+}: {
+  io: Server;
+  queryRoom: string;
+  query: Record<string, unknown>;
+  event: RealtimeEvent;
+  fullDocument: Record<string, unknown> | undefined;
+  entry?: RealtimeRegistryEntry;
+  hasFieldViews: boolean;
+  isOwnerStrategy: boolean;
+  logDebug: (msg: string) => void;
+}): Promise<void> => {
+  if (event.method === "delete") {
+    if (!fullDocument) {
+      // Hard delete with no document context. For owner-strategy collections we can't
+      // tell which query rooms belong to the owner without leaking activity to others,
+      // so skip query fanout entirely — subscribers will reconcile on next fetch.
+      if (isOwnerStrategy) {
+        logDebug(
+          `[realtime] Skipping hard delete fanout to ${queryRoom} (owner strategy, no fullDocument)`
+        );
+        return;
+      }
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted hard delete to ${queryRoom}`);
+      return;
+    }
+
+    if (entry && hasFieldViews) {
+      await emitMaskedQueryRoomEvent({
+        entry,
+        event,
+        fullDocument,
+        io,
+        logDebug,
+        query,
+        queryRoom,
+      });
+      return;
+    }
+
+    // Soft delete: only forward to query rooms whose filter the document satisfies.
+    if (matchesQuery(fullDocument, query)) {
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted soft delete to ${queryRoom} (query matched)`);
+    }
+    return;
+  }
+
+  if (!fullDocument) {
+    return;
+  }
+
+  if (entry && hasFieldViews) {
+    await emitMaskedQueryRoomEvent({entry, event, fullDocument, io, logDebug, query, queryRoom});
+    return;
+  }
+
+  const docMatches = matchesQuery(fullDocument, query);
+
+  if (event.method === "create" && docMatches) {
+    // New document matches the query — send create event
+    if (entry) {
+      await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+    } else {
+      io.to(queryRoom).emit("sync", event);
+    }
+    logDebug(`[realtime] Emitted create to ${queryRoom} (query matched)`);
+  } else if (event.method === "update") {
+    if (docMatches) {
+      // Document still matches (or newly matches) — send update event
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", event);
+      }
+      logDebug(`[realtime] Emitted update to ${queryRoom} (query matched)`);
+    } else {
+      // Document no longer matches the query — send delete event so client removes it
+      const removeEvent: RealtimeEvent = {
+        ...event,
+        method: "delete",
+      };
+      if (entry) {
+        await emitToAuthorizedRoom(io, queryRoom, removeEvent, entry, fullDocument, logDebug);
+      } else {
+        io.to(queryRoom).emit("sync", removeEvent);
+      }
+      logDebug(`[realtime] Emitted delete to ${queryRoom} (query no longer matched)`);
+    }
+  }
+};
 
 /**
  * Emit a sync event to document-specific and query rooms.
@@ -464,80 +638,28 @@ export const emitToDocumentAndQueryRooms = async (
   logDebug(`[realtime] Emitted ${event.method} to ${docRoom}`);
 
   const isOwnerStrategy = entry?.config.roomStrategy === "owner";
+  const hasFieldViews = Boolean(entry?.options.access && entry?.options.accessControl);
 
   // Evaluate query subscriptions
   const querySubscriptions = getQuerySubscriptionsForCollection(collection);
-  for (const {queryId, query} of querySubscriptions) {
-    const queryRoom = `query:${queryId}`;
-
-    if (event.method === "delete") {
-      if (!fullDocument) {
-        // Hard delete with no document context. For owner-strategy collections we can't
-        // tell which query rooms belong to the owner without leaking activity to others,
-        // so skip query fanout entirely — subscribers will reconcile on next fetch.
-        if (isOwnerStrategy) {
-          logDebug(
-            `[realtime] Skipping hard delete fanout to ${queryRoom} (owner strategy, no fullDocument)`
-          );
-          continue;
-        }
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted hard delete to ${queryRoom}`);
-        continue;
-      }
-
-      // Soft delete: only forward to query rooms whose filter the document satisfies.
-      if (matchesQuery(fullDocument, query)) {
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted soft delete to ${queryRoom} (query matched)`);
-      }
-      continue;
-    }
-
-    if (!fullDocument) {
-      continue;
-    }
-
-    const docMatches = matchesQuery(fullDocument, query);
-
-    if (event.method === "create" && docMatches) {
-      // New document matches the query — send create event
-      if (entry) {
-        await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-      } else {
-        io.to(queryRoom).emit("sync", event);
-      }
-      logDebug(`[realtime] Emitted create to ${queryRoom} (query matched)`);
-    } else if (event.method === "update") {
-      if (docMatches) {
-        // Document still matches (or newly matches) — send update event
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, event, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", event);
-        }
-        logDebug(`[realtime] Emitted update to ${queryRoom} (query matched)`);
-      } else {
-        // Document no longer matches the query — send delete event so client removes it
-        const removeEvent: RealtimeEvent = {
-          ...event,
-          method: "delete",
-        };
-        if (entry) {
-          await emitToAuthorizedRoom(io, queryRoom, removeEvent, entry, fullDocument, logDebug);
-        } else {
-          io.to(queryRoom).emit("sync", removeEvent);
-        }
-        logDebug(`[realtime] Emitted delete to ${queryRoom} (query no longer matched)`);
-      }
+  for (const subscription of querySubscriptions) {
+    try {
+      await emitToQueryRoom({
+        entry,
+        event,
+        fullDocument,
+        hasFieldViews,
+        io,
+        isOwnerStrategy,
+        logDebug,
+        query: subscription.query,
+        queryRoom: `query:${subscription.queryId}`,
+      });
+    } catch (error) {
+      // One subscription's failure must not stop the others or the change's sync:delta.
+      logger.warn(
+        `[realtime] Query subscription ${subscription.queryId} failed to evaluate; skipping it: ${error}`
+      );
     }
   }
 };
@@ -981,7 +1103,13 @@ const openChangeStream = ({
         }
 
         if (entry) {
-          await processRealtimeChange({change, docId, entry, io, logDebug, logInfo});
+          // A legacy realtime failure must not skip the independent sync:delta emission.
+          try {
+            await processRealtimeChange({change, docId, entry, io, logDebug, logInfo});
+          } catch (error) {
+            logger.error(`[realtime] Error processing realtime change: ${error}`);
+            Sentry.captureException(error);
+          }
         }
 
         if (syncEntry) {

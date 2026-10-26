@@ -16,12 +16,14 @@ interface MCPAuthUserFields {
   betterAuthId?: string;
   disabled?: boolean;
   email?: string;
+  tokenEpoch?: number;
 }
 
 const userSchema = new Schema({
   betterAuthId: {description: "Better Auth user id", index: true, type: String},
   disabled: {default: false, description: "Whether the account is disabled", type: Boolean},
   email: {description: "User email", type: String},
+  tokenEpoch: {description: "Credential generation", type: Number},
 });
 userSchema.plugin(findOneOrNone);
 
@@ -102,6 +104,43 @@ describe("extractUserFromHeaders", () => {
     );
 
     assert.isUndefined(user);
+  });
+
+  it("treats a service token stored without tokenEpoch as epoch 0", async () => {
+    const created = await UserTestModel.create({email: "legacy-mcp-token@example.com"});
+    const issued = await McpServiceToken.issueFor({_id: created._id}, {name: "Legacy"});
+    await McpServiceToken.updateOne({_id: issued.mcpServiceToken._id}, {$unset: {tokenEpoch: 1}});
+    const headers = {authorization: `Bearer ${issued.token}`};
+
+    const before = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+    await UserTestModel.updateOne({_id: created._id}, {$set: {tokenEpoch: 1}});
+    const after = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+
+    assert.equal(String((before as unknown as MCPAuthUserFields)?._id), created._id.toString());
+    assert.isUndefined(after);
+    const stored = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    assert.isDefined(stored?.revokedAt);
+  });
+
+  it("rejects and revokes a service token issued under an earlier tokenEpoch", async () => {
+    const created = await UserTestModel.create({
+      email: "epoch-mcp-token@example.com",
+      tokenEpoch: 2,
+    });
+    const issued = await McpServiceToken.issueFor(
+      {_id: created._id, tokenEpoch: 2},
+      {name: "Epoch"}
+    );
+    const headers = {authorization: `Bearer ${issued.token}`};
+
+    const before = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+    await UserTestModel.updateOne({_id: created._id}, {$inc: {tokenEpoch: 1}});
+    const after = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+
+    assert.isDefined(before);
+    assert.isUndefined(after);
+    const stored = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    assert.isDefined(stored?.revokedAt);
   });
 
   it("rejects MCP service tokens belonging to disabled users", async () => {

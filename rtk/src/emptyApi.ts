@@ -8,6 +8,7 @@ import {
   fetchBaseQuery,
   retry,
 } from "@reduxjs/toolkit/query/react";
+import type {AuthProvider} from "@terreno/syncdb";
 import {Mutex} from "async-mutex";
 import axios from "axios";
 import axiosRetry from "axios-retry";
@@ -16,10 +17,12 @@ import * as SecureStore from "expo-secure-store";
 import {jwtDecode} from "jwt-decode";
 import {DateTime} from "luxon";
 import qs from "qs";
+import {emitAuthChange, onAuthChange} from "./authEvents";
 import {generateProfileEndpoints, getAuthToken} from "./authSlice";
 import {AUTH_DEBUG, baseUrl, LOGOUT_ACTION_TYPE, TOKEN_REFRESHED_SUCCESS} from "./constants";
 import {shouldDeferOfflineMutation} from "./offlineGate";
 import {IsWeb} from "./platform";
+import {getTokenSource} from "./tokenSource";
 
 const log = AUTH_DEBUG ? (s: string): void => console.debug(`[auth] ${s}`) : (): void => {};
 
@@ -157,6 +160,7 @@ export const refreshAuthToken = async (): Promise<void> => {
       }
       axios.defaults.headers.common.Authorization = `Bearer ${data.token}`;
       console.debug("New token stored");
+      emitAuthChange();
     } else {
       console.warn("refresh token API request failed or didn't return data");
       throw new Error("refresh token API request failed or didn't return data");
@@ -167,11 +171,58 @@ export const refreshAuthToken = async (): Promise<void> => {
   }
 };
 
+interface JwtIdentityPayload {
+  id?: string;
+  sub?: string;
+}
+
+/**
+ * The legacy JWT token source: the tokens `generateAuthSlice` stores. rtk uses this behavior
+ * until an app calls `setTokenSource`; registering it explicitly changes nothing.
+ */
+export const jwtTokenSource: AuthProvider = {
+  getToken: (): Promise<string | null> => getAuthToken(),
+  getUserId: async (): Promise<string | null> => {
+    const token = await getAuthToken();
+    if (!token) {
+      return null;
+    }
+    try {
+      const payload = jwtDecode<JwtIdentityPayload>(token);
+      return payload.id ?? payload.sub ?? null;
+    } catch {
+      return null;
+    }
+  },
+  onAuthChange,
+  refresh: async (): Promise<boolean> => {
+    try {
+      // Share the base query's mutex so a caller such as syncdb never races its refresh.
+      await mutex.runExclusive(refreshAuthToken);
+      return true;
+    } catch (error: unknown) {
+      log(`JWT token source refresh failed: ${error instanceof Error ? error.message : error}`);
+      return false;
+    }
+  },
+};
+
+/** True when rtk should run the legacy JWT path: no source registered, or the JWT one. */
+export const isJwtTokenSource = (source: AuthProvider | undefined): boolean => {
+  return !source || source === jwtTokenSource;
+};
+
+interface BaseQueryOptions {
+  /** Send no `authorization` header when the token is null (instead of `Bearer null`). */
+  omitAuthorizationWhenMissing?: boolean;
+}
+
 export const getBaseQuery = (
   args: string | FetchArgs,
   api: BaseQueryApi,
   extraOptions: unknown,
-  token: string | null
+  token: string | null,
+  {omitAuthorizationWhenMissing = false}: BaseQueryOptions = {}
 ) => {
   const version = Constants.expoConfig?.version ?? "Unknown";
 
@@ -183,7 +234,9 @@ export const getBaseQuery = (
       return qs.stringify(params);
     },
     prepareHeaders: async (headers) => {
-      headers.set("authorization", `Bearer ${token}`);
+      if (token || !omitAuthorizationWhenMissing) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
       // Send version in case the API needs to respond differently based on version.
       headers.set("App-Version", version);
       headers.set("App-Platform", IsWeb ? "web" : "mobile");
@@ -210,6 +263,93 @@ export const getBaseQuery = (
   })(args, api, extraOptions as Parameters<ReturnType<typeof fetchBaseQuery>>[2]);
 };
 
+// Endpoints that never need a valid token, so the base query neither validates nor refreshes it.
+const PUBLIC_ENDPOINTS = [
+  "emailLogin",
+  "emailSignUp",
+  "getVersionCheck",
+  "getZoomSignature",
+  "googleLogin",
+];
+
+// One in-flight refresh shared by every request that got a 401 from the same token source.
+let tokenSourceRefresh: {promise: Promise<boolean>; source: AuthProvider} | undefined;
+
+const readSourceToken = async (source: AuthProvider): Promise<string | null> => {
+  try {
+    return await source.getToken();
+  } catch (error: unknown) {
+    console.warn(
+      `[auth] Token source getToken failed: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+};
+
+const refreshSourceToken = (source: AuthProvider): Promise<boolean> => {
+  if (!source.refresh) {
+    return Promise.resolve(false);
+  }
+  if (tokenSourceRefresh?.source === source) {
+    return tokenSourceRefresh.promise;
+  }
+  // Promise.resolve().then() turns a synchronous throw from refresh into a rejection.
+  const promise = Promise.resolve()
+    // Called on the source so a class-based provider keeps its `this`.
+    .then((): Promise<boolean> => source.refresh?.() ?? Promise.resolve(false))
+    .catch((error: unknown): boolean => {
+      console.warn(
+        `[auth] Token source refresh failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return false;
+    });
+  const pending = {promise, source};
+  tokenSourceRefresh = pending;
+  void promise.finally((): void => {
+    if (tokenSourceRefresh === pending) {
+      tokenSourceRefresh = undefined;
+    }
+  });
+  return promise;
+};
+
+/**
+ * Base query for a registered, non-JWT token source (for example Better Auth). The client never
+ * decides on its own that the user is logged out: a null token sends the request without auth,
+ * and only a 401 that survives one refresh dispatches logout.
+ */
+const tokenSourceBaseQuery = async (
+  args: string | FetchArgs,
+  api: BaseQueryApi,
+  extraOptions: unknown,
+  source: AuthProvider
+): Promise<Awaited<ReturnType<typeof getBaseQuery>>> => {
+  const options: BaseQueryOptions = {omitAuthorizationWhenMissing: true};
+  const token = await readSourceToken(source);
+  let result = await getBaseQuery(args, api, extraOptions, token, options);
+
+  if (PUBLIC_ENDPOINTS.includes(api.endpoint)) {
+    return result;
+  }
+
+  if (result.error?.status === 401) {
+    log(`401 from ${api.endpoint}, refreshing the token source and retrying once`);
+    await refreshSourceToken(source);
+    const retryToken = await readSourceToken(source);
+    result = await getBaseQuery(args, api, extraOptions, retryToken, options);
+    if (result.error?.status === 401) {
+      console.warn(`[auth] 401 from ${api.endpoint} after a token refresh, logging out`);
+      api.dispatch({type: LOGOUT_ACTION_TYPE});
+      retry.fail(result.error, result.meta);
+    }
+  }
+
+  if (result.error && api.type === "mutation") {
+    retry.fail(result.error, result.meta);
+  }
+  return result;
+};
+
 export const staggeredBaseQuery = retry(
   async (args: string | FetchArgs, api, extraOptions) => {
     // Short-circuit immediately when offline for configured mutation endpoints
@@ -217,15 +357,16 @@ export const staggeredBaseQuery = retry(
       retry.fail({error: "Network unavailable", status: "FETCH_ERROR"});
     }
 
+    const source = getTokenSource();
+    if (source && !isJwtTokenSource(source)) {
+      return tokenSourceBaseQuery(args, api, extraOptions, source);
+    }
+
     // wait until the mutex is available without locking it
     await mutex.waitForUnlock();
     let token = await getAuthToken();
 
-    if (
-      ["emailLogin", "emailSignUp", "getVersionCheck", "getZoomSignature", "googleLogin"].includes(
-        api.endpoint
-      )
-    ) {
+    if (PUBLIC_ENDPOINTS.includes(api.endpoint)) {
       // just pass thru the request without token validation for login/signup requests
       // (even if there's a stale token in storage)
       return getBaseQuery(args, api, extraOptions, token);

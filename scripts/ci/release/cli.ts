@@ -3,7 +3,7 @@
  * Release automation entry points shared by CircleCI and GitHub Actions.
  *
  * Usage:
- *   bun run scripts/ci/release/cli.ts plan-merge <head-ref> <files-file> <changelog-file>
+ *   bun run scripts/ci/release/cli.ts plan-merge <head-ref> <files-file> <changelog-file> <author> <allowed-authors>
  *   bun run scripts/ci/release/cli.ts check-tag <version> <on-master: true|false>
  *   bun run scripts/ci/release/cli.ts notes <version> [previous-version]
  *
@@ -31,12 +31,16 @@ const main = (): void => {
   if (command === "plan-merge") {
     // The pull request's own CHANGELOG.md is passed in: bot-merge runs this script
     // from master so a pull request cannot rewrite its own eligibility check.
-    const [headRef, filesFile, changelogFile] = args;
-    if (!headRef || !filesFile || !changelogFile) {
-      fail("plan-merge: provide <head-ref> <files-file> <changelog-file>");
+    const [headRef, filesFile, changelogFile, author, allowedAuthors] = args;
+    if (!headRef || !filesFile || !changelogFile || !author || allowedAuthors === undefined) {
+      fail(
+        "plan-merge: provide <head-ref> <files-file> <changelog-file> <author> <allowed-authors>"
+      );
     }
     const files = readFileSync(filesFile, "utf8").split("\n").filter(Boolean);
     const plan = planBotMerge({
+      allowedAuthors,
+      author,
       changelog: readFileSync(changelogFile, "utf8"),
       files,
       headRef,

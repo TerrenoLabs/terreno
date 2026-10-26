@@ -35,15 +35,35 @@ export interface BotMergePlan {
   version?: string;
 }
 
+// BOT_MERGE_AUTHORS is a comma- or whitespace-separated list of GitHub logins.
+const parseAllowedAuthors = (allowedAuthors: string): string[] =>
+  allowedAuthors
+    .split(/[\s,]+/)
+    .map((login) => login.trim().toLowerCase())
+    .filter(Boolean);
+
 export const planBotMerge = ({
+  allowedAuthors,
+  author,
   changelog,
   files,
   headRef,
 }: {
+  allowedAuthors: string;
+  author: string;
   changelog?: string;
   files: string[];
   headRef: string;
 }): BotMergePlan => {
+  // GitHub logins are case-insensitive.
+  if (!parseAllowedAuthors(allowedAuthors).includes(author.trim().toLowerCase())) {
+    return {
+      disallowedFiles: [],
+      isEligible: false,
+      reason: `${author} is not in BOT_MERGE_AUTHORS`,
+    };
+  }
+
   const releaseMatch = headRef.match(RELEASE_BRANCH_PATTERN);
   const isRoadmap = ROADMAP_BRANCH_PATTERN.test(headRef);
   if (!releaseMatch && !isRoadmap) {

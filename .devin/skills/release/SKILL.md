@@ -133,7 +133,9 @@ Never commit the release directly to master, and never tag before this pull requ
 3. **Bot merge path (default).** When the pull request touches only release-note files (`CHANGELOG.md`, `changelog/unreleased/*`, `whatsNew.generated.json`, `mcp-server/src/docs/upgrades/*.md`), the **Bot merge** workflow merges it after CI passes. It then tags the squash commit and creates the draft GitHub release from the `CHANGELOG.md` section. See [release automation](../../docs/how-to/release-automation.md). Do not merge or tag by hand. Wait for the tag, then go to Step 7:
 
    ```bash
-   gh run watch "$(gh run list --workflow bot-merge.yml --branch "release/$VERSION" --limit 1 --json databaseId --jq '.[0].databaseId')" --exit-status
+   # Bot merge runs as a check on the pull request, after every other check passes.
+   gh pr checks "$PR" --watch --interval 60
+   gh pr view "$PR" --json state --jq .state  # MERGED
    git fetch --tags origin && git rev-parse "$VERSION"
    gh release edit "$VERSION" --notes-file /tmp/release-notes.md  # optional: richer Step 5 notes; the release stays a draft
    ```

@@ -21,6 +21,8 @@ See changelog/unreleased/.
 - Vercel hosting. (#1562)
 `;
 
+const TRUSTED = {allowedAuthors: "joshgachnang, swanka", author: "joshgachnang"};
+
 const RELEASE_FILES = [
   "CHANGELOG.md",
   "changelog/unreleased/ship-changelog.md",
@@ -31,6 +33,7 @@ const RELEASE_FILES = [
 describe("planBotMerge", () => {
   it("merges a release branch that only touches release notes", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       changelog: CHANGELOG,
       files: RELEASE_FILES,
       headRef: "release/57.19.0",
@@ -40,6 +43,7 @@ describe("planBotMerge", () => {
 
   it("accepts the Cursor release branch prefix", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       changelog: CHANGELOG,
       files: ["CHANGELOG.md"],
       headRef: "cursor/release-57.19.0",
@@ -50,6 +54,7 @@ describe("planBotMerge", () => {
 
   it("refuses a release branch that also changes code", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       changelog: CHANGELOG,
       files: [...RELEASE_FILES, "api/src/api.ts", ".rulesync/skills/release/SKILL.md"],
       headRef: "release/57.19.0",
@@ -60,6 +65,7 @@ describe("planBotMerge", () => {
 
   it("refuses a release branch whose changelog has no section for the version", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       changelog: CHANGELOG,
       files: ["CHANGELOG.md"],
       headRef: "release/57.20.0",
@@ -71,13 +77,19 @@ describe("planBotMerge", () => {
   it("refuses prerelease and malformed release branch names", () => {
     for (const headRef of ["release/57.19.0-beta.1", "release/next", "release/57.19.0/x"]) {
       expect(
-        planBotMerge({changelog: CHANGELOG, files: ["CHANGELOG.md"], headRef}).isEligible
+        planBotMerge({
+          ...TRUSTED,
+          changelog: CHANGELOG,
+          files: ["CHANGELOG.md"],
+          headRef,
+        }).isEligible
       ).toBe(false);
     }
   });
 
   it("merges a roadmap branch that only touches roadmap files", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       files: ["ROADMAP.md", "docs/explanation/roadmap-seed-issues.md"],
       headRef: "automation/roadmap-40320206760",
     });
@@ -86,6 +98,7 @@ describe("planBotMerge", () => {
 
   it("refuses roadmap branches that touch release notes or code", () => {
     const plan = planBotMerge({
+      ...TRUSTED,
       files: ["ROADMAP.md", "CHANGELOG.md"],
       headRef: "automation/roadmap-1",
     });
@@ -94,8 +107,65 @@ describe("planBotMerge", () => {
   });
 
   it("ignores other branches and empty pull requests", () => {
-    expect(planBotMerge({files: ["ROADMAP.md"], headRef: "fix-login"}).isEligible).toBe(false);
-    expect(planBotMerge({files: [], headRef: "automation/roadmap-1"}).isEligible).toBe(false);
+    expect(
+      planBotMerge({
+        ...TRUSTED,
+        files: ["ROADMAP.md"],
+        headRef: "fix-login",
+      }).isEligible
+    ).toBe(false);
+    expect(
+      planBotMerge({
+        ...TRUSTED,
+        files: [],
+        headRef: "automation/roadmap-1",
+      }).isEligible
+    ).toBe(false);
+  });
+});
+
+describe("planBotMerge authors", () => {
+  it("accepts any listed author, ignoring case and separators", () => {
+    for (const author of ["joshgachnang", "Swanka"]) {
+      const plan = planBotMerge({
+        allowedAuthors: "joshgachnang,\n swanka ",
+        author,
+        files: ["ROADMAP.md"],
+        headRef: "automation/roadmap-1",
+      });
+      expect(plan.isEligible).toBe(true);
+    }
+  });
+
+  it("refuses an unlisted author before looking at files", () => {
+    const plan = planBotMerge({
+      allowedAuthors: "joshgachnang",
+      author: "someone-else",
+      files: ["ROADMAP.md"],
+      headRef: "automation/roadmap-1",
+    });
+    expect(plan.isEligible).toBe(false);
+    expect(plan.reason).toContain("someone-else is not in BOT_MERGE_AUTHORS");
+  });
+
+  it("refuses everyone when the allowlist is empty", () => {
+    const plan = planBotMerge({
+      allowedAuthors: " , ",
+      author: "joshgachnang",
+      files: ["ROADMAP.md"],
+      headRef: "automation/roadmap-1",
+    });
+    expect(plan.isEligible).toBe(false);
+  });
+
+  it("does not match a login that is only a substring of a listed one", () => {
+    const plan = planBotMerge({
+      allowedAuthors: "joshgachnang",
+      author: "josh",
+      files: ["ROADMAP.md"],
+      headRef: "automation/roadmap-1",
+    });
+    expect(plan.isEligible).toBe(false);
   });
 });
 

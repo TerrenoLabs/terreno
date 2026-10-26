@@ -23,7 +23,7 @@ release/X.Y.Z PR ──► Bot merge waits for CI ──► squash-merge (bot by
 (`planBotMerge`) decides eligibility. A pull request qualifies only if all of these are true:
 
 - It comes from a branch in this repository. Drafts and forks are skipped.
-- Its author is listed in the `BOT_MERGE_AUTHORS` repository variable.
+- Its author is listed in the `BOT_MERGE_AUTHORS` repository variable. Logins are compared without regard to case.
 - Its branch name and changed files match one of the rows below.
 
 | Branch | Files it may change |

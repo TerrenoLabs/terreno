@@ -57,7 +57,10 @@ the build.**
   by name (`@terreno/<package>`), never from `../src`.
 - **One happy path.** Walk the package's main use once and throw on the first wrong response.
   Edge cases belong in unit tests.
-- **About 30 s.** Each smoke finishes in 30 s or less, not counting the build.
+- **About 30 s.** Each smoke finishes in 30 s or less, not counting the build. The CircleCI
+  `smoke` job's results table judges the budget. `bun run smoke` marks a package over 30 s with
+  `⏱ over 30 s budget` but does not fail it, because local times swing with machine load (see
+  [Package pages](#package-pages)). A package over budget on CI gets fixed.
 
 | Item | Convention |
 | --- | --- |
@@ -247,7 +250,20 @@ a smoke well past its budget:
   `dd if=/dev/zero of=$TMPDIR/ddtest bs=1M count=20 conv=fsync` shows whether this is the cause.
 
 Time smokes on an otherwise idle machine. A smoke that is over budget only under one of these
-conditions is not a regression.
+conditions is not a regression. Full local runs on that container still put a different package
+over 30 s each time (admin-frontend 44.7 s in one run; example-frontend 89.8 s and feature-flags
+30.3 s in the next), while admin-frontend alone took 22.4–25.2 s. That noise is why the CI table,
+not a local run, decides the budget.
+
+A browser smoke that fails with `Executable doesn't exist` before it loads a page means the
+machine's preinstalled Playwright browsers are a different build from the Playwright version
+the repo locks. Install the matching Chromium under your home directory and run the smokes with
+the same variable:
+
+```bash
+PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright bunx playwright install chromium
+PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright bun run smoke
+```
 
 Manual cases that no smoke or e2e spec can check live in the
 [regression suites](../regression/README.md).

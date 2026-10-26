@@ -2,6 +2,8 @@
 /**
  * Runs every workspace's `smoke` script one at a time and prints each package's time.
  * Keeps going after a failure so one run reports every broken package, then exits 1.
+ * Flags a smoke over the 30 s budget without failing it: local times are noisy, so the
+ * CircleCI `smoke` job's table is the one that judges the budget.
  *
  * Usage:
  *   bun run smoke             # every workspace with a smoke script
@@ -79,15 +81,25 @@ export const runSmokes = ({
     return {...workspace, durationMs, passed: exitCode === 0};
   });
 
-/** One line per package with its time, and a final pass/fail count. */
+/** Per-package smoke budget, excluding the build (docs/testing/e2e.md). */
+const SMOKE_BUDGET_MS = 30_000;
+
+const isOverBudget = (result: SmokeResult): boolean => result.durationMs > SMOKE_BUDGET_MS;
+
+/** One line per package with its time and any budget overrun, then the counts. */
 export const formatSummary = (results: SmokeResult[]): string => {
   const width = Math.max(...results.map((result) => result.name.length), 0);
-  const lines = results.map(
-    (result) =>
-      `${result.passed ? "✅" : "❌"} ${result.name.padEnd(width)}  ${(result.durationMs / 1000).toFixed(1)} s`
-  );
+  const budgetSeconds = SMOKE_BUDGET_MS / 1000;
+  const lines = results.map((result) => {
+    const line = `${result.passed ? "✅" : "❌"} ${result.name.padEnd(width)}  ${(result.durationMs / 1000).toFixed(1)} s`;
+    return isOverBudget(result) ? `${line}  ⏱ over ${budgetSeconds} s budget` : line;
+  });
   const failed = results.filter((result) => !result.passed).length;
-  lines.push(`${results.length - failed} passed, ${failed} failed`);
+  const overBudget = results.filter(isOverBudget).length;
+  const counts = `${results.length - failed} passed, ${failed} failed`;
+  lines.push(
+    overBudget > 0 ? `${counts}, ${overBudget} over the ${budgetSeconds} s budget` : counts
+  );
   return lines.join("\n");
 };
 

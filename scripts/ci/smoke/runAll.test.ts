@@ -60,6 +60,23 @@ describe("formatSummary", () => {
     ).toBe("✅ @terreno/api  12.3 s\n❌ @terreno/rtk  0.8 s\n1 passed, 1 failed");
   });
 
+  it("flags a passing or failing smoke that ran past the 30 s budget, without failing it", () => {
+    expect(
+      formatSummary([
+        {dir: "api", durationMs: 30_000, name: "@terreno/api", passed: true},
+        {dir: "ui", durationMs: 30_100, name: "@terreno/ui", passed: true},
+        {dir: "rtk", durationMs: 44_700, name: "@terreno/rtk", passed: false},
+      ])
+    ).toBe(
+      [
+        "✅ @terreno/api  30.0 s",
+        "✅ @terreno/ui   30.1 s  ⏱ over 30 s budget",
+        "❌ @terreno/rtk  44.7 s  ⏱ over 30 s budget",
+        "2 passed, 1 failed, 2 over the 30 s budget",
+      ].join("\n")
+    );
+  });
+
   it("handles an empty run", () => {
     expect(formatSummary([])).toBe("0 passed, 0 failed");
   });

@@ -79,9 +79,15 @@ bun run compile
 (cd admin-spa && bun run build:web) && (cd demo && bun run export)
 (cd example-frontend && bun run export:smoke)
 bunx playwright install --with-deps chromium   # once
-bun run smoke              # every package; prints each one's time
+bun run smoke              # every package; prints each one's time, flags any over 30 s
 bun run smoke api rtk      # only these workspaces
 ```
+
+A package over 30 s is flagged, not failed: the CircleCI `smoke` job's table judges the budget
+([smoke conventions](../testing/e2e.md#smoke-conventions)). If a browser smoke fails with
+`Executable doesn't exist`, the preinstalled Playwright browsers do not match the locked
+version; install Chromium with `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` set and run
+`bun run smoke` with the same variable.
 
 Without `TERRENO_TEST_MONGODB_URI`, a smoke that needs Mongo starts its own in-memory
 replica set. To reuse a local replica-set `mongod`, export

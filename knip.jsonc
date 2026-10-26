@@ -6,6 +6,9 @@
   // compiled: clean in CI, which never builds, and 8 findings after `bun run compile`.
   "ignore": [
     "**/dist/**",
+    // Dagger CI spike: the engine loads the module by convention (dagger.json), and the SDK
+    // directory is generated on every `dagger call`.
+    "dagger/**",
     // Generated copies of installable skills. Canonical source is `.rulesync/skills`.
     ".agents/skills/expo-cicd-workflows/scripts/**",
     ".claude/skills/expo-cicd-workflows/scripts/**",

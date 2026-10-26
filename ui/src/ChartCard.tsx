@@ -5,8 +5,11 @@ import {Box} from "./Box";
 import {Card} from "./Card";
 import type {ChartCardProps} from "./Common";
 import {Heading} from "./Heading";
+import {Skeleton} from "./Skeleton";
 import {Text} from "./Text";
 import {resolveTestID} from "./testing/resolveTestId";
+
+const CHART_SKELETON_HEIGHT = 160;
 
 interface PeriodBadgeProps {
   label: string;
@@ -44,6 +47,10 @@ const PeriodBadge: FC<PeriodBadgeProps> = ({label, onPress, testID}) => {
 export const ChartCard: FC<ChartCardProps> = ({
   children,
   filterSummary,
+  loading,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   onPeriodPress,
   periodLabel,
   testID,
@@ -70,7 +77,17 @@ export const ChartCard: FC<ChartCardProps> = ({
           {filterSummary}
         </Text>
       ) : null}
-      <Box minWidth={0} width="100%">
+      <Box
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={
+          loadingComponent ?? <Skeleton height={CHART_SKELETON_HEIGHT} rounding="md" />
+        }
+        loadingLabel={loadingLabel}
+        minWidth={0}
+        testID={loading ? resolveTestID(testID, "loading") : undefined}
+        width="100%"
+      >
         {children}
       </Box>
     </Card>

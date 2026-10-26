@@ -6,8 +6,12 @@ import type {ScrollView} from "react-native";
 
 import {Box} from "./Box";
 import {sharedResponsiveBreakpointStore} from "./ResponsiveBreakpoint";
+import {Skeleton, SkeletonCircle} from "./Skeleton";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 /** Imperative handle exposed by Box's forwarded ref. */
 interface BoxScrollHandle {
@@ -1137,6 +1141,72 @@ describe("Box", () => {
         fireEvent.press(getByLabelText("Press"));
       });
       expect(onClick).toHaveBeenCalled();
+    });
+  });
+
+  describe("loading", () => {
+    it("renders children when not loading", () => {
+      const {getByText} = renderWithTheme(
+        <Box loading={false}>
+          <Text>Loaded</Text>
+        </Box>
+      );
+      expect(getByText("Loaded")).toBeTruthy();
+    });
+
+    it("renders the default text skeleton instead of children while loading", () => {
+      const {getByTestId, queryByText} = renderWithTheme(
+        <Box loading testID="box">
+          <Text>Loaded</Text>
+        </Box>
+      );
+      expect(queryByText("Loaded")).toBeNull();
+      const box = getByTestId("box");
+      expect(box.props["aria-busy"]).toBe(true);
+      expect(box.props.accessibilityState).toMatchObject({busy: true});
+      expect(box.props.accessibilityLabel).toBe("Loading");
+    });
+
+    it("renders a custom loading component with a custom label", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          loading
+          loadingComponent={<SkeletonCircle testID="avatar-skeleton" />}
+          loadingLabel="Loading profile"
+          testID="box"
+        />
+      );
+      expect(getByTestId("avatar-skeleton", HIDDEN)).toBeTruthy();
+      expect(getByTestId("box").props.accessibilityLabel).toBe("Loading profile");
+    });
+
+    it("hands loadingAnimation to skeletons inside the loading component", async () => {
+      const {getByTestId} = renderWithTheme(
+        <Box loading loadingAnimation="shimmer" loadingComponent={<Skeleton testID="block" />} />
+      );
+      // Skeletons hold still until the reduce-motion setting resolves.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(getByTestId("block.shimmer", HIDDEN)).toBeTruthy();
+    });
+
+    it("keeps loading props out of the style object", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box loading loadingAnimation="none" loadingLabel="Loading" padding={2} testID="box" />
+      );
+      const style = getByTestId("box").props.style;
+      expect(style).toMatchObject({padding: 8});
+      expect(style.loading).toBeUndefined();
+      expect(style.loadingAnimation).toBeUndefined();
+      expect(style.loadingLabel).toBeUndefined();
+    });
+
+    it("ignores presses on a clickable Box while loading", () => {
+      const onClick = mock(() => {});
+      const {getByTestId} = renderWithTheme(<Box loading onClick={onClick} testID="box" />);
+      fireEvent.press(getByTestId("box-clickable"));
+      expect(onClick).not.toHaveBeenCalled();
     });
   });
 });

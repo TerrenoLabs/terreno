@@ -2226,8 +2226,8 @@ jobs:
               exit 2
             fi
             bun run check:upgrade-docs "$CIRCLE_TAG"
-      # Packages ship the tag's CHANGELOG.md, so refuse a tag that is not on
-      # master with its assembled release notes (docs/how-to/release-automation.md).
+      # Packages ship the tag's CHANGELOG.md, so refuse a stable tag that is not
+      # on master with its assembled release notes (docs/how-to/release-automation.md).
       - run:
           name: Require merged release notes
           command: |

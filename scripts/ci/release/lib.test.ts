@@ -121,23 +121,15 @@ describe("checkReleaseTag", () => {
     expect(result.failures).toHaveLength(3);
   });
 
-  it("only requires master for prereleases", () => {
-    expect(
-      checkReleaseTag({
-        changelog: CHANGELOG,
-        isOnMaster: true,
-        unreleasedFragmentCount: 3,
-        version: "57.20.0-beta.1",
-      }).isValid
-    ).toBe(true);
+  it("lets prereleases publish from any branch without assembled notes", () => {
     expect(
       checkReleaseTag({
         changelog: CHANGELOG,
         isOnMaster: false,
-        unreleasedFragmentCount: 0,
+        unreleasedFragmentCount: 3,
         version: "57.20.0-beta.1",
       }).isValid
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("rejects a non-semver tag", () => {

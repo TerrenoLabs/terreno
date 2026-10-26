@@ -4,8 +4,12 @@ name: Bot merge
 # check is green, then tags a release so CircleCI publishes the merged notes.
 # Eligibility (branch name + file allowlist) lives in scripts/ci/release/lib.ts.
 # Setup and policy: docs/how-to/release-automation.md.
+#
+# pull_request_target runs master's copy of this file, so a pull request cannot
+# edit the workflow that holds the bypass token. The job never checks out or runs
+# pull request code: it reads file names and CHANGELOG.md through the API.
 on:
-  pull_request:
+  pull_request_target:
     branches: [master]
     types: [opened, synchronize, reopened, ready_for_review]
 

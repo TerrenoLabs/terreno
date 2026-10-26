@@ -32,8 +32,9 @@ release/X.Y.Z PR ──► Bot merge waits for CI ──► squash-merge (bot by
 | `automation/roadmap-*` | `ROADMAP.md`, `docs/explanation/roadmap-seed-issues.md` |
 
 A release branch also needs a non-empty `## [X.Y.Z]` section in its `CHANGELOG.md`. The workflow
-runs this check from `master`'s copy of the script, so a pull request cannot change its own
-eligibility rules. Any pull request that fails a rule keeps a green **Bot merge** check and waits
+uses `pull_request_target`, so both the workflow file and the eligibility script come from
+`master`. A pull request cannot change its own eligibility rules. The job never runs pull request
+code; it reads file names and `CHANGELOG.md` through the API. Any pull request that fails a rule keeps a green **Bot merge** check and waits
 for a human. Examples are a release pull request that also edits a skill, or a prerelease branch.
 
 The `master` ruleset requires no status checks, so the workflow does that job itself. It waits
@@ -51,7 +52,7 @@ stable tag fails if any of these is true:
 - `CHANGELOG.md` has no non-empty `## [X.Y.Z]` section.
 - Fragments are left in `changelog/unreleased/`.
 
-Prerelease tags only have to be on `master`.
+Prerelease tags (`-beta.N`) skip the gate; they are often cut from a feature branch.
 
 `scripts/ci/prepare-package-publish.mjs` copies the root `CHANGELOG.md` into each package before
 `npm publish`. Packages that declare a `files` whitelist list `CHANGELOG.md` in it.

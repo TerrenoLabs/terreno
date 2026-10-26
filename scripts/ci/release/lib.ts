@@ -109,20 +109,22 @@ export const checkReleaseTag = ({
     return {failures: [`${version} is not a semver tag`], isValid: false};
   }
 
+  // Prereleases test the publish pipeline from any branch and do not assemble the changelog.
+  if (!STABLE_VERSION_PATTERN.test(version)) {
+    return {failures: [], isValid: true};
+  }
+
   const failures: string[] = [];
   if (!isOnMaster) {
     failures.push(`tag ${version} is not on master; merge the release notes pull request first`);
   }
-  // Prereleases test the publish pipeline and do not assemble the changelog.
-  if (STABLE_VERSION_PATTERN.test(version)) {
-    if (!getReleaseChangelogSection({changelog, version})?.trim()) {
-      failures.push(`CHANGELOG.md has no non-empty ## [${version}] section`);
-    }
-    if (unreleasedFragmentCount > 0) {
-      failures.push(
-        `${unreleasedFragmentCount} changelog/unreleased fragment(s) were not assembled into ${version}`
-      );
-    }
+  if (!getReleaseChangelogSection({changelog, version})?.trim()) {
+    failures.push(`CHANGELOG.md has no non-empty ## [${version}] section`);
+  }
+  if (unreleasedFragmentCount > 0) {
+    failures.push(
+      `${unreleasedFragmentCount} changelog/unreleased fragment(s) were not assembled into ${version}`
+    );
   }
   return {failures, isValid: failures.length === 0};
 };

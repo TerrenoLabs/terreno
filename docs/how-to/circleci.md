@@ -515,6 +515,74 @@ circleci config validate .circleci/config.yml
 circleci config validate .circleci/continue-config.yml
 ```
 
+## Measure PR CI speed
+
+```bash
+bun run ci:wall-clock                                  # last 60 merged PRs
+bun run ci:wall-clock --limit 20 --max-directories 3   # rolling window used by the speed loop
+bun run ci:wall-clock --json                           # per-PR rows for a ledger
+```
+
+The command needs an authenticated `gh`. It reads each merged PR's head-commit
+statuses and reports the median, p25, and p75 wall clock for average PRs and
+for all PRs. It also lists which job finished last.
+
+| Term | Definition |
+| --- | --- |
+| Wall clock | First `ci/circleci:` status to the last terminal status of a test or build job |
+| Not counted as the end | `approve`, `architectural-pr-review`, `dco`, `deploy-*`, `*-preview`, `serial-*` |
+| Average PR | Touches at most `--max-directories` top-level directories, not counting `docs/`, `website/`, dot-directories, or root files |
+| Rerun job | Its newest status counts; a job whose newest status is pending makes the PR unmeasured |
+| PRs over 100 files | Directories are counted from the first 100 files (`gh pr list` limit) |
+
+The speed goal and loop that use this metric are in
+[`circleci-pr-speed-loop.md`](../implementationPlans/circleci-pr-speed-loop.md).
+
+## Benchmark a CI change
+
+```bash
+bun run ci:bench --branch origin/master --label baseline           # master only
+bun run ci:bench --branch ci-speed/1-cache --label iter1           # control vs treatment
+bun run ci:bench --branch ci-speed/1-cache --label iter1 --cases api-only --runs 1
+bun run ci:bench --suggest-cases                                   # replayable cases for cases.ts
+```
+
+The command needs an authenticated `gh` and push access. The branch under test
+must contain `origin/master`; otherwise it would run an older job set. For each
+case in `scripts/ci/bench/cases.ts`, run by run, it:
+
+1. Builds `ci-bench/<label>/<case>-<run>-control` from `master` and
+   `…-treatment` from the branch under test, in a temporary worktree. Both
+   reverse-apply the case PR's diff, so the replay touches the same files with
+   real code and keeps later work in those files. `docs/`, `changelog/`, and
+   `website/` are left out: they only drive the docs preview. A case whose code
+   no longer reverts cleanly on `master` is refused before anything is pushed. The control also
+   appends a comment to each file the branch under test changes, so path
+   filtering starts the same workflows for both. A file `master` does not have
+   yet maps to the nearest existing file with comment syntax in the same
+   directory or a parent. If there is none, the touch is skipped. This mirror
+   is best-effort: a touch that lands in a parent directory can start a
+   different set of path filters than the new file does.
+2. Opens both as draft PRs labelled `ci-bench`. Preview deploys,
+   `architectural-pr-review`, and `approve` skip `ci-bench/*` branches.
+3. Waits until every counted job has finished and no status has changed for
+   3 minutes (time out at 60 minutes). Then it measures each with the
+   [PR CI speed](#measure-pr-ci-speed) metric.
+4. Closes both PRs and deletes their branches, even on failure. A branch whose
+   PR never opened is deleted directly. A cleanup that still fails is
+   reported as `cleanupError` on the results, so you can remove it by hand.
+
+| Result | Meaning |
+| --- | --- |
+| `ok` | Every counted job succeeded; the run counts |
+| `invalid` | A counted job failed, usually because later code depends on what the replay reverted. Swap the case in `cases.ts` |
+| `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
+| role `case` | The case failed before either role ran: it no longer reverts, has no code to replay, or a PR could not open |
+
+Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary
+compares the median of per-case medians for control and treatment. Only `ok`
+runs count.
+
 ## Disabled GitHub workflows
 
 Package CI, e2e, npm tag, and deploy workflows (`docs-deploy.yml`,

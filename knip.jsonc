@@ -43,6 +43,9 @@
     "**/openApiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
     "example-backend/migrations/**": ["files", "exports", "types"],
+    // Bin entry points (terreno-test-shard / terreno-test-hygiene): the pure functions and
+    // types behind them are exported for their unit tests only, not as a library surface.
+    "test/src/cli/**": ["exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],
     // Runtime adapters expose these hooks only so deterministic tests can replace or
     // reset process-global browser, Metro, log-path, and console state.
@@ -208,7 +211,28 @@
       // The test logger discovers @terreno/api through a runtime require. Declaring it
       // here would cycle with API's own @terreno/test dependency and break the
       // topological order that .github/scripts/compile-workspace-deps.js relies on.
-      "ignoreDependencies": ["@sentry/bun", "@terreno/api"],
+      // The expo tests import Expo/RN modules and app aliases that the preload only mocks;
+      // they are never installed by @terreno/test or its consumers' backend entry point.
+      "ignoreDependencies": [
+        "@sentry/bun",
+        "@terreno/api",
+        "@react-native-async-storage/async-storage",
+        "@hooks/useA",
+        "@store",
+        "expo-clipboard",
+        "expo-constants",
+        "expo-haptics",
+        "expo-linking",
+        "expo-secure-store",
+        "expo-splash-screen",
+        // The service-mock tests import the SDKs their registrars replace with mock.module.
+        "@google-cloud/storage",
+        "@google-cloud/tasks",
+        "@sendgrid/mail",
+        "expo-server-sdk",
+        "google-auth-library",
+        "twilio"
+      ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -416,6 +440,8 @@
       "entry": [
         "e2e/smoke.{ts,spec.ts}",
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",

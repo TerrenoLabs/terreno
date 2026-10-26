@@ -56,6 +56,23 @@ describe("CircleCI credit gates", () => {
     }
   });
 
+  it("validates the Vercel context before bun install", () => {
+    const block = jobCommandBlock(continueConfig, "vercel-deploy");
+    assert.ok(block, "vercel-deploy");
+    const forkAt = block.indexOf("skip_if_fork_deploy");
+    const gateAt = block.indexOf("require_vercel_context");
+    const bunAt = block.indexOf("install_bun_and_deps");
+    assert.ok(forkAt !== -1 && forkAt < gateAt, "previews halt forks before the context gate");
+    assert.ok(gateAt !== -1 && gateAt < bunAt, "the context gate runs before bun install");
+    for (const projectIdVar of [
+      "VERCEL_BACKEND_PROJECT_ID",
+      "VERCEL_FRONTEND_PROJECT_ID",
+      "VERCEL_DEMO_PROJECT_ID",
+    ]) {
+      assert.match(continueConfig, new RegExp(`project-id-var: ${projectIdVar}\\n`));
+    }
+  });
+
   it("halts GitHub App fork deploys before context validation", () => {
     const command = continueConfig.slice(
       continueConfig.indexOf("  skip_if_fork_deploy:"),

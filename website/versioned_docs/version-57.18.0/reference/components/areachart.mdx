@@ -1,0 +1,40 @@
+---
+title: "AreaChart"
+description: "Single-series area chart drawn with owned SVG. Press or hover a point for `{label}: {value}`."
+sidebar_label: "AreaChart"
+slug: /reference/components/areachart
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# AreaChart
+
+Single-series area chart drawn with owned SVG. Press or hover a point for `\{label\}: \{value\}`.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `AreaChartProps`  
+**Story source:** [`demo/stories/AreaChart.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/AreaChart.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="AreaChart" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data` | `array` | Yes | Single series of labeled numeric points. |
+| `accessibilityLabel` | `string` |  | Summary announced for the whole chart. |
+| `comparisonData` | `array` |  | Optional previous-period values drawn as a dotted overlay. |
+| `emptyText` | `string` |  | Copy shown when  |
+| `formatValue` | `reflection` |  | Formats the numeric value in tooltips. |
+| `height` | `number` |  | Plot height in pixels. |
+| `legendLabel` | `string` |  | Series name shown under the plot. |
+| `loading` | `boolean` |  | When true, shows a spinner instead of the plot. |
+| `onPeriodPress` | `reflection` |  | Makes  |
+| `periodLabel` | `string` |  | Relative or absolute reporting period shown with  |
+| `series` | `array` |  | Named series. When non-empty, these replace the single  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `title` | `string` |  | Optional chart-card title shortcut. |
+| `xTickPolicy` | `union` |  | X-label collision policy.  |

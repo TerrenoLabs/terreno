@@ -342,6 +342,9 @@
       ]
     },
     "blocks": {
+      // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+      // cycle through @terreno/test's @terreno/ui dependency and break compile order.
+      "ignoreDependencies": ["@terreno/test"],
       "entry": ["src/{index,cli}.ts!", "e2e/smoke.{ts,spec.ts}"],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -524,7 +527,10 @@
         // Tests mock expo-modules-core subpaths by string; TypeDoc is invoked by
         // the package's `types` script.
         "expo-modules-core",
-        "typedoc"
+        "typedoc",
+        // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+        // cycle through @terreno/test's own @terreno/ui dependency.
+        "@terreno/test"
       ],
       "entry": [
         "e2e/smoke.{ts,spec.ts}",

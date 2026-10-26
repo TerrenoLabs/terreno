@@ -321,7 +321,6 @@
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
-        "@terreno/test": "workspace:*",
         "@types/bun": "catalog:",
         "ajv": "8.20.0",
         "typescript": "catalog:",
@@ -868,7 +867,6 @@
       },
       "devDependencies": {
         "@biomejs/biome": "catalog:",
-        "@terreno/test": "workspace:*",
         "@testing-library/react-native": "catalog:",
         "@types/bun": "catalog:",
         "@types/d3-scale": "^4.0.9",

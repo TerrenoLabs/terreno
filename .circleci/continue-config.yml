@@ -2756,7 +2756,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2781,7 +2781,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2822,7 +2822,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 

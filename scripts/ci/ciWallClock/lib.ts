@@ -6,6 +6,8 @@
  * they are not tests, and a PR is not waiting on them to learn whether it is green.
  */
 
+import {DateTime} from "luxon";
+
 export interface CommitStatus {
   /** GitHub status id; breaks ties when two statuses share a timestamp. */
   id?: number;
@@ -39,6 +41,9 @@ export interface WallClockSummary {
 
 const CIRCLECI_PREFIX = "ci/circleci: ";
 
+/** Epoch milliseconds for a GitHub ISO timestamp. */
+export const toMillis = (timestamp: string): number => DateTime.fromISO(timestamp).toMillis();
+
 /** Jobs that never end the clock: review bots and preview deploys. */
 const NON_TEST_JOBS = new Set(["approve", "architectural-pr-review", "dco"]);
 
@@ -60,7 +65,7 @@ export const measureCiWallClock = ({
   if (circleStatuses.length === 0) {
     return undefined;
   }
-  const start = Math.min(...circleStatuses.map((status) => Date.parse(status.created_at)));
+  const start = Math.min(...circleStatuses.map((status) => toMillis(status.created_at)));
 
   let lastJob: string | undefined;
   let end = 0;
@@ -68,7 +73,7 @@ export const measureCiWallClock = ({
     if (newest.state === "pending") {
       return undefined;
     }
-    const finished = Date.parse(newest.created_at);
+    const finished = toMillis(newest.created_at);
     if (finished > end) {
       end = finished;
       lastJob = job;
@@ -98,7 +103,7 @@ export const finalTestJobStatuses = ({
     const current = newestByJob.get(job);
     const isNewer =
       !current ||
-      Date.parse(status.created_at) - Date.parse(current.created_at) > 0 ||
+      toMillis(status.created_at) - toMillis(current.created_at) > 0 ||
       (status.created_at === current.created_at && (status.id ?? 0) > (current.id ?? 0));
     if (isNewer) {
       newestByJob.set(job, status);
@@ -123,7 +128,8 @@ export const topLevelDirectories = (paths: string[]): string[] => {
 export const countTopLevelDirectories = (paths: string[]): number =>
   topLevelDirectories(paths).length;
 
-const medianOf = (sorted: number[]): number => {
+export const median = (values: number[]): number => {
+  const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) {
     return sorted[middle];
@@ -140,9 +146,9 @@ const distributionOf = (values: number[]): Distribution => {
   const half = Math.ceil(sorted.length / 2);
   return {
     count: sorted.length,
-    median: medianOf(sorted),
-    p25: medianOf(sorted.slice(0, half)),
-    p75: medianOf(sorted.slice(sorted.length - half)),
+    median: median(sorted),
+    p25: median(sorted.slice(0, half)),
+    p75: median(sorted.slice(sorted.length - half)),
   };
 };
 

@@ -563,8 +563,8 @@ case in `scripts/ci/bench/cases.ts`, run by run, it:
    directory or a parent. If there is none, the touch is skipped. This mirror
    is best-effort: a touch that lands in a parent directory can start a
    different set of path filters than the new file does.
-2. Opens both as draft PRs labelled `ci-bench`. Preview deploys skip
-   `ci-bench/*` branches.
+2. Opens both as draft PRs labelled `ci-bench`. Preview deploys,
+   `architectural-pr-review`, and `approve` skip `ci-bench/*` branches.
 3. Waits until every counted job has finished and no status has changed for
    3 minutes (time out at 60 minutes). Then it measures each with the
    [PR CI speed](#measure-pr-ci-speed) metric.
@@ -577,6 +577,7 @@ case in `scripts/ci/bench/cases.ts`, run by run, it:
 | `ok` | Every counted job succeeded; the run counts |
 | `invalid` | A counted job failed, usually because later code depends on what the replay reverted. Swap the case in `cases.ts` |
 | `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
+| role `case` | The case failed before either role ran: it no longer reverts, has no code to replay, or a PR could not open |
 
 Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary
 compares the median of per-case medians for control and treatment. Only `ok`

@@ -16,6 +16,8 @@ import {
   finalTestJobStatuses,
   type MergedPullRequest,
   measureCiWallClock,
+  median,
+  toMillis,
   topLevelDirectories,
 } from "../ciWallClock/lib";
 
@@ -45,7 +47,8 @@ export interface BenchResult {
   minutes?: number;
   pullRequest?: number;
   reason?: string;
-  role: BenchRole;
+  /** `case` marks a failure before either role ran, such as a case that no longer reverts. */
+  role: BenchRole | "case";
   run: number;
   status: "ok" | "invalid" | "timeout" | "error";
 }
@@ -216,7 +219,7 @@ const waitForSettledCi = async ({
       continue;
     }
     const finals = [...finalTestJobStatuses({statuses}).values()];
-    const lastChange = Math.max(0, ...finals.map((status) => Date.parse(status.created_at)));
+    const lastChange = Math.max(0, ...finals.map((status) => toMillis(status.created_at)));
     // Dependent jobs post their first status only when they start, so all-finished is not
     // enough: wait for a quiet period with no new job.
     const isSettled =
@@ -312,6 +315,7 @@ export const runBenchCase = async ({
 
   // Every pushed branch, with its PR once opened, so cleanup never leaks one.
   const pushed: {branch: string; headSha: string; number?: number; role: BenchRole}[] = [];
+  const opened: {headSha: string; number: number; role: BenchRole}[] = [];
   let results: BenchResult[] = [];
   let failure: unknown;
   try {
@@ -328,16 +332,17 @@ export const runBenchCase = async ({
         branch: name,
         title: `[ci-bench] ${label}: replay #${benchCase.pullRequest} (${role}, run ${runIndex})`,
       });
+      opened.push({headSha, number: entry.number, role});
     }
     // Wait on both roles at once so they run under the same CircleCI load.
     results = await Promise.all(
-      pushed.map(({headSha, number, role}) =>
+      opened.map(({headSha, number, role}) =>
         replayRole({
           adapter,
           benchCase,
           headSha,
           pollMs,
-          pullRequest: number as number,
+          pullRequest: number,
           quietMs,
           role,
           runIndex,
@@ -416,12 +421,6 @@ export const suggestBenchCases = async ({
   return suggestions;
 };
 
-const median = (values: number[]): number => {
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
-};
-
 export interface BenchSummary {
   changePercent: number;
   control: number;
@@ -432,12 +431,15 @@ export interface BenchSummary {
 
 /** Median of per-case medians, so one slow case cannot dominate. Only `ok` runs count. */
 export const summarizeBench = (results: BenchResult[]): BenchSummary => {
-  const valid = results.filter((result) => result.status === "ok" && result.minutes !== undefined);
+  const valid = results.filter(
+    (result): result is BenchResult & {minutes: number} =>
+      result.status === "ok" && result.minutes !== undefined
+  );
   const caseNames = [...new Set(valid.map((result) => result.case))].sort();
   const caseMedian = (name: string, role: BenchRole): number | undefined => {
     const minutes = valid
       .filter((result) => result.case === name && result.role === role)
-      .map((result) => result.minutes as number);
+      .map((result) => result.minutes);
     return minutes.length > 0 ? median(minutes) : undefined;
   };
   const perCase = caseNames.flatMap((name) => {

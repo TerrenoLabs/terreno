@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it} from "bun:test";
 import {execFileSync} from "node:child_process";
-import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 
@@ -31,6 +31,7 @@ const createRepo = (): string => {
   execFileSync("git", ["clone", "--quiet", origin, repo], {stdio: "ignore"});
   git(repo, ["config", "user.email", "bench@example.com"]);
   git(repo, ["config", "user.name", "Bench"]);
+  git(repo, ["config", "commit.gpgsign", "false"]);
   return repo;
 };
 
@@ -116,6 +117,27 @@ describe("githubBenchAdapter git operations", () => {
 
     git(repo, ["fetch", "--quiet", "origin"]);
     expect(git(repo, ["diff", "--name-only", "origin/master", headSha])).toBe("app/[model].tsx");
+  });
+
+  it("surfaces the git error and leaves no temp directory when the base ref does not exist", async () => {
+    const repo = createRepo();
+    commitFiles(repo, {"README.md": "# repo\n"}, "base");
+    pushMaster(repo);
+    const adapter = githubBenchAdapter({repoRoot: repo});
+    const leftovers = (): string[] =>
+      readdirSync(tmpdir()).filter(
+        (entry) => entry.startsWith("ci-bench-") && !entry.startsWith("ci-bench-test-")
+      );
+    const before = leftovers();
+
+    await expect(
+      adapter.prepareBranch({
+        baseRef: "origin/no-such-branch",
+        name: "ci-bench/test/x",
+        operations: [],
+      })
+    ).rejects.toThrow("origin/no-such-branch");
+    expect(leftovers()).toEqual(before);
   });
 
   it("deletes a pushed bench branch", async () => {

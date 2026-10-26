@@ -7,6 +7,8 @@ import {appendFileSync, mkdtempSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 
+import {DateTime} from "luxon";
+
 import {githubPullRequestSource} from "../ciWallClock/github";
 import {type BenchAdapter, type FileChange, MASTER_REF, nearestTouchTarget, touchLine} from "./lib";
 
@@ -89,7 +91,7 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
         git(["diff", "-z", "--no-renames", "--name-status", `${MASTER_REF}...${branch}`])
       ),
     listStatuses: statuses.listStatuses,
-    now: (): number => Date.now(),
+    now: (): number => DateTime.now().toMillis(),
     openDraftPullRequest: async ({
       branch,
       title,
@@ -131,8 +133,10 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
     },
     prepareBranch: async ({baseRef, name, operations}): Promise<{headSha: string}> => {
       const worktree = mkdtempSync(join(tmpdir(), "ci-bench-"));
+      let isWorktreeAdded = false;
       try {
         git(["worktree", "add", "--quiet", "--detach", worktree, baseRef]);
+        isWorktreeAdded = true;
         // Revert first, then pick touch targets from the reverted tree, so a touch never
         // lands on a file the revert just removed.
         for (const operation of operations) {
@@ -165,7 +169,10 @@ export const githubBenchAdapter = ({repoRoot}: {repoRoot: string}): BenchAdapter
         git(["push", "--quiet", "--force", "origin", `HEAD:refs/heads/${name}`], worktree);
         return {headSha: git(["rev-parse", "HEAD"], worktree).trim()};
       } finally {
-        git(["worktree", "remove", "--force", worktree]);
+        // Removing a worktree that was never added would throw and hide the real error.
+        if (isWorktreeAdded) {
+          git(["worktree", "remove", "--force", worktree]);
+        }
         rmSync(worktree, {force: true, recursive: true});
       }
     },

@@ -1,6 +1,8 @@
 import {describe, expect, it} from "bun:test";
 
-import type {CommitStatus} from "../ciWallClock/lib";
+import {DateTime} from "luxon";
+
+import {type CommitStatus, toMillis} from "../ciWallClock/lib";
 import {
   type BenchAdapter,
   type BenchResult,
@@ -13,11 +15,11 @@ import {
 } from "./lib";
 
 const MINUTE = 60_000;
-const T0 = Date.parse("2026-10-26T10:00:00Z");
+const T0 = DateTime.fromISO("2026-10-26T10:00:00Z").toMillis();
 
 const status = (job: string, state: string, minutesAfterStart: number, id = 0): CommitStatus => ({
   context: `ci/circleci: ${job}`,
-  created_at: new Date(T0 + minutesAfterStart * MINUTE).toISOString(),
+  created_at: DateTime.fromMillis(T0 + minutesAfterStart * MINUTE, {zone: "utc"}).toISO() ?? "",
   id,
   state,
 });
@@ -84,7 +86,7 @@ const fakeAdapter = ({
         }
         throw new Error("gh api: HTTP 502");
       }
-      return (timelines[sha] ?? []).filter((entry) => Date.parse(entry.created_at) <= clock);
+      return (timelines[sha] ?? []).filter((entry) => toMillis(entry.created_at) <= clock);
     },
     now: () => clock,
     openDraftPullRequest: async ({branch, title}) => {

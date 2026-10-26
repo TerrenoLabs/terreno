@@ -53,12 +53,17 @@ if (!branch || !label || !/^[a-z0-9-]+$/.test(label)) {
 }
 const runs = Number(readOption("runs") ?? "2");
 const caseNames = readOption("cases")?.split(",");
+const unknownCases = (caseNames ?? []).filter(
+  (name) => !BENCH_CASES.some((benchCase) => benchCase.name === name)
+);
 const cases = caseNames
   ? BENCH_CASES.filter((benchCase) => caseNames.includes(benchCase.name))
   : BENCH_CASES;
-if (!Number.isInteger(runs) || runs < 1 || cases.length === 0) {
+if (!Number.isInteger(runs) || runs < 1 || cases.length === 0 || unknownCases.length > 0) {
+  const known = BENCH_CASES.map((benchCase) => benchCase.name).join(", ");
   console.error(
-    `--runs must be >= 1 and --cases must name at least one of: ${BENCH_CASES.map((c) => c.name).join(", ")}`
+    `--runs must be >= 1 and --cases must name only known cases (${known})` +
+      (unknownCases.length > 0 ? `; unknown: ${unknownCases.join(", ")}` : "")
   );
   process.exit(2);
 }
@@ -100,7 +105,7 @@ for (let runIndex = 1; runIndex <= runs; runIndex += 1) {
         {
           case: benchCase.name,
           reason: String(error),
-          role: "control",
+          role: "case",
           run: runIndex,
           status: "error",
         },

@@ -1,0 +1,185 @@
+name: Bot merge
+
+# Merges release-notes and roadmap pull requests without a human once every other
+# check is green, then tags a release so CircleCI publishes the merged notes.
+# Eligibility (branch name + file allowlist) lives in scripts/ci/release/lib.ts.
+# Setup and policy: docs/how-to/release-automation.md.
+#
+# pull_request_target runs master's copy of this file, so a pull request cannot
+# edit the workflow that holds the bypass token. The job never checks out or runs
+# pull request code: it reads file names and CHANGELOG.md through the API.
+on:
+  pull_request_target:
+    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  checks: read
+  contents: read
+  pull-requests: read
+  statuses: read
+
+concurrency:
+  group: bot-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    name: Merge release notes or roadmap
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Forks never get secrets, and drafts are not ready to land.
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      !github.event.pull_request.draft &&
+      (startsWith(github.head_ref, 'release/') ||
+       startsWith(github.head_ref, 'cursor/release-') ||
+       startsWith(github.head_ref, 'automation/roadmap-'))
+    steps:
+      - name: Validate required secrets
+        env:
+          BOT_MERGE_APP_ID: ${{ vars.BOT_MERGE_APP_ID }}
+          BOT_MERGE_AUTHORS: ${{ vars.BOT_MERGE_AUTHORS }}
+          BOT_MERGE_PRIVATE_KEY: ${{ secrets.BOT_MERGE_PRIVATE_KEY }}
+        run: |
+          missing=()
+          if [ -z "$BOT_MERGE_APP_ID" ]; then missing+=("BOT_MERGE_APP_ID (variable)"); fi
+          if [ -z "$BOT_MERGE_AUTHORS" ]; then missing+=("BOT_MERGE_AUTHORS (variable)"); fi
+          if [ -z "$BOT_MERGE_PRIVATE_KEY" ]; then missing+=("BOT_MERGE_PRIVATE_KEY"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      # The eligibility script runs from master, never from the pull request, so a
+      # pull request cannot loosen its own allowlist.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          ref: master
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      # An ineligible pull request is not an error: it stays green and waits for a
+      # human, so the release skill's manual path is never blocked by this check.
+      - name: Check the pull request is eligible
+        id: plan
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          BOT_MERGE_AUTHORS: ${{ vars.BOT_MERGE_AUTHORS }}
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --jq '.[].filename' > "$RUNNER_TEMP/files.txt"
+          gh api -H "Accept: application/vnd.github.raw" \
+            "repos/$GITHUB_REPOSITORY/contents/CHANGELOG.md?ref=$HEAD_SHA" > "$RUNNER_TEMP/CHANGELOG.md"
+          plan="$(bun run scripts/ci/release/cli.ts plan-merge "$HEAD_REF" "$RUNNER_TEMP/files.txt" \
+            "$RUNNER_TEMP/CHANGELOG.md" "$AUTHOR" "$BOT_MERGE_AUTHORS")"
+          echo "$plan"
+          eligible="$(jq -r .isEligible <<<"$plan")"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+          if [ "$eligible" != "true" ]; then
+            echo "::notice::Leaving for human review: $(jq -r .reason <<<"$plan") $(jq -r '.disallowedFiles | join(", ")' <<<"$plan")"
+            exit 0
+          fi
+          echo "kind=$(jq -r .kind <<<"$plan")" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r '.version // ""' <<<"$plan")" >> "$GITHUB_OUTPUT"
+
+      # Master's ruleset has no required checks, so this job is the CI gate: every
+      # other check on the head (GitHub Actions and CircleCI) must pass. Repeated
+      # quiet polls guard against checks that register late.
+      - name: Wait for every other check to pass
+        if: steps.plan.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          quiet=0
+          while true; do
+            checks="$(gh pr checks "$PR_NUMBER" --json name,bucket,workflow \
+              --jq '[.[] | select(.workflow != "Bot merge")]' || true)"
+            [ -n "$checks" ] || checks='[]'
+            total="$(jq length <<<"$checks")"
+            failed="$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")"
+            pending="$(jq '[.[] | select(.bucket == "pending")] | length' <<<"$checks")"
+            if [ -n "$failed" ]; then
+              echo "::error::Checks failed: $failed"
+              exit 1
+            fi
+            if [ "$pending" -eq 0 ]; then
+              quiet=$((quiet + 1))
+              # Path-filtered CI may run nothing for a roadmap-only diff; give late
+              # checks five minutes to register before treating none as a pass.
+              needed=2
+              if [ "$total" -eq 0 ]; then needed=5; fi
+              if [ "$quiet" -ge "$needed" ]; then
+                echo "All $total checks passed"
+                break
+              fi
+            else
+              quiet=0
+            fi
+            echo "$total checks, $pending pending; waiting"
+            sleep 60
+          done
+
+      - name: Create bot token
+        if: steps.plan.outputs.eligible == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.BOT_MERGE_APP_ID }}
+          private-key: ${{ secrets.BOT_MERGE_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The bot is a ruleset bypass actor, so this lands without a human review.
+      # Passing the head sha refuses the merge if anything was pushed after the checks;
+      # delete_branch_on_merge removes the branch.
+      - name: Squash-merge
+        if: steps.plan.outputs.eligible == 'true'
+        id: merge
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+            -f merge_method=squash -f sha="$HEAD_SHA" -f commit_title="$PR_TITLE (#$PR_NUMBER)" --jq .sha)"
+          echo "Merged as $sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      # Tagging the squash commit is what starts CircleCI publish-release, so npm
+      # always receives the release notes merged above.
+      - name: Tag the release and draft its notes
+        if: steps.plan.outputs.eligible == 'true' && steps.plan.outputs.kind == 'release'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.sha }}
+          VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" >/dev/null 2>&1; then
+            echo "::error::Tag $VERSION already exists; tag and publish by hand"
+            exit 1
+          fi
+          # The checkout has no tags; the latest published stable release is the compare base.
+          previous="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases \
+            --limit 1 --json tagName --jq '.[0].tagName // ""')"
+          gh api -H "Accept: application/vnd.github.raw" \
+            "repos/$GITHUB_REPOSITORY/contents/CHANGELOG.md?ref=$MERGE_SHA" > CHANGELOG.md
+          bun run scripts/ci/release/cli.ts notes "$VERSION" "$previous" > "$RUNNER_TEMP/release-notes.md"
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$VERSION" -f sha="$MERGE_SHA" >/dev/null
+          # Drafts only: CircleCI publishes the release after it attaches the docs archive.
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "$VERSION" --notes-file "$RUNNER_TEMP/release-notes.md"
+          echo "Tagged $VERSION at $MERGE_SHA; CircleCI publish-release takes it from here" >> "$GITHUB_STEP_SUMMARY"

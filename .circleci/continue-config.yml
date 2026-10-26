@@ -252,10 +252,10 @@ commands:
             done
 
   demo_lint_and_typecheck:
-    description: Compile blocks and ui, then lint, typecheck, and smoke-test demo, then check story coverage
+    description: Compile blocks, ui, and test, then lint, typecheck, and smoke-test demo, then check story coverage
     steps:
       - compile_packages:
-          packages: blocks ui
+          packages: blocks ui test
       - run:
           name: Lint and typecheck demo
           command: |

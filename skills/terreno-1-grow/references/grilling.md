@@ -185,6 +185,7 @@ alternative you rejected and why in one line when a reviewer would otherwise ask
 Tracer: <public seam the first task cuts through>
 E2E: <planned specs and layers, e.g. "2 specs (browser, http)"; or "None — reason">
 Regression: <provisional case IDs and destination suite; or "None — reason">
+User guide: <guide pages added, updated, or retired; or "None — reason">
 Order: <frontier task IDs; blocked task IDs and what unblocks them>
 Out of scope: <short tags>
 Open risks: <none, or one line each>
@@ -218,8 +219,9 @@ Rules for the brief:
   table, or "none".
 - Every acceptance criterion in the plan table names how it is proved. "Manual check" is
   not a verification method.
-- The `E2E:` and `Regression:` lines summarize the IP's `## E2E tests` and
-  `## Regression cases` sections. They stay lines under the plan table, not new headings.
+- The `E2E:`, `Regression:`, and `User guide:` lines summarize the IP's `## E2E tests`,
+  `## Regression cases`, and `## User guide` sections. They stay lines under the plan
+  table, not new headings.
 - Do not restate the IP. The brief orients and points; the IP holds the detail.
 - If a PR has GitHub Deployments, print those Demo URLs after the brief.
 

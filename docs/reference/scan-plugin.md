@@ -1,6 +1,6 @@
 # Scan plugin reference
 
-Plugin: `terreno-scan` (`2.12.0`). Requires the lifecycle plugin `2.13.0` or later
+Plugin: `terreno-scan` (`2.12.0`). Requires the lifecycle plugin `2.14.0` or later
 ([lifecycle plugin reference](lifecycle-plugin.md)).
 
 A scan turns a long-term outcome — "cold builds under 30s", "no unbounded reads", "WCAG

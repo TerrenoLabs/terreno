@@ -68,7 +68,7 @@ scan stages come from
 | Lifecycle | `terreno-1-grow` … `terreno-5-taste`, `terreno-pick-roast-loop`, `terreno-planning-loop`, `terreno-taste-sweep` |
 | Terreno apps | backend, UI, admin interfaces, data, schema, SDK, prompts, upgrades, deployment |
 | Testing | `terreno-test-setup` (bootstrap backend, frontend, mobile), `terreno-backend-tests`, `terreno-frontend-tests`, `terreno-mobile-tests`, `backend-test-env`, `backfill-regression` (propose manual regression cases for approval) |
-| Docs | `update-docs`, `update-agent-docs`, architecture skills |
+| Docs | `update-docs`, `backfill-user-guide` (draft end-user guide pages for approval), `update-agent-docs`, architecture skills |
 | GitHub | issues, review, UI verification, PR screenshots (`attach-pr-media`), release, dependency updates |
 | Code scans | `terreno-scan-1-aim` … `terreno-scan-5-track`, `terreno-scan-campaign`, `terreno-scan-loop` |
 | Expo and native | `track-upstream-expo`, `upgrading-expo`, `store-assets`, deployment / EAS skills |

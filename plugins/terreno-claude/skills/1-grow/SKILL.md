@@ -11,7 +11,8 @@ execute without conversation history.
 Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`documentation contract`](../../references/documentation-contract.md),
 [`PR deployments`](../../references/pr-deployments.md),
-[`testing plan`](../../references/testing-plan.md), and
+[`testing plan`](../../references/testing-plan.md),
+[`user guide`](../../references/user-guide.md), and
 [`grilling procedure`](references/grilling.md) before acting. Follow grilling for every
 human decision until the answer is executable.
 
@@ -35,7 +36,9 @@ human decision until the answer is executable.
    and verify it against repository reality. Resolve the testing spot: the e2e guide,
    the regression-suite directory, and the smoke command, from the agent instructions'
    `## Testing conventions` table or the testing-plan defaults. Read the e2e guide and
-   the suite files for the affected areas.
+   the suite files for the affected areas. Resolve the `User guide` spot from the
+   `## User guide conventions` table or the user-guide default, and read the guide pages
+   for the affected areas unless the repository opts out.
 2. **Read architecture docs.** Load the repository's architecture, domain, and operator
    docs for the affected area. Treat them as the current design. If docs are missing or
    contradict the code, the IP must resolve that in this invocation.
@@ -68,7 +71,10 @@ human decision until the answer is executable.
    guide layer can drive and assert is an e2e row. Regression cases are usually `None`:
    add one only for a change a developer or QA must check by hand (push notifications
    and other hardware or OS behavior, a full cross-device flow, feel) that no existing
-   case covers, each meeting the testing-plan regression-step bar.
+   case covers, each meeting the testing-plan regression-step bar. Pair each criterion
+   that changes what a user sees or does with a `## User guide` row (new, update, or
+   retire) at the page path the user-guide contract prescribes, or record why it needs
+   none.
 8. **Write.** Produce the IP and a dependency-aware tracer-bullet task list. Each task
    names files/seams, acceptance criteria, blockers, verification, docs to create or
    update, and relevant supporting skills when discoverable. Docs updates follow the
@@ -77,10 +83,13 @@ human decision until the answer is executable.
    formats; either may be `None — <reason>`, neither may be missing. Every E2E row
    names the task that writes it. When no file exists at the resolved e2e guide path,
    add a task that writes it there, ahead of every task that writes a planned spec.
+   The IP also always has the `## User guide` section in the user-guide table format,
+   or `None — <reason>`; it may not be missing. Every guide row names the task that
+   writes its page. A repository that opts out writes `None — user guide off`.
 9. **Approve.** Post the standalone approval brief from grilling: an orientation
    paragraph on where the repository is and where this change takes it, optional
-   background on current state, the idea, the plan with its `E2E:` and `Regression:`
-   lines, then the unbounded Decisions table
+   background on current state, the idea, the plan with its `E2E:`, `Regression:`, and
+   `User guide:` lines, then the unbounded Decisions table
    pairing each settled human decision with the question that prompted it. Skip that
    table when grilling settled none. The brief must be readable without the IP, the
    ticket, or the grilling history. Set the repository's approved status only after human
@@ -101,6 +110,7 @@ none is universally required.
 - Decision log/human gates, listed in full with their prompting questions when any exist
 - Acceptance-criterion → verification mapping
 - `## E2E tests` and `## Regression cases` sections, each with rows or `None — <reason>`
+- `## User guide` section with rows or `None — <reason>`
 - Selected supporting skills
 - Docs files named on each task
 - Updated execution state and structured Grow result
@@ -109,6 +119,7 @@ none is universally required.
 
 - IP/task artifacts are approved, implementation-ready, dependency-aware, and testable.
 - The IP has both testing-plan sections, and every E2E row names its writing task.
+- The IP has a `## User guide` section, and every guide row names its writing task.
 - A fresh Pick invocation can identify the next unblocked task, applicable criteria,
   decisions, supporting skills, and risks from durable artifacts.
 - A reviewer with no prior context can approve or push back from the brief alone.

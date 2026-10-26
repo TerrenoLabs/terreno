@@ -16,7 +16,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`documentation contract`](../../references/documentation-contract.md),
 [`PR deployments`](../../references/pr-deployments.md),
 [`pick-roast loop`](../../references/pick-roast-loop.md),
-[`testing plan`](../../references/testing-plan.md), and
+[`testing plan`](../../references/testing-plan.md),
+[`user guide`](../../references/user-guide.md), and
 [`subagent briefing`](../../references/subagent-briefing.md).
 
 ## Preconditions
@@ -72,7 +73,14 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    actual changed workflow and capture required screenshots/video/logs. App launch alone
    is not proof. Skip that child when this task has no UI/runtime files.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
-   criterion that is true in code but absent or wrong in docs is `FAIL`.
+   criterion that is true in code but absent or wrong in docs is `FAIL`. Check each
+   `## User guide` page whose row names this task against the user-guide guide-entry bar
+   and the shipped screens: every label a step names exists, the steps reach the
+   outcome `## What it does` promises, and `audience` and `platforms` match who can
+   reach the feature. When step 5 drives the UI, walk the page's steps there. A missing
+   page, a page that misses the bar, or steps that do not match the shipped screens is
+   `FAIL` that names the row ID. Skip this when the repository opts out of the user
+   guide; an IP that lacks the section follows the user-guide legacy rule.
 7. **Classify each criterion.** Record `PASS`, `FAIL`, or `BLOCKED` with reproducible
    evidence. Never pass a criterion because the code merely looks reasonable.
 8. **Do not fix.** Report implementation defects to Pick. Only correct verifier setup
@@ -107,6 +115,8 @@ probes. If repository policy makes one mandatory and it is unavailable, emit `BL
 - Exact expected vs actual behavior for every failure
 - Environment/access details for every blocker
 - Docs pages that match or fail against shipped behavior
+- Each `## User guide` row this task owns, with its page and result against the
+  guide-entry bar and the shipped screens
 - Per-task Roast results in execution state
 - Terminal structured Roast or inner-loop result
 
@@ -119,6 +129,8 @@ probes. If repository policy makes one mandatory and it is unavailable, emit `BL
   is recorded `deferred` with its exact command.
 - Every `## Regression cases` row Roast checked meets the regression-step bar.
 - Architecture and public docs match the shipped behavior.
+- Every `## User guide` page this task owns meets the guide-entry bar and matches the
+  shipped screens.
 - Remaining unblocked tasks emit `next: pick`. Roast never invokes Pick.
 - When none remain and every in-scope task has Roast `PASS`, emit `PASS` with
   `next: brew`.
@@ -128,7 +140,9 @@ probes. If repository policy makes one mandatory and it is unavailable, emit `BL
 One or more criteria disproven by evidence emits `FAIL` with severity, expected, actual,
 and reproducible evidence. Set `next: pick`. A missing or failing `## E2E tests` row, or
 a `## Regression cases` row that misses the regression-step bar, could be fully
-automated, or repeats an existing case, is `FAIL` that names the row ID.
+automated, or repeats an existing case, is `FAIL` that names the row ID. So is a
+`## User guide` row whose page is missing, misses the guide-entry bar, or does not match
+the shipped screens.
 
 ## Blocked conditions
 

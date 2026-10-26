@@ -6,6 +6,7 @@ import {assert} from "chai";
 import {
   PORTABILITY_MARKERS,
   readTestingPlanContract,
+  readUserGuideContract,
   validateAsyncReviewBotsContract,
   validateClaudePluginHost,
   validateCodexPluginHost,
@@ -17,6 +18,7 @@ import {
   validateProductCiContract,
   validateStageContent,
   validateTestingPlanContract,
+  validateUserGuideContract,
 } from "./lifecycleSkills.ts";
 
 const ROOT_DIRECTORY = resolve(import.meta.dir, "../..");
@@ -39,6 +41,12 @@ const readGrilling = (): string =>
 const readTestingPlan = (): string =>
   readFileSync(
     resolve(ROOT_DIRECTORY, "plugins/terreno-planning/references/testing-plan.md"),
+    "utf8"
+  );
+
+const readUserGuide = (): string =>
+  readFileSync(
+    resolve(ROOT_DIRECTORY, "plugins/terreno-planning/references/user-guide.md"),
     "utf8"
   );
 
@@ -976,5 +984,105 @@ describe("lifecycle skill architecture", (): void => {
     assert.isTrue(errors.some((error) => error.includes("product-CI procedure")));
     assert.isTrue(errors.some((error) => error.includes("native watch hooks")));
     assert.isTrue(errors.some((error) => error.includes("timer waiting")));
+  });
+});
+
+describe("user-guide contract", (): void => {
+  for (const [directory, stage, nextMarkers, search, replacement, expected] of [
+    [
+      "terreno-1-grow",
+      "grow",
+      ["next: pick", "next: grow", "next: null"],
+      "None — user guide off",
+      "None — skipped",
+      "Grow must write the opt-out entry",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "skip a guide row silently",
+      "drop a guide row",
+      "Pick must never skip a guide row silently",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: pick", "next: brew", "next: null"],
+      "shipped screens",
+      "code",
+      "Roast must check pages against the shipped screens",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "guide index",
+      "page list",
+      "Brew must check the guide index",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "../../references/user-guide.md",
+      "missing-user-guide",
+      "Taste must load the user-guide contract",
+    ],
+  ] as const) {
+    it(`rejects ${stage} without ${search}`, (): void => {
+      const content = readStage(directory).replaceAll(search, replacement);
+
+      assert.deepEqual(
+        validateStageContent({
+          content,
+          definition: {directory, nextMarkers: [...nextMarkers], stage},
+        }),
+        [`${directory}: ${expected}`]
+      );
+    });
+  }
+
+  it("rejects an approval brief without the User guide line", (): void => {
+    const content = readGrilling().replaceAll("User guide: <", "Help: <");
+
+    assert.deepEqual(validateGrilling(content), [
+      "grilling: the approval brief plan must include the User guide: line",
+    ]);
+  });
+
+  it("accepts the real user-guide contract", (): void => {
+    assert.deepEqual(validateUserGuideContract(readUserGuide()), []);
+  });
+
+  it("rejects a plugin whose user-guide contract is missing", (): void => {
+    withPluginFixture((rootDirectory): void => {
+      const pluginDirectory = join(rootDirectory, "plugins/terreno-planning");
+      rmSync(join(pluginDirectory, "references/user-guide.md"));
+
+      assert.isUndefined(readUserGuideContract({pluginDirectory}));
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), [
+        "user-guide contract is missing: references/user-guide.md",
+      ]);
+    });
+  });
+
+  it("rejects a user-guide contract that drops the opt-out or the entry bar", (): void => {
+    const content = readUserGuide()
+      .replaceAll("### Opting out", "### Skipping")
+      .replaceAll("## Guide-entry bar", "## Style");
+
+    assert.deepEqual(validateUserGuideContract(content), [
+      "user-guide contract must define ### Opting out",
+      "user-guide contract must define ## Guide-entry bar",
+    ]);
+  });
+
+  it("keeps the user-guide contract portable", (): void => {
+    const content = readUserGuide();
+
+    for (const marker of PORTABILITY_MARKERS) {
+      assert.notInclude(content, marker);
+    }
   });
 });

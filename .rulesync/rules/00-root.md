@@ -142,6 +142,16 @@ and the smoke command. Terreno uses the planning plugin's default paths and decl
 | Regression suites | docs/regression/ |
 | Smoke command | bun run smoke |
 
+## User guide conventions
+
+Lifecycle skills read this table to find the end-user guide that chat agents read to
+answer "how do I…" questions. Terreno keeps the guide for the example app at the planning
+plugin's default path. Set the value to `none — <reason>` to opt a repository out.
+
+| Key | Value |
+| --- | --- |
+| User guide | docs/user-guide/ |
+
 ## How the Packages Work Together
 
 The three core packages form a complete full-stack framework:

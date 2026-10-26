@@ -14,6 +14,7 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`PR deployments`](references/pr-deployments.md),
 [`pick-roast loop`](references/pick-roast-loop.md),
 [`testing plan`](references/testing-plan.md),
+[`user guide`](references/user-guide.md),
 [`testing guidance`](references/testing.md),
 [`mocking guidance`](references/mocking.md), and
 [`subagent briefing`](references/subagent-briefing.md).
@@ -83,10 +84,16 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
     architecture and public docs in this slice using the documentation contract. Run any
     mandatory runtime/UI/safety verification declared by repository instructions or
     supporting skills. Missing mandatory capability is `BLOCKED`, not skipped.
-    Missing docs for a user-visible or architectural change is `FAIL`.
+    Missing docs for a user-visible or architectural change is `FAIL`. Write or edit
+    each user guide page whose `## User guide` row names this task, at the row's path,
+    in the user-guide page format, from the behavior this slice shipped; update the
+    guide index in the same slice. When a row's page path or change no longer fits,
+    edit that row in the IP with a one-line reason naming the row ID below the table;
+    never skip a guide row silently. Skip this when the repository opts out of the
+    user guide; an IP that lacks the section follows the user-guide legacy rule.
 11. **Record.** Record the completed task/slice in execution state with commands,
-    evidence, artifacts, docs files, attempts, and each planned spec written (row ID
-    and path). Do not commit a separate task-file edit to mark progress; the
+    evidence, artifacts, docs files, attempts, each planned spec written (row ID
+    and path), and each user guide page written (row ID and path). Do not commit a separate task-file edit to mark progress; the
     task-file mark rides in this slice's commit (step 13).
 12. **Prove this task.** Invoke Roast to prove this task only. Prefer a fresh context
     and pass the same task-scoped briefing. Roast must not spawn two unconstrained
@@ -122,6 +129,8 @@ generated-code workflows, and repository gotchas.
 - Red and green test evidence plus required lint/type/build/runtime results
 - Each `## E2E tests` row this task owns, with the spec path written or the edited row
   and its reason
+- Each `## User guide` row this task owns, with the page written or the edited row and
+  its reason
 - Internal review results
 - Drift decision and artifact references
 - Attempted-approach summary (especially on retries)
@@ -134,6 +143,8 @@ generated-code workflows, and repository gotchas.
 - Required repository checks/runtime gates pass for the current head.
 - No unresolved internal review findings or plan drift remain on completed tasks.
 - Every `## E2E tests` row a completed task owns has a spec at the row's path.
+- Every `## User guide` row a completed task owns has its page written, edited, or
+  retired at the row's path.
 - When unblocked tasks remain, continue the loop rather than exiting.
 - When none remain, emit `PASS` with `next: brew`.
 

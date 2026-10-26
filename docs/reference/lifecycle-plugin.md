@@ -1,6 +1,6 @@
 # Lifecycle plugin reference
 
-Plugin: `terreno-planning` (`2.13.0`)
+Plugin: `terreno-planning` (`2.14.0`)
 
 Planning skills are model-invocable: agents may select them from descriptions, not only
 from slash commands. Grow, Brew, and Taste each implement one bounded transition. Pick continues an inner loop until the
@@ -232,3 +232,60 @@ Last full run: never
 | --- | --- | --- | --- | --- | --- | --- |
 | TODO-001 | Due date survives a reinstall | Signed in on a phone with one dated todo, delete and reinstall the app, then sign in | The todo shows the same due date | iOS, Android | manual | todos-due-date |
 ```
+
+## User guide
+
+Every IP says which end-user guide pages it adds, updates, or retires, per
+[user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/user-guide.md).
+A page explains one feature in the words users see on screen. Chat agents read the pages
+to answer "how do I…" questions, so a page describes shipped behavior only.
+
+| Stage | Duty |
+| --- | --- |
+| Grow | Writes `## User guide` rows (`G<n>`), or `None — <reason>`, and a `User guide:` line in the brief |
+| Pick | Writes or edits each page whose row names the current task, and updates the guide index |
+| Roast | Holds each page to the guide-entry bar and checks its steps against the shipped screens |
+| Brew | Confirms every row's page exists or is retired and the index matches the pages on disk |
+| Taste | Updates affected pages after a fix that changes user-visible behavior |
+
+### Spot and opt-out
+
+The guide lives in `docs/user-guide/`, one page per feature at `<area>/<feature>.md`, with
+a `README.md` index. A repo overrides the path, or opts out, with a
+`## User guide conventions` table in AGENTS.md or CLAUDE.md:
+
+```markdown
+## User guide conventions
+
+| Key | Value |
+| --- | --- |
+| User guide | none — command-line tool with no in-app users |
+```
+
+With `none`, Grow writes `None — user guide off` and every stage, check, and backfill
+skips the guide.
+
+### Page format
+
+```markdown
+---
+title: Set a due date on a todo
+area: todos
+audience: user            # user | admin | staff
+platforms: [web, ios, android]
+questions:
+  - How do I set a due date on a todo?
+added: todos-due-date     # IP slug, or user-guide-backfill
+---
+
+# Set a due date on a todo
+
+## What it does
+## How to use it         # numbered steps naming on-screen labels in bold
+## Intended use          # what it is for, and what it is not for
+```
+
+`questions` is what retrieval matches; `audience` keeps a chat agent from describing an
+admin feature to a user. Pages never hold personal or health information, secrets, or
+internal URLs. The `backfill-user-guide` skill drafts pages for features that shipped
+before the contract and writes only the ones the human approves.

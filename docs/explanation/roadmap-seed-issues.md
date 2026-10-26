@@ -1331,6 +1331,17 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## circleci-pr-speed-loop
+
+**Title:** `CircleCI PR Speed Loop`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`In progress`
+
+- **Implementation plan:** [circleci-pr-speed-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/circleci-pr-speed-loop.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

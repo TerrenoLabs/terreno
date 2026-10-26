@@ -2426,11 +2426,18 @@ workflows:
     jobs:
       - dco:
           context: [terreno-github-api]
+      # ci-bench/* are benchmark replays (scripts/ci/bench); they are never reviewed or merged.
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
       - approve:
           context: [terreno-github-api, terreno-approve]
           requires: [dco, architectural-pr-review]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>
@@ -2566,6 +2573,7 @@ workflows:
     jobs:
       - packages-ci:
           package: test
+          compile-deps: blocks ui api
 
   repo-policies:
     when: << pipeline.parameters.run-repo-policies >>
@@ -2747,7 +2755,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2759,7 +2768,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2771,7 +2780,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2783,7 +2793,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2795,7 +2805,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-docs-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2810,7 +2821,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/gcp-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2822,7 +2834,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 

@@ -54,7 +54,7 @@ When this is done, an operator or agent can:
 - Version pin: read `create-terreno-app/package.json` `version` (lockstep with other packages at release). Generated deps use `^${version}`, not `"latest"`.
 - Target layout: `<dir>/{backend,frontend,.github,README.md,Dockerfile,…}` matching today’s bootstrap file list, plus deploy files from Q4.
 - Env files: write gitignored `backend/.env` and `frontend/.env` with local-dev defaults **and** committed `.env.example` siblings (issue asked for env files; Q4 asked for examples).
-- Dockerfile: **consumer** backend image (`oven/bun:1.4.4-slim`, bind `0.0.0.0`, `PORT` from env, health on `/health`). Not the monorepo `example-backend/Dockerfile`.
+- Dockerfile: **consumer** backend image (`oven/bun:1-slim` or `oven/bun:1`, bind `0.0.0.0`, `PORT` from env, health on `/health`). Not the monorepo `example-backend/Dockerfile`.
 - Non-empty: refuse if the target exists and contains anything other than `.git` / `.gitignore`.
 - Hosted write guard: `terreno-mcp-local` sets `TERRENO_MCP_WRITE_SCAFFOLD=1`. HTTP hosted MCP never sets it and **ignores** `targetDir` even if passed.
 - `targetDir` must be an absolute path; local MCP resolves and writes `join(targetDir, appName)` only if that path is empty as above. Do not write `/` or home without an explicit `appName` subdirectory.

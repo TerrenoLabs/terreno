@@ -1717,9 +1717,7 @@ export const GPTChat = ({
           />
 
           <Box alignItems="center" direction="row" justifyContent="between" marginBottom={3}>
-            <Heading size="sm">
-              <Text>Chats</Text>
-            </Heading>
+            <Heading size="sm">Chats</Heading>
             <Box direction="row" gap={1}>
               <SidebarToolbarButtons
                 handleOpenApiKeyModal={handleOpenApiKeyModal}

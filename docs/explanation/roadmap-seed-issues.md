@@ -191,7 +191,7 @@ example-backend Dockerfile with CI validation.
 **Title:** `Deploy to Vercel`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Released`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Shipped`
 
 Documents Expo web export on Vercel, preview-deployment CORS and Better Auth origin handling,
 Vercel Functions WebSockets (Public Beta) operator docs, and a deploy-vercel skill with
@@ -1328,6 +1328,17 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 - **Implementation plan:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-rich-replies.md)
 - **Tasks:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-rich-replies.md)
+
+---
+
+## circleci-pr-speed-loop
+
+**Title:** `CircleCI PR Speed Loop`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`Shaping`
+
+- **Implementation plan:** [circleci-pr-speed-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/circleci-pr-speed-loop.md)
 
 ---
 

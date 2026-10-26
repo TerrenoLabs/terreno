@@ -5,7 +5,9 @@ import mongoose from "mongoose";
 (mongoose.Schema.Types as typeof mongoose.Schema.Types & {DateOnly: typeof DateOnly}).DateOnly =
   DateOnly;
 
-const isTracingEnabled = process.env.NODE_ENV === "production";
+// Vercel Functions run on Node without GCP credentials, so Cloud Trace stays a Cloud Run feature.
+const isVercel = Boolean(process.env.VERCEL);
+const isTracingEnabled = process.env.NODE_ENV === "production" && !isVercel;
 const serviceName = process.env.FLOURISH_SERVICE || "flourish-backend";
 const serviceVersion = process.env.npm_package_version || "1.0.0";
 
@@ -67,6 +69,8 @@ if (!sentryDsn && process.env.NODE_ENV === "production") {
 
 if (sentryDsn) {
   Sentry.init({
+    // @sentry/bun's default integrations call Bun.serve, which does not exist on Vercel's Node runtime.
+    defaultIntegrations: isVercel ? false : undefined,
     dsn: sentryDsn,
     environment: process.env.APP_ENV ?? "development",
     ignoreErrors: [/^.*ECONNRESET*$/, /^.*socket hang up*$/],

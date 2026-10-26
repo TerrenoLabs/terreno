@@ -3,10 +3,12 @@
 Run `bun run check:regression-suites` after you edit any file here. CI runs the same check in
 the `repo-policies` job.
 
-These files hold the manual regression cases a person walks before a release: the checks that
-no unit test, smoke, or e2e spec can make, such as full flows across devices or channels, how
-the app feels, real email delivery, and hardware or operating-system behavior. Only a person
-walks them; anything an e2e spec can drive and assert belongs in an e2e spec instead. Each area has one living file. Implementation plans
+These files hold a minimal manual pass a developer or QA walks before a release: a short check
+that the app works as intended, plus the behavior no unit test, smoke, or e2e spec can reach,
+such as push notifications, real email delivery, other hardware or operating-system behavior,
+full flows across devices, and how the app feels. Keep them small. Most features add no case
+here, and anything an e2e spec can drive and assert belongs in an e2e spec instead. Each area
+has one living file. Implementation plans
 propose cases under `## Regression cases`, and Brew writes them here with real IDs before it
 opens the pull request. See [Where regression suites live](../testing/e2e.md#where-regression-suites-live)
 for how this tier fits with the automated ones.
@@ -76,3 +78,10 @@ bar above; reviewers do.
 1. Open the area's file, or create `<area>.md` with `Last full run: never` and an `Owner:`.
 2. Add a row with the next free ID.
 3. Run `bun run check:regression-suites`.
+
+## Backfill the suites
+
+To find cases an older feature should have had, run the `backfill-regression` skill. It
+surveys the app for behavior automation cannot reach, proposes cases one area at a time, and
+writes only the sets you approve. It records denied cases in
+`.terreno/regression-backfill.json` (not committed) so it never proposes them again.

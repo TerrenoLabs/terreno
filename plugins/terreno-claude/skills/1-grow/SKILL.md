@@ -65,9 +65,10 @@ human decision until the answer is executable.
    human decision, and do not re-ask product decisions the PRD already settled.
    Pair each UI or cross-process criterion with a planned e2e spec at the path and layer
    the e2e guide prescribes, or record why it needs none. Automate first: anything a
-   guide layer can drive and assert is an e2e row. List as manual regression cases only
-   what a human must do or judge (full cross-device flows, feel, hardware and OS), each
-   meeting the testing-plan regression-step bar.
+   guide layer can drive and assert is an e2e row. Regression cases are usually `None`:
+   add one only for a change a developer or QA must check by hand (push notifications
+   and other hardware or OS behavior, a full cross-device flow, feel) that no existing
+   case covers, each meeting the testing-plan regression-step bar.
 8. **Write.** Produce the IP and a dependency-aware tracer-bullet task list. Each task
    names files/seams, acceptance criteria, blockers, verification, docs to create or
    update, and relevant supporting skills when discoverable. Docs updates follow the

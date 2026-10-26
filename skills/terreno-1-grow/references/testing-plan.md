@@ -1,9 +1,9 @@
 # Testing plan
 
-Every IP plans its end-to-end tests and its manual regression cases up front, so no
-stage decides alone whether a feature deserves a spec, and the checks a human repeats
-before a release live in one known file. Grow writes both sections. Later stages read
-them; they do not invent rows.
+Every IP plans its end-to-end tests up front, and says whether it adds any manual
+regression case, so no stage decides alone whether a feature deserves a spec. Most
+features add no regression case. Grow writes both sections. Later stages read them;
+they do not invent rows.
 
 ## Standardized spot
 
@@ -38,24 +38,30 @@ default when an override names a missing file. When no file exists at the resolv
 `E2E guide` path, Grow adds a task that writes it there, and every task that writes a
 planned spec depends on that task.
 
-## Automate first
+## Keep regression minimal
+
+A feature does not need a regression case. `## Regression cases` is `None` for most
+IPs. The suites stay small: a short check that the app works as intended, plus the
+behavior a developer or QA must check by hand because automation cannot reach it.
 
 A check is an `## E2E tests` row whenever a layer in the e2e guide can drive it and
-assert the result. A regression case is only for what a human must do or judge:
+assert the result. Add a regression case only when the feature changes something a
+person must do or judge, and only when no existing case already covers it:
 
+- hardware and the operating system: push notifications, camera, biometrics,
+  permission prompts, reinstall
 - a full flow across apps, devices, or channels that automation cannot reasonably drive
-  end to end
+  end to end, such as a real email reaching an inbox
 - how the app feels: motion, responsiveness, layout under real fonts and screens
-- hardware and the operating system: camera, push delivery, biometrics, permission
-  prompts, reinstall
 
-Only a human walks regression cases. No stage executes them or stamps `Last full run`.
-When a case has an automatable part, that part is an `## E2E tests` row and the case
-keeps only the human part.
+Prefer editing an existing case to adding one. A developer or QA walks the cases; no
+stage executes them or stamps `Last full run`. When a case has an automatable part, that
+part is an `## E2E tests` row and the case keeps only the human part.
 
 ## IP tables
 
 Every IP has both sections. Either may be `None — <reason>`, but neither may be missing.
+`None — no hard-to-automate change` is the usual `## Regression cases` entry.
 
 ### `## E2E tests`
 

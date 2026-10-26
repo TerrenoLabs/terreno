@@ -39,7 +39,8 @@
         "terreno-backend-tests",
         "terreno-frontend-tests",
         "terreno-mobile-tests",
-        "backend-test-env"
+        "backend-test-env",
+        "backfill-regression"
       ],
       "title": "Testing"
     },

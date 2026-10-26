@@ -127,8 +127,8 @@ probes. If repository policy makes one mandatory and it is unavailable, emit `BL
 
 One or more criteria disproven by evidence emits `FAIL` with severity, expected, actual,
 and reproducible evidence. Set `next: pick`. A missing or failing `## E2E tests` row, or
-a `## Regression cases` row that misses the regression-step bar or could be fully
-automated, is `FAIL` that names the row ID.
+a `## Regression cases` row that misses the regression-step bar, could be fully
+automated, or repeats an existing case, is `FAIL` that names the row ID.
 
 ## Blocked conditions
 

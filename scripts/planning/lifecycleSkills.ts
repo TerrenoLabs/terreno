@@ -75,6 +75,7 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
   "attach-pr-media",
   "backend-test-env",
+  "backfill-regression",
   "building-admin-interfaces",
   "building-terreno-apps",
   "debug-syncdb-with-mcp",

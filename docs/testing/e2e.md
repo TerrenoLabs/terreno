@@ -23,11 +23,12 @@ prove the behavior.
 | Unit and integration | Functions, routes, and components behave, in-process | `bun test`, in-memory Mongo | `<package>/src/**/*.test.ts(x)` | `bun run --cwd <package> test:ci` |
 | Smoke | The package's built output works through its public entry in a real process | A child process, a real port, the compiled binary, or Chromium | `<package>/e2e/smoke.ts` or `smoke.spec.ts` | `bun run --cwd <package> smoke` |
 | E2E | A user flow works across the running frontend and backend | Playwright (browser) or Maestro (flow) | `<package>/e2e/*.spec.ts`, `.maestro/flows/` | `bun run frontend:e2e`, `bun run maestro:test` |
-| Manual regression | What only a person can do or judge: full flows across devices or channels, how the app feels, hardware and OS behavior | A person, before a release | `docs/regression/<area>.md` | none |
+| Manual regression | A short check that the app works as intended, plus what automation cannot reach: push notifications and other hardware or OS behavior, full flows across devices, how the app feels | A developer or QA, before a release | `docs/regression/<area>.md` | none |
 
 Unit tests are the default. A smoke exists once per package, not once per feature. A new e2e
-spec is for a user-visible flow that crosses the frontend and backend. Automate first: a manual
-case is only for a check that no automated tier can make, and only a person walks it.
+spec is for a user-visible flow that crosses the frontend and backend. Automate first. Most
+features add no manual case: add one only for a check no automated tier can make and no
+existing case covers. A developer or QA walks them.
 
 ## Layers
 
@@ -187,7 +188,9 @@ flows need the demo's static export served on port 8085 (`bun run --cwd demo exp
 Manual regression cases live in `docs/regression/<area>.md`, one living file per area with
 stable case IDs such as `AUTH-004`. An IP lists the cases it adds under `## Regression cases`,
 and Brew writes them into the suite with real IDs before it opens the PR. A case belongs there
-only when no unit test, smoke, or e2e spec can check it.
+only when no unit test, smoke, or e2e spec can check it, and most features add none. To fill
+gaps from older features, run the `backfill-regression` skill: it proposes cases one area at
+a time and writes only the sets you approve.
 
 The [regression suites index](../regression/README.md) lists the areas, restates the suite
 format, and describes `bun run check:regression-suites`, which CI runs on every change to a

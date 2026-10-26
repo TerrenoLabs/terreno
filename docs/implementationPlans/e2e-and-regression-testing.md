@@ -274,7 +274,7 @@ Destination: `docs/regression/planning.md`. T32 creates it and assigns the real 
   - Depends on: T1, T8, T10
   - Files: .rulesync/rules/00-root.md, generated rule outputs (AGENTS.md, CLAUDE.md and the other `bun run rules` targets), docs/implementationPlans/IP_TEMPLATE.md, docs/implementationPlans/README.md
   - Delivers:
-    - The root rule gains a `## Testing conventions` table: E2E guide = `docs/testing/e2e.md`, Regression suites = `docs/regression/`, Smoke command = `bun run smoke`. Terreno uses the defaults; the table makes them explicit.
+    - The root rule gains a `## Testing conventions` table: E2E guide = `docs/testing/e2e.md`, Regression suites = `docs/regression/`, Smoke command = `bun run smoke:local` (D12). Terreno uses the defaults; the table makes them explicit.
     - IP_TEMPLATE gains `## E2E tests` and `## Regression cases`, placed before `## Acceptance Criteria`.
   - Acceptance:
     - `bun run rules:check` passes.
@@ -473,6 +473,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
 | D9 | example-backend's smoke ran 26–82 s against the 30 s budget. Fix it, or make an exception? | Fix it to 30 s | T33 retry also edits `example-backend/e2e/smoke.ts` (T28's file): seed in-process and skip the duplicate first-boot work. If it still runs over, document a 60 s exception for that smoke only |
 | D10 | (after the PR opened) How much regression testing should a feature carry? | "make it clear the regression testing does not have to be in every feature. this should be a minimal test that the app is working as intended, and that things that are hared to test manually are sufficiently tested by the dev or QA, such as push notifications" and "also add a backfill regression skill that loops through looking for good regression tests and has the user approve or deny each set" | testing-plan.md "Automate first" becomes "Keep regression minimal": `## Regression cases` is usually `None`, a developer or QA walks the cases, and Roast fails a case that repeats an existing one. Adds the `backfill-regression` skill, which proposes cases one area at a time and writes only approved sets. Supersedes D8's "only a human" wording |
 | D11 | Keep or retire PLAN-001 to PLAN-005? | "retire those yes" | All five rows read `Retired` in docs/regression/planning.md; T34 is not walked |
+| D12 | (pre-merge review) Taste's smoke gate fails from a fresh shell; how should consumers opt out of regression suites? | Review finding, then "update so consumers can opt out of the regression testing listing" | Smoke command becomes `bun run smoke:local`, which builds what the smokes test first. `Regression suites \| none` in Testing conventions opts a repository out |
 
 ## Sign-off
 

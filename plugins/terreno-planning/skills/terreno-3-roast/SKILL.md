@@ -55,7 +55,7 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    state, a followable action, and an observable Expected is `FAIL` that names the row
    ID and the missing part; Pick fixes it by rewriting that row in the IP in place.
    A row an e2e guide layer could cover completely is also `FAIL` (testing-plan
-   "Automate first"); Pick moves it to `## E2E tests`. Roast never walks a row.
+   "Keep regression minimal"); Pick moves it to `## E2E tests`. Roast never walks a row.
    An IP that lacks either section follows the testing-plan legacy rule: warn once and
    do not fail.
 4. **Inspect and execute.** Review this task's patch and run concrete checks in this

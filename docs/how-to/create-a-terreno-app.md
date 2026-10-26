@@ -134,7 +134,7 @@ Open `http://localhost:8082` and sign in as `test@example.com` / `testpassword12
 
 Read the [deployment baseline](../explanation/deployment-baseline.md) first.
 
-**Backend:** the root `Dockerfile` builds only `backend/` on `oven/bun`, listens on `PORT` (default `8080` in the image), binds `0.0.0.0`, and exposes `GET /health`. It does not copy Terreno monorepo packages.
+**Backend:** the root `Dockerfile` builds only `backend/` on `oven/bun:1.4.4-slim`, listens on `PORT` (default `8080` in the image), binds `0.0.0.0`, and exposes `GET /health`. It does not copy Terreno monorepo packages.
 
 ```bash
 docker build -t my-app-backend .

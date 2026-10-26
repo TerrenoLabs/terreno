@@ -33,7 +33,8 @@ conventions` table in its agent instructions (AGENTS.md or CLAUDE.md):
 ```
 
 Resolve each key once: the table's value when the table names it, otherwise the
-default. The resolved `E2E guide` path is the only guide; never fall back to the
+default. `Regression suites | none` opts the repository out of manual regression suites
+(see Opting out). The resolved `E2E guide` path is the only guide; never fall back to the
 default when an override names a missing file. When no file exists at the resolved
 `E2E guide` path, Grow adds a task that writes it there, and every task that writes a
 planned spec depends on that task.
@@ -57,6 +58,19 @@ person must do or judge, and only when no existing case already covers it:
 Prefer editing an existing case to adding one. A developer or QA walks the cases; no
 stage executes them or stamps `Last full run`. When a case has an automatable part, that
 part is an `## E2E tests` row and the case keeps only the human part.
+
+## Opting out
+
+A repository that keeps no manual regression suites sets `Regression suites` to `none`
+in its `## Testing conventions` table. Then:
+
+- Every IP still has the section, reading `None — regression suites opted out`, so the
+  IP format stays fixed. Grow proposes no case, and Roast checks none.
+- Brew writes no suite file and lists no regression case under Not tested.
+- Taste skips regression ID renumbering and the suite check.
+- `backfill-regression` stops at once and says the repository opted out.
+
+E2E tests are unaffected. Remove the line, or name a directory, to opt back in.
 
 ## IP tables
 

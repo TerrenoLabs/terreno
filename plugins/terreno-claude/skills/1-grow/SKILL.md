@@ -35,7 +35,8 @@ human decision until the answer is executable.
    and verify it against repository reality. Resolve the testing spot: the e2e guide,
    the regression-suite directory, and the smoke command, from the agent instructions'
    `## Testing conventions` table or the testing-plan defaults. Read the e2e guide and
-   the suite files for the affected areas.
+   the suite files for the affected areas. When `Regression suites` is `none`, follow
+   the testing-plan opt-out: no regression cases.
 2. **Read architecture docs.** Load the repository's architecture, domain, and operator
    docs for the affected area. Treat them as the current design. If docs are missing or
    contradict the code, the IP must resolve that in this invocation.

@@ -11,3 +11,4 @@ The `terreno-planning` lifecycle plugin (2.13.0) plans e2e tests and manual regr
 - Taste re-checks both sections after behaviour-changing fixes and renumbers regression ID collisions with `master`.
 - `bun run check:lifecycle-skills` enforces these phrases in every stage.
 - New `backfill-regression` skill proposes manual regression cases one area at a time and writes only the sets the human approves.
+- A consumer opts out of manual regression suites with `Regression suites | none` in its `## Testing conventions` table.

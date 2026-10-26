@@ -190,6 +190,10 @@ or CLAUDE.md:
 | Smoke command | bun run smoke:local |
 ```
 
+Set `Regression suites` to `none` to opt out of manual regression suites. Every IP's
+`## Regression cases` then reads `None — regression suites opted out`, Brew and Taste skip
+all suite work, and `backfill-regression` stops at once. E2E tests are unaffected.
+
 ### IP sections
 
 Both sections are required. Either may be `None — <reason>`; neither may be missing. An

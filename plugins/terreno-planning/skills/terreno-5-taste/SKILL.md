@@ -160,7 +160,8 @@ make it clean, stop and escalate per push ownership.
         files; not the whole workspace unless the change is repo-wide)
       - run the suite-check command when one was given and a suite file changed. The
         suite check is the command the repository's CI or package scripts run against
-        `<Regression suites>`; pass none when the repository has none.
+        `<Regression suites>`; pass none when the repository has none or opted out
+        (`Regression suites` is `none`, which also skips regression ID renumbering).
       - run the declared `Smoke command` when the repository has one
    5. Do not push until last-run failed tests pass locally and the fresh subagent
       reports pass with command output. A duplicate regression ID reported by the gate

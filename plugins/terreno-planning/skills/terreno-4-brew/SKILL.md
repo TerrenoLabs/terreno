@@ -55,7 +55,8 @@ must follow the [`GitHub attention contract`](../../references/github-attention-
      `next: pick` that names the row ID. A deferred row whose command neither a local
      runner nor any CI job on a discovered host runs is `BLOCKED` naming the row and
      its command.
-   - **Regression cases.** Merge every `## Regression cases` row into
+   - **Regression cases.** Skip this gate when `Regression suites` is `none` (the
+     testing-plan opt-out). Otherwise merge every `## Regression cases` row into
      `<Regression suites>/<area>.md`, finding each file by the `Area:` line its
      `Destination:` prefix names. Create a missing file from the testing-plan suite
      format. Give each provisional `<AREA>-new-<n>` row the next free ID, set `Added`

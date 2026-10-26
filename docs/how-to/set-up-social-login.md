@@ -14,8 +14,8 @@ listed in [Configure Better Auth](configure-better-auth.md#auth-features). Agent
 1. **Point gcloud at the project** that holds the backend's secrets, once per machine:
 
    ```bash
-   gcloud config set project flourish-terreno   # the example's project; use your own
-   gcloud config get-value project              # check
+   gcloud config set project <gcp-project-id>
+   gcloud config get-value project
    ```
 
    Every `gcloud` command below then uses it. Pass `--project=<id>` to override it for one
@@ -191,7 +191,7 @@ runtime account, once:
 
 ```bash
 S=terreno-backend-example
-for n in google-client-id google-client-secret github-client-id github-client-secret apple-client-id apple-team-id apple-key-id apple-private-key; do gcloud secrets create "$S-$n" --replication-policy=automatic --quiet && gcloud secrets add-iam-policy-binding "$S-$n" --member=serviceAccount:terreno-backend-runtime@flourish-terreno.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --quiet >/dev/null && echo "created $S-$n"; done
+for n in google-client-id google-client-secret github-client-id github-client-secret apple-client-id apple-team-id apple-key-id apple-private-key; do gcloud secrets create "$S-$n" --replication-policy=automatic --quiet && gcloud secrets add-iam-policy-binding "$S-$n" --member=serviceAccount:terreno-backend-runtime@<gcp-project-id>.iam.gserviceaccount.com --role=roles/secretmanager.secretAccessor --quiet >/dev/null && echo "created $S-$n"; done
 ```
 
 `infra/flourish/imports.tf` adopts these containers into Terraform on its next apply, so it does

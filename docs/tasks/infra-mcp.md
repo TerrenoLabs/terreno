@@ -34,7 +34,8 @@ Status: Blocked — Phase 1 RBAC wiring depends on the RBAC module PR ([rbac-per
 - [ ] `ProxiedAdapter`: `@modelcontextprotocol/client` (stdio + HTTP), deny-by-default `allowedTools` with mandatory tier annotations, tool name prefixing, upstream lifecycle management
 - [ ] Reference proxied integration (`@sentry/mcp-server` stdio or `@google-cloud/observability-mcp`) with parity tests against native tools
 - [ ] Expo/EAS native adapter (`EXPO_TOKEN`): build status, update status, submission status (read); trigger tools deferred to write expansion
-- [ ] Vercel native adapter (API token): deployments, logs, project info (read)
+- [ ] Vercel native adapter (one team token per team, project→team by lookup): `vercel_list_projects`, `vercel_list_deployments`, `vercel_runtime_logs` via `POST /v1/observability/events` (read); `vercel.read` RBAC scope limiting machine users to their own projects. Port from the hive dogfood implementation
+- [ ] Per-sandbox machine users for orchestrated agents: mint user + service token at sandbox create, revoke at teardown; per-resource allow-list consumed by integration scopes
 
 ## Phase 4 — OSS packaging
 

@@ -13,9 +13,12 @@ targets: ['*']
 
 # Set up social login
 
-The human guide is [docs/how-to/set-up-social-login.md](../../docs/how-to/set-up-social-login.md).
-Read it first; this skill is the order of work and the checks. Server fields are in
-[configure-better-auth.md](../../docs/how-to/configure-better-auth.md#auth-features).
+Read the published guide first:
+[Set up social login](https://terreno-docs.netlify.app/how-to/set-up-social-login).
+Server fields are in
+[Configure Better Auth](https://terreno-docs.netlify.app/how-to/configure-better-auth#auth-features).
+This skill is the order of work. The guide's example deploy is one illustration; a consumer app
+uses its own hosts, secret store, and deploy.
 
 **Never print, commit, or paste a client secret or `.p8` key.** The user enters them into the
 provider consoles and `gcloud secrets versions add` themselves. Never create secrets or change a
@@ -23,19 +26,18 @@ CI context without naming each one and getting a yes.
 
 ## Steps
 
-1. **Find the hosts.** Read the deploy scripts (for the example, `scripts/ci/backend-auth-env.sh`
-   and `scripts/ci/gcp-deploy.sh`) and write down:
+1. **Find the hosts.** From the app's deploy config, write down:
    - the stable backend and web URLs, and whether they share a registrable domain;
    - the preview backend and web URL patterns;
-   - which backend owns the callbacks: stable, or a preview named by `OAUTH_CALLBACK_TAG`.
+   - which backend owns the callbacks: stable, or one named preview.
    Recommend `app.<domain>` and `api.<domain>` for stable, and previews on their hosting domains,
-   never under the stable domain (the guide's "Choose the hosts" says why).
+   never under the stable domain (the guide's "Choose the hosts" says why). The example's hosts
+   are in that guide, not in this skill.
 2. **Configure the server.** Set `googleOAuth`, `githubOAuth`, and `appleOAuth` (key form) only
    when their env vars exist; add `https://appleid.apple.com` to `trustedOrigins` with Apple; set
    `oauthProxy.productionURL` on previews (to the callback owner) and on the owner (to itself);
-   share one `BETTER_AUTH_SECRET`. Copy the pattern in
-   `example-backend/src/utils/betterAuthConfig.ts`. The login and security screens need no
-   change: they read `GET {basePath}/terreno/methods`.
+   share one `BETTER_AUTH_SECRET`. Follow the guide's server section. The login and security
+   screens need no change: they read `GET {basePath}/terreno/methods`.
 3. **Give the user the exact URLs.** For each provider, the callback is
    `https://<callback owner>/api/auth/callback/<provider>`; local dev uses
    `http://localhost:4000` for Google and GitHub (Apple is https only). Print the full URL per
@@ -45,26 +47,26 @@ CI context without naming each one and getting a yes.
    provider": the Google consent screen (test users while in Testing), the GitHub OAuth app, and
    the Apple Services ID plus key.
 5. **Hand over the secrets.** Check `gcloud config get-value project` first; if it is not the
-   project that holds the backend secrets, give `gcloud config set project <id>`. Then give the
-   `put` lines from "Store the secrets", with the app's secret names. It reads each value with
-   `secret terreno <KEY>` from OpenBao, so no value passes through the chat; for an app without
-   OpenBao, swap in its store's read command. Secrets mount at deploy, so a redeploy follows.
-6. **Preview first, when stable does not run this code yet.** For the example, the user sets
-   `OAUTH_CALLBACK_TAG=pr-<n>` in the `terreno-gcp` CircleCI context, registers the preview's
-   backend as the callback host, adds the secrets, and approves the PR's `approve` hold. Say
-   plainly that the named preview then holds the real secrets and stable has no social sign-in
-   until the variable is removed.
+   project that holds the backend secrets, give `gcloud config set project <gcp-project-id>`.
+   Then give the steps from the guide's "Store the secrets", with this app's secret names and
+   its own secret store. No value passes through the chat. Secrets mount at deploy, so a
+   redeploy follows. The example's Secret Manager commands stay in the guide.
+6. **Preview first, when stable does not run this code yet.** Point the callback owner at one
+   preview, register that preview's backend URL with each provider, add the secrets, and deploy
+   that preview only. Say plainly that the named preview then holds the real secrets and stable
+   has no social sign-in until the callback owner moves back. The example does this with
+   `OAUTH_CALLBACK_TAG`; other apps use their own switch.
 7. **Check.** `curl -s https://<backend>/api/auth/terreno/methods | jq .` lists each provider.
    Then sign in with each one on the web app. On `redirect_uri_mismatch`, compare the URI in the
    error with the registered one character for character.
 
 ## In code you change
 
-- A consumer app's deploy may not have `OAUTH_CALLBACK_TAG`. Add the equivalent switch only when
-  the user wants preview-first, with tests like `scripts/ci/cloud-run-preview.test.ts`.
-- Update the app's social-login docs and changelog in the same change (`update-docs`).
-- Prove the flow without real providers with the mock OIDC provider
-  (`example-frontend/e2e/helpers/mockOidcProvider.ts`); real-provider sign-in is the user's check.
+- Add a preview-callback switch only when the user wants preview-first, and cover it with that
+  app's deploy-env tests. The example's switch is `OAUTH_CALLBACK_TAG`, described in the guide.
+- Update the app's social-login docs in the same change.
+- Prove the flow without real providers with the app's mock OIDC provider when it has one.
+  Real-provider sign-in is the user's check.
 
 ## Done when
 

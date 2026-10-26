@@ -1,7 +1,7 @@
 import {afterEach, describe, it} from "bun:test";
 import {act} from "@testing-library/react-native";
 import {assert} from "chai";
-import React from "react";
+import React, {useState} from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminProvider} from "./AdminProvider";
 import type {AdminApi} from "./types";
@@ -102,6 +102,70 @@ describe("useAdminRpc", () => {
       await Promise.resolve();
     });
     assert.isOk(latest.error);
+  });
+
+  it("drops the previous body and reports loading when the URL changes", async () => {
+    let gets = 0;
+    let resolveNext: ((response: Response) => void) | undefined;
+    globalThis.fetch = (async () => {
+      gets += 1;
+      if (gets > 1) {
+        return await new Promise<Response>((resolve) => {
+          resolveNext = resolve;
+        });
+      }
+      return new Response(JSON.stringify({name: "Ada"}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    let setUrl: ((next: string) => void) | undefined;
+    let queryState: {data?: {name: string}; isLoading: boolean} | undefined;
+    const Harness: React.FC = () => {
+      const [url, setNextUrl] = useState("/users/a");
+      setUrl = setNextUrl;
+      const rpc = useAdminRpc();
+      queryState = useAdminRpcQuery<{name: string}>({rpc, url});
+      return null;
+    };
+
+    renderWithTheme(
+      <AdminProvider
+        api={api}
+        apiBase="/admin"
+        credentials="same-origin"
+        getAuthHeaders={() => ({})}
+        routeBase="/admin"
+      >
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.equal(gets, 1);
+    assert.deepEqual(queryState?.data, {name: "Ada"});
+    assert.isFalse(queryState?.isLoading);
+
+    await act(async () => {
+      setUrl?.("/users/b");
+    });
+    assert.isUndefined(queryState?.data);
+    assert.isTrue(queryState?.isLoading);
+
+    await act(async () => {
+      resolveNext?.(
+        new Response(JSON.stringify({name: "Bea"}), {
+          headers: {"Content-Type": "application/json"},
+          status: 200,
+        })
+      );
+      await Promise.resolve();
+    });
+    assert.equal(gets, 2);
+    assert.deepEqual(queryState?.data, {name: "Bea"});
+    assert.isFalse(queryState?.isLoading);
   });
 
   it("refetches mounted queries after a successful tagged mutation", async () => {

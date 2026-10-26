@@ -149,6 +149,59 @@ describe("UserSecurityScreen", () => {
     expect(screen.queryByTestId("user-security-screen-user-error")).toBeNull();
   });
 
+  it("clears the previous name while the next user's record is loading", async () => {
+    const screen = await renderLoaded();
+    expect(screen.getByText("Ada Lovelace")).toBeTruthy();
+
+    let releaseBea: ((response: Response) => void) | undefined;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({method, url});
+      if (url === `${ORIGIN}/admin/config`) {
+        return jsonResponse(configResponse);
+      }
+      if (url === `${ORIGIN}/admin/users/user-2`) {
+        return await new Promise<Response>((resolve) => {
+          releaseBea = resolve;
+        });
+      }
+      if (method === "GET" && url.endsWith("/security")) {
+        return jsonResponse({body: {data: summaryFor(false)}});
+      }
+      return jsonResponse({body: {title: "Not found"}, status: 404});
+    }) as typeof fetch;
+
+    screen.rerender(
+      <AdminProvider
+        api={api}
+        apiBase="/admin"
+        apiOrigin={ORIGIN}
+        getAuthHeaders={async () => ({authorization: "Bearer test"})}
+        routeBase="/admin"
+      >
+        <UserSecurityScreen userId="user-2" />
+      </AdminProvider>
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Ada Lovelace")).toBeNull();
+      expect(screen.getByTestId("user-security-screen-user-loading")).toBeTruthy();
+    });
+
+    await act(async () => {
+      releaseBea?.(
+        jsonResponse({
+          body: {data: {_id: "user-2", email: "bea@example.com", name: "Bea"}},
+        })
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Bea")).toBeTruthy();
+    });
+    expect(screen.queryByText("Ada Lovelace")).toBeNull();
+  });
+
   it("posts disable to /users/:id/security/disable after confirming and shows the new state", async () => {
     const screen = await renderLoaded();
 

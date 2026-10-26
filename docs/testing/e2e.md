@@ -1,11 +1,14 @@
 # E2E testing guide
 
-Run every package smoke from the repo root after the builds they test:
+Run every package smoke from the repo root, with the builds they test and Playwright Chromium:
 
 ```bash
-bun run compile && bun run --cwd admin-spa build:web && bun run --cwd demo export \
-  && bun run --cwd example-frontend export:smoke && bun run smoke
+bun run smoke:local
 ```
+
+It runs `bun run compile`, `admin-spa build:web`, `demo export`, `example-frontend
+export:smoke`, and `bunx playwright install chromium`, then `bun run smoke`. Once those builds
+exist, `bun run smoke` alone reruns the smokes.
 
 This guide covers how Terreno builds and writes end-to-end tests: the test tiers, where each
 kind of spec lives, how specs find elements and wait, and the command that runs them. Each

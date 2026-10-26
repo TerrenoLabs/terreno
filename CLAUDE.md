@@ -125,13 +125,13 @@ an intentional repository-wide dependency-graph change. See
 
 Lifecycle skills read this table to find the e2e guide, the manual regression suites,
 and the smoke command. Terreno uses the planning plugin's default paths and declares
-`bun run smoke` as its smoke command.
+`bun run smoke:local` as its smoke command: it builds what the smokes test, then runs `bun run smoke`.
 
 | Key | Value |
 | --- | --- |
 | E2E guide | docs/testing/e2e.md |
 | Regression suites | docs/regression/ |
-| Smoke command | bun run smoke |
+| Smoke command | bun run smoke:local |
 
 ## How the Packages Work Together
 

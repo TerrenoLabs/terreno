@@ -187,7 +187,7 @@ or CLAUDE.md:
 | --- | --- |
 | E2E guide | docs/testing/e2e.md |
 | Regression suites | docs/regression/ |
-| Smoke command | bun run smoke |
+| Smoke command | bun run smoke:local |
 ```
 
 ### IP sections

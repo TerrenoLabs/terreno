@@ -74,6 +74,8 @@ workspace `smoke` script against the job's replica-set Mongo sidecar
 (`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
 running it.
 
+`bun run smoke:local` runs every step below in order. Run them yourself to reuse builds:
+
 ```bash
 bun run compile
 (cd admin-spa && bun run build:web) && (cd demo && bun run export)

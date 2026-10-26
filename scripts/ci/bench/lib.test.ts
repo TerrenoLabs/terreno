@@ -494,6 +494,48 @@ describe("suggestBenchCases", () => {
 });
 
 describe("summarizeBench", () => {
+  it("drops a case whose treatment ran but never succeeded instead of counting it as no change", () => {
+    const results: BenchResult[] = [
+      {case: "a", minutes: 10, role: "control", run: 1, status: "ok"},
+      {case: "a", minutes: 6, role: "treatment", run: 1, status: "ok"},
+      {case: "b", minutes: 8, role: "control", run: 1, status: "ok"},
+      {
+        case: "b",
+        minutes: 2,
+        reason: "failed jobs: api-ci",
+        role: "treatment",
+        run: 1,
+        status: "invalid",
+      },
+    ];
+
+    expect(summarizeBench(results)).toEqual({
+      changePercent: -40,
+      control: 10,
+      invalid: 1,
+      perCase: [{case: "a", control: 10, treatment: 6}],
+      treatment: 6,
+    });
+  });
+
+  it("uses the control as the treatment on a master-only baseline", () => {
+    const results: BenchResult[] = [
+      {case: "a", minutes: 10, role: "control", run: 1, status: "ok"},
+      {case: "b", minutes: 8, role: "control", run: 1, status: "ok"},
+    ];
+
+    expect(summarizeBench(results)).toEqual({
+      changePercent: 0,
+      control: 9,
+      invalid: 0,
+      perCase: [
+        {case: "a", control: 10, treatment: 10},
+        {case: "b", control: 8, treatment: 8},
+      ],
+      treatment: 9,
+    });
+  });
+
   it("compares the median of per-case medians for control and treatment, ignoring invalid runs", () => {
     const results: BenchResult[] = [
       {case: "a", minutes: 10, role: "control", run: 1, status: "ok"},

@@ -444,8 +444,12 @@ export const summarizeBench = (results: BenchResult[]): BenchSummary => {
   };
   const perCase = caseNames.flatMap((name) => {
     const control = caseMedian(name, "control");
-    // On a master-only baseline the control is also the treatment.
-    const treatment = caseMedian(name, "treatment") ?? control;
+    // On a master-only baseline no treatment ran, so the control is also the treatment. A
+    // treatment that ran but never succeeded drops the case instead of reading as no change.
+    const hasTreatmentRuns = results.some(
+      (result) => result.case === name && result.role === "treatment"
+    );
+    const treatment = hasTreatmentRuns ? caseMedian(name, "treatment") : control;
     return control === undefined || treatment === undefined
       ? []
       : [{case: name, control, treatment}];

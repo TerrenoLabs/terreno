@@ -76,6 +76,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
     description: "Read architecture docs first; write and regenerate them in the same slice.",
     skills: [
       "update-docs",
+      "backfill-user-guide",
       "update-agent-docs",
       "docs-audit",
       "improve-codebase-architecture",

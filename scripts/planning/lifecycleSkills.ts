@@ -76,6 +76,7 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "attach-pr-media",
   "backend-test-env",
   "backfill-regression",
+  "backfill-user-guide",
   "building-admin-interfaces",
   "building-terreno-apps",
   "debug-syncdb-with-mcp",
@@ -226,6 +227,64 @@ const TESTING_PLAN_REQUIRED_PHRASES = [
   "## Regression-step bar",
   "## Legacy rule",
   "predates contract",
+] as const;
+
+const USER_GUIDE_LINK = "../../references/user-guide.md";
+
+/** Phrases each stage needs to carry its part of the user-guide contract. */
+const USER_GUIDE_STAGE_PHRASES: Record<(typeof LIFECYCLE_STAGES)[number], RequiredPhrase[]> = {
+  brew: [
+    {error: "Brew must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Brew must gate on ## User guide rows", phrase: "## User guide"},
+    {error: "Brew must check the guide index", phrase: "guide index"},
+    {error: "Brew must skip the gate when the repository opts out", phrase: "opts out"},
+  ],
+  grow: [
+    {error: "Grow must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Grow must require the IP section ## User guide", phrase: "## User guide"},
+    {error: "Grow must summarize the guide in the brief", phrase: "`User guide:`"},
+    {error: "Grow must write the opt-out entry", phrase: "None — user guide off"},
+  ],
+  pick: [
+    {error: "Pick must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Pick must write the task's ## User guide pages", phrase: "## User guide"},
+    {error: "Pick must never skip a guide row silently", phrase: "skip a guide row silently"},
+    {error: "Pick must skip the guide when the repository opts out", phrase: "opts out"},
+  ],
+  roast: [
+    {error: "Roast must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Roast must check ## User guide pages", phrase: "## User guide"},
+    {error: "Roast must hold pages to the guide-entry bar", phrase: "guide-entry bar"},
+    {error: "Roast must check pages against the shipped screens", phrase: "shipped screens"},
+  ],
+  taste: [
+    {error: "Taste must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Taste must read the IP's ## User guide section", phrase: "## User guide"},
+    {error: "Taste must update guide pages after fixes", phrase: "user guide pages"},
+    {error: "Taste must hold guide edits to the guide-entry bar", phrase: "guide-entry bar"},
+  ],
+};
+
+const USER_GUIDE_REQUIRED_PHRASES = [
+  "## Standardized spot",
+  "docs/user-guide/",
+  "## User guide conventions",
+  "`User guide`",
+  "### Opting out",
+  "None — user guide off",
+  "## Page format",
+  "`audience`",
+  "`questions`",
+  "## What it does",
+  "## How to use it",
+  "## Intended use",
+  "## Guide-entry bar",
+  "| ID | Page | Change | Audience | Written in |",
+  "None — <reason>",
+  "## Index",
+  "## Legacy rule",
+  "predates contract",
+  "backfill-user-guide",
 ] as const;
 
 export const PORTABILITY_MARKERS = [
@@ -531,7 +590,10 @@ export const validateStageContent = ({
     }
   }
 
-  for (const {error, phrase} of TESTING_PLAN_STAGE_PHRASES[definition.stage]) {
+  for (const {error, phrase} of [
+    ...TESTING_PLAN_STAGE_PHRASES[definition.stage],
+    ...USER_GUIDE_STAGE_PHRASES[definition.stage],
+  ]) {
     if (!content.includes(phrase)) {
       errors.push(`${prefix}: ${error}`);
     }
@@ -568,7 +630,7 @@ const validateGrillingProcedure = (content: string): string[] => {
     errors.push("grilling: the Decisions table must stay unbounded");
   }
 
-  for (const label of ["E2E:", "Regression:"]) {
+  for (const label of ["E2E:", "Regression:", "User guide:"]) {
     if (!content.includes(`${label} <`)) {
       errors.push(`grilling: the approval brief plan must include the ${label} line`);
     }
@@ -600,6 +662,25 @@ export const readTestingPlanContract = ({
   return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 };
 
+/** Validates the user-guide reference; `undefined` means the file is missing. */
+export const validateUserGuideContract = (content: string | undefined): string[] => {
+  if (content === undefined) {
+    return ["user-guide contract is missing: references/user-guide.md"];
+  }
+
+  return USER_GUIDE_REQUIRED_PHRASES.filter((phrase) => !content.includes(phrase)).map(
+    (phrase) => `user-guide contract must define ${phrase}`
+  );
+};
+
+/** Reads the plugin's user-guide reference, or `undefined` when the file is missing. */
+export const readUserGuideContract = ({
+  pluginDirectory,
+}: ReadTestingPlanContractOptions): string | undefined => {
+  const path = join(pluginDirectory, "references/user-guide.md");
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+};
+
 export const validateDocumentationContract = (content: string): string[] => {
   const errors: string[] = [];
   const requiredPhrases = [
@@ -607,6 +688,7 @@ export const validateDocumentationContract = (content: string): string[] => {
     "Always update docs",
     "Diátaxis",
     "Missing docs for a user-visible or architectural change is `FAIL`",
+    "user-guide.md",
   ];
 
   for (const phrase of requiredPhrases) {
@@ -1124,6 +1206,7 @@ export const validateLifecyclePlugin = ({
   errors.push(...validateDocumentationContract(documentationContract));
 
   errors.push(...validateTestingPlanContract(readTestingPlanContract({pluginDirectory})));
+  errors.push(...validateUserGuideContract(readUserGuideContract({pluginDirectory})));
 
   const productCi = readFileSync(join(pluginDirectory, "references/product-ci.md"), "utf8");
   errors.push(...validateProductCiContract(productCi));

@@ -11,6 +11,6 @@
   "skills": "skills",
   "compatibility": {
     "terreno": ">=1.0.0",
-    "terreno-planning": ">=2.13.0"
+    "terreno-planning": ">=2.14.0"
   }
 }

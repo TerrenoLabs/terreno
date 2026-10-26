@@ -33,6 +33,11 @@ generates `CLAUDE.md`) and in the hand-kept `AGENTS.md`. The full
 contract is the planning plugin's
 [`testing-plan.md`](../../plugins/terreno-planning/references/testing-plan.md).
 
+Every IP also carries a **`## User guide`** section: the end-user guide pages under
+[`docs/user-guide/`](../user-guide/README.md) the plan adds, updates, or retires, or
+`None — <reason>`. The task that ships the feature writes its page. The contract is
+[`user-guide.md`](../../plugins/terreno-planning/references/user-guide.md).
+
 ## Status lives on each IP
 
 There is no shared `PLAN_INDEX.md`. That file caused merge conflicts the same way a

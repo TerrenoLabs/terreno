@@ -64,6 +64,11 @@ Canonical copy, language rules, and the Django/Rails comparison:
 - [Regression suites](regression/README.md) — the manual cases a person walks before a release,
   one file per area
 
+## User guide
+
+- [User guide](user-guide/README.md) — one page per example-app feature, in end-user words,
+  for chat agents answering "how do I…" questions
+
 ## Quick links
 
 - [Getting started](tutorials/getting-started.md)

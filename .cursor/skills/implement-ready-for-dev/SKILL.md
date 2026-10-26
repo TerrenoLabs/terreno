@@ -192,9 +192,11 @@ issue (template in that reference), apply `status:needs-info`, remove
 Otherwise write the IP and task list, treat Grow as `PASS`, and continue. Task count
 may exceed five; do not BLOCKED for size after Grow `PASS`. The IP has both
 testing-plan sections, `## E2E tests` and `## Regression cases`, as Grow requires;
-either may be `None — <reason>`, neither may be missing.
+either may be `None — <reason>`, neither may be missing. It also has the
+`## User guide` section, rows or `None — <reason>` (`None — user guide off` when the
+repository opts out).
 
-Completion: approved IP path with both testing-plan sections, task-file path, and a
+Completion: approved IP path with both testing-plan sections and `## User guide`, task-file path, and a
 written assumption log.
 
 ### 4. Pin the Pick plan and assumptions
@@ -223,6 +225,7 @@ E2E tests, Regression cases). The testing fields come from the IP's `## E2E test
 1. **<task name>**
    - Docs: <page>
    - E2E tests: E1 `<spec path>` (<layer>)   <!-- rows whose Written in is this task, or "none" -->
+   - User guide: G1 `<page path>` (<new|update|retire>)   <!-- rows whose Written in is this task, or "none" -->
 
 ### Regression cases
 
@@ -230,7 +233,7 @@ E2E tests, Regression cases). The testing fields come from the IP's `## E2E test
 ```
 
 The `### Regression cases` section follows `### Tasks`. Roast proves each task's
-`E2E tests` entries as well as its Acceptance and Verify lines.
+`E2E tests` and `User guide` entries as well as its Acceptance and Verify lines.
 Pin the URL `gh issue comment` prints. Every task has Files/seams, Acceptance, Verify, Docs, and E2E tests. Non-scope is non-empty.
 
 Completion: a pinned comment URL on `$NUMBER`.

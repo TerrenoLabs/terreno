@@ -16,7 +16,8 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`async review bots`](references/async-review-bots.md),
 [`push ownership`](references/push-ownership.md),
 [`independent review procedure`](references/independent-review.md),
-[`testing plan`](references/testing-plan.md), and
+[`testing plan`](references/testing-plan.md),
+[`user guide`](references/user-guide.md), and
 [`subagent briefing`](references/subagent-briefing.md). All GitHub text
 must follow the [`GitHub attention contract`](references/github-attention-contract.md).
 
@@ -66,6 +67,12 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
      that mapping or, failing that, as rows this branch added to the suite file (diff
      against the merge base) whose `Added` is the IP slug, and update them instead of
      adding duplicates.
+   - **User guide.** Unless the repository opts out, confirm every `## User guide` row
+     has its page at the row's path in the user-guide page format (or, for `retire`,
+     that the page and its index entry are gone), that the guide index lists exactly
+     the pages on disk, and that each changed page sets `added` or `updated` to the IP
+     slug. A missing page or index mismatch is `FAIL` with `next: pick` that names the
+     row ID. An IP that lacks the section follows the user-guide legacy rule.
 
    Then execute repository-required pre-submit checks, so suite checks see the merged
    rows. When the root `package.json` defines a `prepush` script, run it in a fresh
@@ -142,6 +149,7 @@ handling, and mandatory evidence gates.
 - Each `## E2E tests` row with its spec path and the passing run Brew accepted
 - Each regression case written to the suite, with its provisional and real ID and
   suite file
+- Each `## User guide` row with its page path and change
 - Commit and pushed head SHA
 - PR URL/number and preserved template/body state
 - Attached artifact references and sensitive-data check
@@ -155,6 +163,8 @@ handling, and mandatory evidence gates.
 - Every `## E2E tests` row has a spec at its path with a passing run on this branch.
 - Every `## Regression cases` row is in its suite file under a real ID, and the PR
   `Verification` section lists those IDs.
+- Every `## User guide` row's page is written, updated, or retired, and the guide index
+  matches the pages on disk.
 - Product CI on every discovered CI host is triggered (or documented skipped) for the
   recorded current head.
 - Async review bots on this head are terminal or did not appear after the startup grace.
@@ -162,7 +172,8 @@ handling, and mandatory evidence gates.
 
 ## Failure conditions
 
-Failed final checks, a missing or failing `## E2E tests` row, including a red CI run of
+Failed final checks, a missing or failing `## E2E tests` row, a missing `## User guide`
+page, including a red CI run of
 a deferred row (`next: pick`, naming the row ID), **Brew's own independent-review findings** (step 4), push errors,
 PR setup errors, or a required CI host still untriggered after grace emit `FAIL` with
 evidence and the smallest corrective stage/action:

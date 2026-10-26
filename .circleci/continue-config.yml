@@ -1363,6 +1363,11 @@ jobs:
             bun run check:regression-suites
             bun test scripts/regression/
       - run:
+          name: User guide
+          command: |
+            bun run check:user-guide
+            bun test scripts/userGuide/
+      - run:
           name: License coverage
           command: bun run check:licenses
       - run:

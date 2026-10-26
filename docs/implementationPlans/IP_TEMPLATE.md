@@ -70,6 +70,16 @@ Destination: `<AREA>` → `docs/regression/<area>.md`
 | --- | --- | --- | --- | --- | --- | --- |
 | `<AREA>-new-1` | `<case>` | `<starting state, then actions>` | `<what a person observes>` | `<platforms>` | manual \| E1 | `<slug>` |
 
+## User guide
+
+End-user guide pages this plan adds, updates, or retires, in the format of
+[`docs/user-guide/`](../user-guide/README.md). Write `None — <reason>` when the plan
+changes nothing a user sees; never delete the section.
+
+| ID | Page | Change | Audience | Written in |
+| --- | --- | --- | --- | --- |
+| G1 | `docs/user-guide/<area>/<feature>.md` | new \| update \| retire | user \| admin \| staff | T1 |
+
 ## Acceptance Criteria
 
 - [ ]

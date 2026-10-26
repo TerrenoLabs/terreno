@@ -242,6 +242,8 @@ workflows:
             scripts/changelog/.* run-repo-policies true
             scripts/regression/.* run-repo-policies true
             docs/regression/.* run-repo-policies true
+            scripts/userGuide/.* run-repo-policies true
+            docs/user-guide/.* run-repo-policies true
             scripts/check-new-file-coverage\.ts run-new-file-coverage true
             scripts/ci/check-new-file-coverage-lcov\.sh run-new-file-coverage true
             changelog/.* run-repo-policies true

@@ -167,6 +167,36 @@ describe("Button", () => {
     assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");
   });
 
+  it("uses surface.primary when a computed theme omits primaryDark", () => {
+    const LegacySurface: FC<{children: ReactNode}> = ({children}) => {
+      const value = ThemeModule.useTheme();
+      const {primaryDark: _primaryDark, ...surface} = value.theme.surface;
+      return (
+        <ThemeModule.ThemeContext.Provider value={{...value, theme: {...value.theme, surface}}}>
+          {children}
+        </ThemeModule.ThemeContext.Provider>
+      );
+    };
+
+    const {getByTestId} = render(
+      <ThemeModule.ThemeProvider>
+        <LegacySurface>
+          <Button onClick={() => {}} testID="legacy-primary" text="Legacy" variant="primary" />
+          <Button
+            onClick={() => {}}
+            state="active"
+            testID="legacy-active"
+            text="Legacy active"
+            variant="secondary"
+          />
+        </LegacySurface>
+      </ThemeModule.ThemeProvider>
+    );
+
+    assert.equal(getByTestId("legacy-primary").props.style.backgroundColor, "#0E9DCD");
+    assert.equal(getByTestId("legacy-active").props.style.backgroundColor, "#0E9DCD");
+  });
+
   it("keeps primary text readable when dark tokens are applied in light colorScheme", async () => {
     const DarkTokens: FC<{children: ReactNode}> = ({children}) => {
       const {setTheme} = ThemeModule.useTheme();

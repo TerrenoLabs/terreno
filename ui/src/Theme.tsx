@@ -293,10 +293,20 @@ const computeTheme = (
     if (key === "primitives") {
       return acc;
     }
-    const value = themeConfig[key as keyof TerrenoThemeConfig] ?? {};
+    const rawValue = themeConfig[key as keyof TerrenoThemeConfig] ?? {};
+    const value = {...rawValue} as Record<string, unknown>;
+    // Older custom themes predate primaryDark. Keep their primary buttons filled.
+    if (
+      key === "surface" &&
+      (value.primaryDark === undefined || value.primaryDark === null) &&
+      value.primary !== undefined &&
+      value.primary !== null
+    ) {
+      value.primaryDark = value.primary;
+    }
     (acc as unknown as Record<string, unknown>)[key] = Object.keys(value).reduce(
       (accKey, valueKey) => {
-        const primitiveKey = value[valueKey as keyof typeof value] as keyof ThemePrimitives;
+        const primitiveKey = value[valueKey] as keyof ThemePrimitives;
         if (key === "font") {
           accKey[valueKey] = primitiveKey;
         } else {

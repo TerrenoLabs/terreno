@@ -417,6 +417,24 @@ describe("Theme", () => {
       expect(captured?.theme.surface.base).toBe("#D33232");
     });
 
+    it("fills primaryDark from primary when a custom surface omits it", () => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = () => {
+        captured = useTheme();
+        return null;
+      };
+      render(
+        <ThemeProvider>
+          <Capture />
+        </ThemeProvider>
+      );
+      act(() => {
+        captured?.setTheme({surface: {primaryDark: undefined}});
+      });
+      expect(captured?.theme.surface.primary).toBe("#0E9DCD");
+      expect(captured?.theme.surface.primaryDark).toBe("#0E9DCD");
+    });
+
     it("updates primitives when setPrimitives is called", () => {
       let captured: ThemeContextValue | undefined;
       const Capture = () => {

@@ -229,7 +229,8 @@ export interface SurfaceThemeConfig {
   ai: keyof ThemePrimitiveColors;
   baseHover: keyof ThemePrimitiveColors;
   primary: keyof ThemePrimitiveColors;
-  primaryDark: keyof ThemePrimitiveColors;
+  /** Action fill. Omitted custom configs resolve to `primary`. */
+  primaryDark?: keyof ThemePrimitiveColors;
   secondaryExtraLight: keyof ThemePrimitiveColors;
   secondaryLight: keyof ThemePrimitiveColors;
   secondaryDark: keyof ThemePrimitiveColors;

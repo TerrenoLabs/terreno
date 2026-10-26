@@ -17,7 +17,7 @@ for how this tier fits with the automated ones.
 
 | File | Area | Covers |
 | --- | --- | --- |
-| [planning.md](planning.md) | `PLAN` | The planning plugin's Grow, Pick, Roast, Brew, and Taste stages, walked in a scratch repo |
+| [planning.md](planning.md) | `PLAN` | Retired: planning-stage checks, kept so their IDs are never reused |
 | [auth.md](auth.md) | `AUTH` | Email delivery for password reset and verification, and native session storage |
 | [admin.md](admin.md) | `ADMIN` | Admin edits and announcements seen live on a phone |
 | [syncdb.md](syncdb.md) | `SYNC` | Offline writes, persistence across an app kill, and account switches on a device |

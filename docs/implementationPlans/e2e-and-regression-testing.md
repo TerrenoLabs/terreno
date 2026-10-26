@@ -80,7 +80,7 @@ fragments and goes stale; the human chose one file per area).
 Tracers: T1 (the IP contract that every later skill task reads) and T8 (the smoke
 harness that every package task builds on) run in parallel.
 E2E: one real-process smoke per package (E1–E21) plus validator fixture cases (E22).
-Regression: five planning cases (PLAN-new-1 to PLAN-new-5), walked by a human before merge (T34, D8).
+Regression: five planning cases (PLAN-new-1 to PLAN-new-5), retired before merge (D11); T34 is not walked.
 brewery: a sibling IP in the brewery repo
 (`docs/plans/2026-10-23-e2e-and-regression-testing.md`) holds distill, cut and tap changes and the
 resync. It is signed off with this one. Its resync runs only after this PR merges.
@@ -472,6 +472,7 @@ Every smoke runs in at most 30 s, excluding the build. Server smokes get Mongo f
 | D8 (durable) | Who runs T34's walk of the planning regression cases? | "the regression tests are ment to be manually tested by only a human. they're generally tests that can't be as easily automated (e.g. full flows, feel of the app, hardware related things). the rest fo the test cases should be e2e automated where possible." | testing-plan.md gains "Automate first": regression cases are only for full flows, feel and hardware/OS, and only a human walks them. Grow routes everything automatable to `## E2E tests`, and Roast fails a regression row a spec could fully cover. T34 is human-owned and skipped by barrel |
 | D9 | example-backend's smoke ran 26–82 s against the 30 s budget. Fix it, or make an exception? | Fix it to 30 s | T33 retry also edits `example-backend/e2e/smoke.ts` (T28's file): seed in-process and skip the duplicate first-boot work. If it still runs over, document a 60 s exception for that smoke only |
 | D10 | (after the PR opened) How much regression testing should a feature carry? | "make it clear the regression testing does not have to be in every feature. this should be a minimal test that the app is working as intended, and that things that are hared to test manually are sufficiently tested by the dev or QA, such as push notifications" and "also add a backfill regression skill that loops through looking for good regression tests and has the user approve or deny each set" | testing-plan.md "Automate first" becomes "Keep regression minimal": `## Regression cases` is usually `None`, a developer or QA walks the cases, and Roast fails a case that repeats an existing one. Adds the `backfill-regression` skill, which proposes cases one area at a time and writes only approved sets. Supersedes D8's "only a human" wording |
+| D11 | Keep or retire PLAN-001 to PLAN-005? | "retire those yes" | All five rows read `Retired` in docs/regression/planning.md; T34 is not walked |
 
 ## Sign-off
 

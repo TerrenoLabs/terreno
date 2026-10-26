@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-26T03:55:58.413Z.
+> dates are promised. Last updated: 2026-10-26T15:55:54.710Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -96,7 +96,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### dx
 
-- [CircleCI PR Speed Loop](https://github.com/TerrenoLabs/terreno/issues/1627) (Feature, Shaping) — IP: [circleci-pr-speed-loop](docs/implementationPlans/circleci-pr-speed-loop.md)
+- [CircleCI PR Speed Loop](https://github.com/TerrenoLabs/terreno/issues/1627) (Feature, In progress) — IP: [circleci-pr-speed-loop](docs/implementationPlans/circleci-pr-speed-loop.md)
 
 ## Target: Released
 

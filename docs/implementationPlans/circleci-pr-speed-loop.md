@@ -1,6 +1,6 @@
 # Implementation Plan: CircleCI PR Speed Loop
 
-**Status:** Shaped — loop not started; iteration 0 (instrumentation) is next
+**Status:** In progress — iteration 0 (instrumentation) in review; iteration 1 picks the first lever
 **Owner:** Josh
 **Goal:** cut CircleCI wall-clock time for an **average PR** by **40% (≤ 5.7 min)**
 or to **under 4 min**, whichever comes first, without weakening any gate.
@@ -144,6 +144,7 @@ Append one row per iteration. Never edit past rows.
 | # | Date | Lever | Target job | Bench before → after | Real-PR median after | Credits/avg PR | Kept? | PR |
 |---|---|---|---|---|---|---|---|---|
 | 0 | 2026-10-25 | Baseline | — | — | 9.5 min | TBD | — | — |
+| 0 | 2026-10-26 | Instrumentation (`ci:wall-clock`, `ci:bench`) | — | `api-only` on master: 11.6 min (1 run, last job `api-ci`) | 9.5 min | TBD (needs CircleCI token) | Yes | this PR |
 
 ## Lever backlog
 

@@ -1,14 +1,19 @@
 import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {assert} from "chai";
 import type express from "express";
-import {model, Schema} from "mongoose";
+import mongoose, {type Model, model, Schema} from "mongoose";
 
 import type {ModelRouterOptions} from "../api";
-import type {User} from "../auth";
+import type {UserModel as AuthUserModel, User} from "../auth";
 import {APIError} from "../errors";
 import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
-import {setupDb} from "../tests";
+import {createAccess} from "../rbac/access";
+import {resolveModelRouterAccess} from "../rbac/modelRouterAccess";
+import {OwnerScope} from "../rbac/scopes";
+import {terrenoStatements} from "../rbac/statements";
+import type {AnyTerrenoAccess} from "../rbac/types";
+import {setupDb, UserModel} from "../tests";
 import {ExecutorConflictError, executeCreate, executeDelete, executeUpdate} from "./executors";
 
 interface ExecStuff extends IsDeleted {
@@ -69,6 +74,14 @@ const execUserishSchema = new Schema<ExecUserish>({
   roles: {description: "Authority-bearing roles stripped after hooks", type: [String]},
 });
 const ExecUserishModel = model<ExecUserish>("ExecUserish", execUserishSchema);
+
+interface UserishAccount {
+  admin?: boolean;
+  email: string;
+  name?: string;
+  roles?: string[];
+  tokenEpoch?: number;
+}
 
 const owner = {_id: "u-owner", admin: false, id: "u-owner"} as unknown as User;
 const stranger = {_id: "u-stranger", admin: false, id: "u-stranger"} as unknown as User;
@@ -169,6 +182,28 @@ describe("executeCreate", () => {
     });
     assert.deepEqual(seenRoles, ["superadmin"]);
     assert.deepEqual(doc.roles ?? [], []);
+    const stored = await ExecUserishModel.findById(doc._id).lean();
+    assert.deepEqual(stored?.roles ?? [], []);
+  });
+
+  it("strips dotted-path User roles on create when writeModelName is User", async () => {
+    await ExecUserishModel.deleteMany({});
+    const {doc} = await executeCreate<ExecUserish>({
+      body: {email: "exec-dotted-roles@example.com", "roles.0": "superadmin"},
+      model: ExecUserishModel,
+      options: {
+        accessControl: {} as never,
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      } as ModelRouterOptions<ExecUserish>,
+      user: owner,
+      writeModelName: "User",
+    });
     const stored = await ExecUserishModel.findById(doc._id).lean();
     assert.deepEqual(stored?.roles ?? [], []);
   });
@@ -484,6 +519,33 @@ describe("executeUpdate", () => {
     expect(error.status).toBe(400);
     expect(error.title).toBe("preUpdate hook error");
     expect(error.detail).toBe(`preUpdate hook error on ${doc._id.toString()}: nope`);
+  });
+
+  it("strips dotted-path User roles on update when writeModelName is User", async () => {
+    await ExecUserishModel.deleteMany({});
+    const target = await ExecUserishModel.create({
+      email: "exec-dotted-update@example.com",
+      roles: ["support"],
+    });
+    await executeUpdate<ExecUserish>({
+      body: {"roles.0": "superadmin", "roles.1": "superadmin"},
+      id: String(target._id),
+      model: ExecUserishModel,
+      options: {
+        accessControl: {} as never,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [Permissions.IsAuthenticated],
+        },
+      } as ModelRouterOptions<ExecUserish>,
+      user: owner,
+      writeModelName: "User",
+    });
+    const stored = await ExecUserishModel.findById(target._id).lean();
+    assert.deepEqual(stored?.roles ?? [], ["support"]);
   });
 
   it("strips _updatedAt from the body before preUpdate", async () => {
@@ -918,5 +980,322 @@ describe("executeDelete", () => {
     expect(error.status).toBe(400);
     expect(error.title).toBe("postDelete hook error");
     expect(error.detail).toBe("cascade failed");
+  });
+});
+
+describe("RBAC user-model strip on a user model not compiled as User", () => {
+  // The configured RBAC user model, compiled under a name other than "User".
+  const AccountModel =
+    (mongoose.models.ExecRbacAccount as Model<UserishAccount> | undefined) ??
+    model<UserishAccount>("ExecRbacAccount", UserModel.schema.clone());
+
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await AccountModel.deleteMany({});
+  });
+
+  it("strips authority fields on update for the configured user model", async () => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as AuthUserModel,
+    });
+    const account = await AccountModel.create({email: "renamed-self@example.com", name: "Self"});
+    const actor = account as unknown as User;
+
+    await executeUpdate<UserishAccount>({
+      body: {admin: true, name: "renamed", roles: ["superadmin"], tokenEpoch: 99},
+      id: String(account._id),
+      model: AccountModel,
+      options: {
+        accessControl: access,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [Permissions.IsAuthenticated],
+        },
+      } as unknown as ModelRouterOptions<UserishAccount>,
+      user: actor,
+    });
+
+    const stored = await AccountModel.findById(account._id).lean();
+    expect(stored?.name).toBe("renamed");
+    expect(stored?.admin).toBe(false);
+    expect(stored?.roles ?? []).toEqual([]);
+    expect(stored?.tokenEpoch ?? 0).toBe(0);
+  });
+
+  it("strips authority fields on create for the configured user model", async () => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      statements: terrenoStatements,
+      userModel: AccountModel as unknown as AuthUserModel,
+    });
+    const {doc} = await executeCreate<UserishAccount>({
+      body: {admin: true, email: "renamed-create@example.com", roles: ["superadmin"]},
+      model: AccountModel,
+      options: {
+        accessControl: access,
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      } as unknown as ModelRouterOptions<UserishAccount>,
+      user: owner,
+    });
+    const stored = await AccountModel.findById(doc._id).lean();
+    expect(stored?.admin).toBe(false);
+    expect(stored?.roles ?? []).toEqual([]);
+  });
+});
+
+describe("owner scope on the written document", () => {
+  const admin = {_id: "u-admin", admin: true, id: "u-admin"} as unknown as User;
+  const scopeStatements = {
+    ...terrenoStatements,
+    execStuff: ["create", "read", "update", "delete", "list"],
+  } as const;
+
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await ExecStuffModel.deleteMany({});
+  });
+
+  const ownerRouterOptions = (): ModelRouterOptions<ExecStuff> =>
+    baseOptions({
+      permissions: {
+        create: [Permissions.IsAuthenticated],
+        delete: [Permissions.IsOwner],
+        list: [Permissions.IsAuthenticated],
+        read: [Permissions.IsOwner],
+        update: [Permissions.IsOwner],
+      },
+    });
+
+  const rbacOptions = async (): Promise<ModelRouterOptions<ExecStuff>> => {
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Exec member",
+          name: "execMember",
+          permissions: {execStuff: ["create", "read", "update", "delete", "list"]},
+        },
+      ],
+      statements: scopeStatements,
+    });
+    await access.roles.seedDefaults();
+    const routerAccess = {resource: "execStuff", scope: OwnerScope()};
+    return {
+      access: routerAccess,
+      accessControl: access,
+      permissions: resolveModelRouterAccess<ExecStuff>({
+        access: routerAccess,
+        accessControl: access as AnyTerrenoAccess,
+      }).permissions,
+    } as unknown as ModelRouterOptions<ExecStuff>;
+  };
+
+  const member = (id: string): User =>
+    ({_id: id, admin: false, id, roles: ["execMember"]}) as unknown as User;
+
+  it("rejects an update that moves an owned document to another user", async () => {
+    const doc = await ExecStuffModel.create({name: "mine", ownerId: owner.id});
+    const error = await caught(
+      executeUpdate<ExecStuff>({
+        body: {name: "moved", ownerId: stranger.id},
+        id: doc._id.toString(),
+        model: ExecStuffModel,
+        options: ownerRouterOptions(),
+        user: owner,
+      })
+    );
+    expect(error.status).toBe(403);
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.ownerId).toBe(owner.id);
+    expect(stored?.name).toBe("mine");
+  });
+
+  it("still lets the owner update other fields and an admin reassign the owner", async () => {
+    const doc = await ExecStuffModel.create({name: "mine", ownerId: owner.id});
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed", ownerId: owner.id},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeUpdate<ExecStuff>({
+      body: {ownerId: stranger.id},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: admin,
+    });
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.name).toBe("renamed");
+    expect(stored?.ownerId).toBe(stranger.id);
+  });
+
+  it("rejects a create that names another user as the owner", async () => {
+    const error = await caught(
+      executeCreate<ExecStuff>({
+        body: {name: "planted", ownerId: stranger.id},
+        model: ExecStuffModel,
+        options: ownerRouterOptions(),
+        user: owner,
+      })
+    );
+    expect(error.status).toBe(403);
+    expect(await ExecStuffModel.countDocuments({ownerId: stranger.id})).toBe(0);
+  });
+
+  it("allows creates that name the caller or no owner", async () => {
+    await executeCreate<ExecStuff>({
+      body: {name: "self", ownerId: owner.id},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeCreate<ExecStuff>({
+      body: {name: "unowned"},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: owner,
+    });
+    await executeCreate<ExecStuff>({
+      body: {name: "for someone", ownerId: stranger.id},
+      model: ExecStuffModel,
+      options: ownerRouterOptions(),
+      user: admin,
+    });
+    expect(await ExecStuffModel.countDocuments({})).toBe(3);
+  });
+
+  it("does not apply the owner check to routers without owner permissions", async () => {
+    await executeCreate<ExecStuff>({
+      body: {name: "open", ownerId: stranger.id},
+      model: ExecStuffModel,
+      options: baseOptions({
+        permissions: {
+          create: [Permissions.IsAuthenticated],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAny],
+          read: [Permissions.IsAny],
+          update: [Permissions.IsAdmin],
+        },
+      }),
+      user: owner,
+    });
+    expect(await ExecStuffModel.countDocuments({ownerId: stranger.id})).toBe(1);
+  });
+
+  it("rejects RBAC OwnerScope updates and creates that leave the caller's scope", async () => {
+    const options = await rbacOptions();
+    const alice = member(new mongoose.Types.ObjectId().toString());
+    const bob = member(new mongoose.Types.ObjectId().toString());
+
+    const {doc} = await executeCreate<ExecStuff>({
+      body: {name: "alice's", ownerId: alice.id},
+      model: ExecStuffModel,
+      options,
+      user: alice,
+    });
+    await executeUpdate<ExecStuff>({
+      body: {name: "alice renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      user: alice,
+    });
+
+    const moveError = await caught(
+      executeUpdate<ExecStuff>({
+        body: {name: "attacker-authored", ownerId: bob.id},
+        id: doc._id.toString(),
+        model: ExecStuffModel,
+        options,
+        user: alice,
+      })
+    );
+    expect(moveError.status).toBe(403);
+    const stored = await ExecStuffModel.findById(doc._id).lean();
+    expect(stored?.ownerId).toBe(alice.id);
+    expect(stored?.name).toBe("alice renamed");
+
+    const plantError = await caught(
+      executeCreate<ExecStuff>({
+        body: {name: "planted", ownerId: bob.id},
+        model: ExecStuffModel,
+        options,
+        user: alice,
+      })
+    );
+    expect(plantError.status).toBe(403);
+    expect(await ExecStuffModel.countDocuments({ownerId: bob.id})).toBe(0);
+  });
+});
+
+describe("soft-delete flag in client write bodies", () => {
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(async () => {
+    await ExecStuffModel.deleteMany({deleted: {$in: [true, false]}} as never);
+  });
+
+  const noDeleteOptions = (): ModelRouterOptions<ExecStuff> => {
+    const options = baseOptions();
+    options.permissions = {...options.permissions, delete: []};
+    return options;
+  };
+
+  it("ignores deleted in an update body, so update permission cannot soft-delete", async () => {
+    const doc = await ExecStuffModel.create({name: "keep", ownerId: owner.id});
+    const {doc: updated} = await executeUpdate<ExecStuff>({
+      body: {deleted: true, name: "renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: noDeleteOptions(),
+      user: owner,
+    });
+    expect(updated.name).toBe("renamed");
+    expect(updated.deleted).toBe(false);
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(1);
+  });
+
+  it("ignores deleted in a create body", async () => {
+    const {doc} = await executeCreate<ExecStuff>({
+      body: {deleted: true, name: "fresh", ownerId: owner.id},
+      model: ExecStuffModel,
+      options: noDeleteOptions(),
+      user: owner,
+    });
+    expect(doc.deleted).toBe(false);
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(1);
+  });
+
+  it("still lets a server-side preUpdate hook set deleted", async () => {
+    const doc = await ExecStuffModel.create({name: "archive me", ownerId: owner.id});
+    await executeUpdate<ExecStuff>({
+      body: {name: "archived"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: baseOptions({preUpdate: (body) => ({...body, deleted: true})}),
+      user: owner,
+    });
+    expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(0);
   });
 });

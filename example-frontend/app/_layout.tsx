@@ -41,6 +41,7 @@ import {oauthHandoff} from "@/lib/oauthHandoff";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
+import {socketTransports} from "@/store/socketTransports";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
@@ -78,9 +79,7 @@ const PushTokenRegistrar: FC = () => {
     await registerExpoPushTokenSafely({
       getToken: getCurrentExpoToken,
       platform: Platform.OS,
-      postToken: async (body) => {
-        await postToken(body).unwrap();
-      },
+      postToken: async (body) => postToken(body).unwrap(),
     });
   }, [postToken]);
 
@@ -199,6 +198,7 @@ const RootLayoutNav = (): React.ReactElement => {
   const {socket} = useSocketConnection({
     baseUrl,
     shouldConnect: Boolean(userId),
+    transports: socketTransports,
   });
 
   useRealtimeDebug(baseUrl, socket?.connected);

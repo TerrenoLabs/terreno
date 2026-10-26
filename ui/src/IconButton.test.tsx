@@ -1,5 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
-import {act, fireEvent} from "@testing-library/react-native";
+import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {IconButton} from "./IconButton";
@@ -351,6 +351,183 @@ describe("IconButton", () => {
           <IconButton accessibilityLabel="Check" iconName="check" onClick={() => {}} />
         )
       ).not.toThrow();
+    });
+  });
+  describe("interaction (real component)", () => {
+    // bunSetup replaces ./IconButton with a null mock; the query suffix loads the real module.
+    const loadIconButton = async (): Promise<typeof import("./IconButton").IconButton> => {
+      const actualIconButtonPath = "./IconButton.tsx?interaction";
+      const module = (await import(actualIconButtonPath)) as typeof import("./IconButton");
+      return module.IconButton;
+    };
+
+    it("runs onClick once when pressed without confirmation", async () => {
+      const ActualIconButton = await loadIconButton();
+      const handleClick = mock(() => Promise.resolve());
+      const {getByLabelText} = renderWithTheme(
+        <ActualIconButton accessibilityLabel="Save" iconName="check" onClick={handleClick} />
+      );
+
+      await act(async () => {
+        fireEvent.press(getByLabelText("Save"));
+      });
+
+      await waitFor(() => {
+        expect(handleClick).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("asks for confirmation first and runs onClick only after Confirm", async () => {
+      const ActualIconButton = await loadIconButton();
+      const handleClick = mock(() => Promise.resolve());
+      const {getByLabelText, getByText} = renderWithTheme(
+        <ActualIconButton
+          accessibilityLabel="Delete"
+          confirmationHeading="Delete item"
+          confirmationText="This cannot be undone."
+          iconName="trash"
+          onClick={handleClick}
+          withConfirmation
+        />
+      );
+
+      expect(getByLabelText("Delete").props.accessibilityHint).toBe(
+        "Opens a confirmation dialog to confirm Delete"
+      );
+      await act(async () => {
+        fireEvent.press(getByLabelText("Delete"));
+      });
+      await waitFor(() => {
+        expect(getByText("This cannot be undone.")).toBeTruthy();
+      });
+      expect(handleClick).not.toHaveBeenCalled();
+
+      await act(async () => {
+        fireEvent.press(getByText("Confirm"));
+      });
+      await waitFor(() => {
+        expect(handleClick).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("closes the confirmation without running onClick on Cancel", async () => {
+      const ActualIconButton = await loadIconButton();
+      const handleClick = mock(() => Promise.resolve());
+      const {getByLabelText, getByText} = renderWithTheme(
+        <ActualIconButton
+          accessibilityLabel="Archive"
+          iconName="box-archive"
+          onClick={handleClick}
+          withConfirmation
+        />
+      );
+
+      await act(async () => {
+        fireEvent.press(getByLabelText("Archive"));
+      });
+      await waitFor(() => {
+        expect(getByText("Are you sure you want to continue?")).toBeTruthy();
+      });
+      await act(async () => {
+        fireEvent.press(getByText("Cancel"));
+      });
+
+      expect(handleClick).not.toHaveBeenCalled();
+    });
+
+    it("colors each variant and state from the theme", async () => {
+      const ActualIconButton = await loadIconButton();
+      let theme = {} as ReturnType<typeof useTheme>["theme"];
+      const CaptureTheme = (): null => {
+        theme = useTheme().theme;
+        return null;
+      };
+      const {getByLabelText} = renderWithTheme(
+        <>
+          <CaptureTheme />
+          <ActualIconButton accessibilityLabel="primary" iconName="check" onClick={() => {}} />
+          <ActualIconButton
+            accessibilityLabel="secondary"
+            iconName="check"
+            onClick={() => {}}
+            variant="secondary"
+          />
+          <ActualIconButton
+            accessibilityLabel="navigation"
+            iconName="check"
+            onClick={() => {}}
+            variant="navigation"
+          />
+          <ActualIconButton
+            accessibilityLabel="destructive"
+            iconName="check"
+            onClick={() => {}}
+            variant="destructive"
+          />
+          <ActualIconButton
+            accessibilityLabel="ghost"
+            iconName="check"
+            onClick={() => {}}
+            variant="ghost"
+          />
+          <ActualIconButton
+            accessibilityLabel="disabled"
+            disabled
+            iconName="check"
+            onClick={() => {}}
+          />
+          <ActualIconButton
+            accessibilityLabel="primary active"
+            iconName="check"
+            onClick={() => {}}
+            state="active"
+          />
+          <ActualIconButton
+            accessibilityLabel="ghost active"
+            iconName="check"
+            onClick={() => {}}
+            state="active"
+            variant="ghost"
+          />
+          <ActualIconButton
+            accessibilityLabel="small"
+            iconName="check"
+            indicator="error"
+            indicatorText="3"
+            onClick={() => {}}
+            size="sm"
+          />
+        </>
+      );
+
+      expect(getByLabelText("primary")).toHaveStyle({backgroundColor: theme.surface.primary});
+      expect(getByLabelText("secondary")).toHaveStyle({
+        backgroundColor: theme.surface.neutralLight,
+      });
+      expect(getByLabelText("navigation")).toHaveStyle({backgroundColor: theme.text.inverted});
+      expect(getByLabelText("destructive")).toHaveStyle({backgroundColor: theme.text.inverted});
+      expect(getByLabelText("ghost")).toHaveStyle({backgroundColor: "transparent"});
+      expect(getByLabelText("disabled")).toHaveStyle({backgroundColor: theme.surface.disabled});
+      expect(getByLabelText("primary active")).toHaveStyle({
+        backgroundColor: theme.primitives.primary600,
+      });
+      expect(getByLabelText("ghost active")).toHaveStyle({backgroundColor: theme.surface.primary});
+      expect(getByLabelText("small")).toHaveStyle({height: 28, width: 28});
+    });
+
+    it("uses the tooltip text as the label when the label is empty", async () => {
+      const ActualIconButton = await loadIconButton();
+      const {getByLabelText} = renderWithTheme(
+        <ActualIconButton
+          accessibilityLabel=""
+          iconName="gear"
+          onClick={() => {}}
+          tooltipText="Settings"
+        />
+      );
+      expect(getByLabelText("Settings").props.accessibilityHint).toBe(
+        "Press to perform Settings action"
+      );
     });
   });
 });

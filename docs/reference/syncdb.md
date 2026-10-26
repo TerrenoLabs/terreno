@@ -91,6 +91,10 @@ todoSchema.plugin(syncPlugin);      // stamps per-stream _syncSeq on every write
 
 Apply plugins **before** the model compiles. Registration validates their presence.
 
+`_syncSeq` and `_syncPrevStream` are server-owned. modelRouter create and update (REST, MCP
+tools, and sync mutations) drop them from the client body, and a save that changes only these
+fields gets a freshly claimed seq instead of keeping the value it was given.
+
 ### modelRouter sync config
 
 Use the three-argument `modelRouter` form:
@@ -138,7 +142,9 @@ instance automatically, with or without a JWT secret. The handshake creates the 
 first contact and refuses disabled users. A `RealtimeApp` without its own `userModel` uses the
 `TerrenoApp`'s, for JWT and Better Auth sockets alike: socket authorization reads the user from
 the database instead of the token's claims, and the revalidation sweep disconnects users who
-were disabled or deleted. Pass `betterAuth` only for a `RealtimeApp` mounted without
+were disabled or deleted. With a user model, the JWT handshake also refuses a token whose user
+is disabled or no longer exists, so a disconnected client cannot reconnect with the same token.
+Pass `betterAuth` only for a `RealtimeApp` mounted without
 `TerrenoApp`:
 
 ```typescript
@@ -221,6 +227,7 @@ before anything else has confirmed one.
 | `authProvider` | `AuthProvider` | — (required) | `{getToken, getUserId, onAuthChange, refresh?}` |
 | `baseUrl` | `string` | — | Server origin; required unless both `transport` and `httpChannel` are injected |
 | `transport` | `SyncTransport` | socket transport from `baseUrl` | Override for tests or custom wiring |
+| `socketTransports` | `string[]` | `["polling", "websocket"]` | Socket.IO transports for the default socket transport. Use `["websocket"]` on hosts without session affinity, such as Vercel Functions ([details](../how-to/vercel-function-websockets.md)) |
 | `httpChannel` | `HttpChannel` | built from `baseUrl` | HTTP fallback channel override |
 | `persisterFactory` | `PersisterFactory` | platform default (IndexedDB web, expo-sqlite native) | Storage backend override |
 | `keyProvider` | `KeyProvider` | server-derived via `GET /sync/key` | Web encryption key provider |
@@ -665,7 +672,7 @@ is 2 requests (`GET /sync/streams` plus one batch) instead of 101.
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100) |
+| `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100). Soft-deleted documents, including pre-sync rows paged by `legacyCursor` (seq 0), arrive as tombstones with `data: null` |
 | `POST /sync/snapshot/batch` | Bootstrap + catch-up for many streams in one round trip. Body `{streams: [{stream, cursor?, legacyCursor?}], limit?}`, at most 500 streams, no repeats. `limit` (default 5,000, max 10,000) is the entity budget for the whole response, split evenly across the streams. Returns `{pages}`, one `GET /sync/snapshot`-shaped page per stream in request order. Any stream the caller may not read fails the whole request |
 | `GET /sync/streams` | Current stream membership for the user |
 | `GET /sync/entities` | Point lookup for entity repair and admin window hydrate. Admin-window callers (`admin:access` with RBAC, else `user.admin`) on `adminBroadcast` collections receive requested ids across product streams. When AdminApp registered a scope, list/read/`queryFilter` still apply; unknown or out-of-scope ids are omitted |
@@ -690,6 +697,12 @@ Conflict responses on mutate: **409** with `{nack}` body (`code: "conflict"`).
 | `sync:auth-expired` | server → client | `{reason: "expired" \| "disabled"}` — session re-validation sweep; client enters auth-pause |
 
 Limits: 50 collection subscriptions per socket; 100 mutations/second per socket (each batch mutation counts); batches capped at 100.
+
+A redelivered `mutationId` returns the outcome recorded for it only to the same user and only
+for the collection it was first sent to; any other replay gets an `unauthorized` nack. A
+replayed `conflict` nack includes `serverDoc` only when the caller can still read the document
+now (read permission and stream membership, or the admin broadcast scope for an admin-window
+mutation); otherwise it carries `serverSeq` alone.
 
 ## Encryption at rest
 

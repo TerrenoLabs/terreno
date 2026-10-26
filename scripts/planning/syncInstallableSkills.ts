@@ -55,10 +55,21 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "generate-sdk",
       "building-terreno-apps",
       "building-admin-interfaces",
-      "backend-test-env",
       "ai-prompt-governance",
     ],
     title: "Terreno apps",
+  },
+  {
+    description:
+      "Bootstrap backend, frontend, and mobile test setups, then write Bun, Playwright, and Maestro tests.",
+    skills: [
+      "terreno-test-setup",
+      "terreno-backend-tests",
+      "terreno-frontend-tests",
+      "terreno-mobile-tests",
+      "backend-test-env",
+    ],
+    title: "Testing",
   },
   {
     description: "Read architecture docs first; write and regenerate them in the same slice.",
@@ -90,6 +101,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "update-dependencies",
       "upgrading-terreno",
       "deploy-gcp",
+      "deploy-vercel",
     ],
     title: "GitHub and shipping",
   },

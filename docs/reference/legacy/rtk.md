@@ -46,7 +46,7 @@ export const store = configureStore({
 **Returns:**
 - `authReducer` — Redux reducer for auth state
 - `authSlice` — Full Redux slice
-- `logout` — Action to clear tokens and reset state
+- `logout` — Action to clear tokens and reset state. A logout that ends a signed-in session also purges the API's RTK Query cache (`resetApiState`), so the next user never gets the previous user's cached responses
 - `setUserId` — Action to set current user ID
 - `tokenRefreshedSuccess` — Action signaling token refresh
 - `middleware` — Login/logout listener middleware array
@@ -90,6 +90,7 @@ For apps using Better Auth instead of JWT:
 ``````typescript
 import {configureStore} from "@reduxjs/toolkit";
 import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
+import {api} from "./sdk"; // the app's generated RTK Query API
 
 // Create Better Auth client. `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
@@ -97,8 +98,8 @@ export const authClient = createBetterAuthClient({
   scheme: "myapp",
 });
 
-// Generate the session Redux slice
-const betterAuth = generateBetterAuthSlice({authClient});
+// Generate the session Redux slice; list the APIs whose cache belongs to the signed-in user
+const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
 
 export const store = configureStore({
   reducer: {
@@ -117,7 +118,7 @@ void betterAuth.syncSession(store.dispatch);
 - `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
 - `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
 - `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
-- `generateBetterAuthSlice({authClient, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`
+- `generateBetterAuthSlice({authClient, apisToReset?, syncInterval?})` — Returns `{reducer, middleware, actions, slice, syncSession, authClient}`. Pass the app's RTK Query APIs (for example `apisToReset: [terrenoApi]`) so their caches are purged (`util.resetApiState()`) when a signed-in session logs out (`betterAuth/logout` or `auth/logout`), when `syncSession` finds the session gone, and when the session changes to another user. Without it, the next account on the same client can be served the previous account's cached responses
 - `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser` — Selectors over `state.betterAuth`
 - `BetterAuthUser`, `BetterAuthState` — TypeScript types for session/user data
 
@@ -233,6 +234,12 @@ Offline-slice exports the middleware uses for the user tag (exported from the pa
 
 > **Deprecated (removed in Terreno 58):** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket` patch RTK Query caches from `sync` events. Use [`@terreno/syncdb`](../syncdb.md). `useSocketConnection` remains for feature flags and other sockets.
 
+A `realtimeList` query subscription (`subscribe:query`) may filter only on fields in the router's
+`queryFields`, the same as the REST list; the server ignores a subscription that names any other
+field. On RBAC routers with field views, each subscriber's create, update, or delete event is
+decided against the document as their field view masks it, so a hidden field never changes which
+event they receive.
+
 ### useSocketConnection
 
 React hook for managing Socket.io connections with automatic reconnection, token refresh, and user feedback.
@@ -277,6 +284,7 @@ useEffect(() => {
 - `onConnectError` (function) — Callback on connection error
 - `onReconnectFailed` (function) — Callback after all reconnection attempts fail
 - `captureEvent` (function) — Analytics event tracking (optional)
+- `transports` (string[]) — Socket.IO transports in order. Default `["polling", "websocket"]`. Pass `["websocket"]` for hosts without session affinity, such as Vercel Functions ([details](../../how-to/vercel-function-websockets.md))
 
 **Returns:**
 - `socket` (Socket | null) — Socket.io client instance

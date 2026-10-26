@@ -1,0 +1,5 @@
+## Properties
+
+### emailVerified
+
+> **emailVerified**: `boolean`

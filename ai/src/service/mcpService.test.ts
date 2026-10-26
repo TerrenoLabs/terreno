@@ -61,6 +61,16 @@ describe("MCPService", () => {
       expect(Object.keys(tools)).toContain("search");
     });
 
+    it("keeps the first server's tool when a later server uses the same name", async () => {
+      const service = new MCPService([makeConfig(), makeConfig({name: "second-server"})]);
+      await service.connect();
+      clientImpl.tools
+        .mockImplementationOnce(async () => ({search: {description: "First"}}))
+        .mockImplementationOnce(async () => ({search: {description: "Second"}}));
+      const tools = await service.getTools();
+      expect((tools.search as {description?: string}).description).toBe("First");
+    });
+
     it("returns empty object when no servers are connected", async () => {
       const service = new MCPService([makeConfig()]);
       const tools = await service.getTools();

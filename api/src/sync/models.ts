@@ -436,6 +436,8 @@ export interface SyncMutationDocument {
   _id: mongoose.Types.ObjectId;
   mutationId: string;
   userId: string;
+  /** Sync collection the mutation was claimed for; absent on rows recorded before it existed. */
+  collectionTag?: string;
   status: SyncMutationStatus;
   nackCode?: string;
   resultId?: string;
@@ -463,6 +465,12 @@ const syncMutationSchema = new Schema<SyncMutationDocument>(
         "When this delivery claimed the mutation (lease); a pending row older than " +
         "SYNC_MUTATION_LEASE_MS may be taken over by a fresh delivery via findOneAndUpdate",
       type: Date,
+    },
+    collectionTag: {
+      description:
+        "Sync collection the mutation was claimed for; a replay naming another collection is " +
+        "rejected",
+      type: String,
     },
     created: {
       default: () => DateTime.now().toJSDate(),

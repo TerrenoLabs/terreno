@@ -20,6 +20,7 @@ import {
   startChangeStreamWatcher,
   stopChangeStreamWatcher,
 } from "../realtime/changeStreamWatcher";
+import {addQuerySubscription, clearQueryStore, computeQueryId} from "../realtime/queryStore";
 import {clearRealtimeRegistry, registerRealtime} from "../realtime/registry";
 import {setupDb} from "../tests";
 import {defaultResponseHandler} from "../transformers";
@@ -1724,5 +1725,96 @@ describe("sync:delta — change stream integration", () => {
     const deltas = io.emissions.filter((e) => e.event === "sync:delta");
     expect(deltas).toHaveLength(1);
     expect(io.emissions.filter((e) => e.event === "sync")).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// change handler — realtime query fan-out failures stay isolated
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("change handler isolation", () => {
+  let originalDb: typeof mongoose.connection.db;
+
+  beforeAll(async () => {
+    await setupDb();
+  });
+
+  beforeEach(() => {
+    originalDb = mongoose.connection.db;
+    clearRealtimeRegistry();
+    clearQueryStore();
+    clearSyncRegistry();
+  });
+
+  afterEach(async () => {
+    await stopChangeStreamWatcher();
+    (mongoose.connection as unknown as {db: unknown}).db = originalDb;
+    clearRealtimeRegistry();
+    clearQueryStore();
+    clearSyncRegistry();
+  });
+
+  it("an unevaluable query predicate does not block sync:delta or later query rooms", async () => {
+    const listeners = new Map<string, (...args: unknown[]) => unknown>();
+    const mockStream = {
+      close: async (): Promise<void> => {},
+      on(event: string, handler: (...args: unknown[]) => unknown) {
+        listeners.set(event, handler);
+        return this;
+      },
+    };
+    (mongoose.connection as unknown as {db: unknown}).db = {watch: () => mockStream};
+    // One registration carries both surfaces, as modelRouter does for realtime + sync.
+    registerSync({
+      config: {scope: {type: "owner"}},
+      model: SockStuffModel as unknown as Model<unknown>,
+      options: {
+        ...permissiveOptions,
+        realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
+      },
+      routePath: "/sockStuff",
+    });
+    const poisoned = [{$and: [null]}, {name: {$eq: {toString: 1}}}] as Record<string, unknown>[];
+    for (const [index, query] of poisoned.entries()) {
+      addQuerySubscription(`attacker-${index}`, "sockStuff", query, `poisoned-${index}`);
+    }
+    const healthyQueryId = computeQueryId("sockStuff", {name: "poison-check"});
+    addQuerySubscription("victim", "sockStuff", {name: "poison-check"}, healthyQueryId);
+
+    const io = makeTrackedIo();
+    io.addSocketToRoom(`query:${healthyQueryId}`, {admin: true, id: "admin"});
+    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:victim-user"), {
+      admin: false,
+      id: "victim-user",
+    });
+    startChangeStreamWatcher(io, {}, true);
+    const changeHandler = listeners.get("change");
+    if (!changeHandler) {
+      throw new Error("expected change handler");
+    }
+
+    await changeHandler(
+      makeChange({
+        documentKey: {_id: "poison-doc"},
+        fullDocument: {
+          _id: "poison-doc",
+          _syncSeq: 3,
+          name: "poison-check",
+          ownerId: "victim-user",
+        },
+        ns: {coll: SockStuffModel.collection.collectionName},
+        operationType: "insert",
+      })
+    );
+    await waitForDelta(io, (d) => d.id === "poison-doc", 2000);
+
+    const deltas = io.emissions.filter(
+      (e) => e.event === "sync:delta" && (e.payload as SyncDelta).id === "poison-doc"
+    );
+    expect(deltas).toHaveLength(1);
+    const healthy = io.emissions.filter(
+      (e) => e.event === "sync" && e.room === `query:${healthyQueryId}`
+    );
+    expect(healthy).toHaveLength(1);
   });
 });

@@ -239,7 +239,9 @@ Full walkthrough: [Build for web](${BUILD_FOR_WEB_DOC}).
 
 const generateRootDockerfile = (): string => {
   return `# Consumer Terreno backend image — builds backend/ only (not the Terreno monorepo).
-FROM oven/bun:1-slim AS builder
+# Pin 1.4.4 so the image includes the patched Brotli decoder (CVE-2026-111497).
+# Floating oven/bun:1 can resolve to an affected release.
+FROM oven/bun:1.4.4-slim AS builder
 WORKDIR /app
 
 COPY backend/package.json ./
@@ -247,7 +249,7 @@ RUN bun install
 
 COPY backend/ ./
 
-FROM oven/bun:1-slim
+FROM oven/bun:1.4.4-slim
 WORKDIR /app
 
 RUN apt-get update \\
@@ -1753,9 +1755,9 @@ export default HomeScreen;
 };
 
 const generateFrontendTabsProfile = (): string => {
-  return `import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text} from "@terreno/ui";
+  return `import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {signOut} from "@/lib/betterAuth";
 import {logout, syncBetterAuthSession, useAppDispatch} from "@/store/index";
 import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk";
@@ -1767,6 +1769,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const user = profile;
@@ -1806,17 +1809,27 @@ const ProfileScreen: React.FC = () => {
     [updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase(),
+    [email, user?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       try {
-        await updateProfile({email: value}).unwrap();
+        const body = isEmailChanged ? {currentPassword, email: value} : {email: value};
+        await updateProfile(body).unwrap();
+        setCurrentPassword("");
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError("Failed to update email");
+        setSaveError(
+          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
+        );
       }
     },
-    [updateProfile]
+    [currentPassword, isEmailChanged, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -1866,6 +1879,16 @@ const ProfileScreen: React.FC = () => {
               type="email"
               value={email}
             />
+            {isEmailChanged && (
+              <TextField
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
             <TapToEdit
               helperText="Leave blank to keep your current password"
               onSave={handleSavePassword}
@@ -2185,6 +2208,8 @@ export interface ProfileResponse {
 export interface UpdateProfileRequest {
   name?: string;
   email?: string;
+  /** Required by the server when \`email\` changes the mailbox. */
+  currentPassword?: string;
   password?: string;
 }
 

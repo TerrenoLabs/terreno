@@ -82,7 +82,9 @@ export const spawnUntilReady = async ({
       );
     }
     try {
-      const res = await fetch(url, {signal: AbortSignal.timeout(1000)});
+      // The bun and node type packages each declare AbortSignal; fetch expects the global one.
+      const signal = AbortSignal.timeout(1000) as unknown as RequestInit["signal"];
+      const res = await fetch(url, {signal});
       await res.body?.cancel();
       if (res.ok) {
         return {output: output.combined, pid: child.pid, stop};

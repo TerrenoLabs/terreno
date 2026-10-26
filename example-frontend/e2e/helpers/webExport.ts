@@ -1,12 +1,13 @@
 import fs from "node:fs";
-import {createServer} from "node:net";
 import path from "node:path";
 
 /**
- * The API port the smoke's web export is built against. The export bakes its API URL in, so a
- * fixed port lets one export (built once, outside the smoke's time budget) serve every run.
+ * The placeholder API URL baked into the smoke's web export. The export is built once, outside
+ * the smoke's time budget, so the smoke swaps this for its real API URL as it serves the bundle.
+ * The `.invalid` host never resolves, so an unswapped bundle fails instead of reaching a stale
+ * backend.
  */
-export const SMOKE_API_PORT = 4310;
+export const SMOKE_PLACEHOLDER_API_URL = "http://smoke-api.invalid";
 
 export interface SmokeExportPaths {
   apiUrl: string;
@@ -15,30 +16,30 @@ export interface SmokeExportPaths {
   exportDir: string;
 }
 
-/** Where `export:smoke` writes the smoke's web export, and the API URL baked into it. */
+/** Where `export:smoke` writes the smoke's web export, and the placeholder API URL baked into it. */
 export const smokeExportPaths = ({packageDir}: {packageDir: string}): SmokeExportPaths => ({
-  apiUrl: `http://localhost:${SMOKE_API_PORT}`,
+  apiUrl: SMOKE_PLACEHOLDER_API_URL,
   cacheDir: path.join(packageDir, ".expo", "smoke-metro-cache"),
   exportDir: path.join(packageDir, "dist-smoke"),
 });
 
 /**
- * Throws if anything listens on `port`, so the smoke never mistakes a stale backend's `/health`
- * for the one it started.
+ * Points an exported file at the smoke's real API. Only JS and HTML carry the baked URL; other
+ * files pass through untouched.
  */
-export const assertPortFree = async (port: number): Promise<void> => {
-  const server = createServer();
-  try {
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(port, "127.0.0.1", () => resolve());
-    });
-  } catch (error: unknown) {
-    throw new Error(
-      `Port ${port} is in use, and the smoke's web export calls the API there. Stop the process on it and rerun. (${error instanceof Error ? error.message : String(error)})`
-    );
+export const rewriteApiUrl = ({
+  apiUrl,
+  body,
+  filePath,
+}: {
+  apiUrl: string;
+  body: string;
+  filePath: string;
+}): string => {
+  if (!/\.(html|js)$/.test(filePath)) {
+    return body;
   }
-  await new Promise<void>((resolve) => server.close(() => resolve()));
+  return body.replaceAll(SMOKE_PLACEHOLDER_API_URL, apiUrl);
 };
 
 /**

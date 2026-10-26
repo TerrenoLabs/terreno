@@ -50,9 +50,8 @@ static server's output and Playwright's report.
 The smoke needs Chromium (`bunx playwright install chromium`) but no backend, database, or
 secrets.
 
-**Measured time:** timed by the CircleCI `smoke` job, which prints each package's time on every
-run. Its row in the [package table](../e2e.md#package-pages) points there. Budget: 30 s,
-excluding the compile and the demo export.
+**Measured time:** 8.5–9 s across three runs on a 4-CPU container, excluding the compile and
+the demo export. The CircleCI `smoke` job prints each package's time on every run. Budget: 30 s.
 
 ## Add an e2e test
 

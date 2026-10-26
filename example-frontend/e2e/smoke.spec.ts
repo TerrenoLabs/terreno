@@ -3,9 +3,10 @@
  * `bun run compile`, then `bun e2e/smoke.spec.ts`.
  *
  * Run with Bun, this file is the driver. `export` builds the web export into `dist-smoke/` with a
- * fixed API URL baked in; like demo's `export` and admin-spa's `build:web`, that build sits
- * outside the smoke's time budget. The smoke itself serves that export on a free port, starts
- * example-backend with `spawnExampleBackend()` on the baked-in port with the web origin trusted,
+ * placeholder API URL baked in; like demo's `export` and admin-spa's `build:web`, that build sits
+ * outside the smoke's time budget. The smoke itself serves that export on a free port, swapping
+ * the placeholder for the API's URL, starts example-backend with `spawnExampleBackend()` on
+ * another free port with the web origin trusted,
  * then runs itself under Playwright. Loaded by Playwright, it defines the one browser test: a
  * user signs in with `loginAs`, reaches the todos screen, and creates a todo that the API then
  * lists. Exits non-zero on the first failed step. playwright.config.ts ignores this file, so the
@@ -22,8 +23,7 @@ import {loginAs} from "./helpers/login";
 import {listTodosAs} from "./helpers/todosApi";
 import {
   assertExportTargetsApi,
-  assertPortFree,
-  SMOKE_API_PORT,
+  rewriteApiUrl,
   smokeExportPaths,
   webExportEnv,
 } from "./helpers/webExport";
@@ -97,9 +97,27 @@ const defineBrowserTest = (): void => {
   });
 };
 
-/** Serves an Expo static web export, falling back to `index.html` like `serve -s`. */
-const serveExport = ({exportDir}: {exportDir: string}): ReturnType<typeof Bun.serve> =>
-  Bun.serve({
+/**
+ * Serves an Expo static web export, falling back to `index.html` like `serve -s`, with the baked
+ * placeholder API URL swapped for `apiUrl`.
+ */
+const serveExport = ({
+  apiUrl,
+  exportDir,
+}: {
+  apiUrl: string;
+  exportDir: string;
+}): ReturnType<typeof Bun.serve> => {
+  const respond = async (filePath: string): Promise<Response> => {
+    const file = Bun.file(filePath);
+    // Images and fonts are binary; only JS and HTML can carry the placeholder.
+    if (!/\.(html|js)$/.test(filePath)) {
+      return new Response(file);
+    }
+    const body = rewriteApiUrl({apiUrl, body: await file.text(), filePath});
+    return new Response(body, {headers: {"Content-Type": file.type}});
+  };
+  return Bun.serve({
     fetch: async (request: Request): Promise<Response> => {
       const pathname = decodeURIComponent(new URL(request.url).pathname);
       const candidates = [pathname, `${pathname}.html`, path.join(pathname, "index.html")];
@@ -111,18 +129,19 @@ const serveExport = ({exportDir}: {exportDir: string}): ReturnType<typeof Bun.se
         }
         const file = Bun.file(filePath);
         if ((await file.exists()) && fs.statSync(filePath).isFile()) {
-          return new Response(file);
+          return respond(filePath);
         }
       }
-      return new Response(Bun.file(path.join(exportDir, "index.html")));
+      return respond(path.join(exportDir, "index.html"));
     },
     // Pages load from `localhost`; Chromium falls back from ::1 to 127.0.0.1, as it does for
     // CI's `serve` on 8082.
     hostname: "127.0.0.1",
     port: 0,
   });
+};
 
-/** Build step: the web export the smoke serves, with the smoke's API URL baked in. */
+/** Build step: the web export the smoke serves, with the placeholder API URL baked in. */
 const exportWeb = async (): Promise<void> => {
   const startedAt = performance.now();
   const {runBin} = await import("@terreno/test");
@@ -150,10 +169,10 @@ const exportWeb = async (): Promise<void> => {
 /** Driver side: the prebuilt export on a static server, a real backend, then Playwright. */
 const run = async (): Promise<void> => {
   const startedAt = performance.now();
-  const {runBin, smokeMongoUri, spawnExampleBackend, stopSmokeMongo} = await import(
+  const {freePort, runBin, smokeMongoUri, spawnExampleBackend, stopSmokeMongo} = await import(
     "@terreno/test"
   );
-  const {apiUrl, exportDir} = smokeExportPaths({packageDir: PACKAGE_DIR});
+  const {apiUrl: bakedApiUrl, exportDir} = smokeExportPaths({packageDir: PACKAGE_DIR});
   let backend: Awaited<ReturnType<typeof spawnExampleBackend>> | undefined;
   let webServer: ReturnType<typeof Bun.serve> | undefined;
   // Traces go to a temp dir, not an untracked folder in the package. A failed run keeps its
@@ -162,18 +181,19 @@ const run = async (): Promise<void> => {
   let keepOutput = false;
 
   try {
-    assertExportTargetsApi({apiUrl, exportDir});
-    await assertPortFree(SMOKE_API_PORT);
+    assertExportTargetsApi({apiUrl: bakedApiUrl, exportDir});
+    const apiPort = await freePort();
+    const apiUrl = `http://localhost:${apiPort}`;
     // The page and the API share the `localhost` site, so Better Auth's session cookie flows as
     // it does in the e2e suite (8082 and 4000).
-    webServer = serveExport({exportDir});
+    webServer = serveExport({apiUrl, exportDir});
     const webUrl = `http://localhost:${webServer.port}`;
 
     const mongoUri = await smokeMongoUri({databaseName: "exampleFrontendSmoke"});
     backend = await spawnExampleBackend({
       env: {AUTH_PROVIDER: "better-auth", BETTER_AUTH_URL: apiUrl, CORS_ORIGINS: webUrl},
       mongoUri,
-      port: SMOKE_API_PORT,
+      port: apiPort,
       timeoutMs: BACKEND_READY_TIMEOUT_MS,
     });
     console.info(`✅ example-backend is healthy at ${apiUrl} and trusts ${webUrl}`);

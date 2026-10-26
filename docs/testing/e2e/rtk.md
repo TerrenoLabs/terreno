@@ -58,8 +58,9 @@ Because `Platform.OS` is `"web"`, the smoke proves the web bearer path, not the 
 SecureStore cookie-jar path. Native sign-in stays covered by the unit tests and example-frontend
 on a device.
 
-**Measured time:** 17–50 s against a running replica-set Mongo (`TERRENO_TEST_MONGODB_URI`),
-excluding the compile. Almost all of it is example-backend booting until `/health` answers 200;
+**Measured time:** 15–18 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), against a running replica-set Mongo
+(`TERRENO_TEST_MONGODB_URI`), excluding the compile. Single runs on a loaded container took up
+to 50 s. Almost all of it is example-backend booting until `/health` answers 200;
 the rtk checks take under a second. The first boot against a fresh database also runs
 example-backend's startup work and took about 70 s in a slow-I/O sandbox, so the smoke allows
 120 s for readiness. Budget: 30 s. A warm boot fits it; a slow or cold boot goes over, and the

@@ -211,7 +211,7 @@ and the smoke's measured time. Every smoke's budget is 30 s, excluding the build
 | [`@terreno/cli`](e2e/cli.md) | `cli/e2e/smoke.ts` | process | 2 s |
 | [`@terreno/comms`](e2e/comms.md) | `comms/e2e/smoke.ts` | http | 5–6.5 s |
 | [`create-terreno-app`](e2e/create-terreno-app.md) | `create-terreno-app/e2e/smoke.ts` | process | 2.5 s |
-| [demo](e2e/demo.md) | `demo/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [demo](e2e/demo.md) | `demo/e2e/smoke.spec.ts` | browser | 7.5–8 s |
 | [example-backend](e2e/example-backend.md) | `example-backend/e2e/smoke.ts` | http | 16–20 s |
 | [example-frontend](e2e/example-frontend.md) | `example-frontend/e2e/smoke.spec.ts` | browser | 22–26 s (in-memory Mongo) |
 | [`@terreno/feature-flags`](e2e/feature-flags.md) | `feature-flags/e2e/smoke.ts` | http | 5–5.5 s |
@@ -220,15 +220,16 @@ and the smoke's measured time. Every smoke's budget is 30 s, excluding the build
 | [`@terreno/rtk`](e2e/rtk.md) | `rtk/e2e/smoke.ts` | http | 15–18 s |
 | [`@terreno/syncdb`](e2e/syncdb.md) | `syncdb/e2e/smoke.ts` | http, websocket | 15–19 s |
 | [`@terreno/test`](e2e/test.md) | `test/e2e/smoke.ts` | http | 2.5–3 s |
-| [`@terreno/ui`](e2e/ui.md) | `ui/e2e/smoke.spec.ts` | browser | CircleCI `smoke` job |
+| [`@terreno/ui`](e2e/ui.md) | `ui/e2e/smoke.spec.ts` | browser | 8.5–9 s |
 
 The times are what `bun run smoke` printed for each package across three root runs (the runs
 after the first one after a compile, described below) on a 4-CPU container, against a
 single-node replica set (`TERRENO_TEST_MONGODB_URI`), after `bun run compile` and
 `bun run --cwd admin-spa build:web` (admin-spa's time is from the two runs after its build). Each package page
 records how its own time splits. The admin-frontend and example-frontend times come from
-separate runs of each smoke on an idle container, with the in-memory replica set. The other
-browser smokes were not timed locally; the CircleCI `smoke` job prints their times.
+separate runs of each smoke on an idle container, with the in-memory replica set. The demo and
+ui times come from three separate runs of each smoke on the same container, against an existing
+demo export.
 
 The first root run after a compile was slower for four packages: example-backend took 48 s,
 syncdb 33 s, and create-terreno-app 21 s, and comms failed because its server did not answer

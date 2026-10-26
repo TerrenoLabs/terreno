@@ -10,7 +10,8 @@ bun run compile                # builds test/dist, which the smoke imports
 bun run --cwd test smoke       # or, from the root: bun run smoke test
 ```
 
-It takes about 12 s warm. The first run on a machine also downloads or unpacks the
+It takes 2.5–3 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), and about 12 s as a single warm run that loads the package
+cold. The first run on a machine also downloads or unpacks the
 `mongod` binary for the in-memory replica set, which can add 20 s or more.
 
 ## What it proves

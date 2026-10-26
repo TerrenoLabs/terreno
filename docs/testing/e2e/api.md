@@ -33,7 +33,8 @@ It prints one `✅` line per check and exits 1 on the first failure, after print
 server's output. The health route is inline because `@terreno/api-health` depends on
 `@terreno/api`.
 
-**Measured time:** 13 s on an idle machine and 16–26 s under load, excluding the compile.
+**Measured time:** 5–10 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), excluding the compile. Single runs took 13 s on an
+idle machine and 16–26 s under load.
 Budget: 30 s.
 
 ## Add an e2e test

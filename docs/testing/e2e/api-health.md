@@ -36,8 +36,8 @@ default route that stops answering 2xx shows up as a `spawnUntilReady` timeout, 
 The smoke uses no `TerrenoApp`, so it needs no user model, MongoDB, or secrets. That also keeps
 it free of dependencies api-health does not already declare.
 
-**Measured time:** about 8 s on an idle machine and 11–20 s under load, excluding the compile.
-Most of it is loading `@terreno/test`; the checks themselves take about 2 s. Budget: 30 s.
+**Measured time:** 2 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), excluding the compile. A single run that also loads
+`@terreno/test` cold took about 8 s on an idle machine and 11–20 s under load. Budget: 30 s.
 
 ## Add an e2e test
 

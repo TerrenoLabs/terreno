@@ -42,8 +42,9 @@ server's output. Without `admin-spa/dist/index.html` it exits 1 at once and asks
 The smoke needs no browser, MongoDB, or secrets. The browser flows belong to `test:e2e` and
 `test:integration`.
 
-**Measured time:** 6–8 s wall clock across three runs (the smoke reports 5–6.5 s), excluding
-the compile and the web export. Most of it is loading `@terreno/test` and starting the child;
+**Measured time:** 4–4.5 s in two root `bun run smoke` runs after the build (the
+[guide's](../e2e.md#package-pages) figure), excluding the compile and the web export. Single runs
+took 6–8 s wall clock. Most of it is loading `@terreno/test` and starting the child;
 the checks take well under a second. Budget: 30 s.
 
 ## Add an e2e test

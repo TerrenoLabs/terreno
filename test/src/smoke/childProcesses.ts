@@ -26,7 +26,11 @@ export const killGroup = (child: SmokeChild, signal: NodeJS.Signals): void => {
   }
 };
 
-const killLiveChildren = (): void => {
+/**
+ * Kills every tracked child that is still running; the smoke's exit and signal handlers call it.
+ * @internal Exported for tests.
+ */
+export const killLiveChildren = (): void => {
   for (const child of liveChildren) {
     killGroup(child, "SIGKILL");
   }

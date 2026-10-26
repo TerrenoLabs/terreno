@@ -36,8 +36,8 @@ pipelines call, because signup never grants admin. Creating it through the admin
 would mean seeding an admin straight into MongoDB. Each run imports under a new release
 version, so reruns against a shared `TERRENO_TEST_MONGODB_URI` never collide.
 
-**Measured time:** 21–24 s on a quiet 4-CPU container against an external replica set, and
-40–100 s when parallel builds starved the CPU, excluding the compile. Most of it is loading
+**Measured time:** 4.5–8 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), excluding the compile. Earlier single runs took
+21–24 s on a quiet 4-CPU container against an external replica set, and 40–100 s when parallel builds starved the CPU, excluding the compile. Most of it is loading
 the compiled packages in the child; under load, password hashing on signup alone took 17 s.
 Budget: 30 s.
 

@@ -1,12 +1,11 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import fs from "node:fs";
-import {createServer, type Server} from "node:net";
 import os from "node:os";
 import path from "node:path";
 import {
   assertExportTargetsApi,
-  assertPortFree,
-  SMOKE_API_PORT,
+  rewriteApiUrl,
+  SMOKE_PLACEHOLDER_API_URL,
   smokeExportPaths,
   webExportEnv,
 } from "../e2e/helpers/webExport";
@@ -22,35 +21,32 @@ describe("webExportEnv", () => {
 });
 
 describe("smokeExportPaths", () => {
-  it("bakes a fixed localhost API port into an export kept in the package", () => {
+  it("bakes the placeholder API URL into an export kept in the package", () => {
     const paths = smokeExportPaths({packageDir: "/repo/example-frontend"});
-    expect(paths.apiUrl).toBe(`http://localhost:${SMOKE_API_PORT}`);
+    expect(paths.apiUrl).toBe(SMOKE_PLACEHOLDER_API_URL);
     expect(paths.exportDir).toBe("/repo/example-frontend/dist-smoke");
     expect(paths.cacheDir).toBe("/repo/example-frontend/.expo/smoke-metro-cache");
   });
 });
 
-describe("assertPortFree", () => {
-  let server: Server | undefined;
+describe("rewriteApiUrl", () => {
+  const bundle = `const c={envApiUrl:"${SMOKE_PLACEHOLDER_API_URL}"};fetch("${SMOKE_PLACEHOLDER_API_URL}/health");`;
 
-  afterEach(async () => {
-    await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
-    server = undefined;
+  it("points every placeholder in a JS bundle at the real API", () => {
+    const body = rewriteApiUrl({apiUrl: API_URL, body: bundle, filePath: "/x/index-abc.js"});
+    expect(body).not.toContain(SMOKE_PLACEHOLDER_API_URL);
+    expect(body.split(API_URL)).toHaveLength(3);
   });
 
-  it("resolves for a port nothing listens on", async () => {
-    const probe = createServer();
-    await new Promise<void>((resolve) => probe.listen(0, "127.0.0.1", () => resolve()));
-    const {port} = probe.address() as {port: number};
-    await new Promise<void>((resolve) => probe.close(() => resolve()));
-    await expect(assertPortFree(port)).resolves.toBeUndefined();
+  it("rewrites HTML pages too", () => {
+    const html = `<script>window.api="${SMOKE_PLACEHOLDER_API_URL}"</script>`;
+    expect(rewriteApiUrl({apiUrl: API_URL, body: html, filePath: "/x/index.html"})).toContain(
+      API_URL
+    );
   });
 
-  it("rejects a port another server holds, so the smoke never talks to a stale backend", async () => {
-    server = createServer();
-    await new Promise<void>((resolve) => server?.listen(0, "127.0.0.1", () => resolve()));
-    const {port} = server.address() as {port: number};
-    await expect(assertPortFree(port)).rejects.toThrow(`Port ${port} is in use`);
+  it("leaves other files untouched", () => {
+    expect(rewriteApiUrl({apiUrl: API_URL, body: bundle, filePath: "/x/app.css"})).toBe(bundle);
   });
 });
 

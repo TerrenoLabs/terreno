@@ -64,8 +64,11 @@ container (`TERRENO_TEST_MONGODB_URI`):
   ran the seed as a second process.
 
 Without `TERRENO_TEST_MONGODB_URI`, the in-memory replica set is empty every run, so two runs
-took 24 and 38 s. CI's `smoke` job sets the variable to its Mongo sidecar, which starts empty, so
-CI pays the first-boot cost once per job. Budget: 30 s.
+took 24 and 38 s. CI's `smoke` job sets the variable to its Mongo sidecar, which starts empty.
+Every smoke that boots example-backend uses its own database (`exampleBackendSmoke`,
+`rtkSmoke`, `syncdbSmoke`, `adminFrontendSmoke`, `exampleFrontendSmoke`), so on CI each of them
+pays the empty-database first boot (about 27 s here), not the warm times above. The CircleCI
+`smoke` job's per-package times are the ones that judge the budget. Budget: 30 s.
 
 ## Add an e2e test
 

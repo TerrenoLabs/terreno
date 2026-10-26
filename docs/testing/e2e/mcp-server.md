@@ -46,7 +46,8 @@ documents, so it runs after the CI `smoke` job's plain compile.
 
 The smoke needs no MongoDB: listing tools touches no database.
 
-**Measured time:** 9–24 s on a 4-CPU container, excluding the compile. About 10 s of that is
+**Measured time:** 5.5–6 s in three root `bun run smoke` runs (the [guide's](../e2e.md#package-pages) figure), excluding the compile. Single runs on a loaded
+4-CPU container took 9–24 s. About 10 s of that is
 the hosted server reading its docs at startup. Budget: 30 s.
 
 ## Add an e2e test

@@ -30,22 +30,25 @@ Run with Bun, it is the driver. It has two modes.
 takes about 3 minutes.
 
 1. It runs `expo export --platform web` into `example-frontend/dist-smoke/` (git-ignored) with
-   `EXPO_PUBLIC_API_URL=http://localhost:4310`. The export bakes the API URL in, so the smoke
-   API always listens on that fixed port (`SMOKE_API_PORT` in `e2e/helpers/webExport.ts`).
+   `EXPO_PUBLIC_API_URL=http://smoke-api.invalid`, a placeholder (`SMOKE_PLACEHOLDER_API_URL` in
+   `e2e/helpers/webExport.ts`). The export bakes the API URL in, so the smoke swaps the
+   placeholder for its real API URL as it serves the bundle. The `.invalid` host never
+   resolves, so a bundle served without the swap fails instead of reaching a stale backend.
 2. Metro's transform cache key ignores `EXPO_PUBLIC_*` values, so a cache shared with another
    export (the main suite's, for example, built against port 4000) could ship the wrong API URL.
    The export therefore keeps its own Metro cache in `example-frontend/.expo/smoke-metro-cache`
    (`TMPDIR` points there). Only this export writes that cache, so it stays warm and right.
-3. It checks that the bundle contains the API URL.
+3. It checks that the bundle contains the placeholder.
 
 `bun e2e/smoke.spec.ts` (the `smoke` script) is the smoke:
 
 1. It exits 1 at once, naming `export:smoke`, when `dist-smoke/` has no bundle or its bundle
-   targets another API URL. It also exits 1 when anything already listens on port 4310, so the
-   smoke never mistakes a stale backend's `/health` for its own.
-2. It serves `dist-smoke/` on a free port with a static server that falls back to
-   `index.html`, as `serve -s` does in CI.
-3. `spawnExampleBackend()` starts example-backend on port 4310 against `smokeMongoUri()`, with
+   lacks the placeholder (an export from before the placeholder, or from another build).
+2. It picks a free API port with `freePort()`, then serves `dist-smoke/` on another free port
+   with a static server that falls back to `index.html`, as `serve -s` does in CI. The server
+   replaces the placeholder with `http://localhost:<API port>` in every JS and HTML file it
+   sends.
+3. `spawnExampleBackend()` starts example-backend on the API port against `smokeMongoUri()`, with
    `AUTH_PROVIDER=better-auth`, `BETTER_AUTH_URL` on `localhost`, and the web origin in
    `CORS_ORIGINS`. The page and the API share the `localhost` site, so Better Auth's session
    cookie works as it does in the main suite on ports 8082 and 4000.

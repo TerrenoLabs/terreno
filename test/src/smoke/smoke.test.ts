@@ -5,6 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import mongoose from "mongoose";
 
+import {killLiveChildren, spawnTracked} from "./childProcesses";
 import {freePort} from "./freePort";
 import {runBin} from "./runBin";
 import {smokeMongoUri, stopSmokeMongo} from "./smokeMongoUri";
@@ -190,6 +191,13 @@ process.exit(3);`
 });
 
 describe("child cleanup", () => {
+  it("kills tracked children that are still running", async () => {
+    const child = spawnTracked({cmd: [process.execPath, "-e", "setInterval(() => {}, 1000)"]});
+    killLiveChildren();
+    expect(await child.exited).not.toBe(0);
+    expect(child.signalCode).toBe("SIGKILL");
+  });
+
   const writeParent = (name: string, ending: string): string =>
     writeFixture(
       name,
@@ -329,6 +337,26 @@ describe("smokeMongoUri", () => {
     );
     expect(await smokeMongoUri()).toBe("mongodb://sidecar:27017/terrenoSmoke?replicaSet=rs0");
   });
+
+  it(
+    "lets the next caller retry after the in-memory replica set fails to start",
+    async () => {
+      delete process.env.TERRENO_TEST_MONGODB_URI;
+      const systemBinary = process.env.MONGOMS_SYSTEM_BINARY;
+      process.env.MONGOMS_SYSTEM_BINARY = "/nonexistent/mongod";
+      try {
+        await expect(smokeMongoUri()).rejects.toThrow();
+      } finally {
+        if (systemBinary === undefined) {
+          delete process.env.MONGOMS_SYSTEM_BINARY;
+        } else {
+          process.env.MONGOMS_SYSTEM_BINARY = systemBinary;
+        }
+      }
+      expect(await smokeMongoUri({databaseName: "retrySmoke"})).toContain("/retrySmoke?");
+    },
+    {timeout: 90000}
+  );
 
   it(
     "starts one in-memory replica set, shared by concurrent callers, when unset",

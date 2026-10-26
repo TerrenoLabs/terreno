@@ -112,7 +112,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
     if (!theme) {
       return {};
     }
-    let bgColor = theme.surface.primary;
+    let bgColor = theme.surface.primaryDark;
     let bColor: string | undefined;
     let bWidth: number | undefined;
     // Primary labels and icons stay inverted (white in light mode), including
@@ -144,7 +144,7 @@ const ButtonVisual: React.FC<ButtonVisualProps> = ({
       } else if (variant === "destructive") {
         bgColor = theme.surface.error;
       } else {
-        bgColor = theme.surface.primary;
+        bgColor = theme.surface.primaryDark;
       }
       bColor = undefined;
       bWidth = undefined;

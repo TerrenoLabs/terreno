@@ -2308,7 +2308,7 @@ export const primitives = {
   primary200: "#73CAE8",
   primary300: "#40B8E0",
   primary400: "#0E9DCD",
-  primary500: "#0086B3",
+  primary500: "#0C80A7",
   primary600: "#0A7092",
   primary700: "#035D7E",
   primary800: "#004B64",

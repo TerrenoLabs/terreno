@@ -6,6 +6,7 @@ import type {ReactTestInstance} from "react-test-renderer";
 
 import {Button} from "./Button";
 import type {ButtonProps} from "./Common";
+import {contrastRatio, WCAG_NORMAL_TEXT_CONTRAST} from "./colorContrast";
 import {isNarrowViewport} from "./MediaQuery";
 import * as ThemeModule from "./Theme";
 import {renderWithIcons, renderWithTheme, TEST_CUSTOM_ICON_TEST_ID} from "./test-utils";
@@ -17,11 +18,11 @@ const ACTIVE_BUTTON_VARIANTS: {
   variant: NonNullable<ButtonProps["variant"]>;
 }[] = [
   {backgroundColor: "#2B6072", variant: "primary"},
-  {backgroundColor: "#0E9DCD", variant: "secondary"},
-  {backgroundColor: "#0E9DCD", variant: "muted"},
-  {backgroundColor: "#0E9DCD", variant: "outline"},
+  {backgroundColor: "#0C80A7", variant: "secondary"},
+  {backgroundColor: "#0C80A7", variant: "muted"},
+  {backgroundColor: "#0C80A7", variant: "outline"},
   {backgroundColor: "#BD1111", variant: "destructive"},
-  {backgroundColor: "#0E9DCD", variant: "ghost"},
+  {backgroundColor: "#0C80A7", variant: "ghost"},
 ];
 
 interface PressableTestProps {
@@ -139,7 +140,7 @@ describe("Button", () => {
 
   it("uses inverted labels for primary buttons in both modes", () => {
     const light = renderWithTheme(
-      <Button onClick={() => {}} text="Light primary" variant="primary" />
+      <Button onClick={() => {}} testID="light-primary" text="Light primary" variant="primary" />
     );
     const disabled = renderWithTheme(
       <Button
@@ -152,11 +153,15 @@ describe("Button", () => {
     );
     const dark = render(
       <ThemeModule.ThemeProvider colorScheme="dark">
-        <Button onClick={() => {}} text="Dark primary" variant="primary" />
+        <Button onClick={() => {}} testID="dark-primary" text="Dark primary" variant="primary" />
       </ThemeModule.ThemeProvider>
     );
 
+    assert.equal(light.getByTestId("light-primary").props.style.backgroundColor, "#0C80A7");
+    assert.equal(dark.getByTestId("dark-primary").props.style.backgroundColor, "#40B8E0");
     assert.equal(light.getByText("Light primary").props.style.color, "#FFFFFF");
+    assert.isAtLeast(contrastRatio("#FFFFFF", "#0C80A7"), WCAG_NORMAL_TEXT_CONTRAST);
+    assert.isAtLeast(contrastRatio("#353535", "#40B8E0"), WCAG_NORMAL_TEXT_CONTRAST);
     assert.equal(disabled.getByText("Disabled primary").props.style.color, "#FFFFFF");
     assert.equal(disabled.getByTestId("disabled-primary").props.style.backgroundColor, "#949494");
     assert.equal(dark.getByText("Dark primary").props.style.color, "#353535");

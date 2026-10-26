@@ -229,6 +229,7 @@ export interface SurfaceThemeConfig {
   ai: keyof ThemePrimitiveColors;
   baseHover: keyof ThemePrimitiveColors;
   primary: keyof ThemePrimitiveColors;
+  primaryDark: keyof ThemePrimitiveColors;
   secondaryExtraLight: keyof ThemePrimitiveColors;
   secondaryLight: keyof ThemePrimitiveColors;
   secondaryDark: keyof ThemePrimitiveColors;
@@ -303,6 +304,7 @@ export interface SurfaceTheme {
   ai: string;
   baseHover: string;
   primary: string;
+  primaryDark: string;
   secondaryExtraLight: string;
   secondaryLight: string;
   secondaryDark: string;

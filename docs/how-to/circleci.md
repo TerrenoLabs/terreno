@@ -398,7 +398,9 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`publish-release` compiles the 16 lockstep packages once with
+`publish-release` first requires the tag to be on `master` with its assembled
+`CHANGELOG.md` section ([release automation](release-automation.md)), then
+compiles the lockstep packages once with
 `bun run --filter ... compile` (dependency order), then runs
 `scripts/ci/publish-package.sh` for all of them in parallel with
 `TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
@@ -417,8 +419,8 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
 
-The release skill pushes the tag and creates the GitHub release with
-`gh release create --draft`. The repository has immutable releases on: a
+The **Bot merge** workflow (or the release skill, when a human merges) pushes
+the tag and creates the GitHub release with `gh release create --draft`. The repository has immutable releases on: a
 published release cannot take new assets (GitHub answers `422`). So CI publishes
 the draft last with `scripts/ci/github-release.sh publish`.
 `archive-docs-version` does it right after the upload on `X.Y.0` tags.

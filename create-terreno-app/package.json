@@ -25,6 +25,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist",
     "README.md"
   ],

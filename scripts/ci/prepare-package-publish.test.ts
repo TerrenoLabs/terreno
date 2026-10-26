@@ -12,6 +12,7 @@ describe("prepare-package-publish", () => {
     try {
       mkdirSync(join(repoRoot, "mcp-server"), {recursive: true});
       writeFileSync(join(repoRoot, "package.json"), JSON.stringify({catalog: {}}));
+      writeFileSync(join(repoRoot, "CHANGELOG.md"), "# Changelog\n\n## [58.0.0] - 2026-10-26\n");
       writeFileSync(
         join(repoRoot, "mcp-server/package.json"),
         JSON.stringify({
@@ -38,6 +39,11 @@ describe("prepare-package-publish", () => {
       assert.equal(publishedPackage.version, "58.0.0");
       assert.equal(publishedPackage.dependencies["@terreno/api"], "58.0.0");
       assert.equal(publishedPackage.dependencies["create-terreno-app"], "58.0.0");
+      assert.include(
+        readFileSync(join(repoRoot, "mcp-server/CHANGELOG.md"), "utf8"),
+        "## [58.0.0]",
+        "the root changelog ships inside the package"
+      );
     } finally {
       rmSync(repoRoot, {force: true, recursive: true});
     }

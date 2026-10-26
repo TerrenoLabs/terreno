@@ -61,6 +61,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "src/dist/**",
     "dist/**"
   ],

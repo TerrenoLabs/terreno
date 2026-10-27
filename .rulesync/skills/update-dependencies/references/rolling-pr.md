@@ -54,7 +54,7 @@ If merge conflicts require a behavior decision, stop as `BLOCKED`. Never force-p
 
 The PR body is the memory across days. Preserve prior rows. Update in place.
 
-Required sections after the marker:
+Required sections after the marker: `## Why`, then `## What changed` holding the ledger as `###` subsections, then `## Verification` with one `✅ Tested` row per bump landed this run. The ledger subsections:
 
 1. **Last run** — ISO date (UTC), agent/run id if known, `bun outdated` summary count, local gate result (`prepush` green, infra jobs run or not run), CI rounds this run (0–2) and the stop reason if CI stayed red
 2. **Landed** — package, old → new, exercise test path + command, fingerprint unchanged

@@ -10,7 +10,7 @@
     "noImplicitReturns": true,
     "outDir": "dist/",
     "paths": {
-      "react-native-swiper-flatlist": ["./src/types/react-native-swiper-flatlist.d.ts"]
+      "react-native-swiper-flatlist": ["./src/types/react-native-swiper-flatlist.shim.js"]
     },
     "rootDir": "src",
     "skipLibCheck": true,

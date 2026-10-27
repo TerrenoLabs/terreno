@@ -97,6 +97,8 @@ export const useAdminRpcQuery = <T = unknown>({
     setIsLoading(isNewUrl);
     setIsFetching(true);
     if (isNewUrl) {
+      // The body on screen is gone, so returning to the old URL must load it again.
+      loadedUrlRef.current = null;
       setData(undefined);
     }
     setError(null);

@@ -168,6 +168,56 @@ describe("useAdminRpc", () => {
     assert.isFalse(queryState?.isLoading);
   });
 
+  it("reports loading when returning to a URL before the other one finishes", async () => {
+    let gets = 0;
+    globalThis.fetch = (async () => {
+      gets += 1;
+      if (gets > 1) {
+        return await new Promise<Response>(() => undefined);
+      }
+      return new Response(JSON.stringify({name: "Ada"}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    let setUrl: ((next: string) => void) | undefined;
+    let queryState: {data?: {name: string}; isLoading: boolean} | undefined;
+    const Harness: React.FC = () => {
+      const [url, setNextUrl] = useState("/users/a");
+      setUrl = setNextUrl;
+      const rpc = useAdminRpc();
+      queryState = useAdminRpcQuery<{name: string}>({rpc, url});
+      return null;
+    };
+
+    renderWithTheme(
+      <AdminProvider
+        api={api}
+        apiBase="/admin"
+        credentials="same-origin"
+        getAuthHeaders={() => ({})}
+        routeBase="/admin"
+      >
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.deepEqual(queryState?.data, {name: "Ada"});
+
+    await act(async () => {
+      setUrl?.("/users/b");
+    });
+    await act(async () => {
+      setUrl?.("/users/a");
+    });
+    assert.equal(gets, 3);
+    assert.isUndefined(queryState?.data);
+    assert.isTrue(queryState?.isLoading);
+  });
+
   it("refetches mounted queries after a successful tagged mutation", async () => {
     let gets = 0;
     let resolveRefetch: ((response: Response) => void) | undefined;

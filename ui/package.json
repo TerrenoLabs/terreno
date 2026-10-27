@@ -164,7 +164,7 @@
     "test:coverage": "TZ=America/New_York bun run ../scripts/check-coverage.ts",
     "types": "bun typedoc"
   },
-  "version": "57.18.0",
+  "version": "57.19.2",
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },

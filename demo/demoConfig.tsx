@@ -93,6 +93,7 @@ import {SignatureFieldConfiguration} from "@story-config/SignatureField.config";
 import {SignUpScreenConfiguration} from "@story-config/SignUpScreen.config";
 import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
+import {SkeletonConfiguration} from "@story-config/Skeleton.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
 import {SparklineChartConfiguration} from "@story-config/SparklineChart.config";
@@ -389,6 +390,7 @@ const Config: DemoConfigurationBase[] = [
   SignatureConfiguration,
   SignatureCaptureFieldConfiguration,
   SignatureFieldConfiguration,
+  SkeletonConfiguration,
   SliderConfiguration,
   SocialLoginButtonConfiguration,
   SparklineChartConfiguration,

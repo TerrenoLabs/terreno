@@ -19,7 +19,7 @@
     "typescript": "catalog:",
     "winston": "catalog:"
   },
-  "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures \u2014 part of Terreno, the batteries-included TypeScript framework for universal apps.",
+  "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@reduxjs/toolkit": "catalog:",
@@ -47,6 +47,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "README.md",
     "dist/**/*",
     "src/**/*.ts",
@@ -108,5 +109,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "57.19.2"
 }

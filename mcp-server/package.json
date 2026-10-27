@@ -65,6 +65,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist",
     "src/docs"
   ],
@@ -105,5 +106,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "type": "module",
-  "version": "57.18.0"
+  "version": "57.19.2"
 }

@@ -685,11 +685,122 @@ export interface AccessibilityProps {
 
 /** Checked and disabled state a `Box` reports to screen readers. */
 export interface BoxAccessibilityState {
+  /** Set automatically while `loading` is true; sent as `aria-busy` on web. */
+  busy?: boolean;
   checked?: boolean;
   disabled?: boolean;
 }
 
-export interface BoxPropsBase extends WithTestID {
+/** How skeleton placeholders animate. `none` renders a static block. */
+export type SkeletonAnimation = "pulse" | "shimmer" | "none";
+
+/**
+ * Shared loading contract. Box, Card, ChartCard, Scorecard, Page, SplitPage, and the charts
+ * accept it, and custom components can extend it and hand it to a `Box` or `withLoading`.
+ */
+export interface LoadingProps {
+  /** When true, renders `loadingComponent` in place of the children. */
+  loading?: boolean;
+  /**
+   * Placeholder rendered while `loading` is true, usually built from `Skeleton`, `SkeletonText`,
+   * `SkeletonCircle`, `SkeletonCard`, or `SkeletonList`. Each component documents its default.
+   */
+  loadingComponent?: ReactNode;
+  /**
+   * Animation for skeletons inside `loadingComponent` that do not set their own `animation`.
+   * Falls back to `none` when the OS reduce-motion setting is on.
+   * @default "pulse"
+   */
+  loadingAnimation?: SkeletonAnimation;
+  /**
+   * Screen reader label announced while loading.
+   * @default "Loading"
+   */
+  loadingLabel?: string;
+}
+
+export interface SkeletonProps extends WithTestID {
+  /**
+   * Overrides the nearest `SkeletonGroup` (or loading container) animation.
+   * @default "pulse"
+   */
+  animation?: SkeletonAnimation;
+  /**
+   * Placeholder fill.
+   * @default "neutralExtraLight"
+   */
+  color?: SurfaceColor;
+  /** @default 16 */
+  height?: NumberOrPercentage;
+  /** @default "sm" */
+  rounding?: Rounding | "circle";
+  /** @default "100%" */
+  width?: NumberOrPercentage;
+}
+
+export interface SkeletonTextProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Width of the final line, so a paragraph does not end flush.
+   * @default "60%"
+   */
+  lastLineWidth?: NumberOrPercentage;
+  /** @default 3 */
+  lines?: number;
+  /**
+   * Matches the line height of `Text` at this size.
+   * @default "md"
+   */
+  size?: TextSize;
+}
+
+export interface SkeletonCircleProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Diameter in pixels.
+   * @default 40
+   */
+  size?: number;
+}
+
+export interface SkeletonCardProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /** @default 2 */
+  lines?: number;
+  /**
+   * Height of the media block when `showMedia` is true.
+   * @default 160
+   */
+  mediaHeight?: number;
+  /** @default true */
+  showAvatar?: boolean;
+  /** Adds a full-width media block above the text, like a display `Card` with an image. */
+  showMedia?: boolean;
+}
+
+export interface SkeletonListProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Text lines per row.
+   * @default 2
+   */
+  lines?: number;
+  /** @default 3 */
+  rows?: number;
+  /** @default true */
+  showAvatar?: boolean;
+}
+
+export interface SkeletonGroupProps {
+  /**
+   * Animation inherited by every skeleton inside the group. Skeletons in one group pulse in sync.
+   * @default "pulse"
+   */
+  animation?: SkeletonAnimation;
+  children?: ReactNode;
+}
+
+export interface BoxPropsBase extends WithTestID, LoadingProps {
   /**
    * Checked and disabled state for screen readers, sent as `accessibilityState` and as
    * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
@@ -1262,7 +1373,8 @@ export interface SplitPageListItem {
   id: string;
 }
 
-export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListItem> {
+export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListItem>
+  extends LoadingProps {
   /**
    * can accept either one React Child or any array of ReactChild. If this is not provided,
    * renderContent must return one or many ReactChild.
@@ -2610,7 +2722,7 @@ export interface NumberPickerActionSheetProps {
   actionSheetRef: React.RefObject<any>;
 }
 
-export interface PageProps extends WithTestID {
+export interface PageProps extends WithTestID, LoadingProps {
   // noExplicitAny: React Navigation type varies by navigation stack configuration
   // biome-ignore lint/suspicious/noExplicitAny: React Navigation type varies by navigation stack configuration
   navigation?: any;
@@ -2867,7 +2979,7 @@ export interface PaginationProps extends WithTestID {
   totalPages: number;
 }
 
-export interface LineChartProps extends WithTestID {
+export interface LineChartProps extends WithTestID, LoadingProps {
   /** Summary announced for the whole chart. */
   accessibilityLabel?: string;
   /** Optional previous-period values drawn as a dotted overlay. */
@@ -2882,7 +2994,9 @@ export interface LineChartProps extends WithTestID {
   height?: number;
   /** Series name shown under the plot. */
   legendLabel?: string;
-  /** When true, shows a spinner instead of the plot. */
+  /**
+   * When true, shows `loadingComponent` (default: a spinner) instead of the plot.
+   */
   loading?: boolean;
   /** Makes `periodLabel` pressable when provided. */
   onPeriodPress?: () => void;
@@ -2907,7 +3021,11 @@ export interface SparklineChartProps extends WithTestID {
   height?: number;
 }
 
-export interface ChartCardProps extends WithTestID {
+/**
+ * While `loading`, the title row stays visible and the body shows `loadingComponent`
+ * (default: a 160px `Skeleton`).
+ */
+export interface ChartCardProps extends WithTestID, LoadingProps {
   children: React.ReactNode;
   /** Optional context shown below the title row. */
   filterSummary?: string;
@@ -2919,7 +3037,11 @@ export interface ChartCardProps extends WithTestID {
   title: string;
 }
 
-export interface ScorecardProps extends WithTestID {
+/**
+ * While `loading`, the title row stays visible and the value shows `loadingComponent`
+ * (default: a heading-sized `Skeleton`).
+ */
+export interface ScorecardProps extends WithTestID, LoadingProps {
   /** Optional previous-period sparkline values. */
   comparisonData?: Array<{label: string; value: number}>;
   /** Formats numeric values. String values render unchanged. */

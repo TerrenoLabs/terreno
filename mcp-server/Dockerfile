@@ -1,5 +1,6 @@
 # Stage 1: Install dependencies and build
-FROM oven/bun:1 AS builder
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497).
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /app
 
 COPY . .
@@ -21,8 +22,9 @@ RUN cd mcp-server \
   && bun run sync-package-guidelines \
   && test -d src/docs/versioned/next
 
-# Stage 2: Runtime - use oven/bun:1 so Sentry/OpenTelemetry instrumentation works
-FROM oven/bun:1
+# Stage 2: Runtime stays on Bun so Sentry/OpenTelemetry instrumentation works.
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497).
+FROM oven/bun:1.4.4
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules

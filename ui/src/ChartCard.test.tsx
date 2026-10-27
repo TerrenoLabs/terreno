@@ -4,8 +4,12 @@ import {assert} from "chai";
 
 import {ChartCard} from "./ChartCard";
 import {ChartCard as RootChartCard} from "./index";
+import {Skeleton} from "./Skeleton";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 describe("ChartCard", () => {
   it("renders title, filter summary, period badge, and children", () => {
@@ -75,5 +79,31 @@ describe("ChartCard", () => {
 
   it("is available from the package root lazy boundary", () => {
     assert.isFunction(RootChartCard);
+  });
+
+  it("keeps the title and shows a skeleton in place of the body while loading", () => {
+    const {getByTestId, getByText, queryByText} = renderWithTheme(
+      <ChartCard loading testID="chart-card" title="Conversions">
+        <Text>Body</Text>
+      </ChartCard>
+    );
+
+    assert.exists(getByText("Conversions"));
+    assert.notExists(queryByText("Body"));
+    assert.isTrue(getByTestId("chart-card.loading").props["aria-busy"]);
+  });
+
+  it("renders a custom loading component", () => {
+    const {getByTestId} = renderWithTheme(
+      <ChartCard
+        loading
+        loadingComponent={<Skeleton height={80} testID="custom-skeleton" />}
+        title="Conversions"
+      >
+        <Text>Body</Text>
+      </ChartCard>
+    );
+
+    assert.equal(getByTestId("custom-skeleton", HIDDEN).props.style.height, 80);
   });
 });

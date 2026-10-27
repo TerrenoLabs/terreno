@@ -50,6 +50,7 @@
     }
   },
   "files": [
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*"
   ],
@@ -97,5 +98,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "57.19.2"
 }

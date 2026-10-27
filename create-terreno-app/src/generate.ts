@@ -247,7 +247,9 @@ Full walkthrough: [Build for web](${BUILD_FOR_WEB_DOC}).
 
 const generateRootDockerfile = (): string => {
   return `# Consumer Terreno backend image — builds backend/ only (not the Terreno monorepo).
-FROM oven/bun:1-slim AS builder
+# Pin 1.4.4 so the image includes the patched Brotli decoder (CVE-2026-111497).
+# Floating oven/bun:1 can resolve to an affected release.
+FROM oven/bun:1.4.4-slim AS builder
 WORKDIR /app
 
 COPY backend/package.json ./
@@ -255,7 +257,7 @@ RUN bun install
 
 COPY backend/ ./
 
-FROM oven/bun:1-slim
+FROM oven/bun:1.4.4-slim
 WORKDIR /app
 
 RUN apt-get update \\

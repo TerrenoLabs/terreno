@@ -20,9 +20,11 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
-## [57.19.0] - 2026-10-26
+## [57.19.2] - 2026-10-26
 
-Upgrade note: [`mcp-server/src/docs/upgrades/57.19.0.md`](mcp-server/src/docs/upgrades/57.19.0.md).
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.2.md`](mcp-server/src/docs/upgrades/57.19.2.md).
+
+57.19.0 and 57.19.1 were tagged but never published to npm (the publish gate failed before the release notes had merged). This release contains everything from both.
 
 ### Added
 
@@ -45,6 +47,8 @@ Upgrade note: [`mcp-server/src/docs/upgrades/57.19.0.md`](mcp-server/src/docs/up
   Playwright), and mobile (Maestro) test setups; `terreno-backend-tests`,
   `terreno-frontend-tests`, and `terreno-mobile-tests` cover writing tests for each. New how-to:
   [Set up tests in a Terreno app](docs/how-to/set-up-app-tests.md).
+- `@terreno/ui` loading skeletons: `Box` and the container components (`Card`, `EditableCard`, `ChartCard`, `Scorecard`, `Page`, `SplitPage`, and the charts) take `loading`, `loadingComponent`, `loadingAnimation`, and `loadingLabel` props. New `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonCard`, `SkeletonList`, and `SkeletonGroup` components support `pulse`, `shimmer`, or no animation and respect reduce-motion. `withLoading(Component, options)` adds the props to custom components. See [Show loading skeletons](docs/how-to/show-loading-skeletons.md). (#1571)
+- Published packages now include the repository `CHANGELOG.md` in their tarballs. (#1632)
 
 ### Changed
 

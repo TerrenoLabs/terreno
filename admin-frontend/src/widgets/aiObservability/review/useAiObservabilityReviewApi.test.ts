@@ -111,6 +111,16 @@ describe("useAiObservabilityReviewApi", () => {
       url: "/ai/observability/review/batches",
     });
     expect(
+      endpoints.createAiObservabilityReviewBatch.query({
+        datasetId: "ds-1",
+        evaluatorId: "e1",
+      } as never)
+    ).toEqual({
+      body: {datasetId: "ds-1", evaluatorId: "e1"},
+      method: "POST",
+      url: "/ai/observability/review/batches",
+    });
+    expect(
       endpoints.runAiObservabilityReviewBatchJudge.query({
         batchId: "b1",
         evaluatorId: "j1",

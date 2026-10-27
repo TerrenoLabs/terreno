@@ -48,8 +48,25 @@ const bestJudgePercent = (batch: ReviewBatchListItem): number | undefined => {
   return rate === undefined || Number.isNaN(rate) ? undefined : Math.round(rate * 100);
 };
 
+const DatasetCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const batch = cellData.value as ReviewBatchListItem;
+  if (!batch.datasetId) {
+    return <Text color="secondaryDark">Recent traces</Text>;
+  }
+  return (
+    <Box gap={1} testID={`ai-review-batch-dataset-${batch.id}`}>
+      <Text numberOfLines={1}>{batch.datasetName ?? batch.datasetId}</Text>
+      {batch.questionsStale ? (
+        <Text color="warning" size="sm" testID={`ai-review-batch-stale-${batch.id}`}>
+          Questions changed — re-judge
+        </Text>
+      ) : undefined}
+    </Box>
+  );
+};
+
 const batchSearchText = (batch: ReviewBatchListItem): string =>
-  `${batch.name} ${batch.promptName ?? ""}`;
+  `${batch.name} ${batch.promptName ?? ""} ${batch.datasetName ?? ""}`;
 
 const buildColumns = (batches: ReviewBatchListItem[]): ClientTableColumn<ReviewBatchListItem>[] => [
   {
@@ -66,6 +83,15 @@ const buildColumns = (batches: ReviewBatchListItem[]): ClientTableColumn<ReviewB
     title: "Prompt",
     value: (batch) => batch.promptName,
     width: 200,
+  },
+  {
+    cell: (batch) => ({value: batch}),
+    columnType: "batchDataset",
+    filter: {kind: "choice", options: distinctChoiceOptions(batches, (batch) => batch.datasetName)},
+    key: "dataset",
+    title: "Dataset",
+    value: (batch) => batch.datasetName,
+    width: 220,
   },
   {
     filter: {
@@ -157,6 +183,7 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
     () => ({
       batchAnswered: AnsweredCell,
       batchBestJudge: BestJudgeCell,
+      batchDataset: DatasetCell,
       batchOpen: ({cellData}: {cellData: DataTableCellData}) => (
         <Box justifyContent="center">
           <Button

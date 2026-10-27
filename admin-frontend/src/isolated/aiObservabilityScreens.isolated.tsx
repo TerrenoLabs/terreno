@@ -1846,7 +1846,7 @@ describe("AiExperimentNewScreen", () => {
   const pendingEstimates: PendingEstimate[] = [];
 
   beforeEach(() => {
-    setExpoSearchParams(() => ({datasetId: "ds-1"}));
+    setExpoSearchParams(() => ({datasetId: "ds-1", pipeline: "prompt"}));
     routerPush.mockClear();
     estimateShouldFail = false;
     createShouldFail = false;

@@ -88,6 +88,7 @@ const baseProps = {
   onRun: () => undefined,
   onStepChange: () => undefined,
   onVersionToggle: () => undefined,
+  pipeline: "prompt" as const,
   promptDetail,
   promptName: "summarize",
   prompts,

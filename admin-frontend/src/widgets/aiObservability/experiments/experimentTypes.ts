@@ -1,3 +1,8 @@
+import type {PromptDetail} from "../prompts/promptTypes";
+import type {JudgeAgreement, ScoreValue} from "../review/batchTypes";
+
+export type ExperimentKind = "judge" | "prompt";
+
 export interface ExperimentEstimate {
   costUsd?: number;
   generations: number;
@@ -5,7 +10,8 @@ export interface ExperimentEstimate {
 }
 
 export interface ScoreThreshold {
-  aggregate: "mean" | "trueRate";
+  /** `agreement` gates compare a judge prompt version's answers with human answers. */
+  aggregate: "agreement" | "mean" | "trueRate";
   dimension: string;
   evaluatorName: string;
   op: "eq" | "gte" | "lte";
@@ -19,6 +25,8 @@ export interface ExperimentGateResult extends ScoreThreshold {
 }
 
 export interface ExperimentAggregates {
+  /** Judge experiments: agreement with the human answers, keyed by judge prompt version. */
+  agreement?: Record<string, JudgeAgreement>;
   gates: ExperimentGateResult[];
   lowConfidenceItemIds: string[];
   outlierItemIds: string[];
@@ -41,6 +49,8 @@ export interface ExperimentVersionResult {
 export interface ExperimentItemRecord {
   datasetItemId: string;
   failed: boolean;
+  /** Judge experiments: the human answers each judge version is compared with. */
+  humanScores?: Record<string, ScoreValue>;
   id: string;
   versionResults: Record<string, ExperimentVersionResult>;
 }
@@ -49,16 +59,30 @@ export interface ExperimentRecord {
   backgroundTaskId?: string;
   created: string;
   datasetId: string;
+  datasetName?: string;
   estimate?: ExperimentEstimate;
   evaluatorIds: string[];
   id: string;
   includeUnproofread: boolean;
   items: ExperimentItemRecord[];
+  /** Judge experiments: the llm-judge evaluator whose prompt versions are compared. */
+  judgeEvaluatorId?: string;
+  judgeName?: string;
+  /** Older payloads leave it out; treat a missing kind as a prompt comparison. */
+  kind?: ExperimentKind;
   modelOverride?: string;
   name: string;
+  /** The compared prompt; for judge experiments, the judge's prompt. */
   promptName: string;
+  /** Judge experiments: the human question set whose answers are the reference. */
+  questionSetId?: string;
+  questionSetName?: string;
+  /** Judge experiments: true when the questions changed after the run. */
+  questionsStale?: boolean;
   results?: ExperimentAggregates;
   status: "completed" | "failed" | "pending" | "running";
+  /** Judge experiments: agreement rate (0–1) a version must reach to pass. */
+  targetAgreement?: number;
   thresholds: ScoreThreshold[];
   updated: string;
   versions: number[];
@@ -155,6 +179,9 @@ export const formatGateName = (
 
 /** What the measured number is: the average score, or the share of items scored true. */
 export const formatGateAggregate = (aggregate: ScoreThreshold["aggregate"]): string => {
+  if (aggregate === "agreement") {
+    return "Agreement";
+  }
   return aggregate === "trueRate" ? "Pass rate" : "Average";
 };
 
@@ -280,4 +307,115 @@ export const experimentItemColumnWidths = ({
       ? Math.max(MIN_OUTPUT_COLUMN_WIDTH, Math.floor(available / versionCount))
       : MIN_OUTPUT_COLUMN_WIDTH;
   return {item: ITEM_COLUMN_WIDTH, output, pass: PASS_COLUMN_WIDTH};
+};
+
+export const DEFAULT_TARGET_AGREEMENT = 0.9;
+
+export const EXPERIMENT_KIND_LABELS: Record<ExperimentKind, string> = {
+  judge: "Judge calibration",
+  prompt: "Prompt comparison",
+};
+
+export const experimentKind = (experiment: Pick<ExperimentRecord, "kind">): ExperimentKind => {
+  return experiment.kind === "judge" ? "judge" : "prompt";
+};
+
+export const formatAgreementPercent = (rate?: number): string => {
+  if (rate === undefined || Number.isNaN(rate)) {
+    return "—";
+  }
+  return `${Math.round(rate * 1000) / 10}%`;
+};
+
+export interface JudgeVersionSummary {
+  agreement?: JudgeAgreement;
+  meetsTarget: boolean;
+  target: number;
+  verdict: string;
+  version: number;
+}
+
+/**
+ * Plain-language verdict per judge prompt version, such as
+ * "v2 agrees with humans 95% of the time — meets the 90% target."
+ */
+export const summarizeJudgeVersions = (experiment: ExperimentRecord): JudgeVersionSummary[] => {
+  const target = experiment.targetAgreement ?? DEFAULT_TARGET_AGREEMENT;
+  const targetText = formatAgreementPercent(target);
+  return [...experiment.versions]
+    .sort((left, right) => left - right)
+    .map((version) => {
+      const agreement = experiment.results?.agreement?.[String(version)];
+      const rate = agreement?.rate;
+      if (rate === undefined || Number.isNaN(rate)) {
+        return {
+          agreement,
+          meetsTarget: false,
+          target,
+          verdict: `v${version} has no answers to compare with the humans yet.`,
+          version,
+        };
+      }
+      const meetsTarget = rate >= target;
+      const verdict = `v${version} agrees with humans ${formatAgreementPercent(rate)} of the time — ${
+        meetsTarget ? "meets" : "below"
+      } the ${targetText} target.`;
+      return {agreement, meetsTarget, target, verdict, version};
+    });
+};
+
+/** The version with the highest agreement rate, if any version has one. */
+export const bestJudgeVersion = (summaries: JudgeVersionSummary[]): number | undefined => {
+  let best: JudgeVersionSummary | undefined;
+  for (const summary of summaries) {
+    const rate = summary.agreement?.rate;
+    if (rate === undefined) {
+      continue;
+    }
+    if (!best || rate > (best.agreement?.rate ?? -1)) {
+      best = summary;
+    }
+  }
+  return best?.version;
+};
+
+/** Tags shown next to a prompt version in pickers: latest, production, superseded. */
+export const promptVersionTags = (version: number, detail?: PromptDetail): string[] => {
+  const tags: string[] = [];
+  if (!detail || detail.versions.length === 0) {
+    return tags;
+  }
+  const latest = Math.max(...detail.versions.map((entry) => entry.version));
+  if (version === latest) {
+    tags.push("latest");
+  }
+  if (detail.labels.some((label) => label.label === "production" && label.version === version)) {
+    tags.push("production");
+  }
+  if (version < latest - 1) {
+    tags.push("superseded");
+  }
+  return tags;
+};
+
+/** "v1 and v2" or "v1, v2, and v3". */
+export const formatVersionList = (versions: number[]): string => {
+  const labels = [...versions].sort((left, right) => left - right).map((version) => `v${version}`);
+  if (labels.length <= 2) {
+    return labels.join(" and ");
+  }
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+};
+
+/** Parse a target agreement typed as a percent ("90") into a rate (0.9), or undefined if invalid. */
+export const parseTargetAgreementPercent = (value: string): number | undefined => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 100) {
+    return undefined;
+  }
+  return parsed / 100;
 };

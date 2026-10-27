@@ -13,8 +13,26 @@ export interface EvaluatorRunModes {
   liveSampleRate: number;
 }
 
+/** How well an llm-judge agreed with human answers in its latest judge calibration experiment. */
+export interface EvaluatorCalibration {
+  datasetName?: string;
+  experimentId: string;
+  experimentName: string;
+  passed: boolean;
+  questionSetName?: string;
+  /** Agreement rate (0–1) of `version`; unset when nothing could be compared. */
+  rate?: number;
+  /** True when the question set's questions changed after the experiment ran. */
+  stale: boolean;
+  targetAgreement?: number;
+  /** The judge prompt's production version when it was compared, else the best version. */
+  version: number;
+}
+
 export interface EvaluatorRecord {
   assertion?: {constraint: string; path: string};
+  /** llm-judge only: the latest judge calibration against human answers. */
+  calibration?: EvaluatorCalibration;
   confidenceAlertBelow: number;
   description?: string;
   dimensions: EvaluatorDimension[];
@@ -198,4 +216,65 @@ export const parseApiErrorTitle = (error: unknown): string | undefined => {
     return record.message;
   }
   return undefined;
+};
+
+export interface CalibrationSummary {
+  /** True when the judge passed its latest calibration and the questions have not changed. */
+  isTrusted: boolean;
+  label: string;
+  status: "neutral" | "success" | "warning";
+}
+
+const percent = (rate?: number): string => {
+  if (rate === undefined || Number.isNaN(rate)) {
+    return "—";
+  }
+  return `${Math.round(rate * 1000) / 10}%`;
+};
+
+/**
+ * One-line calibration status for an llm-judge, such as
+ * "Calibrated: 95% agreement on summary-review-set (v2)".
+ */
+export const summarizeCalibration = (calibration?: EvaluatorCalibration): CalibrationSummary => {
+  if (!calibration) {
+    return {
+      isTrusted: false,
+      label: "Not calibrated — run a judge calibration (step 3) first",
+      status: "neutral",
+    };
+  }
+  const where = calibration.datasetName ? ` on ${calibration.datasetName}` : "";
+  const rate = percent(calibration.rate);
+  if (calibration.stale) {
+    return {
+      isTrusted: false,
+      label: `Calibration stale: the questions changed after ${calibration.experimentName} — re-judge and recalibrate`,
+      status: "warning",
+    };
+  }
+  if (!calibration.passed) {
+    const target = percent(calibration.targetAgreement ?? 0.9);
+    return {
+      isTrusted: false,
+      label: `Below target: ${rate} agreement${where} (v${calibration.version}, needs ${target})`,
+      status: "warning",
+    };
+  }
+  return {
+    isTrusted: true,
+    label: `Calibrated: ${rate} agreement${where} (v${calibration.version})`,
+    status: "success",
+  };
+};
+
+/** Question keys the judge and the question set both answer. */
+export const sharedQuestionKeys = (
+  judge: Pick<EvaluatorRecord, "dimensions">,
+  questionSet: Pick<EvaluatorRecord, "dimensions">
+): string[] => {
+  const judgeKeys = new Set(judge.dimensions.map((dimension) => dimension.key));
+  return questionSet.dimensions
+    .map((dimension) => dimension.key)
+    .filter((key) => judgeKeys.has(key));
 };

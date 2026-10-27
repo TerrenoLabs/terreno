@@ -1,5 +1,7 @@
 import {Badge, Box, Button, Card, Heading, SelectField, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
+import {EvalStepBanner} from "../shell/EvalStepBanner";
+import {HUMAN_JUDGING_ACTIVITY} from "../shell/evalPipeline";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -8,6 +10,7 @@ import {
 import {
   agreementStatus,
   agreementVerdict,
+  answerSubjectKey,
   formatAnswer,
   formatPercent,
   previewText,
@@ -116,8 +119,9 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
     });
   }, [batch.judges, onSelectJudge, selectedJudge?.evaluatorId]);
 
-  const itemByTrace = useMemo(() => {
-    return new Map(batch.items.map((item) => [item.traceId, item]));
+  // Human and judge answers pair by dataset item when the batch came from a dataset, else by trace.
+  const itemBySubject = useMemo(() => {
+    return new Map(batch.items.map((item) => [answerSubjectKey(item), item]));
   }, [batch.items]);
 
   const disagreementRows: ObservabilityTableRow[] = useMemo(() => {
@@ -125,7 +129,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
       return [];
     }
     return selectedJudge.agreement.disagreements.map((row, index) => {
-      const item = itemByTrace.get(row.traceId);
+      const item = itemBySubject.get(answerSubjectKey(row));
       const dimension = dimensions.find((entry) => entry.key === row.key);
       return {
         cells: [
@@ -136,7 +140,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
             {row.judge === undefined ? "No answer" : formatAnswer(row.judge)}
           </Text>,
         ],
-        key: `${row.traceId}-${row.key}-${index}`,
+        key: `${answerSubjectKey(row)}-${row.key}-${index}`,
         onClick: item
           ? () => {
               onOpenItem(item.reviewItemId);
@@ -144,7 +148,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
           : undefined,
       };
     });
-  }, [dimensions, itemByTrace, onOpenItem, selectedJudge]);
+  }, [dimensions, itemBySubject, onOpenItem, selectedJudge]);
 
   const itemColumns: ObservabilityTableColumn[] = useMemo(() => {
     return [
@@ -161,7 +165,9 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
   // Disagreements come from the backend so item cells flag exactly what the agreement rate counts.
   const disagreementKeys = useMemo(() => {
     return new Set(
-      (selectedJudge?.agreement.disagreements ?? []).map((row) => `${row.traceId}:${row.key}`)
+      (selectedJudge?.agreement.disagreements ?? []).map(
+        (row) => `${answerSubjectKey(row)}:${row.key}`
+      )
     );
   }, [selectedJudge]);
 
@@ -185,7 +191,9 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
           ...dimensions.map((dimension) => {
             const human = item.scores?.[dimension.key];
             const judge = judgeScores?.[dimension.key];
-            const isDisagreement = disagreementKeys.has(`${item.traceId}:${dimension.key}`);
+            const isDisagreement = disagreementKeys.has(
+              `${answerSubjectKey(item)}:${dimension.key}`
+            );
             return (
               <Box gap={1} key={dimension.key}>
                 <Text>{formatAnswer(human)}</Text>
@@ -216,6 +224,13 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
           <Box direction="row" gap={2} wrap>
             <Badge status="info" value={batch.evaluatorName} />
             {batch.promptName ? <Badge status="neutral" value={batch.promptName} /> : undefined}
+            {batch.datasetId ? (
+              <Badge
+                status="neutral"
+                testID="ai-review-batch-dataset"
+                value={`Dataset: ${batch.datasetName ?? batch.datasetId}`}
+              />
+            ) : undefined}
             <Badge
               status={counts.pending === 0 ? "success" : "warning"}
               testID="ai-review-batch-progress"
@@ -236,6 +251,26 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
           text={counts.pending > 0 ? `Answer ${counts.pending} remaining` : "All answered"}
         />
       </Box>
+      {batch.datasetId ? (
+        <EvalStepBanner
+          activity={HUMAN_JUDGING_ACTIVITY}
+          detail={`answer each item of ${batch.datasetName ?? "this dataset"} once. Answers are saved on the dataset, so every judge experiment reuses them while the questions stay the same.`}
+          step={2}
+        />
+      ) : undefined}
+      {batch.questionsStale ? (
+        <Box
+          border="warning"
+          color="warningLight"
+          padding={3}
+          rounding="md"
+          testID="ai-review-batch-questions-stale"
+        >
+          <Text>
+            {`The questions in ${batch.evaluatorName} changed after this batch was created. Answers given here before the change are stale and no longer count. Send the dataset to human review again to re-judge those items.`}
+          </Text>
+        </Box>
+      ) : undefined}
       <Box color="neutralLight" height={6} rounding="md" testID="ai-review-batch-progress-bar">
         <Box
           color="success"

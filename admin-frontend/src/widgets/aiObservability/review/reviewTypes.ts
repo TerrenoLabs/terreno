@@ -5,13 +5,16 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 export interface ReviewListItem {
   assigneeId?: string;
   batchId?: string;
+  /** Set when reviewers judge a dataset item. */
+  datasetItemId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
   promptName?: string;
   reason: string;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
   traceName: string;
 }
 
@@ -47,7 +50,10 @@ export interface ReviewDetail {
   rawOutput?: unknown;
   scores?: Record<string, boolean | number | string>;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
+  /** Set when reviewers judge a dataset item; answers are saved on that item. */
+  datasetItemId?: string;
 }
 
 export const REVIEW_STATUSES: ReviewStatus[] = ["pending", "in_progress", "done", "skipped"];

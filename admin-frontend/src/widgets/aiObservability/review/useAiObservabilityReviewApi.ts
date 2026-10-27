@@ -14,7 +14,13 @@ const BATCH_KEY = "aiObservabilityReviewBatch";
 const CREATE_BATCH_KEY = "createAiObservabilityReviewBatch";
 const RUN_JUDGE_KEY = "runAiObservabilityReviewBatchJudge";
 
+/**
+ * Create a review batch from the newest traces (`limit`, `promptName`) or from a dataset's
+ * unanswered items (`datasetId`). The server rejects `datasetId` together with `limit`.
+ */
 export interface CreateReviewBatchBody {
+  datasetId?: string;
+  description?: string;
   evaluatorId: string;
   limit?: number;
   name?: string;

@@ -58,7 +58,11 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
         </Heading>
         <Box direction="row" gap={2}>
           <Badge status="info" value={reviewStatusLabel(detail.status)} />
-          <Text color="secondaryDark">{`Trace ${detail.traceId}`}</Text>
+          <Text color="secondaryDark">
+            {detail.traceId
+              ? `Trace ${detail.traceId}`
+              : `Dataset item ${detail.datasetItemId ?? "—"}`}
+          </Text>
         </Box>
       </Box>
       <Box direction="row" gap={2}>

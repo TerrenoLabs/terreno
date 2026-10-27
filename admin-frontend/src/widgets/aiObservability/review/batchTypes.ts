@@ -12,10 +12,12 @@ export interface JudgeQuestionAgreement {
 }
 
 export interface JudgeDisagreement {
+  /** Set when the answers pair by dataset item (dataset batches and judge experiments). */
+  datasetItemId?: string;
   human: ScoreValue;
   judge?: ScoreValue;
   key: string;
-  traceId: string;
+  traceId?: string;
 }
 
 export interface JudgeAgreement {
@@ -49,6 +51,9 @@ export interface ReviewBatchListItem {
   bestJudge?: {evaluatorName: string; rate?: number};
   counts: ReviewBatchCounts;
   created: string;
+  /** Dataset the batch judges, when it was built from a dataset. */
+  datasetId?: string;
+  datasetName?: string;
   description?: string;
   evaluatorId: string;
   evaluatorName: string;
@@ -56,16 +61,22 @@ export interface ReviewBatchListItem {
   judgeCount: number;
   name: string;
   promptName?: string;
+  /** Question-set fingerprint when the batch was created (dataset batches). */
+  questionsFingerprint?: string;
+  /** True when the question set's questions changed after this dataset batch was created. */
+  questionsStale?: boolean;
 }
 
 export interface ReviewBatchItem {
+  datasetItemId?: string;
   input?: unknown;
   judgeAnswers: Record<string, {error?: string; scores?: Record<string, ScoreValue>}>;
   output?: unknown;
   reviewItemId: string;
   scores?: Record<string, ScoreValue>;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset for a dataset item without a source trace. */
+  traceId?: string;
   traceName: string;
 }
 
@@ -77,6 +88,20 @@ export interface ReviewBatchDetail extends ReviewBatchListItem {
 }
 
 export const DEFAULT_BATCH_SIZE = 10;
+
+/** Key that pairs a human answer row with judge answers: the dataset item, else the trace. */
+export const answerSubjectKey = (row: {datasetItemId?: string; traceId?: string}): string => {
+  return row.datasetItemId ?? row.traceId ?? "";
+};
+
+/** The created batch's id from a create response, with or without a `data` envelope. */
+export const unwrapCreatedBatchId = (raw: unknown): string | undefined => {
+  const data = unwrapData(raw);
+  if (data && typeof data === "object" && typeof (data as {id?: unknown}).id === "string") {
+    return (data as {id: string}).id;
+  }
+  return undefined;
+};
 
 // Agreement at or above this rate is treated as "matches the humans".
 const AGREEMENT_TRUSTED = 0.9;

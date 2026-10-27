@@ -134,6 +134,7 @@ export * from "./SideDrawer";
 export * from "./Signature";
 export * from "./SignatureCaptureField";
 export * from "./SignatureField";
+export * from "./Skeleton";
 export * from "./Slider";
 export * from "./SocialLoginButton";
 export type * from "./SparklineChart";
@@ -192,6 +193,7 @@ export * from "./useStoredState";
 export * from "./useSubmitConsent";
 export * from "./WebAddressAutocomplete";
 export * from "./WhatsNewBanner";
+export * from "./withLoading";
 
 // export * from "./Layout";
 // export * from "./Drawer";

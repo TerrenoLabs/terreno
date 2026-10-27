@@ -9,6 +9,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
 - Feedback: `Spinner`, `Modal`, `Toast`
+- Loading: `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonCard`, `SkeletonList`, `SkeletonGroup`, `withLoading`, `LoadingProps`
 - Notifications: `NotificationBell`, `NotificationInbox`, `NotificationPreferences`
 - AI chat: `GPTChat`, `AskCard` (agent asks in the transcript), `SimpleAskCard` (an ask's simple card for narrow layouts), `BlocksView` (a whole-reply YAML document)
 - Authentication: `SocialLoginButton`, `LoginScreen`, `SignUpScreen`
@@ -279,6 +280,80 @@ and do not expose dismiss or read-state actions.
 |---|---|---|
 | `preferences` | `{inapp, mail, push, sms}` | Current toggles |
 | `onChange` | `(channel, value) => void` | Per-channel updates |
+
+## Loading states and skeletons
+
+Containers share one loading contract, `LoadingProps`:
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `loading` | `boolean` | `false` | Renders `loadingComponent` in place of the children |
+| `loadingComponent` | `ReactNode` | per component, below | The placeholder, usually built from skeletons |
+| `loadingAnimation` | `"pulse" \| "shimmer" \| "none"` | `"pulse"` | Animation for skeletons inside `loadingComponent` that do not set their own |
+| `loadingLabel` | `string` | `"Loading"` | What screen readers announce while loading |
+
+| Component | While `loading`, renders | Default `loadingComponent` |
+| --- | --- | --- |
+| `Box` | `loadingComponent` instead of children | `<SkeletonText />` (three lines) |
+| `Card` (container), `EditableCard` | `loadingComponent` instead of children | `<SkeletonText />` |
+| `Card` (display) | `loadingComponent` instead of image, title, and body | `<SkeletonCard>` with media when `imageUri` is set |
+| `ChartCard` | Title row, then `loadingComponent` instead of the body | 160px `Skeleton` |
+| `Scorecard` | Title row, then `loadingComponent` instead of the value | Value-sized `Skeleton`, plus a sparkline `Skeleton` when `sparklineData` is set |
+| `LineChart`, `BarChart`, `AreaChart`, `DonutChart` | `loadingComponent` instead of the plot | `Spinner` |
+| `Page` | `loadingComponent` instead of children | `Spinner` and `loadingText` |
+| `SplitPage` | `loadingComponent` instead of the list and detail | `Spinner` beside the content |
+
+`Page`, `SplitPage`, and the charts keep their spinner unless you pass `loadingComponent`. The
+spinner is busy and labeled the same way. `SplitPage` takes no `testID`, so its loading region is
+always `split-page-loading`.
+
+While loading, the container sets `accessibilityState.busy` (`aria-busy` on web) and the
+`loadingLabel` as its accessibility label. Skeleton blocks are hidden from screen readers. A
+clickable `Box` ignores presses while loading.
+
+```tsx
+import {Box, SkeletonList} from "@terreno/ui";
+
+<Box loading={isLoading} loadingAnimation="shimmer" loadingComponent={<SkeletonList rows={3} />}>
+  {rows}
+</Box>
+```
+
+### Skeleton primitives
+
+| Component | Props (defaults) | Shape |
+| --- | --- | --- |
+| `Skeleton` | `width` (`"100%"`), `height` (16), `rounding` (`"sm"`, or `"circle"`), `color` (`"neutralExtraLight"`) | One block |
+| `SkeletonText` | `lines` (3), `size` (`"md"`), `lastLineWidth` (`"60%"`) | Lines sized to `Text` at `size` |
+| `SkeletonCircle` | `size` (40) | Avatar or icon |
+| `SkeletonCard` | `showAvatar` (true), `showMedia` (false), `mediaHeight` (160), `lines` (2) | Media, avatar, title, and text |
+| `SkeletonList` | `rows` (3), `showAvatar` (true), `lines` (2) | Repeated list rows |
+
+Every primitive takes `animation` and `testID`. Child test ids are dot-suffixed, such as
+`{testID}.line.0`, `{testID}.row.1.avatar`, and `{testID}.shimmer`. Skeletons are hidden from
+assistive tech, so React Native Testing Library queries need `{includeHiddenElements: true}`.
+
+`SkeletonGroup` sets `animation` for every skeleton inside it and runs them from one timeline, so
+they pulse together. Loading containers wrap `loadingComponent` in one. A skeleton's own
+`animation` overrides the group. Animations stop while the OS reduce-motion setting is on. On
+native, skeletons hold still until that setting has been read, so they never animate first.
+
+### Custom components
+
+`withLoading(Component, {loadingComponent?, loadingAnimation?})` returns a component that takes
+`LoadingProps`. While `loading`, it renders `loadingComponent` in a busy `Box` with test id
+`{testID}-loading`; otherwise it renders `Component`. The wrapper consumes `loading`, so use it
+only for components without a `loading` prop of their own.
+
+```tsx
+const UserRowWithLoading = withLoading(UserRow, {loadingComponent: <SkeletonList rows={1} />});
+
+<UserRowWithLoading loading={isLoading} user={user} />
+```
+
+To give your own container the same contract, extend `LoadingProps` and pass the props to a
+`Box`, or call `resolveLoadingContent({children, loading, loadingAnimation, loadingComponent,
+defaultLoadingComponent})` where the placeholder goes.
 
 ## WhatsNewBanner
 

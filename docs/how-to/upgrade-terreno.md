@@ -2,6 +2,10 @@
 
 Bump every `@terreno/*` package together. Mixing versions is unsupported ([versioning policy](../explanation/versioning-policy.md)).
 
+`@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. Install that before upgrading those packages. Bun 1.4.0–1.4.3 is affected by CVE-2026-111497 (Brotli decoder out-of-bounds write); 1.4.4 patches the decoder. Apps scaffolded earlier should set `FROM oven/bun:1.4.4-slim` and rebuild. A `bun build --compile` binary embeds the builder's Bun and stays on the old decoder until that rebuild.
+
+EAS build profiles in this repository stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
 ## 1. Check current versions
 
 From the app root:

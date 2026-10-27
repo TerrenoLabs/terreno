@@ -20,6 +20,54 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.19.2] - 2026-10-26
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.2.md`](mcp-server/src/docs/upgrades/57.19.2.md).
+
+57.19.0 and 57.19.1 were tagged but never published to npm (the publish gate failed before the release notes had merged). This release contains everything from both.
+
+### Added
+
+- `@terreno/test` gains the test helpers Flourish built and proved in its own suites:
+
+  - `waitUntil` / `waitForCalls` to poll a condition instead of sleeping, and `freezeTime` to
+    freeze `Date.now()`, `new Date()`, and Luxon together.
+  - `authWithToken` for a supertest agent with a pre-minted token (no login round-trip),
+    `expectAPIError` for `APIError` bodies, and `assertStrictResponseProperties` to fail on any
+    response field outside an allowlist.
+  - Opt-in `mock.module` registrars for Cloud Tasks (with `drainTasks`), SendGrid, Twilio, Expo
+    push, GCS, Google auth, and the `@terreno/api` notifiers, plus `createMockLanguageModel` for
+    the AI SDK.
+  - `@terreno/test/expo/*`: `registerExpoTestEnvironment`, `renderWithTerreno`, in-memory auth
+    token storage, and a module-alias mocker for Bun + Expo tests. `example-frontend` now uses it.
+  - `terreno-test-shard` (weighted test sharding) and `terreno-test-hygiene` (AST lint for leaky
+    or flaky Bun test patterns, with a baseline) CLIs.
+- Testing skills for Terreno apps, installable with the other agent skills: `terreno-test-setup`
+  bootstraps backend (Bun + in-memory Mongo), frontend (Bun + React Native Testing Library,
+  Playwright), and mobile (Maestro) test setups; `terreno-backend-tests`,
+  `terreno-frontend-tests`, and `terreno-mobile-tests` cover writing tests for each. New how-to:
+  [Set up tests in a Terreno app](docs/how-to/set-up-app-tests.md).
+- `@terreno/ui` loading skeletons: `Box` and the container components (`Card`, `EditableCard`, `ChartCard`, `Scorecard`, `Page`, `SplitPage`, and the charts) take `loading`, `loadingComponent`, `loadingAnimation`, and `loadingLabel` props. New `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonCard`, `SkeletonList`, and `SkeletonGroup` components support `pulse`, `shimmer`, or no animation and respect reduce-motion. `withLoading(Component, options)` adds the props to custom components. See [Show loading skeletons](docs/how-to/show-loading-skeletons.md). (#1571)
+- Published packages now include the repository `CHANGELOG.md` in their tarballs. (#1632)
+
+### Changed
+
+- `@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. 1.4.4 patches the Brotli decoder (CVE-2026-111497). CI, `example-backend`, and `mcp-server` images pin that release. `oven/bun:1` and `oven/bun:1-slim` can still resolve to an affected release, and `bun build --compile` embeds the builder's Bun binary. New apps from `create-terreno-app` get `oven/bun:1.4.4-slim`. Existing apps should set that tag in their Dockerfile and rebuild. See [Upgrade Terreno](docs/how-to/upgrade-terreno.md).
+
+  EAS build profiles stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
+### Fixed
+
+- `create-terreno-app` did nothing when run through its package bin (`bunx create-terreno-app`,
+  `npx create-terreno-app`): the entry check compared the module URL with the unresolved
+  `node_modules/.bin` symlink. It now resolves the path first.
+- `@terreno/test` now installs and imports outside the monorepo. `supertest`,
+  `@types/supertest`, and the `mongodb-memory-server` packages moved from
+  `devDependencies` to `dependencies` (57.17.0 failed with `Cannot find package
+  'supertest'` on import), and the published tarball no longer ships test files.
+- `registerSimpleMongoPreload` now passes `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` (default 60s) to
+  `mongodb-memory-server`, so a cold `mongod` start no longer fails at the library's 10s default.
+
 ## [57.18.0] - 2026-10-25
 
 ### Added

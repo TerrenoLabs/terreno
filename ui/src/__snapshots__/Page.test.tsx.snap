@@ -969,19 +969,42 @@ exports[`Page renders loading state 1`] = `
               "children": [
                 {
                   "$$typeof": Symbol(react.test.json),
-                  "children": null,
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": null,
+                      "props": {
+                        "onPointerEnter": [Function: AsyncFunction],
+                        "onPointerLeave": [Function: AsyncFunction],
+                        "style": {
+                          "alignItems": "center",
+                          "display": "flex",
+                          "flex": undefined,
+                          "flexDirection": "column",
+                          "flexGrow": 1,
+                          "flexShrink": 1,
+                          "justifyContent": "center",
+                          "marginTop": 48,
+                        },
+                        "testID": undefined,
+                      },
+                      "type": "View",
+                    },
+                  ],
                   "props": {
+                    "accessibilityLabel": "Loading",
+                    "accessibilityState": {
+                      "busy": true,
+                    },
+                    "aria-busy": true,
                     "onPointerEnter": [Function: AsyncFunction],
                     "onPointerLeave": [Function: AsyncFunction],
                     "style": {
-                      "alignItems": "center",
                       "display": "flex",
-                      "flex": undefined,
                       "flexDirection": "column",
                       "flexGrow": 1,
                       "flexShrink": 1,
-                      "justifyContent": "center",
-                      "marginTop": 48,
+                      "width": "100%",
                     },
                     "testID": undefined,
                   },

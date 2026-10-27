@@ -30,14 +30,16 @@ jobs:
       # Every publish job checks out the dispatched ref, so dispatch this workflow
       # from the tag itself. Otherwise master's head ships under the tag's version.
       - name: Require the dispatched ref to be the tag
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          tag_sha="$(git rev-parse --verify --quiet "refs/tags/${{ inputs.version }}^{commit}" || true)"
+          tag_sha="$(git rev-parse --verify --quiet "refs/tags/${VERSION}^{commit}" || true)"
           if [ -z "$tag_sha" ]; then
-            echo "::error::Tag ${{ inputs.version }} does not exist"
+            echo "::error::Tag ${VERSION} does not exist"
             exit 1
           fi
           if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-            echo "::error::Dispatched ref ${GITHUB_REF} is not tag ${{ inputs.version }}; use Run workflow from the tag"
+            echo "::error::Dispatched ref ${GITHUB_REF} is not tag ${VERSION}; use Run workflow from the tag"
             exit 1
           fi
 
@@ -48,12 +50,14 @@ jobs:
       # so a stable tag must be on master with its assembled release notes
       # (docs/how-to/release-automation.md).
       - name: Require merged release notes
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
           on_master=false
           if git merge-base --is-ancestor HEAD origin/master; then
             on_master=true
           fi
-          bun run scripts/ci/release/cli.ts check-tag "${{ inputs.version }}" "$on_master"
+          bun run scripts/ci/release/cli.ts check-tag "$VERSION" "$on_master"
 
   check-changes:
     needs: breaking-change-documentation

@@ -26,6 +26,7 @@ import {IconButton} from "./IconButton";
 import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
+import {SplitPageLoading} from "./SplitPageLoading";
 import {useTheme} from "./Theme";
 
 // flex: 1 (basis 0, shrink 1) sizes the content container to the pane. A height: "100%"
@@ -85,6 +86,9 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -671,13 +675,20 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       padding={isLabeledPagerBody ? 0 : 2}
       width="100%"
     >
-      {loading === true && (
-        <Spinner
-          color={theme.text.primary as unknown as ComponentProps<typeof Spinner>["color"]}
-          size="md"
-        />
-      )}
-      {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
+      <SplitPageLoading
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={loadingComponent}
+        loadingLabel={loadingLabel}
+        spinner={
+          <Spinner
+            color={theme.text.primary as unknown as ComponentProps<typeof Spinner>["color"]}
+            size="md"
+          />
+        }
+      >
+        {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
+      </SplitPageLoading>
     </Box>
   );
 };

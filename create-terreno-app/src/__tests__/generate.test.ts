@@ -172,7 +172,7 @@ describe("generateAllFiles", () => {
       files.find((file) => file.path === "backend/package.json")?.content ?? "{}"
     ) as {scripts: Record<string, string>};
 
-    assert.include(dockerfile, "FROM oven/bun:1-slim");
+    assert.include(dockerfile, "FROM oven/bun:1.4.4-slim");
     assert.include(dockerfile, "ENV PORT=8080");
     assert.include(dockerfile, "EXPOSE 8080");
     assert.include(dockerfile, `CMD curl -fsS "http://127.0.0.1:\${PORT}/health"`);

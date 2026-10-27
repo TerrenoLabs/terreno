@@ -61,6 +61,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "src/dist/**",
     "dist/**"
   ],
@@ -104,5 +105,5 @@
     "web": "expo start --web --port 8083"
   },
   "types": "./src/dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "57.19.2"
 }

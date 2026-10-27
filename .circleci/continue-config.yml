@@ -2226,6 +2226,18 @@ jobs:
               exit 2
             fi
             bun run check:upgrade-docs "$CIRCLE_TAG"
+      # Packages ship the tag's CHANGELOG.md, so refuse a stable tag that is not
+      # on master with its assembled release notes (docs/how-to/release-automation.md).
+      - run:
+          name: Require merged release notes
+          command: |
+            set -euo pipefail
+            git fetch origin master
+            on_master=false
+            if git merge-base --is-ancestor HEAD origin/master; then
+              on_master=true
+            fi
+            bun run scripts/ci/release/cli.ts check-tag "$CIRCLE_TAG" "$on_master"
       - run:
           name: Compile release packages once
           command: |

@@ -14,18 +14,46 @@ on:
 
 jobs:
   breaking-change-documentation:
-    name: Breaking changes have upgrade notes
+    name: Release is tagged on master with upgrade notes
     runs-on: ubuntu-latest
     steps:
+      # Full history so the tag and origin/master can be compared.
       - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
 
+      # Every publish job checks out the dispatched ref, so dispatch this workflow
+      # from the tag itself. Otherwise master's head ships under the tag's version.
+      - name: Require the dispatched ref to be the tag
+        run: |
+          tag_sha="$(git rev-parse --verify --quiet "refs/tags/${{ inputs.version }}^{commit}" || true)"
+          if [ -z "$tag_sha" ]; then
+            echo "::error::Tag ${{ inputs.version }} does not exist"
+            exit 1
+          fi
+          if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::Dispatched ref ${GITHUB_REF} is not tag ${{ inputs.version }}; use Run workflow from the tag"
+            exit 1
+          fi
+
       - name: Check release upgrade documentation
         run: bun run check:upgrade-docs "${{ inputs.version }}"
+
+      # Same gate as CircleCI publish-release: packages ship the tag's CHANGELOG.md,
+      # so a stable tag must be on master with its assembled release notes
+      # (docs/how-to/release-automation.md).
+      - name: Require merged release notes
+        run: |
+          on_master=false
+          if git merge-base --is-ancestor HEAD origin/master; then
+            on_master=true
+          fi
+          bun run scripts/ci/release/cli.ts check-tag "${{ inputs.version }}" "$on_master"
 
   check-changes:
     needs: breaking-change-documentation

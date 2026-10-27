@@ -54,6 +54,10 @@ stable tag fails if any of these is true:
 
 Prerelease tags (`-beta.N`) skip the gate; they are often cut from a feature branch.
 
+The manual fallback `.github/workflows/publish-on-tag.yml` runs the same `check-tag` gate. It also
+fails unless it was dispatched from the tag itself, because its publish jobs build the dispatched
+ref, not the tag by name. Use **Run workflow** with the tag selected as the ref.
+
 `scripts/ci/prepare-package-publish.mjs` copies the root `CHANGELOG.md` into each package before
 `npm publish`. Packages that declare a `files` whitelist list `CHANGELOG.md` in it.
 

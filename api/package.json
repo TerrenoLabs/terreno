@@ -38,6 +38,7 @@
     "passport-local": "^1.0.0",
     "path-to-regexp": "^8.4.2",
     "qs": "catalog:",
+    "reflect-metadata": "^0.2.2",
     "router": "^2.2.0",
     "serve-static": "^2.2.1",
     "socket.io": "catalog:",

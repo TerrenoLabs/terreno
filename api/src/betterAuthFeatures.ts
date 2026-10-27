@@ -5,6 +5,9 @@
  */
 
 import {createPrivateKey, createSign, type KeyObject} from "node:crypto";
+// Before the passkey plugin: its @peculiar/x509 dependency loads tsyringe, which needs the
+// Reflect polyfill, and `bun build --compile` can run tsyringe ahead of x509's own import.
+import "reflect-metadata";
 import {expo} from "@better-auth/expo";
 import {passkey} from "@better-auth/passkey";
 import type {BetterAuthPlugin} from "better-auth";

@@ -92,6 +92,7 @@ Keep dependencies current on one rolling PR, with every bump proven by a test th
 | Package | From → to | Exercise | Fingerprint |
 | --- | --- | --- | --- |
 | axios | 1.13.1 → 1.13.2 | `bun test api/src/http.test.ts` | example-frontend + demo unchanged |
+| chai | 5.2.0 → 5.2.1 | `bun test api/src/foo.test.ts` | example-frontend + demo unchanged |
 
 ### Failed
 | Package | Attempted | Date | Cause |
@@ -110,7 +111,7 @@ Keep dependencies current on one rolling PR, with every bump proven by a test th
 
 | Status | Scope | Evidence / action |
 | --- | --- | --- |
-| ✅ Tested | axios 1.13.2 | `bun test api/src/http.test.ts` → 14 pass; fingerprint unchanged |
+| ✅ Tested | chai 5.2.1 | `bun test api/src/foo.test.ts` → 9 pass; fingerprint unchanged |
 | ✅ Tested | Local gate | `bun run prepush` → green |
 ```
 

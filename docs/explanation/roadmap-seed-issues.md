@@ -1342,6 +1342,42 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`In review`
+
+Today an implementation plan never says which end-to-end tests a feature needs, so bots decide alone whether a slice deserves a Playwright spec, and the manual checks a person should repeat before a release live in nobody's file. Most packages are tested only in-process.
+
+Every IP will carry `## E2E tests` and `## Regression cases` sections (either may be `None — <reason>`, neither may be missing). Grow plans the rows, Pick writes each spec with its feature, Roast runs them, Brew merges manual cases into one living suite per area under `docs/regression/`, and Taste keeps both current after fixes. Regression stays minimal: only what a developer or QA must check by hand, such as push notifications, real email delivery, or how the app feels. Terreno itself gains a real-process smoke test and an e2e guide page for every package, and brewery mirrors the contract.
+
+Out of scope: running manual cases automatically, and coverage targets.
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+- **Pull requests:** [#1628](https://github.com/TerrenoLabs/terreno/pull/1628), brewery [#15](https://github.com/joshgachnang/brewery/pull/15)
+
+---
+
+## lifecycle-user-guide
+
+**Title:** `An end-user guide that grows with every feature`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`lifecycle-user-guide`, Status=`Shaping`
+
+Chat agents cannot answer "how do I…" questions about an app today, because no text describes its features in the words users see, and a guide written once drifts from the app the first time a label changes.
+
+Every IP will gain a `## User guide` section, and the task that ships a feature writes its page: one plain-text file per feature under `docs/user-guide/<area>/<feature>.md`, with `audience`, `platforms`, and the `questions` users would ask in its frontmatter, then what it does, how to use it, and what it is meant for. Roast checks the steps against the shipped screens, and Brew gates on the page. A repository with no end users opts out with `User guide: none`. A `backfill-user-guide` skill drafts pages for features that already shipped, for a human to approve.
+
+Open for discussion: how this relates to the support agent's `support/kb/` docs (one corpus or two), whether pages ship in the app or are served by the backend, and who reviews the wording.
+
+- **Implementation plan:** [lifecycle-user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/lifecycle-user-guide.md)
+- **Pull request:** [#1633](https://github.com/TerrenoLabs/terreno/pull/1633)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

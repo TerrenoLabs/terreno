@@ -1,6 +1,6 @@
 /**
  * Isolated test for createBetterAuthClient on native. It mocks the platform as native, which
- * would leak into the web suites in betterAuthClient.test.ts if it shared their process.
+ * would leak into the web suites in betterAuthClient.isolated.ts if it shared their process.
  */
 import {afterEach, describe, expect, it, mock} from "bun:test";
 

@@ -14,6 +14,7 @@ import {
   isCoveragePathIgnored,
   isCoverageSourceFile,
   isReExportOnlySource,
+  isTypeOnlySource,
   PACKAGE_CI_LCOV_SKIP,
   packageNeedsCompiledDistDeps,
   parseNewFileCoverageArgs,
@@ -378,5 +379,34 @@ describe("isReExportOnlySource", () => {
     assert.isFalse(isReExportOnlySource('export {a} from "./a";\nexport const b = 1;\n'));
     assert.isFalse(isReExportOnlySource('import {a} from "./a";\nexport {a};\n'));
     assert.isFalse(isReExportOnlySource("// only a comment\n"));
+  });
+});
+
+describe("isTypeOnlySource", () => {
+  it("skips modules TypeScript erases", () => {
+    const source = [
+      "/** Session shapes. */",
+      "export interface Session {",
+      "  id: string;",
+      "}",
+      'export type Mode = "cookie" | "bearer";',
+      "",
+    ].join("\n");
+    assert.isTrue(isTypeOnlySource(source));
+    assert.isTrue(
+      isTypeOnlySource('import type {Id} from "./id";\nexport interface Row { id: Id }\n')
+    );
+  });
+
+  it("keeps modules that emit runtime code", () => {
+    assert.isFalse(
+      isTypeOnlySource("export interface Row { id: string }\nexport const empty = {};\n")
+    );
+    assert.isFalse(isTypeOnlySource('export function read(): string { return ""; }\n'));
+    assert.isFalse(isTypeOnlySource("export enum Kind { A }\n"));
+    assert.isFalse(isTypeOnlySource("// only a comment\n"));
+    assert.isFalse(
+      isTypeOnlySource('import {read} from "./read";\nexport interface Row { id: string }\n')
+    );
   });
 });

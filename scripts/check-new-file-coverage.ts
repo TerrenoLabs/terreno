@@ -215,6 +215,37 @@ export const isReExportOnlySource = (source: string): boolean => {
   );
 };
 
+const stripComments = (source: string): string => {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .trim();
+};
+
+/**
+ * Modules that export only `interface` and `type` aliases. TypeScript erases them, so Bun
+ * writes no LCOV record and the new-file gate would treat the file as 0% covered.
+ */
+export const isTypeOnlySource = (source: string): boolean => {
+  const code = stripComments(source);
+  if (code.length === 0) {
+    return false;
+  }
+  if (/\b(?:function|class|enum|const|let|var|namespace)\b/.test(code)) {
+    return false;
+  }
+  if (/^import(?!\s+type\b)/m.test(code)) {
+    return false;
+  }
+  if (/export\s+default\b/.test(code)) {
+    return false;
+  }
+  if (/export\s+(?!type\b|interface\b)/.test(code)) {
+    return false;
+  }
+  return /export\s+(?:type|interface)\b/.test(code);
+};
+
 const findFileCoverage = (
   coverage: Map<string, FileCoverage>,
   packageRoot: string,
@@ -311,7 +342,10 @@ const getAddedSourceFiles = (repoRoot: string, base: string): string[] => {
     .split("\n")
     .map((path) => path.trim())
     .filter((path) => path.length > 0 && isCoverageSourceFile(path))
-    .filter((path) => !isReExportOnlySource(readFileSync(join(repoRoot, path), "utf8")));
+    .filter((path) => {
+      const source = readFileSync(join(repoRoot, path), "utf8");
+      return !isReExportOnlySource(source) && !isTypeOnlySource(source);
+    });
 };
 
 export const groupFilesByWorkspace = ({

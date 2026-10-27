@@ -8,6 +8,7 @@ import mongoose from "mongoose";
 import type supertest from "supertest";
 
 import {AIRequest} from "../models/aiRequest";
+import {FileAttachment} from "../models/fileAttachment";
 import {GptHistory} from "../models/gptHistory";
 import {Project} from "../models/project";
 import {MemoryTraceSink} from "../observability/local/traceStore";
@@ -196,6 +197,7 @@ describe("AI Routes", () => {
     streamTextOverride = undefined;
     resetObservabilityApp();
     await AIRequest.deleteMany({});
+    await FileAttachment.deleteMany({});
     await GptHistory.deleteMany({});
   });
 
@@ -1642,6 +1644,14 @@ describe("AI Routes", () => {
       textOnlyStream((streamOptions) => {
         modelMessages = streamOptions.messages;
       });
+      await FileAttachment.create({
+        filename: "old.png",
+        gcsKey: "uploads/test/old.png",
+        mimeType: "image/png",
+        size: 5,
+        url: "https://storage.googleapis.com/bucket/uploads/test/old.png",
+        userId: await getNotAdminId(),
+      });
       const history = await GptHistory.create({
         prompts: [
           {
@@ -1669,6 +1679,99 @@ describe("AI Routes", () => {
         .parse(sseCollect);
       expect(storage.getSignedUrl).toHaveBeenCalledWith("uploads/test/old.png");
       expect(JSON.stringify(modelMessages)).toContain("signed.example.com/uploads/test/old.png");
+    });
+
+    it("does not sign a stored attachment key that names another user's upload", async () => {
+      const storage = createFakeStorage();
+      let modelMessages: unknown;
+      textOnlyStream((streamOptions) => {
+        modelMessages = streamOptions.messages;
+      });
+      const otherUserId = new mongoose.Types.ObjectId();
+      const foreignKey = `uploads/${otherUserId.toString()}/1700000000002-dummy-b.png`;
+      await FileAttachment.create({
+        filename: "dummy-b.png",
+        gcsKey: foreignKey,
+        mimeType: "image/png",
+        size: 5,
+        url: `https://storage.googleapis.com/bucket/${foreignKey}`,
+        userId: otherUserId,
+      });
+      const history = await GptHistory.create({
+        prompts: [
+          {
+            content: [
+              {text: "pic", type: "text"},
+              {
+                gcsKey: foreignKey,
+                mimeType: "image/png",
+                type: "image",
+                url: "https://placeholder.invalid/p.png",
+              },
+            ],
+            text: "pic",
+            type: "user",
+          },
+        ],
+        userId: await getNotAdminId(),
+      });
+      const agent = await authAsUser(buildApp({fileStorageService: storage.service}), "notAdmin");
+      const res = await agent
+        .post("/gpt/prompt")
+        .send({historyId: history._id.toString(), prompt: "Describe"})
+        .buffer(true)
+        .parse(sseCollect);
+      expect(res.status).toBe(200);
+      expect(storage.getSignedUrl).not.toHaveBeenCalledWith(foreignKey);
+      expect(JSON.stringify(modelMessages)).not.toContain("signed.example.com");
+    });
+
+    it("drops attachment keys a client writes into history content parts", async () => {
+      const ownerId = await getNotAdminId();
+      const ownKey = `uploads/${ownerId.toString()}/1700000000003-own.png`;
+      const plantedKey = "uploads/other/1700000000001-dummy-a.txt";
+      const plantedPart = {
+        filename: "a.txt",
+        gcsKey: plantedKey,
+        mimeType: "text/plain",
+        type: "file",
+        url: "https://placeholder.invalid/a",
+      };
+      const agent = await authAsUser(app, "notAdmin");
+
+      const created = await agent.post("/gpt/histories").send({
+        prompts: [{content: [{text: "f", type: "text"}, plantedPart], text: "f", type: "user"}],
+      });
+      expect(created.status).toBe(201);
+      const historyId = created.body.data._id;
+      expect(JSON.stringify((await GptHistory.findById(historyId))?.prompts)).not.toContain(
+        plantedKey
+      );
+
+      // A key the chat turn stored survives a client that sends the prompts back.
+      await GptHistory.updateOne({_id: historyId}, {$set: {"prompts.0.content.1.gcsKey": ownKey}});
+      const stored = await agent.get(`/gpt/histories/${historyId}`);
+      const roundTripped = await agent
+        .patch(`/gpt/histories/${historyId}`)
+        .send({prompts: stored.body.data.prompts});
+      expect(roundTripped.status).toBe(200);
+      expect((await GptHistory.findById(historyId))?.prompts[0].content?.[1].gcsKey).toBe(ownKey);
+
+      const patched = await agent.patch(`/gpt/histories/${historyId}`).send({
+        prompts: [{content: [{text: "f", type: "text"}, plantedPart], text: "f", type: "user"}],
+      });
+      expect(patched.status).toBe(200);
+      const dotted = await agent
+        .patch(`/gpt/histories/${historyId}`)
+        .send({"prompts.0.content.1.gcsKey": plantedKey});
+      expect(dotted.status).toBe(200);
+      const prompt = await agent
+        .post(`/gpt/histories/${historyId}/prompts`)
+        .send({prompts: {content: [plantedPart], text: "g", type: "user"}});
+      expect(prompt.status).toBe(200);
+
+      const history = await GptHistory.findById(historyId);
+      expect(JSON.stringify(history?.prompts)).not.toContain(plantedKey);
     });
 
     it("emits a started event and saves the completed reply with its streamId", async () => {

@@ -315,6 +315,24 @@ describe("Phase C sync routes", () => {
       expect(stamped?.seq).toBe(1);
     });
 
+    it("serves soft-deleted legacy documents as data-less tombstones", async () => {
+      await PhaseCTodoModel.collection.insertMany([
+        {deleted: true, ownerId: notAdminId, title: "DUMMY-deleted-legacy"},
+        {deleted: false, ownerId: notAdminId, title: "DUMMY-live-legacy"},
+      ] as unknown as PhaseCTodo[]);
+
+      const page = await agent
+        .get(`/sync/snapshot?stream=${enc(ownerStream())}&limit=10`)
+        .expect(200);
+      const entities = page.body.entities as SnapshotEntity[];
+      expect(entities).toHaveLength(2);
+      const tombstone = entities.find((e) => e.deleted);
+      expect(tombstone).toMatchObject({data: null, deleted: true, seq: 0});
+      const live = entities.find((e) => !e.deleted);
+      expect(live?.data?.title).toBe("DUMMY-live-legacy");
+      expect(JSON.stringify(page.body)).not.toContain("DUMMY-deleted-legacy");
+    });
+
     it("Task 9.14: a string-_id model with more legacy docs than the limit bootstraps completely", async () => {
       // Non-hex, client-minted ids: casting the legacy cursor to ObjectId would throw
       // (500), and a hex-shaped string id would compare across BSON types and match

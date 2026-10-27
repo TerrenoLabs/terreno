@@ -2,7 +2,7 @@ import {Box, Button, Text} from "@terreno/ui";
 import React from "react";
 import {Platform} from "react-native";
 import {ReviewScoreField} from "./ReviewScoreField";
-import {dimensionLabel, type EvaluatorDimension, firstUnanswered} from "./reviewTypes";
+import {dimensionLabel, type EvaluatorDimension, firstUnansweredBoolean} from "./reviewTypes";
 
 export interface ReviewQuestionListProps {
   /** Question the keyboard answers; defaults to the first unanswered one. */
@@ -87,7 +87,7 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
   scores,
 }) => {
   const answered = dimensions.filter((dimension) => scores[dimension.key] !== undefined).length;
-  const nextKey = activeKey ?? firstUnanswered(dimensions, scores);
+  const nextKey = activeKey ?? firstUnansweredBoolean(dimensions, scores);
   const hasUnansweredBoolean = dimensions.some(
     (dimension) => dimension.dataType === "boolean" && scores[dimension.key] === undefined
   );

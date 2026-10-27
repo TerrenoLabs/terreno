@@ -32,6 +32,7 @@ src/
   betterAuthTypes.ts     # Better Auth standalone types
   emptyApi.ts            # Base RTK Query API with retry and token refresh
   socket.ts              # useSocketConnection hook
+  tokenSource.ts         # setTokenSource / getTokenSource registry
   constants.ts           # Base URL resolution, debug flags
   mongooseSlice.ts       # List response utilities
   tagGenerator.ts        # Cache invalidation tag generation
@@ -108,46 +109,42 @@ const userId = selectCurrentUserId(state);  // Selector version
 
 ## generateBetterAuthSlice
 
-Creates a complete Better Auth Redux integration for session state management.
+Creates a Better Auth Redux integration for session state.
 
 ### Usage
 
 ```typescript
 import {createBetterAuthClient, generateBetterAuthSlice} from "@terreno/rtk";
 
-// Create Better Auth client
+// `scheme` is the app's deep-link scheme (required)
 const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
-  basePath: "/api/auth",
+  baseURL: process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000",
+  scheme: "myapp",
 });
 
-// Generate Redux slice
-const {
-  betterAuthReducer,
-  betterAuthSlice,
-  actions: {setSession, setUser, clearSession, setLoading, setError},
-  selectors: {selectIsAuthenticated, selectUserId, selectUser, selectIsLoading, selectError},
-  middleware,
-} = generateBetterAuthSlice(authClient);
+const betterAuth = generateBetterAuthSlice({authClient});
 
-// Add to Redux store
 const store = configureStore({
   reducer: {
-    betterAuth: betterAuthReducer,
+    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
   },
-  middleware: (getDefault) => getDefault().concat(...middleware),
+  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
 });
+
+// Copy the session into Redux after sign-in, sign-out, and at startup
+void betterAuth.syncSession(store.dispatch);
 ```
 
 ### What It Returns
 
 | Export | Type | Description |
 |--------|------|-------------|
-| `betterAuthReducer` | Reducer | Better Auth state reducer |
-| `betterAuthSlice` | Slice | Full Redux slice |
-| `actions` | Object | `setSession`, `setUser`, `clearSession`, `setLoading`, `setError` |
-| `selectors` | Object | `selectIsAuthenticated`, `selectUserId`, `selectUser`, `selectIsLoading`, `selectError` |
+| `reducer` | Reducer | Better Auth state reducer |
+| `slice` | Slice | Full Redux slice |
+| `actions` | Object | `setSession`, `clearSession`, `setLoading`, `setError`, `logout` |
 | `middleware` | Middleware[] | Listener middleware for logout side effects |
+| `syncSession` | `(dispatch) => Promise<void>` | Reads the session from the client into Redux |
+| `authClient` | Client | The client passed in |
 
 ### Better Auth State
 
@@ -158,40 +155,76 @@ const store = configureStore({
   user: BetterAuthUser | null;
   isLoading: boolean;
   error: string | null;
+  lastSyncTimestamp: number | null;
 }
 ```
 
 ### createBetterAuthClient
 
-Creates a Better Auth client instance for React Native/Expo:
+Creates a Better Auth client for React Native/Expo:
 
 ```typescript
 const authClient = createBetterAuthClient({
   baseURL: "https://api.example.com",  // Required
-  basePath: "/api/auth",               // Optional, default: "/api/auth"
+  scheme: "myapp",                     // Required: deep-link scheme
+  // storagePrefix: "terreno",         // Optional, default: "terreno"
+  // webAuth: "bearer",                // Optional: "cookie" (default) | "bearer"
+  // bearerStorage: window.sessionStorage, // Optional, bearer mode; default localStorage
 });
 
-// Use with React components
 await authClient.signIn.email({email, password});
 await authClient.signIn.social({provider: "google"});
 await authClient.signUp.email({email, password, name});
 await authClient.signOut();
 ```
 
-The client automatically handles:
-- Platform-specific storage (expo-secure-store on native, AsyncStorage on web)
-- Session persistence and retrieval
-- OAuth redirects with deep links
+Where the session lives:
+- **Native:** the Expo plugin keeps the session cookie in `expo-secure-store`.
+- **Web, `webAuth: "cookie"`:** the browser keeps Better Auth's HttpOnly session cookie. Use it
+  when the frontend and API share a site.
+- **Web, `webAuth: "bearer"`:** the client stores the `set-auth-token` header in localStorage
+  (or `bearerStorage`), sends `Authorization: Bearer`, and sends no cookies. Use it when the
+  frontend and API are on different sites. Read the token with `getBetterAuthBearerToken()`.
 
 ### Selectors
 
 ```typescript
-import {selectIsAuthenticated, selectUserId, selectUser} from "@terreno/rtk";
+import {
+  selectBetterAuthIsAuthenticated,
+  selectBetterAuthUser,
+  selectBetterAuthUserId,
+} from "@terreno/rtk";
 
-const isAuthenticated = selectIsAuthenticated(state);
-const userId = selectUserId(state);
-const user = selectUser(state);
+const isAuthenticated = selectBetterAuthIsAuthenticated(state);
+const userId = selectBetterAuthUserId(state);
+const user = selectBetterAuthUser(state);
 ```
+
+## Token source
+
+Every rtk consumer reads its token from one registered token source, typed as syncdb's
+`AuthProvider` (`getToken`, `getUserId`, `onAuthChange`, optional `refresh`). JWT apps register
+nothing: the default `jwtTokenSource` reads the JWT in storage. A Better Auth app registers the
+adapter it builds for syncdb, once at startup, before the first request:
+
+```typescript
+import {setTokenSource} from "@terreno/rtk";
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+
+setTokenSource(betterAuthAdapter(bridgeBetterAuthReactClient(authClient)));
+// webAuth: "bearer": pass {getBearerToken: () => getBetterAuthBearerToken({storagePrefix})}
+// as the adapter's second argument so getToken() skips the get-session call
+```
+
+- Readers: the `emptySplitApi` base query, `useSocketConnection`, `useTerrenoChat`,
+  `useMCPTools`, and `createOfflineMiddleware`.
+- Each of the last four takes a `tokenSource` option that overrides the registered one for that
+  consumer. Pass `useSocketConnection` a stable object so it does not re-subscribe.
+- With a non-JWT source the base query never logs out on a missing token. It logs out only
+  after a 401 survives one `refresh()`.
+- Do not fork the base query to read the Better Auth session. Register the source and point the
+  SDK at `emptySplitApi`.
+- Full behavior: `docs/reference/legacy/rtk.md#token-source`.
 
 ## emptyApi — Base RTK Query API
 
@@ -312,19 +345,24 @@ import {useSocketConnection} from "@terreno/rtk";
 const {socket, isSocketConnected} = useSocketConnection({
   baseUrl: "wss://ws.example.com",
   shouldConnect: !!userId,
-  getAuthToken: () => getAuthToken(),
+  // Reads the registered token source; pass `tokenSource` to override it
   onConnect: () => console.info("Connected"),
   onDisconnect: () => console.warn("Disconnected"),
+  transports: ["websocket"],  // optional; default ["polling", "websocket"]
 });
 ```
 
 ### Features
 
-- WebSocket transport only, reconnection with 5 attempts
-- Bearer token authentication via `socket.auth`
+- Transports default to `["polling", "websocket"]` (polling first so dev server restarts don't fail the handshake, then upgrade). Pass `transports: ["websocket"]` on hosts without session affinity, such as Vercel Functions, where polling fails with `Session ID unknown` (`docs/how-to/vercel-function-websockets.md`)
+- Reconnection with 5 attempts (1-5s backoff)
+- Bearer token authentication via `socket.auth`, read from the token source on every handshake
+- Refreshes once per failure run (reset by a successful connect), then stops; stops at once
+  when the source has no `refresh` or it fails; reconnects when `onAuthChange` brings a new token
+- Legacy `getAuthToken` option still works and turns the token source off for that hook
 - Auto-reconnects on token refresh
 - Disconnect toast after 9+ seconds
-- Token expiration checks on disconnect/error
+- Token expiration checks on disconnect/error (JWT source only)
 - SSR-safe (checks `typeof window`)
 
 ## Tag Generator

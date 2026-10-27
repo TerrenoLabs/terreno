@@ -168,7 +168,10 @@ export const tracePromptRefs = (refs: HarnessPromptRef[] | undefined): HarnessPr
   const expanded = refs.flatMap((ref) => {
     if (ref?.includes !== undefined && !Array.isArray(ref.includes)) {
       throw harnessError({
-        detail: `Prompt ref "${ref.name}" includes must be an array`,
+        detail:
+          typeof ref.name === "string" && ref.name.trim()
+            ? `Prompt ref "${ref.name}" includes must be an array`
+            : "Prompt ref includes must be an array",
         kind: "invalidRequest",
       });
     }

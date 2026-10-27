@@ -5,20 +5,18 @@ import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {AiReviewItemView} from "./AiReviewItemView";
+import {openBatchItems} from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
   type EvaluatorDimension,
-  firstUnanswered,
+  firstUnansweredBoolean,
   nextUnansweredAfter,
-  type ReviewStatus,
   stepQuestionKey,
   unwrapCurrentUserId,
   unwrapReviewDetail,
   unwrapReviewList,
 } from "./reviewTypes";
 import {type ReviewActionBody, useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
-
-const OPEN_BATCH_STATUSES: ReviewStatus[] = ["pending", "in_progress"];
 
 export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
@@ -57,7 +55,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
   // A batch counts assigned (in progress) items as open work, like the batch screen does.
   const pending = useMemo(() => {
     const items = unwrapReviewList(pendingQuery.data);
-    return batchId ? items.filter((item) => OPEN_BATCH_STATUSES.includes(item.status)) : items;
+    return batchId ? openBatchItems(items) : items;
   }, [batchId, pendingQuery.data]);
   const currentUserId = useMemo(
     () => unwrapCurrentUserId(currentUserQuery.data),
@@ -77,12 +75,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     setScores(detail?.scores ?? {});
     setComment(detail?.comment ?? "");
     setSubmitError("");
-    setActiveQuestionKey(
-      firstUnanswered(
-        (detail?.dimensions ?? []).filter((dimension) => dimension.dataType === "boolean"),
-        detail?.scores ?? {}
-      )
-    );
+    setActiveQuestionKey(firstUnansweredBoolean(detail?.dimensions ?? [], detail?.scores ?? {}));
   }, [detail]);
 
   const openItem = useCallback(
@@ -201,7 +194,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         void handleSkip();
         return;
       }
-      const currentKey = activeQuestionKey ?? firstUnanswered(booleanDimensions, scores);
+      const currentKey = activeQuestionKey ?? firstUnansweredBoolean(booleanDimensions, scores);
       if (action === "next" || action === "previous") {
         setActiveQuestionKey(
           stepQuestionKey(booleanDimensions, currentKey, action === "next" ? 1 : -1)

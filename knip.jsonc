@@ -318,6 +318,7 @@
         "jspdf-native-stub.js",
         "fingerprint.config.js",
         "playwright.circleci.config.ts",
+        "playwright.smoke.config.ts",
         "tests/bunSetup.ts",
         "tests/testPreload.ts"
       ],
@@ -358,6 +359,7 @@
         "@terreno/jobs!",
         "@thream/socketio-jwt!",
         "ai!",
+        "better-auth!",
         "expo-server-sdk!",
         "express!",
         "google-auth-library!",
@@ -372,6 +374,8 @@
       ],
       "entry": [
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",

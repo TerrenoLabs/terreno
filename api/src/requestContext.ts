@@ -64,6 +64,12 @@ export interface RequestContext {
   credential?: RequestCredential;
   /** Background job identifier (from `x-job-id` or set via {@link runWithRequestContext}). */
   jobId?: string;
+  /**
+   * Scopes granted to the MCP OAuth access token that authenticated the request. Set only when
+   * `credential` is `oauth`. Terreno does not map scopes to tools; check them in permission code,
+   * for example with `requireOAuthScope`.
+   */
+  oauthScopes?: string[];
   /** Stable id shared by all log lines for one request/job; echoed to clients as `X-Request-ID`. */
   requestId: string;
   /** Auth session id, resolved from the JWT/Better Auth session or `x-session-id`. */

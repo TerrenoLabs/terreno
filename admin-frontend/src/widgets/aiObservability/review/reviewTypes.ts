@@ -170,7 +170,7 @@ export const dimensionLabel = (dimension: EvaluatorDimension): string => {
 };
 
 /** Key of the first required-or-optional dimension still missing an answer. */
-export const firstUnanswered = (
+const firstUnanswered = (
   dimensions: EvaluatorDimension[],
   scores: Record<string, boolean | number | string>
 ): string | undefined => {
@@ -198,4 +198,15 @@ export const stepQuestionKey = (
     return (step > 0 ? dimensions[0] : dimensions.at(-1))?.key;
   }
   return dimensions[Math.min(dimensions.length - 1, Math.max(0, index + step))]?.key;
+};
+
+/** Key of the first unanswered yes/no question: the one the list highlights and Y or N answers. */
+export const firstUnansweredBoolean = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return firstUnanswered(
+    dimensions.filter((dimension) => dimension.dataType === "boolean"),
+    scores
+  );
 };

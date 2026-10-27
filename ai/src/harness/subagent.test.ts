@@ -379,6 +379,11 @@ describe("rt.runAgent (subagents)", () => {
     ).rejects.toThrow(
       harnessErrorMatching("invalidRequest", 'Prompt ref "plan" includes must be an array')
     );
+    await expect(
+      harness.createTask(parent, {}, {prompts: [{includes: {}, version: 1} as never]})
+    ).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", "Prompt ref includes must be an array")
+    );
     await expect(harness.createTask(parent, {}, {trace: {tags: ["ok", " "]}})).rejects.toThrow(
       harnessErrorMatching("invalidRequest", "trace.tags must be an array of non-empty strings")
     );

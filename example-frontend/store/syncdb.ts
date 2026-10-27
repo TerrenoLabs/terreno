@@ -10,16 +10,25 @@ import {
   createSyncDb,
   type SyncDb,
 } from "@terreno/syncdb";
-import {betterAuthClient} from "@/lib/betterAuth";
+import {betterAuthClient, getStoredBearerToken} from "@/lib/betterAuth";
+import {socketTransports} from "@/store/socketTransports";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
 export const SYNC_DB_NAME = "terreno-example";
 /** Admin window rows live in their own store so they never leak into the product UI. */
 const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 
-// pollIntervalMs is only used as a fallback if the session atom bridge is unavailable
-// (e.g. a future Better Auth client shape change); keep it slow.
-const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+/**
+ * The app's one token source: syncdb authenticates with it, and store/index.ts registers it
+ * with @terreno/rtk so the RTK base query, sockets, and MCP tools read the same token.
+ *
+ * `getBearerToken` reads the web bearer token locally, so `getToken()` makes no `get-session`
+ * call per read; it returns null in cookie mode and on native, where the adapter reads the
+ * session instead. pollIntervalMs is only used as a fallback if the session atom bridge is
+ * unavailable (e.g. a future Better Auth client shape change); keep it slow.
+ */
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+  getBearerToken: getStoredBearerToken,
   pollIntervalMs: 60_000,
 });
 
@@ -52,6 +61,7 @@ export const syncDb: SyncDb = createSyncDb({
   // Todos stay fully synced; `fullSync` also enables server-filtered query windows
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
   queryCollections: [{collection: "todos", fullSync: true}],
+  socketTransports,
 });
 
 let adminOrganizationId: string | undefined;
@@ -71,6 +81,7 @@ export const adminSyncDb: SyncDb = createSyncDb({
   collections: [...SYNC_COLLECTIONS],
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
+  socketTransports,
   windowCollections: [...SYNC_COLLECTIONS],
 });
 

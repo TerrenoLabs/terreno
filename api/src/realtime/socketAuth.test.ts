@@ -171,6 +171,60 @@ describe("socketAuth", () => {
     });
   });
 
+  describe("createLegacyJwtValidator with a user model", () => {
+    const SocketAuthUser = getSocketAuthUserModel();
+    const userModel = SocketAuthUser as unknown as UserModel;
+
+    beforeEach(async () => {
+      await SocketAuthUser.deleteMany({});
+    });
+
+    it("accepts an enabled user's JWT", async () => {
+      const user = await SocketAuthUser.create({email: "enabled-jwt@example.com"});
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await validator(socket);
+
+      expect(socket.decodedToken?.id).toBe(String(user._id));
+      expect(socket.decodedToken?.authKind).toBe("jwt");
+    });
+
+    it("rejects a disabled user's JWT", async () => {
+      const user = await SocketAuthUser.create({disabled: true, email: "disabled-jwt@example.com"});
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await expect(validator(socket)).rejects.toThrow("disabled");
+      expect(socket.decodedToken).toBeUndefined();
+    });
+
+    it("rejects a JWT whose user no longer exists", async () => {
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(new mongoose.Types.ObjectId())}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await expect(validator(socket)).rejects.toThrow("Unauthorized");
+      expect(socket.decodedToken).toBeUndefined();
+    });
+
+    it("refuses a disabled user through the middleware chain on every handshake", async () => {
+      const user = await SocketAuthUser.create({email: "reconnect-jwt@example.com"});
+      const middleware = createSocketAuthMiddleware({tokenSecret, userModel});
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+
+      expect(await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`))).toBeUndefined();
+
+      await SocketAuthUser.updateOne({_id: user._id}, {disabled: true});
+      const first = await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`));
+      const second = await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`));
+      expect(first?.message).toContain("disabled");
+      expect(second?.message).toContain("disabled");
+    });
+  });
+
   describe("createBetterAuthValidator", () => {
     const stubAuth = (
       session: unknown,

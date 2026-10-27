@@ -38,6 +38,11 @@ const mcpServiceTokenSchema = new mongoose.Schema<McpServiceTokenDocument, McpSe
       description: "When this MCP service token was revoked; unset while it remains active",
       type: Date,
     },
+    tokenEpoch: {
+      description:
+        "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+      type: Number,
+    },
     tokenHash: {
       description: "SHA-256 hash of the full MCP service token plaintext",
       required: true,
@@ -109,13 +114,14 @@ mcpServiceTokenSchema.statics = {
   },
   async issueFor(
     this: McpServiceTokenModel,
-    user: {_id: {toString(): string}},
+    user: {_id: {toString(): string}; tokenEpoch?: number},
     options: {expiresAt?: Date; name: string}
   ): Promise<{mcpServiceToken: McpServiceTokenDocument; token: string}> {
     const token = `${MCP_SERVICE_TOKEN_PREFIX}${randomBytes(MCP_SERVICE_TOKEN_RANDOM_BYTES).toString("hex")}`;
     const mcpServiceToken = await this.create({
       expiresAt: options.expiresAt,
       name: options.name,
+      tokenEpoch: user.tokenEpoch ?? 0,
       tokenHash: hashToken(token),
       tokenPrefix: token.slice(
         MCP_SERVICE_TOKEN_PREFIX.length,
@@ -138,6 +144,24 @@ mcpServiceTokenSchema.statics = {
       },
       {$set: {revokedAt: DateTime.now().toJSDate()}},
       {returnDocument: "after"}
+    );
+  },
+  /**
+   * Revoke the user's active tokens issued under an earlier tokenEpoch. A token from before the
+   * field existed counts as epoch 0, the same way a refresh token without `te` does.
+   */
+  async revokeOutdatedForUser(
+    this: McpServiceTokenModel,
+    user: {_id: {toString(): string}; tokenEpoch?: number}
+  ): Promise<void> {
+    const currentEpoch = user.tokenEpoch ?? 0;
+    await this.updateMany(
+      {
+        revokedAt: {$exists: false},
+        tokenEpoch: {$nin: currentEpoch === 0 ? [0, null] : [currentEpoch]},
+        userId: new mongoose.Types.ObjectId(String(user._id)),
+      },
+      {$set: {revokedAt: DateTime.now().toJSDate()}}
     );
   },
   async verify(this: McpServiceTokenModel, token: string): Promise<McpServiceTokenDocument | null> {

@@ -334,6 +334,28 @@ describe("RealtimeApp with a registered BetterAuthApp", () => {
     expect((socket.decodedToken as {id?: string}).id).toBe(String(created?._id));
   });
 
+  it("refuses a disabled user's legacy JWT at handshake", async () => {
+    const jwtLib = (await import("jsonwebtoken")).default;
+    realtime = new RealtimeApp(
+      testRealtimeOptions({
+        sessionRevalidationIntervalMs: 0,
+        tokenIssuer: "wiring-issuer",
+        tokenSecret: "test-secret",
+        userModel,
+      })
+    );
+    realtime.onServerCreated(fakeServer);
+    const user = await WiringUser.create({email: "jwt-disabled@example.com"});
+    const token = jwtLib.sign({id: String(user._id)}, "test-secret", {issuer: "wiring-issuer"});
+
+    const accepted = await handshake(token);
+    expect(accepted.error).toBeUndefined();
+
+    await WiringUser.updateOne({_id: user._id}, {disabled: true});
+    const refused = await handshake(token);
+    expect(refused.error?.message).toContain("disabled");
+  });
+
   it("starts without TOKEN_SECRET when a BetterAuthApp is registered", () => {
     Reflect.deleteProperty(process.env, "TOKEN_SECRET");
     realtime = new RealtimeApp(testRealtimeOptions({sessionRevalidationIntervalMs: 0, userModel}));

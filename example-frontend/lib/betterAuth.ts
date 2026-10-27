@@ -2,13 +2,29 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {baseUrl, createBetterAuthClient} from "@terreno/rtk";
+import {
+  baseUrl,
+  completeBetterAuthOAuthHandoff,
+  createBetterAuthClient,
+  getBetterAuthBearerToken,
+  IsWeb,
+  signInSocialWithHandoff,
+} from "@terreno/rtk";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
   const expoExtra = Constants.expoConfig?.extra;
   return expoExtra?.scheme ?? "frontend";
 };
+
+const BETTER_AUTH_STORAGE_PREFIX = "terreno-example";
+
+/**
+ * True when the web build authenticates with a stored bearer token instead of Better Auth's
+ * session cookie. Set `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` when the web app and the API are
+ * on different sites, where browsers block or partition third-party cookies. Native ignores it.
+ */
+const isWebBearerAuth = IsWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
 
 // `baseUrl` from @terreno/rtk is the single source of truth every other caller
 // (RTK Query, sockets, syncdb) already uses. A separate resolver here previously
@@ -17,12 +33,62 @@ const getAppScheme = (): string => {
 export const betterAuthClient = createBetterAuthClient({
   baseURL: baseUrl,
   scheme: getAppScheme(),
-  storagePrefix: "terreno-example",
+  storagePrefix: BETTER_AUTH_STORAGE_PREFIX,
+  webAuth: isWebBearerAuth ? "bearer" : "cookie",
 });
 
-export const signInWithSocial = async (provider: "google" | "github" | "apple"): Promise<void> => {
-  await betterAuthClient.signIn.social({provider});
+/**
+ * Reads the bearer token the web bearer client stored, without a network call. Returns null in
+ * cookie mode and on native, where the session lives elsewhere.
+ */
+export const getStoredBearerToken = (): string | null => {
+  if (!isWebBearerAuth) {
+    return null;
+  }
+  return getBetterAuthBearerToken({storagePrefix: BETTER_AUTH_STORAGE_PREFIX});
 };
+
+/**
+ * The page a bearer-mode social sign-in returns to. It must be one of example-backend's
+ * `oauthHandoff.callbackPaths`; lib/oauthHandoff.ts takes the one-time token from it at startup.
+ */
+const OAUTH_RETURN_PATH = "/login";
+
+/**
+ * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
+ * button shows only in web bearer builds with `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`; example-backend
+ * registers the provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ */
+export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+export const isMockOidcSignInEnabled =
+  isWebBearerAuth && process.env.EXPO_PUBLIC_MOCK_OIDC_SIGN_IN === "true";
+
+/**
+ * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to
+ * the login page with a one-time token, so this resolves `true` while the page is leaving and
+ * the caller should wait instead of reading the session. Otherwise it resolves `false` once
+ * Better Auth's own flow returns.
+ */
+export const signInWithSocial = async (provider: string): Promise<boolean> => {
+  if (isWebBearerAuth) {
+    signInSocialWithHandoff({
+      callbackURL: OAUTH_RETURN_PATH,
+      client: betterAuthClient,
+      provider,
+    });
+    return true;
+  }
+  await betterAuthClient.signIn.social({provider});
+  return false;
+};
+
+/**
+ * Exchanges the one-time token a bearer-mode social sign-in brought back for the bearer, after
+ * removing it from the URL. Resolves `true` when a bearer was stored; never rejects.
+ */
+export const completeOAuthHandoff = (): Promise<boolean> =>
+  completeBetterAuthOAuthHandoff({client: betterAuthClient});
 
 interface BetterAuthActionResult {
   error?: {message?: string} | null;
@@ -72,14 +138,11 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Number of `getSession()` attempts `getSessionToken()` makes before giving up.
- * Callers (e.g. `useSocketConnection`'s `getAuthToken`) only call this once they
- * believe the user is signed in — right after login/session-sync resolved a userId
- * into Redux — so an empty session on the first attempt is more likely a transient
- * race (the freshly-set session cookie not yet consistently queryable) than a real
- * signed-out state. `useSocketConnection` has no retry of its own for this case (its
- * token-refresh-driven reconnect only fires for the JWT auth slice, not Better Auth),
- * so a transient empty result here would otherwise leave the socket connection
- * permanently unattempted until some unrelated effect re-triggers it.
+ * Callers (the AI tab, GCS settings, and the Sync Lab's raw fetches) only call this
+ * once they believe the user is signed in — right after login/session-sync resolved a
+ * userId into Redux — so an empty session on the first attempt is more likely a
+ * transient race (the freshly-set session cookie not yet consistently queryable) than
+ * a real signed-out state.
  */
 const GET_SESSION_TOKEN_RETRY_ATTEMPTS = 3;
 const GET_SESSION_TOKEN_RETRY_DELAY_MS = 250;

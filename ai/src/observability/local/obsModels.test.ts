@@ -112,6 +112,12 @@ describe("local observability models", () => {
     expect(serialized).toContain('{"flaggedForDataset":1,"created":-1}');
   });
 
+  it("declares an ObsReviewItem batch index for batch queues and counts", () => {
+    const ObsReviewItem = registerObsReviewItem();
+    const serialized = ObsReviewItem.schema.indexes().map(([fields]) => JSON.stringify(fields));
+    expect(serialized).toContain('{"batchId":1,"status":1}');
+  });
+
   it("declares ObsExperiment promptName list index", () => {
     const ObsExperiment = registerObsExperiment();
     const serialized = ObsExperiment.schema.indexes().map(([fields]) => JSON.stringify(fields));

@@ -17,7 +17,7 @@ import {Stack, ThemeProvider, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi";
+import {getAdminAuthHeaders} from "@/store/adminAuthHeaders";
 import {terrenoApi, useGetMeQuery} from "@/store/sdk";
 import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
 import {buildNavigationTheme} from "@/utils/navigationTheme";

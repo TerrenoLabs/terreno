@@ -20,6 +20,15 @@
 > dropped. Every Langfuse mention below is superseded; the local plane is the only prompt, dataset,
 > experiment, and review primary, and OTel stays the optional extra sink.
 
+> **Amended 2026-10-24:** Review batches and judge agreement shipped on top of the Phase 1 review
+> queue. A batch (`ObsReviewBatch`) groups recent traces against one human question set;
+> `ObsReviewItem.batchId` links its items (indexed with `status`). Routes:
+> `GET/POST /review/batches`, `GET /review/batches/:id`, and
+> `POST /review/batches/:id/judgeRuns`, which runs an LLM judge (`ObsJudgeRun`) over the batch and
+> reports overall and per-question agreement with the human answers. `GET /review` accepts
+> `batchId`. The review item screen walks a batch's pending and in-progress items with Y / N /
+> Enter / S shortcuts. See [AI observability](../explanation/ai-observability.md).
+
 ## Goal
 
 Replace Langfuse as the **primary** AI observability product for Terreno apps: prompt versioning with a

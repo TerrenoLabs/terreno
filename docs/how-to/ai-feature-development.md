@@ -108,6 +108,11 @@ await aiService.generateText({
 
 Missing `production` fails the request (400). Do not fall back to a hardcoded string.
 
+3. Bound cost before users reach the AI routes. `@terreno/ai` has no per-user token or spend
+   limit, and a chat reply keeps running after the client disconnects. Enable `TerrenoApp`
+   `rateLimit` and set a provider budget or quota alert; see
+   [Cost and abuse limits](../reference/ai.md#cost-and-abuse-limits).
+
 ## 7. Production tracing and feedback
 
 Do this in parallel with steps 1–6 once the feature is reachable.

@@ -10,7 +10,12 @@ import {
   unwrapBatchList,
 } from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
-import {dimensionLabel, firstUnanswered, nextUnansweredAfter, stepQuestionKey} from "./reviewTypes";
+import {
+  dimensionLabel,
+  firstUnansweredBoolean,
+  nextUnansweredAfter,
+  stepQuestionKey,
+} from "./reviewTypes";
 
 describe("batchTypes", () => {
   it("formats agreement as a percent with a traffic-light status", () => {
@@ -54,9 +59,9 @@ describe("review question helpers", () => {
   it("labels by question and finds the next unanswered question", () => {
     expect(dimensionLabel(dimensions[0] as never)).toBe("Is A true?");
     expect(dimensionLabel(dimensions[1] as never)).toBe("b");
-    expect(firstUnanswered(dimensions, {})).toBe("a");
-    expect(firstUnanswered(dimensions, {a: false})).toBe("b");
-    expect(firstUnanswered(dimensions, {a: false, b: true})).toBeUndefined();
+    expect(firstUnansweredBoolean(dimensions, {})).toBe("a");
+    expect(firstUnansweredBoolean(dimensions, {a: false})).toBe("b");
+    expect(firstUnansweredBoolean(dimensions, {a: false, b: true})).toBeUndefined();
   });
 
   it("moves the keyboard highlight to the next unanswered question and steps between rows", () => {

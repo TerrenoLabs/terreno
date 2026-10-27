@@ -1,11 +1,19 @@
+import type {AuthProvider} from "@terreno/syncdb";
 import {useToast} from "@terreno/ui";
 import {DateTime} from "luxon";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {useSelector} from "react-redux";
 import {io, type Socket} from "socket.io-client";
 import {selectLastTokenRefreshTimestamp} from "./authSlice";
-import {logAuth} from "./constants";
-import {getFriendlyExpirationInfo, getTokenExpirationTimes, refreshAuthToken} from "./emptyApi";
+import {logAuth, logSocket} from "./constants";
+import {
+  getFriendlyExpirationInfo,
+  getTokenExpirationTimes,
+  isJwtTokenSource,
+  jwtTokenSource,
+  refreshAuthToken,
+} from "./emptyApi";
+import {getTokenSource} from "./tokenSource";
 
 export interface SocketConnection {
   isConnected: boolean;
@@ -18,10 +26,60 @@ export interface UseSocketConnectionOptions {
   onDisconnect?: () => void;
   onConnectError?: (error: Error) => void;
   onReconnectFailed?: () => void;
-  getAuthToken: () => Promise<string | null>;
+  /**
+   * Reads the token for the handshake. When passed, the hook keeps its legacy behavior: it
+   * reads the token once per `connectSocket` call, sends it as a static `auth` payload, and
+   * refreshes the JWT when it is near expiry. Omit it to use a token source instead (see
+   * `tokenSource`).
+   */
+  getAuthToken?: () => Promise<string | null>;
+  /**
+   * Token source the hook reads when `getAuthToken` is omitted. Defaults to the source
+   * registered with `setTokenSource`, else the built-in JWT source. The handshake re-reads
+   * `getToken()` on every connect and reconnect. On an auth `connect_error` the hook calls
+   * `refresh()` once and reconnects; a second auth failure before a successful connect stops
+   * reconnecting and calls `onConnectError`. When `onAuthChange` fires with a different token, it
+   * drops a live connection and reconnects with the new token; with no token it disconnects.
+   * Pass a stable reference (not a new object per render) so the hook does not re-subscribe.
+   */
+  tokenSource?: AuthProvider;
   shouldConnect: boolean;
   captureEvent?: (eventName: string, data: Record<string, unknown>) => void;
+  /**
+   * Socket.io transports, in order. Defaults to polling then websocket. Pass `["websocket"]`
+   * for hosts without session affinity, such as Vercel Functions, where a polling request
+   * can land on a different instance than the one holding the session.
+   */
+  transports?: string[];
 }
+
+const DEFAULT_TRANSPORTS = ["polling", "websocket"];
+
+/** How the JWT expiry check ended: it refreshed, its refresh failed, or nothing was due. */
+type ExpiryCheckResult = "refreshed" | "failed" | "skipped";
+
+/** Refresh state for consecutive auth failures; a successful connect starts a new episode. */
+interface AuthFailureEpisode {
+  hasRefreshed: boolean;
+  isRefreshing: boolean;
+  isStopped: boolean;
+}
+
+const newAuthFailureEpisode = (): AuthFailureEpisode => ({
+  hasRefreshed: false,
+  isRefreshing: false,
+  isStopped: false,
+});
+
+/** True when the server's socket auth middleware rejected the handshake. */
+const isAuthConnectError = (error: Error): boolean => {
+  const data = (error as Error & {data?: unknown}).data;
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    (data as {type?: unknown}).type === "UnauthorizedError"
+  );
+};
 
 export const useSocketConnection = ({
   baseUrl,
@@ -30,8 +88,10 @@ export const useSocketConnection = ({
   onConnectError,
   onReconnectFailed,
   getAuthToken,
+  tokenSource,
   shouldConnect, // Whether we have a logged in user.
   captureEvent,
+  transports = DEFAULT_TRANSPORTS,
 }: UseSocketConnectionOptions): {
   socket: Socket | null;
   isSocketConnected: SocketConnection;
@@ -46,11 +106,34 @@ export const useSocketConnection = ({
   });
   const disconnectedToastId = useRef<string | null>(null);
   const tokenErrorToastId = useRef<string | null>(null);
+  const authFailureEpisodeRef = useRef<AuthFailureEpisode>(newAuthFailureEpisode());
+
+  // Without a getAuthToken getter the hook reads a token source, and the JWT expiry check only
+  // applies while that source is the JWT one.
+  const usesTokenSource = !getAuthToken;
+  const source = usesTokenSource
+    ? (tokenSource ?? getTokenSource() ?? jwtTokenSource)
+    : jwtTokenSource;
+  // The token the last token-source handshake sent, so an auth change that leaves it unchanged
+  // keeps a live connection.
+  const lastHandshakeTokenRef = useRef<string | null>(null);
+  // Set while the hook drops a live connection to rotate its token, so that planned disconnect
+  // is not captured as an outage.
+  const isRotatingTokenRef = useRef(false);
+  // Set from the moment a token-source handshake sends CONNECT until it connects, fails, or the
+  // hook drops it. socket.io-client's connect() re-sends CONNECT while the manager is open, so an
+  // auth change in that window waits in deferredAuthChangeRef until the handshake settles.
+  const isHandshakingRef = useRef(false);
+  const deferredAuthChangeRef = useRef<(() => void) | null>(null);
+  const runsJwtExpiryCheck = !usesTokenSource || isJwtTokenSource(source);
 
   // Keep ref updated with latest socket connection state
   useEffect(() => {
     isConnectedRef.current = isSocketConnected;
   }, [isSocketConnected]);
+
+  // Compare by value so a caller passing a fresh array each render keeps the same socket.
+  const transportsKey = transports.join(",");
 
   // Initialize socket connection
   useEffect(() => {
@@ -60,19 +143,22 @@ export const useSocketConnection = ({
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      // Start with polling so dev server restarts don't fail the initial websocket-only
-      // handshake; Socket.io upgrades to websocket once the connection is established.
-      transports: ["polling", "websocket"],
+      // The default starts with polling so dev server restarts don't fail the initial
+      // websocket-only handshake; Socket.io upgrades to websocket once connected.
+      transports: transportsKey.split(","),
     });
 
     socketRef.current = socketIo;
+    authFailureEpisodeRef.current = newAuthFailureEpisode();
+    isHandshakingRef.current = false;
+    deferredAuthChangeRef.current = null;
     setSocket(socketIo);
 
     return (): void => {
       socketIo.disconnect();
       socketRef.current = null;
     };
-  }, [baseUrl]);
+  }, [baseUrl, transportsKey]);
 
   const hideDisconnectedToast = useCallback((): void => {
     if (disconnectedToastId.current) {
@@ -90,16 +176,26 @@ export const useSocketConnection = ({
 
   // Connect the socket with the current auth token
   const connectSocket = useCallback(async (): Promise<void> => {
-    const token = await getAuthToken();
+    if (!getAuthToken && authFailureEpisodeRef.current.isStopped) {
+      logSocket(
+        undefined,
+        "[SocketConnection] connectSocket skipped — auth failed and the token could not be refreshed."
+      );
+      return;
+    }
+
+    const token = getAuthToken ? await getAuthToken() : await source.getToken();
 
     if (!token) {
       console.warn(
-        "[SocketConnection] Attempting to connect socket, but getAuthToken returned no token."
+        `[SocketConnection] Attempting to connect socket, but ${getAuthToken ? "getAuthToken" : "the token source"} returned no token.`
       );
       // Don't capture this event because it's expected when the user is logged out.
       return;
     } else {
-      logAuth("[SocketConnection] Token received from getAuthToken.");
+      logAuth(
+        `[SocketConnection] Token received from ${getAuthToken ? "getAuthToken" : "the token source"}.`
+      );
     }
 
     if (socketRef.current) {
@@ -108,16 +204,34 @@ export const useSocketConnection = ({
       logAuth(
         `[SocketConnection] Socket connecting ${token ? "with" : "without"} token. Current socket state: ${socketInstance.connected ? "connected" : "disconnected"}`
       );
-      socketInstance.auth = {token: `Bearer ${token}`};
+      if (getAuthToken) {
+        socketInstance.auth = {token: `Bearer ${token}`};
+      } else {
+        // socket.io-client calls this on every handshake, including its own reconnects, so each
+        // attempt carries the source's current token.
+        socketInstance.auth = (sendAuth: (data: object) => void): void => {
+          isHandshakingRef.current = true;
+          source.getToken().then(
+            (currentToken) => {
+              lastHandshakeTokenRef.current = currentToken;
+              sendAuth(currentToken ? {token: `Bearer ${currentToken}`} : {});
+            },
+            () => {
+              lastHandshakeTokenRef.current = null;
+              sendAuth({});
+            }
+          );
+        };
+      }
       socketInstance.connect();
     } else {
       logAuth("[SocketConnection] connectSocket skipped — socket not initialized yet.");
     }
-  }, [getAuthToken]);
+  }, [getAuthToken, source]);
 
   // Extracted logic for checking token expiration, refreshing token, and handling related UI
   const checkAndRefreshTokenLogic = useCallback(
-    async (context: "disconnect" | "connect_error"): Promise<void> => {
+    async (context: "disconnect" | "connect_error"): Promise<ExpiryCheckResult> => {
       let authRemainingSecs: number | undefined;
       let refreshRemainingSecs: number | undefined;
       try {
@@ -143,7 +257,9 @@ export const useSocketConnection = ({
             );
             socketInstance.connect();
           }
+          return "refreshed";
         }
+        return "skipped";
       } catch (error) {
         const socketError = error as Error;
         console.error(
@@ -176,10 +292,129 @@ export const useSocketConnection = ({
             }
           );
         }
+        return "failed";
       }
     },
     [shouldConnect, captureEvent, hideDisconnectedToast, toast, hideTokenErrorToast]
   );
+
+  // The one refresh of an auth-failure episode: the JWT expiry check on the JWT source, else the
+  // source's refresh(), then a reconnect with the refreshed token.
+  const refreshForEpisode = useCallback(
+    async (episode: AuthFailureEpisode, stop: (reason: string) => void): Promise<void> => {
+      // On the JWT source the expiry check runs as it always has; when it refreshes (and
+      // reconnects) or fails, that is this episode's refresh.
+      const expiryCheck: ExpiryCheckResult = runsJwtExpiryCheck
+        ? await checkAndRefreshTokenLogic("connect_error")
+        : "skipped";
+      if (expiryCheck === "refreshed") {
+        return;
+      }
+      if (expiryCheck === "failed") {
+        stop("the token refresh failed.");
+        return;
+      }
+
+      let isRefreshed = false;
+      try {
+        isRefreshed = source.refresh ? await source.refresh() : false;
+      } catch (error) {
+        logSocket(
+          undefined,
+          `[SocketConnection] Token source refresh threw: ${(error as Error).message}`
+        );
+      }
+      if (!isRefreshed) {
+        stop("the token source could not refresh the token.");
+        return;
+      }
+      if (shouldConnect && !episode.isStopped) {
+        logSocket(undefined, "[SocketConnection] Reconnecting after a token source refresh.");
+        await connectSocket();
+      }
+    },
+    [checkAndRefreshTokenLogic, connectSocket, runsJwtExpiryCheck, shouldConnect, source]
+  );
+
+  // Refresh once per auth-failure episode; a second failure before a successful connect stops
+  // reconnecting so a server that keeps rejecting the token is not hammered.
+  const handleAuthFailure = useCallback(
+    async (connectionError: Error): Promise<void> => {
+      const episode = authFailureEpisodeRef.current;
+      const stop = (reason: string): void => {
+        episode.isStopped = true;
+        console.warn(`[SocketConnection] Not reconnecting: ${reason}`);
+        onConnectError?.(connectionError);
+      };
+
+      // A handshake that started before the in-flight refresh finished carried the old token;
+      // the refresh decides this episode.
+      if (episode.isRefreshing) {
+        return;
+      }
+      if (episode.hasRefreshed) {
+        stop("the server rejected the refreshed token.");
+        return;
+      }
+      episode.hasRefreshed = true;
+      episode.isRefreshing = true;
+      try {
+        await refreshForEpisode(episode, stop);
+      } finally {
+        episode.isRefreshing = false;
+      }
+    },
+    [onConnectError, refreshForEpisode]
+  );
+
+  // Reconnect with the source's new token whenever it reports an auth change
+  useEffect(() => {
+    if (!usesTokenSource || !shouldConnect) {
+      return;
+    }
+    const handleAuthChange = async (): Promise<void> => {
+      let token: string | null = null;
+      try {
+        token = await source.getToken();
+      } catch {
+        token = null;
+      }
+      const socketInstance = socketRef.current;
+      if (!socketInstance) {
+        return;
+      }
+      // The in-flight handshake reads the source's token itself; connecting now would send a
+      // second CONNECT. Check again once it settles, in case it carried the old token.
+      if (isHandshakingRef.current) {
+        deferredAuthChangeRef.current = (): void => {
+          void handleAuthChange();
+        };
+        return;
+      }
+      // Sources such as betterAuthAdapter emit on subscribe and on unrelated session reads; a
+      // live connection that already carries this token stays up.
+      if (socketInstance.connected && token && token === lastHandshakeTokenRef.current) {
+        return;
+      }
+      if (socketInstance.connected) {
+        logSocket(undefined, "[SocketConnection] Auth changed, reconnecting with the new token.");
+        isRotatingTokenRef.current = true;
+        socketInstance.disconnect();
+      }
+      if (!token) {
+        return;
+      }
+      authFailureEpisodeRef.current.isStopped = false;
+      await connectSocket();
+    };
+    const unsubscribe = source.onAuthChange((): void => {
+      void handleAuthChange();
+    });
+    return (): void => {
+      unsubscribe();
+      deferredAuthChangeRef.current = null;
+    };
+  }, [connectSocket, shouldConnect, source, usesTokenSource]);
 
   // Use Redux state for token refresh signal
   const lastTokenRefreshTimestamp = useSelector(selectLastTokenRefreshTimestamp);
@@ -226,6 +461,9 @@ export const useSocketConnection = ({
       }
     } else {
       logAuth(`[SocketConnection] Disconnecting socket because shouldConnect is false.`);
+      authFailureEpisodeRef.current = newAuthFailureEpisode();
+      // disconnect() on an unanswered handshake emits nothing, so clear it here.
+      isHandshakingRef.current = false;
       socket?.disconnect();
       if (isSocketConnected.isConnected) {
         setIsSocketConnected({
@@ -295,8 +533,20 @@ export const useSocketConnection = ({
   useEffect(() => {
     if (!socket) return;
 
+    // The handshake is over; run an auth change that arrived while it was in flight. Returns
+    // whether one ran.
+    const settleHandshake = (): boolean => {
+      isHandshakingRef.current = false;
+      const deferredAuthChange = deferredAuthChangeRef.current;
+      deferredAuthChangeRef.current = null;
+      deferredAuthChange?.();
+      return Boolean(deferredAuthChange);
+    };
+
     const handleConnect = (): void => {
       logAuth("[SocketConnection] Socket connected");
+      settleHandshake();
+      authFailureEpisodeRef.current = newAuthFailureEpisode();
       hideDisconnectedToast();
       hideTokenErrorToast();
 
@@ -318,6 +568,11 @@ export const useSocketConnection = ({
     };
 
     const handleDisconnect = async (reason: Socket.DisconnectReason): Promise<void> => {
+      // A planned token rotation is not an outage worth reporting. Read the flag before any
+      // await so it belongs to this disconnect.
+      const isRotating = isRotatingTokenRef.current;
+      isRotatingTokenRef.current = false;
+      settleHandshake();
       const tokenInfo = await getFriendlyExpirationInfo();
 
       // Enhanced logging for Option 1 (disconnect reason)
@@ -329,19 +584,24 @@ export const useSocketConnection = ({
         lastDisconnectedAt: DateTime.now().toISO(),
       });
 
-      captureEvent?.("WebSocket Disconnection", {
-        reason,
-        time: DateTime.now().toISO(),
-        tokenInfo,
-      });
+      if (!isRotating) {
+        captureEvent?.("WebSocket Disconnection", {
+          reason,
+          time: DateTime.now().toISO(),
+          tokenInfo,
+        });
+      }
 
       // Check token status on disconnect
-      await checkAndRefreshTokenLogic("disconnect");
+      if (runsJwtExpiryCheck) {
+        await checkAndRefreshTokenLogic("disconnect");
+      }
 
       await onDisconnect?.();
     };
 
     const handleConnectError = async (connectionError: Error): Promise<void> => {
+      const didRunDeferredAuthChange = settleHandshake();
       const tokenInfo = await getFriendlyExpirationInfo();
       const browserOffline = typeof navigator !== "undefined" && !navigator.onLine;
 
@@ -364,8 +624,20 @@ export const useSocketConnection = ({
         tokenInfo,
       });
 
+      if (usesTokenSource && isAuthConnectError(connectionError)) {
+        // The rejected handshake carried the token from before the auth change, which is already
+        // reconnecting with the new one; a refresh now would send a second CONNECT.
+        if (didRunDeferredAuthChange) {
+          return;
+        }
+        await handleAuthFailure(connectionError);
+        return;
+      }
+
       // Check token status on connect_error
-      await checkAndRefreshTokenLogic("connect_error");
+      if (runsJwtExpiryCheck) {
+        await checkAndRefreshTokenLogic("connect_error");
+      }
 
       onConnectError?.(connectionError);
     };
@@ -384,6 +656,7 @@ export const useSocketConnection = ({
       });
 
       // Force a new connection attempt
+      isHandshakingRef.current = false;
       socket.disconnect();
       setTimeout(() => {
         // Check shouldConnect and if still disconnected using the ref for the most current state
@@ -431,6 +704,9 @@ export const useSocketConnection = ({
     toast,
     hideTokenErrorToast,
     checkAndRefreshTokenLogic,
+    handleAuthFailure,
+    runsJwtExpiryCheck,
+    usesTokenSource,
   ]);
 
   return {isSocketConnected, socket};

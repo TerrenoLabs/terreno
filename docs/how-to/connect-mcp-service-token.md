@@ -108,3 +108,5 @@ The token acts as the owning user on **MCP only**. It cannot mint or list tokens
 - **Admin:** Admin → MCP service tokens (`/admin/mcp-service-tokens`). Create and update are off. Delete sets `revokedAt`; it does not hard-delete the row.
 
 Revoked and expired keys fail `tools/call` immediately. Disabled user accounts are refused the same way as over HTTP.
+
+A password reset, Better Auth password change, or "sign out everywhere" (`revoke-sessions` / `revoke-other-sessions`) bumps the user's `tokenEpoch` and ends every key minted before it. The keys show as revoked in the list; mint a new one for each client you still use.

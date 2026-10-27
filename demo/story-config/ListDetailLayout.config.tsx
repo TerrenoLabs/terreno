@@ -19,8 +19,8 @@ export const ListDetailLayoutConfiguration: DemoConfiguration = {
   status: {
     documentation: "ready",
     figma: "planned",
-    ios: "ready",
-    android: "ready",
+    ios: "inProgress",
+    android: "inProgress",
     web: "ready",
   },
   additionalDocumentation: [],

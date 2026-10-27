@@ -217,6 +217,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
 
 - [ ] **T7** — Prove the layout on native phones and tablets
   - Depends on: T4
+  - Status: follow-up after this PR (D4: best effort). No simulator was available, so the flow, the script, and the native runs are not in the PR. The demo marks iOS and Android `inProgress` until this task passes.
   - Files: .maestro/flows/native/list-detail.yaml, package.json, docs/how-to/build-list-detail-screens.md
   - Delivers:
     - A native Maestro flow (`appId: com.terreno.demo`) over the demo mail example, which needs no backend.

@@ -127,6 +127,28 @@ Never commit the release directly to master, and never tag before this pull requ
    gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
    ```
 
+   Write `/tmp/release-pr.md` with the `Why`, `What changed`, and `Verification` sections the approval bot scores:
+
+   ```markdown
+   ## Why
+
+   Assemble the X.Y.Z changelog so the release can be tagged.
+
+   ## What changed
+
+   - Folded <n> fragments from `changelog/unreleased/` into `CHANGELOG.md` under X.Y.Z
+   - Regenerated `example-frontend/constants/whatsNew.generated.json`
+   - <Upgrade note `mcp-server/src/docs/upgrades/X.Y.Z.md`, when written>
+
+   ## Verification
+
+   | Status | Scope | Evidence / action |
+   | --- | --- | --- |
+   | ✅ Tested | Section is non-empty and grouped | `bun run check:changelog` → OK; the X.Y.Z section in `CHANGELOG.md` lists <n> entries |
+   | ✅ Tested | What's new matches the changelog | `bun run check:whats-new` → pass |
+   | ✅ Tested | Upgrade note present | `bun run check:upgrade-docs X.Y.Z` → pass (omit row when none is needed) |
+   ```
+
 3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
 
    ```bash

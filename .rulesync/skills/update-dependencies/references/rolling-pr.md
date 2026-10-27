@@ -71,32 +71,49 @@ Do not delete failure history when the PR is still open. After merge, the next d
 ```markdown
 <!-- terreno-update-dependencies -->
 
-## Last run
+## Why
+
+Keep dependencies current on one rolling PR, with every bump proven by a test that imports it.
+
+## What changed
+
+### Last run
 
 - Date: 2026-09-08
 - Landed 1, failed 1, skipped 4 (2 fingerprint, 2 cooldown)
 - Local gate: `bun run prepush` green; Playwright `app` shard run; Maestro not run (no frontend bump)
 - CI rounds: 1, green
 
-### Run log
+#### Run log
 - 2026-09-07: opened; landed axios; failed chai (exercise `api/src/foo.test.ts`)
 - 2026-09-08: rebased master; landed chai; skipped expo-*
 
-## Landed
+### Landed
 | Package | From → to | Exercise | Fingerprint |
 | --- | --- | --- | --- |
 | axios | 1.13.1 → 1.13.2 | `bun test api/src/http.test.ts` | example-frontend + demo unchanged |
 
-## Failed
+### Failed
 | Package | Attempted | Date | Cause |
 | --- | --- | --- | --- |
 | mongoose | 9.8.0 | 2026-09-07 | exercise `api/src/models.test.ts` — timeout |
 
-## Skipped
+### Skipped
 | Package | Reason |
 | --- | --- |
 | left-pad@1.9.0 | published 2 days ago |
 
-## Deferred to release
+### Deferred to release
 `expo`, `expo-router`, `react-native-reanimated`
+
+## Verification
+
+| Status | Scope | Evidence / action |
+| --- | --- | --- |
+| ✅ Tested | axios 1.13.2 | `bun test api/src/http.test.ts` → 14 pass; fingerprint unchanged |
+| ✅ Tested | Local gate | `bun run prepush` → green |
 ```
+
+Keep one `✅ Tested` row per landed bump this run, naming its exercise command and outcome.
+The ledger sits under `What changed` as `###` subsections so the approval bot reads the
+body's `Why`, `What changed`, and `Verification` sections.

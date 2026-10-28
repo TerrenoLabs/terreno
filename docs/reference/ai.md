@@ -578,7 +578,8 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 `POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
 `dimensions[]` render as reviewer score fields and `instructions` render above the review form.
 Each dimension may set `question`, which the review screen shows instead of the key; yes/no
-questions render as Yes / No rows with keyboard shortcuts on web.
+questions render as a segmented **Yes** / **No** control with **Yes to the rest** and keyboard
+shortcuts on web.
 Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
 requires every dimension marked `required`; omitted optional dimensions do not create empty score
 rows. The local score store remains the fallback when no external score sink is configured.
@@ -604,7 +605,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/status` | Admin chrome. `{plugins, primaries, localOn, playgroundAi}` — drives the status chip, hides Review when `localOn` is false, and tells the prompt playground whether AI comes from `ObservabilityApp.aiService` (`server`), per-request `x-ai-api-key` via `requestAiServiceFactory` (`request-key`), or is not configured (`unavailable`) |
+| GET | `/ai/observability/status` | Admin chrome. `{plugins, primaries, localOn, playgroundAi}` — drives the status chip (**Local observability on** / **off**), hides Review when `localOn` is false, and tells the prompt playground whether AI comes from `ObservabilityApp.aiService` (`server`), per-request `x-ai-api-key` via `requestAiServiceFactory` (`request-key`), or is not configured (`unavailable`) |
 
 | Method | Path | Behavior |
 | --- | --- | --- |

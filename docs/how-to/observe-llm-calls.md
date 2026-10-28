@@ -89,7 +89,7 @@ Opt out of tracing with `skipTrace: true`. Sink failures are logged and never fa
 Phase 1 admin ships **Prompts**, **Traces**, and **Review**. Datasets, Evaluators, and
 Experiments screens arrive in phase 2. Review is hidden when the local plugin is off.
 
-On **Traces**, **Run multi-stage trace test** (local sink only) runs two schema-backed
+On **Traces**, the header **Run a test trace** action (local sink only) runs two schema-backed
 `generateJsonObject` calls, a deterministic tool stage, and a final schema-backed combine
 call, then opens the nested trace. Each LLM span input includes `outputSchema`. It uses the
 server `aiService` when one is configured; otherwise it sends the admin's saved key as
@@ -126,15 +126,15 @@ that key exists.
    start with `seed-obs-`. Production stays on v1 for every product prompt, so promoting v2 from
    an experiment changes what the app sends.
 
-   **New experiment** keeps **Next** disabled and shows "Select a dataset." until you
-   choose a dataset; the field reads "Choose a dataset" until then. **Experiment
-   results** shows one card per version under **Score gates by version**. Each card says
-   whether that version passes (for example "Fails 1 of 3 gates"), and each gate tile
-   names the evaluator and dimension in plain words, the measured value, the threshold
-   with a symbol, and Pass or Fail — for example "correctness: correct · Pass rate 0.75 ·
-   needs ≥ 0.8 · ✗ Fail". The **Promote to production** card explains a blocked version
-   next to the button, for example "v1 fails 1 gate: correctness: correct ≥ 0.8 (got
-   0.75) — can't promote v1.", or says "Ready to promote v2" when every gate passes.
+   **New experiment** (pipeline **Compare prompt versions**) keeps **Continue** disabled and
+   shows "Select a dataset." until you choose a dataset; the field reads "Choose a dataset"
+   until then. **Experiment results** shows one verdict banner, then one **Gates** table: a
+   row per gate (evaluator and dimension in plain words), **Needs** with the threshold as a
+   symbol (for example "≥ 0.8"), and one column per version with the measured value and Pass
+   or Fail. The last **Result** row says whether each version passes (for example "Fails 1 of
+   3 gates"). When no version passes, the screen explains why, for example "v1 fails 1 gate:
+   correctness: correct ≥ 0.8 (got 0.75) — can't promote v1.", and the header **Promote vN to
+   production** stays disabled.
 
    On a database that already booted, run
    Admin → Scripts → `seedAiObservabilityDemo`, or
@@ -216,7 +216,7 @@ curl -X POST "$API/ai/observability/prompts/example-summarize/labels" \
 The example backend registers `requestAiServiceFactory` but no server `aiService`, so status reports
 `playgroundAi.source: "request-key"`. In **AI Observability → Prompts → Playground**, save a Gemini
 API key on **Profile** first; the admin UI blocks **Run once** with that hint until the key loads
-from storage and is sent as `x-ai-api-key`. **Traces → Run multi-stage trace test** uses the same
+from storage and is sent as `x-ai-api-key`. **Traces → Run a test trace** uses the same
 saved key and is blocked the same way.
 
 ## Share instructions across prompts
@@ -295,23 +295,24 @@ the same list of questions for. Then run LLM judges over the same traces and com
    the reviewer-facing wording in each dimension's `question`, for example
    `{key: "covers_every_item", dataType: "boolean", question: "Does it mention every todo?"}`.
    The seed installs `summary-review-questions` with four questions.
-2. Open **AI Observability → Review batches**, pick the question set and (optionally) a prompt,
-   and press **Grab 10 recent traces**. API: `POST /ai/observability/review/batches` with
+2. Open **AI Observability → Review batches** (or **Review batches** in the Review queue header),
+   pick the question set and (optionally) a prompt, and press the header **Grab 10 recent
+   traces**. API: `POST /ai/observability/review/batches` with
    `{evaluatorId, promptName?, limit?: 10, name?}`. It takes the newest successful traces with an
    output that are not already in a batch for that question set, so pressing it again gives the
    next 10. Pass `traceIds` instead to pick traces by hand.
 3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side and
    every question with Yes / No. On web, `Y` / `N` answer the highlighted question, `Enter`
-   submits and opens the next item in the batch, and `S` skips. **Rest Yes** answers every open
-   yes/no question with Yes. Items someone assigned to themselves (in progress) stay in the
+   submits and opens the next item in the batch (**Submit and open next**), and `S` skips. **Yes to
+   the rest** answers every open yes/no question with Yes. Items someone assigned to themselves (in progress) stay in the
    batch's next/previous walk until they are submitted or skipped.
 4. Create an `llm-judge` evaluator whose dimension keys match the question keys and whose judge
    prompt returns those keys. On the batch, choose the judge and press **Run on N items**
    (`POST /ai/observability/review/batches/:id/judgeRuns` with `{evaluatorId}`). The judge runs
    on every batch trace through `ObservabilityApp.aiService` (or the caller's `x-ai-api-key`).
-5. Read **Which judges match the humans?**: overall and per-question agreement for each judge,
-   counted only on items people answered and questions the judge also answers. 90% or more is
-   green, 75–89% amber. Click a judge to list where it disagrees, then open the item to see why.
+5. Read **Which judge matches people?**: overall and per-question agreement for each judge,
+   counted only on items people answered and questions the judge also answers. 90% or more reads
+   **Matches**, 75–89% **Close**, and under 75% **Off**. Click a judge to list where it disagrees, then open the item to see why.
    Re-running a judge after editing its prompt replaces that judge's previous result.
 
 The seed adds the batch `Recent summaries — batch 1` (8 of 10 answered) with two judges run:

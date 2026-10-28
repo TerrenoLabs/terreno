@@ -1460,8 +1460,9 @@ jobs:
   # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
   # never installs or executes code from the PR checkout: the working tree is reset to
   # origin/master before anything runs. It waits for every other
-  # check on the head before judging, so it runs once, last. Comment-only while
-  # approveLevels is empty. A not-approved verdict is not a pipeline failure.
+  # check on the head before judging, so it runs once, last. It approves only levels in
+  # approveLevels (low); medium and high get a comment for a human. A not-approved
+  # verdict is not a pipeline failure.
   approve:
     executor: node22
     resource_class: small

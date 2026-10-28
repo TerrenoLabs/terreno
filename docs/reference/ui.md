@@ -1657,6 +1657,35 @@ for that type:
 A value that is already formatted, such as "Oct 8, 2026, 3:00 PM", is not ISO, so a `date`
 column shows it unchanged.
 
+## DataTable column widths
+
+`width` on a `DataTableColumn` is optional. A column with a `width` is always that many
+pixels. A column without one is sized automatically:
+
+1. Its natural width is the wider of its header (title plus the sort, info, and filter icons)
+   and its content, plus cell padding, clamped to 80–360px. Content is read from at most 50
+   rows, spread evenly across `data`. Dates are measured as formatted; boolean cells are a
+   fixed icon width; custom cells whose value is not a string or number count as 120px.
+2. When the table body is wider than the sum of all columns, auto-sized columns grow to fill
+   it, in proportion to their natural widths. When the columns are wider than the body, they
+   keep their natural widths and the table scrolls horizontally.
+
+Text is measured with one shared canvas on web and estimated from font size on native, so
+sizing never renders or lays out extra cells. Measurement reruns only when `columns`, `data`,
+`defaultTextSize`, or `customColumnComponentMap` change; a container resize only reruns the
+fill step. Keep `columns` and `data` referentially stable between renders.
+
+```typescript
+const columns: DataTableColumn[] = [
+  {columnType: "text", title: "Name"},            // auto
+  {columnType: "text", title: "Email"},           // auto
+  {columnType: "number", title: "Visits"},        // auto
+  {columnType: "custom", title: "", width: 60},   // fixed
+];
+```
+
+Custom cell components receive the column with its resolved `width`.
+
 ## DataTable server-side filtering
 
 `DataTable` is data-layer agnostic. Optional filter and search props emit a

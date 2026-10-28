@@ -3086,7 +3086,11 @@ export interface DataTableQueryParams {
 export interface DataTableColumn {
   title: string;
   columnType: "text" | "number" | "date" | "boolean" | string;
-  width: number;
+  /**
+   * Fixed column width in pixels. Omit it to size the column from its title and a sample of its
+   * content; auto-sized columns then grow to fill the table's container.
+   */
+  width?: number;
   highlight?: SurfaceColor;
   sortable?: boolean;
   infoModalText?: string;

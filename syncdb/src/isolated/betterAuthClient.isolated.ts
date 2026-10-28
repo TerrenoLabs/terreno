@@ -1,6 +1,10 @@
+/**
+ * Isolated because these suites `mock.module` Better Auth and expo-secure-store. A shared
+ * `bun test` process would keep those replacements for every other syncdb file.
+ */
 import {afterAll, afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 
-import type {BetterAuthSessionClientLike} from "./betterAuthTypes";
+import type {BetterAuthSessionClientLike} from "../auth/betterAuthTypes";
 
 type ExpoOptions = {
   scheme?: string;
@@ -88,7 +92,7 @@ const mockSecureStore = (): void => {
 mockSecureStore();
 
 const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
-const {bridgeBetterAuthReactClient} = await import("./betterAuthReactClient");
+const {bridgeBetterAuthReactClient} = await import("../auth/betterAuthReactClient");
 const {
   completeBetterAuthOAuthHandoff,
   createBetterAuthClient,
@@ -97,7 +101,7 @@ const {
   repairCookieJar,
   signInSocialWithHandoff,
   withCookieJarRepair,
-} = await import("./betterAuthClient");
+} = await import("../auth/betterAuthClient");
 // The real, unmocked vanilla client: it runs captured options through Better Auth's own
 // route proxy and better-fetch hook pipeline, so hook ordering is proven rather than assumed.
 const {createAuthClient: createRealAuthClient} = await import("better-auth/client");

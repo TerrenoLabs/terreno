@@ -1,3 +1,7 @@
+/**
+ * Isolated so shared-suite `mock.module("expo-router")` calls cannot replace `router.push`
+ * before these spies run.
+ */
 // noExplicitAny: test mocks use loosely typed hook doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {afterEach, beforeEach, describe, expect, it, type Mock, spyOn} from "bun:test";
@@ -11,7 +15,7 @@ import {
   resetAdminModelApiDouble,
 } from "../testing/useAdminModelApiDouble";
 import type {AdminModelConfig} from "../types";
-import {ModelsGridWidget} from "./ModelsGridWidget";
+import {ModelsGridWidget} from "../widgets/ModelsGridWidget";
 
 let routerPush: Mock<(...args: unknown[]) => void>;
 

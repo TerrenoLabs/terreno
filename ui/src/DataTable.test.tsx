@@ -1,7 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {type FC, useState} from "react";
-import {Platform, StyleSheet} from "react-native";
+import {Platform, type StyleProp, StyleSheet, type ViewStyle} from "react-native";
 
 import type {DataTableCustomComponentMap, DataTableProps} from "./Common";
 import {DataTable} from "./DataTable";
@@ -943,6 +943,74 @@ describe("DataTable", () => {
       );
       expect(getByText("Custom 6")).toBeTruthy();
       expect(getByText("Custom 2026-03-14")).toBeTruthy();
+    });
+  });
+
+  describe("auto column widths", () => {
+    interface HostNode {
+      props?: {style?: unknown};
+      parent: HostNode | null;
+    }
+    const headerCellWidth = (titleNode: HostNode): number | undefined => {
+      let node: HostNode | null = titleNode;
+      while (node) {
+        const width = StyleSheet.flatten(node.props?.style as StyleProp<ViewStyle>)?.width;
+        if (typeof width === "number") {
+          return width;
+        }
+        node = node.parent;
+      }
+      return undefined;
+    };
+
+    const autoColumns = [
+      {columnType: "text", title: "Name"},
+      {columnType: "text", title: "Notes"},
+      {columnType: "number", title: "Fixed", width: 90},
+    ];
+    const autoData = [
+      [
+        {value: "Ada"},
+        {value: "A much longer note that should make this column wider"},
+        {value: 1},
+      ],
+    ];
+
+    it("sizes columns without a width from their content and keeps explicit widths", () => {
+      const {getByText} = renderWithTheme(<DataTable columns={autoColumns} data={autoData} />);
+      const nameWidth = headerCellWidth(getByText("Name"));
+      const notesWidth = headerCellWidth(getByText("Notes"));
+      expect(nameWidth).toBeGreaterThan(0);
+      expect(notesWidth).toBeGreaterThan(nameWidth!);
+      expect(headerCellWidth(getByText("Fixed"))).toBe(90);
+    });
+
+    it("grows auto-sized columns to fill the measured container", async () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <DataTable columns={autoColumns} data={autoData} testID="auto-table" />
+      );
+      await act(async () => {
+        fireEvent(getByTestId("auto-table.body"), "layout", {
+          nativeEvent: {layout: {height: 400, width: 1602, x: 0, y: 0}},
+        });
+      });
+      const widths = ["Name", "Notes", "Fixed"].map((title) => headerCellWidth(getByText(title)));
+      expect(widths[2]).toBe(90);
+      // The container is 1602 wide with a 1px border on each side.
+      expect(widths.reduce((sum: number, width) => sum + (width ?? 0), 0)).toBe(1600);
+    });
+
+    it("leaves explicit widths alone when the container is wider", async () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <DataTable columns={sampleColumns} data={sampleData} testID="fixed-table" />
+      );
+      await act(async () => {
+        fireEvent(getByTestId("fixed-table.body"), "layout", {
+          nativeEvent: {layout: {height: 400, width: 1200, x: 0, y: 0}},
+        });
+      });
+      expect(headerCellWidth(getByText("Name"))).toBe(150);
+      expect(headerCellWidth(getByText("Age"))).toBe(100);
     });
   });
 });

@@ -368,7 +368,10 @@ registered `DemoConfig` demo and story through `renderWithTheme` from
 Pull requests also run the `New file coverage` workflow. Every newly added workspace
 `.ts` or `.tsx` implementation file must have at least 90% function coverage and 90%
 line coverage. Test, spec, story, generated OpenAPI SDK, `dist`, isolated-test,
-`src/types` type modules, demo `story-config/*.config.tsx`, and Expo Router route
+`src/types` type modules, modules whose only exports are `interface` and `type`
+aliases (comments and string literals do not count; TypeScript erases them, so
+Bun writes no LCOV record), demo
+`story-config/*.config.tsx`, and Expo Router route
 files (`index`, `_layout`, `+not-found`, `[param]`, plus example recovery screens
 `forgotPassword` / `resetPassword` / `verifyEmail`) are excluded. A new implementation
 file that is absent from LCOV is treated as 0% covered, except files listed in

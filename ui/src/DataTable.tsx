@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import {
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
@@ -34,6 +35,15 @@ import type {
 } from "./Common";
 import {readableTextColor} from "./colorContrast";
 import {DataTableHeaderInfoMarkdown} from "./DataTableHeaderInfoMarkdown";
+import {
+  DATA_TABLE_BORDER_WIDTH,
+  DATA_TABLE_CELL_PADDING,
+  DATA_TABLE_MORE_COLUMN_WIDTH,
+  DATA_TABLE_SORT_BUTTON_MARGIN,
+  DATA_TABLE_SORT_BUTTON_SIZE,
+  fitDataTableColumnWidths,
+  getDataTableNaturalWidths,
+} from "./dataTableColumnWidths";
 import {
   DataTableAdditionalFiltersWeb,
   DataTableColumnFilterWeb,
@@ -62,6 +72,9 @@ const DATA_TABLE_INITIAL_NUM_TO_RENDER = 15;
 const DATA_TABLE_MAX_TO_RENDER_PER_BATCH = 10;
 const DATA_TABLE_WINDOW_SIZE = 5;
 const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
+
+/** A column after auto-sizing: every column has a resolved pixel width. */
+type SizedDataTableColumn = DataTableColumn & {width: number};
 
 /** Inverted text when primary text falls below WCAG AA on the cell's highlight fill. */
 // Dark neutralLight (#686868) is too light for a stripe: ghost and link text drop near 2:1 on it.
@@ -199,7 +212,7 @@ const DataTableCellComponent: FC<InternalDataTableCellProps> = ({
         height,
         justifyContent: "center",
         overflow: "hidden",
-        padding: 16,
+        padding: DATA_TABLE_CELL_PADDING,
         position: "relative",
         width: columnDef.width,
         zIndex: 1,
@@ -227,7 +240,7 @@ const DataTableCell = memo(DataTableCellComponent);
 interface DataTableRowProps {
   rowData: DataTableCellData[];
   rowIndex: number;
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   columnEnd: number;
   columnStart: number;
   pinnedColumns: number;
@@ -323,7 +336,7 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
         borderBottomWidth: 1,
         height: rowHeight ?? 54,
         justifyContent: "center",
-        width: 48,
+        width: DATA_TABLE_MORE_COLUMN_WIDTH,
       }}
     >
       <Pressable
@@ -390,7 +403,7 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
         flexDirection: "row",
         height: headerHeight ?? rowHeight,
         justifyContent: isNumberColumn ? "flex-end" : "space-between",
-        padding: 16,
+        padding: DATA_TABLE_CELL_PADDING,
         width: column.width,
         ...(isPinnedHorizontal && {
           left: pinnedLeft,
@@ -431,10 +444,10 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
                   alignItems: "center",
                   backgroundColor: sort ? theme.surface.primary : theme.surface.neutralLight,
                   borderRadius: theme.radius.rounded,
-                  height: 16,
+                  height: DATA_TABLE_SORT_BUTTON_SIZE,
                   justifyContent: "center",
-                  marginLeft: 8,
-                  width: 16,
+                  marginLeft: DATA_TABLE_SORT_BUTTON_MARGIN,
+                  width: DATA_TABLE_SORT_BUTTON_SIZE,
                 }}
               >
                 <FontAwesome6
@@ -456,7 +469,7 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
 };
 
 interface DataTableHeaderProps {
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   hasMoreContent: boolean;
   pinnedColumns: number;
   pinnedLeftOffsets: number[];
@@ -500,7 +513,7 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
             borderBottomColor: theme.border.default,
             borderBottomWidth: 1,
             height: headerHeight ?? rowHeight,
-            width: 48,
+            width: DATA_TABLE_MORE_COLUMN_WIDTH,
             zIndex: 11,
           }}
         />
@@ -569,7 +582,7 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
 
 interface DataTableContentProps {
   data: DataTableCellData[][];
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   pinnedColumns: number;
   alternateRowBackground: boolean;
   pinnedLeftOffsets: number[];
@@ -852,7 +865,7 @@ const DataTableContentComponent: FC<DataTableContentProps> = ({
               left: 0,
               position: "absolute",
               top: 0,
-              width: 48,
+              width: DATA_TABLE_MORE_COLUMN_WIDTH,
               zIndex: 1,
             }}
           >
@@ -1061,7 +1074,45 @@ const DataTableComponent: FC<DataTableProps> = ({
     setNativeSearchDraft("");
   }, [columnFilters]);
 
-  const columnWidths = useMemo(() => columns.map((col) => col.width), [columns]);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const moreColumnWidth = moreContentComponent ? DATA_TABLE_MORE_COLUMN_WIDTH : 0;
+  // Measure text only when columns or data change; a resize only re-runs the cheap fit below.
+  const naturalWidths = useMemo(
+    () =>
+      getDataTableNaturalWidths({
+        columns,
+        customColumnTypes: customColumnComponentMap
+          ? new Set(Object.keys(customColumnComponentMap))
+          : undefined,
+        data,
+        defaultTextSize,
+        formatDate: formatDataTableDate,
+        hasFilters: Boolean(onFilterValuesChange),
+      }),
+    [columns, customColumnComponentMap, data, defaultTextSize, onFilterValuesChange]
+  );
+  const columnWidths = useMemo(
+    () =>
+      fitDataTableColumnWidths({
+        availableWidth: availableWidth > 0 ? availableWidth - moreColumnWidth : 0,
+        columns,
+        naturalWidths,
+      }),
+    [availableWidth, columns, moreColumnWidth, naturalWidths]
+  );
+  const sizedColumns = useMemo(
+    (): SizedDataTableColumn[] =>
+      columns.map((column, index) =>
+        column.width === columnWidths[index]
+          ? (column as SizedDataTableColumn)
+          : {...column, width: columnWidths[index]}
+      ),
+    [columns, columnWidths]
+  );
+  const handleBodyLayout = useCallback((event: LayoutChangeEvent): void => {
+    const width = Math.floor(event.nativeEvent.layout.width - DATA_TABLE_BORDER_WIDTH * 2);
+    setAvailableWidth((previous) => (previous === width ? previous : width));
+  }, []);
   const pinnedLeftOffsets = useMemo(() => {
     let currentOffset = 0;
     return columnWidths.map((width) => {
@@ -1157,9 +1208,10 @@ const DataTableComponent: FC<DataTableProps> = ({
         </Box>
       ) : null}
       <View
+        onLayout={handleBodyLayout}
         style={{
           borderColor: theme.border.default,
-          borderWidth: 1,
+          borderWidth: DATA_TABLE_BORDER_WIDTH,
           flex: 1,
           height: "100%",
           minHeight: 0,
@@ -1167,7 +1219,7 @@ const DataTableComponent: FC<DataTableProps> = ({
         testID={tableTestIDs.body}
       >
         <DataTableHeader
-          columns={columns}
+          columns={sizedColumns}
           filterValues={filterValues}
           hasMoreContent={Boolean(moreContentComponent)}
           headerHeight={headerHeight}
@@ -1190,7 +1242,7 @@ const DataTableComponent: FC<DataTableProps> = ({
             <DataTableContent
               alternateRowBackground={alternateRowBackground}
               bodyScrollRef={bodyScrollRef}
-              columns={columns}
+              columns={sizedColumns}
               customColumnComponentMap={customColumnComponentMap}
               data={data}
               defaultTextSize={defaultTextSize}

@@ -64,6 +64,9 @@ admin `Stack`); otherwise its default light screen containers cover the canvas. 
 `padding={0}` so cards sit on that canvas. Custom screens wrap content in
 `AdminScreenPage`; the back arrow uses `router.push(routeBase)` rather than
 `router.back()` because sidebar clicks do not always leave history on web.
+Nested model stacks (`app/admin/[model]/_layout.tsx` and `admin-spa/app/[model]/_layout.tsx`)
+set `headerShown: false` so Expo does not title the screen `index` or add a second back arrow.
+Page components do not draw their own navigator arrows.
 
 ## Where code goes
 

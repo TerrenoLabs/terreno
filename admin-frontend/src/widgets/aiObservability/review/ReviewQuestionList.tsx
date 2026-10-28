@@ -4,13 +4,15 @@ import {Platform} from "react-native";
 import {ReviewScoreField} from "./ReviewScoreField";
 import {dimensionLabel, type EvaluatorDimension, firstUnansweredBoolean} from "./reviewTypes";
 
+/** Yes/No, and later a number input, share this column so the question text stays aligned. */
+const ANSWER_COLUMN_WIDTH = 220;
+
 export interface ReviewQuestionListProps {
   /** Question the keyboard answers; defaults to the first unanswered one. */
   activeKey?: string;
   dimensions: EvaluatorDimension[];
   instructions?: string;
   onAnswer: (key: string, value: boolean | number | string) => void;
-  onAnswerRestYes: () => void;
   scores: Record<string, boolean | number | string>;
 }
 
@@ -21,30 +23,8 @@ const QuestionRow: React.FC<{
   onAnswer: (key: string, value: boolean | number | string) => void;
   value?: boolean | number | string;
 }> = ({dimension, index, isNext, onAnswer, value}) => {
-  if (dimension.dataType !== "boolean") {
-    return (
-      <Box gap={1} paddingY={2} testID={`ai-review-question-${dimension.key}`}>
-        {dimension.question ? <Text bold>{`${index + 1}. ${dimension.question}`}</Text> : undefined}
-        <ReviewScoreField
-          dimension={dimension}
-          onChange={(next) => {
-            onAnswer(dimension.key, next);
-          }}
-          value={value}
-        />
-      </Box>
-    );
-  }
-  return (
-    <Box
-      alignItems="center"
-      border={isNext ? "focus" : "default"}
-      direction="row"
-      gap={3}
-      padding={2}
-      rounding="md"
-      testID={`ai-review-question-${dimension.key}`}
-    >
+  const answer =
+    dimension.dataType === "boolean" ? (
       <Box direction="row" gap={2}>
         <Button
           onClick={() => {
@@ -65,7 +45,29 @@ const QuestionRow: React.FC<{
           variant={value === false ? "destructive" : "outline"}
         />
       </Box>
-      <Box flex="grow" gap={1} minWidth={200}>
+    ) : (
+      <ReviewScoreField
+        dimension={dimension}
+        onChange={(next) => {
+          onAnswer(dimension.key, next);
+        }}
+        value={value}
+      />
+    );
+  return (
+    <Box
+      alignItems="center"
+      border={isNext ? "focus" : "default"}
+      direction="row"
+      gap={3}
+      padding={2}
+      rounding="md"
+      testID={`ai-review-question-${dimension.key}`}
+    >
+      <Box flex="none" testID={`ai-review-answer-${dimension.key}`} width={ANSWER_COLUMN_WIDTH}>
+        {answer}
+      </Box>
+      <Box flex="grow" gap={1} minWidth={0}>
         <Text bold={value === undefined}>{`${index + 1}. ${dimensionLabel(dimension)}`}</Text>
         {dimension.question ? (
           <Text color="secondaryDark" size="sm">
@@ -83,30 +85,16 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
   dimensions,
   instructions,
   onAnswer,
-  onAnswerRestYes,
   scores,
 }) => {
   const answered = dimensions.filter((dimension) => scores[dimension.key] !== undefined).length;
   const nextKey = activeKey ?? firstUnansweredBoolean(dimensions, scores);
-  const hasUnansweredBoolean = dimensions.some(
-    (dimension) => dimension.dataType === "boolean" && scores[dimension.key] === undefined
-  );
 
   return (
     <Box gap={2} testID="ai-review-questions">
-      <Box alignItems="center" direction="row" gap={2} justifyContent="between" wrap>
-        <Text color="secondaryDark" testID="ai-review-questions-progress">
-          {`${answered} of ${dimensions.length} answered`}
-        </Text>
-        <Button
-          disabled={!hasUnansweredBoolean}
-          onClick={onAnswerRestYes}
-          size="sm"
-          testID="ai-review-questions-rest-yes"
-          text="Rest Yes"
-          variant="secondary"
-        />
-      </Box>
+      <Text color="secondaryDark" testID="ai-review-questions-progress">
+        {`${answered} of ${dimensions.length} answered`}
+      </Text>
       {instructions ? <Text color="secondaryDark">{instructions}</Text> : undefined}
       {dimensions.map((dimension, index) => (
         <QuestionRow

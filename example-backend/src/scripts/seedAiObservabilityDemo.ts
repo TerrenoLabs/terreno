@@ -30,6 +30,7 @@ import {
 } from "@terreno/ai";
 import {BackgroundTask, type SeedChangeResult} from "@terreno/api";
 import {DateTime} from "luxon";
+import mongoose from "mongoose";
 import {User} from "../models/user";
 
 export const SEED_FIXTURE_MODEL_ID = "seed-fixture";
@@ -735,6 +736,12 @@ const SUMMARY_QUESTION_SET_EVALUATOR = {
 export const OUTPUT_QUALITY_QUESTIONS = "output-quality-questions";
 export const HELPFULNESS_QUESTIONS = "helpfulness-questions";
 
+/** Queue items seeded before the three-question sets still point at these one-score templates. */
+const LEGACY_QUEUE_EVALUATORS: Record<string, string> = {
+  "correctness-human": OUTPUT_QUALITY_QUESTIONS,
+  "helpfulness-human": HELPFULNESS_QUESTIONS,
+};
+
 const REVIEW_QUEUE_QUESTION_SETS = [
   {
     description: "Yes/no questions reviewers answer for queued traces flagged by feedback or evals",
@@ -1111,14 +1118,26 @@ const ensureEvaluators = async (
   }
   for (const questionSet of [SUMMARY_QUESTION_SET_EVALUATOR, ...REVIEW_QUEUE_QUESTION_SETS]) {
     const existing = await evaluatorStore.getByName(questionSet.name);
+    const drifted = existing ? questionSetDrifted(existing, questionSet) : false;
     output.changes.push({
-      change: existing ? "unchanged" : "created",
+      change: !existing ? "created" : drifted && !dryRun ? "updated" : "unchanged",
       count: 1,
       key: JSON.stringify({name: questionSet.name}),
       model: "ObsEvaluator",
     });
-    if (!existing && !dryRun) {
+    if (dryRun) {
+      continue;
+    }
+    if (!existing) {
       await evaluatorStore.create(questionSet);
+      continue;
+    }
+    if (drifted) {
+      await evaluatorStore.update(existing.id, {
+        description: questionSet.description,
+        dimensions: questionSet.dimensions,
+        instructions: questionSet.instructions,
+      });
     }
   }
   for (const judge of SUMMARY_JUDGE_EVALUATORS) {
@@ -1138,6 +1157,79 @@ const ensureEvaluators = async (
       target: "full trace",
       type: "llm-judge",
     });
+  }
+};
+
+const questionSetDrifted = (
+  existing: {
+    description?: string;
+    dimensions: Array<{dataType: string; key: string; question?: string}>;
+    instructions?: string;
+  },
+  questionSet: {
+    description: string;
+    dimensions: Array<{dataType: string; key: string; question?: string}>;
+    instructions: string;
+  }
+): boolean => {
+  if (existing.instructions !== questionSet.instructions) {
+    return true;
+  }
+  if (existing.description !== questionSet.description) {
+    return true;
+  }
+  if (existing.dimensions.length !== questionSet.dimensions.length) {
+    return true;
+  }
+  return questionSet.dimensions.some((dimension, index) => {
+    const current = existing.dimensions[index];
+    return (
+      current?.key !== dimension.key ||
+      current.dataType !== dimension.dataType ||
+      current.question !== dimension.question
+    );
+  });
+};
+
+/** Point queue items that still use a one-score template at the three-question sets. */
+const repairLegacyReviewQueue = async (
+  dryRun: boolean,
+  evaluatorStore: LocalEvaluatorStore,
+  output: AiObservabilityDemoResult
+): Promise<void> => {
+  if (dryRun) {
+    return;
+  }
+  const evaluators = await evaluatorStore.list();
+  const byName = new Map(evaluators.map((row) => [row.name, row]));
+  await new LocalReviewStore().list();
+  const ObsReviewItem = mongoose.model("ObsReviewItem");
+  for (const [legacyName, nextName] of Object.entries(LEGACY_QUEUE_EVALUATORS)) {
+    const legacy = byName.get(legacyName);
+    const next = byName.get(nextName);
+    if (!legacy || !next) {
+      continue;
+    }
+    const result = await ObsReviewItem.updateMany(
+      {
+        $or: [{batchId: {$exists: false}}, {batchId: null}],
+        evaluatorId: new mongoose.Types.ObjectId(legacy.id),
+      },
+      {$set: {evaluatorId: new mongoose.Types.ObjectId(next.id)}}
+    );
+    const modified = result.modifiedCount ?? 0;
+    if (modified === 0) {
+      continue;
+    }
+    output.changes.push({
+      change: "updated",
+      count: modified,
+      key: JSON.stringify({from: legacyName, to: nextName}),
+      model: "ObsReviewItem",
+    });
+    output.results.push(
+      `Pointed ${modified} review queue ${modified === 1 ? "item" : "items"} from ${legacyName} to ${nextName}`
+    );
   }
 };
 
@@ -1859,6 +1951,7 @@ export const seedAiObservabilityDemo = async ({
   }
   await ensureExperiments({datasetIds, datasetStore, dryRun, evaluatorStore, output, promptStore});
   await seedTracesAndReview({dryRun, evaluatorStore, output});
+  await repairLegacyReviewQueue(dryRun, evaluatorStore, output);
   await seedReviewBatch({dryRun, evaluatorStore, output, promptStore});
   await seedJudgeCalibration({datasetStore, dryRun, evaluatorStore, output, promptStore});
   return output;

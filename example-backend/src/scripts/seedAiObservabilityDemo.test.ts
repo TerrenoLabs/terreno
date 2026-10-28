@@ -203,7 +203,29 @@ describe("seedAiObservabilityDemo", () => {
     assert.deepInclude(careful?.calibration, {passed: true, stale: false, version: 2});
     assert.closeTo(careful?.calibration?.rate ?? 0, 0.95, 0.001);
 
+    const legacy = (await evaluatorStore.list()).find((row) => row.name === "correctness-human");
+    const pending = queueItems.find((item) => item.status === "pending");
+    const quality = (await evaluatorStore.list()).find((row) => {
+      return row.name === OUTPUT_QUALITY_QUESTIONS;
+    });
+    if (!legacy || !pending || !quality) {
+      assert.fail("Seeded queue evaluators are missing");
+    }
+    await mongoose
+      .model("ObsReviewItem")
+      .updateOne({_id: pending.id}, {$set: {evaluatorId: new mongoose.Types.ObjectId(legacy.id)}});
+    await evaluatorStore.update(quality.id, {
+      dimensions: [{dataType: "boolean", key: "correct", required: true}],
+      instructions: "old single question",
+    });
+
     await seedAiObservabilityDemo({dryRun: false});
+    const repaired = (await new LocalReviewStore().list()).data.find((item) => {
+      return item.id === pending.id;
+    });
+    const repairedEvaluator = await evaluatorStore.get(repaired?.evaluatorId ?? "");
+    assert.equal(repairedEvaluator.name, OUTPUT_QUALITY_QUESTIONS);
+    assert.lengthOf(repairedEvaluator.dimensions, 3);
     assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/}), 30);
     assert.lengthOf((await runner.list({limit: 100})).data, 5);
     assert.deepEqual((await new LocalReviewStore().list()).counts, counts);

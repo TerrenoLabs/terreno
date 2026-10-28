@@ -6,7 +6,7 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {AiReviewItemView} from "./AiReviewItemView";
 import {openBatchItems} from "./batchTypes";
-import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
+import {focusReviewPage, type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
   type EvaluatorDimension,
   firstUnansweredBoolean,
@@ -78,6 +78,14 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     setActiveQuestionKey(firstUnansweredBoolean(detail?.dimensions ?? [], detail?.scores ?? {}));
   }, [detail]);
 
+  // Focus the page once per item so Y/N work before the first click.
+  useEffect(() => {
+    if (!detail?.id) {
+      return;
+    }
+    focusReviewPage();
+  }, [detail?.id]);
+
   const openItem = useCallback(
     (nextId: string): void => {
       router.push(`${prefix}/ai-review-item?id=${encodeURIComponent(nextId)}`);
@@ -122,19 +130,6 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     },
     [booleanDimensions, scores]
   );
-
-  const handleAnswerRestYes = useCallback((): void => {
-    setScores((current) => {
-      const next = {...current};
-      for (const dimension of detail?.dimensions ?? []) {
-        if (dimension.dataType === "boolean" && next[dimension.key] === undefined) {
-          next[dimension.key] = true;
-        }
-      }
-      return next;
-    });
-    setActiveQuestionKey(undefined);
-  }, [detail?.dimensions]);
 
   const handleSubmit = useCallback(async (): Promise<void> => {
     if (!detail) {
@@ -286,7 +281,6 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         detail={detail}
         isPending={currentIndex >= 0}
         isSaving={actionState.isLoading}
-        onAnswerRestYes={handleAnswerRestYes}
         onAssign={handleAssign}
         onCommentChange={setComment}
         onNext={next ? () => openItem(next.id) : undefined}

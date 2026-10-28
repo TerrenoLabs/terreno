@@ -130,11 +130,12 @@ Do this in parallel with steps 1–6 once the feature is reachable.
 7. On each item, compare **What the AI was given** with **What the AI wrote**. Long fields begin
    collapsed with a word count; structured outputs retain field labels and reviewer notes. Use
    **Raw JSON** only when the field view is insufficient.
-8. Score every required evaluator dimension: numeric dimensions use the declared range slider,
-   boolean dimensions use Pass / Fail, and categorical dimensions use pills. Add an optional
-   comment, then **Submit & next**. **Skip** records no score. For the second phase-1 intake path,
-   use **Assign to me** to manually claim an item and move it to In progress. Continue until the
-   toast says **Queue clear**.
+8. Score every required evaluator dimension on the same screen. Yes / No, the numeric slider, and
+   categorical pills sit in a fixed column on the left of each question. On web, `Y` / `N` answer
+   the highlighted question as soon as the item opens, `Enter` submits, and `S` skips. Add an
+   optional comment, then **Submit & next**. **Skip** records no score. For the second phase-1
+   intake path, use **Assign to me** to manually claim an item and move it to In progress.
+   Continue until the toast says **Queue clear**.
 
 Feedback is a score (`source: "user-feedback"`) fanned out to every ScoreSink. Non-owners who are not admin get 403.
 

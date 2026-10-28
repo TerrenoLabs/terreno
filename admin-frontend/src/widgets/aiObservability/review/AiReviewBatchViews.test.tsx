@@ -85,34 +85,26 @@ const batch: ReviewBatchDetail = {
 };
 
 describe("ReviewQuestionList", () => {
-  it("answers questions with Yes/No and fills the rest with Yes", async () => {
+  it("answers every question on one screen", async () => {
     const onAnswer = mock(() => {});
-    const onAnswerRestYes = mock(() => {});
-    const {getByTestId, getByText} = renderWithTheme(
-      <ReviewQuestionList
-        dimensions={QUESTIONS}
-        onAnswer={onAnswer}
-        onAnswerRestYes={onAnswerRestYes}
-        scores={{faithful: true}}
-      />
+    const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+      <ReviewQuestionList dimensions={QUESTIONS} onAnswer={onAnswer} scores={{faithful: true}} />
     );
     expect(getByText("1. Is it faithful?")).toBeTruthy();
     expect(getByText("1 of 2 answered")).toBeTruthy();
+    expect(queryByTestId("ai-review-questions-rest-yes")).toBeNull();
     await press(getByTestId("ai-review-question-concise-no"));
     expect(onAnswer).toHaveBeenCalledWith("concise", false);
-    await press(getByTestId("ai-review-questions-rest-yes"));
-    expect(onAnswerRestYes).toHaveBeenCalled();
     await press(getByTestId("ai-review-question-faithful-yes"));
     expect(onAnswer).toHaveBeenCalledWith("faithful", true);
   });
 
-  it("puts Yes/No before each question and highlights the active question", () => {
+  it("puts answers in a fixed left column and highlights the active question", () => {
     const view = renderWithTheme(
       <ReviewQuestionList
         activeKey="concise"
         dimensions={QUESTIONS}
         onAnswer={() => {}}
-        onAnswerRestYes={() => {}}
         scores={{}}
       />
     );
@@ -123,11 +115,13 @@ describe("ReviewQuestionList", () => {
     );
     const style = (testID: string): string => JSON.stringify(view.getByTestId(testID).props.style);
     expect(style("ai-review-question-concise")).not.toBe(style("ai-review-question-faithful"));
+    expect(style("ai-review-answer-concise")).toContain("220");
+    expect(style("ai-review-answer-faithful")).toContain("220");
   });
 
-  it("answers non-boolean questions through the score field", async () => {
+  it("answers non-boolean questions through the score field in the left column", async () => {
     const onAnswer = mock(() => {});
-    const {getByTestId, getByText} = renderWithTheme(
+    const view = renderWithTheme(
       <ReviewQuestionList
         dimensions={[
           {
@@ -139,12 +133,15 @@ describe("ReviewQuestionList", () => {
           },
         ]}
         onAnswer={onAnswer}
-        onAnswerRestYes={() => {}}
         scores={{}}
       />
     );
-    expect(getByText("1. What is the tone?")).toBeTruthy();
-    await press(getByTestId("ai-review-score-tone-safe"));
+    expect(view.getByText("1. What is the tone?")).toBeTruthy();
+    const tree = JSON.stringify(view.toJSON());
+    expect(tree.indexOf("ai-review-score-tone-safe")).toBeLessThan(
+      tree.indexOf("1. What is the tone?")
+    );
+    await press(view.getByTestId("ai-review-score-tone-safe"));
     expect(onAnswer).toHaveBeenCalledWith("tone", "safe");
   });
 });

@@ -47,6 +47,9 @@ const syncConflicts = useConflicts();
 </AdminProvider>
 ```
 
+The nested `app/admin/[model]/_layout.tsx` stack sets `headerShown: false` too. Without that,
+Expo titles the screen `index` and draws a second back arrow above `AdminScreenPage`.
+
 Render this tree inside `SyncDbProvider client={adminSyncDb}`. If product screens
 also sync the same collection, make `adminSyncDb` a dedicated client with a unique
 store name and `windowCollections` set; do not mix admin rows into the owner/tenant

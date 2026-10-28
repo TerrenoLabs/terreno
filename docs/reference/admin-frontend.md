@@ -538,12 +538,16 @@ oldest-first and lists the trace action, prompt, assignee, waiting time, and sta
 **Start reviewing — oldest first** opens the first pending item; the empty state names both
 Traces intake and manual **Assign to me** assignment.
 
-`ai-review-item?id=` shows "Item N of M pending", previous/next navigation, read-only
-**What the AI was given** / **What the AI wrote** panels, collapsed long fields with word
-counts, reviewer notes, and a collapsed Raw JSON disclosure. Score controls come from evaluator
-dimensions (numeric slider, boolean Pass / Fail, categorical pills). Actions are
-**Submit & next**, **Skip**, and **Assign to me**; completion toasts report the remaining count
-or **Queue clear**.
+`ai-review-item?id=` shows "Item N of M pending", previous/next navigation, and read-only
+**What the AI was given** / **What the AI wrote** panels in equal columns. Each heading sits
+outside its card. Long fields start collapsed with a word count; reviewer notes and a collapsed
+Raw JSON disclosure stay available. Every question is on one screen: the answer control (Yes / No,
+numeric slider, or categorical pills) is a fixed-width column on the left and the question is on
+the right. There is no "Answer the question" heading. On web, `Y` / `N` answer the highlighted
+question as soon as the item opens (before the first click), `Enter` submits, and `S` skips.
+Actions are **Submit & next**, **Skip**, and **Assign to me**; completion toasts report the
+remaining count or **Queue clear**. The nested admin stack hides its header
+(`headerShown: false`); `AdminScreenPage` owns the back arrow.
 
 `ai-evaluators` lists evaluators with type badge, dimension summary, target, and run-mode chips.
 **Create evaluator** opens `ai-evaluator-new` with the name and optional purpose first, then how

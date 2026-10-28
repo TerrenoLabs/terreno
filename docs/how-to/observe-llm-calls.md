@@ -286,6 +286,8 @@ So `?prompt=base-rules` on the trace list finds every call that used the shared 
 4. Open an item: `GET /ai/observability/review/:id` returns evaluator dimensions plus `given` / `wrote` panels (variable labels when present, otherwise raw keys).
 5. `POST /ai/observability/review/:id` with `action: "submit"` writes dimension-keyed scores through every ScoreSink and marks the item `done` (it leaves the pending list). `skip` and `assign` move status to `skipped` / `in_progress`.
 
+The seeded queue uses `output-quality-questions` and `helpfulness-questions`: three required yes/no questions on one screen. Re-running `bun run backend:seed` updates those question sets in place and points any queue item still using `correctness-human` or `helpfulness-human` at the matching three-question set. On the item screen, **What the AI was given** and **What the AI wrote** are equal columns with the heading outside the card. Yes / No (and a numeric or categorical control) sit in a fixed left column. On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter` submits, and `S` skips.
+
 ## Check that an LLM judge agrees with people
 
 Use a review batch: a fixed set of traces (one input and one output each) that reviewers answer
@@ -300,11 +302,11 @@ the same list of questions for. Then run LLM judges over the same traces and com
    `{evaluatorId, promptName?, limit?: 10, name?}`. It takes the newest successful traces with an
    output that are not already in a batch for that question set, so pressing it again gives the
    next 10. Pass `traceIds` instead to pick traces by hand.
-3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side and
-   every question with Yes / No. On web, `Y` / `N` answer the highlighted question, `Enter`
-   submits and opens the next item in the batch, and `S` skips. **Rest Yes** answers every open
-   yes/no question with Yes. Items someone assigned to themselves (in progress) stay in the
-   batch's next/previous walk until they are submitted or skipped.
+3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side, in
+   equal columns, and every question with Yes / No in a fixed left column. On web, `Y` / `N`
+   answer the highlighted question as soon as the item opens, `Enter` submits and opens the next
+   item in the batch, and `S` skips. Items someone assigned to themselves (in progress) stay in
+   the batch's next/previous walk until they are submitted or skipped.
 4. Create an `llm-judge` evaluator whose dimension keys match the question keys and whose judge
    prompt returns those keys. On the batch, choose the judge and press **Run on N items**
    (`POST /ai/observability/review/batches/:id/judgeRuns` with `{evaluatorId}`). The judge runs

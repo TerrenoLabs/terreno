@@ -577,8 +577,10 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 
 `POST /ai/observability/traces/review` requires a `human` `ObsEvaluator`. Its
 `dimensions[]` render as reviewer score fields and `instructions` render above the review form.
-Each dimension may set `question`, which the review screen shows instead of the key; yes/no
-questions render as Yes / No rows with keyboard shortcuts on web.
+Each dimension may set `question`, which the review screen shows instead of the key. Yes / No,
+numeric, and categorical controls render in a fixed left column, with the question on the right.
+On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter` submits, and
+`S` skips.
 Automatic evaluator types return **400** instead of entering the human queue. Submitting a review
 requires every dimension marked `required`; omitted optional dimensions do not create empty score
 rows. The local score store remains the fallback when no external score sink is configured.

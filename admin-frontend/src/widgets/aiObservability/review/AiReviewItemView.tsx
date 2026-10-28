@@ -10,7 +10,6 @@ export interface AiReviewItemViewProps {
   detail: ReviewDetail;
   isPending: boolean;
   isSaving?: boolean;
-  onAnswerRestYes?: () => void;
   onAssign: () => void;
   onCommentChange: (value: string) => void;
   onNext?: () => void;
@@ -30,7 +29,6 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
   detail,
   isPending,
   isSaving,
-  onAnswerRestYes,
   onAssign,
   onCommentChange,
   onNext,
@@ -81,11 +79,11 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
       </Box>
     </Box>
 
-    <Box direction="row" gap={3} wrap>
-      <Box flex="grow" minWidth={300}>
+    <Box alignItems="stretch" direction="row" gap={3} width="100%">
+      <Box flex="grow" minWidth={0} width="50%">
         <ReviewReadOnlyPanel fields={detail.panels.given} title="What the AI was given" />
       </Box>
-      <Box flex="grow" minWidth={300}>
+      <Box flex="grow" minWidth={0} width="50%">
         <ReviewReadOnlyPanel fields={detail.panels.wrote} title="What the AI wrote" />
       </Box>
     </Box>
@@ -103,7 +101,6 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
           dimensions={detail.dimensions}
           instructions={detail.instructions}
           onAnswer={onScoreChange}
-          onAnswerRestYes={onAnswerRestYes ?? (() => undefined)}
           scores={scores}
         />
         <TextArea

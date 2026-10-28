@@ -13,14 +13,6 @@ type StreamPart = {type: string; [key: string]: unknown};
 let streamParts: StreamPart[] = [];
 let streamFiles: Array<{base64: string; mediaType: string}> = [];
 
-// Mock langfuseVercelAi to avoid transitive langfuse SDK imports.
-const realLangfuseVercelAi = await import("../langfuseVercelAi");
-mock.module("../langfuseVercelAi", () => ({
-  ...realLangfuseVercelAi,
-  createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-  preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-}));
-
 // Mock the AI SDK so we control exactly which fullStream parts the GPT prompt
 // handler iterates over. All other exports are preserved so AIService and the
 // route helpers keep working.

@@ -167,9 +167,6 @@ const toolMessages = async (conversationId: string) => {
 
 describe("Agent turns across a crash", () => {
   beforeAll(async () => {
-    // The shared preload's beforeEach imports this lazily under a 5 s hook timeout; a
-    // cold first import can exceed it, so load it here first.
-    await import("../langfuseClient");
     createLocalObservabilityPlugin();
     SpanModel = registerObsSpan();
     TraceModel = registerObsTrace();

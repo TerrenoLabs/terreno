@@ -8,7 +8,13 @@ import {createLocalObservabilityPlugin} from "./localPlugin";
 import {registerObsScore} from "./models/obsScore";
 import {registerObsSpan} from "./models/obsSpan";
 import {registerObsTrace} from "./models/obsTrace";
-import {LocalTraceSink, LocalTraceStore, MemoryScoreSink, MemoryTraceSink} from "./traceStore";
+import {
+  LocalTraceSink,
+  LocalTraceStore,
+  MemoryScoreSink,
+  MemoryTraceSink,
+  parseTraceListSort,
+} from "./traceStore";
 
 const iso = (msAgo: number): string => {
   return DateTime.utc().minus({milliseconds: msAgo}).toISO() ?? "";
@@ -242,6 +248,138 @@ describe("LocalTraceStore", () => {
     expect(sinkRow).toBeDefined();
     const sinkDetail = await store.getDetail(sinkRow!.id);
     expect(sinkDetail.name).toBe("sink");
+  });
+
+  describe("sorting", () => {
+    const at = (base: DateTime, ms: number): string => base.plus({milliseconds: ms}).toISO() ?? "";
+
+    const span = (id: string, startedAt: string): TraceRecord["spans"][number] => {
+      return {id, kind: "LLM", name: id, startedAt, status: "ok"};
+    };
+
+    const score = (traceId: string): ScoreRecord => {
+      return {dataType: "boolean", name: "correct", source: "human", traceId, value: true};
+    };
+
+    // bravo: 15 tokens, $0.002, 300 ms, 1 span, 2 scores
+    // alpha: 150 tokens, $0.0001, 100 ms, 3 spans, 0 scores
+    // Charlie: no usage, no end time, 0 spans, 1 score
+    const seed = async (): Promise<{alpha: string; bravo: string; charlie: string}> => {
+      const base = DateTime.utc().minus({hours: 1});
+      const bravo = await store.exportTrace(
+        baseTrace({
+          endedAt: at(base, 300),
+          name: "bravo",
+          spans: [span("b1", at(base, 0))],
+          startedAt: at(base, 0),
+          usage: {costUsd: 0.002, inputTokens: 10, outputTokens: 5},
+        })
+      );
+      const alpha = await store.exportTrace(
+        baseTrace({
+          endedAt: at(base, 1100),
+          name: "alpha",
+          spans: [
+            span("a1", at(base, 1000)),
+            span("a2", at(base, 1000)),
+            span("a3", at(base, 1000)),
+          ],
+          startedAt: at(base, 1000),
+          usage: {costUsd: 0.0001, inputTokens: 100, outputTokens: 50},
+        })
+      );
+      const charlie = await store.exportTrace(
+        baseTrace({
+          endedAt: undefined,
+          name: "Charlie",
+          spans: [],
+          startedAt: at(base, 2000),
+          usage: undefined,
+        })
+      );
+      await store.exportScore(score(bravo.id));
+      await store.exportScore(score(bravo.id));
+      await store.exportScore(score(charlie.id));
+      return {alpha: alpha.id, bravo: bravo.id, charlie: charlie.id};
+    };
+
+    const names = async (sort?: string): Promise<string[]> => {
+      const listed = await store.list({sort});
+      return listed.data.map((row) => row.name);
+    };
+
+    const pagedNames = async (sort: string): Promise<string[]> => {
+      const first = await store.list({limit: 2, page: 1, sort});
+      const second = await store.list({limit: 2, page: 2, sort});
+      expect(first.meta.total).toBe(3);
+      return [...first.data, ...second.data].map((row) => row.name);
+    };
+
+    const cases: Array<[string, string[]]> = [
+      ["startedAt", ["bravo", "alpha", "Charlie"]],
+      ["-startedAt", ["Charlie", "alpha", "bravo"]],
+      ["name", ["alpha", "bravo", "Charlie"]],
+      ["-name", ["Charlie", "bravo", "alpha"]],
+      ["tokens", ["bravo", "alpha", "Charlie"]],
+      ["-tokens", ["alpha", "bravo", "Charlie"]],
+      ["cost", ["alpha", "bravo", "Charlie"]],
+      ["-cost", ["bravo", "alpha", "Charlie"]],
+      ["latency", ["alpha", "bravo", "Charlie"]],
+      ["-latency", ["bravo", "alpha", "Charlie"]],
+      ["spans", ["Charlie", "bravo", "alpha"]],
+      ["-spans", ["alpha", "bravo", "Charlie"]],
+      ["scores", ["alpha", "Charlie", "bravo"]],
+      ["-scores", ["bravo", "Charlie", "alpha"]],
+    ];
+
+    for (const [sort, expected] of cases) {
+      it(`orders every page by ${sort}`, async () => {
+        await seed();
+        expect(await names(sort)).toEqual(expected);
+        expect(await pagedNames(sort)).toEqual(expected);
+      });
+    }
+
+    it("defaults to newest first and keeps counts on sorted rows", async () => {
+      const ids = await seed();
+      expect(await names()).toEqual(["Charlie", "alpha", "bravo"]);
+      const bySpans = await store.list({sort: "-spans"});
+      expect(bySpans.data[0]).toMatchObject({id: ids.alpha, scoreCount: 0, spanCount: 3});
+    });
+
+    it("orders by status in both directions", async () => {
+      await seed();
+      await store.exportTrace(baseTrace({name: "zulu", status: "error"}));
+      const asc = await store.list({sort: "status"});
+      expect(asc.data.map((row) => row.status)).toEqual(["error", "ok", "ok", "ok"]);
+      const desc = await store.list({limit: 3, page: 2, sort: "-status"});
+      expect(desc.data.map((row) => row.name)).toEqual(["zulu"]);
+    });
+
+    it("sorts inside the filtered set", async () => {
+      await seed();
+      await store.exportTrace(baseTrace({name: "zulu", status: "error"}));
+      const okOnly = await store.list({sort: "-tokens", status: "ok"});
+      expect(okOnly.data.map((row) => row.name)).toEqual(["alpha", "bravo", "Charlie"]);
+    });
+
+    it("rejects unknown sort keys with a 400", async () => {
+      await expect(store.list({sort: "created"})).rejects.toMatchObject({status: 400});
+      await expect(store.list({sort: "-"})).rejects.toMatchObject({status: 400});
+      expect(parseTraceListSort(undefined)).toEqual({direction: -1, key: "startedAt"});
+      expect(parseTraceListSort("cost")).toEqual({direction: 1, key: "cost"});
+    });
+  });
+
+  it("filters by any of several prompt names", async () => {
+    await store.exportTrace(baseTrace({name: "one", prompts: [{name: "summarize", version: 1}]}));
+    await store.exportTrace(baseTrace({name: "two", prompts: [{name: "title", version: 1}]}));
+    await store.exportTrace(baseTrace({name: "three", prompts: [{name: "other", version: 1}]}));
+    const listed = await store.list({prompt: ["summarize", "title"], sort: "name"});
+    expect(listed.data.map((row) => row.name)).toEqual(["one", "two"]);
+    await expect(store.list({prompt: ["summarize", "title"], promptVersion: 1})).rejects.toThrow(
+      /exactly one prompt/
+    );
   });
 
   it("throws when loading an unknown trace", async () => {

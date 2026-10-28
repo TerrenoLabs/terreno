@@ -18,7 +18,7 @@ Ships design screens: Prompts, Prompt editor (+ Playground), Traces, Trace detai
   - Files: `ai/src/observability/types.ts`, `ai/src/observability/observabilityApp.ts`, `ai/src/observability/observabilityApp.test.ts`, `ai/src/index.ts`
   - Blocked by: none
   - Docs: `docs/explanation/ai-observability.md` (two planes + config errors)
-  - Acceptance: unit tests for local-only valid config, illegal mix, langfuse review queue, missing plugin for a primary
+  - Acceptance: unit tests for local-only valid config, illegal mix, non-local review queue, missing plugin for a primary
 
 - [x] **Task 1.2**: In-memory sinks + `AIService` emit + production prompt resolve
   - Delivers: `promptName` + `promptLabel` resolves via `PromptRegistry` **before the model call**, even when `skipTrace` is true or no trace sink is registered; missing registry/label/version returns 400 without a model call; resolved-version `sensitive` applies unless the generate option overrides it; every `generate*` exports a trace unless `skipTrace`; sink failures logged not thrown; `AIRequest` still written; `userId` / `sessionId` / `sensitive` / `promptRef` / `priceMap` on options; `costUsd` omitted for unpriced models
@@ -171,7 +171,7 @@ Ships design screens: Evaluators, Evaluator detail, New evaluator, Datasets, Dat
   - Acceptance: widget tests for each tab and the empty dataset; `verify-ui-changes` bulk-adds traces and sees them under Needs review
 
 - [ ] **Task 2.9**: Experiment screens (list, wizard, results)
-  - Delivers: list with status badge, running progress bar and cost, plus the BackgroundTask/Langfuse footnote; 4-step wizard with a completed-step rail, dataset picker showing counts and schema match, version checkboxes tagged latest/production/superseded, evaluator checkboxes with per-item cost, and a Review & run step showing the estimate; results with gate tiles, "N gates failing", the **Promote blocked** state naming the failing gate, the outliers list with reason chips, the side-by-side table with failed rows floated and highlighted, and the promote confirm modal
+  - Delivers: list with status badge, running progress bar and cost, plus the BackgroundTask footnote; 4-step wizard with a completed-step rail, dataset picker showing counts and schema match, version checkboxes tagged latest/production/superseded, evaluator checkboxes with per-item cost, and a Review & run step showing the estimate; results with gate tiles, "N gates failing", the **Promote blocked** state naming the failing gate, the outliers list with reason chips, the side-by-side table with failed rows floated and highlighted, and the promote confirm modal
   - Files: `admin-frontend/src/widgets/aiObservability/experiments/*.tsx`
   - Blocked by: 2.5, 2.8, 1.9
   - Docs: how-to steps 5–6
@@ -188,7 +188,7 @@ Ships design screens: Evaluators, Evaluator detail, New evaluator, Datasets, Dat
 
 # Phase 3 — Analytics and pluggable backends
 
-Ships design screens: Sessions, Session timeline, Users, User AI profile, Costs, plus sink health and Open in Langfuse.
+Ships design screens: Sessions, Session timeline, Users, User AI profile, Costs, plus sink health.
 
 - [ ] **Task 3.1**: Session, user, and cost aggregates + screens
   - Delivers: `GET /sessions`, `/sessions/:id`, `/users`, `/users/:id`, `/costs`; Sessions list with the Traces/Sessions toggle and the timeline detail; Users list subtitled "AI cost and usage per user — not the user CRUD table" and the profile with masked email, **no prompt content**, and 7d/30d/all-time rollups; Costs with the KPI row, by-model table showing **tokens only** for unpriced models plus the "no $0 lie" note, and the by-prompt table
@@ -197,19 +197,9 @@ Ships design screens: Sessions, Session timeline, Users, User AI profile, Costs,
   - Docs: `docs/reference/ai.md` routes; `docs/reference/admin-frontend.md`
   - Acceptance: an unpriced model renders `tokens only` and never `$0`; no prompt or output text appears in any users response; widget tests for each screen
 
-- [ ] **Task 3.2**: Langfuse `TraceSink` + `ScoreSink`
-  - Delivers: adapters wrapping the existing `getLangfuseClient()`; **no second OTel SDK**; best-effort with logged failures
-  - Files: `ai/src/observability/langfuse/traceAdapter.ts`, tests with a mocked client
-  - Blocked by: 1.2
-  - Docs: explanation — `LangfuseApp` vs `ObservabilityApp`
-  - Acceptance: one generate dual-writes; a throwing Langfuse mock leaves the local row intact and the caller unaffected
+- [x] ~~**Task 3.2**: Langfuse `TraceSink` + `ScoreSink`~~ — dropped: Langfuse support was removed from `@terreno/ai`.
 
-- [ ] **Task 3.3**: Langfuse `PromptRegistry` / `DatasetStore` / `ExperimentRunner` + primaries
-  - Delivers: `AI_OBS_*_PRIMARY` env wiring; Terreno HTTP facade delegating to the existing Langfuse admin routes; **Open in Langfuse** deep-link bases on `GET /status`
-  - Files: `ai/src/observability/langfuse/*.ts`, tests
-  - Blocked by: 3.2, 1.5, 2.5
-  - Docs: how-to — switching primaries by env
-  - Acceptance: prompts primary `langfuse` reads through the client; experiments primary `langfuse` starts no `BackgroundTask`; the illegal mixes still fail boot
+- [x] ~~**Task 3.3**: Langfuse `PromptRegistry` / `DatasetStore` / `ExperimentRunner` + primaries~~ — dropped: Langfuse support was removed from `@terreno/ai`.
 
 - [ ] **Task 3.4**: `OtelTraceSink` (OpenInference)
   - Delivers: OTLP exporter behind `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`; `openinference.span.kind` set from the span kind; model and token attributes
@@ -219,11 +209,11 @@ Ships design screens: Sessions, Session timeline, Users, User AI profile, Costs,
   - Acceptance: the mock exporter receives an `LLM` span with model and token attributes
 
 - [ ] **Task 3.5**: Sink health chip, example wiring, and phase-3 docs
-  - Delivers: last-error-per-sink on `GET /status`; the chip renders Langfuse health and active primaries and shows **Open in Langfuse** only when that plugin is registered; example-backend adds the Langfuse and OTel sinks conditionally; docs and the `terreno-langfuse-integration.md` pointer finalized
+  - Delivers: last-error-per-sink on `GET /status`; the chip renders sink health and active primaries; example-backend adds the OTel sink conditionally; docs finalized
   - Files: `ai/src/observability/routes/status.ts`, `admin-frontend/.../shell/*.tsx`, `example-backend/src/server.ts`, docs
-  - Blocked by: 3.1, 3.3, 3.4
+  - Blocked by: 3.1, 3.4
   - Docs: (this task)
-  - Acceptance: chip states covered by widget tests; a Langfuse-less boot shows no deep link; `verify-ui-changes` evidence attached
+  - Acceptance: chip states covered by widget tests; a boot without sinks shows a healthy local-only chip; `verify-ui-changes` evidence attached
 
 ---
 

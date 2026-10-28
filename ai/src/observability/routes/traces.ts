@@ -1,6 +1,11 @@
 import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
-import type {LocalTraceStore} from "../local/traceStore";
+import {
+  DEFAULT_TRACE_LIST_SORT,
+  type LocalTraceStore,
+  parseTraceListSort,
+  TRACE_LIST_SORT_KEYS,
+} from "../local/traceStore";
 import {getObservabilityApp} from "../observabilityAppRegistry";
 import type {ScoreRecord, ScoreSink} from "../types";
 import {
@@ -27,7 +32,7 @@ const parseBoolean = (value: unknown): boolean | undefined => {
   throw new APIError({status: 400, title: "boolean query must be true or false"});
 };
 
-const parsePromptVersion = (value: unknown, prompt?: string): number | undefined => {
+const parsePromptVersion = (value: unknown, prompt?: string | string[]): number | undefined => {
   if (value === undefined) {
     return undefined;
   }
@@ -35,10 +40,35 @@ const parsePromptVersion = (value: unknown, prompt?: string): number | undefined
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new APIError({status: 400, title: "promptVersion must be a positive integer"});
   }
-  if (!prompt) {
+  if (!prompt || prompt.length === 0) {
     throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
   }
   return parsed;
+};
+
+const parsePrompt = (value: unknown): string | string[] | undefined => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+    return value as string[];
+  }
+  if (value === undefined) {
+    return undefined;
+  }
+  throw new APIError({status: 400, title: "prompt must be a string or a list of strings"});
+};
+
+const parseSort = (value: unknown): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new APIError({status: 400, title: "Unknown trace sort key"});
+  }
+  // Validate here so a bad key fails before the store runs any query.
+  parseTraceListSort(value);
+  return value;
 };
 
 const parsePositiveInt = (value: unknown, fallback: number): number => {
@@ -72,11 +102,22 @@ export const addObservabilityTraceRoutes = (
         .withQueryParameter("prompt", {type: "string"}, {required: false})
         .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withQueryParameter("scope", {type: "string"}, {required: false})
+        .withQueryParameter(
+          "sort",
+          {
+            enum: TRACE_LIST_SORT_KEYS.flatMap((key) => [key, `-${key}`]),
+            type: "string",
+          },
+          {
+            description: `Sort column, \`-\` prefix for descending. Defaults to \`${DEFAULT_TRACE_LIST_SORT}\`.`,
+            required: false,
+          }
+        )
         .withResponse(200, {data: {type: "array"}})
         .build()
     ),
     asyncHandler(async (req, res) => {
-      const prompt = typeof req.query.prompt === "string" ? req.query.prompt : undefined;
+      const prompt = parsePrompt(req.query.prompt);
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
         from: typeof req.query.from === "string" ? req.query.from : undefined,
@@ -88,6 +129,7 @@ export const addObservabilityTraceRoutes = (
         scope: typeof req.query.scope === "string" ? req.query.scope : undefined,
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
+        sort: parseSort(req.query.sort),
         status:
           req.query.status === "ok" || req.query.status === "error" ? req.query.status : undefined,
         to: typeof req.query.to === "string" ? req.query.to : undefined,

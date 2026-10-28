@@ -4,19 +4,27 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 
 export interface ReviewListItem {
   assigneeId?: string;
+  batchId?: string;
+  /** Set when reviewers judge a dataset item. */
+  datasetItemId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
+  /** Short preview of what the AI wrote; the queue falls back to the trace name without it. */
+  outputPreview?: string;
   promptName?: string;
   reason: string;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
   traceName: string;
 }
 
 export interface EvaluatorDimension {
   dataType: "boolean" | "categorical" | "numeric";
   key: string;
+  /** Question shown to human reviewers in place of the score key. */
+  question?: string;
   range?: string;
   required: boolean;
 }
@@ -29,6 +37,8 @@ export interface ReviewPanelField {
 }
 
 export interface ReviewDetail {
+  batchId?: string;
+  batchName?: string;
   comment?: string;
   dimensions: EvaluatorDimension[];
   evaluatorId: string;
@@ -42,7 +52,10 @@ export interface ReviewDetail {
   rawOutput?: unknown;
   scores?: Record<string, boolean | number | string>;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
+  /** Set when reviewers judge a dataset item; answers are saved on that item. */
+  datasetItemId?: string;
 }
 
 export const REVIEW_STATUSES: ReviewStatus[] = ["pending", "in_progress", "done", "skipped"];
@@ -151,4 +164,51 @@ export const categoricalOptions = (range?: string): string[] => {
     .split(/[|,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+};
+
+/** Reviewer-facing label for a score: its question when set, otherwise the key. */
+export const dimensionLabel = (dimension: EvaluatorDimension): string => {
+  return dimension.question?.trim() || dimension.key;
+};
+
+/** Key of the first required-or-optional dimension still missing an answer. */
+const firstUnanswered = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
+};
+
+/** The first unanswered question after `fromKey`, wrapping to the start; undefined when all are answered. */
+export const nextUnansweredAfter = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>,
+  fromKey?: string
+): string | undefined => {
+  const start = dimensions.findIndex((dimension) => dimension.key === fromKey) + 1;
+  return firstUnanswered([...dimensions.slice(start), ...dimensions.slice(0, start)], scores);
+};
+
+/** Move the highlighted question up or down one row, stopping at the first and last question. */
+export const stepQuestionKey = (
+  dimensions: EvaluatorDimension[],
+  currentKey: string | undefined,
+  step: 1 | -1
+): string | undefined => {
+  const index = dimensions.findIndex((dimension) => dimension.key === currentKey);
+  if (index < 0) {
+    return (step > 0 ? dimensions[0] : dimensions.at(-1))?.key;
+  }
+  return dimensions[Math.min(dimensions.length - 1, Math.max(0, index + step))]?.key;
+};
+
+/** Key of the first unanswered yes/no question: the one the list highlights and Y or N answers. */
+export const firstUnansweredBoolean = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return firstUnanswered(
+    dimensions.filter((dimension) => dimension.dataType === "boolean"),
+    scores
+  );
 };

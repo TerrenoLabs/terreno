@@ -10,6 +10,11 @@ const obsReviewItemSchema = new mongoose.Schema<ObsReviewItemDocument, ObsReview
       ref: "User",
       type: mongoose.Schema.Types.ObjectId,
     },
+    batchId: {
+      description: "Review batch this item belongs to, when it was created as part of one",
+      ref: "ObsReviewBatch",
+      type: mongoose.Schema.Types.ObjectId,
+    },
     comment: {description: "Reviewer comment submitted with scores", type: String},
     datasetItemId: {
       description: "Optional dataset item this review is bound to",
@@ -49,9 +54,9 @@ const obsReviewItemSchema = new mongoose.Schema<ObsReviewItemDocument, ObsReview
       type: String,
     },
     traceId: {
-      description: "Trace under review",
+      description:
+        "Trace under review. Unset when the item judges a dataset item that has no source trace",
       ref: "ObsTrace",
-      required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
   },
@@ -67,6 +72,10 @@ const reviewIndexSpec: Array<[string, 1]> = [
   ["enqueuedAt", 1],
 ];
 obsReviewItemSchema.index(Object.fromEntries(reviewIndexSpec));
+// Batch list, detail, and queue reads all scope by batchId, then by status.
+obsReviewItemSchema.index({batchId: 1, status: 1});
+// Dataset batches skip items that already wait in an open review for the same question set.
+obsReviewItemSchema.index({datasetItemId: 1, evaluatorId: 1});
 
 export const registerObsReviewItem = (): ObsReviewItemModel => {
   if (mongoose.models.ObsReviewItem) {

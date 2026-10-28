@@ -1,0 +1,247 @@
+import {describe, it} from "bun:test";
+import {
+  LocalDatasetStore,
+  LocalEvaluatorStore,
+  LocalExperimentRunner,
+  LocalPromptStore,
+  LocalReviewBatchStore,
+  LocalReviewStore,
+} from "@terreno/ai";
+import {assert} from "chai";
+import mongoose from "mongoose";
+import {adminScripts} from "../adminScripts";
+import {seedDefaultData} from "./seed-test-data";
+import {
+  CHAT_DATASET_NAME,
+  CHAT_EXPERIMENT,
+  createSeedFixtureClient,
+  HELPFULNESS_QUESTIONS,
+  JOKE_DATASET_NAME,
+  JOKE_EXPERIMENT,
+  OUTPUT_QUALITY_QUESTIONS,
+  SEED_FIXTURE_MODEL_ID,
+  SUMMARIZE_EXPERIMENT_V1_V2,
+  SUMMARIZE_EXPERIMENT_V2_V3,
+  SUMMARIZE_GOLD_DATASET_NAME,
+  SUMMARY_CAREFUL_JUDGE,
+  SUMMARY_DATASET_BATCH,
+  SUMMARY_JUDGE_CALIBRATION,
+  SUMMARY_JUDGE_PROMPT,
+  SUMMARY_QUESTION_SET,
+  SUMMARY_QUICK_JUDGE,
+  SUMMARY_REVIEW_BATCH,
+  SUMMARY_REVIEW_DATASET,
+  seedAiObservabilityDemo,
+} from "./seedAiObservabilityDemo";
+
+const buildRunner = (promptStore: LocalPromptStore): LocalExperimentRunner => {
+  const datasetStore = new LocalDatasetStore(promptStore);
+  const evaluatorStore = new LocalEvaluatorStore(promptStore);
+  return new LocalExperimentRunner({datasetStore, evaluatorStore, promptStore});
+};
+
+const gate = (
+  gates: Array<{dimension: string; passed: boolean; version: number}>,
+  version: number,
+  dimension: string
+): boolean | undefined => {
+  return gates.find((row) => {
+    return row.version === version && row.dimension === dimension;
+  })?.passed;
+};
+
+describe("seedAiObservabilityDemo", () => {
+  it("fills every observability screen and stays idempotent", async () => {
+    await seedDefaultData();
+    await seedAiObservabilityDemo({dryRun: false});
+
+    const promptStore = new LocalPromptStore();
+    const summarize = (await promptStore.list({search: "example-summarize"})).find((entry) => {
+      return entry.name === "example-summarize";
+    });
+    assert.equal(summarize?.latestVersion, 3);
+    assert.equal(summarize?.production, 1);
+    assert.equal(
+      (await promptStore.get({label: "staging", name: "example-summarize"}))?.version,
+      3
+    );
+
+    for (const name of ["joke-generator", "chat-assistant"]) {
+      const registered = await promptStore.get({name});
+      assert.equal(registered?.version, 1, name);
+      assert.equal((await promptStore.get({label: "staging", name}))?.version, 2, name);
+    }
+    assert.match((await promptStore.get({name: "joke-generator"}))?.body ?? "", /witty comedian/);
+
+    const evaluatorNames = (await new LocalEvaluatorStore().list()).map((row) => row.name);
+    assert.includeMembers(evaluatorNames, [
+      "correctness",
+      "correctness-human",
+      "helpfulness",
+      "helpfulness-human",
+      "schema-assert",
+      SUMMARY_QUESTION_SET,
+      SUMMARY_CAREFUL_JUDGE,
+      SUMMARY_QUICK_JUDGE,
+      OUTPUT_QUALITY_QUESTIONS,
+      HELPFULNESS_QUESTIONS,
+    ]);
+
+    const dataset = (await new LocalDatasetStore(promptStore).list()).find((entry) => {
+      return entry.name === SUMMARIZE_GOLD_DATASET_NAME;
+    });
+    assert.equal(dataset?.counts.total, 10);
+    assert.equal(dataset?.counts.needsReview, 2);
+
+    const datasets = await new LocalDatasetStore(promptStore).list();
+    for (const name of [JOKE_DATASET_NAME, CHAT_DATASET_NAME]) {
+      assert.equal(datasets.find((entry) => entry.name === name)?.counts.total, 6, name);
+    }
+
+    const runner = buildRunner(promptStore);
+    const experiments = (await runner.list({promptName: "example-summarize"})).data;
+    const goldRun = experiments.find((row) => row.name === SUMMARIZE_EXPERIMENT_V1_V2);
+    const lengthRun = experiments.find((row) => row.name === SUMMARIZE_EXPERIMENT_V2_V3);
+    if (!goldRun?.results || !lengthRun?.results) {
+      assert.fail("Seeded experiments did not finish");
+    }
+    assert.equal(goldRun.status, "completed");
+    assert.deepEqual(goldRun.results.progress, {completed: 8, total: 8});
+    assert.isFalse(gate(goldRun.results.gates, 1, "correct"));
+    assert.isTrue(
+      goldRun.results.gates.filter((row) => row.version === 2).every((row) => row.passed)
+    );
+    assert.isNotEmpty(goldRun.results.lowConfidenceItemIds);
+    assert.isFalse(gate(lengthRun.results.gates, 3, "schema_valid"));
+    assert.lengthOf(
+      (await runner.get(lengthRun.id)).items.filter((item) => item.failed),
+      2
+    );
+
+    for (const name of [JOKE_EXPERIMENT, CHAT_EXPERIMENT]) {
+      const run = (await runner.list({limit: 100})).data.find((row) => row.name === name);
+      if (!run?.results) {
+        assert.fail(`${name} did not finish`);
+      }
+      assert.isFalse(gate(run.results.gates, 1, "helpfulness"), name);
+      assert.isTrue(
+        run.results.gates.filter((row) => row.version === 2).every((row) => row.passed),
+        name
+      );
+    }
+
+    const ObsTrace = mongoose.model("ObsTrace");
+    assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/}), 30);
+    for (const name of ["joke-generator", "chat-assistant"]) {
+      assert.equal(await ObsTrace.countDocuments({"prompts.name": name}), 6, name);
+    }
+    assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/, status: "error"}), 2);
+
+    const {counts} = await new LocalReviewStore().list();
+    // 11 queue and batch answers plus the 10 dataset items reviewers answered.
+    assert.deepEqual(counts, {done: 21, in_progress: 1, pending: 11, skipped: 1});
+
+    // Every queue item outside the batch asks exactly three yes/no questions.
+    const evaluatorStore = new LocalEvaluatorStore();
+    const queueItems = (await new LocalReviewStore().list()).data.filter((item) => !item.batchId);
+    assert.isAbove(queueItems.length, 0);
+    for (const item of queueItems) {
+      const {dimensions} = await evaluatorStore.get(item.evaluatorId);
+      assert.lengthOf(dimensions, 3, item.id);
+      for (const dimension of dimensions) {
+        assert.equal(dimension.dataType, "boolean", dimension.key);
+        assert.isNotEmpty(dimension.question, dimension.key);
+      }
+    }
+
+    const batchStore = new LocalReviewBatchStore(promptStore);
+    const batchRows = await batchStore.list();
+    assert.sameMembers(
+      batchRows.map((row) => row.name),
+      [SUMMARY_REVIEW_BATCH, SUMMARY_DATASET_BATCH]
+    );
+    const batchRow = batchRows.find((row) => row.name === SUMMARY_REVIEW_BATCH);
+    assert.deepEqual(batchRow?.counts, {done: 8, pending: 2, skipped: 0, total: 10});
+    const batch = await batchStore.get(batchRow?.id ?? "");
+    assert.isTrue(batch.dimensions.every((dimension) => Boolean(dimension.question)));
+    const rates = Object.fromEntries(
+      batch.judges.map((judge) => [judge.evaluatorName, judge.agreement.rate])
+    );
+    assert.closeTo(rates[SUMMARY_CAREFUL_JUDGE] ?? 0, 31 / 32, 0.001);
+    assert.closeTo(rates[SUMMARY_QUICK_JUDGE] ?? 0, 25 / 32, 0.001);
+    assert.equal(batch.judges[0]?.evaluatorName, SUMMARY_CAREFUL_JUDGE);
+
+    // Judge calibration: humans answered every summary in the dataset; two judge prompt versions.
+    const judgePrompt = (await promptStore.list({search: SUMMARY_JUDGE_PROMPT})).find((entry) => {
+      return entry.name === SUMMARY_JUDGE_PROMPT;
+    });
+    assert.equal(judgePrompt?.latestVersion, 2);
+    assert.equal(judgePrompt?.production, 2);
+    const reviewSet = (await new LocalDatasetStore(promptStore).list()).find((entry) => {
+      return entry.name === SUMMARY_REVIEW_DATASET;
+    });
+    assert.equal(reviewSet?.counts.total, 10);
+    assert.deepEqual(
+      reviewSet?.judgments.map(({evaluatorId: _id, ...row}) => row),
+      [{answered: 10, current: 10, evaluatorName: SUMMARY_QUESTION_SET, stale: 0, total: 10}]
+    );
+    const [calibrationRow] = (await runner.list({kind: "judge"})).data;
+    assert.equal(calibrationRow?.name, SUMMARY_JUDGE_CALIBRATION);
+    const calibration = await runner.get(calibrationRow?.id ?? "");
+    assert.equal(calibration.status, "completed");
+    assert.equal(calibration.judgeName, SUMMARY_CAREFUL_JUDGE);
+    assert.equal(calibration.questionSetName, SUMMARY_QUESTION_SET);
+    assert.equal(calibration.datasetName, SUMMARY_REVIEW_DATASET);
+    assert.lengthOf(calibration.items, 10);
+    assert.closeTo(calibration.results?.agreement?.["1"]?.rate ?? 0, 31 / 40, 0.001);
+    assert.closeTo(calibration.results?.agreement?.["2"]?.rate ?? 0, 38 / 40, 0.001);
+    assert.isFalse(gate(calibration.results?.gates ?? [], 1, "agreement"));
+    assert.isTrue(gate(calibration.results?.gates ?? [], 2, "agreement"));
+    const careful = (await evaluatorStore.list()).find((row) => {
+      return row.name === SUMMARY_CAREFUL_JUDGE;
+    });
+    assert.deepInclude(careful?.calibration, {passed: true, stale: false, version: 2});
+    assert.closeTo(careful?.calibration?.rate ?? 0, 0.95, 0.001);
+
+    await seedAiObservabilityDemo({dryRun: false});
+    assert.equal(await ObsTrace.countDocuments({sessionId: /^seed-obs-/}), 30);
+    assert.lengthOf((await runner.list({limit: 100})).data, 5);
+    assert.deepEqual((await new LocalReviewStore().list()).counts, counts);
+    assert.lengthOf(await batchStore.list(), 2);
+  });
+
+  it("writes nothing on a dry run", async () => {
+    await seedDefaultData();
+    const ObsTrace = mongoose.model("ObsTrace");
+    await ObsTrace.deleteMany({});
+
+    const preview = await seedAiObservabilityDemo({dryRun: true});
+
+    assert.equal(await ObsTrace.countDocuments({}), 0);
+    assert.isTrue(
+      preview.changes.some((change) => {
+        return change.model === "ObsTrace" && change.change === "created";
+      })
+    );
+  });
+
+  it("answers summaries and judge calls deterministically", async () => {
+    const client = createSeedFixtureClient();
+    assert.equal(client.modelId, SEED_FIXTURE_MODEL_ID);
+    const fallback = await client.generateText({
+      prompt: "Summarize the following text:\n\nUnseen row.",
+    });
+    assert.equal(fallback, "Unseen row.");
+    const verdict = await client.generateJsonObject<{correct: boolean}>({
+      prompt: 'Model output JSON:\n"unknown"',
+      schema: {} as never,
+      schemaName: "correctness-judge",
+    });
+    assert.isTrue(verdict.correct);
+  });
+
+  it("is registered as an admin script", () => {
+    const script = adminScripts.find(({name}) => name === "seedAiObservabilityDemo");
+    assert.match(script?.description ?? "", /example-summarize-gold/);
+  });
+});

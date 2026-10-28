@@ -246,9 +246,6 @@ const parentTask = ({
 
 describe("rt.runAgent (subagents)", () => {
   beforeAll(async () => {
-    // The shared preload's beforeEach imports this lazily under a 5 s hook timeout; a
-    // cold first import can exceed it, so load it here first.
-    await import("../langfuseClient");
     createLocalObservabilityPlugin();
     SpanModel = registerObsSpan();
     TraceModel = registerObsTrace();
@@ -377,6 +374,16 @@ describe("rt.runAgent (subagents)", () => {
     ).rejects.toThrow(
       harnessErrorMatching("invalidRequest", 'Prompt ref "plan" label must be a string')
     );
+    await expect(
+      harness.createTask(parent, {}, {prompts: [{includes: {}, name: "plan", version: 1} as never]})
+    ).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", 'Prompt ref "plan" includes must be an array')
+    );
+    await expect(
+      harness.createTask(parent, {}, {prompts: [{includes: {}, version: 1} as never]})
+    ).rejects.toThrow(
+      harnessErrorMatching("invalidRequest", "Prompt ref includes must be an array")
+    );
     await expect(harness.createTask(parent, {}, {trace: {tags: ["ok", " "]}})).rejects.toThrow(
       harnessErrorMatching("invalidRequest", "trace.tags must be an array of non-empty strings")
     );
@@ -394,6 +401,23 @@ describe("rt.runAgent (subagents)", () => {
 
     const trace = await TraceModel.findExactlyOne({_id: created.traceId});
     expect(plain(trace.prompts)).toEqual([plan]);
+  });
+
+  it("records a registry prompt's shared includes after it", async () => {
+    const agent = summarizerWith();
+    const parent = parentTask({agent, inputs: []});
+    const {model} = scriptedModel([]);
+    const {harness} = await openProcess({model, registry: [agent, parent]});
+
+    const include = {includedBy: "plan", label: "production", name: "base-rules", version: 4};
+    const created = await harness.createTask(
+      parent,
+      {},
+      {prompts: [{includes: [include], name: "plan", version: 2}]}
+    );
+
+    const trace = await TraceModel.findExactlyOne({_id: created.traceId});
+    expect(plain(trace.prompts)).toEqual([{name: "plan", version: 2}, include]);
   });
 
   it("fails the caller at once for an instructions prompt without a body or a bad prompt ref", async () => {

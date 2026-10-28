@@ -170,10 +170,16 @@ export const runJsonAssertEvaluator = (
   };
 };
 
+/**
+ * Run an llm-judge evaluator. By default the AI client resolves the judge prompt's production
+ * version by name. Pass `judgeSystemPrompt` (a specific version's resolved body) to run that
+ * version instead, as judge calibration experiments do.
+ */
 export const runLlmJudgeEvaluator = async (
   context: EvaluatorExecutionContext,
   ai: EvaluatorAiClient,
-  judgeOutputSchema: Record<string, unknown>
+  judgeOutputSchema: Record<string, unknown>,
+  options: {judgeSystemPrompt?: string} = {}
 ): Promise<EvaluatorExecutionResult> => {
   const judgePromptName = context.evaluator.judgePromptName;
   if (!judgePromptName) {
@@ -181,9 +187,13 @@ export const runLlmJudgeEvaluator = async (
   }
 
   try {
+    const promptSource =
+      options.judgeSystemPrompt === undefined
+        ? {promptName: judgePromptName}
+        : {systemPrompt: options.judgeSystemPrompt};
     const payload = (await ai.generateJsonObject({
       prompt: buildJudgePrompt(context),
-      promptName: judgePromptName,
+      ...promptSource,
       schema: jsonSchema(judgeOutputSchema) as FlexibleSchema<Record<string, unknown>>,
       schemaName: `${context.evaluator.name}-judge`,
       skipTrace: true,

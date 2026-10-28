@@ -1157,15 +1157,43 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 
 ## ai-observability
 
-**Title:** `AI observability (Langfuse-light, pluggable)`
+**Title:** `AI observability (built in, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
 **Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
-Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
+Ship built-in prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
 - **Implementation plan:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability.md)
 - **Tasks:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability.md)
+
+---
+
+## ai-observability-production-loop
+
+**Title:** `AI observability in production: live evals, alerts, threads, CI suites, prompt optimizer`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`ai-observability-production-loop`, Status=`Planned`
+
+Terreno's AI observability covers building an AI feature: versioned prompts, traces, evaluators, datasets, experiments, and human review. It stops at production. The evaluator's live-sampling setting is never run. There's no view of quality, cost, or latency over time, nothing alerts on a regression, and a chat conversation is a loose set of traces. Prompt changes can't be gated in CI.
+
+This work adds:
+
+- Online evaluation of sampled production traces.
+- Named trace groups (conversations, or any id the app chooses) with a timeline view.
+- A monitoring dashboard.
+- Threshold alerts, delivered as signed, metadata-only webhooks to Slack or any URL.
+- Stored eval suites that `terreno ai test <suite>` runs from CI with a scoped service token.
+- A prompt optimizer that proposes better prompt versions from failing dataset items.
+
+Everything stays local to `@terreno/ai`, with screens in `admin-frontend`.
+
+Out of scope: conversation-level evaluators, eval backfill and budgets, email alerts, custom dashboards, and other optimizer algorithms.
+
+- **Implementation plan:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability-production-loop.md)
+- **Tasks:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability-production-loop.md)
+- **Depends on:** `ai-observability` (phases 1–4)
 
 ---
 

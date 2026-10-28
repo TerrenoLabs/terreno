@@ -135,12 +135,6 @@ Hosting platforms scope variables per environment. Vercel has **Production**, **
 | `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | `global` | No | server |
 | `GOOGLE_VERTEX_ALLOWED_MODELS` | `@terreno/ai` | ❌ | all | No | server |
 | `CLAUDE_KEY` | tooling | ❌ | — | Yes | tooling |
-| `LANGFUSE_SECRET_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
-| `LANGFUSE_PUBLIC_KEY` | `@terreno/ai` | ❌ | — | No | server |
-| `LANGFUSE_BASE_URL` | `@terreno/ai` | ❌ | — | No | server |
-| `LANGFUSE_ORGANIZATION` | `@terreno/ai` | ❌ | — | No | server |
-| `LANGFUSE_PROJECT` | `@terreno/ai` | ❌ | — | No | server |
-| `LANGFUSE_PROJECT_ID` | `@terreno/ai` | ❌ | — | No | server |
 
 ## Storage (GCS)
 

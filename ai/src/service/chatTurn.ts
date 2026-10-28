@@ -24,12 +24,12 @@ import type express from "express";
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
-import {createTelemetryConfig, preparePromptForAI} from "../langfuseVercelAi";
 import {AIRequest} from "../models/aiRequest";
 import {FileAttachment} from "../models/fileAttachment";
 import {GptHistory} from "../models/gptHistory";
 import {getProjectModel} from "../models/project";
-import type {SpanRecord} from "../observability/types";
+import {getObservabilityApp} from "../observability/observabilityAppRegistry";
+import type {PromptVersionRef, SpanRecord} from "../observability/types";
 import type {
   AskOrigin,
   GptHistoryAskStatus,
@@ -1140,17 +1140,39 @@ const startTurn = async ({
 const lastUserText = (prompts: GptHistoryPrompt[]): string =>
   prompts.findLast((prompt) => prompt.type === "user")?.text ?? "";
 
-/** The request's system prompt with project context and the Langfuse prompt prepended. */
+/** The route's default registry system prompt, or undefined when it cannot be loaded. */
+const loadRegistrySystemPrompt = async (
+  options: GptRouteOptions
+): Promise<PromptVersionRef | undefined> => {
+  const registry = getObservabilityApp()?.promptRegistry;
+  if (!options.systemPromptName || !registry) {
+    return undefined;
+  }
+  try {
+    return await registry.get({
+      label: options.systemPromptLabel ?? "production",
+      name: options.systemPromptName,
+    });
+  } catch (error) {
+    logger.warn("Registry system prompt skipped", {
+      error: error instanceof Error ? error.message : String(error),
+      promptName: options.systemPromptName,
+    });
+    return undefined;
+  }
+};
+
+/** The request's system prompt with project context and the registry prompt prepended. */
 const buildSystemPrompt = async ({
   history,
-  options,
   projectId,
+  registryPrompt,
   systemPrompt,
   userId,
 }: {
   history: GptHistoryDocument;
-  options: GptRouteOptions;
   projectId: unknown;
+  registryPrompt?: string;
   systemPrompt: unknown;
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<string | undefined> => {
@@ -1181,22 +1203,10 @@ const buildSystemPrompt = async ({
     }
   }
 
-  if (options.langfuseSystemPromptName) {
-    try {
-      const langfuseResult = await preparePromptForAI({
-        promptName: options.langfuseSystemPromptName,
-        userId: userId?.toString(),
-      });
-      const langfusePrompt =
-        typeof langfuseResult.prompt === "string" ? langfuseResult.prompt : undefined;
-      if (langfusePrompt) {
-        effectiveSystemPrompt = effectiveSystemPrompt
-          ? `${langfusePrompt}\n\n${effectiveSystemPrompt}`
-          : langfusePrompt;
-      }
-    } catch (err) {
-      logger.debug(`Langfuse system prompt skipped: ${(err as Error).message}`);
-    }
+  if (registryPrompt) {
+    effectiveSystemPrompt = effectiveSystemPrompt
+      ? `${registryPrompt}\n\n${effectiveSystemPrompt}`
+      : registryPrompt;
   }
   return effectiveSystemPrompt;
 };
@@ -1778,20 +1788,29 @@ export const runChatTurn = async ({
   const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
     turn;
   let {history} = turn;
+  // An admin-selected promptName replaces the system prompt, so the route default is skipped.
+  const registryPrompt = promptName ? undefined : await loadRegistrySystemPrompt(options);
   let effectiveSystemPrompt = await buildSystemPrompt({
     history,
-    options,
     projectId,
+    registryPrompt: registryPrompt?.body,
     systemPrompt,
     userId,
   });
-  const observability = await aiService.resolveGenerateObservability({
+  const resolvedObservability = await aiService.resolveGenerateObservability({
     promptLabel,
     promptName,
     sensitive: body.sensitive === true ? true : undefined,
     sessionId,
     systemPrompt: effectiveSystemPrompt,
   });
+  const observability = registryPrompt
+    ? {
+        ...resolvedObservability,
+        promptRef: registryPrompt,
+        sensitive: resolvedObservability.sensitive || Boolean(registryPrompt.sensitive),
+      }
+    : resolvedObservability;
   effectiveSystemPrompt = observability.systemPrompt;
 
   // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
@@ -2037,17 +2056,7 @@ export const runChatTurn = async ({
       sink.emit({askResolved: {action: resolvedAsk.action, toolCallId: resolvedAsk.toolCallId}});
     }
     logger.debug("Starting streamText", {model: modelId, supportsTools});
-    const telemetry = createTelemetryConfig({
-      functionId: "gpt-prompt",
-      metadata: {
-        ...(options.langfuseSystemPromptName
-          ? {langfusePromptName: options.langfuseSystemPromptName}
-          : {}),
-      },
-      userId: userId?.toString(),
-    });
     const result = streamText({
-      experimental_telemetry: telemetry,
       messages,
       model: aiService.model,
       providerOptions: !supportsTools

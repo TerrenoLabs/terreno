@@ -50,6 +50,15 @@ describe("useAiObservabilityExperimentsApi", () => {
       method: "GET",
       url: "/ai/observability/experiments",
     });
+    expect(endpoints.aiObservabilityExperiments.query(undefined as never)).toEqual({
+      method: "GET",
+      url: "/ai/observability/experiments",
+    });
+    expect(endpoints.aiObservabilityExperiments.query({kind: "judge"} as never)).toEqual({
+      method: "GET",
+      params: {kind: "judge"},
+      url: "/ai/observability/experiments",
+    });
     expect(endpoints.aiObservabilityExperiment.query("exp-1" as never)).toEqual({
       method: "GET",
       url: "/ai/observability/experiments/exp-1",
@@ -63,6 +72,20 @@ describe("useAiObservabilityExperimentsApi", () => {
     );
     expect(endpoints.createAiObservabilityExperiment.query({name: "run"} as never)).toEqual({
       body: {name: "run"},
+      method: "POST",
+      url: "/ai/observability/experiments",
+    });
+    const judgeBody = {
+      datasetId: "ds-1",
+      judgeEvaluatorId: "judge-1",
+      kind: "judge",
+      name: "calibrate",
+      questionSetId: "qs-1",
+      targetAgreement: 0.9,
+      versions: [1, 2],
+    };
+    expect(endpoints.createAiObservabilityExperiment.query(judgeBody as never)).toEqual({
+      body: judgeBody,
       method: "POST",
       url: "/ai/observability/experiments",
     });

@@ -12,7 +12,7 @@ const priceMap = parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON);
 server.register(new ObservabilityApp({
   accessControl: access,
   aiService,
-  plugins: [localPlugin, langfuseAdapter, otelSink].filter(Boolean),
+  plugins: [localPlugin, otelSink].filter(Boolean),
   control: {
     datasets: process.env.AI_OBS_DATASETS_PRIMARY ?? "local",
     experiments: process.env.AI_OBS_EXPERIMENTS_PRIMARY ?? "local",
@@ -36,9 +36,7 @@ Validate the parsed object before registration: each model needs non-negative nu
 `example-backend/src/utils/observabilityConfig.ts`; malformed values fail startup with the
 variable name.
 
-Keep existing `LangfuseApp` if you already use Langfuse keys. The Langfuse **adapter** must reuse `getLangfuseClient()` and must not start a second OpenTelemetry SDK.
-
-Boot **fails** if `experiments.primary !== datasets.primary`, if `reviewQueue` is `langfuse`, or if a primary’s plugin is missing.
+`local` is the only control primary. Boot **fails** if `experiments.primary !== datasets.primary`, if `reviewQueue` is not `local`, or if a primary’s plugin is missing.
 
 Pass the same `access` object you use for `TerrenoApp` and `AdminApp` so
 `GET /ai/observability/status` permissions match `/admin/config` screen filtering and every
@@ -63,12 +61,11 @@ Terreno does not ship domain-specific folder names or an in-app approval workflo
 
 | Variable | Role |
 | --- | --- |
-| `AI_OBS_PROMPTS_PRIMARY` | `local` or `langfuse` (default `local`) |
+| `AI_OBS_PROMPTS_PRIMARY` | default `local` (the only primary) |
 | `AI_OBS_DATASETS_PRIMARY` | default `local` |
 | `AI_OBS_EXPERIMENTS_PRIMARY` | must equal datasets |
 | `AI_OBS_SAMPLE_RATE` | `0`–`1`, default `0` (live evals off) |
 | `AI_OBS_PRICE_MAP_JSON` | `{ "gemini-2.5-flash": { "inputPerMTok": 0.1, "outputPerMTok": 0.4 } }` |
-| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | existing Langfuse plugin |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | optional OTLP trace sink |
 
 ## App generate calls
@@ -90,10 +87,9 @@ Opt out of tracing with `skipTrace: true`. Sink failures are logged and never fa
 ## Admin
 
 Phase 1 admin ships **Prompts**, **Traces**, and **Review**. Datasets, Evaluators, and
-Experiments screens arrive in phase 2. **Open in Langfuse** appears in phase 3 when the
-Langfuse plugin is registered. Review is hidden when the local plugin is off.
+Experiments screens arrive in phase 2. Review is hidden when the local plugin is off.
 
-On **Traces**, **Run multi-stage trace test** (local sink only) runs two schema-backed
+On **Traces**, the header **Run a test trace** action (local sink only) runs two schema-backed
 `generateJsonObject` calls, a deterministic tool stage, and a final schema-backed combine
 call, then opens the nested trace. Each LLM span input includes `outputSchema`. It uses the
 server `aiService` when one is configured; otherwise it sends the admin's saved key as
@@ -112,6 +108,37 @@ that key exists.
    evaluator. On a database that already booted, run Admin → Scripts →
    `seedChatSafetyDataset` as a wet run, or
    `cd example-backend && bun run script seedChatSafetyDataset --wet`.
+
+   The same seed also fills every observability screen, so you do not have to build data
+   by hand:
+
+   | Screen | Seeded data |
+   | --- | --- |
+   | Prompts | `example-summarize` v3 (staging, output capped at 120 characters); `joke-generator` and `chat-assistant` v1 (production) and v2 (staging); judge prompts `eval-judge-correctness` and `eval-judge-helpfulness`; `eval-judge-summary-questions` v1 (short paraphrased wording) and v2 (careful wording, production) |
+   | Evaluators | `correctness-human`, `helpfulness-human`, `schema-assert`, the `correctness` and `helpfulness` LLM judges, and the review-queue question sets `output-quality-questions` and `helpfulness-questions` (three yes/no questions each) |
+   | Datasets | `example-summarize-gold` (8 proofread rows, 2 unproofread), `joke-generator-topics` (6), `chat-assistant-gold` (6), and `summary-review-set` (the 10 newest seeded summaries, every item answered by humans with `summary-review-questions`) |
+   | Experiments | `Summarize v1 vs v2 (gold)`: v1 fails correctness, v2 passes. `Summarize v2 vs v3 (length cap)`: v3 fails `schema-assert` on 2 rows. `Jokes v1 vs v2 (one-liners)` and `Chat assistant v1 vs v2 (brevity)`: v1 fails helpfulness, v2 passes. `Summary judge v1 vs v2 (calibration)`: a judge calibration experiment on `summary-review-set`; v1 agrees with humans 77.5% (fails the 90% gate), v2 agrees 95% (passes) |
+   | Traces | 18 Todos → Summarize traces over the past week (2 errors, 1 sensitive, 2 flagged for the dataset), 6 `joke-generator` traces, and 6 `chat-assistant` turns (4 with a tool span); user-feedback, LLM-judge, and code scores |
+   | Review | 34 items: 11 pending, 1 in progress, 21 done, 1 skipped, including the batches `Recent summaries — batch 1` (8 of 10 answered) and `summary-review-set — human answers` (10 of 10) |
+
+   Seeded experiments run through the real experiment runner with a deterministic
+   `seed-fixture` client, so they need no API key. Seeded traces use session IDs that
+   start with `seed-obs-`. Production stays on v1 for every product prompt, so promoting v2 from
+   an experiment changes what the app sends.
+
+   **New experiment** (pipeline **Compare prompt versions**) keeps **Continue** disabled and
+   shows "Select a dataset." until you choose a dataset; the field reads "Choose a dataset"
+   until then. **Experiment results** shows one verdict banner, then one **Gates** table: a
+   row per gate (evaluator and dimension in plain words), **Needs** with the threshold as a
+   symbol (for example "≥ 0.8"), and one column per version with the measured value and Pass
+   or Fail. The last **Result** row says whether each version passes (for example "Fails 1 of
+   3 gates"). When no version passes, the screen explains why, for example "v1 fails 1 gate:
+   correctness: correct ≥ 0.8 (got 0.75) — can't promote v1.", and the header **Promote vN to
+   production** stays disabled.
+
+   On a database that already booted, run
+   Admin → Scripts → `seedAiObservabilityDemo`, or
+   `cd example-backend && bun run script seedAiObservabilityDemo --wet`.
 3. Start `bun run backend:dev` and `bun run frontend:web`, then sign in as the seeded
    admin.
 4. Open **AI Observability → Prompts** to inspect or save a new immutable version. Move
@@ -137,6 +164,13 @@ that key exists.
 6. Open its `example-summarize` trace, send it to Review, score **correct**, and submit
    until the queue reports **Queue clear**.
 
+The example chat reads two more registry prompts. `addGptRoutes` takes
+`systemPromptName: "chat-assistant"`, so each chat turn prepends that prompt's `production`
+version to the system prompt and its trace records the version. The chat's `generate_joke`
+tool calls `generateText` with `promptName: "joke-generator"` and falls back to a built-in
+prompt when the registry has no `production` version. Move either label in **Prompts** and
+the next chat message uses the new version.
+
 The example app also calls this route from the UI: **Todos → Summarize** sends the user's todo
 list, so each press produces a trace with the production prompt reference, `userId`, and a
 per-app-run `x-ai-session-id`. Without server credentials the screen forwards the Gemini key
@@ -145,7 +179,7 @@ saved in **Profile** as `x-ai-api-key`; otherwise the route answers **503**.
 The route sends `text` as the user prompt. The labelled registry version supplies the
 system prompt and the route uses `TemperaturePresets.LOW`.
 
-The example registers the local plugin even when no Langfuse keys exist. Set
+The example always registers the local plugin. Set
 `AI_OBS_PRICE_MAP_JSON` to calculate USD cost; unlisted models show tokens with no cost,
 never `$0`.
 
@@ -182,8 +216,65 @@ curl -X POST "$API/ai/observability/prompts/example-summarize/labels" \
 The example backend registers `requestAiServiceFactory` but no server `aiService`, so status reports
 `playgroundAi.source: "request-key"`. In **AI Observability → Prompts → Playground**, save a Gemini
 API key on **Profile** first; the admin UI blocks **Run once** with that hint until the key loads
-from storage and is sent as `x-ai-api-key`. **Traces → Run multi-stage trace test** uses the same
+from storage and is sent as `x-ai-api-key`. **Traces → Run a test trace** uses the same
 saved key and is blocked the same way.
+
+## Share instructions across prompts
+
+Put the instructions that a set of prompts repeats in one prompt, then reference it from each
+prompt with `{{> name}}`.
+
+1. Create the shared prompt and pin `production`:
+
+   ```bash
+   curl -X POST "$API/ai/observability/prompts" \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+     -d '{"folder":"shared","name":"base-rules","template":"Answer in plain language for {{audience}}.","type":"text"}'
+   curl -X POST "$API/ai/observability/prompts/base-rules/labels" \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
+     -d '{"label":"production","version":1}'
+   ```
+
+2. Reference it from each prompt's `system` or `template`:
+
+   ```text
+   {{> base-rules}}
+   Triage the intake form.
+   ```
+
+   - `{{> base-rules}}` follows the `production` label.
+   - `{{> base-rules label=staging}}` follows another label.
+   - `{{> base-rules version=3}}` pins one version. Use `label=` or `version=`, not both.
+   - A shared prompt can reference another one, up to 5 levels deep.
+
+3. Promote a new `base-rules` version. Every prompt that references it by label uses the new text
+   at once, with no new version of its own.
+
+Every reference must resolve when you save, so a saved prompt never fails at call time. Creating a
+prompt, saving a version, and moving a label return 400:
+
+- `Invalid prompt reference` when a tag is malformed, names an unknown prompt or version, or names
+  a label the shared prompt does not have yet. Promote the shared prompt before you reference it.
+- `Prompt reference cycle` when the save or label move would make prompts include each other. A
+  new version counts as `latest` for this check.
+- `Prompt references nested too deeply` when the change would nest references more than 5 levels,
+  in the saved prompt or in any prompt that includes it.
+
+The prompt editor keeps the tag; `PromptRegistry.get`, the playground, experiments, and judges use
+the resolved text. `{{variables}}` in a shared prompt are filled like the prompt's own.
+
+The trace stays named after the prompt you called. Its `prompts` list holds that prompt first,
+then one entry per shared prompt with `includedBy` set to the prompt whose tag pulled it in:
+
+```json
+[
+  {"label": "production", "name": "triage-intake", "version": 3},
+  {"includedBy": "triage-intake", "label": "production", "name": "base-rules", "version": 1}
+]
+```
+
+So `?prompt=base-rules` on the trace list finds every call that used the shared text, and
+`?prompt=triage-intake` still finds only that prompt's calls.
 
 ## Review a trace
 
@@ -194,4 +285,57 @@ saved key and is blocked the same way.
 3. List oldest-first: `GET /ai/observability/review?status=pending` (response includes per-status counts).
 4. Open an item: `GET /ai/observability/review/:id` returns evaluator dimensions plus `given` / `wrote` panels (variable labels when present, otherwise raw keys).
 5. `POST /ai/observability/review/:id` with `action: "submit"` writes dimension-keyed scores through every ScoreSink and marks the item `done` (it leaves the pending list). `skip` and `assign` move status to `skipped` / `in_progress`.
+
+## Check that an LLM judge agrees with people
+
+Use a review batch: a fixed set of traces (one input and one output each) that reviewers answer
+the same list of questions for. Then run LLM judges over the same traces and compare.
+
+1. Create a **question set**: a `human` evaluator with one `boolean` dimension per question. Put
+   the reviewer-facing wording in each dimension's `question`, for example
+   `{key: "covers_every_item", dataType: "boolean", question: "Does it mention every todo?"}`.
+   The seed installs `summary-review-questions` with four questions.
+2. Open **AI Observability → Review batches** (or **Review batches** in the Review queue header),
+   pick the question set and (optionally) a prompt, and press the header **Grab 10 recent
+   traces**. API: `POST /ai/observability/review/batches` with
+   `{evaluatorId, promptName?, limit?: 10, name?}`. It takes the newest successful traces with an
+   output that are not already in a batch for that question set, so pressing it again gives the
+   next 10. Pass `traceIds` instead to pick traces by hand.
+3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side and
+   every question with Yes / No. On web, `Y` / `N` answer the highlighted question, `Enter`
+   submits and opens the next item in the batch (**Submit and open next**), and `S` skips. **Yes to
+   the rest** answers every open yes/no question with Yes. Items someone assigned to themselves (in progress) stay in the
+   batch's next/previous walk until they are submitted or skipped.
+4. Create an `llm-judge` evaluator whose dimension keys match the question keys and whose judge
+   prompt returns those keys. On the batch, choose the judge and press **Run on N items**
+   (`POST /ai/observability/review/batches/:id/judgeRuns` with `{evaluatorId}`). The judge runs
+   on every batch trace through `ObservabilityApp.aiService` (or the caller's `x-ai-api-key`).
+5. Read **Which judge matches people?**: overall and per-question agreement for each judge,
+   counted only on items people answered and questions the judge also answers. 90% or more reads
+   **Matches**, 75–89% **Close**, and under 75% **Off**. Click a judge to list where it disagrees, then open the item to see why.
+   Re-running a judge after editing its prompt replaces that judge's previous result.
+
+The seed adds the batch `Recent summaries — batch 1` (8 of 10 answered) with two judges run:
+`summary-questions-judge` agrees 97% and `summary-questions-judge-quick` agrees 78%.
+
+## Calibrate a judge prompt against a human-judged dataset
+
+A batch answers "does this judge match people on these traces?". To improve a judge prompt
+version by version, judge a dataset once and reuse those answers:
+
+1. Build a dataset of traces (**Add to dataset** on traces, or
+   `POST /ai/observability/traces/add-to-dataset`).
+2. Create a review batch from it: `POST /ai/observability/review/batches` with
+   `{evaluatorId: <question set>, datasetId}`. Only items without a current answer are queued.
+   Every submitted answer is saved on its dataset item, and the dataset's `judgments` show
+   answered, current, and stale counts per question set.
+3. Save 2–3 versions of the judge prompt, then create a judge experiment:
+   `POST /ai/observability/experiments` with
+   `{kind: "judge", name, datasetId, questionSetId, judgeEvaluatorId, versions: [1, 2], targetAgreement: 0.9}`.
+   Each version answers every human-answered item; `results.agreement` ranks the versions and
+   each version gets an `agreement` gate.
+4. Promote the version that passes (`POST /ai/observability/experiments/:id/promote`); the
+   judge evaluator then shows its `calibration`. Use that judge in prompt experiments.
+
+Rewording a question makes earlier answers stale: re-run step 2 to re-queue those items.
 

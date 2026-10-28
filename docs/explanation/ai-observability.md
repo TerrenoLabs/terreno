@@ -1,26 +1,26 @@
 # AI observability
 
-Terreno ships Langfuse-like prompt versioning, nested traces, evaluators, datasets, experiments, and a local human review queue **inside `@terreno/ai`**, with operator UI in **`admin-frontend` only**.
+Terreno ships prompt versioning, nested traces, evaluators, datasets, experiments, and a local human review queue **inside `@terreno/ai`**, with operator UI in **`admin-frontend` only**.
 
-## Why not Langfuse-only
+## Why built in
 
-Apps must iterate prompts without a required vendor account. `LangfuseApp` stays a second plugin. Traces and scores **fan out** to every registered sink (local Mongo, Langfuse, OTLP/OpenInference). Prompts, datasets, experiments, and the review queue have **one writer** each (a primary). The review queue is **local-only**.
+Apps must iterate prompts without a required vendor account, so the prompt registry, traces, and review queue live in the app's own Mongo. Traces and scores **fan out** to every registered sink (local Mongo plus any extra `TraceSink` / `ScoreSink` plugin an app registers). Prompts, datasets, experiments, and the review queue have **one writer** each (a primary). The review queue is **local-only**.
 
 That split is the two planes:
 
 | Plane | Write | Admin read |
 | --- | --- | --- |
-| Telemetry (traces, scores) | All sinks, best-effort | Local if the local plugin is on, else Langfuse |
+| Telemetry (traces, scores) | All sinks, best-effort | Local |
 | Control (prompts, datasets, experiments, queue) | One primary per capability | That primary |
 
-`experiments.primary` must equal `datasets.primary`. Defaults are all `local`.
+`local` is the only control primary, and the default for all four. `experiments.primary` must equal `datasets.primary`.
 
 `ObservabilityApp` fails boot (constructor throws) when:
 
 | Error | Cause |
 | --- | --- |
 | `experiments.primary must equal datasets.primary` | Mixed dataset/experiment writers |
-| `reviewQueue.primary must be local` | `reviewQueue` set to `langfuse` |
+| `reviewQueue.primary must be local` | `reviewQueue` set to anything but `local` |
 | `<capability> primary "<id>" has no plugin` | No registered plugin with that `id`, capability, and store |
 
 Telemetry sinks still fan out even when a control primary is local-only.
@@ -28,8 +28,9 @@ Telemetry sinks still fan out even when a control primary is local-only.
 Admin chrome lives in `admin-frontend`. One sidebar group **AI Observability** holds Prompts,
 Traces, Evaluators, Datasets, Experiments, and Review (Review is omitted when the local plugin is
 off). Existing **AI Requests** stays under **Screens**. Every observability screen shows
-breadcrumbs `Admin / AI Observability / <Section> / <leaf>` and a status chip from
-`GET /ai/observability/status`. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
+breadcrumbs (`Admin / AI Observability / <Section>` on lists, plus `/ <leaf>` on detail
+screens), a quiet status chip from `GET /ai/observability/status`, and one left-aligned page
+header with the screen's single primary action. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
 versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 ## Why this shape for product work
@@ -67,7 +68,7 @@ The example backend always registers the local plugin. Its idempotent seed creat
 `correctness-human` evaluator, the automatic `schema-assert` evaluator, and a two-item
 `example-gold` dataset. It also creates `chat-safety-synthetic`, a proofread set of
 two-person chats for routing, toxicity, privacy, and dismissive-reply experiments.
-This makes the review and experiment loops walkable without Langfuse:
+This makes the review and experiment loops walkable with no external service:
 resolve the production prompt → emit a trace → inspect spans and sensitive I/O → send the
 trace to Review → record a human score.
 
@@ -87,10 +88,34 @@ With the local plugin registered and primaries set to `local`, the control plane
 
 - **`llm-judge` and `json-assert` evaluators** — judges call `AIService.generateJsonObject` through a named registry prompt (`judgePromptName`); create/update rejects a judge when the prompt `outputSchema` omits a required dimension (the error names that key). `json-assert` supports path/constraint checks and a built-in mode that validates output against the prompt version `outputSchema`. Parse or generation failures record an error outcome instead of throwing to the caller. Custom creates score a full trace; generation span and dataset item targets are reserved. Seeded templates install `correctness` / `hallucination` / `helpfulness` / `toxicity` as `llm-judge`, `schema-assert` as `json-assert`, and `*-human` variants for the review queue.
 - **Human review evaluators** — sending traces to review requires a `human` evaluator. Its dimensions become the review item's score fields and its instructions tell the reviewer how to apply them. `llm-judge` and `json-assert` evaluators run automatically and are rejected from the human queue.
+- **Review batches and judge agreement** — a human evaluator with several yes/no dimensions (each with a reviewer `question`) acts as a question set. A batch fixes the traces people answer, so an operator can run any number of LLM judges over the same traces and see, per judge and per question, how often the judge gives the human answer. That number is what tells you a new judge can replace or extend human review; disagreements point at the prompt rule to fix.
 - **Datasets** — CRUD plus item provenance (`origin`, `proofread`, `sourceTraceId`, tags, outcome class). Import accepts **JSON** (bare objects or structured rows) and **CSV** (quoted fields; `input.*` / `expectedOutput.*` column prefixes). Rows validate against the bound prompt input schema when configured. Adding from a trace copies I/O; sensitive traces always land `proofread: false`. Deleting an item never mutates the trace.
-- **Experiments** — compare 2–3 prompt versions on a dataset with optional `modelOverride` (requires `aiServiceFactory` on `ObservabilityApp`), evaluator thresholds (defaulting to the SOP gates), **per-version gate tiles** (`gates[].version`), outlier/low-confidence item ids, and version-scoped promote (**409** when the selected version's gates fail). Unproofread items are excluded unless `includeUnproofread` is true. Local runs compile exact prompt versions and call `AIService.generateText` with compiled `prompt` + `systemPrompt` (no `promptName`/`promptLabel`). `ObservabilityApp` wires the local experiment runner from `aiService` at register time.
+- **Experiments** — compare 2–3 prompt versions on a dataset with optional `modelOverride` (requires `aiServiceFactory` on `ObservabilityApp`), evaluator thresholds (defaulting to the SOP gates), **per-version gate tiles** (`gates[].version`; the results screen groups them in one card per version and shows operators as ≥ ≤ > < =, never `gte`/`lte`), outlier/low-confidence item ids, and version-scoped promote (**409** when the selected version's gates fail). Unproofread items are excluded unless `includeUnproofread` is true. Local runs compile exact prompt versions and call `AIService.generateText` with compiled `prompt` + `systemPrompt` (no `promptName`/`promptLabel`). `ObservabilityApp` wires the local experiment runner from `aiService` at register time.
 
 Operator UI for datasets and experiments ships in tasks 2.7–2.9; routes and stores are live for API clients and tests today.
+
+## The eval pipeline: humans first, then calibrated judges
+
+Terreno's evaluation flow has four steps, and each step reuses the one before it:
+
+1. **Build a dataset** of traces (or hand-written items).
+2. **Humans answer a question set** — a `human` evaluator whose dimensions are usually yes/no
+   `question`s — for every dataset item, through review batches built from the dataset. Each
+   submitted answer is written back onto the dataset item (`humanAnswers`).
+3. **Calibrate the judge.** A judge calibration experiment (`kind: "judge"`) runs 2–3 versions of
+   an LLM judge's prompt over the human-answered items and ranks the versions by agreement with
+   the humans. Iterate on the judge prompt until a version clears the target (default 90%), then
+   promote it.
+4. **Compare product prompts** with ordinary prompt experiments, scored by a judge whose
+   calibration (latest agreement, and whether it is stale) shows on the evaluator.
+
+Human answers are expensive, so they are reused: a dataset judged once feeds any number of judge
+experiments. The rule that keeps reuse honest is the **question fingerprint** — a hash of each
+question's key, type, wording, and range. Answers stay *current* while the fingerprint matches;
+rewording a question makes them *stale*, the dataset shows them as stale, new review batches
+re-queue those items, and judge calibrations based on the old wording are flagged stale.
+Judges always see what reviewers saw (the source trace, else the item's input and expected
+output), so agreement measures the judge, not a difference in evidence.
 
 ## GPT tool spans and nested traces
 

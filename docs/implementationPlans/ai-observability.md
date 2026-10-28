@@ -3,7 +3,7 @@
 **Status:** Approved  
 **Roadmap:** Area=`ai`, Target=`Future`, Impact=`Feature`  
 **Created:** 2026-08-24  
-**Updated:** 2026-10-02 (domain-neutral RBAC and prompt relationship hub approved)
+**Updated:** 2026-10-17 (review batches and judge agreement shipped)
 **Owner:** unassigned  
 **Branch:** `cursor/ai-observability-ip-64ca`  
 **Task list:** [docs/tasks/ai-observability.md](../tasks/ai-observability.md)  
@@ -11,9 +11,23 @@
 **Linear:** none  
 **Roadmap issue:** none yet (handoff after Approved)
 
-**Depends on:** current `@terreno/ai` (`AIService`, `AIRequest`, `LangfuseApp`, `AIAdminApp`).
+**Depends on:** current `@terreno/ai` (`AIService`, `AIRequest`, `AIAdminApp`).
 
-**Related:** [terreno-langfuse-integration.md](./terreno-langfuse-integration.md) (`LangfuseApp` stays). [FH-48](https://linear.app/flourish-health/issue/FH-48/ai-improvements).
+**Related:** [FH-48](https://linear.app/flourish-health/issue/FH-48/ai-improvements).
+
+> **Amended 2026-10-20:** Langfuse support was removed from `@terreno/ai` ([#1601](https://github.com/TerrenoLabs/terreno/pull/1601)).
+> `LangfuseApp`, the `langfuse` primary, Langfuse sinks and adapters, and **Open in Langfuse** are
+> dropped. Every Langfuse mention below is superseded; the local plane is the only prompt, dataset,
+> experiment, and review primary, and OTel stays the optional extra sink.
+
+> **Amended 2026-10-24:** Review batches and judge agreement shipped on top of the Phase 1 review
+> queue. A batch (`ObsReviewBatch`) groups recent traces against one human question set;
+> `ObsReviewItem.batchId` links its items (indexed with `status`). Routes:
+> `GET/POST /review/batches`, `GET /review/batches/:id`, and
+> `POST /review/batches/:id/judgeRuns`, which runs an LLM judge (`ObsJudgeRun`) over the batch and
+> reports overall and per-question agreement with the human answers. `GET /review` accepts
+> `batchId`. The review item screen walks a batch's pending and in-progress items with Y / N /
+> Enter / S shortcuts. See [AI observability](../explanation/ai-observability.md).
 
 ## Goal
 
@@ -36,7 +50,6 @@ schema or route is rewritten later.
 
 ## Non-goals
 
-- Removing or rewriting `LangfuseApp`.
 - `admin-spa` screens (spa already embeds `admin-frontend` widgets).
 - First-class Braintrust, Helicone, LangSmith, Weave, Opik, Portkey adapters (document how they fit; do not code stubs).
 - Langfuse **annotation queues** as `reviewQueue.primary` (local Mongo queue only).
@@ -495,6 +508,23 @@ The prompt detail screen is the relationship hub:
 
 Folders, descriptions, tags, and role names remain consumer-defined. Terreno introduces no
 clinical, finance, or other domain vocabulary.
+
+### Review batches and judge agreement (shipped)
+
+Human evaluators can carry a reviewer-facing `question` per dimension; the review item screen
+renders them as Yes / No rows with **Rest Yes** and web shortcuts (`Y`, `N`, `Enter`, `S`).
+
+| Screen | Name | Behavior |
+| --- | --- | --- |
+| Review batches | `ai-review-batches` | Pick a question set (human evaluator) and optional prompt; **Grab 10 recent traces** creates a fixed batch of successful traces not yet batched for that question set |
+| Review batch | `ai-review-batch` | Answered count; **Answer N remaining** opens the next pending or in-progress item; run an LLM judge over the batch; per-judge overall and per-question agreement with human answers; disagreement list |
+
+Batch items set `batchId` on the review item screen, which then walks only that batch's pending
+and in-progress items and returns to the batch at zero. Routes: `GET/POST
+/ai/observability/review/batches`, `GET /ai/observability/review/batches/:id`, `POST
+/ai/observability/review/batches/:id/judgeRuns`, and `batchId` on `GET /ai/observability/review`.
+Models: `ObsReviewBatch`, `ObsJudgeRun`, and `ObsReviewItem.batchId` (indexed with `status`).
+Behavior is documented in `docs/explanation/ai-observability.md` and `docs/reference/ai.md`.
 
 ## Example app
 

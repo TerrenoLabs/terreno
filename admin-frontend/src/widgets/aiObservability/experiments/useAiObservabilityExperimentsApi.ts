@@ -1,7 +1,12 @@
 import {useMemo} from "react";
 import {asDynamicHookApi} from "../../../dynamicHookApi";
 import type {AdminApi, EndpointBuilder} from "../../../types";
-import type {ExperimentEstimate, ExperimentRecord, ScoreThreshold} from "./experimentTypes";
+import type {
+  ExperimentEstimate,
+  ExperimentKind,
+  ExperimentRecord,
+  ScoreThreshold,
+} from "./experimentTypes";
 
 const LIST_KEY = "aiObservabilityExperiments";
 const DETAIL_KEY = "aiObservabilityExperiment";
@@ -9,10 +14,12 @@ const CREATE_KEY = "createAiObservabilityExperiment";
 const ESTIMATE_KEY = "estimateAiObservabilityExperiment";
 const PROMOTE_KEY = "promoteAiObservabilityExperiment";
 
-export interface ExperimentCreateBody {
+/** Step 4: compare product prompt versions, scored by evaluators. */
+export interface PromptExperimentCreateBody {
   datasetId: string;
   evaluatorIds: string[];
   includeUnproofread?: boolean;
+  kind?: "prompt";
   modelOverride?: string;
   name: string;
   promptName: string;
@@ -20,12 +27,42 @@ export interface ExperimentCreateBody {
   versions: number[];
 }
 
-export interface ExperimentEstimateBody {
+/** Step 3: compare judge prompt versions by agreement with human answers on a judged dataset. */
+export interface JudgeExperimentCreateBody {
+  datasetId: string;
+  judgeEvaluatorId: string;
+  kind: "judge";
+  modelOverride?: string;
+  name: string;
+  questionSetId: string;
+  /** Agreement rate (0–1) a version must reach to pass. The server defaults to 0.9. */
+  targetAgreement?: number;
+  versions: number[];
+}
+
+export type ExperimentCreateBody = JudgeExperimentCreateBody | PromptExperimentCreateBody;
+
+export interface PromptExperimentEstimateBody {
   datasetId: string;
   evaluatorIds: string[];
   includeUnproofread?: boolean;
+  kind?: "prompt";
   modelOverride?: string;
   versions: number[];
+}
+
+export interface JudgeExperimentEstimateBody {
+  datasetId: string;
+  kind: "judge";
+  modelOverride?: string;
+  questionSetId: string;
+  versions: number[];
+}
+
+export type ExperimentEstimateBody = JudgeExperimentEstimateBody | PromptExperimentEstimateBody;
+
+export interface ExperimentListArgs {
+  kind?: ExperimentKind;
 }
 
 interface QueryOptions {
@@ -41,8 +78,9 @@ const createExperimentsApi = (api: AdminApi) => {
     endpoints: (build: EndpointBuilder) => ({
       [LIST_KEY]: build.query({
         providesTags: ["aiObservabilityExperiments"],
-        query: () => ({
+        query: (args?: ExperimentListArgs) => ({
           method: "GET",
+          ...(args?.kind ? {params: {kind: args.kind}} : {}),
           url: "/ai/observability/experiments",
         }),
       }),
@@ -109,7 +147,7 @@ export const useAiObservabilityExperimentsApi = (api: AdminApi) => {
       (body: ExperimentEstimateBody) => {unwrap: () => Promise<ExperimentEstimate>},
       {error?: unknown; isError: boolean; isLoading: boolean},
     ],
-    useListQuery: hooks.useAiObservabilityExperimentsQuery as () => {
+    useListQuery: hooks.useAiObservabilityExperimentsQuery as (args?: ExperimentListArgs) => {
       data?: ExperimentRecord[] | {data: ExperimentRecord[]};
       error?: unknown;
       isError: boolean;

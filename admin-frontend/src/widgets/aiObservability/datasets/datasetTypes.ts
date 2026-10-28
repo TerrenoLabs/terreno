@@ -5,6 +5,19 @@ export interface DatasetCounts {
   total: number;
 }
 
+/** Human judging progress for one question set on a dataset. */
+export interface DatasetJudgment {
+  /** Items with any answer from this question set. */
+  answered: number;
+  /** Answers given to the questions as they are now. */
+  current: number;
+  evaluatorId: string;
+  evaluatorName: string;
+  /** Answers given to an older version of the questions; they no longer count. */
+  stale: number;
+  total: number;
+}
+
 export interface DatasetRecord {
   counts: DatasetCounts;
   created: string;
@@ -12,6 +25,8 @@ export interface DatasetRecord {
   expectedOutputSchema?: Record<string, unknown>;
   id: string;
   inputSchemaPromptName?: string;
+  /** One row per question set that answered any item or has a review batch from this dataset. */
+  judgments?: DatasetJudgment[];
   name: string;
   tags: string[];
   updated: string;
@@ -78,19 +93,6 @@ export const unwrapDatasetItems = (raw: unknown): DatasetItemRecord[] => {
   });
 };
 
-export const formatProvenanceBar = (counts: DatasetCounts): string => {
-  if (counts.total === 0) {
-    return "—";
-  }
-  const humanPct = Math.round((counts.human / counts.total) * 100);
-  // Auto is the unreviewed trace/synthetic share. A stale payload that also
-  // counts those items as human must not render both shares at 100%.
-  const nonHuman = Math.max(0, counts.total - counts.human);
-  const autoCount = Math.min(Math.max(0, counts.auto), nonHuman);
-  const autoPct = Math.round((autoCount / counts.total) * 100);
-  return `${humanPct}% human · ${autoPct}% auto`;
-};
-
 export const filterDatasetItemsByTab = (
   items: DatasetItemRecord[],
   tab: DatasetItemTab
@@ -118,4 +120,26 @@ export const summarizeJson = (value: unknown): string => {
   }
   const text = JSON.stringify(value);
   return text.length > 80 ? `${text.slice(0, 80)}…` : text;
+};
+
+/** "10 of 10 answered with summary-review-questions". */
+export const formatJudgmentCoverage = (judgment: DatasetJudgment): string => {
+  return `${judgment.current} of ${judgment.total} answered with ${judgment.evaluatorName}`;
+};
+
+/** "2 stale answers — the questions changed after they were given". */
+export const formatStaleAnswers = (judgment: DatasetJudgment): string | undefined => {
+  if (judgment.stale <= 0) {
+    return undefined;
+  }
+  return `${judgment.stale} stale ${judgment.stale === 1 ? "answer" : "answers"} — the questions changed after ${judgment.stale === 1 ? "it was" : "they were"} given, so ${judgment.stale === 1 ? "it no longer counts" : "they no longer count"}. Send the dataset to human review again to re-judge.`;
+};
+
+/** Question sets with current human answers, most answered first. */
+export const judgedQuestionSets = (
+  dataset?: Pick<DatasetRecord, "judgments">
+): DatasetJudgment[] => {
+  return [...(dataset?.judgments ?? [])]
+    .filter((judgment) => judgment.current > 0)
+    .sort((left, right) => right.current - left.current);
 };

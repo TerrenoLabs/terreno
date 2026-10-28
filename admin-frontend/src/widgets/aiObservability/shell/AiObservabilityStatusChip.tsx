@@ -42,13 +42,19 @@ const StatusChipView: React.FC<{
 }> = ({error, isLoading, status}) => {
   if (isLoading) {
     return (
-      <Badge status="info" testID="ai-observability-status-chip" value="Checking observability…" />
+      <Badge
+        secondary
+        status="neutral"
+        testID="ai-observability-status-chip"
+        value="Checking observability…"
+      />
     );
   }
 
   if (error || !status) {
     return (
       <Badge
+        secondary
         status="error"
         testID="ai-observability-status-chip"
         value="Observability unavailable"
@@ -58,7 +64,9 @@ const StatusChipView: React.FC<{
 
   return (
     <Badge
-      status={status.localOn ? "success" : "warning"}
+      iconName={status.localOn ? "circle-check" : "circle-minus"}
+      secondary
+      status={status.localOn ? "success" : "neutral"}
       testID="ai-observability-status-chip"
       value={formatObservabilityStatusChip(status)}
     />

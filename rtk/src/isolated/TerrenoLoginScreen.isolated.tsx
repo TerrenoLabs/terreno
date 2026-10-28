@@ -146,6 +146,7 @@ describe("TerrenoLoginScreen", () => {
     });
     const challenge = last("TwoFactorChallengeScreen");
     expect(challenge.trustDeviceDays).toBe(30);
+    expect(challenge.initialTrustDevice).toBeUndefined();
 
     await act(async () => {
       await (challenge.onSubmit as (values: unknown) => Promise<void>)({
@@ -155,6 +156,30 @@ describe("TerrenoLoginScreen", () => {
       });
     });
     expect(onSignedIn).toHaveBeenCalledWith({method: "email", user: JANE});
+  });
+
+  it("starts the trust checkbox unchecked when initialTrustDevice is false", async () => {
+    await act(async () => {
+      renderer = create(
+        <TerrenoLoginScreen
+          client={fakeClient()}
+          initialTrustDevice={false}
+          onSignedIn={mock(() => {})}
+          rememberedAccounts={memoryStore()}
+          trustDeviceDays={30}
+          webAuth="cookie"
+        />
+      );
+    });
+    await flush();
+    const login = last("LoginScreen");
+    await act(async () => {
+      await (login.onSubmit as (values: Record<string, string>) => Promise<void>)({
+        email: "jane@example.com",
+        password: "pw",
+      });
+    });
+    expect(last("TwoFactorChallengeScreen").initialTrustDevice).toBe(false);
   });
 
   it("reports each step it moves to", async () => {

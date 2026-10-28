@@ -1098,6 +1098,11 @@ export interface HelperTextProps {
 
 export interface ErrorTextProps {
   errorText?: string;
+  /**
+   * Where `errorText` sits relative to the control.
+   * @default "above"
+   */
+  errorPosition?: "above" | "below";
 }
 
 export interface AiSuggestionProps {
@@ -1161,6 +1166,8 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
 
   inputRef?: (ref: TextInput | null) => void;
   trimOnBlur?: boolean;
+  /** Renders the value in a monospace face with tracking, for codes such as backup codes. */
+  mono?: boolean;
 
   aiSuggestion?: AiSuggestionProps;
 
@@ -2349,10 +2356,18 @@ export interface SocialLoginButtonProps extends WithTestID {
   /**
    * The visual variant of the button.
    * - "primary": Uses the provider's brand colors
-   * - "outline": Uses an outline style with neutral colors
+   * - "outline": Neutral outline pill, matching the other sign-in methods
    * @default "primary"
    */
   variant?: "primary" | "outline";
+
+  /**
+   * When set on the outline variant, highlights the pill and shows this label inside it.
+   */
+  lastUsedLabel?: string;
+
+  /** Test ID of the last-used label. Requires `lastUsedLabel`. */
+  lastUsedTestID?: string;
 
   /**
    * If true, the button will be disabled.

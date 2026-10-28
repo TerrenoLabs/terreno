@@ -1,7 +1,7 @@
 import {describe, expect, it} from "bun:test";
 
 import {getSocialProviderName} from "../SocialLoginButton";
-import {getLoginMethodLabels} from "./loginMethods";
+import {getLoginMethodLabels, maskEmail} from "./loginMethods";
 
 describe("getSocialProviderName", () => {
   it("names the branded providers", () => {
@@ -42,5 +42,12 @@ describe("getLoginMethodLabels", () => {
       name: "constructor",
       phrase: "constructor",
     });
+  });
+});
+
+describe("maskEmail", () => {
+  it("keeps the first character of the name and the host", () => {
+    expect(maskEmail("josh@nang.io")).toBe("j***@n***.io");
+    expect(maskEmail("not-an-email")).toBe("not-an-email");
   });
 });

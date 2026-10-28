@@ -5,6 +5,7 @@ import {ActivityIndicator, Pressable, Text, View} from "react-native";
 
 import {Box} from "./Box";
 import type {SocialLoginButtonProps} from "./Common";
+import {OutlinePill} from "./login/OutlinePill";
 import {useTheme} from "./Theme";
 import {Unifier} from "./Unifier";
 
@@ -85,6 +86,8 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
   fullWidth = true,
   text,
   testID,
+  lastUsedLabel,
+  lastUsedTestID,
 }) => {
   // Pressing tracks the button's own onPress; the parent's `loading` prop is read on every render
   // so a parent can start or clear the spinner after mount.
@@ -141,6 +144,31 @@ export const SocialLoginButton: FC<SocialLoginButtonProps> = ({
   }
 
   const isDisabled = disabled || loading;
+
+  if (variant === "outline") {
+    return (
+      <OutlinePill
+        accessibilityLabel={accessibilityLabel ?? buttonText}
+        disabled={disabled}
+        icon={
+          iconName ? (
+            <FontAwesome6
+              brand
+              color={isDisabled ? theme.text.secondaryLight : theme.text.primary}
+              name={iconName}
+              size={18}
+            />
+          ) : undefined
+        }
+        lastUsedLabel={lastUsedLabel}
+        lastUsedTestID={lastUsedTestID}
+        loading={loading}
+        onPress={handlePress}
+        testID={resolvedTestID}
+        text={buttonText}
+      />
+    );
+  }
 
   return (
     <Pressable

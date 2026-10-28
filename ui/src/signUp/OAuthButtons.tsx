@@ -1,11 +1,14 @@
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {type FC, Fragment, type ReactElement} from "react";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
-import {LastUsedBadge} from "../login/LastUsedBadge";
+import {LastUsedPill} from "../login/LastUsedBadge";
 import {withLastUsedLabel} from "../login/loginMethods";
+import {OutlinePill} from "../login/OutlinePill";
 import {SOCIAL_PROVIDER_NAMES, SocialLoginButton} from "../SocialLoginButton";
 import {Text} from "../Text";
+import {useTheme} from "../Theme";
 import type {GenericOAuthProviderConfig, OAuthProviderConfig} from "./signUpTypes";
 
 /**
@@ -33,6 +36,12 @@ interface OAuthButtonsProps {
   dividerText?: string;
   /** Where the divider sits: above the buttons (default), below them, or `"none"` for no divider. */
   dividerPosition?: "above" | "below" | "none";
+  /**
+   * `"pill"` renders every provider as the same neutral outline pill, with the last-used label
+   * inside the button. `"brand"` keeps branded fills and a badge above the last-used button.
+   * @default "brand"
+   */
+  appearance?: "brand" | "pill";
   /** Test ID prefix for the component. */
   testID?: string;
 }
@@ -42,7 +51,7 @@ interface ProviderEntry {
   /** The button's visible text, used to build its last-used accessible name. */
   label: string;
   /** Renders the button; `accessibilityLabel` overrides its accessible name. */
-  render: (accessibilityLabel?: string) => ReactElement;
+  render: (accessibilityLabel?: string, lastUsed?: {label: string; testID: string}) => ReactElement;
 }
 
 /**
@@ -56,43 +65,72 @@ export const OAuthButtons: FC<OAuthButtonsProps> = ({
   disabled = false,
   dividerText = "Or continue with",
   dividerPosition = "above",
+  appearance = "brand",
   testID = "oauth-buttons",
 }) => {
-  if (providers.length === 0 && genericProviders.length === 0) {
+  const {theme} = useTheme();
+  if ((providers.length === 0 && genericProviders.length === 0) || !theme) {
     return null;
   }
+  const isPill = appearance === "pill";
 
   const entries: ProviderEntry[] = [
     ...providers.map((config) => ({
       id: config.provider,
       label: `Continue with ${SOCIAL_PROVIDER_NAMES[config.provider]}`,
-      render: (accessibilityLabel?: string): ReactElement => (
+      render: (
+        accessibilityLabel?: string,
+        lastUsed?: {label: string; testID: string}
+      ): ReactElement => (
         <SocialLoginButton
           accessibilityLabel={accessibilityLabel}
           disabled={disabled || config.disabled}
+          lastUsedLabel={lastUsed?.label}
+          lastUsedTestID={lastUsed?.testID}
           loading={config.loading}
           onPress={config.onPress}
           provider={config.provider}
           testID={`${testID}-${config.provider}`}
+          variant={isPill ? "outline" : "primary"}
         />
       ),
     })),
     ...genericProviders.map((config) => ({
       id: config.id,
       label: `Continue with ${config.label}`,
-      render: (accessibilityLabel?: string): ReactElement => (
-        <Button
-          accessibilityLabel={accessibilityLabel}
-          disabled={disabled || config.disabled}
-          fullWidth
-          iconName={config.iconName}
-          loading={config.loading}
-          onClick={config.onPress}
-          testID={`${testID}-${config.id}`}
-          text={`Continue with ${config.label}`}
-          variant="outline"
-        />
-      ),
+      render: (
+        accessibilityLabel?: string,
+        lastUsed?: {label: string; testID: string}
+      ): ReactElement =>
+        isPill ? (
+          <OutlinePill
+            accessibilityLabel={accessibilityLabel}
+            disabled={disabled || config.disabled}
+            icon={
+              config.iconName ? (
+                <FontAwesome6 color={theme.text.primary} name={config.iconName} size={18} />
+              ) : undefined
+            }
+            lastUsedLabel={lastUsed?.label}
+            lastUsedTestID={lastUsed?.testID}
+            loading={config.loading}
+            onPress={config.onPress}
+            testID={`${testID}-${config.id}`}
+            text={`Continue with ${config.label}`}
+          />
+        ) : (
+          <Button
+            accessibilityLabel={accessibilityLabel}
+            disabled={disabled || config.disabled}
+            fullWidth
+            iconName={config.iconName}
+            loading={config.loading}
+            onClick={config.onPress}
+            testID={`${testID}-${config.id}`}
+            text={`Continue with ${config.label}`}
+            variant="outline"
+          />
+        ),
     })),
   ];
 
@@ -125,13 +163,19 @@ export const OAuthButtons: FC<OAuthButtonsProps> = ({
           if (lastUsedIndex === -1 || entry.id !== lastUsed?.provider) {
             return <Fragment key={entry.id}>{entry.render()}</Fragment>;
           }
+          const lastUsedTestID = lastUsed.testID ?? `${testID}-${entry.id}-last-used`;
+          const accessibleName = withLastUsedLabel({label: entry.label, lastUsedLabel: badgeLabel});
+          if (isPill) {
+            return (
+              <Fragment key={entry.id}>
+                {entry.render(accessibleName, {label: badgeLabel, testID: lastUsedTestID})}
+              </Fragment>
+            );
+          }
           return (
             <Box key={entry.id}>
-              <LastUsedBadge
-                label={badgeLabel}
-                testID={lastUsed.testID ?? `${testID}-${entry.id}-last-used`}
-              />
-              {entry.render(withLastUsedLabel({label: entry.label, lastUsedLabel: badgeLabel}))}
+              <LastUsedPill label={badgeLabel} testID={lastUsedTestID} />
+              {entry.render(accessibleName)}
             </Box>
           );
         })}

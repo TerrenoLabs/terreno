@@ -21,6 +21,8 @@ interface LabeledCheckBoxProps {
   onChange: (checked: boolean) => void;
   /** Blocks toggling and marks the control disabled. */
   disabled?: boolean;
+  /** Smaller line under the label. It is not part of the accessible name. */
+  helperText?: string;
   /** Test ID of the pressable checkbox. */
   testID?: string;
 }
@@ -34,6 +36,7 @@ export const LabeledCheckBox: FC<LabeledCheckBoxProps> = ({
   checked,
   onChange,
   disabled = false,
+  helperText,
   testID,
 }) => {
   const handleToggle = useCallback((): void => {
@@ -74,6 +77,11 @@ export const LabeledCheckBox: FC<LabeledCheckBoxProps> = ({
         <CheckBox selected={checked} size="md" />
         <Box flex="shrink">
           <Text>{label}</Text>
+          {Boolean(helperText) && (
+            <Text color="secondaryLight" size="sm">
+              {helperText}
+            </Text>
+          )}
         </Box>
       </Box>
     </Pressable>

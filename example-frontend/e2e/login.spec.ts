@@ -1,7 +1,7 @@
 import type {Page, Route} from "@playwright/test";
 import {expect, test} from "./fixtures/test";
 import {TEST_USER} from "./fixtures/testUsers";
-import {ensureLoggedOut, loginAs} from "./helpers/login";
+import {ensureLoggedOut, loginAs, showOtherSignInMethods} from "./helpers/login";
 
 const METHODS_ROUTE = "**/api/auth/terreno/methods";
 
@@ -87,8 +87,11 @@ test.describe("Login", () => {
     await page.getByTestId("login-screen-password-input").fill("wrongpassword");
     await page.getByTestId("login-screen-submit-button").click();
 
-    await page.getByTestId("login-screen-error").waitFor({state: "visible"});
-    await expect(page.getByTestId("login-screen-error")).toBeVisible();
+    const passwordError = page.getByTestId("login-screen-password-input.error");
+    await passwordError.waitFor({state: "visible"});
+    await expect(passwordError).toContainText(
+      "That password doesn't match. Try again or reset it."
+    );
   });
 
   test("navigates to signup screen", async ({page}) => {
@@ -146,9 +149,10 @@ test.describe("Remembered accounts", () => {
   });
 
   test("user sees email as the last used method after signing out", async ({page}) => {
-    await expect(page.getByTestId("login-screen-last-used-email")).toBeVisible();
-    // The example opts into rememberIdentity, so the card names the user.
     await expect(page.getByTestId("login-screen-continue-0")).toContainText(TEST_USER.name);
+    await expect(page.getByTestId("login-screen-last-used-account-0")).toBeVisible();
+    await showOtherSignInMethods(page);
+    await expect(page.getByTestId("login-screen-last-used-email")).toBeVisible();
   });
 
   test("user continues as a remembered email account", async ({page}) => {
@@ -162,6 +166,7 @@ test.describe("Remembered accounts", () => {
   });
 
   test("user can forget a remembered account", async ({page}) => {
+    await page.getByTestId("login-screen-accounts-edit").click();
     await page.getByTestId("login-screen-forget-0").click();
 
     await expect(page.getByTestId("login-screen-continue-0")).toHaveCount(0);

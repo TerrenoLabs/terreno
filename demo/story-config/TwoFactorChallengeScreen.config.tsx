@@ -18,10 +18,10 @@ export const TwoFactorChallengeScreenConfiguration: DemoConfiguration = {
   component: TwoFactorChallengeScreen,
   related: ["OtpField", "LoginScreen"],
   description:
-    "Second sign-in step for two-factor authentication: an authenticator code (submitted as soon as it is complete) or a backup code, an optional \"Don't ask again on this device\" checkbox, and an error state. Presentational: it reports {code, kind, trustDevice} through onSubmit.",
+    "Second sign-in step: an authenticator code or a backup code, with Trust this device checked by default. Presentational: it reports {code, kind, trustDevice} through onSubmit.",
   a11yNotes: [
     "The error is an alert, so screen readers announce a rejected code at once.",
-    "The trust-device control is a checkbox with its full sentence as the accessible name.",
+    "The trust-device control is a checkbox labelled Trust this device. The 30-day sentence is helper text.",
     "A rejected code clears the cells and returns focus to the first one.",
   ],
   category: ["Pattern", "Form"],
@@ -48,11 +48,17 @@ export const TwoFactorChallengeScreenConfiguration: DemoConfiguration = {
   demoOptions: {size: "lg"},
   stories: {
     "Authenticator code": {
-      description: 'Enter "123456" to succeed; any other code shows the error state.',
+      description: "Enter the code from the authenticator app. Trust this device starts checked.",
       render: () => <TwoFactorChallengeScreenDemo />,
     },
-    "Backup code": {render: () => <TwoFactorChallengeScreenBackupCode />},
-    Error: {render: () => <TwoFactorChallengeScreenError />},
+    "Wrong code": {
+      description: "A rejected authenticator code shows a fixed explanation under the cells.",
+      render: () => <TwoFactorChallengeScreenError />,
+    },
+    "Backup code": {
+      description: "One-time backup code. Dashes and spaces are optional.",
+      render: () => <TwoFactorChallengeScreenBackupCode />,
+    },
     Loading: {render: () => <TwoFactorChallengeScreenLoading />},
   },
 };

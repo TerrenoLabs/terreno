@@ -54,6 +54,8 @@ exports[`TypedSignatureField renders correctly with default props 1`] = `
                         "accessibilityState": {
                           "disabled": false,
                         },
+                        "aria-describedby": undefined,
+                        "aria-invalid": false,
                         "aria-label": "Text input field",
                         "autoCapitalize": "sentences",
                         "autoCorrect": true,
@@ -80,6 +82,7 @@ exports[`TypedSignatureField renders correctly with default props 1`] = `
                           "fontSize": 16,
                           "gap": 10,
                           "height": 24,
+                          "letterSpacing": undefined,
                           "paddingVertical": 0,
                           "width": "100%",
                         },

@@ -151,6 +151,15 @@ describe("LoginScreen", () => {
     expect(getByTestId("login-screen-email-input").props.value).toBe("second@example.com");
     // Fields the new values leave out keep what the user typed.
     expect(getByTestId("login-screen-password-input").props.value).toBe("secret123");
+
+    rerender(
+      <LoginScreen
+        fields={defaultFields}
+        initialValues={{email: "second@example.com", password: ""}}
+        onSubmit={onSubmit}
+      />
+    );
+    expect(getByTestId("login-screen-password-input").props.value).toBe("");
   });
 
   it("leaves out the whole form block when there are no fields", () => {
@@ -321,7 +330,7 @@ describe("LoginScreen last used method", () => {
     );
   });
 
-  it("keeps providers below the form in their given order without a last-used provider", () => {
+  it("keeps providers above the form in their given order without a last-used provider", () => {
     const {queryByTestId, toJSON} = renderWithTheme(
       <LoginScreen
         fields={defaultFields}
@@ -334,8 +343,8 @@ describe("LoginScreen last used method", () => {
     expect(indexOfTestID(ids, "login-screen-oauth-google")).toBeLessThan(
       indexOfTestID(ids, "login-screen-oauth-github")
     );
-    expect(indexOfTestID(ids, "login-screen-oauth")).toBeGreaterThan(
-      indexOfTestID(ids, "login-screen-submit-button")
+    expect(indexOfTestID(ids, "login-screen-oauth")).toBeLessThan(
+      indexOfTestID(ids, "login-screen-email-input")
     );
   });
 
@@ -351,17 +360,17 @@ describe("LoginScreen last used method", () => {
     );
     expect(getByTestId("login-screen-last-used-email")).toBeTruthy();
     expect(getByTestId("login-screen-submit-button").props.accessibilityLabel).toBe(
-      "Log In, last used"
+      "Sign in, last used"
     );
     const ids = collectTestIDs(toJSON() as RenderedNode);
     expect(indexOfTestID(ids, "login-screen-last-used-email")).toBeLessThan(
       indexOfTestID(ids, "login-screen-email-input")
     );
-    expect(indexOfTestID(ids, "login-screen-email-input")).toBeLessThan(
-      indexOfTestID(ids, "login-screen-oauth")
+    expect(indexOfTestID(ids, "login-screen-oauth")).toBeLessThan(
+      indexOfTestID(ids, "login-screen-email-input")
     );
-    expect(indexOfTestID(ids, "login-screen-email-input")).toBeLessThan(
-      indexOfTestID(ids, "login-screen-passkey-button")
+    expect(indexOfTestID(ids, "login-screen-passkey-button")).toBeLessThan(
+      indexOfTestID(ids, "login-screen-email-input")
     );
   });
 
@@ -376,14 +385,14 @@ describe("LoginScreen last used method", () => {
       />
     );
     expect(getByTestId("login-screen-last-used-passkey")).toBeTruthy();
-    expect(getByTestId("login-screen-passkey-button").props.accessibilityLabel).toBe(
+    expect(getByTestId("login-screen-passkey-button").props["aria-label"]).toBe(
       "Sign in with a passkey, last used"
     );
     const ids = collectTestIDs(toJSON() as RenderedNode);
     expect(indexOfTestID(ids, "login-screen-passkey-button")).toBeLessThan(
-      indexOfTestID(ids, "login-screen-email-input")
+      indexOfTestID(ids, "login-screen-oauth")
     );
-    expect(indexOfTestID(ids, "login-screen-oauth")).toBeGreaterThan(
+    expect(indexOfTestID(ids, "login-screen-oauth")).toBeLessThan(
       indexOfTestID(ids, "login-screen-email-input")
     );
   });
@@ -399,7 +408,7 @@ describe("LoginScreen last used method", () => {
     );
     expect(queryByTestId("login-screen-last-used-apple")).toBeNull();
     const ids = collectTestIDs(toJSON() as RenderedNode);
-    expect(indexOfTestID(ids, "login-screen-oauth")).toBeGreaterThan(
+    expect(indexOfTestID(ids, "login-screen-oauth")).toBeLessThan(
       indexOfTestID(ids, "login-screen-email-input")
     );
   });
@@ -502,9 +511,7 @@ describe("LoginScreen continue as", () => {
       />
     );
     expect(getByText("Ada Lovelace")).toBeTruthy();
-    expect(getByText("ada@example.com")).toBeTruthy();
-    // A session card names the method it is signed in with.
-    expect(getByText("Signed in on this device · GitHub")).toBeTruthy();
+    expect(getByText("Signed in · ada@example.com")).toBeTruthy();
     expect(getByTestId("login-screen-continue-0").props["aria-label"]).toBe(
       "Continue as Ada Lovelace, GitHub"
     );
@@ -537,8 +544,13 @@ describe("LoginScreen continue as", () => {
       />
     );
     expect(queryByTestId("login-screen-forget-0")).toBeNull();
+    expect(queryByTestId("login-screen-forget-1")).toBeNull();
+    await act(async () => {
+      fireEvent.press(getByTestId("login-screen-accounts-edit"));
+    });
+    expect(queryByTestId("login-screen-forget-0")).toBeNull();
     expect(getByTestId("login-screen-forget-1").props.accessibilityLabel).toBe(
-      "Forget this Google account"
+      "Remove this account, Google, from this device"
     );
     await act(async () => {
       fireEvent.press(getByTestId("login-screen-forget-1"));
@@ -573,7 +585,7 @@ describe("LoginScreen continue as", () => {
     expect(queryByTestId("login-screen-continue-0")).toBeNull();
   });
 
-  it("names a generic provider by its label and an email account by its address", () => {
+  it("names a generic provider by its label and an email account by its address", async () => {
     const {getByTestId} = renderWithTheme(
       <LoginScreen
         fields={defaultFields}
@@ -597,8 +609,11 @@ describe("LoginScreen continue as", () => {
     expect(
       within(getByTestId("login-screen-continue-2")).getByText("Continue with a passkey")
     ).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByTestId("login-screen-accounts-edit"));
+    });
     expect(getByTestId("login-screen-forget-2").props.accessibilityLabel).toBe(
-      "Forget this passkey account"
+      "Remove this account, Passkey, from this device"
     );
   });
 });
@@ -704,13 +719,10 @@ describe("LoginScreen notice", () => {
 });
 
 describe("LoginScreen loading", () => {
-  it("disables continue cards, forget, passkey and provider buttons while loading", () => {
-    const {getByTestId} = renderWithTheme(
+  it("disables continue rows and the collapsed methods button while loading", () => {
+    const {getByTestId, queryByTestId} = renderWithTheme(
       <LoginScreen
         fields={defaultFields}
-        genericProviders={[
-          {id: "mock-oidc", label: "Mock OIDC", onPress: mock(() => Promise.resolve())},
-        ]}
         loading
         oauthProviders={[{onPress: mock(() => Promise.resolve()), provider: "github"}]}
         onContinue={mock(() => {})}
@@ -721,12 +733,83 @@ describe("LoginScreen loading", () => {
       />
     );
     expect(getByTestId("login-screen-continue-0").props.accessibilityState.disabled).toBe(true);
+    expect(getByTestId("login-screen-another-way").props.accessibilityState.disabled).toBe(true);
+    expect(queryByTestId("login-screen-passkey-button")).toBeNull();
+    fireEvent.press(getByTestId("login-screen-accounts-edit"));
     expect(getByTestId("login-screen-forget-0").props.accessibilityState.disabled).toBe(true);
+  });
+
+  it("disables passkey and provider buttons while loading when no accounts are offered", () => {
+    const {getByTestId} = renderWithTheme(
+      <LoginScreen
+        fields={defaultFields}
+        genericProviders={[
+          {id: "mock-oidc", label: "Mock OIDC", onPress: mock(() => Promise.resolve())},
+        ]}
+        loading
+        oauthProviders={[{onPress: mock(() => Promise.resolve()), provider: "github"}]}
+        onPasskeyPress={mock(() => Promise.resolve())}
+        onSubmit={mock(() => Promise.resolve())}
+      />
+    );
     expect(getByTestId("login-screen-passkey-button").props.accessibilityState.disabled).toBe(true);
     expect(getByTestId("login-screen-oauth-mock-oidc").props.accessibilityState.disabled).toBe(
       true
     );
     expect(getByTestId("login-screen-oauth-github").props.disabled).toBe(true);
+  });
+});
+
+describe("LoginScreen redesign states", () => {
+  it("keeps other methods behind Sign in another way until that button is pressed", async () => {
+    const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+      <LoginScreen
+        fields={defaultFields}
+        oauthProviders={brandedProviders()}
+        onContinue={mock(() => {})}
+        onSubmit={mock(() => Promise.resolve())}
+        rememberedAccounts={[{id: "r1", method: "google"}]}
+      />
+    );
+    expect(queryByTestId("login-screen-oauth")).toBeNull();
+    await act(async () => {
+      fireEvent.press(getByTestId("login-screen-another-way"));
+    });
+    expect(getByTestId("login-screen-oauth")).toBeTruthy();
+    expect(getByText("or sign in another way")).toBeTruthy();
+    expect(getByText("or use your email")).toBeTruthy();
+  });
+
+  it("shows a wrong password on the password field", () => {
+    const {getByText, queryByTestId} = renderWithTheme(
+      <LoginScreen
+        fields={defaultFields}
+        onSubmit={mock(() => Promise.resolve())}
+        passwordError="That password doesn't match. Try again or reset it."
+      />
+    );
+    expect(getByText("That password doesn't match. Try again or reset it.")).toBeTruthy();
+    expect(queryByTestId("login-screen-error")).toBeNull();
+  });
+
+  it("replaces the body with the password step for a continuing email account", () => {
+    const onCancelContinue = mock(() => {});
+    const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+      <LoginScreen
+        continuingAccount={{email: "jane@example.com", id: "u1", method: "email", name: "Jane"}}
+        fields={defaultFields}
+        onCancelContinue={onCancelContinue}
+        onSubmit={mock(() => Promise.resolve())}
+      />
+    );
+    expect(getByText("Enter your password")).toBeTruthy();
+    expect(getByText("Jane")).toBeTruthy();
+    expect(getByTestId("login-screen-email-input", {includeHiddenElements: true}).props.value).toBe(
+      "jane@example.com"
+    );
+    expect(queryByTestId("login-screen-title")).toBeNull();
+    fireEvent.press(getByTestId("login-screen-continue-back"));
+    expect(onCancelContinue).toHaveBeenCalledTimes(1);
   });
 });
 

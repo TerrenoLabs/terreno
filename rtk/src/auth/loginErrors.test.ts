@@ -4,6 +4,7 @@ import {
   getAccountNotLinkedText,
   getLoginFeedback,
   LOGIN_FAILED_MESSAGE,
+  PASSWORD_MISMATCH_MESSAGE,
   SIGN_UP_CLOSED_NOTICE_TEXT,
   VERIFY_EMAIL_NOTICE_TEXT,
 } from "./loginErrors";
@@ -23,7 +24,12 @@ describe("getLoginFeedback", () => {
     ]) {
       expect(getLoginFeedback({failure, mode: "explicit", originalMethod: "GitHub"})).toEqual({
         isSignUpClosed: false,
-        notice: {text: expected, tone: "warning"},
+        notice: {
+          actionLabel: "Sign in with GitHub",
+          text: expected,
+          title: "You already have an account",
+          tone: "warning",
+        },
       });
     }
   });
@@ -47,7 +53,7 @@ describe("getLoginFeedback", () => {
     for (const code of ["signup_disabled", "EMAIL_PASSWORD_SIGN_UP_DISABLED"]) {
       expect(getLoginFeedback({failure: {code, source: "url"}})).toEqual({
         isSignUpClosed: true,
-        notice: {text: SIGN_UP_CLOSED_NOTICE_TEXT, tone: "warning"},
+        notice: {text: SIGN_UP_CLOSED_NOTICE_TEXT, title: "Sign-up is closed", tone: "warning"},
       });
     }
   });
@@ -58,7 +64,10 @@ describe("getLoginFeedback", () => {
         failure: {code: "OAUTH_LINK_ERROR", message: "signup disabled", source: "response"},
         mode: "explicit",
       })
-    ).toEqual({isSignUpClosed: true, notice: {text: SIGN_UP_CLOSED_NOTICE_TEXT, tone: "warning"}});
+    ).toEqual({
+      isSignUpClosed: true,
+      notice: {text: SIGN_UP_CLOSED_NOTICE_TEXT, title: "Sign-up is closed", tone: "warning"},
+    });
     // Any other OAUTH_LINK_ERROR message is shown as it is.
     expect(
       getLoginFeedback({
@@ -78,8 +87,8 @@ describe("getLoginFeedback", () => {
 
   it("shows a response's own message but never text from a URL", () => {
     expect(
-      getLoginFeedback({failure: {message: "Invalid email or password", source: "response"}}).error
-    ).toBe("Invalid email or password");
+      getLoginFeedback({failure: {message: "Invalid email or password", source: "response"}})
+    ).toEqual({isSignUpClosed: false, passwordError: PASSWORD_MISMATCH_MESSAGE});
     expect(
       getLoginFeedback({failure: {code: "sign_in_failed", message: "evil", source: "url"}}).error
     ).toBe(LOGIN_FAILED_MESSAGE);

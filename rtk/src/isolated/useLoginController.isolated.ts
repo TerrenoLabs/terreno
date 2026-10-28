@@ -369,10 +369,32 @@ describe("useLoginController", () => {
       await result.current.signInEmail({email: "jane@example.com", password: "pw"});
     });
 
+    expect(result.current.twoFactor.initialTrustDevice).toBeUndefined();
     expect(onTwoFactorRequired).toHaveBeenCalledWith({method: "email", twoFactorMethods: ["totp"]});
     expect(onSignedIn).not.toHaveBeenCalled();
     expect(result.current.step).toBe("login");
     expect(store.list()).toEqual([]);
+  });
+
+  it("forwards initialTrustDevice false onto the inline challenge", async () => {
+    const client = fakeClient(
+      {},
+      {
+        email: async () => ({
+          data: {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          error: null,
+        }),
+      }
+    );
+    const {result} = renderController({client, initialTrustDevice: false});
+    await waitForLoginScreen(result);
+
+    await act(async () => {
+      await result.current.signInEmail({email: "jane@example.com", password: "pw"});
+    });
+
+    expect(result.current.step).toBe("twoFactor");
+    expect(result.current.twoFactor.initialTrustDevice).toBe(false);
   });
 
   it("runs the inline two-factor challenge when no onTwoFactorRequired is given", async () => {
@@ -432,7 +454,9 @@ describe("useLoginController", () => {
     await act(async () => {
       await bare.result.current.twoFactor.onSubmit({code: "1", kind: "totp", trustDevice: false});
     });
-    expect(bare.result.current.twoFactor.error).toBe("That code didn't work. Please try again.");
+    expect(bare.result.current.twoFactor.error).toBe(
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+    );
 
     const throwing = renderController({
       client: fakeClient(
@@ -453,7 +477,7 @@ describe("useLoginController", () => {
       });
     });
     expect(throwing.result.current.twoFactor.error).toBe(
-      "That code didn't work. Please try again."
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
     );
 
     const noUser = renderController({
@@ -463,7 +487,9 @@ describe("useLoginController", () => {
     await act(async () => {
       await noUser.result.current.twoFactor.onSubmit({code: "1", kind: "totp", trustDevice: false});
     });
-    expect(noUser.result.current.twoFactor.error).toBe("That code didn't work. Please try again.");
+    expect(noUser.result.current.twoFactor.error).toBe(
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+    );
     expect(noUser.onSignedIn).not.toHaveBeenCalled();
   });
 
@@ -484,9 +510,9 @@ describe("useLoginController", () => {
     }
     expect(texts[0]).toContain("Verify your email address, then sign in again to link");
     expect(texts[1]).toBe(
-      "An account with this email already exists. Sign in with Google, then link this sign-in method from Security."
+      "That email is already used with Google. Sign in with Google, then link it from Security."
     );
-    expect(texts[2]).toBe("This email already has an account. Sign in with Google instead.");
+    expect(texts[2]).toBe("That email already has an account. Sign in with Google instead.");
   });
 
   it("names a remembered method or a provider id that matches an Object.prototype key as text", async () => {
@@ -508,8 +534,8 @@ describe("useLoginController", () => {
       expect(labels.every((label) => typeof label === "string")).toBe(true);
     }
     expect(texts).toEqual([
-      "This email already has an account. Sign in with Proto instead.",
-      "This email already has an account. Sign in with Constructor instead.",
+      "That email already has an account. Sign in with Proto instead.",
+      "That email already has an account. Sign in with Constructor instead.",
     ]);
   });
 
@@ -524,7 +550,7 @@ describe("useLoginController", () => {
       await result.current.signInSocial("github");
     });
     expect(result.current.screenProps.notice?.text).toBe(
-      "This email already has an account. Sign in the way you did before instead."
+      "That email already has an account. Sign in the way you did before instead."
     );
   });
 
@@ -549,6 +575,7 @@ describe("useLoginController", () => {
     });
     expect(result.current.screenProps.notice).toEqual({
       text: VERIFY_EMAIL_NOTICE_TEXT,
+      title: "Verify your email",
       tone: "warning",
     });
     expect(onSignedIn).not.toHaveBeenCalled();
@@ -571,6 +598,7 @@ describe("useLoginController", () => {
     await waitForLoginScreen(result);
     expect(result.current.screenProps.notice).toEqual({
       text: SIGN_UP_CLOSED_NOTICE_TEXT,
+      title: "Sign-up is closed",
       tone: "warning",
     });
     expect(result.current.screenProps.onSignUpPress).toBeUndefined();
@@ -625,7 +653,10 @@ describe("useLoginController", () => {
     await act(async () => {
       await refused.result.current.signInEmail({email: "a@b.co", password: "x"});
     });
-    expect(refused.result.current.screenProps.error).toBe("Invalid email or password");
+    expect(refused.result.current.screenProps.passwordError).toBe(
+      "That password doesn't match. Try again or reset it."
+    );
+    expect(refused.result.current.screenProps.error).toBeUndefined();
     expect(refused.result.current.screenProps.loading).toBe(false);
 
     const throwing = renderController({
@@ -820,7 +851,11 @@ describe("useLoginController", () => {
     await act(async () => {
       await result.current.screenProps.onPasskeyPress?.();
     });
-    expect(result.current.screenProps.error).toBe("Authentication cancelled");
+    expect(result.current.screenProps.error).toBeUndefined();
+    expect(result.current.screenProps.notice).toEqual({
+      text: "Passkey sign-in was cancelled. Try again or choose another way.",
+      tone: "info",
+    });
 
     passkeyResult = {data: null, error: {status: 400}};
     await act(async () => {
@@ -1225,8 +1260,69 @@ describe("useLoginController", () => {
         "remembered"
       );
     });
-    expect(result.current.screenProps.initialValues).toEqual({email: "jane@example.com"});
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "jane@example.com",
+      password: "",
+    });
+    expect(result.current.screenProps.continuingAccount).toEqual({
+      email: "jane@example.com",
+      id: "u1",
+      method: "email",
+    });
     expect(result.current.screenProps.notice).toBeUndefined();
+
+    await act(async () => {
+      await result.current.continueAs(
+        {email: "other@example.com", id: "u2", method: "email"},
+        "remembered"
+      );
+    });
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "other@example.com",
+      password: "",
+    });
+
+    act(() => result.current.screenProps.onCancelContinue?.());
+    expect(result.current.screenProps.continuingAccount).toBeUndefined();
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "start@example.com",
+      password: "",
+    });
+  });
+
+  it("leaves the password step and clears the typed password when two-factor is cancelled", async () => {
+    const client = fakeClient(
+      {},
+      {
+        email: async () => ({
+          data: {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          error: null,
+        }),
+      }
+    );
+    const {result} = renderController({client, initialEmail: "start@example.com"});
+    await waitForLoginScreen(result);
+    await act(async () => {
+      await result.current.continueAs(
+        {email: "jane@example.com", id: "u1", method: "email", name: "Jane"},
+        "remembered"
+      );
+    });
+    await act(async () => {
+      await result.current.signInEmail({email: "jane@example.com", password: "secret"});
+    });
+    expect(result.current.step).toBe("twoFactor");
+    expect(result.current.screenProps.continuingAccount?.email).toBe("jane@example.com");
+
+    await act(async () => {
+      result.current.twoFactor.onCancel();
+    });
+    expect(result.current.step).toBe("login");
+    expect(result.current.screenProps.continuingAccount).toBeUndefined();
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "start@example.com",
+      password: "",
+    });
   });
 
   it("explains a remembered method the server no longer offers, and forgets accounts", async () => {

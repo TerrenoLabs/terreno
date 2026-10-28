@@ -22,7 +22,7 @@ import {
   signUpApiUser,
 } from "./helpers/authFlows";
 import {betterAuthSessionCookies, stripApiCookies} from "./helpers/crossSiteApi";
-import {waitForSignedIn} from "./helpers/login";
+import {showOtherSignInMethods, waitForSignedIn} from "./helpers/login";
 import {setMockOidcIdentity} from "./helpers/mockOidcProvider";
 
 const MOCK_OIDC_BUTTON = "login-screen-oauth-mock-oidc";
@@ -62,9 +62,9 @@ test.describe("Remembered sign-ins on this device", () => {
     await page.getByTestId("todos-screen").first().waitFor({state: "visible"});
     await signOutFromProfile(page);
 
-    await expect(page.getByTestId("login-screen-last-used-mock-oidc")).toBeVisible();
-    // Both render in the cross-site run, where no backend cookie can be read.
     await expect(page.getByTestId("login-screen-continue-0")).toContainText("Remembered Person");
+    await showOtherSignInMethods(page);
+    await expect(page.getByTestId("login-screen-last-used-mock-oidc")).toBeVisible();
     expect(await betterAuthSessionCookies(context)).toEqual([]);
     await page.screenshot({
       fullPage: true,
@@ -92,6 +92,7 @@ test.describe("Remembered sign-ins on this device", () => {
     await page.getByTestId("todos-screen").first().waitFor({state: "visible"});
     await signOutFromProfile(page);
 
+    await page.getByTestId("login-screen-accounts-edit").click();
     await page.getByTestId("login-screen-forget-0").click();
 
     await expect(page.getByTestId("login-screen-continue-0")).toHaveCount(0);
@@ -110,8 +111,9 @@ test.describe("Remembered sign-ins on this device", () => {
     await waitForSignedIn(page);
     await signOutFromProfile(page);
 
-    await expect(page.getByTestId("login-screen-last-used-passkey")).toBeVisible();
     await expect(page.getByTestId("login-screen-continue-0")).toBeVisible();
+    await showOtherSignInMethods(page);
+    await expect(page.getByTestId("login-screen-last-used-passkey")).toBeVisible();
   });
 
   test("user signs in with a saved passkey from autofill", async ({context, page}) => {

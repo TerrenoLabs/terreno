@@ -42,17 +42,25 @@ export interface LoginAccountOption {
 export type LoginAccountSource = "session" | "remembered";
 
 /**
- * A message shown above the login form, such as guidance after an `account_not_linked` error.
+ * A message shown under the heading, such as guidance after an `account_not_linked` error.
+ * Info notices can be dismissed. A wrong password is not a notice: it is `passwordError`.
  */
 export interface LoginNotice {
   /** Visual tone of the notice. */
-  tone: "info" | "warning";
+  tone: "info" | "warning" | "error";
+  /** Optional bold line above `text`. */
+  title?: string;
   /** Message text. */
   text: string;
-  /** Label for an optional action button. Renders only with `onAction`. */
+  /** Label for an optional action button under the text. */
   actionLabel?: string;
   /** Callback for the action button. */
   onAction?: () => void | Promise<void>;
+  /**
+   * Sign-in method the action should bring forward: `"email"` focuses the email field, any other
+   * id expands the method list. The screen does this before calling `onAction`.
+   */
+  focusMethod?: string;
 }
 
 /**
@@ -67,13 +75,28 @@ export interface LoginScreenProps {
   oauthProviders?: OAuthProviderConfig[];
   /** Custom logo or banner to display above the form. */
   logo?: ReactNode;
-  /** Title text for the login form. */
+  /**
+   * Title text for the login form. Defaults to "Welcome back" when accounts are offered and
+   * "Sign in" otherwise.
+   */
   title?: string;
+  /**
+   * Line under the title. Defaults to "Pick up where you left off." when accounts are offered and
+   * "Choose how you want to sign in." otherwise.
+   */
+  subtitle?: string;
   /** Whether the form is in a loading state. */
   loading?: boolean;
-  /** Error message to display. */
+  /** Error message shown in a banner under the heading. A `notice` wins when both are set. */
   error?: string;
-  /** Text for the link to navigate to sign up. */
+  /**
+   * Wrong-password message shown under the password field, not in the banner.
+   */
+  passwordError?: string;
+  /**
+   * Text of the "Create an account" link in the footer.
+   * @default "Create an account"
+   */
   signUpLinkText?: string;
   /** Callback triggered when the sign-up link is pressed. */
   onSignUpPress?: () => void;
@@ -90,10 +113,10 @@ export interface LoginScreenProps {
   genericProviders?: GenericOAuthProviderConfig[];
   /**
    * The method this device signed in with last: a provider id (`"google"`, `"github"`,
-   * `"mock-oidc"`, ...), `"email"`, or `"passkey"`. That method gets a "Last used" badge
-   * (testID `${testID}-last-used-${method}`). A provider or passkey moves above the form, and a
-   * provider moves to the front of the provider list. A method the screen does not offer is
-   * ignored.
+   * `"mock-oidc"`, ...), `"email"`, or `"passkey"`. That method gets a "Last used" pill
+   * (testID `${testID}-last-used-${method}`). A provider moves to the front of the provider
+   * list, and a passkey leads the method stack. Methods stay above the email form. A method the
+   * screen does not offer is ignored.
    */
   lastUsedMethod?: string;
   /** Text of the last-used badge. Defaults to "Last used". */
@@ -104,9 +127,9 @@ export interface LoginScreenProps {
    */
   currentSessions?: LoginAccountOption[];
   /**
-   * Accounts remembered on this device. Each renders a "Continue" card that re-authenticates
-   * with the remembered method, plus a forget button when `onForget` is set. Requires
-   * `onContinue`.
+   * Accounts remembered on this device. Each renders a row in the continue-as list that
+   * re-authenticates with the remembered method. `onForget` reveals Remove in the list's Edit
+   * mode. Requires `onContinue`.
    */
   rememberedAccounts?: LoginAccountOption[];
   /**
@@ -115,10 +138,24 @@ export interface LoginScreenProps {
    */
   onContinue?: (account: LoginAccountOption, source: LoginAccountSource) => void | Promise<void>;
   /**
-   * Called when a remembered account's forget button is pressed
+   * Called when a remembered account's Remove button is pressed in Edit mode
    * (testID `${testID}-forget-${index}`). Sessions are never forgettable here.
    */
   onForget?: (account: LoginAccountOption) => void | Promise<void>;
+  /**
+   * Replaces the screen body with the password step for this email account. Set by the controller
+   * when a continue-as row has a usable email. Requires `onCancelContinue` to return.
+   */
+  continuingAccount?: LoginAccountOption;
+  /** Leaves the password step and returns to the account list. */
+  onCancelContinue?: () => void;
+  /**
+   * Opens the screen with the other sign-in methods expanded. Returning users start collapsed
+   * behind "Sign in another way".
+   */
+  initialMethodsExpanded?: boolean;
+  /** Opens the account list in Edit mode, where remembered accounts can be removed. */
+  initialAccountsEditing?: boolean;
   /**
    * Shows a "Sign in with a passkey" button (testID `${testID}-passkey-button`) that calls this.
    */
@@ -136,7 +173,7 @@ export interface LoginScreenProps {
    * fields keep what the user typed, so a "Continue" card can prefill the email.
    */
   initialValues?: Record<string, string>;
-  /** A message shown above the form (testID `${testID}-notice`). */
+  /** A message under the heading (testID `${testID}-notice`). */
   notice?: LoginNotice;
   /** Test ID for the root element. */
   testID?: string;
@@ -170,18 +207,23 @@ export interface TwoFactorChallengeScreenProps {
    * Auth trusts a device for 30 days by default.
    */
   trustDeviceDays?: number;
-  /** Shows a "Use another method" link (text via `cancelText`), for example back to sign-in. */
+  /** Shows a back link and a footer link (text via `cancelText`), for example back to sign-in. */
   onCancel?: () => void;
   /**
-   * Text for the cancel link.
-   * @default "Use another method"
+   * Text for the footer link.
+   * @default "Sign in a different way"
    */
   cancelText?: string;
   /**
-   * Heading text.
-   * @default "Two-factor authentication"
+   * Heading text. Defaults to "Enter your code" for an authenticator code and "Use a backup code"
+   * for a backup code.
    */
   title?: string;
+  /**
+   * Account the code is for, usually an email. The authenticator subtitle names it. The screen
+   * masks an email address.
+   */
+  accountLabel?: string;
   /** Optional logo above the heading. */
   logo?: ReactNode;
   /**
@@ -194,6 +236,11 @@ export interface TwoFactorChallengeScreenProps {
    * @default "totp"
    */
   initialKind?: TwoFactorCodeKind;
+  /**
+   * Whether "Trust this device" starts checked. Defaults to checked for an authenticator code
+   * and unchecked for a backup code. Set `false` to start unchecked.
+   */
+  initialTrustDevice?: boolean;
   /**
    * Focuses the first code cell when the screen mounts. Turn it off when the screen is not the
    * page's main task (a preview or gallery), since focusing scrolls the page to the cells. A

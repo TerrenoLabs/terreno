@@ -9,9 +9,11 @@ import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesLi
 import {
   AiTracesListView,
   type AiTracesListViewProps,
+} from "../widgets/aiObservability/traces/AiTracesListView";
+import {
   sortColumnToTraceSort,
   traceSortToSortColumn,
-} from "../widgets/aiObservability/traces/AiTracesListView";
+} from "../widgets/aiObservability/traces/traceTableSort";
 import type {TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import type {TraceListQueryArgs} from "../widgets/aiObservability/traces/useAiObservabilityTracesApi";
 

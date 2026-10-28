@@ -51,7 +51,7 @@ const toTime = (value: ClientTableValue): number | undefined => {
 };
 
 /** Compare two cell values; blanks always sort last. */
-export const compareClientValues = (a: ClientTableValue, b: ClientTableValue): number => {
+const compareClientValues = (a: ClientTableValue, b: ClientTableValue): number => {
   if (isBlank(a) || isBlank(b)) {
     return Number(isBlank(a)) - Number(isBlank(b));
   }
@@ -90,7 +90,7 @@ const choiceValues = (value: unknown): string[] => {
 };
 
 /** Whether one row value passes one column filter's current value. */
-export const matchesClientFilter = (
+const matchesClientFilter = (
   filter: DataTableColumnFilter,
   value: ClientTableValue,
   filterValues: Record<string, unknown>

@@ -123,10 +123,7 @@ export const failingGateCount = (experiment: ExperimentRecord): number => {
   return experiment.results.gates.filter((gate) => !gate.passed).length;
 };
 
-export const gatesForVersion = (
-  experiment: ExperimentRecord,
-  version: number
-): ExperimentGateResult[] => {
+const gatesForVersion = (experiment: ExperimentRecord, version: number): ExperimentGateResult[] => {
   if (!experiment.results) {
     return [];
   }
@@ -142,7 +139,7 @@ const GATE_OP_SYMBOLS: Record<string, string> = {
 };
 
 /** Show a gate comparison operator as the math symbol people read, never the API word. */
-export const formatGateOp = (op: string): string => {
+const formatGateOp = (op: string): string => {
   return GATE_OP_SYMBOLS[op] ?? op;
 };
 
@@ -186,7 +183,7 @@ export const formatGateAggregate = (aggregate: ScoreThreshold["aggregate"]): str
 };
 
 /** One failing gate in a sentence, such as "helpfulness ≥ 0.8 (got 0.62)". */
-export const describeGateResult = (gate: ExperimentGateResult): string => {
+const describeGateResult = (gate: ExperimentGateResult): string => {
   return `${formatGateName(gate)} ${formatGateThreshold(gate)} (got ${formatGateActual(gate.actual)})`;
 };
 
@@ -235,16 +232,6 @@ export const formatPromoteBlockedReason = (summary: VersionGateSummary): string 
   }
   const details = summary.failing.map(describeGateResult).join("; ");
   return `v${summary.version} fails ${pluralize(summary.failing.length, "gate", "gates")}: ${details} — can't promote v${summary.version}.`;
-};
-
-/**
- * One sentence per version that fails a gate, for places that summarize a whole experiment
- * (such as the experiments list) instead of one version.
- */
-export const describeFailingVersions = (experiment: ExperimentRecord): string[] => {
-  return summarizeGatesByVersion(experiment)
-    .map(formatPromoteBlockedReason)
-    .filter((reason): reason is string => Boolean(reason));
 };
 
 export const experimentProgressPercent = (experiment: ExperimentRecord): number => {
@@ -320,7 +307,7 @@ export const experimentKind = (experiment: Pick<ExperimentRecord, "kind">): Expe
   return experiment.kind === "judge" ? "judge" : "prompt";
 };
 
-export const formatAgreementPercent = (rate?: number): string => {
+const formatAgreementPercent = (rate?: number): string => {
   if (rate === undefined || Number.isNaN(rate)) {
     return "—";
   }

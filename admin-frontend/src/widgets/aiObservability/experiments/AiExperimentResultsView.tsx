@@ -14,9 +14,11 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {
+  bestJudgeVersion,
   type ExperimentGateResult,
   type ExperimentRecord,
   experimentItemColumnWidths,
+  experimentKind,
   formatGateActual,
   formatGateAggregate,
   formatGateName,
@@ -24,6 +26,7 @@ import {
   formatPromoteBlockedReason,
   formatVersionGateVerdict,
   summarizeGatesByVersion,
+  summarizeJudgeVersions,
   type VersionGateSummary,
 } from "./experimentTypes";
 
@@ -124,9 +127,12 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
   onSelectVersion,
 }) => {
   const versionSummaries = useMemo(() => summarizeGatesByVersion(experiment), [experiment]);
+  const judgeSummaries = useMemo(() => summarizeJudgeVersions(experiment), [experiment]);
+  const bestJudge = useMemo(() => bestJudgeVersion(judgeSummaries), [judgeSummaries]);
   const promoteSummary = versionSummaries.find((summary) => summary.version === promoteVersion);
   const blockedReason = promoteSummary ? formatPromoteBlockedReason(promoteSummary) : undefined;
   const hasGates = versionSummaries.some((summary) => summary.gates.length > 0);
+  const isJudgeExperiment = experimentKind(experiment) === "judge";
 
   const [tableWidth, setTableWidth] = useState(0);
   const handleTableLayout = useCallback((event: LayoutChangeEvent) => {
@@ -170,6 +176,38 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
           Running… {experiment.results?.progress.completed ?? 0}/
           {experiment.results?.progress.total ?? 0}
         </Text>
+      ) : undefined}
+      {isJudgeExperiment ? (
+        <Box gap={2} testID="ai-experiment-judge-agreement">
+          <Heading size="sm">Agreement with human answers</Heading>
+          <Text color="secondaryDark" size="sm">
+            Each prompt version is scored against the same human judgments on this dataset.
+          </Text>
+          <Box gap={2}>
+            {judgeSummaries.map((summary) => {
+              const isBest = bestJudge !== undefined && summary.version === bestJudge;
+              return (
+                <Card
+                  gap={1}
+                  key={summary.version}
+                  padding={3}
+                  testID={`ai-experiment-judge-v${summary.version}`}
+                >
+                  <Box alignItems="center" direction="row" gap={2} justifyContent="between" wrap>
+                    <Text bold>{`v${summary.version}`}</Text>
+                    <Badge
+                      secondary
+                      status={summary.meetsTarget ? "success" : "warning"}
+                      value={summary.meetsTarget ? "Meets target" : "Below target"}
+                    />
+                    {isBest ? <Badge status="info" value="Best agreement" /> : undefined}
+                  </Box>
+                  <Text size="sm">{summary.verdict}</Text>
+                </Card>
+              );
+            })}
+          </Box>
+        </Box>
       ) : undefined}
       {hasGates ? (
         <Box gap={2} testID="ai-experiment-gates">

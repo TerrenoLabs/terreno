@@ -2,19 +2,15 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 import type {ExperimentRecord, VersionGateSummary} from "./experimentTypes";
 import {
-  describeFailingVersions,
-  describeGateResult,
   experimentItemColumnWidths,
   experimentProgressPercent,
   failingGateCount,
   formatGateActual,
   formatGateAggregate,
   formatGateName,
-  formatGateOp,
   formatGateThreshold,
   formatPromoteBlockedReason,
   formatVersionGateVerdict,
-  gatesForVersion,
   isValidExperimentVersionCount,
   parsePromoteBlockedTitle,
   summarizeGatesByVersion,
@@ -83,11 +79,9 @@ describe("experimentTypes helpers", () => {
     assert.isUndefined(unwrapExperimentRecord({bad: true}));
   });
 
-  it("counts failing gates and filters gates by version", () => {
+  it("counts failing gates", () => {
     assert.equal(failingGateCount(experiment), 1);
     assert.equal(failingGateCount({...experiment, results: undefined}), 0);
-    assert.equal(gatesForVersion(experiment, 2).length, 1);
-    assert.equal(gatesForVersion(experiment, 3).length, 0);
   });
 
   it("computes progress percent with zero-safe denominator", () => {
@@ -131,12 +125,7 @@ describe("experimentTypes helpers", () => {
     assert.equal(experimentItemColumnWidths({containerWidth: 500, versionCount: 3}).output, 180);
   });
 
-  it("shows gate operators as symbols, never API words", () => {
-    assert.equal(formatGateOp("gte"), "≥");
-    assert.equal(formatGateOp("lte"), "≤");
-    assert.equal(formatGateOp("gt"), ">");
-    assert.equal(formatGateOp("lt"), "<");
-    assert.equal(formatGateOp("eq"), "=");
+  it("shows gate operators as symbols in thresholds, never API words", () => {
     assert.equal(formatGateThreshold({op: "gte", value: 0.8}), "≥ 0.8");
     assert.equal(formatGateThreshold({op: "eq", value: 1}), "= 1");
   });
@@ -201,9 +190,5 @@ describe("experimentTypes helpers", () => {
       formatPromoteBlockedReason(twoFailing),
       "v2 fails 2 gates: quality: correct ≥ 0.8 (got 0.50); helpfulness ≥ 0.8 (got 0.50) — can't promote v2."
     );
-    assert.equal(describeGateResult(gate), "quality: correct ≥ 0.8 (got 0.50)");
-    assert.deepEqual(describeFailingVersions(experiment), [
-      "v2 fails 1 gate: quality: correct ≥ 0.8 (got 0.50) — can't promote v2.",
-    ]);
   });
 });

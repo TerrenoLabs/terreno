@@ -156,7 +156,3 @@ export const judgedQuestionSets = (
     .filter((judgment) => judgment.current > 0)
     .sort((left, right) => right.current - left.current);
 };
-
-export const hasHumanAnswers = (dataset?: Pick<DatasetRecord, "judgments">): boolean => {
-  return judgedQuestionSets(dataset).length > 0;
-};

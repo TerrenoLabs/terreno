@@ -2,7 +2,9 @@ import {Badge, Box, Button, DataTable, type DataTableCellData, Text} from "@terr
 import React, {useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
+  EXPERIMENT_KIND_LABELS,
   type ExperimentRecord,
+  experimentKind,
   experimentProgressPercent,
   failingGateCount,
   summarizeGatesByVersion,
@@ -59,6 +61,19 @@ const buildColumns = ({
     value: (experiment) => experiment.name,
     // Fits seeded names such as "Summarize v2 vs v3 (length cap)" on one line.
     width: 300,
+  },
+  {
+    filter: {
+      kind: "choice",
+      options: distinctChoiceOptions(
+        experiments,
+        (experiment) => EXPERIMENT_KIND_LABELS[experimentKind(experiment)]
+      ),
+    },
+    key: "kind",
+    title: "Type",
+    value: (experiment) => EXPERIMENT_KIND_LABELS[experimentKind(experiment)],
+    width: 180,
   },
   {
     filter: {kind: "choice", options: distinctChoiceOptions(experiments, datasetName)},

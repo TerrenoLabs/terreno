@@ -94,15 +94,6 @@ export const answerSubjectKey = (row: {datasetItemId?: string; traceId?: string}
   return row.datasetItemId ?? row.traceId ?? "";
 };
 
-/** The created batch's id from a create response, with or without a `data` envelope. */
-export const unwrapCreatedBatchId = (raw: unknown): string | undefined => {
-  const data = unwrapData(raw);
-  if (data && typeof data === "object" && typeof (data as {id?: unknown}).id === "string") {
-    return (data as {id: string}).id;
-  }
-  return undefined;
-};
-
 /** Batch items still awaiting an answer: pending or in progress, in batch order. */
 export const openBatchItems = (items: ReviewListItem[]): ReviewListItem[] =>
   items.filter((item) => item.status === "pending" || item.status === "in_progress");

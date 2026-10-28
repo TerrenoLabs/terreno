@@ -254,7 +254,7 @@ exports[`HeightField snapshots should match snapshot with default props 1`] = `
                                             "style": {
                                               "alignItems": "center",
                                               "alignSelf": "flex-start",
-                                              "backgroundColor": "#0E9DCD",
+                                              "backgroundColor": "#0C80A7",
                                               "borderColor": undefined,
                                               "borderRadius": 360,
                                               "borderWidth": undefined,
@@ -1016,7 +1016,7 @@ exports[`HeightField snapshots should match snapshot with value 1`] = `
                                             "style": {
                                               "alignItems": "center",
                                               "alignSelf": "flex-start",
-                                              "backgroundColor": "#0E9DCD",
+                                              "backgroundColor": "#0C80A7",
                                               "borderColor": undefined,
                                               "borderRadius": 360,
                                               "borderWidth": undefined,
@@ -1878,7 +1878,7 @@ exports[`HeightField snapshots should match snapshot with all props 1`] = `
                                             "style": {
                                               "alignItems": "center",
                                               "alignSelf": "flex-start",
-                                              "backgroundColor": "#0E9DCD",
+                                              "backgroundColor": "#0C80A7",
                                               "borderColor": undefined,
                                               "borderRadius": 360,
                                               "borderWidth": undefined,
@@ -2672,7 +2672,7 @@ exports[`HeightField snapshots should match snapshot when disabled 1`] = `
                                             "style": {
                                               "alignItems": "center",
                                               "alignSelf": "flex-start",
-                                              "backgroundColor": "#0E9DCD",
+                                              "backgroundColor": "#0C80A7",
                                               "borderColor": undefined,
                                               "borderRadius": 360,
                                               "borderWidth": undefined,
@@ -3505,7 +3505,7 @@ exports[`HeightField snapshots should match snapshot with error state 1`] = `
                                             "style": {
                                               "alignItems": "center",
                                               "alignSelf": "flex-start",
-                                              "backgroundColor": "#0E9DCD",
+                                              "backgroundColor": "#0C80A7",
                                               "borderColor": undefined,
                                               "borderRadius": 360,
                                               "borderWidth": undefined,

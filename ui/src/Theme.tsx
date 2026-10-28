@@ -39,7 +39,7 @@ export const defaultThemePrimitives: ThemePrimitives = {
   primary200: "#73CAE8",
   primary300: "#40B8E0",
   primary400: "#0E9DCD",
-  primary500: "#0086B3",
+  primary500: "#0C80A7",
   primary600: "#0A7092",
   primary700: "#035D7E",
   primary800: "#004B64",
@@ -145,6 +145,7 @@ export const lightThemeConfig: TerrenoThemeConfig = {
     neutralExtraLight: "neutral200",
     neutralLight: "neutral300",
     primary: "primary400",
+    primaryDark: "primary500",
     secondaryDark: "secondary500",
     secondaryExtraDark: "secondary800",
     secondaryExtraLight: "secondary000",
@@ -202,6 +203,7 @@ export const darkThemeConfig: TerrenoThemeConfig = {
     neutralExtraLight: "neutral600",
     neutralLight: "neutral600",
     primary: "primary300",
+    primaryDark: "primary300",
     secondaryDark: "secondary300",
     secondaryExtraDark: "secondary050",
     secondaryExtraLight: "secondary600",
@@ -291,10 +293,20 @@ const computeTheme = (
     if (key === "primitives") {
       return acc;
     }
-    const value = themeConfig[key as keyof TerrenoThemeConfig] ?? {};
+    const rawValue = themeConfig[key as keyof TerrenoThemeConfig] ?? {};
+    const value = {...rawValue} as Record<string, unknown>;
+    // Older custom themes predate primaryDark. Keep their primary buttons filled.
+    if (
+      key === "surface" &&
+      (value.primaryDark === undefined || value.primaryDark === null) &&
+      value.primary !== undefined &&
+      value.primary !== null
+    ) {
+      value.primaryDark = value.primary;
+    }
     (acc as unknown as Record<string, unknown>)[key] = Object.keys(value).reduce(
       (accKey, valueKey) => {
-        const primitiveKey = value[valueKey as keyof typeof value] as keyof ThemePrimitives;
+        const primitiveKey = value[valueKey] as keyof ThemePrimitives;
         if (key === "font") {
           accKey[valueKey] = primitiveKey;
         } else {

@@ -26,6 +26,8 @@ const ThemeConsumer = () => {
       <Text testID="border-ai">{theme.border.ai}</Text>
       <Text testID="surface-base">{theme.surface?.base}</Text>
       <Text testID="surface-ai">{theme.surface.ai}</Text>
+      <Text testID="surface-primary">{theme.surface.primary}</Text>
+      <Text testID="surface-primary-dark">{theme.surface.primaryDark}</Text>
       <Text testID="text-primary">{theme.text?.primary}</Text>
     </View>
   );
@@ -53,6 +55,8 @@ describe("Theme", () => {
       // Default text.primary is neutral900 which maps to #1C1C1C
       expect(getByTestId("text-primary").children[0]).toBe("#1C1C1C");
       assert.equal(getByTestId("surface-ai").children[0], "#EBFAFF");
+      assert.equal(getByTestId("surface-primary").children[0], "#0E9DCD");
+      assert.equal(getByTestId("surface-primary-dark").children[0], "#0C80A7");
       assert.equal(getByTestId("border-ai").children[0], "#90D8F0");
       assert.equal(getByTestId("color-scheme").children[0], "light");
     });
@@ -66,7 +70,9 @@ describe("Theme", () => {
 
       assert.equal(getByTestId("surface-base").children[0], "#353535");
       assert.equal(getByTestId("surface-ai").children[0], "#035D7E");
-      assert.equal(getByTestId("border-ai").children[0], "#0086B3");
+      assert.equal(getByTestId("surface-primary").children[0], "#40B8E0");
+      assert.equal(getByTestId("surface-primary-dark").children[0], "#40B8E0");
+      assert.equal(getByTestId("border-ai").children[0], "#0C80A7");
       assert.equal(getByTestId("text-primary").children[0], "#FFFFFF");
       assert.equal(getByTestId("color-scheme").children[0], "dark");
       assert.equal(getByTestId("color-scheme-setting").children[0], "dark");
@@ -152,6 +158,7 @@ describe("Theme", () => {
         neutralExtraLight: "neutral200",
         neutralLight: "neutral300",
         primary: "primary400",
+        primaryDark: "primary500",
         secondaryDark: "secondary500",
         secondaryExtraDark: "secondary800",
         secondaryLight: "secondary100",
@@ -219,6 +226,7 @@ describe("Theme", () => {
         neutralExtraLight: "neutral600",
         neutralLight: "neutral600",
         primary: "primary300",
+        primaryDark: "primary300",
         secondaryDark: "secondary300",
         secondaryExtraDark: "secondary050",
         secondaryLight: "secondary600",
@@ -244,6 +252,9 @@ describe("Theme", () => {
         away: "neutral300",
         doNotDisturb: "error050",
       });
+      assert.equal(defaultThemePrimitives.primary300, "#40B8E0");
+      assert.equal(defaultThemePrimitives.primary400, "#0E9DCD");
+      assert.equal(defaultThemePrimitives.primary500, "#0C80A7");
       assert.equal(defaultThemePrimitives.error050, "#EDA1A1");
       assert.equal(defaultThemePrimitives.success050, "#9BE7B2");
       assert.equal(defaultThemePrimitives.warning050, "#FAA372");
@@ -404,6 +415,24 @@ describe("Theme", () => {
         captured?.setTheme({surface: {base: "error100"}});
       });
       expect(captured?.theme.surface.base).toBe("#D33232");
+    });
+
+    it("fills primaryDark from primary when a custom surface omits it", () => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = () => {
+        captured = useTheme();
+        return null;
+      };
+      render(
+        <ThemeProvider>
+          <Capture />
+        </ThemeProvider>
+      );
+      act(() => {
+        captured?.setTheme({surface: {primaryDark: undefined}});
+      });
+      expect(captured?.theme.surface.primary).toBe("#0E9DCD");
+      expect(captured?.theme.surface.primaryDark).toBe("#0E9DCD");
     });
 
     it("updates primitives when setPrimitives is called", () => {

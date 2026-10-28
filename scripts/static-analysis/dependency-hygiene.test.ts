@@ -80,8 +80,8 @@ const UNUSED_DEV_DEPENDENCIES = new Map<string, string[]>([
   ["api/package.json", ["@types/bcrypt", "@types/cron", "@types/sinon", "sinon"]],
   ["example-backend/package.json", ["@types/lodash", "@types/winston", "mongodb"]],
   ["example-frontend/package.json", ["@types/lodash"]],
-  ["admin-backend/package.json", ["passport-local-mongoose"]],
-  ["feature-flags/package.json", ["passport-local-mongoose"]],
+  // admin-backend and feature-flags keep passport-local-mongoose: their e2e smokes seed users
+  // with it.
   ["ai/package.json", ["winston"]],
   [
     "demo/package.json",

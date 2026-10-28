@@ -59,6 +59,8 @@ const CI_ONLY_HINTS: Record<string, string> = {
   "run-maestro": "bun run maestro:test (needs the Maestro CLI and a running example-frontend)",
   "run-maestro-demo": "bun run demo:maestro:test",
   "run-mcp-server-docker": "docker build -f mcp-server/Dockerfile .",
+  "run-smoke":
+    "bun run smoke (after bun run compile, cd admin-spa && bun run build:web, cd demo && bun run export, cd example-frontend && bun run export:smoke); bun run smoke:local does all of it",
 };
 
 /** Deploy parameters: they ship artifacts rather than verify the change. */
@@ -97,6 +99,10 @@ const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
     name: "repo-policies: planning + CI tools",
   },
   {command: "bun run skills:check", name: "repo-policies: generated skills in sync"},
+  {
+    command: "bun run check:regression-suites && bun test scripts/regression/",
+    name: "repo-policies: regression suites",
+  },
   {command: "bun run check:licenses", name: "repo-policies: license coverage"},
   {command: "bun run check:circleci-parity", name: "repo-policies: CircleCI path-filter parity"},
   {
@@ -201,9 +207,9 @@ export const planPrepush = ({
 
   if (has("run-admin-spa")) {
     steps.push({
-      command: "bunx tsc --noEmit -p tsconfig.json && bun run build:web && bun run smoke",
+      command: "bunx tsc --noEmit -p tsconfig.json && bun run build:web",
       cwd: "admin-spa",
-      name: "admin-spa-ci: typecheck, web build, smoke",
+      name: "admin-spa-ci: typecheck, web build",
     });
   }
   if (has("run-example-backend")) {

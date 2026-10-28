@@ -109,6 +109,14 @@ export const E2E_SHARDS: ShardDefinition[] = [
     specs: ["crossSiteBearer", "crossSiteOAuth"],
   },
   {
+    // The package smoke: CircleCI's `smoke` job runs it through `bun run --cwd example-frontend
+    // smoke`, which builds its own web export and backend, so no e2e shard job runs it.
+    blocksPullRequest: false,
+    name: "smoke",
+    routes: [`${APP}/login.tsx`],
+    specs: ["smoke"],
+  },
+  {
     blocksPullRequest: false,
     name: "load",
     routes: [`${APP}/syncdb-debug.tsx`],

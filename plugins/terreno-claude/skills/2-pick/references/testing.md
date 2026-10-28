@@ -23,6 +23,16 @@ Prefer the highest existing seam that proves the behavior. Add a seam only when 
 
 Expected values come from a literal worked example, the IP, or another independent source of truth.
 
+## Planned e2e specs
+
+The IP's `## E2E tests` table is the e2e plan, defined in the
+[`testing plan`](../../../references/testing-plan.md). Pick writes every row whose
+`Written in` names the current task, in that task, at the row's path. Follow the e2e
+guide the testing plan resolves for where specs live, how they find elements, and how
+they wait. A row whose path or layer no longer fits is edited in the IP with a one-line
+reason, never skipped. Running a layer the current stage cannot reach follows the
+testing-plan deferral rule.
+
 ## Repository composition
 
 Load applicable repository testing skills before choosing commands, harnesses, fixtures,

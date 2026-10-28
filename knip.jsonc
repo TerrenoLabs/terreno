@@ -25,7 +25,16 @@
   // Root tooling loads these through package scripts or child CLIs rather than imports:
   // Biome powers hooks, RTK codegen is resolved by generate-sdk.ts, and ts-node loads
   // TypeScript codegen configuration.
-  "ignoreDependencies": ["@biomejs/biome", "@rtk-query/codegen-openapi", "ts-node"],
+  //
+  // `@terreno/test` is a devDependency of every package so each package's real-process smoke
+  // (`e2e/smoke.ts`) can import its helpers. Packages whose smoke has not landed yet do not
+  // import it; drop this entry once every workspace's smoke does.
+  "ignoreDependencies": [
+    "@biomejs/biome",
+    "@rtk-query/codegen-openapi",
+    "@terreno/test",
+    "ts-node"
+  ],
   "ignoreIssues": {
     // Keep the Sentry React Native catalog pin stable for consumer/native fingerprint
     // compatibility even though no current workspace declares it.
@@ -79,6 +88,9 @@
     "api/src/example.ts"
   ],
   "workspaces": {
+    // Every package's real-process smoke (`e2e/smoke.ts`, or `e2e/smoke.spec.ts` for browser
+    // packages) is run by its `smoke` script, not imported, so each workspace lists it as an
+    // entry. example-frontend's `e2e/**/*.ts` already covers it. See docs/reference/test.md.
     // mcp-server `bunfig.toml` `test.preload` is an array so Knip's Bun plugin can
     // `preload.map`. A scalar string crashes the plugin (hence it used to set bun: false).
     // Setting `entry` replaces Knip's default `{index,cli,main}` patterns for that
@@ -111,6 +123,7 @@
       // that become unused both internally and externally are still reported.
       "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/**/*.test.{ts,tsx}",
@@ -121,6 +134,11 @@
       ]
     },
     "admin-backend": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -133,6 +151,7 @@
       // Public types used by their own implementation remain valid package API.
       "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/isolated/**/*.isolated.ts"
@@ -148,6 +167,7 @@
       "ignoreDependencies": ["ioredis", "passport-local-mongoose"],
       // auth.compile.test.ts compiles this fixture by absolute path.
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/tests/fixtures/compileAuthEntry.ts",
@@ -162,6 +182,7 @@
     },
     "rtk": {
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/isolated/**/*.isolated.ts"
@@ -173,6 +194,7 @@
     },
     "syncdb": {
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/isolated/**/*.isolated.ts",
@@ -211,6 +233,11 @@
         "google-auth-library",
         "twilio"
       ],
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/preload/**!"
@@ -231,6 +258,7 @@
         "redux-persist"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "e2e/serveTestApp.ts",
@@ -280,6 +308,7 @@
         "swiper"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "**/*.test.ts",
@@ -291,10 +320,17 @@
         "chartVisual/**/*.test.ts",
         "chartVisual/fixtures.tsx",
         "app/demo/chart-visual-gallery.tsx"
+      ],
+      // e2e/ holds the Bun-driven smoke and its helpers, which never ship; production mode
+      // skips them, and default mode still checks them from the smoke entry.
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!e2e/**!"
       ]
     },
     "announcements": {
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         // `bunfig.toml` test preload; not imported from the package entry graph.
@@ -306,7 +342,10 @@
       ]
     },
     "blocks": {
-      "entry": ["src/{index,cli}.ts!"],
+      // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+      // cycle through @terreno/test's @terreno/ui dependency and break compile order.
+      "ignoreDependencies": ["@terreno/test"],
+      "entry": ["src/{index,cli}.ts!", "e2e/smoke.{ts,spec.ts}"],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!",
@@ -314,6 +353,11 @@
       ]
     },
     "comms": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -397,6 +441,7 @@
         "zod!"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "src/index.ts!",
         // Vercel Functions entry (see vercel.json / build:vercel).
         "src/app.ts!",
@@ -417,6 +462,11 @@
       ]
     },
     "feature-flags": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -427,6 +477,11 @@
       "ignoreDependencies": ["@google-cloud/tasks", "@vercel/queue"],
       // Mongoose method/static interfaces and runner option types are used in-file.
       "ignoreExportsUsedInFile": {"interface": true, "type": true},
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -438,6 +493,7 @@
       // preload file from the plugin, so it is listed as an entry.
       "bun": false,
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "src/index.ts",
         "src/local/index.ts",
         "src/**/*.test.ts",
@@ -471,13 +527,38 @@
         // Tests mock expo-modules-core subpaths by string; TypeDoc is invoked by
         // the package's `types` script.
         "expo-modules-core",
-        "typedoc"
+        "typedoc",
+        // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+        // cycle through @terreno/test's own @terreno/ui dependency.
+        "@terreno/test"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "babel.config.js",
         "utilities/process-counties-script/processCounties.js"
+      ]
+    },
+    "api-health": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ]
+    },
+    "cli": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ]
+    },
+    "create-terreno-app": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
       ]
     },
     "website": {

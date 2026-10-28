@@ -158,6 +158,7 @@
     "performance:imports": "bun run compile && RUN_UI_IMPORT_BENCHMARK=1 bun test --preload ./src/bunSetup.ts ./benchmarks/RootImportBenchmark.test.tsx",
     "performance:p2:button": "bun run compile && RUN_UI_P2_BUTTON_BENCHMARK=1 bun test --preload ./src/bunSetup.ts ./benchmarks/P2ButtonPerformance.test.tsx",
     "performance:p2:responsive-box": "bun run compile && RUN_UI_P2_RESPONSIVE_BOX_BENCHMARK=1 bun test --preload ./src/bunSetup.ts ./benchmarks/P2ResponsiveBoxPerformance.test.tsx",
+    "smoke": "bun e2e/smoke.spec.ts",
     "test": "TZ=America/New_York bun test --watch",
     "test:agent": "AGENT=1 TZ=America/New_York bun test --only-failures",
     "test:ci": "TZ=America/New_York bun test",

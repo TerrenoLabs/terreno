@@ -14,6 +14,7 @@
   "description": "Terreno CLI for docs, codegen, app scaffolding, and OpenAPI-driven REST clients",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:"
@@ -58,8 +59,9 @@
     "compile": "bun tsc",
     "compile:watch": "bun tsc -w",
     "dev": "bun tsc -w",
-    "lint": "biome check ./src",
-    "lint:fix": "biome check --write ./src",
+    "lint": "biome check ./src ./e2e",
+    "lint:fix": "biome check --write ./src ./e2e",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun test src/",
     "test:agent": "AGENT=1 bun test --only-failures src/",
     "test:ci": "bun test src/",

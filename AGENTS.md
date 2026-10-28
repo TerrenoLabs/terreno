@@ -106,6 +106,18 @@ bun run admin-backend:compile   # Compile admin backend
 bun run admin-frontend:compile  # Compile admin frontend
 ```
 
+## Testing conventions
+
+Lifecycle skills read this table to find the e2e guide, the manual regression suites,
+and the smoke command. Terreno uses the planning plugin's default paths and declares
+`bun run smoke:local` as its smoke command: it builds what the smokes test, then runs `bun run smoke`.
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke:local |
+
 ## How the Packages Work Together
 
 The three core packages form a complete full-stack framework:

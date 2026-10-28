@@ -117,6 +117,11 @@ workflows:
             mcp-server/.* run-mcp-server true
             ui/src/.* run-mcp-server true
             create-terreno-app/.* run-create-terreno-app true
+            (admin-backend|admin-frontend|admin-spa|ai|announcements|api|api-health|blocks|cli|comms|create-terreno-app|demo|example-backend|example-frontend|feature-flags|jobs|mcp-server|rtk|syncdb|test|ui)/.* run-smoke true
+            scripts/ci/smoke/.* run-smoke true
+            \.circleci/continue-config\.yml run-smoke true
+            bun\.lock run-smoke true
+            package\.json run-smoke true
             scripts/check-coverage\.ts run-api true
             scripts/check-coverage\.ts run-rtk true
             scripts/check-coverage\.ts run-admin-backend true
@@ -236,6 +241,8 @@ workflows:
             scripts/check-source-rules/.* run-repo-policies true
             scripts/check-license-coverage/.* run-repo-policies true
             scripts/changelog/.* run-repo-policies true
+            scripts/regression/.* run-repo-policies true
+            docs/regression/.* run-repo-policies true
             scripts/check-new-file-coverage\.ts run-new-file-coverage true
             scripts/ci/check-new-file-coverage-lcov\.sh run-new-file-coverage true
             changelog/.* run-repo-policies true

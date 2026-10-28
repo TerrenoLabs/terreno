@@ -18,11 +18,11 @@
   "metadata": {
     "compatibility": {
       "terreno": ">=1.0.0",
-      "terreno-planning": ">=2.11.0"
+      "terreno-planning": ">=2.13.0"
     }
   },
   "name": "terreno-scan",
   "repository": "https://github.com/TerrenoLabs/terreno",
   "skills": "./skills/",
-  "version": "2.11.0"
+  "version": "2.12.0"
 }

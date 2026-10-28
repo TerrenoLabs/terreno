@@ -58,12 +58,42 @@ bun test --only-failures <path>
 | `create-terreno-app-ci` | `cd create-terreno-app && bun run test:ci` |
 | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) | `cd <package> && bun run test:ci` |
 | `example-backend-ci` | `cd example-backend && bun run test:ci` |
+| `smoke` | `bun run smoke` (see [Package smokes](#package-smokes-smoke)) |
 | `example-frontend-ci` | `bun run frontend:test` |
 | `ui-demo-ci` | `cd demo && bun run test:ci` then `bun run check:demo-coverage` |
 | `new-file-coverage` | `bun run check:new-file-coverage --base=origin/master --threshold=90` |
 | `repo-policies` | `bun run prepush` (runs every repo-policies step) |
 
 Coverage gate for a published package: `cd <package> && bun run test:coverage`.
+
+## Package smokes (`smoke`)
+
+The CircleCI `smoke` job runs on any package change. It compiles the workspace, builds
+the admin-spa, demo, and example-frontend smoke web exports, installs Playwright Chromium, then runs every
+workspace `smoke` script against the job's replica-set Mongo sidecar
+(`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
+running it.
+
+`bun run smoke:local` runs every step below in order. Run them yourself to reuse builds:
+
+```bash
+bun run compile
+(cd admin-spa && bun run build:web) && (cd demo && bun run export)
+(cd example-frontend && bun run export:smoke)
+bunx playwright install --with-deps chromium   # once
+bun run smoke              # every package; prints each one's time, flags any over 30 s
+bun run smoke api rtk      # only these workspaces
+```
+
+A package over 30 s is flagged, not failed: the CircleCI `smoke` job's table judges the budget
+([smoke conventions](../testing/e2e.md#smoke-conventions)). If a browser smoke fails with
+`Executable doesn't exist`, the preinstalled Playwright browsers do not match the locked
+version; install Chromium with `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` set and run
+`bun run smoke` with the same variable.
+
+Without `TERRENO_TEST_MONGODB_URI`, a smoke that needs Mongo starts its own in-memory
+replica set. To reuse a local replica-set `mongod`, export
+`TERRENO_TEST_MONGODB_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0"` first.
 
 ## Playwright (example-frontend e2e)
 

@@ -15,6 +15,24 @@ for *the concrete steps*. External trackers (a GitHub roadmap issue, a Linear is
 discussion thread) link **to** these files — they never replace them. See
 [`docs/tasks/README.md`](../tasks/README.md) for the task-file shape.
 
+## E2E tests and regression cases
+
+Every IP carries two testing sections from [`IP_TEMPLATE.md`](IP_TEMPLATE.md), placed
+before `## Acceptance Criteria`:
+
+- **`## E2E tests`** lists each planned spec or flow: its path, layer, the criterion it
+  proves, and the task that writes it. Paths and layers follow the
+  [e2e guide](../testing/e2e.md).
+- **`## Regression cases`** lists the manual cases the feature adds or changes, with
+  provisional IDs (`AUTH-new-1`). Brew writes them into the area's suite under
+  `docs/regression/` and assigns the real IDs.
+
+Either section may be `None — <reason>`; neither may be missing. Terreno's paths are
+declared in the `## Testing conventions` table in `.rulesync/rules/00-root.md` (which
+generates `CLAUDE.md`) and in the hand-kept `AGENTS.md`. The full
+contract is the planning plugin's
+[`testing-plan.md`](../../plugins/terreno-planning/references/testing-plan.md).
+
 ## Status lives on each IP
 
 There is no shared `PLAN_INDEX.md`. That file caused merge conflicts the same way a

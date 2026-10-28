@@ -63,6 +63,9 @@ parameters:
   run-admin-spa-integration:
     type: boolean
     default: false
+  run-smoke:
+    type: boolean
+    default: false
   run-repo-policies:
     type: boolean
     default: false
@@ -249,10 +252,10 @@ commands:
             done
 
   demo_lint_and_typecheck:
-    description: Compile blocks and ui, then lint, typecheck, and smoke-test demo, then check story coverage
+    description: Compile blocks, ui, and test, then lint, typecheck, and smoke-test demo, then check story coverage
     steps:
       - compile_packages:
-          packages: blocks ui
+          packages: blocks ui test
       - run:
           name: Lint and typecheck demo
           command: |
@@ -1206,7 +1209,7 @@ jobs:
           command: |
             bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
-          name: Lint / compile / types / unit / build / smoke
+          name: Lint / compile / types / unit / build
           working_directory: ~/project/admin-spa
           no_output_timeout: 20m
           environment:
@@ -1219,7 +1222,6 @@ jobs:
             bun run test:coverage
             bash ../scripts/upload-codecov.sh admin-spa
             bun run build:web
-            bun run smoke
       - check_new_file_lcov:
           package: admin-spa
       - run:
@@ -1239,6 +1241,45 @@ jobs:
       - store_artifacts:
           path: admin-spa/test-results
           destination: admin-spa-playwright-results
+
+  # Every workspace `smoke` script (docs/how-to/run-tests-locally.md). The web builds
+  # and Chromium are prepared up front so a new browser smoke needs no config edit.
+  smoke:
+    executor: node22_browsers_mongo_rs
+    # Three Expo web exports in one job need the large class (see executors).
+    resource_class: large
+    environment:
+      CI: "true"
+      TERRENO_TEST_MONGODB_URI: mongodb://127.0.0.1:27017/?replicaSet=rs0
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - init_mongo_replica
+      - run:
+          name: Compile workspace
+          command: bun run compile
+      - run:
+          name: Build admin-spa web
+          working_directory: ~/project/admin-spa
+          no_output_timeout: 20m
+          command: bun run build:web
+      - run:
+          name: Export demo web
+          working_directory: ~/project/demo
+          no_output_timeout: 20m
+          command: bun run export
+      - run:
+          name: Export example-frontend web for its smoke
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          command: bun run export:smoke
+      - run:
+          name: Install Playwright Chromium
+          command: bunx playwright install --with-deps chromium
+      - run:
+          name: Smoke every package
+          no_output_timeout: 20m
+          command: bun run smoke
 
   packages-ci:
     parameters:
@@ -1316,6 +1357,11 @@ jobs:
             bun run check:lifecycle-skills
             bun test scripts/planning/
             bun run test:ci-tools
+      - run:
+          name: Regression suites
+          command: |
+            bun run check:regression-suites
+            bun test scripts/regression/
       - run:
           name: License coverage
           command: bun run check:licenses
@@ -2613,6 +2659,11 @@ workflows:
     when: << pipeline.parameters.run-admin-spa-integration >>
     jobs:
       - admin-spa-integration
+
+  smoke:
+    when: << pipeline.parameters.run-smoke >>
+    jobs:
+      - smoke
 
   maestro:
     when: << pipeline.parameters.run-maestro >>

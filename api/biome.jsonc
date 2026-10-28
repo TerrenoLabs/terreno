@@ -7,6 +7,7 @@
       "package.json",
       "src/**/*.ts",
       "src/**/*.tsx",
+      "e2e/**/*.ts",
       "!!src/populate.ts",
       "!!**/node_modules",
       "!!node_modules",

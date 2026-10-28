@@ -34,6 +34,12 @@ skip. Missing docs for a user-visible or architectural change is a failed slice.
    | Why the system is shaped this way | `docs/explanation/` |
    | UI component | generated `docs/reference/components/` plus a demo story |
 
+   The one exception to this layout is the
+   [`testing plan`](references/testing-plan.md) spots. The e2e guide stays at
+   `docs/testing/e2e.md` (with any pages it links) and the manual
+   regression suites stay in `docs/regression/<area>.md`, or wherever the repository's
+   `## Testing conventions` table points. Never move them into a Diátaxis directory.
+
 3. **Write the page**
    - Update the existing section in place.
    - Lead with the next action or canonical fact.

@@ -1,6 +1,6 @@
 {
   "name": "terreno-planning",
-  "version": "2.12.0",
+  "version": "2.13.0",
   "description": "Terreno lifecycle and app workflows: Grow, Pick/Roast, Brew, Taste, continuous outer loops, backend/API, UI, data, schema, admin, docs, upgrades, deployment, and verification agents.",
   "author": {
     "name": "Terreno",

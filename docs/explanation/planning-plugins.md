@@ -42,6 +42,15 @@ Five bounded transitions plus three outer loops. Canonical source:
 Full contract: [lifecycle plugin reference](../reference/lifecycle-plugin.md) and
 [loop engineering](loop-engineering.md).
 
+Every IP also carries a testing plan: an `## E2E tests` table and a `## Regression
+cases` table, either of which may be `None — <reason>` but never missing. Grow plans the
+rows, Pick writes each spec in the task that delivers it, Roast runs them, Brew merges
+the manual cases into one living suite file per area under `docs/regression/`, and
+Taste keeps both current after review fixes. The point is that no bot decides alone
+whether a feature deserves an end-to-end test, and the checks a human repeats before a
+release live in a known file instead of in someone's head. See
+[Testing plan](../reference/lifecycle-plugin.md#testing-plan).
+
 ## terreno-scan (scan plugin)
 
 Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-scan/`;
@@ -78,6 +87,7 @@ Full contract: [scan plugin reference](../reference/scan-plugin.md).
 | Artifact | Owner | Committed |
 | --- | --- | --- |
 | IP and task list | Grow | yes |
+| Regression suites (`docs/regression/<area>.md`) | Brew, Taste | yes |
 | Execution state (`.terreno/pipeline/<slug>.json`) | Lifecycle outer loops | no |
 | Charter (`docs/scans/<goal>/charter.md`) | Aim | yes |
 | Findings report (`docs/scans/<goal>/round-<n>-findings.md`) | Sift | yes |

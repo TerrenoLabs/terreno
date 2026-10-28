@@ -13,6 +13,7 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`documentation contract`](references/documentation-contract.md),
 [`PR deployments`](references/pr-deployments.md),
 [`pick-roast loop`](references/pick-roast-loop.md),
+[`testing plan`](references/testing-plan.md),
 [`testing guidance`](references/testing.md),
 [`mocking guidance`](references/mocking.md), and
 [`subagent briefing`](references/subagent-briefing.md).
@@ -55,9 +56,18 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
    it. List its edge cases before writing code: empty, missing, and error inputs;
    loading and disabled states; boundaries; permissions; web versus native. Take them
    from the acceptance criteria and repository test rules. Each one becomes a test in
-   this slice, so Roast proves them instead of discovering them.
+   this slice, so Roast proves them instead of discovering them. Read the IP's
+   `## E2E tests` rows whose `Written in` names this task, and the e2e guide at the
+   path the testing plan resolves. Each such row is a spec this slice writes. When a
+   row's path or layer no longer fits the code or the guide, edit that row in the IP,
+   add a one-line reason naming the row ID below the table (never a new column), and
+   update any `## Regression cases` `Automated by` cell that names the old path; never
+   skip a row silently. An IP that lacks the section follows the testing-plan legacy rule.
 6. **Encode.** Add one failing test and run the repository's closest test command. Confirm
-   it fails for the intended product reason.
+   it fails for the intended product reason. When the behavior has a planned row from
+   step 5, write that spec in this cycle at the row's path, following the e2e guide's
+   location, selector, and waiting rules for its layer. Run it when this stage can
+   reach that layer; otherwise record it `deferred` per the testing-plan deferral rule.
 7. **Fulfill.** Implement the minimum code that passes. Prefer real integrations and
    narrow injected fakes at true external boundaries.
 8. **Clean the Kitchen.** Once the vertical slice is green, refactor names/structure,
@@ -75,8 +85,9 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
     supporting skills. Missing mandatory capability is `BLOCKED`, not skipped.
     Missing docs for a user-visible or architectural change is `FAIL`.
 11. **Record.** Record the completed task/slice in execution state with commands,
-    evidence, artifacts, docs files, and attempts. Do not commit a separate task-file
-    edit to mark progress; the task-file mark rides in this slice's commit (step 13).
+    evidence, artifacts, docs files, attempts, and each planned spec written (row ID
+    and path). Do not commit a separate task-file edit to mark progress; the
+    task-file mark rides in this slice's commit (step 13).
 12. **Prove this task.** Invoke Roast to prove this task only. Prefer a fresh context
     and pass the same task-scoped briefing. Roast must not spawn two unconstrained
     reviewers. Roast must return after classifying this task. Roast never invokes Pick.
@@ -109,6 +120,8 @@ generated-code workflows, and repository gotchas.
 
 - Files/behavior completed for each task this invocation finished
 - Red and green test evidence plus required lint/type/build/runtime results
+- Each `## E2E tests` row this task owns, with the spec path written or the edited row
+  and its reason
 - Internal review results
 - Drift decision and artifact references
 - Attempted-approach summary (especially on retries)
@@ -120,6 +133,7 @@ generated-code workflows, and repository gotchas.
 - Every in-scope task this invocation reached has Roast `PASS` on the recorded head.
 - Required repository checks/runtime gates pass for the current head.
 - No unresolved internal review findings or plan drift remain on completed tasks.
+- Every `## E2E tests` row a completed task owns has a spec at the row's path.
 - When unblocked tasks remain, continue the loop rather than exiting.
 - When none remain, emit `PASS` with `next: brew`.
 

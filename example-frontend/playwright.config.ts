@@ -19,6 +19,12 @@ if (process.argv.some((arg) => CROSS_SITE_SPECS.test(arg))) {
   process.env.E2E_CROSS_SITE_BEARER = "true";
 }
 const isCrossSiteBearerRun = process.env.E2E_CROSS_SITE_BEARER === "true";
+
+/**
+ * The package smoke (e2e/smoke.spec.ts) drives its own web export and backend through
+ * `bun run smoke`, so the main suite never collects it.
+ */
+const PACKAGE_SMOKE = /e2e\/smoke\.spec\.ts$/;
 const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
 
 /**
@@ -64,7 +70,7 @@ const localProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "app",
-    testIgnore: [/consents\.spec\.ts/, /syncdb-.*\.spec\.ts/, CROSS_SITE_SPECS],
+    testIgnore: [/consents\.spec\.ts/, /syncdb-.*\.spec\.ts/, CROSS_SITE_SPECS, PACKAGE_SMOKE],
     use: chromium,
   },
   {
@@ -86,7 +92,7 @@ const ciProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "chromium",
-    testIgnore: CROSS_SITE_SPECS,
+    testIgnore: [CROSS_SITE_SPECS, PACKAGE_SMOKE],
     use: chromium,
   },
 ];

@@ -46,7 +46,6 @@ import {AiReviewScreenWidget} from "../widgets/aiObservability/review/AiReviewQu
 import {
   AiReviewQueueActions,
   AiReviewQueueView,
-  reviewSourceLabel,
 } from "../widgets/aiObservability/review/AiReviewQueueView";
 import {ReviewScoreField} from "../widgets/aiObservability/review/ReviewScoreField";
 import type {ReviewDetail, ReviewListItem} from "../widgets/aiObservability/review/reviewTypes";
@@ -4831,14 +4830,31 @@ describe("AiReviewQueueView", () => {
       expect(getByText("Short")).toBeTruthy();
       expect(getByText("Review oldest pending")).toBeTruthy();
       expect(queryByText("Open")).toBeNull();
-      expect(reviewSourceLabel({...item, batchId: "b1"})).toBe("From a review batch");
-      expect(reviewSourceLabel({...item, reason: "eval"})).toBe("From an experiment");
-      expect(reviewSourceLabel({...item, reason: "other"})).toBe("From Traces");
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-start-oldest"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onStart).toHaveBeenCalled();
+    });
+
+    it("labels where each untitled review item came from", () => {
+      const {getByText} = renderWithTheme(
+        <AiReviewQueueView
+          counts={{...counts, pending: 3}}
+          items={[
+            {...item, batchId: "b1", id: "review-item-batch"},
+            {...item, id: "review-item-eval", reason: "eval"},
+            {...item, id: "review-item-other", reason: "other"},
+          ]}
+          onOpenItem={() => undefined}
+          onRetry={() => undefined}
+          onStatusChange={() => undefined}
+          status="pending"
+        />
+      );
+      expect(getByText("From a review batch")).toBeTruthy();
+      expect(getByText("From an experiment")).toBeTruthy();
+      expect(getByText("From Traces")).toBeTruthy();
     });
 
     it("renders loading, error retry, status tabs, and open controls", async () => {

@@ -13,7 +13,7 @@ export interface ObservabilityStatusStyle {
  * The one status scale for every AI observability screen. Review items, experiments,
  * and traces all map their raw status here so the same word gets the same colour and icon.
  */
-export const OBSERVABILITY_STATUS: Record<string, ObservabilityStatusStyle> = {
+const OBSERVABILITY_STATUS: Record<string, ObservabilityStatusStyle> = {
   completed: {iconName: "check", label: "Done", tone: "success"},
   done: {iconName: "check", label: "Done", tone: "success"},
   error: {iconName: "triangle-exclamation", label: "Error", tone: "error"},
@@ -55,7 +55,7 @@ export const getObservabilityStatusStyle = ({
  * Agreement between an LLM judge and people. One pair of cut-offs drives every
  * agreement badge, meter, and per-question cell.
  */
-export const AGREEMENT_THRESHOLDS = {close: 0.75, match: 0.9} as const;
+const AGREEMENT_THRESHOLDS = {close: 0.75, match: 0.9} as const;
 
 export type AgreementLevel = "close" | "match" | "none" | "off";
 

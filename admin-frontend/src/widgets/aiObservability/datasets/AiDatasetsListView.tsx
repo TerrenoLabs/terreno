@@ -58,7 +58,7 @@ export interface AiDatasetsListViewProps {
   onRetry: () => void;
 }
 
-export const FILE_READ_ERROR = "Could not read that file. Try again, or paste its contents below.";
+const FILE_READ_ERROR = "Could not read that file. Try again, or paste its contents below.";
 
 const formatUpdated = (iso: string): string => {
   const parsed = DateTime.fromISO(iso);

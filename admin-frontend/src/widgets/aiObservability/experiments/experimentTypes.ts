@@ -123,10 +123,7 @@ export const failingGateCount = (experiment: ExperimentRecord): number => {
   return experiment.results.gates.filter((gate) => !gate.passed).length;
 };
 
-export const gatesForVersion = (
-  experiment: ExperimentRecord,
-  version: number
-): ExperimentGateResult[] => {
+const gatesForVersion = (experiment: ExperimentRecord, version: number): ExperimentGateResult[] => {
   if (!experiment.results) {
     return [];
   }
@@ -142,7 +139,7 @@ const GATE_OP_SYMBOLS: Record<string, string> = {
 };
 
 /** Show a gate comparison operator as the math symbol people read, never the API word. */
-export const formatGateOp = (op: string): string => {
+const formatGateOp = (op: string): string => {
   return GATE_OP_SYMBOLS[op] ?? op;
 };
 
@@ -177,16 +174,8 @@ export const formatGateName = (
   return `${gate.evaluatorName}: ${dimension}`;
 };
 
-/** What the measured number is: the average score, or the share of items scored true. */
-export const formatGateAggregate = (aggregate: ScoreThreshold["aggregate"]): string => {
-  if (aggregate === "agreement") {
-    return "Agreement";
-  }
-  return aggregate === "trueRate" ? "Pass rate" : "Average";
-};
-
 /** One failing gate in a sentence, such as "helpfulness ≥ 0.8 (got 0.62)". */
-export const describeGateResult = (gate: ExperimentGateResult): string => {
+const describeGateResult = (gate: ExperimentGateResult): string => {
   return `${formatGateName(gate)} ${formatGateThreshold(gate)} (got ${formatGateActual(gate.actual)})`;
 };
 
@@ -235,24 +224,6 @@ export const formatPromoteBlockedReason = (summary: VersionGateSummary): string 
   }
   const details = summary.failing.map(describeGateResult).join("; ");
   return `v${summary.version} fails ${pluralize(summary.failing.length, "gate", "gates")}: ${details} — can't promote v${summary.version}.`;
-};
-
-/**
- * One sentence per version that fails a gate, for places that summarize a whole experiment
- * (such as the experiments list) instead of one version.
- */
-export const describeFailingVersions = (experiment: ExperimentRecord): string[] => {
-  return summarizeGatesByVersion(experiment)
-    .map(formatPromoteBlockedReason)
-    .filter((reason): reason is string => Boolean(reason));
-};
-
-export const experimentProgressPercent = (experiment: ExperimentRecord): number => {
-  const progress = experiment.results?.progress;
-  if (!progress || progress.total === 0) {
-    return 0;
-  }
-  return Math.round((progress.completed / progress.total) * 100);
 };
 
 export const parsePromoteBlockedTitle = (error: unknown): string | undefined => {
@@ -318,65 +289,6 @@ export const EXPERIMENT_KIND_LABELS: Record<ExperimentKind, string> = {
 
 export const experimentKind = (experiment: Pick<ExperimentRecord, "kind">): ExperimentKind => {
   return experiment.kind === "judge" ? "judge" : "prompt";
-};
-
-export const formatAgreementPercent = (rate?: number): string => {
-  if (rate === undefined || Number.isNaN(rate)) {
-    return "—";
-  }
-  return `${Math.round(rate * 1000) / 10}%`;
-};
-
-export interface JudgeVersionSummary {
-  agreement?: JudgeAgreement;
-  meetsTarget: boolean;
-  target: number;
-  verdict: string;
-  version: number;
-}
-
-/**
- * Plain-language verdict per judge prompt version, such as
- * "v2 agrees with humans 95% of the time — meets the 90% target."
- */
-export const summarizeJudgeVersions = (experiment: ExperimentRecord): JudgeVersionSummary[] => {
-  const target = experiment.targetAgreement ?? DEFAULT_TARGET_AGREEMENT;
-  const targetText = formatAgreementPercent(target);
-  return [...experiment.versions]
-    .sort((left, right) => left - right)
-    .map((version) => {
-      const agreement = experiment.results?.agreement?.[String(version)];
-      const rate = agreement?.rate;
-      if (rate === undefined || Number.isNaN(rate)) {
-        return {
-          agreement,
-          meetsTarget: false,
-          target,
-          verdict: `v${version} has no answers to compare with the humans yet.`,
-          version,
-        };
-      }
-      const meetsTarget = rate >= target;
-      const verdict = `v${version} agrees with humans ${formatAgreementPercent(rate)} of the time — ${
-        meetsTarget ? "meets" : "below"
-      } the ${targetText} target.`;
-      return {agreement, meetsTarget, target, verdict, version};
-    });
-};
-
-/** The version with the highest agreement rate, if any version has one. */
-export const bestJudgeVersion = (summaries: JudgeVersionSummary[]): number | undefined => {
-  let best: JudgeVersionSummary | undefined;
-  for (const summary of summaries) {
-    const rate = summary.agreement?.rate;
-    if (rate === undefined) {
-      continue;
-    }
-    if (!best || rate > (best.agreement?.rate ?? -1)) {
-      best = summary;
-    }
-  }
-  return best?.version;
 };
 
 /** Tags shown next to a prompt version in pickers: latest, production, superseded. */

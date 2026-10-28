@@ -9,8 +9,6 @@ import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesLi
 import {
   AiTracesListView,
   type AiTracesListViewProps,
-  sortColumnToTraceSort,
-  traceSortToSortColumn,
 } from "../widgets/aiObservability/traces/AiTracesListView";
 import type {TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import type {TraceListQueryArgs} from "../widgets/aiObservability/traces/useAiObservabilityTracesApi";
@@ -146,22 +144,44 @@ const columnByTitle = (columns: DataTableColumn[], title: string): DataTableColu
 };
 
 describe("Traces table sort mapping", () => {
-  it("maps server sort keys to DataTable columns and back", () => {
-    assert.deepEqual(traceSortToSortColumn("-startedAt"), {column: 3, direction: "desc"});
-    assert.deepEqual(traceSortToSortColumn("cost"), {column: 6, direction: "asc"});
-    assert.isUndefined(traceSortToSortColumn("created"));
+  const tableSortFor = (sort: string): unknown => {
+    const {UNSAFE_root} = renderWithTheme(<AiTracesListView {...viewProps({sort})} />);
+    return findTable(UNSAFE_root).props.sortColumn;
+  };
 
-    assert.equal(sortColumnToTraceSort({column: 6, direction: "desc"}, "-startedAt"), "-cost");
-    assert.equal(sortColumnToTraceSort({column: 4, direction: "asc"}, "-startedAt"), "tokens");
-    assert.equal(sortColumnToTraceSort({column: 5, direction: "asc"}, "cost"), "latency");
-    assert.equal(sortColumnToTraceSort({column: 2, direction: "asc"}, "cost"), "status");
-    assert.equal(sortColumnToTraceSort({column: 1, direction: "asc"}, "cost"), "name");
-    assert.equal(sortColumnToTraceSort({column: 7, direction: "desc"}, "cost"), "-scores");
+  const sortAfterPress = async (
+    next: {column: number; direction: "asc" | "desc"} | undefined,
+    sort: string
+  ): Promise<string | undefined> => {
+    const onSortChange = mock((_sort: string) => undefined);
+    const {getByTestId} = renderWithTheme(
+      <AiTracesListView {...viewProps({onSortChange, sort})} />
+    );
+    await act(async () => {
+      fireEvent(getByTestId("ai-traces-table"), "setSortColumn", next);
+      await Promise.resolve();
+    });
+    return onSortChange.mock.calls[0]?.[0];
+  };
+
+  it("maps server sort keys to DataTable columns", () => {
+    assert.deepEqual(tableSortFor("-startedAt"), {column: 3, direction: "desc"});
+    assert.deepEqual(tableSortFor("cost"), {column: 6, direction: "asc"});
+    assert.isUndefined(tableSortFor("created"));
+  });
+
+  it("maps header presses back to server sort keys", async () => {
+    assert.equal(await sortAfterPress({column: 6, direction: "desc"}, "-startedAt"), "-cost");
+    assert.equal(await sortAfterPress({column: 4, direction: "asc"}, "-startedAt"), "tokens");
+    assert.equal(await sortAfterPress({column: 5, direction: "asc"}, "cost"), "latency");
+    assert.equal(await sortAfterPress({column: 2, direction: "asc"}, "cost"), "status");
+    assert.equal(await sortAfterPress({column: 1, direction: "asc"}, "cost"), "name");
+    assert.equal(await sortAfterPress({column: 7, direction: "desc"}, "cost"), "-scores");
     // Unsortable columns keep the current sort.
-    assert.equal(sortColumnToTraceSort({column: 0, direction: "asc"}, "cost"), "cost");
+    assert.equal(await sortAfterPress({column: 0, direction: "asc"}, "cost"), "cost");
     // Clearing a sort falls back to newest first; clearing newest first flips Started.
-    assert.equal(sortColumnToTraceSort(undefined, "-cost"), "-startedAt");
-    assert.equal(sortColumnToTraceSort(undefined, "-startedAt"), "startedAt");
+    assert.equal(await sortAfterPress(undefined, "-cost"), "-startedAt");
+    assert.equal(await sortAfterPress(undefined, "-startedAt"), "startedAt");
   });
 });
 

@@ -54,12 +54,12 @@ const summarizeOutput = (value: unknown): string => {
 };
 
 /** Versions whose gates all pass, in version order. */
-export const passingVersions = (summaries: VersionGateSummary[]): number[] => {
+const passingVersions = (summaries: VersionGateSummary[]): number[] => {
   return summaries.filter((summary) => summary.passed).map((summary) => summary.version);
 };
 
 /** The one-sentence verdict for the whole experiment, shown once as a banner. */
-export const experimentVerdict = (
+const experimentVerdict = (
   summaries: VersionGateSummary[]
 ): {status: "info" | "warning"; text: string} | undefined => {
   const gated = summaries.filter((summary) => summary.gates.length > 0);

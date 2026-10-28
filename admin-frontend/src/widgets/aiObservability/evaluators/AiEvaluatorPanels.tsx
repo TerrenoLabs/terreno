@@ -41,7 +41,7 @@ type JudgePromptStatus = "error" | "idle" | "loading" | "ready";
 const EVALUATOR_TYPE_ORDER: EvaluatorRecord["type"][] = ["human", "llm-judge", "json-assert"];
 
 /** Readable data-type labels; the API keeps boolean / numeric / categorical. */
-export const DIMENSION_DATA_TYPE_LABELS: Record<EvaluatorDimension["dataType"], string> = {
+const DIMENSION_DATA_TYPE_LABELS: Record<EvaluatorDimension["dataType"], string> = {
   boolean: "Yes or no",
   categorical: "Category",
   numeric: "Number",

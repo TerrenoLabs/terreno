@@ -29,7 +29,7 @@ const REASON_LABELS: Record<string, string> = {
   manual: "From Traces",
 };
 
-export const reviewSourceLabel = (item: ReviewListItem): string => {
+const reviewSourceLabel = (item: ReviewListItem): string => {
   if (item.batchId) {
     return "From a review batch";
   }

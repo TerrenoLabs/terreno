@@ -2,19 +2,13 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 import type {ExperimentRecord, VersionGateSummary} from "./experimentTypes";
 import {
-  describeFailingVersions,
-  describeGateResult,
   experimentItemColumnWidths,
-  experimentProgressPercent,
   failingGateCount,
   formatGateActual,
-  formatGateAggregate,
   formatGateName,
-  formatGateOp,
   formatGateThreshold,
   formatPromoteBlockedReason,
   formatVersionGateVerdict,
-  gatesForVersion,
   isValidExperimentVersionCount,
   parsePromoteBlockedTitle,
   summarizeGatesByVersion,
@@ -83,21 +77,13 @@ describe("experimentTypes helpers", () => {
     assert.isUndefined(unwrapExperimentRecord({bad: true}));
   });
 
-  it("counts failing gates and filters gates by version", () => {
+  it("counts failing gates and groups gates by version", () => {
     assert.equal(failingGateCount(experiment), 1);
     assert.equal(failingGateCount({...experiment, results: undefined}), 0);
-    assert.equal(gatesForVersion(experiment, 2).length, 1);
-    assert.equal(gatesForVersion(experiment, 3).length, 0);
-  });
-
-  it("computes progress percent with zero-safe denominator", () => {
-    assert.equal(experimentProgressPercent(experiment), 50);
-    assert.equal(
-      experimentProgressPercent({
-        ...experiment,
-        results: {...experiment.results!, progress: {completed: 0, total: 0}},
-      }),
-      0
+    assert.equal(summaryFor(2).gates.length, 1);
+    assert.deepEqual(
+      summarizeGatesByVersion({...experiment, versions: [3]}).map((summary) => summary.gates),
+      [[]]
     );
   });
 
@@ -132,12 +118,10 @@ describe("experimentTypes helpers", () => {
   });
 
   it("shows gate operators as symbols, never API words", () => {
-    assert.equal(formatGateOp("gte"), "≥");
-    assert.equal(formatGateOp("lte"), "≤");
-    assert.equal(formatGateOp("gt"), ">");
-    assert.equal(formatGateOp("lt"), "<");
-    assert.equal(formatGateOp("eq"), "=");
     assert.equal(formatGateThreshold({op: "gte", value: 0.8}), "≥ 0.8");
+    assert.equal(formatGateThreshold({op: "lte", value: 0.2}), "≤ 0.2");
+    assert.equal(formatGateThreshold({op: "gt" as never, value: 1}), "> 1");
+    assert.equal(formatGateThreshold({op: "lt" as never, value: 1}), "< 1");
     assert.equal(formatGateThreshold({op: "eq", value: 1}), "= 1");
   });
 
@@ -156,11 +140,9 @@ describe("experimentTypes helpers", () => {
     );
   });
 
-  it("formats measured values and aggregates", () => {
+  it("formats measured values", () => {
     assert.equal(formatGateActual(0.625), "0.63");
     assert.equal(formatGateActual(undefined), "—");
-    assert.equal(formatGateAggregate("mean"), "Average");
-    assert.equal(formatGateAggregate("trueRate"), "Pass rate");
   });
 
   it("summarizes gates per version in version order", () => {
@@ -201,9 +183,5 @@ describe("experimentTypes helpers", () => {
       formatPromoteBlockedReason(twoFailing),
       "v2 fails 2 gates: quality: correct ≥ 0.8 (got 0.50); helpfulness ≥ 0.8 (got 0.50) — can't promote v2."
     );
-    assert.equal(describeGateResult(gate), "quality: correct ≥ 0.8 (got 0.50)");
-    assert.deepEqual(describeFailingVersions(experiment), [
-      "v2 fails 1 gate: quality: correct ≥ 0.8 (got 0.50) — can't promote v2.",
-    ]);
   });
 });

@@ -42,7 +42,7 @@ const isNewestStaging = (prompt: PromptListRow): boolean => {
 };
 
 /** Relative time of the last call in the past 7 days, e.g. "2 hours ago". */
-export const formatPromptLastUsed = (iso?: string): string => {
+const formatPromptLastUsed = (iso?: string): string => {
   if (!iso) {
     return "—";
   }

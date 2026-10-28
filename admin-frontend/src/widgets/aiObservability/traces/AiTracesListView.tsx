@@ -66,7 +66,7 @@ const ADDITIONAL_FILTERS: DataTableColumnFilter[] = [
 const TRACE_ROW_HEIGHT = 72;
 
 /** Total tokens with thousands separators, e.g. "12,345". */
-export const formatTraceTokens = (usage?: TraceUsage): string => {
+const formatTraceTokens = (usage?: TraceUsage): string => {
   if (!usage || (usage.inputTokens === undefined && usage.outputTokens === undefined)) {
     return "—";
   }
@@ -74,7 +74,7 @@ export const formatTraceTokens = (usage?: TraceUsage): string => {
 };
 
 /** Cost to the cent, or "<$0.01" when a call cost less than a cent. */
-export const formatTraceCost = (usage?: TraceUsage): string => {
+const formatTraceCost = (usage?: TraceUsage): string => {
   if (!usage || usage.costUsd === undefined) {
     return "—";
   }
@@ -85,7 +85,7 @@ export const formatTraceCost = (usage?: TraceUsage): string => {
 };
 
 /** Wall-clock time in seconds, e.g. "1.2 s". */
-export const formatTraceLatency = (item: {endedAt?: string; startedAt: string}): string => {
+const formatTraceLatency = (item: {endedAt?: string; startedAt: string}): string => {
   if (!item.endedAt) {
     return "—";
   }
@@ -99,7 +99,7 @@ export const formatTraceLatency = (item: {endedAt?: string; startedAt: string}):
 };
 
 /** Relative start time for the list, e.g. "3 hours ago". */
-export const formatTraceStarted = (iso: string): string => {
+const formatTraceStarted = (iso: string): string => {
   const parsed = DateTime.fromISO(iso);
   if (!parsed.isValid) {
     return "—";
@@ -163,7 +163,7 @@ const buildColumns = (promptOptions: string[]): DataTableColumn[] => {
 };
 
 /** Maps a `sort` query value such as `-cost` to the DataTable's column sort state. */
-export const traceSortToSortColumn = (sort: string): ColumnSortInterface | undefined => {
+const traceSortToSortColumn = (sort: string): ColumnSortInterface | undefined => {
   const descending = sort.startsWith("-");
   const key = descending ? sort.slice(1) : sort;
   const entry = Object.entries(TRACE_SORT_KEY_BY_COLUMN).find(([, value]) => value === key);
@@ -178,10 +178,7 @@ export const traceSortToSortColumn = (sort: string): ColumnSortInterface | undef
  * "none" falls back to newest first, and pressing Started while already newest first flips
  * it to oldest first so that column can still toggle.
  */
-export const sortColumnToTraceSort = (
-  next: ColumnSortInterface | undefined,
-  current: string
-): string => {
+const sortColumnToTraceSort = (next: ColumnSortInterface | undefined, current: string): string => {
   if (!next) {
     return current === DEFAULT_TRACE_SORT ? "startedAt" : DEFAULT_TRACE_SORT;
   }

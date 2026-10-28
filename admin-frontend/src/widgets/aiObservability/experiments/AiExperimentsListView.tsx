@@ -71,7 +71,7 @@ const experimentCost = (experiment: ExperimentRecord): number | undefined => {
  * One gate verdict per experiment: the highest version that passes every gate, or how many gates
  * the closest version fails. Undefined before any gate has a score.
  */
-export const experimentResultVerdict = (
+const experimentResultVerdict = (
   experiment: ExperimentRecord
 ): {passed: boolean; text: string} | undefined => {
   const summaries = summarizeGatesByVersion(experiment).filter((entry) => entry.gates.length > 0);

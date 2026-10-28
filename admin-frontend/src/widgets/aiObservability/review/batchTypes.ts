@@ -1,9 +1,4 @@
-import {
-  AGREEMENT_LEVEL_STYLE,
-  type AgreementLevel,
-  formatRate,
-  getAgreementLevel,
-} from "../shell/observabilityStatus";
+import {AGREEMENT_LEVEL_STYLE, formatRate, getAgreementLevel} from "../shell/observabilityStatus";
 import type {EvaluatorDimension, ReviewListItem, ReviewStatus} from "./reviewTypes";
 
 export type ScoreValue = boolean | number | string;
@@ -100,35 +95,11 @@ export const answerSubjectKey = (row: {datasetItemId?: string; traceId?: string}
   return row.datasetItemId ?? row.traceId ?? "";
 };
 
-/** The created batch's id from a create response, with or without a `data` envelope. */
-export const unwrapCreatedBatchId = (raw: unknown): string | undefined => {
-  const data = unwrapData(raw);
-  if (data && typeof data === "object" && typeof (data as {id?: unknown}).id === "string") {
-    return (data as {id: string}).id;
-  }
-  return undefined;
-};
-
 /** Batch items still awaiting an answer: pending or in progress, in batch order. */
 export const openBatchItems = (items: ReviewListItem[]): ReviewListItem[] =>
   items.filter((item) => item.status === "pending" || item.status === "in_progress");
 
 export const formatPercent = (rate?: number): string => formatRate(rate);
-
-export const agreementStatus = (rate?: number): "error" | "neutral" | "success" | "warning" => {
-  const tone = AGREEMENT_LEVEL_STYLE[getAgreementLevel(rate)].tone;
-  return tone === "info" ? "neutral" : tone;
-};
-
-const AGREEMENT_VERDICT: Record<AgreementLevel, string> = {
-  close: "Close — check disagreements",
-  match: "Matches humans",
-  none: "No human answers yet",
-  off: "Does not match humans",
-};
-
-export const agreementVerdict = (rate?: number): string =>
-  AGREEMENT_VERDICT[getAgreementLevel(rate)];
 
 export const formatAnswer = (value: ScoreValue | undefined): string => {
   if (value === undefined) {

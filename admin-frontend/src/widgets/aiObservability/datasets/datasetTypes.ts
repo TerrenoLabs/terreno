@@ -93,19 +93,6 @@ export const unwrapDatasetItems = (raw: unknown): DatasetItemRecord[] => {
   });
 };
 
-export const formatProvenanceBar = (counts: DatasetCounts): string => {
-  if (counts.total === 0) {
-    return "—";
-  }
-  const humanPct = Math.round((counts.human / counts.total) * 100);
-  // Auto is the unreviewed trace/synthetic share. A stale payload that also
-  // counts those items as human must not render both shares at 100%.
-  const nonHuman = Math.max(0, counts.total - counts.human);
-  const autoCount = Math.min(Math.max(0, counts.auto), nonHuman);
-  const autoPct = Math.round((autoCount / counts.total) * 100);
-  return `${humanPct}% human · ${autoPct}% auto`;
-};
-
 export const filterDatasetItemsByTab = (
   items: DatasetItemRecord[],
   tab: DatasetItemTab
@@ -155,8 +142,4 @@ export const judgedQuestionSets = (
   return [...(dataset?.judgments ?? [])]
     .filter((judgment) => judgment.current > 0)
     .sort((left, right) => right.current - left.current);
-};
-
-export const hasHumanAnswers = (dataset?: Pick<DatasetRecord, "judgments">): boolean => {
-  return judgedQuestionSets(dataset).length > 0;
 };

@@ -1,9 +1,7 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {renderHook} from "@testing-library/react-native";
 import {
-  agreementStatus,
   agreementTextColor,
-  agreementVerdict,
   formatAnswer,
   formatPercent,
   humanizeKey,
@@ -30,15 +28,9 @@ describe("batchTypes", () => {
     expect(agreementTextColor(undefined)).toBe("secondaryDark");
   });
 
-  it("formats agreement as a percent with a traffic-light status", () => {
+  it("formats agreement as a percent", () => {
     expect(formatPercent(31 / 32)).toBe("97%");
     expect(formatPercent(undefined)).toBe("—");
-    expect(agreementStatus(0.95)).toBe("success");
-    expect(agreementStatus(0.78)).toBe("warning");
-    expect(agreementStatus(0.5)).toBe("error");
-    expect(agreementStatus(undefined)).toBe("neutral");
-    expect(agreementVerdict(0.9)).toBe("Matches humans");
-    expect(agreementVerdict(undefined)).toBe("No human answers yet");
   });
 
   it("formats answers and previews", () => {

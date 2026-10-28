@@ -31,7 +31,7 @@ export interface AiEvaluatorsListViewProps {
 }
 
 /** Icon per evaluator kind. Kind badges stay neutral: colour means state, not category. */
-export const EVALUATOR_TYPE_ICONS: Record<EvaluatorRecord["type"], IconName> = {
+const EVALUATOR_TYPE_ICONS: Record<EvaluatorRecord["type"], IconName> = {
   human: "user",
   "json-assert": "code",
   "llm-judge": "gavel",

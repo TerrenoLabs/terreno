@@ -1,7 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {
   AGREEMENT_LEVEL_STYLE,
-  AGREEMENT_THRESHOLDS,
   formatRate,
   getAgreementLevel,
   getObservabilityStatusStyle,
@@ -42,10 +41,11 @@ describe("getObservabilityStatusStyle", () => {
 
 describe("getAgreementLevel", () => {
   it("uses the shared thresholds", () => {
-    expect(getAgreementLevel(AGREEMENT_THRESHOLDS.match)).toBe("match");
+    expect(getAgreementLevel(0.9)).toBe("match");
     expect(getAgreementLevel(0.97)).toBe("match");
     expect(getAgreementLevel(0.89)).toBe("close");
-    expect(getAgreementLevel(AGREEMENT_THRESHOLDS.close)).toBe("close");
+    expect(getAgreementLevel(0.75)).toBe("close");
+    expect(getAgreementLevel(0.74)).toBe("off");
     expect(getAgreementLevel(0.5)).toBe("off");
   });
 

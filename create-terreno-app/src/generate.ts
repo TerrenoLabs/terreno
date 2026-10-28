@@ -110,8 +110,10 @@ const generateMcpSettings = (args: BootstrapArgs): string => {
           type: "http",
           url: `${mcpUrl}/mcp`,
         },
+        // Generated apps do not depend on @terreno/mcp, and no npm package is named
+        // `terreno-mcp-local`, so bunx must be told which package provides the bin.
         "terreno-local": {
-          args: ["terreno-mcp-local"],
+          args: ["-p", "@terreno/mcp", "terreno-mcp-local"],
           command: "bunx",
         },
       },
@@ -149,6 +151,8 @@ const DEPLOY_BACKEND_CLOUD_RUN_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/deploy-backend-to-cloud-run.md";
 const BUILD_FOR_WEB_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md";
+const SET_UP_TERRENO_MCP_DOC =
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md";
 
 const generateRootReadme = (args: BootstrapArgs): string => {
   const {appDisplayName, appName} = args;
@@ -198,6 +202,10 @@ After backend route changes, regenerate the OpenAPI SDK:
 \`\`\`bash
 cd frontend && bun run sdk
 \`\`\`
+
+## AI-assisted development
+
+\`.cursor/mcp.json\` and \`.mcp.json\` connect your editor to the hosted Terreno MCP and \`terreno-mcp-local\` (logs, last error, client state, database); see [Set up Terreno MCP](${SET_UP_TERRENO_MCP_DOC}).
 
 ## Deploy
 
@@ -1476,12 +1484,18 @@ import {Stack} from "expo-router";
 import {useEffect} from "react";
 import "react-native-reanimated";
 import {baseUrl, selectBetterAuthIsLoading, selectBetterAuthUserId} from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {Spinner, TerrenoProvider} from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
+
+// Dev-only: forwards console errors/warnings and uncaught errors to the backend's
+// POST /__terreno/browser-logs so terreno-mcp-local \`read_logs\` / \`last_error\` can read them.
+// No-op outside __DEV__.
+installTerrenoDevConsoleLogger({baseUrl});
 
 export {ErrorBoundary} from "expo-router";
 
@@ -2459,6 +2473,8 @@ TOKEN_ISSUER=${appName}-dev
 REFRESH_TOKEN_SECRET=dev-refresh-secret
 SESSION_SECRET=dev-session-secret
 PORT=4000
+# TerrenoApp registers POST /__terreno/browser-logs (terreno-mcp-local read_logs) only in development.
+NODE_ENV=development
 `;
 };
 
@@ -2717,6 +2733,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateRootDockerfile(), path: "Dockerfile"},
     {content: generateCursorRules(args), path: ".cursorrules"},
     {content: generateMcpSettings(args), path: ".cursor/mcp.json"},
+    {content: generateMcpSettings(args), path: ".mcp.json"},
     {content: generateClaudeMd(args), path: "CLAUDE.md"},
 
     // Backend files

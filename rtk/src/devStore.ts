@@ -8,7 +8,7 @@ declare global {
 
 /**
  * Exposes the Redux store on `globalThis.__TERRENO_STORE__` in development so
- * `terreno-mcp-local` can run `get_rtk_state` against the real app state.
+ * `terreno-mcp-local` can run `get_client_state` against the real app state.
  */
 export const registerTerrenoDevStore = (store: Store<Record<string, unknown>>): void => {
   if (typeof __DEV__ === "undefined" || !__DEV__) {

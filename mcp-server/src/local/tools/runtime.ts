@@ -3,6 +3,7 @@ import {
   ensureCdpConnected,
   getCdpConnectionStatus,
 } from "../metro/metroDevSession.js";
+import {hasLocalSyncDbRegistry, probeSyncDbState, type SyncDbStateProbe} from "./syncDb.js";
 
 interface TerrenoDevStore {
   getState: () => Record<string, unknown>;
@@ -117,10 +118,27 @@ const summarizeClientState = (
   };
 };
 
-export interface GetRtkStateArgs {
+export interface GetClientStateArgs {
+  /** RTK: `auth`, `betterAuth`, `rtk`/`terreno-rtk`, or any top-level Redux state key. */
   slice?: string;
+  /** RTK: filter cache rows by endpoint name or serialized args. */
   query?: string;
+  /** SyncDB: client name; defaults to the first registered client. */
+  name?: string;
+  /** SyncDB: collection filter. */
+  collection?: string;
+  /** SyncDB: entity id filter. */
+  entityId?: string;
+  /** SyncDB: set false to return debug stats without event bodies. */
+  includeDebugEvents?: boolean;
+  /** SyncDB: entity limit per collection. */
+  limit?: number;
 }
+
+/** Which client data layer `get_client_state` found in the running app. */
+type ClientStateLayer = "rtk" | "syncdb" | "syncdb+rtk" | "none";
+
+type RtkStateProbe = {found: true; state: unknown} | {found: false; reason: string};
 
 const STORE_READ_EXPR = `(() => {
   const s = globalThis.__TERRENO_STORE__;
@@ -134,30 +152,97 @@ const STORE_READ_EXPR = `(() => {
   }
 })()`;
 
-export const getRtkState = (args: GetRtkStateArgs): Promise<string> => {
-  return (async (): Promise<string> => {
-    const slice = args.slice?.trim();
-    const query = args.query?.trim();
+const NO_CLIENT_STATE_HINT =
+  "No client data layer found. For RTK Query, call `registerTerrenoDevStore(store)` from @terreno/rtk in __DEV__. For SyncDB, create the client with `createSyncDb({debug: true})`. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).";
 
-    const local = getDevStore();
-    if (local) {
-      const state = local.getState();
-      return JSON.stringify(summarizeClientState(state, slice, query), null, 2);
-    }
+const probeRtkState = async (
+  slice: string | undefined,
+  query: string | undefined
+): Promise<RtkStateProbe> => {
+  const local = getDevStore();
+  if (local) {
+    return {found: true, state: summarizeClientState(local.getState(), slice, query)};
+  }
+  const ev = await cdpRuntimeEvaluate(STORE_READ_EXPR, true);
+  if (ev.error) {
+    return {found: false, reason: ev.error};
+  }
+  const payload = ev.value as
+    | {error?: string; ok?: boolean; state?: Record<string, unknown>}
+    | undefined;
+  if (!payload?.ok || !payload.state) {
+    return {
+      found: false,
+      reason: `Could not read store from app: ${JSON.stringify(payload ?? ev.value)}`,
+    };
+  }
+  return {found: true, state: summarizeClientState(payload.state, slice, query)};
+};
 
-    const ev = await cdpRuntimeEvaluate(STORE_READ_EXPR, true);
-    if (ev.error) {
-      return `${ev.error}\n${getCdpConnectionStatus()}`;
-    }
-    const payload = ev.value as
-      | {error?: string; ok?: boolean; state?: Record<string, unknown>}
-      | undefined;
-    if (!payload?.ok || !payload.state) {
-      return `Could not read store from app: ${JSON.stringify(payload ?? ev.value)}\n${getCdpConnectionStatus()}`;
-    }
-    const state = payload.state;
-    return JSON.stringify(summarizeClientState(state, slice, query), null, 2);
-  })();
+const resolveLayer = (hasRtk: boolean, hasSyncDb: boolean): ClientStateLayer => {
+  if (hasRtk && hasSyncDb) {
+    return "syncdb+rtk";
+  }
+  if (hasSyncDb) {
+    return "syncdb";
+  }
+  if (hasRtk) {
+    return "rtk";
+  }
+  return "none";
+};
+
+/**
+ * Detects the app's client data layer (RTK Query Redux store and/or SyncDB client) and returns
+ * `{layer, rtk?, syncdb?}`, or `{layer: "none", hint, reasons, connection}` when neither is found.
+ */
+export const getClientState = async (args: GetClientStateArgs): Promise<string> => {
+  const hasLocalRtk = getDevStore() !== undefined;
+  const hasLocalSyncDb = hasLocalSyncDbRegistry();
+  // An in-process registry means the app shares this heap, so CDP would only add latency.
+  const isInProcess = hasLocalRtk || hasLocalSyncDb;
+  const [rtk, syncdb] = await Promise.all([
+    isInProcess && !hasLocalRtk
+      ? Promise.resolve<RtkStateProbe>({found: false, reason: "no __TERRENO_STORE__ in process"})
+      : probeRtkState(args.slice?.trim(), args.query?.trim()),
+    isInProcess && !hasLocalSyncDb
+      ? Promise.resolve<SyncDbStateProbe>({
+          found: false,
+          reason: "no __TERRENO_SYNCDB__ registry in process",
+        })
+      : probeSyncDbState({
+          collection: args.collection,
+          entityId: args.entityId,
+          includeDebugEvents: args.includeDebugEvents,
+          limit: args.limit,
+          name: args.name,
+        }),
+  ]);
+  const layer = resolveLayer(rtk.found, syncdb.found);
+  if (layer === "none") {
+    return JSON.stringify(
+      {
+        connection: getCdpConnectionStatus(),
+        hint: NO_CLIENT_STATE_HINT,
+        layer,
+        reasons: {
+          rtk: rtk.found ? undefined : rtk.reason,
+          syncdb: syncdb.found ? undefined : syncdb.reason,
+        },
+      },
+      null,
+      2
+    );
+  }
+  return JSON.stringify(
+    {
+      layer,
+      rtk: rtk.found ? rtk.state : undefined,
+      syncdb: syncdb.found ? syncdb.state : undefined,
+    },
+    null,
+    2
+  );
 };
 
 export interface EvaluateArgs {

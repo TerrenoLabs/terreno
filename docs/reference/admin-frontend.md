@@ -213,7 +213,9 @@ object has no value for it. Subfield test IDs use the dotted path, for example
 `admin-field-tasks.enabled`; the group itself is `admin-field-group-tasks`. Editing a subfield
 merges it into the parent object, and Save sends the whole object for that field. In create mode
 the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
-default are left out. Nested objects inside an array of subdocuments render the same way.
+default are left out. Nested objects inside an array of subdocuments render the same way; their
+test IDs add the array key and item index (`admin-field-servers.0.media.port`), and new array
+items follow the same default rules.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 

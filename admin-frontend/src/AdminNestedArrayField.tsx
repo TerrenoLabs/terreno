@@ -8,14 +8,19 @@ import {
   isNestedObjectField,
 } from "./AdminNestedObjectField";
 import type {AdminApi, AdminFieldConfig, AdminFieldValue, RefRendererMap} from "./types";
+import {SYSTEM_FIELDS} from "./types";
 
 const FIELD_HEIGHT_ESTIMATE = 76;
 const CARD_HEADER_HEIGHT = 44;
 const CARD_PADDING = 24;
 const ITEMS_GAP = 8;
+/** Border, padding, heading, and helper text of a nested object group. */
+const NESTED_GROUP_CHROME_HEIGHT = 84;
 
 interface AdminNestedArrayFieldProps {
   title: string;
+  /** Dotted path of the array field; prefixes nested object group test IDs inside items. */
+  fieldKey?: string;
   helperText?: string;
   errorText?: string;
   items: Record<string, AdminFieldConfig>;
@@ -42,6 +47,11 @@ interface ItemFieldArgs {
   apiBase?: string;
   routeBase?: string;
   fieldKey: string;
+  /**
+   * Prefix for nested object group keys, e.g. `servers.0`, so test IDs stay unique per item.
+   * Leaf fields directly on the item keep their bare key.
+   */
+  groupKeyPrefix?: string;
   label: string;
   fieldConfig: AdminFieldConfig;
   fieldValue: AdminFieldValue;
@@ -65,6 +75,7 @@ const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
     apiBase,
     routeBase,
     fieldKey,
+    groupKeyPrefix,
     label,
     fieldConfig,
     fieldValue,
@@ -80,6 +91,7 @@ const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
         api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
+        fieldKey={groupKeyPrefix ? `${groupKeyPrefix}.${fieldKey}` : fieldKey}
         helperText={fieldConfig.description}
         items={fieldConfig.items}
         key={fieldKey}
@@ -98,7 +110,7 @@ const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
   if (isNestedObjectField(fieldConfig) && fieldConfig.items) {
     return (
       <AdminNestedObjectField
-        fieldKey={fieldKey}
+        fieldKey={groupKeyPrefix ? `${groupKeyPrefix}.${fieldKey}` : fieldKey}
         fields={fieldConfig.items}
         helperText={fieldConfig.description}
         key={fieldKey}
@@ -110,6 +122,7 @@ const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
             fieldConfig: sub.fieldConfig,
             fieldKey: sub.fieldKey,
             fieldValue: sub.value,
+            groupKeyPrefix: undefined,
             label: sub.label,
             onChange: sub.onChange,
             readOnly: sub.readOnly,
@@ -143,39 +156,42 @@ const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
 
 const renderNestedSubField = ({
   index,
+  itemKeyPrefix,
   onSubFieldChange,
   ...rest
-}: Omit<ItemFieldArgs, "label" | "onChange"> & {
+}: Omit<ItemFieldArgs, "groupKeyPrefix" | "label" | "onChange"> & {
   index: number;
+  itemKeyPrefix: string;
   onSubFieldChange: (index: number, fieldKey: string, fieldValue: AdminFieldValue) => void;
 }): React.ReactElement => {
   return renderItemField({
     ...rest,
+    groupKeyPrefix: `${itemKeyPrefix}.${index}`,
     label: startCase(rest.fieldKey),
     onChange: (val) => onSubFieldChange(index, rest.fieldKey, val),
   });
 };
 
-const buildDefaultItem = (
-  items: Record<string, AdminFieldConfig>
-): Record<string, AdminFieldValue> => {
-  const newItem: Record<string, AdminFieldValue> = {};
+/**
+ * Estimated rendered height of an item's subfields. DraggableList positions rows at a fixed
+ * height, so nested object groups count their own subfields plus the group's chrome.
+ */
+const estimateSubFieldsHeight = (
+  items: Record<string, AdminFieldConfig>,
+  isNestedGroup = false
+): number => {
+  let height = 0;
   for (const [key, config] of Object.entries(items)) {
-    if (config.default != null) {
-      newItem[key] = config.default;
-    } else if (isNestedObjectField(config) && config.items) {
-      newItem[key] = buildNestedObjectDefault(config.items);
-    } else if (config.type === "boolean") {
-      newItem[key] = false;
-    } else if (config.type === "number") {
-      newItem[key] = 0;
-    } else if (config.type === "array") {
-      newItem[key] = [];
+    if (isNestedGroup && SYSTEM_FIELDS.has(key)) {
+      continue;
+    }
+    if (isNestedObjectField(config) && config.items) {
+      height += NESTED_GROUP_CHROME_HEIGHT + estimateSubFieldsHeight(config.items, true);
     } else {
-      newItem[key] = "";
+      height += FIELD_HEIGHT_ESTIMATE;
     }
   }
-  return newItem;
+  return height;
 };
 
 /**
@@ -185,6 +201,7 @@ const buildDefaultItem = (
  */
 export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
   title,
+  fieldKey: arrayFieldKey,
   helperText,
   errorText,
   items,
@@ -205,8 +222,8 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
     return Array.isArray(value) ? value : [];
   }, [value]);
 
-  const subFieldCount = Object.keys(items).length;
-  const itemHeight = CARD_HEADER_HEIGHT + subFieldCount * FIELD_HEIGHT_ESTIMATE + CARD_PADDING;
+  const itemKeyPrefix = arrayFieldKey ?? "item";
+  const itemHeight = CARD_HEADER_HEIGHT + estimateSubFieldsHeight(items) + CARD_PADDING;
 
   // Stable ID counter so new items get unique IDs across the component lifetime
   const nextIdRef = useRef(arrayValue.length);
@@ -233,7 +250,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
   }, [arrayValue.length]);
 
   const handleAddItem = useCallback((): void => {
-    const newItem = buildDefaultItem(items);
+    const newItem = buildNestedObjectDefault(items);
     const newId = String(nextIdRef.current++);
     itemIdsRef.current = [...itemIdsRef.current, newId];
     onChange([...arrayValue, newItem]);
@@ -318,6 +335,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
                 fieldKey,
                 fieldValue: itemData[fieldKey],
                 index,
+                itemKeyPrefix,
                 modelConfigs,
                 onSubFieldChange: handleSubFieldChange,
                 parentFormState: subFieldParentFormState,
@@ -344,6 +362,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
       handleRemoveItem,
       handleSubFieldChange,
       isReadOnly,
+      itemKeyPrefix,
     ]
   );
 
@@ -396,6 +415,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
                       fieldKey,
                       fieldValue: itemData[fieldKey],
                       index,
+                      itemKeyPrefix,
                       modelConfigs,
                       onSubFieldChange: handleSubFieldChange,
                       parentFormState: subFieldParentFormState,

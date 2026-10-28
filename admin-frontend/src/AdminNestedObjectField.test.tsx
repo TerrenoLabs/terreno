@@ -138,11 +138,15 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
         fieldKey="servers"
         onChange={() => {}}
         readOnly
-        value={[{media: {port: 1, sonarr: {apiKey: "k", url: "http://x"}}}]}
+        value={[
+          {media: {port: 1, sonarr: {apiKey: "k", url: "http://x"}}},
+          {media: {port: 2, sonarr: {apiKey: "j", url: "http://y"}}},
+        ]}
       />
     );
-    expect(getByTestId("admin-field-group-media")).toBeTruthy();
-    expect(getByTestId("admin-field-media.sonarr.url").props.value).toBe("http://x");
+    expect(getByTestId("admin-field-group-servers.0.media")).toBeTruthy();
+    expect(getByTestId("admin-field-servers.0.media.sonarr.url").props.value).toBe("http://x");
+    expect(getByTestId("admin-field-servers.1.media.sonarr.url").props.value).toBe("http://y");
     expect(queryByText("JSON value (string, number, boolean, object, or array)")).toBeNull();
   });
 

@@ -47,6 +47,7 @@ export const AdminFieldRenderer: React.FC<AdminFieldRendererProps> = ({
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
+        fieldKey={fieldKey}
         helperText={fieldConfig.description}
         items={fieldConfig.items}
         modelConfigs={modelConfigs}

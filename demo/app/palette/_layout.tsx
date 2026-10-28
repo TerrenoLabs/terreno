@@ -1,13 +1,20 @@
 import {isSupportedDesktopWidth} from "@terreno/ui";
 import {router, Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {type ReactElement, useCallback} from "react";
+import {type ReactElement, useCallback, useEffect, useState} from "react";
 import {Pressable, Text, useWindowDimensions} from "react-native";
 
 const Layout = (): ReactElement => {
   const {width} = useWindowDimensions();
+  const [hasMounted, setHasMounted] = useState(false);
   const isDesktopLayout = isSupportedDesktopWidth({width});
+  const showHeaderBack = hasMounted && !isDesktopLayout;
   const hideHeaderBack = useCallback((): null => null, []);
+
+  // Static export SSR has no reliable window width, so keep header chrome stable until mount.
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   return (
     <>
@@ -15,8 +22,8 @@ const Layout = (): ReactElement => {
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
-          headerBackVisible: !isDesktopLayout,
-          headerLeft: isDesktopLayout ? hideHeaderBack : undefined,
+          headerBackVisible: showHeaderBack,
+          headerLeft: showHeaderBack ? undefined : hideHeaderBack,
           headerRight: () => (
             <Pressable
               onPress={async () => {
@@ -26,7 +33,7 @@ const Layout = (): ReactElement => {
                 alignItems: "center",
                 height: "100%",
                 justifyContent: "center",
-                marginRight: isDesktopLayout ? 16 : 0,
+                marginRight: hasMounted && isDesktopLayout ? 16 : 0,
               }}
             >
               <Text style={{fontWeight: "bold"}}>Demo Mode</Text>

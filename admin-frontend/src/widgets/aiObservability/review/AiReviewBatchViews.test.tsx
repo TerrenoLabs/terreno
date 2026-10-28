@@ -116,6 +116,7 @@ describe("ReviewQuestionList", () => {
     const style = (testID: string): string => JSON.stringify(view.getByTestId(testID).props.style);
     expect(style("ai-review-question-concise")).not.toBe(style("ai-review-question-faithful"));
     expect(style("ai-review-answer-concise")).toContain("220");
+    expect(style("ai-review-answer-concise")).not.toContain('"flex":0');
     expect(style("ai-review-answer-faithful")).toContain("220");
   });
 

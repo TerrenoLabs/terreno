@@ -63,8 +63,15 @@ const QuestionRow: React.FC<{
       padding={2}
       rounding="md"
       testID={`ai-review-question-${dimension.key}`}
+      width="100%"
     >
-      <Box flex="none" testID={`ai-review-answer-${dimension.key}`} width={ANSWER_COLUMN_WIDTH}>
+      {/* Width only — `flex="none"` is `flex: 0` (basis 0), so the buttons collapse onto the question. */}
+      <Box
+        maxWidth={ANSWER_COLUMN_WIDTH}
+        minWidth={ANSWER_COLUMN_WIDTH}
+        testID={`ai-review-answer-${dimension.key}`}
+        width={ANSWER_COLUMN_WIDTH}
+      >
         {answer}
       </Box>
       <Box flex="grow" gap={1} minWidth={0}>

@@ -189,14 +189,17 @@ mcpServiceTokenSchema.statics = {
     user: {_id: {toString(): string}; tokenEpoch?: number}
   ): Promise<void> {
     const currentEpoch = user.tokenEpoch ?? 0;
-    await this.updateMany(
-      {
-        revokedAt: {$exists: false},
-        tokenEpoch: {$nin: currentEpoch === 0 ? [0, null] : [currentEpoch]},
-        userId: new mongoose.Types.ObjectId(String(user._id)),
-      },
-      {$set: {revokedAt: DateTime.now().toJSDate()}}
-    );
+    const userId = new mongoose.Types.ObjectId(String(user._id));
+    const outdated = await this.find({
+      revokedAt: {$exists: false},
+      tokenEpoch: {$nin: currentEpoch === 0 ? [0, null] : [currentEpoch]},
+      userId,
+    });
+    const revokedAt = DateTime.now().toJSDate();
+    for (const token of outdated) {
+      token.revokedAt = revokedAt;
+      await token.save();
+    }
   },
   async verify(this: McpServiceTokenModel, token: string): Promise<McpServiceTokenDocument | null> {
     const now = DateTime.now().toJSDate();

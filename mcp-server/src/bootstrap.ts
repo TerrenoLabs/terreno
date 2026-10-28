@@ -156,9 +156,9 @@ cd frontend && bun run sdk   # Regenerate store/apiSdk.ts after backend changes
 ## Frontend Conventions
 
 - Use \`@terreno/syncdb/react\` hooks (\`useQuery\`, \`useMutate\`) for synced collection CRUD
-- Use generated SDK hooks from \`@/store/openApiSdk\` for non-synced routes only
+- Use generated hooks from \`@/store/apiSdk\` (\`useGetAuthMeQuery\`, \`usePatchAuthMeMutation\`, ...) for non-synced routes only
 - Use @terreno/ui components (Box, Page, Button, TextField, etc.)
-- Never modify \`openApiSdk.ts\` manually - regenerate with \`bun run sdk\`
+- Never modify \`apiSdk.ts\` manually - regenerate with \`bun run sdk\`
 - Session: \`SessionProvider\` / \`useSession()\` from \`@terreno/syncdb/auth\` (no Redux)
 
 ## AI Assistance

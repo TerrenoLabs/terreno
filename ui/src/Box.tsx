@@ -27,6 +27,7 @@ import {
   type ResponsiveBreakpoint,
   useResponsiveBreakpoint,
 } from "./ResponsiveBreakpoint";
+import {getLoadingAccessibilityProps, resolveLoadingContent} from "./Skeleton";
 import {useTheme} from "./Theme";
 import {Unifier} from "./Unifier";
 
@@ -60,6 +61,18 @@ const ALIGN_SELF = {
 
 const BORDER_WIDTH = 1;
 
+// react-native's Pressable does not type the web `onKeyDown` event, but React Native Web
+// forwards it.
+interface WebKeyDownEvent {
+  key: string;
+  preventDefault: () => void;
+  repeat?: boolean;
+}
+
+interface WebKeyDownProps {
+  onKeyDown?: (event: WebKeyDownEvent) => void;
+}
+
 const isValidPercentage = (value: string): boolean => {
   return /^\d+(\.\d+)?%$/.test(value);
 };
@@ -78,11 +91,17 @@ const isValidWidthHeight = (value: number | string): boolean => {
 const NON_STYLE_BOX_PROPS = new Set<string>([
   "accessibilityHint",
   "accessibilityLabel",
+  "accessibilityLiveRegion",
   "accessibilityRole",
+  "accessibilityState",
   "avoidKeyboard",
   "children",
   "dangerouslySetInlineStyle",
   "keyboardOffset",
+  "loading",
+  "loadingAnimation",
+  "loadingComponent",
+  "loadingLabel",
   "onClick",
   "onHoverEnd",
   "onHoverStart",
@@ -392,47 +411,107 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
 
   let box: React.ReactElement;
 
+  const isLoading = props.loading === true;
+  const children = resolveLoadingContent({
+    children: props.children,
+    loading: isLoading,
+    loadingAnimation: props.loadingAnimation,
+    loadingComponent: props.loadingComponent,
+  });
+  const loadingAccessibilityProps = getLoadingAccessibilityProps({
+    loading: isLoading,
+    loadingLabel: props.loadingLabel,
+  });
+
+  const accessibilityState =
+    props.accessibilityState || isLoading
+      ? {...props.accessibilityState, ...loadingAccessibilityProps.accessibilityState}
+      : undefined;
+  const accessibilityStateProps = accessibilityState
+    ? {
+        accessibilityState,
+        ...(accessibilityState.checked !== undefined
+          ? {"aria-checked": accessibilityState.checked}
+          : {}),
+        ...(accessibilityState.disabled !== undefined
+          ? {"aria-disabled": accessibilityState.disabled}
+          : {}),
+        ...(accessibilityState.busy !== undefined ? {"aria-busy": accessibilityState.busy} : {}),
+      }
+    : {};
+
   // Adding the accessibilityRole of button throws a warning in React Native since we nest buttons
   // within Box and RN does not support nested buttons — so this stays on `aria-role` (which RN
   // itself translates to accessibilityRole under the hood) by default; an explicit
   // `accessibilityRole` prop is only forwarded literally when the caller opts in.
   if (props.onClick) {
     const explicitAccessibilityRole = (props as AccessibilityProps).accessibilityRole;
+    // Content is not there yet while loading, so presses are held until it is.
+    const isDisabled = accessibilityState?.disabled === true || isLoading;
+    // Per ARIA, Space toggles a checkbox or switch; react-native-web only maps Space to buttons.
+    const toggleKeyDownProps: WebKeyDownProps =
+      explicitAccessibilityRole === "checkbox" || explicitAccessibilityRole === "switch"
+        ? {
+            onKeyDown: (event) => {
+              if (event.key !== " " && event.key !== "Spacebar") {
+                return;
+              }
+              event.preventDefault();
+              if (isDisabled || event.repeat) {
+                return;
+              }
+              void props.onClick?.();
+            },
+          }
+        : {};
     box = (
       <Pressable
+        {...toggleKeyDownProps}
         accessibilityHint={(props as AccessibilityProps).accessibilityHint}
         {...(explicitAccessibilityRole
           ? {accessibilityRole: explicitAccessibilityRole as never}
           : {})}
-        aria-label={(props as AccessibilityProps).accessibilityLabel}
+        {...accessibilityStateProps}
+        aria-label={
+          loadingAccessibilityProps.accessibilityLabel ??
+          (props as AccessibilityProps).accessibilityLabel
+        }
         aria-role="button"
+        {...(isDisabled ? {disabled: true} : {})}
         onLayout={props.onLayout}
         onPointerEnter={onHoverIn}
         onPointerLeave={onHoverOut}
         onPress={async () => {
+          if (isDisabled) {
+            return;
+          }
           await Unifier.utils.haptic();
           await props.onClick?.();
         }}
         style={boxStyle}
         testID={resolvedTestID ? `${resolvedTestID}-clickable` : undefined}
       >
-        {props.children}
+        {children}
       </Pressable>
     );
   } else {
     const accessibilityHint = (props as AccessibilityProps).accessibilityHint;
-    const accessibilityLabel = (props as AccessibilityProps).accessibilityLabel;
+    const accessibilityLabel =
+      loadingAccessibilityProps.accessibilityLabel ??
+      (props as AccessibilityProps).accessibilityLabel;
     box = (
       <View
         {...(accessibilityHint ? {accessibilityHint} : {})}
         {...(accessibilityLabel ? {accessibilityLabel} : {})}
+        {...(props.accessibilityLiveRegion ? {"aria-live": props.accessibilityLiveRegion} : {})}
+        {...accessibilityStateProps}
         {...(props.onLayout ? {onLayout: props.onLayout} : {})}
         onPointerEnter={onHoverIn}
         onPointerLeave={onHoverOut}
         style={boxStyle}
         testID={resolvedTestID}
       >
-        {props.children}
+        {children}
       </View>
     );
   }

@@ -4,7 +4,7 @@ import {logger} from "@terreno/api";
  * Helper for listing models available to the Gemini Developer API (the API-key based
  * `generativelanguage.googleapis.com` service, distinct from Vertex / the Gemini Enterprise Agent
  * Platform). Used to drive model pickers from the live set of models Google actually exposes for a
- * given API key, so retired models (e.g. an old `gemini-2.0-flash`) never appear.
+ * given API key, so retired models (e.g. an old `gemini-2.5-flash`) never appear.
  */
 
 /** Default Gemini Developer API base URL. */
@@ -33,14 +33,14 @@ interface GeminiApiModel {
   supportedGenerationMethods?: string[];
 }
 
-/** Strip the "models/" resource prefix from a Gemini model name (e.g. "models/gemini-2.5-flash"). */
+/** Strip the "models/" resource prefix from a Gemini model name (e.g. "models/gemini-3.8-flash"). */
 export const normalizeGeminiModelId = (name: string): string => {
   return name.trim().replace(/^models\//, "");
 };
 
 /**
  * List the models available to a Gemini Developer API key via the `models` REST endpoint. Returns
- * normalized model ids (e.g. "gemini-2.5-flash"). By default only chat-capable models (those
+ * normalized model ids (e.g. "gemini-3.8-flash"). By default only chat-capable models (those
  * supporting `generateContent`) are returned. Returns `undefined` when the listing could not be
  * retrieved (missing key, network error, non-200 response, etc.).
  */

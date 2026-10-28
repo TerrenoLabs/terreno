@@ -20,6 +20,349 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.19.2] - 2026-10-26
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.2.md`](mcp-server/src/docs/upgrades/57.19.2.md).
+
+57.19.0 and 57.19.1 were tagged but never published to npm (the publish gate failed before the release notes had merged). This release contains everything from both.
+
+### Added
+
+- `@terreno/test` gains the test helpers Flourish built and proved in its own suites:
+
+  - `waitUntil` / `waitForCalls` to poll a condition instead of sleeping, and `freezeTime` to
+    freeze `Date.now()`, `new Date()`, and Luxon together.
+  - `authWithToken` for a supertest agent with a pre-minted token (no login round-trip),
+    `expectAPIError` for `APIError` bodies, and `assertStrictResponseProperties` to fail on any
+    response field outside an allowlist.
+  - Opt-in `mock.module` registrars for Cloud Tasks (with `drainTasks`), SendGrid, Twilio, Expo
+    push, GCS, Google auth, and the `@terreno/api` notifiers, plus `createMockLanguageModel` for
+    the AI SDK.
+  - `@terreno/test/expo/*`: `registerExpoTestEnvironment`, `renderWithTerreno`, in-memory auth
+    token storage, and a module-alias mocker for Bun + Expo tests. `example-frontend` now uses it.
+  - `terreno-test-shard` (weighted test sharding) and `terreno-test-hygiene` (AST lint for leaky
+    or flaky Bun test patterns, with a baseline) CLIs.
+- Testing skills for Terreno apps, installable with the other agent skills: `terreno-test-setup`
+  bootstraps backend (Bun + in-memory Mongo), frontend (Bun + React Native Testing Library,
+  Playwright), and mobile (Maestro) test setups; `terreno-backend-tests`,
+  `terreno-frontend-tests`, and `terreno-mobile-tests` cover writing tests for each. New how-to:
+  [Set up tests in a Terreno app](docs/how-to/set-up-app-tests.md).
+- `@terreno/ui` loading skeletons: `Box` and the container components (`Card`, `EditableCard`, `ChartCard`, `Scorecard`, `Page`, `SplitPage`, and the charts) take `loading`, `loadingComponent`, `loadingAnimation`, and `loadingLabel` props. New `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonCard`, `SkeletonList`, and `SkeletonGroup` components support `pulse`, `shimmer`, or no animation and respect reduce-motion. `withLoading(Component, options)` adds the props to custom components. See [Show loading skeletons](docs/how-to/show-loading-skeletons.md). (#1571)
+- Published packages now include the repository `CHANGELOG.md` in their tarballs. (#1632)
+
+### Changed
+
+- `@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. 1.4.4 patches the Brotli decoder (CVE-2026-111497). CI, `example-backend`, and `mcp-server` images pin that release. `oven/bun:1` and `oven/bun:1-slim` can still resolve to an affected release, and `bun build --compile` embeds the builder's Bun binary. New apps from `create-terreno-app` get `oven/bun:1.4.4-slim`. Existing apps should set that tag in their Dockerfile and rebuild. See [Upgrade Terreno](docs/how-to/upgrade-terreno.md).
+
+  EAS build profiles stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
+### Fixed
+
+- `create-terreno-app` did nothing when run through its package bin (`bunx create-terreno-app`,
+  `npx create-terreno-app`): the entry check compared the module URL with the unresolved
+  `node_modules/.bin` symlink. It now resolves the path first.
+- `@terreno/test` now installs and imports outside the monorepo. `supertest`,
+  `@types/supertest`, and the `mongodb-memory-server` packages moved from
+  `devDependencies` to `dependencies` (57.17.0 failed with `Cannot find package
+  'supertest'` on import), and the published tarball no longer ships test files.
+- `registerSimpleMongoPreload` now passes `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` (default 60s) to
+  `mongodb-memory-server`, so a cold `mongod` start no longer fails at the library's 10s default.
+
+## [57.18.0] - 2026-10-25
+
+### Added
+
+- Vercel hosting: `example-backend` runs on Vercel Functions (exported `http.Server` with Socket.IO, full Bun bundle), and `example-frontend` and `demo` deploy as static Expo exports. CircleCI deploys all three to the `terrenolabs` Vercel team alongside Cloud Run and Netlify. See `docs/how-to/deploy-to-vercel.md` and `docs/how-to/vercel-function-websockets.md`.
+- `@terreno/rtk`: `useSocketConnection({transports})` chooses the Socket.IO transports (default unchanged: polling, then websocket). Use `["websocket"]` on hosts without session affinity, such as Vercel Functions.
+- `@terreno/syncdb`: `createSyncDb({socketTransports})` does the same for the default socket transport.
+- New `deploy-vercel` agent skill.
+
+### Fixed
+
+- `@terreno/syncdb`'s tests now cover the debug-recorder paths (replay failures, retries, rate-limit and auth nacks, batch sends, stream join/leave/skip, cursor migration, tombstone compaction, snapshot-batch fallback, `forceResync`, and subscribe catch-up), so the 95% coverage gate passes again on Bun 1.4.4, which counts the lines of debug event objects that never run without a recorder.
+
+## [57.17.0] - 2026-10-23
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.17.0.md`](mcp-server/src/docs/upgrades/57.17.0.md).
+
+### Breaking
+
+- `PATCH /auth/me` now requires `currentPassword` when the body changes the email to a different mailbox (casing-only changes and an unchanged email echoed back still need none). A missing or wrong password gets 403 and nothing is saved; a user with no password (for example GitHub-only) gets 400 and must set one through the reset flow first. The password is checked against the passport hash, which counts toward its `limitAttempts` lockout, or against the Better Auth credential when `BetterAuthApp` is registered (new `authOptions.verifyBetterAuthPassword`, wired by TerrenoApp, and `verifyBetterAuthCredentialPassword`). After a change the old address gets a `sensitive: true` notice through `authOptions.sendMail` with the new address partially masked and no links. Clients that let users change their email must collect and send `currentPassword`; the example frontend, `create-terreno-app`, and the MCP bootstrap profile screens now show a "Current password" field when the email is edited. See [Changing the email on PATCH /auth/me](docs/reference/api.md#changing-the-email-on-patch-authme).
+- `PermissionSource.failClosedWhenDenyUnknown` now defaults to `true`. When a source's `getGrants` fails for a user this process has no last-known deny posture for (a new instance, or the posture was evicted), permission checks throw 503 `Permission source unavailable` instead of resolving local roles without the source's `deny`. Behavior after a successful fetch is unchanged. Add `failClosedWhenDenyUnknown: false` to app sources that never return `deny` (additive-only role or permission mappings) to keep their old outage behavior. The built-in organization membership source already sets it. See [RBAC permission sources](docs/reference/api.md#rbac-permission-sources).
+- With RBAC (`accessControl`), changing another user's `email`, `disabled`, `betterAuthId`, `githubId`, or `emailVerified` now requires the new `user:updateIdentity` permission in addition to `user:update`. This applies to modelRouter, sync, MCP, instance actions, and AdminApp `PATCH` and bulk-patch. Writes without it get 403 `Missing user:updateIdentity permission`. Newly seeded `admin` roles include it and `superadmin` gets it through `*`. `seedDefaults` does not update an `admin` role that is already stored, so existing deployments must add `updateIdentity` to that role's `user` actions (for example with `PATCH /rbac/roles/admin`) to keep RBAC admins able to edit user emails and disable users. Legacy `admin: true` users and self-writes are not affected. See [RBAC user identity writes](docs/reference/api.md#rbac-user-identity-writes).
+
+### Added
+
+- `attach-pr-media` agent skill. It uploads local screenshots and recordings to one shared secret gist with only the `gh` token and posts Markdown that embeds them in the pull request, for sandboxes where `/opt/cursor/artifacts/` is unavailable. `verify-ui-changes` now points to it. Install with `npx skills add TerrenoLabs/terreno --skill attach-pr-media` or from the `terreno` Claude plugin.
+- `BetterAuthConfig` takes `options` and `plugins`. `options` passes any other Better Auth option (for example `emailAndPassword.requireEmailVerification`, legacy `password.{hash, verify}`, or `databaseHooks`), deep-merged over Terreno's defaults with arrays replaced and explicit values winning. `plugins` are appended after `bearer()` and mount under `basePath`. Apps no longer need to replace `BetterAuthApp` to reach them. (#1578)
+- `BetterAuthConfig.oauthHandoff: {webOrigins, callbackPaths?}` lets a web app on another site finish a social or generic OAuth sign-in in bearer mode without cookies. When the OAuth callback creates a session and redirects to one of `callbackPaths` (exact paths written in normal form, default `["/"]`; the query is free) on one of `webOrigins` (exact `http(s)` origins), the redirect carries `#ott=<token>` in its URL fragment: a single-use token that expires in three minutes and is stored hashed. `POST {basePath}/one-time-token/verify` exchanges it once for the session and the `set-auth-token` header. Neither the handed-off callback redirect nor verify sets a session cookie on the API's origin. App schemes, relative paths, the API's own origin, and origins that only `trustedOrigins` allows get no token. Clients cannot mint one (`GET /one-time-token/generate` is refused), and no response sends a `set-ott` header. Start the sign-in with a top-level navigation to the new `GET {basePath}/oauth-handoff/start?provider=<id>&callbackURL=<url>` (optional `errorCallbackURL`): it sets the OAuth state cookie first-party on the API's origin and redirects to the provider, so the callback works when the browser blocks third-party cookies. It answers 400 when `Sec-Fetch-Dest` is set and is not `document`, so only a page navigation can start a sign-in. It works for social and generic OAuth providers, and answers 400 with no redirect unless `callbackURL` is one of `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of `webOrigins`, and `trustedOrigins` allows both. With the default `["/"]`, any other return page is refused. An unknown provider or one that cannot start sends the page back with `error=provider_not_found` or `error=sign_in_failed`. Terreno's opt-in `rateLimit` puts `{basePath}/oauth-handoff/*` and `{basePath}/one-time-token/*` in the auth bucket. Unset by default, which adds no `/one-time-token` or `/oauth-handoff` routes.
+- `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` starts a social or generic OAuth sign-in for a `createBetterAuthClient({webAuth: "bearer"})` web client. It stores a random nonce in `sessionStorage` and navigates the page to the server's `GET {basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URL. It throws on native and in cookie mode.
+- `completeBetterAuthOAuthHandoff({client})` finishes that sign-in on the return page. When the URL has `#ott=<token>` and a `handoff` equal to the stored nonce, it removes both from the URL with `history.replaceState`, then exchanges the token at `{basePath}/one-time-token/verify`, and bearer mode stores the `set-auth-token` that comes back. A token without a matching nonce is removed and never sent. Other query and fragment parts stay, and `?error=` is left for the app. It resolves `true` only when a token was stored. Await it at startup before session reads, other query handling, and Sentry. The server needs `oauthHandoff: {webOrigins, callbackPaths?}`. See [Social sign-in in bearer mode](docs/how-to/configure-better-auth.md#social-sign-in-in-bearer-mode).
+- `createBetterAuthClient` takes `webAuth: "bearer"` for web apps whose frontend and API are on different sites. On web it stores the `set-auth-token` header from sign-in, sends `Authorization: Bearer` on every Better Auth call including `getSession`, and sends no cookies. `signOut()` clears the token before its request, and a successful `getSession` with no session clears it unless a newer token was stored meanwhile. The token lives in `localStorage` under `${storagePrefix}_bearer_token`, or in the `bearerStorage` you pass (for example `window.sessionStorage` on shared devices). The default stays `"cookie"`, and native is unchanged. The web origin must be in the server's Better Auth `trustedOrigins`. See [Frontend and API on different sites](docs/how-to/configure-better-auth.md#frontend-and-api-on-different-sites).
+- `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` reads that stored token without a network call.
+- `GPTChat` takes `showHistory` (default `true`). Pass `false` to leave out the history sidebar so the chat panel uses the full width on narrow and phone layouts.
+- modelRouter actions can opt into MCP with `mcp: {name, description?}`. The action becomes a tool on `/mcp` that takes `{id, ...body}` (instance) or the body alone (collection), runs the action's own permission chain including RBAC `access`, and gets `req.isMCPRequest === true`. Actions also accept `unwrapResponse: true` to send the handler's return value as the REST body instead of `{data: …}`. See [modelRouter actions → MCP tools](docs/explanation/model-router-actions.md#mcp-tools).
+- `TerrenoApp` `mcpOAuth: {enabled: true}` turns on an OAuth 2.1 authorization server for `/mcp`, so Claude.ai connectors and ChatGPT apps can connect to apps that sign in with Terreno JWTs. It is off by default. It serves RFC 9728 and RFC 8414 discovery, the authorization-code flow with PKCE S256 and an app-hosted consent screen, rotating refresh tokens with reuse detection, and revocation. Revoking a token family writes an `McpOAuthRevokedFamily` tombstone that `McpOAuthToken.issue` honors, so concurrent refreshes and code replays cannot leave a live token. Dynamic client registration (public clients, redirect hosts allowlisted) is a separate opt-in, `dynamicClientRegistration: true`; without it, the app creates `McpOAuthClient` documents itself. With `mcpOAuth` on, `/mcp` answers unauthenticated requests with a `401` `WWW-Authenticate` challenge. See [Enable MCP OAuth for a JWT app](docs/how-to/enable-mcp-oauth.md).
+- `getCurrentRequestContext()?.credential` records how the caller authenticated: `"jwt"`, `"better-auth-session"`, `"mcp-service-token"`, or `"oauth"`. Permission functions and hooks can use it to keep broad access (such as an admin bypass) to the user's own session and away from delegated agent tokens. `extractAuthFromHeaders` returns the same `{user, credential}` pair for MCP mounts. See [Request credential](docs/reference/api.md#request-credential).
+- `useTerrenoChat` takes a `tokenSource` option. Each chat request reads its `Authorization: Bearer` token from that source, else the one registered with `setTokenSource`, else the built-in JWT source, and sends no `Authorization` header when there is no token. JWT apps behave as before.
+- `useMCPTools` takes a `tokenSource` option. The MCP transport reads its `Authorization: Bearer` token from that source, else the one registered with `setTokenSource`, else the built-in JWT source, before every MCP request instead of capturing one token per fetch. When the source has no token as a fetch starts, the hook connects without authentication, as JWT apps do today.
+- `createOfflineMiddleware` takes a `tokenSource` option. With a non-JWT source (that option, else the one registered with `setTokenSource`), queued mutations are tagged with the source's `getUserId()` instead of `state.auth.userId`, so the middleware works without an `auth` slice. They replay only while that same user is signed in, with `Authorization: Bearer` from the source's `getToken()` (omitted when there is no token). The offline slice gains an optional `lastUserId` (with `setLastUserId` and `selectLastUserId`): the last user id the source confirmed, refreshed on the first action, on rehydrate, on `onAuthChange` and on reconnect. A session read that fails while offline therefore still tags new mutations, and when the `offline` slice is persisted with redux-persist, mutations made after an offline launch are tagged with the persisted user. Until a read in the running app confirms that persisted id, those mutations carry `userIdConfirmed: false` (new optional `QueuedMutation` field, with the new `resolveUnconfirmedMutations` and `dropUnconfirmedMutations` actions): a read that returns a user keeps them only if it is the same user and no auth change or source swap happened since, and any auth change drops them (even for the same user), so they survive only when the reconnect read confirms them first. syncdb's `betterAuthAdapter` fires `onAuthChange` on the session's first successful load, which after an offline launch happens once the network returns, so that event drops offline-launch writes the reconnect read has not confirmed yet. The one remaining risk needs the signed-in user to change while no running instance of the middleware observes it (for example in another browser tab sharing the persisted `offline` slice) between an unconfirmed write and the next launch's first read. On the token-source path, a sign-out reported by the source, `auth/logout`, or the Better Auth slice's `betterAuth/logout` clears the queue, conflicts and `lastUserId`, and discards writes still waiting on a user id read and any replay in progress. A reconnect with no readable user, or a user switch during a replay, keeps the remaining queue for a later reconnect, and a mutation still waiting on a user id read gets no user (so it never replays) if the user changes first. JWT apps behave as before.
+- `useSocketConnection` no longer requires `getAuthToken`. Without it, the hook reads the token source: the new `tokenSource` option, else the one registered with `setTokenSource`, else the built-in JWT source. The handshake re-reads the token on every connect and reconnect, and when the source's `onAuthChange` reports a different token the hook reconnects with it (with no token it disconnects). When the server rejects the handshake token, the hook calls `refresh()` once and reconnects; a second rejection before a successful connect stops reconnecting and calls `onConnectError`. Passing `getAuthToken` keeps the previous behavior.
+- `@terreno/rtk` reads request tokens from one registered token source. Call `setTokenSource(authProvider)` once at startup with the same syncdb `AuthProvider` the app builds for `createSyncDb` (for example `betterAuthAdapter(betterAuthClient)`). `getTokenSource()`, `jwtTokenSource`, and `isJwtTokenSource()` are also exported. Without a registered source, rtk keeps using the JWT tokens in storage, so JWT apps change nothing.
+- `emptySplitApi` sends the registered source's token.
+- `betterAuthAdapter` takes a `getBearerToken` option. When it returns a token, `getToken` uses it without calling `getSession()`; a null, empty or throwing getter falls back to `getSession()` as before. Pair it with `getBetterAuthBearerToken` from `@terreno/rtk` for web apps in Better Auth bearer mode. `getUserId`, `onAuthChange` and `refresh` are unchanged. See [createSyncDb configuration](docs/reference/syncdb.md#createsyncdb-configuration).
+- `WhatsNewBanner` in `@terreno/ui` shows non-blocking release notes, such as "What's new
+  in 57.16.2", until the viewer opens or dismisses it, then hidden until a newer release. See
+  [Show release notes with WhatsNewBanner](docs/how-to/whats-new-banner.md).
+- The example app's what's new banner lists the 10 most recent `CHANGELOG.md` releases.
+  `bun run whats-new:generate` writes them, `changelog:assemble` refreshes them on each
+  release, and CI fails through `bun run check:whats-new` when they are stale.
+- `BannerButton` accepts an optional `testID`.
+
+### Changed
+
+- `RealtimeApp` uses the Better Auth instance of a `BetterAuthApp` registered on the same `TerrenoApp`, so Better Auth socket sessions work without building a second instance and passing `betterAuth`. An explicit `betterAuth` option still wins. (#1576)
+- An explicit `betterAuth` option without a `userModel` now gets the `RealtimeApp`'s (else the `TerrenoApp`'s), so its sockets resolve to the app user instead of the Better Auth id. (#1576)
+- The Better Auth socket handshake creates the app `User` on first contact, as the REST session middleware does, and refuses disabled users. (#1576)
+- A `RealtimeApp` registered without its own `userModel` uses the `TerrenoApp`'s, for JWT and Better Auth sockets alike. Socket authorization then reads the user from the database instead of the token's claims, and the revalidation sweep disconnects disabled or deleted users, as `TerrenoApp({realtime})` already did. (#1576)
+- create-terreno-app: generated backends no longer build a second Better Auth instance for `RealtimeApp`; it uses the registered `BetterAuthApp`, so `BetterAuthConfig` `options` and `plugins` apply to sockets too. (#1594)
+- create-terreno-app: generated frontends register the syncdb Better Auth adapter from `store/syncdb.ts` with `setTokenSource` before the store is built, and the generated SDK uses `@terreno/rtk`'s `emptySplitApi` (`openapi-config.ts` `apiFile: "@terreno/rtk"`). `store/betterAuthApi.ts` and its forked base query are no longer generated. Generated web clients still use Better Auth's session cookie. RTK requests now get rtk's retries, and a 401 that survives one session refresh signs the user out (`auth/logout`); the fork never did. To move an existing generated app over: export `authProvider` from `store/syncdb.ts`, call `setTokenSource(authProvider)` in `store/index.ts`, set `apiFile: "@terreno/rtk"` in `openapi-config.ts`, run `bun run sdk`, delete `store/betterAuthApi.ts`, and import `useGetVersionCheckQuery` from `@terreno/rtk` if the app used it.
+- The example backend seeds its staff modal and patient banner announcements as drafts, so a
+  fresh database (local dev or a PR preview) no longer interrupts sign-in. Publish them from
+  **Admin → Announcements** to try them.
+- `@terreno/feature-flags` evaluation diagnostics are off unless `FEATURE_FLAGS_DEBUG=true` (they were on unless set to `"false"`), are written at `debug` level instead of `info`, and no longer include the requesting user's value for a field rule.
+- Lifecycle skills now own a PR after every push: Brew, Taste, the planning loop, taste-sweep, and the repository skills that push (fix-conflicts, respond-to-review, update-dependencies, release, track-upstream-expo, implement-ready-for-dev) keep fixing red CI and answer every review-bot comment, then escalate to the human as `BLOCKED` after three failed fix rounds instead of leaving the PR red. See `references/push-ownership.md`.
+
+### Fixed
+
+- `BetterAuthApp` stores Better Auth users, accounts, sessions, and verifications in the mongoose connection's database (the `dbName` passed to `mongoose.connect`) instead of the connection string's default database. Apps that connect with a `dbName` different from the URI's database should copy the `user`, `account`, `session`, and `verification` collections into the `dbName` database when upgrading.
+- A Better Auth session whose app `User` has `disabled: true` no longer authenticates on REST: `req.user` stays unset, so protected routes answer 401, matching JWT and MCP. Better Auth's own routes, such as sign-out, still work. (#1577)
+- The `TerrenoApp` rate limiter resolves `.`/`..` path segments (including `%2e` forms) before choosing a bucket, so dot-segment variants of Better Auth sign-in, sign-up, and password-reset paths are charged to the auth bucket, and dot-segment paths no longer get the health/openapi/swagger skip.
+- Request logging redacts credential fields under any key name and at any depth in request bodies and query strings (for example `currentPassword`, `idToken.token`, `client_secret`, `code_verifier`, and OAuth `code`), not only five top-level keys. `TerrenoApp` now honors `loggingOptions.logRequests: false`, which was previously ignored.
+- Better Auth apps are no longer logged out on their first RTK Query request (#1217). With a registered non-JWT token source, `emptySplitApi` sends no `authorization` header when the token is null, and dispatches `auth/logout` only when a 401 survives one `refresh()` and retry.
+- `betterAuthAdapter` no longer reports a failed session read as a sign-out. When `getSession()` rejects or returns a non-401 `{error}` envelope, `getUserId()` answers with the user id the server last confirmed instead of null. Before, going offline between a session-atom emission and the syncdb client's follow-up read cleared the client's current user, paused sync, and made `mutate()` throw "requires start() to have resolved an authenticated user" until the next sign-in.
+- `betterAuthAdapter` keeps the newest confirmed user id. A session read that started before a sign-out or user switch and resolves after it no longer restores the previous user, and neither does a session-atom emission that repeats the cached session (a refetch start, or the value a new `onAuthChange` subscriber receives on subscribing). A later failed read therefore cannot revive a signed-out identity or report the wrong user.
+- `betterAuthAdapter` treats a 401 session-atom emission as a sign-out, the same as a 401 from `getSession()`: it clears the confirmed user id and fires `onAuthChange`. Before, the subscribe path ignored it like a network failure and kept the previous user.
+
+## [57.16.2] - 2026-10-13
+
+### Fixed
+
+- Light-mode primary button labels, icons, and loading indicators are white again,
+  including on disabled primary buttons. (#1567)
+
+## [57.16.1] - 2026-10-12
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.16.1.md`](mcp-server/src/docs/upgrades/57.16.1.md).
+
+### Added
+
+- `terraform/modules/terreno-backend` provisions one Terreno backend on Cloud Run: Artifact Registry, a least-privilege runtime service account, empty Secret Manager secrets, and a websocket-safe service (session affinity, 3600s timeout, one minimum instance). Set `github_deploy` for a keyless GitHub Actions deployer. See [Deploy backend to Cloud Run](docs/how-to/deploy-backend-to-cloud-run.md#manage-with-terraform).
+
+### Changed
+
+- `terraform/` now holds only reusable modules. Terreno's own GCP deployment (example backend, jobs worker, hosted MCP server) moved to `infra/flourish/`, which uses the shared modules through a symlink; CI stages a dereferenced copy for Infra Manager. No infrastructure changes: resource addresses are unchanged.
+
+### Fixed
+
+- `TextField` and `TextArea` on web no longer drop a typo fix made within half a second. The
+  oscillation guard used to suppress any change that undid the previous one within 500ms, so
+  typing a character and backspacing it right away put the character back. Changes the user
+  types, deletes, pastes, drops or undoes (judged by the DOM input event's `inputType`) now
+  bypass the guard. Spellcheck replacements, IME composition and changes with no input event
+  stay guarded.
+
+## [57.15.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.15.0.md`](mcp-server/src/docs/upgrades/57.15.0.md).
+
+### Changed
+
+- SyncDB bootstraps and reconciles every stream through one `POST /sync/snapshot/batch` request
+  per round instead of one `GET /sync/snapshot` per stream. A reconnect with nothing new now costs
+  2 requests however many collections the app syncs. The client sends the next round while it
+  writes the current one and writes rows in chunks of 500 so the UI keeps responding. Clients fall
+  back to per-stream paging against servers without the batch route. The web IndexedDB persister
+  no longer serializes the whole store once per transaction: it serializes once per write.
+
+## [57.14.0] - 2026-10-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.14.0.md`](mcp-server/src/docs/upgrades/57.14.0.md).
+
+### Changed
+
+- `@terreno/syncdb` now pages snapshot streams side by side instead of one at a time, so cold
+  start no longer costs one sequential round trip per stream. Reconcile, subscribe catch-up,
+  `forceResync` and wipe re-bootstrap run up to `snapshotConcurrency` streams at once (new
+  `createSyncDb` option, default 6; `1` restores the old behavior). Each stream now runs one pass
+  at a time: a subscribe catch-up queues behind a pass that started before the room join, and a
+  force resync waits for the stream's in-flight pass before purging it, so a concurrent pass can
+  no longer mark a purged stream bootstrapped over rows it never paged. A new how-to,
+  [Use syncdb correctly](docs/how-to/use-syncdb-correctly.md), lists the library behavior
+  apps have to handle.
+
+## [57.13.0] - 2026-10-10
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.13.0.md`](mcp-server/src/docs/upgrades/57.13.0.md).
+
+### Added
+
+- Agent UI rich replies: a block document can now hold a `stepper` (− value + that calls a host action and gets the replacement stepper back), a `checklist` (ticks with an "n of m" counter, local or sent to a host action), a `gallery` (2–6 photos), a `list` (titled rows with portrait thumbnails), a card `eyebrow`, and a `copy` button action that writes a block's text to the clipboard on the device. See [Add a stepper callback](docs/how-to/agent-ui-blocks.md#add-a-stepper-callback), [UI blocks](docs/reference/blocks.md), and [Agent UI blocks](docs/explanation/agent-ui-blocks.md).
+- `@terreno/blocks` exports the stepper, checklist, gallery, list, and copy action types, `blockPlainText`, `stepperElementIds`, `checklistElementId`, `COPY_TARGET_TYPES`, and the error codes `OUT_OF_RANGE` and `COPY_TARGET_INVALID`. `blocksPromptSection` takes `richBlocks`, `stepperActions`, and `checklistActions`; `validateBlocks` takes the two action lists. The Sunday roast golden document is `blocks/src/fixtures/golden/sunday-roast.yaml`.
+- `@terreno/ai` adds the opt-in host actions `scaleStepperHostAction` and `toggleChecklistHostAction`, `findAgentBlock` for reading the block the agent wrote from the stored history, and `runBufferedChatTurn` for one chat turn without HTTP. A host action can set `handles: "stepper" | "checklist"` and `logResponse: false` (the returned block stays out of the `ui_action` log). `uiBlocks.richBlocks` controls which blocks the prompt offers.
+- `@terreno/ui` `BlocksView` renders the new blocks with Terreno components. `DataTable` has right-aligned `number` and Luxon `date` cells, and the `table` block uses them. `MarkdownView` tables get theme borders, a bold header, and sideways scroll. `Box` takes `accessibilityState` and `accessibilityLiveRegion`. `Image` uses `alt` as its accessible label.
+- The example app generates a stored photo library once (`bun run photos:generate`, Vertex Imagen), gives the agent a `findPhotos` tool, serves `GET /photoLibrary/:id/url`, and registers `scaleStepper` and `toggleChecklist`. `bun run blocks:smoke` checks that a real model writes the roast reply, and skips without a model key.
+- `@terreno/api` exports `createRouteRateLimitMiddleware({name, max, windowMs, store?, keyBy?})`, a fixed-window limit for one route that works without `TerrenoApp` `rateLimit`. See [Rate limiting](docs/how-to/rate-limiting.md). (#1499)
+- `@terreno/admin-backend` `DocumentStorageApp` takes `access: "authenticated"` to open document storage to every signed-in user. Non-admins only see their own `users/<userId>/` folder under `folderPrefix`; admins keep the whole prefix. `uploadRateLimit` limits uploads per client IP (or `keyBy`). A `folderPrefix` without a trailing slash gets one, and a missing bucket lists as empty. (#1499)
+- `@terreno/admin-frontend` `DocumentStorageBrowser` takes `backButton` and shows upload errors inline, including a 429 "Upload limit reached" message. (#1499)
+- `@terreno/ui` `SegmentedControl` takes `size="sm"` (28px, sized to its labels). (#1499)
+
+### Changed
+
+- The admin Roles screen shows one row per resource, with that resource's actions as badges, instead of one badge per `resource:action`. Custom permissions list before model permissions. Badges are green for read actions, amber for writes, and red for destructive actions (`delete`, `destroy`, `remove`). Saved role data is unchanged. (#1540)
+- Behaviour change: hosts with `uiBlocks` on get the new rich blocks (`checklist`, `gallery`, `list`, card `eyebrow`, and `copy`, plus `stepper` when a host action has `handles: "stepper"`) in the chat system prompt by default. A native build released before them shows an error banner for a reply that uses them. Set `uiBlocks.richBlocks: false` to keep the old catalog until those builds update; the prompt is then unchanged from before, even with a stepper action registered. Validation accepts the new blocks either way. See [Keep the old catalog for shipped native builds](docs/how-to/agent-ui-blocks.md#keep-the-old-catalog-for-shipped-native-builds).
+- `DataTable` columns with `columnType: "number"` now right-align their cells and header, and `columnType: "date"` cells format an ISO string or `Date` as Luxon `DATE_MED` (date only, local zone). Values that are already formatted strings show as before. Use `customColumnComponentMap` to keep the old look.
+- `Image` with `alt` now sets it as the accessible label and makes the image its own screen-reader element.
+- `table` blocks show column names with underscores as spaces, size to their rows, and show at most 10 rows before the body scrolls.
+- The `neutral500` theme primitive is now `#949494` (was `#9A9A9A`), so extra-light text meets contrast guidelines. Disabled surfaces, dark borders, the away status, and new `create-terreno-app` projects pick up the new gray. Apps that set their own `neutral500` with `setPrimitives` are unaffected. (#1544)
+
+### Fixed
+
+- On web, an open toast no longer blocks clicks on the rest of the page at the same height.
+  The toast's `SafeAreaView` and the `Toast` layout wrapper span the full width (up to 900px)
+  around the visible toast and swallowed clicks there. Both now use `pointerEvents: "box-none"`,
+  so only the visible toast is interactive.
+- `Tooltip` no longer shows up in the top-left corner and blocks the screen when its trigger measures as zero-sized or off-screen. When the trigger measurement is invalid or the ref cannot be measured, the tooltip hides and logs `console.error`. Measurements left over from an earlier show are ignored. (#1490)
+- `Tooltip` on web no longer mounts a full-screen layer over the app while it is open.
+  The bubble now renders into `document.body` with `position: fixed` instead of through
+  the `PortalHost` layer, so nothing covers the page and the content below stays
+  clickable. Web tooltips also use `zIndex: 9999`, matching the body-level overlays
+  (`Modal`, `DropdownPanel`), so tooltips inside a modal show on top of it. Native keeps
+  the `PortalHost` path.
+
+## [57.12.0] - 2026-10-07
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.12.0.md`](mcp-server/src/docs/upgrades/57.12.0.md).
+
+### Added
+
+- `@terreno/ai` harness: `harness.createTask(def, input, {trace: {scope, tags}, prompts})` writes a scope (tenant, workspace), tags, and prompt versions onto the task's `ObsTrace`; child tasks and subagents share it. `ObsTrace` gains `scope` (indexed with `created`) and `tags`, and the admin trace list filters by `scope`. `rt.runAgent` takes `prompts` and accepts a registry `PromptVersionRef` as `instructions` (its `body` runs, its version is recorded). New subpath exports replace `dist/` deep imports: `@terreno/ai/admin`, `@terreno/ai/harness/{agentLoop,commit,events,internalRuntime}`, and `@terreno/ai/observability/{observabilityApp,localPlugin,promptStore}`. `getProjectModel()` returns the chat `Project` model, and `new AiApp({projects: false})` skips the `/gpt/projects` routes so an app can own a model named `Project`. See [AI harness reference](docs/reference/ai-harness.md#trace-scope-and-prompt-versions). Closes #1533.
+
+### Changed
+
+- Harness task HTTP responses and the task OpenAPI schema omit `lease`. The fencing token stays on the server. Approve, reject, submit, and abort invalidate the same cache tags as the task, approval, and conversation lists (`harnesstasks`, `harnessapprovals`, `harnessconversations`).
+- Importing `@terreno/ai` no longer registers the mongoose `Project` model. The `Project` export is a lazy proxy and is deprecated: the first use of `Project` or `getProjectModel()` registers the model. Statics, `new Project(...)`, and `instanceof Project` still work. The proxy is not the model (`Project !== mongoose.models.Project`, `Object.keys(Project)` is empty, and reading `Project.prototype` throws). Use `getProjectModel()`.
+
+### Fixed
+
+- Web `SplitPage` desktop child columns scroll vertically again. The corner radius and clip sit on the pane, so `overflow: hidden` no longer blocks the column `ScrollView`. A child with `height: "100%"` stays within the visible pane and can scroll internally. Narrow web pager pages use the measured pane height, so that same full-height child can scroll internally while the page still clips its rounded corners. Labeled pager previous and next controls sit in fixed slots in a row under the column, and the column uses the height left after that row and its spacing. `desktopChildrenMinWidth` horizontal scrolling, the list column, and native `SplitPage` are unchanged.
+
+## [57.11.0] - 2026-10-05
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.11.0.md`](mcp-server/src/docs/upgrades/57.11.0.md).
+
+### Added
+
+- `@terreno/ai/harness/jobsRunner`: `JobsRunner` runs durable harness phases as `@terreno/jobs` jobs (`terreno.harness.phase`) on every instance, for multi-instance deploys such as Cloud Run. The task lease decides who commits, so duplicate or late jobs are harmless. `@terreno/jobs` is an optional peer; importing `@terreno/ai` never loads it. Adds `HarnessTask.claims` (default 0, no migration). See [Run the harness on multiple instances](docs/how-to/run-harness-on-multiple-instances.md).
+- `@terreno/api` can manage one Slack workspace with `SLACK_BOT_TOKEN`: `createSlackPrivateChannel` creates a private channel, invites member ids, and posts an optional first message; `inviteSlackUsersToChannel` adds staff to a channel the bot already belongs to; `postSlackMessage` posts as the bot; `findSlackChannelByName` resolves a visible channel name to its id.
+- `@terreno/syncdb` query windows: `queryCollections` config, `client.queryWindows`, and the `useWindowQuery` hook (plus generated `use{Collection}Window` hooks) run server-filtered, paged list queries (`where`, `sort`, `pageSize`, `fetchNextPage`, `refetch`, `hasMore`, `total`) over a shared, deduplicated entity table. Overlapping windows store each row once and update it once; each window lists only its own members. `fullSync: true` adds windows to a collection that still snapshot-syncs.
+- `useQuery` / `useEntityIds` accept the same Mongo-style `where`, string sort specs, and `limit` for local queries.
+- Window refetches learn the route's `maxLimit` and pipeline page requests with a `console.warn` instead of silently truncating.
+- `modelRouter` list requests that filter on a field missing from `queryFields` now return a 400 naming the field, model, and allowed fields (`meta.allowedQueryFields`), checked before query validation so the filter can never be silently stripped. syncdb raises it as `QueryFieldNotAllowedError`.
+- `terreno-prd` interviews the app owner and writes a product PRD with measurable success metrics before Grow. Invoke `/terreno-prd` in Cursor, `/terreno:prd` in Claude Code, or `$terreno-prd` in Codex.
+
+### Changed
+
+- `@terreno/ai/harness`: `InProcessRunner` now runs up to 8 claimed tasks at once (new `concurrency` option, default 8), each under its own task lease, and `stop()` waits for all of them. Expect parallel model calls (watch provider rate limits and cost) and more stream-counter transaction retries. Turns of one conversation stay serial. Pass `new InProcessRunner({concurrency: 1})` to keep the previous one-at-a-time behavior. See [AI harness reference → InProcessRunner](docs/reference/ai-harness.md#inprocessrunner).
+
+### Fixed
+
+- Outline `Button`s match solid buttons in width and height. The border width is subtracted from horizontal padding as well as vertical, at the default and `sm` sizes.
+- `@terreno/ui` date and table components import `FontAwesome6` from `@expo/vector-icons/FontAwesome6`, so the named export resolves on iOS. The public component API is unchanged.
+- Web `SplitPage` navigation IconButtons use the default variant, and detail child columns get a default `md` corner radius with `overflow: hidden`. Pass `childColumnRounding` to override that radius. The list column is unchanged. Native `SplitPage` is unchanged.
+
+## [57.10.1] - 2026-10-04
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.10.1.md`](mcp-server/src/docs/upgrades/57.10.1.md).
+
+### Breaking
+
+- Security: `GET /files/*gcsKey` (`addFileRoutes`, `AiApp` with `gcsBucket`) now requires authentication and returns a signed URL only for the caller's own upload. Before, anyone could get a signed URL for any stored key, and keys are guessable (`uploads/<userId>/<ms>-<name>`). Another user's file, including for an admin, returns 404 like a missing file, so keys cannot be probed. Send the user's session token with the request; an unauthenticated request now returns 401.
+
+### Added
+
+- Agent UI Asks: the chat agent can pause a turn and ask the user a typed question, then continue with the exact answer. Turn it on with `asks: true` (or `{kinds, approvals, maxFileSizeBytes}`) on `AiApp` or `addGptRoutes`. Asks are off by default: with `asks` unset, tools, the system prompt, SSE events, and endpoints are unchanged. See `docs/how-to/agent-ui-asks.md`, `docs/reference/agent-ui-asks.md`, and `docs/explanation/agent-ui-asks.md`.
+- New package `@terreno/blocks`: the shared Zod contracts for asks (input and answer schemas, `validateAskInput`, `validateAskResponse`, stable error codes, `ASK_LIMITS`), simple cards (`toSimpleCard`, `resolveButtonAnswer`), the compact surface, the headless endpoint bodies, and JSON Schema documents plus fixtures (`@terreno/blocks/schemas/*`, `@terreno/blocks/fixtures/*`) for native clients such as a Swift watch app.
+- Five ask kinds, each a client-side `ask_<kind>` tool: `choice` (select one, or select many with an optional Other text answer), `confirm`, `markdown` (edit a draft), `form` (a few typed fields, one submit), and `files` (upload images or documents the model reads in the same turn, as data URLs or `fileId`s from `POST /files/upload`).
+- Server-enforced approval: with asks on, a host tool marked `needsApproval: true` runs only after the user approves a server-made `confirm` ask. `asks.approvals` sets that ask's text per tool name. With asks off, such a tool never runs.
+- `/gpt/prompt` accepts `askResponse` and `surface: "full" | "compact"`, and streams `{ask}` and `{askResolved}` events plus `pendingAsk` on `{done}`. `GptHistory` stores the pending ask. With `chat` options that turn asks on, `addGptHistoryRoutes` (and `AiApp`) adds `GET /gpt/histories/pendingAsks` and `POST /gpt/histories/:id/turn`, which run a turn to completion and return JSON for clients that do not read server-sent events.
+- `@terreno/ui`: `GPTChat` shows asks as an `AskCard` in the transcript (`GPTChatMessage.ask`, `onAskSubmit`, `askErrors`, `resolveAskFiles`). New `AskCard` and `SimpleAskCard` components. `Button` has a new `wrapText` prop that wraps a long label onto centered lines instead of overflowing its container.
+- The example app's AI screen answers asks end to end, and the example backend runs a scripted keyless demo agent (`terreno-demo-agent`) when no model is configured, so asks can be tried without an API key.
+- Agent UI blocks: a chat reply can be one YAML document of headings, metrics, charts, tables, and actions. Turn it on with `uiBlocks` on `addGptRoutes`. The model is told its whole reply is that document. After the text, the route checks it and sends `{blocks}` before `{done}`. `repair: true` runs one repair call. See `docs/how-to/agent-ui-blocks.md`, `docs/reference/blocks.md`, and `docs/explanation/agent-ui-blocks.md`.
+- `@terreno/blocks` adds `parseBlocks`, `validateBlocks`, `blocksJsonSchema`, and `terreno-blocks validate`. Charts and tables read inline rows or a `ref` dataset. `AIService.generateBlocks` returns one validated document at temperature 0.
+- `@terreno/ai` stores chart rows on `AIDataset` via `registerAiDataset`. `GET /gpt/datasets/:id` is owner-only and can bucket, downsample, or paginate them. `POST /gpt/actions` runs a named host callback after an owner check and a payload check.
+- `@terreno/ui` `BlocksView` paints a document. `GPTChat` `uiBlocks` renders assistant messages through that view, including a spinner while the reply is still streaming.
+- The example backend registers `exportDataset` and a `todoStats` tool that stores open and completed todo counts. The example AI tab loads `ref` charts and posts callbacks.
+- `html` blocks are opt-in (`uiBlocks.html` on the server, `allowHtml` on `GPTChat` or `BlocksView`). The server strips scripts, event handlers, forms, frames, and links, then stores the cleaned document. The client draws it in a sandboxed frame only after the reply finishes.
+- `callout`, `image`, and `details` render as a banner, an image, and an accordion. An `https` image loads only when its host is in `uiBlocks.imageHosts`.
+- A reply that omits an actions block `id` gets one before it is stored. A block document written in the same step as a tool call is kept when the turn would otherwise have no text. The chat receives the document after that fill, repair, and HTML sanitizing, so an invalid draft is not shown. `{replace: "text"}` is sent only when text was already streamed and then changed. A validation banner names the field path once the reply has finished.
+- Example-backend registers `accessControl: access` on `ObservabilityApp` and seeds optional `aiObservabilityViewer` and `aiObservabilityOperator` RBAC roles that demonstrate read-only and full observability access without auto-assigning them to users.
+- `@terreno/ai` ships local prompt versions, nested traces, evaluators, datasets, experiments, and a review queue through `ObservabilityApp`, with the admin screens in `@terreno/admin-frontend`. Prompts, datasets, and experiments have one writer. Traces and scores fan out to every registered sink (local Mongo, Langfuse, or OTLP). Six RBAC resources cover read-only, reviewer, and operator access. See `docs/how-to/observe-llm-calls.md`.
+- `@terreno/ai/harness` runs phased tasks on Mongo that survive a process crash. Each checkpoint and its trace span commit in one transaction. Tasks can wait for a person, retry, abort from the bottom up, and stay pinned to the definition version they started with. `defineTask`, `defineAgent`, and `defineTool` describe the work; approvals have their own permissions and an admin inbox. See `docs/how-to/build-a-durable-workflow.md`.
+
+### Fixed
+
+- `GET` and `DELETE /files/*gcsKey` find uploads by their full key. Express 5 passes the wildcard as path segments, so a key with slashes, such as the `uploads/<userId>/<ms>-<name>` key every upload gets, returned 404.
+
+## [57.9.0] - 2026-10-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.9.0.md`](mcp-server/src/docs/upgrades/57.9.0.md).
+
+### Added
+
+- `@terreno/ui` can compose operations dashboards with scorecards, comparison sparklines, multi-series line and area charts, donut center labels, previous-period bar overlays, chart-card headers, and spanning dashboard items.
+- File uploads can be turned off with the `file-uploads` feature flag. `POST /files/upload`, document storage uploads, and chat attachments return 403 when the flag is off. The example app hides the upload controls. A missing flag leaves uploads enabled.
+- `/gpt/prompt` rejects client-only attachment URLs (`blob:`, `file:`, `content:`, `ph:`) with `400` before streaming. With `fileStorageService` configured, `data:` attachments are uploaded and history stores the storage `url` plus `gcsKey`; later turns send the model signed URLs.
+- `/gpt/prompt` saves the turn before streaming, sends a first `{historyId, started: true, streamId}` event, and persists partial reply text about every second with `status: "streaming"`. The finished reply is saved with `status: "complete"`; a failed one keeps its partial text with `status: "error"`.
+- New `GET /gpt/histories/:id/stream` re-attaches to an in-flight reply after a reload or remount (`offset` skips text the client already shows). The example app reopens the last chat after a reload and resumes its live reply.
+- `store-assets` agent skill for Expo apps. It keeps a simulator/emulator dev client in sync with the native fingerprint (downloading a matching EAS build or starting one), captures App Store and Google Play screenshots on store-sized devices with Maestro flows that log in through the `@terreno/ui` LoginScreen, and renders the Play feature graphic and 512×512 icon from a repo's `storeAssets.config.json`. Install with `npx skills add TerrenoLabs/terreno --skill store-assets` or from the `terreno` Claude plugin.
+
+### Changed
+
+- `GPTChat` history rows move rename and delete into a three-dot overflow menu. Rename uses an outlined pencil in the dark secondary color; titles truncate before the menu trigger at any sidebar width.
+- `GPTChat` shows "Scroll to bottom" only when content sits below the viewport, never in an empty chat.
+- The `GPTChat` composer grows with long text up to 200px, then scrolls. `TextField` / `TextArea` accept `maxHeight` to cap `grow`.
+- Generated images in `GPTChat` offer copy-image and (web) download. Copying an image-only reply copies the image instead of text.
+- `FilePickerButton` opens an anchored dropdown instead of a modal. On web, **Document** now opens the file picker, and both options return `data:` URLs instead of `blob:` URLs.
+
+### Fixed
+
+- Web toasts now render above open modals and remain correctly centered in statically exported apps instead of inheriting a zero-width server-rendered viewport.
+
+## [57.8.0] - 2026-10-02
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.8.0.md`](mcp-server/src/docs/upgrades/57.8.0.md).
+
+### Added
+
+- `@terreno/announcements` imports a versioned release pack (`pack.yaml` plus one Markdown file per announcement) through idempotent `POST /announcements/import-release`. Imports default to drafts; pass `publish: true` to publish on import. Re-importing the same product, release version, channel, and slug updates the existing row, and a matching soft-deleted row is restored. Admin auth or `ANNOUNCEMENTS_UPLOAD_TOKEN` can call the route. Request bodies for the import and for impression and click events are strict Zod schemas.
+- `SplitPage` accepts opt-in web layout props. `desktopChildrenMinWidth` keeps one or two desktop children at least that many pixels wide and scrolls horizontally when the row is tighter. `narrowViewportChildLabels`, `narrowViewportSelectionActive`, `narrowViewportSelectionKey`, and `narrowViewportListButtonLabel` replace the dotted narrow swiper with a labeled pager. `narrowBelowWidth` uses the narrow layout at or below that pixel width; omit it to keep `isNarrowViewport()`. Native `SplitPage` ignores these props. `IconButton` accepts `backgroundOpacity` to tint only the button background.
+
+### Changed
+
+- CircleCI `publish-release` compiles every lockstep package once and publishes them in parallel instead of recompiling and retesting each package in turn. Tagged commits already passed CI on master. Releases drop from 25+ minutes to about 4.
+- `deploy-demo` runs alongside `publish-release` instead of after it.
+- `scripts/ci/netlify-deploy.sh` passes `--no-build`, so Netlify deploys no longer rerun the root `netlify.toml` docs build (about 3.5 minutes per demo and frontend deploy).
+
+### Deprecated
+
+- `isMobileDevice` is deprecated. Call `isNarrowViewport` instead. The old function stays exported and returns the same result until it is removed.
+
+### Fixed
+
+- `DropdownPanel` now anchors to its trigger rather than to the row around it. The measured wrapper stretched to fill its container, so the panel opened at the start of that row — visible whenever the trigger is not at the start edge, such as a right-aligned button or a right-to-left layout, where the panel appeared on the opposite side of the screen.
+- `/gpt/prompt` sends each generated image once. Image-output models no longer duplicate the SSE `image` event and saved content part, and image-only responses save empty text instead of the `(image)` placeholder. `GptHistory` prompt `text` is now required only when the prompt has no `content` parts.
+
 ## [57.7.0] - 2026-09-28
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.7.0.md`](mcp-server/src/docs/upgrades/57.7.0.md).

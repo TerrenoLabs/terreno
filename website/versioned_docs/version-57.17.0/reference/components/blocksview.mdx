@@ -1,0 +1,37 @@
+---
+title: "BlocksView"
+description: "Renders a whole-reply YAML document of Terreno components. An invalid document shows an error banner and keeps the raw text collapsed."
+sidebar_label: "BlocksView"
+slug: /reference/components/blocksview
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# BlocksView
+
+Renders a whole-reply YAML document of Terreno components. An invalid document shows an error banner and keeps the raw text collapsed.
+
+**Package:** `@terreno/ui`  
+**Categories:** Pattern  
+**Props interface:** `BlocksViewProps`  
+**Story source:** [`demo/stories/BlocksView.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/BlocksView.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="BlocksView" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `document` | `union` | Yes | A whole-reply YAML or JSON string, or a document that already parsed. |
+| `allowHtml` | `boolean` |  | When true, an  |
+| `hostActions` | `typeOperator` |  | Names the host will run. A callback outside this list is disabled. Omit to leave callbacks enabled. |
+| `imageHosts` | `typeOperator` |  | Hostnames allowed on https image sources. Empty rejects every https image. |
+| `onAction` | `reflection` |  | Called for reply, open, select, and callback. Select also updates the target chart locally. A copy button writes the clipboard itself and never calls this. |
+| `overrides` | `Record` |  | Block ids replaced in place. The key is the original block id. |
+| `pendingElementIds` | `typeOperator` |  | Element ids whose buttons show a loading state. |
+| `resolveDataset` | `reflection` |  | Loads a  |
+| `resolveImage` | `reflection` |  | Turns a  |
+| `streaming` | `boolean` |  | While a reply is still streaming,  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

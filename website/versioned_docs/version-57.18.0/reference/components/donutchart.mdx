@@ -1,0 +1,43 @@
+---
+title: "DonutChart"
+description: "Single-series donut chart. One slice per point; optional per-slice color; legend is one row per slice."
+sidebar_label: "DonutChart"
+slug: /reference/components/donutchart
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# DonutChart
+
+Single-series donut chart. One slice per point; optional per-slice color; legend is one row per slice.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `DonutChartProps`  
+**Story source:** [`demo/stories/DonutChart.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/DonutChart.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="DonutChart" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data` | `array` | Yes | Single series of labeled numeric points. |
+| `accessibilityLabel` | `string` |  | Summary announced for the whole chart. |
+| `centerTitle` | `string` |  | Small copy below the center value. |
+| `centerValue` | `string` |  | Primary copy inside the donut hole. |
+| `comparisonData` | `array` |  | Optional previous-period values drawn as a dotted overlay. |
+| `emptyText` | `string` |  | Copy shown when  |
+| `formatShare` | `reflection` |  | Formats each slice's legend share. Defaults to a rounded percentage. |
+| `formatValue` | `reflection` |  | Formats the numeric value in tooltips. |
+| `height` | `number` |  | Plot height in pixels. |
+| `legendLabel` | `string` |  | Series name shown under the plot. |
+| `loading` | `boolean` |  | When true, shows a spinner instead of the plot. |
+| `onPeriodPress` | `reflection` |  | Makes  |
+| `periodLabel` | `string` |  | Relative or absolute reporting period shown with  |
+| `series` | `array` |  | Named series. When non-empty, these replace the single  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `title` | `string` |  | Optional chart-card title shortcut. |
+| `xTickPolicy` | `union` |  | X-label collision policy.  |

@@ -54,7 +54,7 @@ fi
 
 case "$target" in
   demo)
-    bun run --filter '@terreno/ui' compile
+    bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
     bun run --filter '@terreno/ui' types
     (cd demo && bun run export)
     bash demo/scripts/fix-netlify-assets.sh demo/dist
@@ -69,21 +69,31 @@ case "$target" in
       '.expo.extra.BASE_URL = $url | .expo.extra.apiBaseUrl = $url' \
       example-frontend/app.json > example-frontend/app.json.tmp
     mv example-frontend/app.json.tmp example-frontend/app.json
+    # Netlify and Cloud Run are different sites, so Better Auth's session cookie would be a
+    # third-party cookie that Safari blocks. The web build signs in with a stored bearer token.
+    export EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true
     (cd example-frontend && bun run export)
     bash demo/scripts/fix-netlify-assets.sh example-frontend/dist
     printf '/*    /index.html   200\n' > example-frontend/dist/_redirects
     publish_dir="example-frontend/dist"
     ;;
   docs)
-    bun run --filter '@terreno/ui' compile
+    bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
     bun run --filter '@terreno/ui' types
     (cd website && bun run generate:components && bun run generate:api)
     (
       cd website
-      DOCS_PREVIEW="$([ "$mode" = "preview" ] && echo true || echo false)" \
+      # Docusaurus sizes its SSG worker pool from the CPU count, which can report the
+      # host's cores inside CI containers. Each worker loads the full server bundle.
+      DOCUSAURUS_SSG_WORKER_THREAD_COUNT=1 \
+        DOCS_PREVIEW="$([ "$mode" = "preview" ] && echo true || echo false)" \
         DEMO_URL=https://terreno-demo.netlify.app \
         bunx docusaurus build --no-minify
     )
+    # Released versions are prebuilt once at release time; unpack them, don't rebuild.
+    if [ "$mode" = "production" ]; then
+      scripts/ci/docs-archive.sh fetch website/build
+    fi
     publish_dir="website/build"
     ;;
 esac

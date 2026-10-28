@@ -116,11 +116,11 @@ describe("update-dependencies skill", (): void => {
     assert.isFalse(isTrustedRollingPr({...candidate, headRefName: "spoofed-branch"}, repository));
   });
 
-  it("keeps react-native-web eligible for root Dependabot updates", (): void => {
+  it("keeps react-native-web eligible for root Dependabot security updates", (): void => {
     const dependabot = readFileSync(resolve(ROOT_DIRECTORY, ".github/dependabot.yml"), "utf8");
     const rootUpdates = dependabot.slice(
-      dependabot.indexOf("# Maintain dependencies for root package.json"),
-      dependabot.indexOf("# Maintain dependencies for backend packages")
+      dependabot.indexOf("# Root package.json"),
+      dependabot.indexOf("# Backend packages")
     );
 
     assert.notInclude(rootUpdates, 'dependency-name: "react-native-*"');

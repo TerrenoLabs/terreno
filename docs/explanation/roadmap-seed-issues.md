@@ -57,7 +57,7 @@ duplicating sprint planning.
 **Title:** `Deploy to GCP (generalized)`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-gcp`, Status=`In progress`
 
 Turns Terreno's GCP deployment story from Flourish-specific infrastructure into a reusable
 guide any Terreno app can follow. It documents Cloud Run backend hosting, GCS plus CDN for
@@ -191,7 +191,7 @@ example-backend Dockerfile with CI validation.
 **Title:** `Deploy to Vercel`
 
 **Labels:** `area:deploy`, `type:docs`  
-**Project fields:** Area=`deploy`, Target=`Next`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Planned`
+**Project fields:** Area=`deploy`, Target=`Released`, Impact=`Improvement`, IP=`deploy-to-vercel`, Status=`Shipped`
 
 Documents Expo web export on Vercel, preview-deployment CORS and Better Auth origin handling,
 Vercel Functions WebSockets (Public Beta) operator docs, and a deploy-vercel skill with
@@ -636,6 +636,26 @@ docs are the proof; comms admin stats consume these primitives later.
 - **Tasks:** [charts-and-dashboards.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/charts-and-dashboards.md)
 - **RTK flag:** None
 - **Depends on:** —
+
+---
+
+## dashboard-chart-parity
+
+**Title:** `Ops dashboard chart parity`
+
+**Labels:** `area:ui`, `type:feature`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`dashboard-chart-parity`, Status=`Planned`
+
+Follow-up to charts-and-dashboards: scorecards with comparison sparklines, `ChartCard`
+period badges, additive multi-series facades, donut hole labels, spanning `DashboardGrid`
+items, and DataTable period headers / totals / range status so apps can compose a
+“How’s it going?”-class ops dashboard. Terreno theme defaults; no Looker preset. Grammar
+not required.
+
+- **Implementation plan:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/dashboard-chart-parity.md)
+- **Tasks:** [dashboard-chart-parity.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/dashboard-chart-parity.md)
+- **RTK flag:** None
+- **Depends on:** charts-and-dashboards
 
 ---
 
@@ -1140,7 +1160,7 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 **Title:** `AI observability (Langfuse-light, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
-**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Shaping`
+**Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
 Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
@@ -1268,6 +1288,57 @@ Turn the Expo demo into the workshop for `@terreno/ui`: a person can find a comp
 
 - **Implementation plan:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/demo-workshop.md)
 - **Tasks:** [demo-workshop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/demo-workshop.md)
+
+---
+
+## agent-ui-asks
+
+**Title:** `Agent UI Asks — agents ask the user for a typed answer inside the chat`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-asks`, Status=`In progress`
+
+Let an agent **ask the user something and get a typed answer back in the same turn**. The agent calls an ask tool: pick one, pick many, upload images or files, edit a markdown draft, confirm an action, or fill a short form. `GPTChat` renders the matching `@terreno/ui` control inline. The user answers. The answer returns to the agent as a validated tool result and the turn continues from where it paused.
+
+- **Implementation plan:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-asks.md)
+- **Tasks:** [agent-ui-asks.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-asks.md)
+
+---
+
+## durable-agent-harness
+
+**Title:** `Durable agent harness (@terreno/ai/harness)`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`durable-agent-harness`, Status=`Planned`
+
+One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work durably: deterministic multi-phase workflows, LLM agent loops, tools, subagents, human approvals, retries, and crash recovery — all audited. It must be strong enough to build an OpenClaw/Hermes-class personal agent, a coding agent, and a regulated clinical automation on the same primitives.
+
+- **Implementation plan:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/durable-agent-harness.md)
+- **Tasks:** [durable-agent-harness.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/durable-agent-harness.md)
+
+---
+
+## agent-ui-rich-replies
+
+**Title:** `Agent UI Rich Replies: steppers, checklists, galleries, and copy`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`agent-ui-rich-replies`, Status=`Planned`
+
+- **Implementation plan:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/agent-ui-rich-replies.md)
+- **Tasks:** [agent-ui-rich-replies.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/agent-ui-rich-replies.md)
+
+---
+
+## circleci-pr-speed-loop
+
+**Title:** `CircleCI PR Speed Loop`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`In progress`
+
+- **Implementation plan:** [circleci-pr-speed-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/circleci-pr-speed-loop.md)
 
 ---
 

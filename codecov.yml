@@ -58,6 +58,9 @@ flag_management:
     - name: ai
       paths:
         - ai/
+    - name: blocks
+      paths:
+        - blocks/
     - name: comms
       paths:
         - comms/

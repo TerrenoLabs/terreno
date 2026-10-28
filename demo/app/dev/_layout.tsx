@@ -1,36 +1,30 @@
-import {isSupportedDesktopWidth} from "@terreno/ui";
-import {router, Stack} from "expo-router";
+import {DemoHeaderControls} from "@components/DemoHeaderControls";
+import {isSupportedDesktopWidth, useTheme} from "@terreno/ui";
+import {Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import type {ReactElement} from "react";
-import {Pressable, Text, useWindowDimensions} from "react-native";
+import {type ReactElement, useCallback} from "react";
+import {useWindowDimensions} from "react-native";
+
+const DevStackHeaderRight = (): ReactElement => <DemoHeaderControls modeTarget="demo" />;
 
 const Layout = (): ReactElement => {
+  const {colorScheme, theme} = useTheme();
   const {width} = useWindowDimensions();
   const isDesktopLayout = isSupportedDesktopWidth({width});
+  const hideHeaderBack = useCallback((): null => null, []);
 
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <Stack
         screenOptions={{
-          contentStyle: {flex: 1},
+          contentStyle: {backgroundColor: theme.surface.base, flex: 1},
           headerBackTitle: "Back",
           headerBackVisible: !isDesktopLayout,
-          headerRight: () => (
-            <Pressable
-              onPress={async () => {
-                router.navigate("demo");
-              }}
-              style={{
-                alignItems: "center",
-                height: "100%",
-                justifyContent: "center",
-                marginRight: isDesktopLayout ? 16 : 0,
-              }}
-            >
-              <Text style={{fontWeight: "bold"}}>Demo Mode</Text>
-            </Pressable>
-          ),
+          headerLeft: isDesktopLayout ? hideHeaderBack : undefined,
+          headerRight: DevStackHeaderRight,
+          headerStyle: {backgroundColor: theme.surface.base},
+          headerTintColor: theme.text.primary,
         }}
       />
     </>

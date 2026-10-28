@@ -1,6 +1,7 @@
 # Build stage
 # TODO: Do this build in Github Actions
-FROM oven/bun:1 AS builder
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497). `bun build --compile` embeds this binary.
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /app
 
 COPY . .
@@ -8,8 +9,10 @@ COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter "@terreno/api" compile
 RUN bun run --filter "@terreno/api-health" compile
-RUN bun run --filter "@terreno/ai" compile
+RUN bun run --filter "@terreno/blocks" compile
+# @terreno/ai type-checks its optional JobsRunner against @terreno/jobs, so jobs compiles first.
 RUN bun run --filter "@terreno/jobs" compile
+RUN bun run --filter "@terreno/ai" compile
 RUN bun run --filter "@terreno/admin-backend" compile
 RUN bun run --filter "@terreno/announcements" compile
 RUN bun run --filter "@terreno/comms" compile

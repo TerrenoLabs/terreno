@@ -1,0 +1,13 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick a color.",
+    "select": "one",
+    "options": [
+      {"id": "red", "label": "Red"},
+      {"id": "blue", "label": "Blue"}
+    ],
+    "icon": "palette"
+  },
+  "errors": [{"path": "icon", "code": "UNKNOWN_KEY"}]
+}

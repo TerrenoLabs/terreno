@@ -2,8 +2,9 @@
   "$schema": "https://skills.sh/schemas/skills.sh.schema.json",
   "groupings": [
     {
-      "description": "Bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
+      "description": "PRD seed, then bounded Grow → Pick/Roast inner loop → Brew → Taste, plus continuous Pick-Roast, planning, and taste-sweep outer loops.",
       "skills": [
+        "terreno-prd",
         "terreno-1-grow",
         "terreno-2-pick",
         "terreno-3-roast",
@@ -27,10 +28,20 @@
         "generate-sdk",
         "building-terreno-apps",
         "building-admin-interfaces",
-        "backend-test-env",
         "ai-prompt-governance"
       ],
       "title": "Terreno apps"
+    },
+    {
+      "description": "Bootstrap backend, frontend, and mobile test setups, then write Bun, Playwright, and Maestro tests.",
+      "skills": [
+        "terreno-test-setup",
+        "terreno-backend-tests",
+        "terreno-frontend-tests",
+        "terreno-mobile-tests",
+        "backend-test-env"
+      ],
+      "title": "Testing"
     },
     {
       "description": "Read architecture docs first; write and regenerate them in the same slice.",
@@ -52,6 +63,8 @@
         "implement-ready-for-dev",
         "respond-to-review",
         "verify-ui-changes",
+        "attach-pr-media",
+        "accessibility-testing",
         "review-chart-visuals",
         "work-github-issues",
         "fix-conflicts",
@@ -59,7 +72,8 @@
         "generate-release-announcements",
         "update-dependencies",
         "upgrading-terreno",
-        "deploy-gcp"
+        "deploy-gcp",
+        "deploy-vercel"
       ],
       "title": "GitHub and shipping"
     },
@@ -95,6 +109,7 @@
         "expo-cicd-workflows",
         "expo-deployment",
         "expo-dev-client",
+        "store-assets",
         "track-upstream-expo",
         "upgrading-expo",
         "use-dom"

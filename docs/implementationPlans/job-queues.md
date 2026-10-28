@@ -144,7 +144,7 @@ picks it up. Cloud runners persist then create a platform task whose HTTP body
 is `{jobId}` (not the payload). Execute loads the Mongo row, claims if needed,
 runs the handler.
 
-GCP and Vercel SDKs are **optional peers** on subpath exports
+GCP and Vercel Queues SDKs are **optional peers** on subpath exports
 (`@terreno/jobs/runners/gcpCloudTasks`, `@terreno/jobs/runners/vercelQueues`).
 Core `@terreno/jobs` has zero cloud SDKs. Tests inject fakes.
 

@@ -1,0 +1,1 @@
+> **AdminChangeType** = `"create"` \| `"delete"` \| `"update"`

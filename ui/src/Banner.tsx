@@ -15,6 +15,7 @@ interface BannerButtonProps {
   buttonOnClick: () => void | Promise<void>;
   buttonText: string;
   loading?: boolean;
+  testID?: string;
 }
 
 export const BannerButton = ({
@@ -22,6 +23,7 @@ export const BannerButton = ({
   buttonText,
   buttonIconName,
   buttonOnClick,
+  testID,
 }: BannerButtonProps): React.ReactElement | null => {
   const [loading, setLoading] = useState(propsLoading);
   const {theme} = useTheme();
@@ -60,6 +62,7 @@ export const BannerButton = ({
         paddingHorizontal: 12,
         paddingVertical: 4,
       }}
+      {...(testID ? {testID} : {})}
     >
       <View style={{flexDirection: "row"}}>
         <View style={{flexDirection: "row-reverse"}}>
@@ -74,7 +77,7 @@ export const BannerButton = ({
               <Icon iconName={buttonIconName as IconName} type="solid" />
             </View>
           )}
-          <NativeText style={{fontSize: 12}}>{buttonText}</NativeText>
+          <NativeText style={{color: theme.text.primary, fontSize: 12}}>{buttonText}</NativeText>
         </View>
         {Boolean(loading) && (
           <Box marginLeft={2}>

@@ -1,0 +1,16 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": 5,
+    "select": "one",
+    "options": "red, blue",
+    "allowDecline": "yes",
+    "default": "red"
+  },
+  "errors": [
+    {"path": "allowDecline", "code": "INVALID_TYPE"},
+    {"path": "default", "code": "INVALID_TYPE"},
+    {"path": "options", "code": "INVALID_TYPE"},
+    {"path": "prompt", "code": "INVALID_TYPE"}
+  ]
+}

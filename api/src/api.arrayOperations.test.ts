@@ -581,6 +581,44 @@ describe("array operation errors", () => {
     expect(res.body.detail).toContain("Access to PATCH");
   });
 
+  it("lets a later route handle non-ObjectId paths under the same prefix", async () => {
+    app.use(
+      "/ai",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      })
+    );
+    app.post("/ai/observability/evaluators", (_req, res) => {
+      res.status(201).json({data: {created: true}});
+    });
+    app.post("/ai/observability/experiments", (_req, res) => {
+      res.status(201).json({data: {started: true}});
+    });
+    _server = supertest(app);
+
+    const created = await _server
+      .post("/ai/observability/evaluators")
+      .send({name: "toxicity", target: "full trace"})
+      .expect(201);
+    expect(created.body.data.created).toBe(true);
+
+    const started = await _server
+      .post("/ai/observability/experiments")
+      .send({name: "Example Experiment"})
+      .expect(201);
+    expect(started.body.data.started).toBe(true);
+
+    const denied = await _server.post(`/ai/${apple._id}/tags`).send({tags: "organic"}).expect(405);
+    expect(denied.body.code).toBe("array-update-not-allowed");
+  });
+
   it("array operation on non-existent document returns 404", async () => {
     app.use(
       "/food",
@@ -752,5 +790,83 @@ describe("array operation with undefined preUpdate return", () => {
 
     const res = await agent.delete(`/food/${apple._id}/tags/healthy`).expect(400);
     expect(res.body.title).toContain("preUpdate hook error");
+  });
+});
+
+describe("array subdocument PATCH with a stripping preUpdate", () => {
+  let app: express.Application;
+  let apple: Food;
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    const [admin] = await setupDb();
+    apple = await FoodModel.create({
+      calories: 100,
+      categories: [
+        {name: "Fruit", show: true},
+        {name: "Popular", show: false},
+      ],
+      hidden: false,
+      name: "Apple",
+      ownerId: admin._id,
+    });
+  });
+
+  const mountStrippingRouter = async (
+    preUpdate: (body: Partial<Food>) => Partial<Food>
+  ): Promise<void> => {
+    app = getBaseServer();
+    setupAuth(app, UserModel as unknown as AuthUserModel);
+    addAuthRoutes(app, UserModel as unknown as AuthUserModel);
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+        preUpdate: (body) => preUpdate(body as Partial<Food>),
+      })
+    );
+    agent = await authAsUser(app, "admin");
+  };
+
+  it("keeps a subdocument unchanged when preUpdate strips the array field", async () => {
+    await mountStrippingRouter((body) => {
+      const {categories: _categories, ...rest} = body;
+      return rest;
+    });
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "ViaArraySubroute", show: false}})
+      .expect(200);
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Fruit");
+    expect(stored?.categories?.[0]?.show).toBe(true);
+  });
+
+  it("applies only the subdocument fields that survive preUpdate", async () => {
+    await mountStrippingRouter((body) => ({
+      categories: (body.categories ?? []).map((category) => ({
+        ...((category as {toObject?: () => FoodCategory}).toObject?.() ?? category),
+        show: true,
+      })) as Food["categories"],
+    }));
+    const categoryId = apple.categories[1]._id;
+    const res = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "Renamed", show: false}})
+      .expect(200);
+    expect(res.body.data.categories[1].name).toBe("Renamed");
+    expect(res.body.data.categories[1]._id).toBe(String(categoryId));
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[1]?.name).toBe("Renamed");
+    expect(stored?.categories?.[1]?.show).toBe(true);
+    expect(String(stored?.categories?.[1]?._id)).toBe(String(categoryId));
   });
 });

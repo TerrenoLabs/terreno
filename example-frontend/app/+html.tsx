@@ -18,7 +18,7 @@ export default function Root({children}: {children: React.ReactNode}) {
         */}
         <ScrollViewStyleReset />
 
-        {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
+        {/* The app defaults to light, so first paint stays light regardless of the OS theme. */}
         <style>{responsiveBackground}</style>
         {/* Add any additional <head> elements that you want globally available on web... */}
       </head>
@@ -30,9 +30,4 @@ export default function Root({children}: {children: React.ReactNode}) {
 const responsiveBackground = `
 body {
   background-color: #fff;
-}
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #000;
-  }
 }`;

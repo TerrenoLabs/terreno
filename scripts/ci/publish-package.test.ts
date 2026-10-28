@@ -64,6 +64,23 @@ describe("publish-package.sh", () => {
     assert.match(script, /NPM_CONFIG_USERCONFIG="\$npmrc" npm publish/);
   });
 
+  it("compiles every package the release publishes", () => {
+    const lists = publishReleaseJob.matchAll(/packages=\(\n([\s\S]*?)\)/g);
+    const packageLists = [...lists].map((match) =>
+      match[1]
+        .split("\n")
+        .flatMap((line) => line.trim().split(/\s+/))
+        .filter((token) => token.length > 0)
+    );
+    assert.equal(packageLists.length, 2, "expected a compile list and a publish list");
+    const [compilePackages, publishPackages] = packageLists;
+    assert.deepEqual(
+      compilePackages,
+      publishPackages,
+      "a published package missing from the prebuild list fails typecheck"
+    );
+  });
+
   it("compiles once and publishes in parallel without a Mongo sidecar in publish-release", () => {
     assert.match(publishReleaseJob, /executor: node22\n/);
     assert.ok(!publishReleaseJob.includes("wait_for_mongo"), "release no longer runs tests");

@@ -15,8 +15,8 @@ import type {ImageModel, LanguageModel} from "ai";
  *   actually enabled/available for the project using the Google publisher-models listing API.
  */
 
-/** Default Vertex / Gemini Enterprise Agent Platform region. */
-export const DEFAULT_VERTEX_LOCATION = "us-central1";
+/** Default Vertex / Gemini Enterprise Agent Platform region. Only global is supported for Gemini 3. */
+export const DEFAULT_VERTEX_LOCATION = "global";
 
 const CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 const MAX_MODEL_LIST_PAGES = 10;
@@ -38,7 +38,7 @@ export interface CreateVertexProviderOptions {
    * Vertex models are permitted. When provided, only listed models may be resolved.
    */
   allowedModels?: string[];
-  /** Vertex location/region. Falls back to GOOGLE_VERTEX_LOCATION, then `us-central1`. */
+  /** Vertex location/region. Forced to global endpoint for Gemini 3 support. */
   location?: string;
   /** GCP project id. Falls back to the GOOGLE_VERTEX_PROJECT env var. */
   project?: string;
@@ -76,7 +76,7 @@ export interface ListEnabledVertexModelsOptions {
   fetchImpl?: typeof fetch;
   /** Injectable access-token getter (defaults to Application Default Credentials). */
   getAccessToken?: () => Promise<string | undefined>;
-  /** Vertex location/region. Falls back to GOOGLE_VERTEX_LOCATION, then `us-central1`. */
+  /** Vertex location/region. Forced to global endpoint for Gemini 3 support. */
   location?: string;
   /** GCP project id. */
   project: string;
@@ -99,8 +99,8 @@ export interface VerifyVertexModelsOptions extends ListEnabledVertexModelsOption
 }
 
 /**
- * Normalize a publisher model resource name (e.g. "publishers/google/models/gemini-2.5-flash" or
- * "gemini-2.5-flash@001") down to its bare model id (e.g. "gemini-2.5-flash").
+ * Normalize a publisher model resource name (e.g. "publishers/google/models/gemini-3.8-flash" or
+ * "gemini-3.8-flash@001") down to its bare model id (e.g. "gemini-3.8-flash").
  */
 export const normalizeVertexModelId = (modelName: string): string => {
   const lastSegment = modelName.trim().split("/").pop() ?? modelName.trim();
@@ -108,15 +108,40 @@ export const normalizeVertexModelId = (modelName: string): string => {
 };
 
 /**
- * Returns true when the model id is permitted. An empty/undefined allow-list permits all models.
- * Both the requested model id and allow-list entries are normalized (publisher paths and `@version`
- * suffixes stripped) so matching stays consistent with `verifyVertexModelsEnabled`.
+ * A Google publisher model id, optionally with a `publishers/google/models/` or `models/` prefix
+ * and an `@version` suffix. The provider builds the request URL from the id, so nothing else
+ * (`/`, `:`, `?`, `#`) may appear in it.
+ */
+const VERTEX_MODEL_ID_PATTERN =
+  /^(?:publishers\/google\/models\/|models\/)?([a-z0-9][a-z0-9._-]{0,127})(@[a-z0-9._-]{1,32})?$/i;
+
+/**
+ * The id the provider is given: the model id with any publisher prefix removed and its
+ * `@version` kept, or undefined when the id is not a plain Vertex model id.
+ */
+const canonicalVertexModelId = (modelId: string): string | undefined => {
+  const match = VERTEX_MODEL_ID_PATTERN.exec(modelId.trim());
+  if (!match) {
+    return undefined;
+  }
+  return `${match[1]}${match[2] ?? ""}`;
+};
+
+/**
+ * Returns true when the model id is permitted. An id that is not a plain Vertex model id is never
+ * permitted. An empty/undefined allow-list permits all other models. Both the requested model id
+ * and allow-list entries are normalized (publisher paths and `@version` suffixes stripped) so
+ * matching stays consistent with `verifyVertexModelsEnabled`.
  */
 export const isVertexModelAllowed = (modelId: string, allowedModels?: string[]): boolean => {
+  const canonical = canonicalVertexModelId(modelId);
+  if (!canonical) {
+    return false;
+  }
   if (!allowedModels || allowedModels.length === 0) {
     return true;
   }
-  const normalized = normalizeVertexModelId(modelId);
+  const normalized = normalizeVertexModelId(canonical);
   return allowedModels.some((allowed) => normalizeVertexModelId(allowed) === normalized);
 };
 
@@ -152,8 +177,7 @@ const getDefaultAccessToken = async (): Promise<string | undefined> => {
   }
 };
 
-const resolveLocation = (location?: string): string =>
-  location ?? process.env.GOOGLE_VERTEX_LOCATION ?? DEFAULT_VERTEX_LOCATION;
+const resolveLocation = (_location?: string): string => "global";
 
 const aiPlatformHost = (location: string): string =>
   location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`;
@@ -186,14 +210,18 @@ export const createVertexProvider = (
 
   const raw = factory({location, project});
 
-  const assertAllowed = (modelId: string): void => {
-    if (isVertexModelAllowed(modelId, allowedModels)) {
-      return;
+  /** The canonical id the provider is given. Throws when the model is not permitted. */
+  const assertAllowed = (modelId: string): string => {
+    const canonical = canonicalVertexModelId(modelId);
+    if (canonical && isVertexModelAllowed(canonical, allowedModels)) {
+      return canonical;
     }
     throw new APIError({
-      detail: `Model "${modelId}" is not in the configured Vertex model allow-list (${(
-        allowedModels ?? []
-      ).join(", ")}).`,
+      detail: canonical
+        ? `Model "${modelId}" is not in the configured Vertex model allow-list (${(
+            allowedModels ?? []
+          ).join(", ")}).`
+        : `Model "${modelId}" is not a Vertex model id.`,
       status: 400,
       title: "Model not permitted",
     });
@@ -201,15 +229,9 @@ export const createVertexProvider = (
 
   return {
     allowedModels,
-    imageModel: (modelId: string): ImageModel => {
-      assertAllowed(modelId);
-      return raw.image(modelId);
-    },
+    imageModel: (modelId: string): ImageModel => raw.image(assertAllowed(modelId)),
     isModelAllowed: (modelId: string): boolean => isVertexModelAllowed(modelId, allowedModels),
-    languageModel: (modelId: string): LanguageModel => {
-      assertAllowed(modelId);
-      return raw(modelId);
-    },
+    languageModel: (modelId: string): LanguageModel => raw(assertAllowed(modelId)),
     location,
     project,
     raw,

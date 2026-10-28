@@ -62,6 +62,8 @@ export const syncDb = createSyncDb({
 });
 ```
 
+The default socket transport uses `["polling", "websocket"]`. On hosts without session affinity (Vercel Functions), pass `socketTransports: ["websocket"]`; see `docs/how-to/vercel-function-websockets.md`.
+
 Call `syncDb.start()` when the user is authenticated and `syncDb.stop()` on logout. Gate `mutate()` until `start()` resolves.
 
 ## React hooks (`@terreno/syncdb/react`)
@@ -81,8 +83,9 @@ import {
 | Hook | Purpose |
 |------|---------|
 | `useEntity(collection, id)` | Single row; `{data, deleted, seq, isPending}` |
-| `useQuery(collection, options?)` | Filtered/sorted entity array |
+| `useQuery(collection, options?)` | Local `where`/`filter`/`sort`/`limit` entity array |
 | `useEntityIds(collection, options?)` | Stable id list for large lists |
+| `useWindowQuery(collection, options?)` | Server-filtered paged list for `queryCollections` (RTK list args: `where`, `sort`, `pageSize`, `fetchNextPage`) |
 | `useMutate(collection)` | `{create, update, remove}` — local-first writes |
 | `useSyncStatus()` | Online, syncing, queued count, conflict count |
 | `useConflicts()` | `{conflicts, resolve}` with `useServer` / `keepMine` |

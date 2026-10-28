@@ -79,6 +79,43 @@ export class Page extends React.Component<PageProps, {}> {
     );
   }
 
+  renderContent() {
+    // Without a loadingComponent, Page keeps its centered spinner and optional loadingText.
+    const spinner = (
+      <Box
+        alignItems="center"
+        direction="column"
+        display="flex"
+        flex="grow"
+        justifyContent="center"
+        marginTop={8}
+      >
+        <Spinner />
+        {Boolean(this.props.loadingText) && (
+          <Box marginTop={2}>
+            <Text color="secondaryDark">{this.props.loadingText}</Text>
+          </Box>
+        )}
+      </Box>
+    );
+    if (!this.props.loading) {
+      return this.props.children;
+    }
+    // Both paths render through a loading Box so the page announces loadingLabel and is busy.
+    return (
+      <Box
+        direction="column"
+        flex="grow"
+        loading
+        loadingAnimation={this.props.loadingAnimation}
+        loadingComponent={this.props.loadingComponent ?? spinner}
+        loadingLabel={this.props.loadingLabel}
+        testID={this.props.testID ? `${this.props.testID}-loading` : undefined}
+        width="100%"
+      />
+    );
+  }
+
   renderBody() {
     return (
       <>
@@ -98,25 +135,7 @@ export class Page extends React.Component<PageProps, {}> {
           width="100%"
         >
           {this.renderHeader()}
-          {this.props.loading ? (
-            <Box
-              alignItems="center"
-              direction="column"
-              display="flex"
-              flex="grow"
-              justifyContent="center"
-              marginTop={8}
-            >
-              <Spinner />
-              {Boolean(this.props.loadingText) && (
-                <Box marginTop={2}>
-                  <Text color="secondaryDark">{this.props.loadingText}</Text>
-                </Box>
-              )}
-            </Box>
-          ) : (
-            this.props.children
-          )}
+          {this.renderContent()}
         </Box>
         {Boolean(this.props.footer) && (
           <Box

@@ -1,2 +1,9 @@
 [test]
-preload = ["../ui/src/bunSetup.ts"]
+preload = ["./tests/testPreload.ts", "./tests/bunSetup.ts"]
+coveragePathIgnorePatterns = [
+  "**/*.test.ts",
+  "**/*.test.tsx",
+  "tests/**",
+  "store/openApiSdk.ts",
+  "playwright*.config.ts",
+]

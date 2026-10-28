@@ -2,6 +2,10 @@
 
 Bump every `@terreno/*` package together. Mixing versions is unsupported ([versioning policy](../explanation/versioning-policy.md)).
 
+`@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. Install that before upgrading those packages. Bun 1.4.0–1.4.3 is affected by CVE-2026-111497 (Brotli decoder out-of-bounds write); 1.4.4 patches the decoder. Apps scaffolded earlier should set `FROM oven/bun:1.4.4-slim` and rebuild. A `bun build --compile` binary embeds the builder's Bun and stays on the old decoder until that rebuild.
+
+EAS build profiles in this repository stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
 ## 1. Check current versions
 
 From the app root:
@@ -38,7 +42,7 @@ Maintainers watching the next SDK beta use `track-upstream-expo` / [`track-upstr
 
 ### Backend vs frontend packages
 
-From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`.
+From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`. `blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
 
 ## 4. RTK → syncdb is not a version bump
 

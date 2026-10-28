@@ -1,6 +1,9 @@
 import {
   AdminProvider,
+  type AdminScreenWidgetProps,
   AdminShellLayout,
+  AiPromptEditorScreenWidget,
+  AiTracesScreenWidget,
   OrgContextProvider,
   OrgSwitcher,
   organizationFromPath,
@@ -8,15 +11,46 @@ import {
 } from "@terreno/admin-frontend";
 import {baseUrl, canOpenAdminPage, selectBetterAuthUserId} from "@terreno/rtk";
 import {SyncDbProvider, useConflicts} from "@terreno/syncdb/react";
-import {Box, Spinner, Text} from "@terreno/ui";
-import {Stack, usePathname} from "expo-router";
+import {Box, Spinner, Text, useStoredState, useTheme} from "@terreno/ui";
+import {Stack, ThemeProvider, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi";
+import {getAdminAuthHeaders} from "@/store/adminAuthHeaders";
 import {terrenoApi, useGetMeQuery} from "@/store/sdk";
 import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
+import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
+
+const PLAYGROUND_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run the playground.";
+
+const MULTI_STAGE_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run the multi-stage trace test.";
+
+const ExamplePromptEditorScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiPromptEditorScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyLoading={isGeminiApiKeyLoading}
+      playgroundApiKeyHint={PLAYGROUND_GEMINI_KEY_HINT}
+    />
+  );
+};
+
+const ExampleTracesScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiTracesScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyHint={MULTI_STAGE_GEMINI_KEY_HINT}
+      apiKeyLoading={isGeminiApiKeyLoading}
+    />
+  );
+};
 
 const BindAdminSyncOrganization: React.FC = () => {
   const organizationId = useOptionalOrgContext()?.organizationId;
@@ -42,6 +76,12 @@ const AdminLayoutContent: React.FC = () => {
   const syncConflicts = useConflicts();
   const [isAdminSyncReady, setIsAdminSyncReady] = useState(false);
   const [adminSyncError, setAdminSyncError] = useState<string | undefined>();
+  const {colorScheme, theme} = useTheme();
+  // Transparent screen containers let the AdminShell canvas show through in both schemes.
+  const adminNavigationTheme = useMemo(
+    () => buildNavigationTheme({background: "transparent", colorScheme, theme}),
+    [colorScheme, theme]
+  );
   const canOpen = canOpenAdminPage({
     admin: profile?.admin,
     permissions: profile?.permissions,
@@ -124,7 +164,13 @@ const AdminLayoutContent: React.FC = () => {
       routeBase={ADMIN_ROUTE}
       syncConflicts={syncConflicts}
       syncDb={adminSyncDb}
-      widgets={{screens: {"sync-lab": SyncLabScreen}}}
+      widgets={{
+        screens: {
+          "ai-prompt-editor": ExamplePromptEditorScreen,
+          "ai-traces": ExampleTracesScreen,
+          "sync-lab": SyncLabScreen,
+        },
+      }}
     >
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindAdminSyncOrganization />
@@ -139,24 +185,26 @@ const AdminLayoutContent: React.FC = () => {
           routeBase={ADMIN_ROUTE}
           versionConfigPath="/version-config"
         >
-          <Stack
-            screenOptions={{
-              contentStyle: {flex: 1},
-              headerShown: false,
-            }}
-          >
-            <Stack.Screen name="index" options={{title: "Admin"}} />
-            <Stack.Screen name="showcase" options={{title: "Admin UI v2 map"}} />
-            <Stack.Screen name="configuration" options={{title: "Configuration"}} />
-            <Stack.Screen name="roles" options={{title: "Roles"}} />
-            <Stack.Screen name="announcements/index" options={{title: "Announcements"}} />
-            <Stack.Screen name="consent-forms/index" options={{title: "Consent forms"}} />
-            <Stack.Screen name="consent-responses/index" options={{title: "Consent responses"}} />
-            <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
-            <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
-            <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
-            <Stack.Screen name="[model]" options={{title: "Model"}} />
-          </Stack>
+          <ThemeProvider value={adminNavigationTheme}>
+            <Stack
+              screenOptions={{
+                contentStyle: {backgroundColor: "transparent", flex: 1},
+                headerShown: false,
+              }}
+            >
+              <Stack.Screen name="index" options={{title: "Admin"}} />
+              <Stack.Screen name="showcase" options={{title: "Admin UI v2 map"}} />
+              <Stack.Screen name="configuration" options={{title: "Configuration"}} />
+              <Stack.Screen name="roles" options={{title: "Roles"}} />
+              <Stack.Screen name="announcements/index" options={{title: "Announcements"}} />
+              <Stack.Screen name="consent-forms/index" options={{title: "Consent forms"}} />
+              <Stack.Screen name="consent-responses/index" options={{title: "Consent responses"}} />
+              <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
+              <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
+              <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
+              <Stack.Screen name="[model]" options={{title: "Model"}} />
+            </Stack>
+          </ThemeProvider>
         </AdminShellLayout>
       </OrgContextProvider>
     </AdminProvider>

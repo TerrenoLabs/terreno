@@ -1,0 +1,21 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which language should the report use?",
+    "select": "one",
+    "allowDecline": false,
+    "options": [
+      {"id": "en", "label": "English"},
+      {"id": "es", "label": "Spanish"},
+      {"id": "fr", "label": "French"},
+      {"id": "de", "label": "German"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which language should the report use?",
+    "handoff": true,
+    "buttons": []
+  }
+}

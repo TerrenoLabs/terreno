@@ -1,7 +1,13 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {displayTitle, filterRoadmapItems, type RoadmapItem, renderRoadmapMarkdown} from "./lib";
+import {
+  displayTitle,
+  filterRoadmapItems,
+  type RoadmapItem,
+  renderRoadmapMarkdown,
+  roadmapContentIsUnchanged,
+} from "./lib";
 
 const sampleItems: RoadmapItem[] = [
   {
@@ -69,6 +75,35 @@ describe("renderRoadmapMarkdown", () => {
       "Tasks: [oss-governance-baseline](docs/tasks/oss-governance-baseline.md)"
     );
     assert.notInclude(markdown, "docs/tasks/docs-tutorials-ai-first.md");
+  });
+});
+
+describe("roadmapContentIsUnchanged", (): void => {
+  it("ignores a refreshed Last updated stamp", (): void => {
+    const existing = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-04T18:56:30.566Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+    const next = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-05T13:25:14.001Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+
+    assert.notEqual(existing, next);
+    assert.isTrue(roadmapContentIsUnchanged({existing, next}));
+  });
+
+  it("reports a title change", (): void => {
+    const existing = renderRoadmapMarkdown({
+      generatedAtIso: "2026-10-04T18:56:30.566Z",
+      items: sampleItems,
+      projectUrl: "https://github.com/orgs/TerrenoLabs/projects/1",
+    });
+    const next = existing.replace("OSS governance baseline", "Renamed item");
+
+    assert.isFalse(roadmapContentIsUnchanged({existing, next}));
   });
 });
 

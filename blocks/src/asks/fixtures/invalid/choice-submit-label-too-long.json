@@ -1,0 +1,13 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Ready to send the invoice?",
+    "select": "one",
+    "options": [
+      {"id": "send", "label": "Send it"},
+      {"id": "wait", "label": "Wait"}
+    ],
+    "submitLabel": "Send my answer right now!"
+  },
+  "errors": [{"path": "submitLabel", "code": "TOO_LONG"}]
+}

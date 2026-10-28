@@ -70,12 +70,19 @@ export const ensureTestUsers = async (
   return createdUsers;
 };
 
+/**
+ * `app` may also be the URL of a served app (`serveApp`). supertest accepts a URL, though
+ * `@terreno/test` types only an app.
+ */
 export const authAsUser = async (
-  app: express.Application,
+  app: express.Application | string,
   type: StandardAiTestUserRole
 ): Promise<TestAgent> => {
   const preset = STANDARD_AI_TEST_USERS[type];
-  return authAsUserWithCredentials(app, {email: preset.email, password: preset.password});
+  return authAsUserWithCredentials(app as express.Application, {
+    email: preset.email,
+    password: preset.password,
+  });
 };
 
 export {authAsUserWithCredentials};

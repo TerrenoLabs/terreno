@@ -8,6 +8,7 @@ exports[`TableDate renders correctly with ISO string date 1`] = `
   ],
   "props": {
     "style": {
+      "color": "#1C1C1C",
       "fontSize": 16,
     },
   },
@@ -23,6 +24,7 @@ exports[`TableDate renders correctly with Date object 1`] = `
   ],
   "props": {
     "style": {
+      "color": "#1C1C1C",
       "fontSize": 16,
     },
   },
@@ -38,6 +40,7 @@ exports[`TableDate renders date in MM/dd/yyyy format by default 1`] = `
   ],
   "props": {
     "style": {
+      "color": "#1C1C1C",
       "fontSize": 16,
     },
   },
@@ -53,6 +56,7 @@ exports[`TableDate renders annotated date with relative time 1`] = `
   ],
   "props": {
     "style": {
+      "color": "#1C1C1C",
       "fontSize": 16,
     },
   },

@@ -2,10 +2,12 @@
 name: ai-prompt-governance
 description: >-
   Invoke when adding, modifying, or reviewing any prompt used by `@terreno/ai`
-  (AIService methods, system prompts, helpers). Provides prompt-as-constant
-  rules, temperature preset guidance, logging requirements, and a testing
-  checklist. Lifecycle composition: Grow for prompt-contract decisions, Pick for
-  implementation, Roast for independent prompt-behavior verification.
+  (AIService methods, system prompts, helpers) or when shipping a new AI product
+  feature (dataset, evaluators, experiments, production label, live feedback).
+  Provides prompt-as-constant/registry rules, SOP loop, temperature presets,
+  logging/tracing, and a testing checklist. Lifecycle: Grow for prompt-contract
+  decisions, Pick for implementation, Roast for independent prompt-behavior
+  verification.
 ---
 # AI Prompt Governance — `@terreno/ai`
 
@@ -13,12 +15,15 @@ description: >-
 
 See `ai/src/service/aiService.ts` and `ai/src/service/prompts.ts` for the canonical implementation.
 
+**New product AI features** follow [Develop an AI feature](../../docs/how-to/ai-feature-development.md) (dataset → label → prompt versions → evaluators → experiment gates → `production` label → live traces + feedback). Do not ship a prompt-only change that skips gold data and evaluators when ObservabilityApp is in the app.
+
 ## Prompt Writing Rules
 
-1. **Always a named constant** — Define prompts in `ai/src/service/prompts.ts` (or the consuming app's equivalent constants file). Never inline prompt strings in route handlers, services, or `AIService` method bodies.
-2. **Self-contained** — A prompt should read coherently on its own. If you must inject runtime context, document why in a comment above the constant.
-3. **Typed return** — If the prompt asks for structured JSON, define a matching TypeScript interface in `ai/src/types/index.ts` and parse against it on every response.
-4. **Don't bake user-identifiable data into the prompt template itself** — inject it at call time as runtime parameters, never as defaults in the constant.
+1. **Always a named constant or registry version** — Define prompts in `ai/src/service/prompts.ts`, the consuming app's constants file, or `PromptRegistry` (named prompt + immutable version). Never inline prompt strings in route handlers, services, or `AIService` method bodies.
+2. **Runtime production body** — After ObservabilityApp is registered, app generate calls pass `promptName` + `promptLabel: "production"` so deploy is a label move, not a code edit. Framework/judge wrappers may stay as TypeScript constants.
+3. **Self-contained** — A prompt should read coherently on its own. If you must inject runtime context, document why in a comment above the constant (or in the registry version notes).
+4. **Typed return** — If the prompt asks for structured JSON, define a matching TypeScript interface in `ai/src/types/index.ts` (or the app) and parse against it on every response. Dataset `expectedOutputSchema` should match that shape when you run experiments.
+5. **Don't bake user-identifiable data into the prompt template itself** — inject it at call time as runtime parameters, never as defaults in the constant.
 
 ## Temperature Preset Guidance
 
@@ -59,29 +64,36 @@ For a one-off manual smoke against a real provider, temporarily add `logger.debu
 
 ## Prompt Change Checklist
 
-- [ ] Prompt is a named constant in `prompts.ts` (or app equivalent) — not inlined
+- [ ] Prompt is a named constant in `prompts.ts` (or app equivalent) **or** a `PromptRegistry` version — not inlined
+- [ ] App call uses `promptName` + `promptLabel` when ObservabilityApp is on (no copied production string in the route)
 - [ ] Prompt still produces valid, parseable structured JSON if applicable (tested with 3+ inputs)
 - [ ] Temperature preset is appropriate (lowest viable for the task)
-- [ ] Call goes through `AIService` (so `AIRequest` logging fires) — no direct Vercel SDK calls from routes
+- [ ] Call goes through `AIService` (so `AIRequest` logging and traces fire) — no direct Vercel SDK calls from routes
 - [ ] If `requestType` taxonomy changed, the type union and admin explorer filters were updated
 - [ ] No user-identifiable data baked into the prompt template (only injected at call time)
 - [ ] Unit test added/updated with a mock model
+- [ ] For a user-facing feature: gold dataset labeled, SOP or custom evaluators attached, experiment run, `production` label moved ([how-to](../../docs/how-to/ai-feature-development.md))
 - [ ] Commit message explains the behavioral change (the prompt is the behavior)
 
 ## Adding a New AI Feature
 
-1. Define prompt(s) as named constants in `ai/src/service/prompts.ts`.
-2. If structured JSON output, define the TypeScript interface for the return shape in `ai/src/types/index.ts`.
-3. Add a method to `AIService` (or a new service class) that calls `generateText` / `generateTextStream` and goes through the existing logging path.
-4. If exposing via HTTP, add a route in `ai/src/routes/` following the patterns in `gpt.ts` / `gptHistories.ts`. Use `createOpenApiBuilder` for OpenAPI docs.
-5. Add an integration test with a mock model that verifies:
-   - The prompt sent to the model matches the constant
+Follow [Develop an AI feature](../../docs/how-to/ai-feature-development.md). Code slice:
+
+1. Create the named prompt in `PromptRegistry` (or a constant **and** a registry seed). Do not inline in routes.
+2. If structured JSON output, define the TypeScript interface and align dataset `expectedOutputSchema`.
+3. Add or reuse an `AIService` method that calls `generateText` / `generateTextStream` with `promptName`/`promptLabel`, `userId`, `sessionId`.
+4. If exposing via HTTP, add a route in `ai/src/routes/` (or the app) following `gpt.ts`. Use `createOpenApiBuilder`.
+5. Wire product feedback to `POST /ai/observability/traces/:id/feedback` (thumbs, outcome class, flag-for-dataset) when the UI has user judgments.
+6. Add an integration test with a mock model that verifies:
+   - The prompt sent to the model matches the registry/constant body
    - The structured JSON return parses against the typed interface
    - `AIRequest.logRequest` is called with the correct `requestType`
+   - A trace is emitted when ObservabilityApp is registered (`skipTrace` still opts out)
 
 ## Common Pitfalls
 
-- Calling the Vercel SDK directly from a route — bypasses logging and request typing
+- Shipping a prompt edit as a code-only change with no dataset/experiment when ObservabilityApp is available — skips the SOP loop
+- Calling the Vercel SDK directly from a route — bypasses logging, tracing, and request typing
 - Inlining a prompt string in a route handler — makes future changes invisible and untestable
 - Using the wrong `requestType` value (or `"general"` as a catch-all) — degrades the admin explorer
 - Setting `temperature` numerically instead of via a preset — drifts away from the documented presets

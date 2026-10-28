@@ -8,7 +8,7 @@ exports[`SectionDivider renders correctly 1`] = `
     "accessibilityRole": "none",
     "aria-hidden": true,
     "style": {
-      "backgroundColor": "#9A9A9A",
+      "backgroundColor": "#949494",
       "height": 1,
       "width": "100%",
     },
@@ -26,7 +26,7 @@ exports[`SectionDivider is hidden from accessibility 1`] = `
     "accessibilityRole": "none",
     "aria-hidden": true,
     "style": {
-      "backgroundColor": "#9A9A9A",
+      "backgroundColor": "#949494",
       "height": 1,
       "width": "100%",
     },

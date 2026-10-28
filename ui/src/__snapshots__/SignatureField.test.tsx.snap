@@ -55,7 +55,7 @@ exports[`SignatureField renders correctly with default props 1`] = `
               ],
               "props": {
                 "style": {
-                  "borderColor": "#9A9A9A",
+                  "borderColor": "#949494",
                   "borderWidth": 1,
                   "maxWidth": 300,
                   "width": "100%",
@@ -206,7 +206,7 @@ exports[`SignatureField renders disabled state without value 1`] = `
       "children": null,
       "props": {
         "style": {
-          "backgroundColor": "#D9D9D9",
+          "backgroundColor": "#CDCDCD",
           "height": 90,
           "marginVertical": 8,
           "width": 300,

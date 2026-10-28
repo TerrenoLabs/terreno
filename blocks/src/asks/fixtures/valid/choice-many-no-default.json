@@ -1,0 +1,21 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which days work for the team offsite?",
+    "select": "many",
+    "options": [
+      {"id": "mon", "label": "Monday"},
+      {"id": "tue", "label": "Tuesday"},
+      {"id": "wed", "label": "Wednesday"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which days work for the team offsite?",
+    "handoff": true,
+    "buttons": [
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

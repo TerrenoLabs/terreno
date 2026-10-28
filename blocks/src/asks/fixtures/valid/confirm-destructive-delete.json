@@ -1,0 +1,41 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Delete 14 completed todos? This cannot be undone.",
+    "title": "Clean up todos",
+    "confirmLabel": "Delete 14 todos",
+    "denyLabel": "Keep them",
+    "destructive": true
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "confirm",
+    "title": "Clean up todos",
+    "text": "Delete 14 completed todos? This cannot be undone.",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Delete 14 todos",
+        "style": "destructive",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": true
+          }
+        }
+      },
+      {
+        "id": "deny",
+        "label": "Keep them",
+        "style": "cancel",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": false
+          }
+        }
+      }
+    ]
+  }
+}

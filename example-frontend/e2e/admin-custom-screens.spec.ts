@@ -10,7 +10,9 @@ test.describe("Admin contributed custom screens", () => {
     consoleGuard.allow("Failed to load resource: the server responded with a status of 503");
     await page.goto("/admin/documents");
     await page.getByTestId("document-refresh-button").waitFor({state: "visible", timeout: 15_000});
-    await expect(page.getByText("Documents").first()).toBeVisible();
+    // The app tab is also titled Documents and stays mounted hidden. Box onClick
+    // puts the nav test id on the pressable as `${testID}-clickable`.
+    await expect(page.getByTestId("admin-shell-nav-screen-documents-clickable")).toBeVisible();
     await expect(page.getByTestId("document-refresh-button")).toBeVisible();
   });
 

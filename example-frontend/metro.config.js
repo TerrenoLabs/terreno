@@ -9,6 +9,13 @@ const monorepoRoot = path.resolve(projectRoot, "..");
 
 const config = getDefaultConfig(projectRoot);
 
+// Expo Router treats every file under app/ as a route. Colocated bun tests live
+// next to those screens for the new-file coverage gate, and must stay out of the bundle.
+config.resolver.blockList = [
+  ...(config.resolver.blockList ?? []),
+  /[/\\]app[/\\].*\.(?:test|spec)\.[jt]sx?$/,
+];
+
 // Only list the packages within your monorepo that your app uses. No need to add anything else.
 // If your monorepo tooling can give you the list of monorepo workspaces linked
 // in your app workspace, you can automate this list instead of hardcoding them.

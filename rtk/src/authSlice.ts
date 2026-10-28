@@ -7,6 +7,7 @@ import * as SecureStore from "expo-secure-store";
 import {DateTime} from "luxon";
 import {useSelector} from "react-redux";
 
+import {emitAuthChange} from "./authEvents";
 import {LOGOUT_ACTION_TYPE, type RootState} from "./constants";
 import {IsWeb} from "./platform";
 
@@ -240,6 +241,7 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
           }
         }
         listenerApi.dispatch(authSlice.actions.setUserId({userId: action.payload.userId ?? ""}));
+        emitAuthChange();
       }
     },
     type: "terreno-rtk/executeMutation/fulfilled",
@@ -261,7 +263,15 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
   // we need to use a listener middleware.
   const logoutListenerMiddleware = createListenerMiddleware();
   logoutListenerMiddleware.startListening({
-    effect: async () => {
+    effect: async (_action, listenerApi) => {
+      // Cached responses belong to the user who is signing out. Only a logout that ends a
+      // signed-in session resets, so a query that keeps failing while signed out cannot loop
+      // through logout, reset, and refetch.
+      const previousUserId = (listenerApi.getOriginalState() as {auth?: {userId?: string | null}})
+        .auth?.userId;
+      if (previousUserId) {
+        listenerApi.dispatch(api.util.resetApiState());
+      }
       // TODO: We should only clear local storage when we're logging out, not disconnected.
       // await clearLocalStorage();
       if (!IsWeb) {
@@ -275,6 +285,7 @@ export const generateAuthSlice = (api: Api<any, any, any, any, any>) => {
         }
       }
       console.debug("Cleared auth token from secure storage as part of logout.");
+      emitAuthChange();
     },
     type: LOGOUT_ACTION_TYPE,
   });

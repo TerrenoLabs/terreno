@@ -1,9 +1,13 @@
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import {APIError} from "@terreno/api";
 import {jsonSchema, type LanguageModel} from "ai";
 import {assert} from "chai";
 import mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
+import {MemoryTraceSink} from "../observability/local/traceStore";
+import {ObservabilityApp, resetObservabilityApp} from "../observability/observabilityApp";
+import type {ObservabilityPlugin, PromptVersionRef} from "../observability/types";
 import {AIService, TemperaturePresets} from "./aiService";
 
 // Create a mock LanguageModelV2
@@ -44,6 +48,7 @@ describe("AIService", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
+    resetObservabilityApp();
   });
 
   describe("constructor", () => {
@@ -542,6 +547,27 @@ describe("AIService", () => {
       expect(messages[1]).toEqual({content: "[Generated image]", role: "assistant"});
     });
 
+    it("skips streaming placeholders and empty failed replies", () => {
+      const model = createMockModel();
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const messages = service.buildMessages([
+        {text: "First", type: "user"},
+        {status: "error", text: "", type: "assistant"},
+        {text: "Second", type: "user"},
+        {status: "error", text: "Partial answer", type: "assistant"},
+        {text: "Third", type: "user"},
+        {status: "streaming", text: "Half", type: "assistant"},
+      ]);
+
+      expect(messages).toEqual([
+        {content: "First", role: "user"},
+        {content: "Second", role: "user"},
+        {content: "Partial answer", role: "assistant"},
+        {content: "Third", role: "user"},
+      ]);
+    });
+
     it("should convert multi-modal user prompts with image content", () => {
       const model = createMockModel();
       const service = new AIService({model: model as unknown as LanguageModel});
@@ -605,6 +631,262 @@ describe("AIService", () => {
 
       expect(messages.length).toBe(2);
       expect(messages[0]).toEqual({content: "You are helpful", role: "system"});
+    });
+
+    describe("asks", () => {
+      const planAsk = {
+        options: [
+          {id: "starter", label: "Starter"},
+          {id: "team", label: "Team"},
+        ],
+        prompt: "Which plan should I set up?",
+        select: "one",
+      };
+      const regionAsk = {
+        options: [
+          {id: "us", label: "US"},
+          {id: "eu", label: "EU"},
+        ],
+        prompt: "Where should your data live?",
+        select: "one",
+      };
+      const buildMessages = (prompts: Parameters<AIService["buildMessages"]>[0]) =>
+        new AIService({model: createMockModel() as unknown as LanguageModel}).buildMessages(
+          prompts
+        );
+
+      it("includes a completed ask as a tool call and its result, and still skips host tool rows", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: {},
+            text: "Tool call: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-call",
+          },
+          {
+            result: {plans: 2},
+            text: "Tool result: lookupPlans",
+            toolCallId: "call_lookup",
+            toolName: "lookupPlans",
+            type: "tool-result",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {selected: ["team"]}},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "Setting up the Team plan.", type: "assistant"},
+          {text: "Thanks", type: "user"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "accept", content: {selected: ["team"]}}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "Setting up the Team plan.", role: "assistant"},
+          {content: "Thanks", role: "user"},
+        ]);
+      });
+
+      it("puts consecutive ask calls from one step in one assistant message, in call order", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: regionAsk,
+            ask: {kind: "choice", status: "cancelled"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            result: {action: "cancel", reason: "one_ask_at_a_time"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_region",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+          {text: "No plan for now.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: planAsk, toolCallId: "call_plan", toolName: "ask_choice", type: "tool-call"},
+              {
+                input: regionAsk,
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-call",
+              },
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: {action: "decline"}},
+                toolCallId: "call_plan",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+              {
+                output: {type: "json", value: {action: "cancel", reason: "one_ask_at_a_time"}},
+                toolCallId: "call_region",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+          {content: "No plan for now.", role: "assistant"},
+        ]);
+      });
+
+      it("skips an ask that is still waiting for an answer", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "pending"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_plan",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+        ]);
+
+        expect(messages).toEqual([{content: "Set up my workspace", role: "user"}]);
+      });
+
+      it("skips approval asks, which are display-only", () => {
+        const messages = buildMessages([
+          {text: "Delete my completed todos", type: "user"},
+          {
+            args: {prompt: "Allow deleteCompletedTodos?"},
+            ask: {kind: "confirm", origin: "approval", status: "answered"},
+            text: "Tool call: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-call",
+          },
+          {
+            result: {action: "accept", content: {confirmed: true}},
+            text: "Tool result: deleteCompletedTodos",
+            toolCallId: "approval_delete",
+            toolName: "deleteCompletedTodos",
+            type: "tool-result",
+          },
+          {text: "Deleted 2 todos.", type: "assistant"},
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Delete my completed todos", role: "user"},
+          {content: "Deleted 2 todos.", role: "assistant"},
+        ]);
+      });
+
+      it("skips ask rows without a tool call id or tool name, and sends null for a missing result", () => {
+        const messages = buildMessages([
+          {text: "Set up my workspace", type: "user"},
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            type: "tool-call",
+          },
+          {
+            args: planAsk,
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-call",
+          },
+          {
+            result: {action: "decline"},
+            text: "Tool result: ask_choice",
+            toolCallId: "call_nameless",
+            type: "tool-result",
+          },
+          {
+            ask: {kind: "choice", status: "answered"},
+            text: "Tool call: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-call",
+          },
+          {
+            text: "Tool result: ask_choice",
+            toolCallId: "call_bare",
+            toolName: "ask_choice",
+            type: "tool-result",
+          },
+        ]);
+
+        expect(messages).toEqual([
+          {content: "Set up my workspace", role: "user"},
+          {
+            content: [
+              {input: {}, toolCallId: "call_bare", toolName: "ask_choice", type: "tool-call"},
+            ],
+            role: "assistant",
+          },
+          {
+            content: [
+              {
+                output: {type: "json", value: null},
+                toolCallId: "call_bare",
+                toolName: "ask_choice",
+                type: "tool-result",
+              },
+            ],
+            role: "tool",
+          },
+        ]);
+      });
     });
   });
 
@@ -676,6 +958,338 @@ describe("AIService", () => {
       const content = (messages[0] as {content: Array<{type: string; filename?: string}>}).content;
       expect(content[1].type).toBe("file");
       expect(content[1].filename).toBe("doc.pdf");
+    });
+  });
+
+  describe("observability traces and prompt resolve", () => {
+    const PRODUCTION_BODY = "You are the production greeter.";
+    const productionVersion: PromptVersionRef = {
+      body: PRODUCTION_BODY,
+      label: "production",
+      name: "greeter",
+      sensitive: true,
+      version: 2,
+    };
+
+    const registerLocalApp = ({
+      priceMap,
+      promptVersion,
+      traceSink,
+    }: {
+      priceMap?: {inputPerMTok: number; outputPerMTok: number};
+      promptVersion?: PromptVersionRef;
+      traceSink: MemoryTraceSink | {export: (trace: unknown) => Promise<void>};
+    }): void => {
+      const plugin: ObservabilityPlugin = {
+        capabilities: new Set([
+          "datasets",
+          "experiments",
+          "prompts",
+          "reviewQueue",
+          "scores",
+          "traces",
+        ]),
+        datasetStore: {},
+        experimentRunner: {},
+        id: "local",
+        promptRegistry: {
+          get: async ({label, name}) => {
+            if (!promptVersion) {
+              return undefined;
+            }
+            if (name === promptVersion.name && (label ?? "production") === promptVersion.label) {
+              return promptVersion;
+            }
+            return undefined;
+          },
+        },
+        reviewQueue: {},
+        traceSink: traceSink as MemoryTraceSink,
+      };
+      new ObservabilityApp({
+        plugins: [plugin],
+        priceMap: priceMap ? {"mock-model": priceMap} : undefined,
+      });
+    };
+
+    it("exports a trace to every TraceSink", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+      const userId = new mongoose.Types.ObjectId();
+
+      await service.generateText({
+        prompt: "Say hello",
+        sessionId: "sess-1",
+        userId,
+      });
+
+      expect(sink.traces.length).toBe(1);
+      expect(sink.traces[0].userId).toBe(userId.toString());
+      expect(sink.traces[0].sessionId).toBe("sess-1");
+      expect(sink.traces[0].status).toBe("ok");
+      expect(sink.traces[0].spans[0].kind).toBe("LLM");
+      expect("costUsd" in (sink.traces[0].usage ?? {})).toBe(false);
+    });
+
+    it("exports a CHAIN root with TOOL children when childSpans are provided", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+      const observability = await service.resolveGenerateObservability({});
+
+      await service.recordGenerate({
+        childSpans: [
+          {
+            durationMs: 5,
+            endedAt: "2026-01-01T00:00:00.005Z",
+            id: "tool-span",
+            input: {q: "hello"},
+            kind: "TOOL",
+            name: "search",
+            output: {results: ["item1"]},
+            startedAt: "2026-01-01T00:00:00.000Z",
+            status: "ok",
+          },
+        ],
+        observability,
+        prompt: "search",
+        requestType: "general",
+        response: "done",
+        responseTime: 12,
+        startTime: Date.parse("2026-01-01T00:00:00.000Z"),
+      });
+
+      assert.equal(sink.traces.length, 1);
+      assert.equal(sink.traces[0].spans[0]?.kind, "CHAIN");
+      assert.equal(sink.traces[0].spans.length, 2);
+      const toolSpan = sink.traces[0].spans.find((span) => span.kind === "TOOL");
+      assert.isDefined(toolSpan);
+      assert.equal(toolSpan?.parentSpanId, sink.traces[0].spans[0]?.id);
+      assert.deepEqual(toolSpan?.input, {q: "hello"});
+      assert.deepEqual(toolSpan?.output, {results: ["item1"]});
+    });
+
+    it("does not export a trace when skipTrace is true", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello", skipTrace: true});
+
+      expect(sink.traces.length).toBe(0);
+      const logs = await AIRequest.find({prompt: "Say hello"});
+      expect(logs.length).toBe(1);
+    });
+
+    it("logs a throwing sink and still writes AIRequest", async () => {
+      registerLocalApp({
+        traceSink: {
+          export: async () => {
+            throw new Error("sink down");
+          },
+        },
+      });
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateText({prompt: "Say hello"});
+
+      expect(result).toBe("Hello world");
+      const logs = await AIRequest.find({prompt: "Say hello"});
+      expect(logs.length).toBe(1);
+    });
+
+    it("sets costUsd from the price map", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({
+        priceMap: {inputPerMTok: 1000, outputPerMTok: 2000},
+        traceSink: sink,
+      });
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello"});
+
+      expect(sink.traces[0].usage?.costUsd).toBeCloseTo(0.025);
+    });
+
+    it("omits costUsd when the model is unpriced", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "Say hello"});
+
+      expect(sink.traces[0].usage?.costUsd).toBeUndefined();
+    });
+
+    it("resolves promptName before the model call even when skipTrace is true", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({
+        prompt: "User says hi",
+        promptLabel: "production",
+        promptName: "greeter",
+        skipTrace: true,
+      });
+
+      expect(sink.traces.length).toBe(0);
+      expect(model.doGenerate.mock.calls.length).toBe(1);
+      const payload = JSON.stringify(model.doGenerate.mock.calls[0]);
+      expect(payload).toContain(PRODUCTION_BODY);
+    });
+
+    it("returns 400 and does not call the model when the production label is missing", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      try {
+        await service.generateText({
+          prompt: "User says hi",
+          promptLabel: "production",
+          promptName: "missing-prompt",
+        });
+        throw new Error("expected APIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(400);
+      }
+      expect(model.doGenerate.mock.calls.length).toBe(0);
+      expect(sink.traces.length).toBe(0);
+    });
+
+    it("returns 400 and does not call the model when no prompt registry is registered", async () => {
+      resetObservabilityApp();
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      try {
+        await service.generateText({
+          prompt: "User says hi",
+          promptName: "greeter",
+        });
+        throw new Error("expected APIError");
+      } catch (error) {
+        expect(error).toBeInstanceOf(APIError);
+        expect((error as APIError).status).toBe(400);
+      }
+      expect(model.doGenerate.mock.calls.length).toBe(0);
+    });
+
+    it("inherits sensitive from the resolved prompt version", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({promptVersion: productionVersion, traceSink: sink});
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({
+        prompt: "User says hi",
+        promptName: "greeter",
+      });
+
+      expect(sink.traces[0].sensitive).toBe(true);
+      expect(sink.traces[0].prompts).toEqual([{label: "production", name: "greeter", version: 2}]);
+    });
+
+    it("still writes AIRequest for a chat stream when a sink is registered", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({traceSink: sink});
+      const model = createMockModel();
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const chunks: string[] = [];
+      for await (const chunk of service.generateChatStream({
+        messages: [{content: "Hello", role: "user"}],
+      })) {
+        chunks.push(chunk);
+      }
+
+      expect(chunks.join("")).toBe("Mock response");
+      const logs = await AIRequest.find({});
+      expect(logs.length).toBe(1);
+      expect(sink.traces.length).toBe(1);
+    });
+  });
+
+  describe("generateBlocks", () => {
+    const validDocument = '{"v":1,"blocks":[{"type":"heading","text":"Hello"}]}';
+    const overLimitDocument =
+      '{"v":1,"datasets":{"signups":{"source":"ref","id":"ds1","limit":5000}},"blocks":[{"type":"heading","text":"Hello"}]}';
+
+    it("returns a validated document at deterministic temperature and logs ui_blocks", async () => {
+      const model = createMockModel(validDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Say hello"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+      const call = model.doGenerate.mock.calls[0]?.[0] as {temperature?: number} | undefined;
+      expect(call?.temperature).toBe(0);
+      expect(JSON.stringify(call)).toContain("Your entire reply is one document");
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].error).toBeUndefined();
+    });
+
+    it("repairs once and puts the error code in the second prompt", async () => {
+      const model = createMockModel(overLimitDocument);
+      let calls = 0;
+      model.doGenerate = mock(async () => {
+        calls += 1;
+        const text = calls === 1 ? overLimitDocument : validDocument;
+        return {
+          content: [{text, type: "text" as const}],
+          finishReason: "stop" as const,
+          usage: {inputTokens: 5, outputTokens: 10},
+        };
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      const result = await service.generateBlocks({prompt: "Chart signups"});
+
+      expect(result.blocks[0]).toMatchObject({text: "Hello", type: "heading"});
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const second = JSON.stringify(model.doGenerate.mock.calls[1]?.[0]);
+      expect(second).toContain("TOO_MANY_POINTS");
+    });
+
+    it("throws 502 when the model fails before a document exists", async () => {
+      const model = createMockModel(validDocument);
+      model.doGenerate = mock(async () => {
+        throw new Error("model unavailable");
+      });
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Say hello"})).rejects.toMatchObject({
+        status: 502,
+        title: "Block generation failed",
+      });
+      expect(model.doGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws 422 and logs error codes when the repair still fails", async () => {
+      const model = createMockModel(overLimitDocument);
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await expect(service.generateBlocks({prompt: "Still too big"})).rejects.toMatchObject({
+        status: 422,
+      });
+
+      expect(model.doGenerate).toHaveBeenCalledTimes(2);
+      const logs = await AIRequest.find({requestType: "ui_blocks"});
+      expect(logs).toHaveLength(1);
+      expect(logs[0].metadata?.errorCodes).toEqual(["TOO_MANY_POINTS"]);
     });
   });
 

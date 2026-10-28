@@ -2,7 +2,13 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 
 (globalThis as {__DEV__?: boolean}).__DEV__ = false;
 
-const platform = {OS: "web"};
+const reactNative = await import("react-native");
+const platform = {
+  OS: "web",
+  select: <T>(specifics: {default?: T; web?: T}): T | undefined => {
+    return specifics[platform.OS as keyof typeof specifics] ?? specifics.default;
+  },
+};
 const constants = {
   default: {
     expoConfig: {
@@ -19,6 +25,7 @@ mock.module("expo-updates", () => ({
   manifest: {version: "9.9.9"},
 }));
 mock.module("react-native", () => ({
+  ...reactNative,
   Platform: platform,
 }));
 
@@ -85,6 +92,8 @@ describe("buildVersionInfo", () => {
 
 describe("versionInfo", () => {
   it("reads Expo config through buildVersionInfo", () => {
+    // The shared test environment resets __DEV__ to true after every test.
+    (globalThis as {__DEV__?: boolean}).__DEV__ = false;
     const info = versionInfo();
     expect(info.environment).toBe("staging");
     expect(info.updateChannel).toBe("staging");

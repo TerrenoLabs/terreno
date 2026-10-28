@@ -43,6 +43,13 @@ describe("SegmentedControl", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("renders a compact control that hugs its labels", () => {
+    const {toJSON} = renderWithTheme(
+      <SegmentedControl items={defaultItems} selectedIndex={0} size="sm" />
+    );
+    expect(toJSON()).toMatchSnapshot();
+  });
+
   it("renders with large size", () => {
     const {toJSON} = renderWithTheme(
       <SegmentedControl items={defaultItems} selectedIndex={0} size="lg" />

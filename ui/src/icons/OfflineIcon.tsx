@@ -12,7 +12,7 @@ export const OfflineIcon = ({doNotDisturb, ...props}: CustomSvgProps) => (
     <Path
       d="M24.5 18a9.5 9.5 0 1 1-19 0 9.5 9.5 0 0 1 19 0Z"
       fill="#fff"
-      stroke="#9A9A9A"
+      stroke="#949494"
       strokeWidth={5}
     />
     {doNotDisturb && (
@@ -26,7 +26,7 @@ export const OfflineIcon = ({doNotDisturb, ...props}: CustomSvgProps) => (
         />
         <Path
           d="M18 4h8l-8 6.857h8"
-          stroke="#9A9A9A"
+          stroke="#949494"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth={3}

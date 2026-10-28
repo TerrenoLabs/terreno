@@ -119,7 +119,8 @@ include:
 | --- | --- |
 | Backend/API/data | `terreno-backend-api`, `mongoose-schema-safety`, `backend-test-env`, `generate-sdk`, `terreno-data-fetching` |
 | UI/app | `terreno-ui`, `building-terreno-apps`, `verify-ui-changes` |
-| AI/prompts | `ai-prompt-governance` |
+| Testing | `terreno-test-setup`, `terreno-backend-tests`, `terreno-frontend-tests`, `terreno-mobile-tests` |
+| AI/prompts | `ai-prompt-governance` — new features also follow [Develop an AI feature](../how-to/ai-feature-development.md) |
 | Docs/submission | `update-docs`, Brew, `fix-conflicts` |
 | GitHub issues | `create-github-issue`, `work-github-issues`, `implement-ready-for-dev` (Pick plan comment is the Roast contract; unattended Grow may also write an IP) |
 | Deployment/runtime | `deploy-gcp`, Expo deployment/workflow skills |

@@ -1,0 +1,33 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "seats",
+        "type": "number",
+        "label": "Seats",
+        "min": 1,
+        "max": 500,
+        "default": 0
+      },
+      {
+        "id": "rating",
+        "type": "number",
+        "label": "Rating",
+        "integer": true,
+        "default": 4.5
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "OUT_OF_RANGE"
+    },
+    {
+      "path": "fields[1].default",
+      "code": "FIELD_TYPE_MISMATCH"
+    }
+  ]
+}

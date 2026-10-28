@@ -541,6 +541,27 @@ describe("seedBetterAuthUser", () => {
     assert.equal((user as {betterAuthId?: string}).betterAuthId, authId);
   });
 
+  it("links an application user that already exists for the seeded email", async () => {
+    const existing = await SeedAuthUser.create({email: seedUser.email, name: "Legacy Seed"});
+    const authId = new mongoose.Types.ObjectId().toString();
+    const auth = {
+      api: {
+        signUpEmail: async () => ({
+          user: {email: seedUser.email, emailVerified: false, id: authId, name: seedUser.name},
+        }),
+      },
+    };
+
+    const user = await seedBetterAuthUser({
+      auth: auth as never,
+      user: seedUser,
+      userModel: SeedAuthUser as never,
+    });
+
+    assert.equal(String((user as {_id?: unknown})._id), String(existing._id));
+    assert.equal((user as {betterAuthId?: string}).betterAuthId, authId);
+  });
+
   it("falls back to sign-in when sign-up fails", async () => {
     const authId = new mongoose.Types.ObjectId().toString();
     const auth = {

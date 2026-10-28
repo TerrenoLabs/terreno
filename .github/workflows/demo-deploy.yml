@@ -43,10 +43,14 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Install root dependencies (workspace)
         run: bun install --frozen-lockfile
+
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
 
       - name: Build UI dependency
         run: bun run compile

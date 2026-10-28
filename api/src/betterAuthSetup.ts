@@ -5,17 +5,20 @@
  * create session middleware, and sync users with the application User model.
  */
 
-import {betterAuth} from "better-auth";
+import {type BetterAuthOptions, type BetterAuthPlugin, betterAuth} from "better-auth";
 import {mongodbAdapter} from "better-auth/adapters/mongodb";
+import {createAuthMiddleware} from "better-auth/api";
 import {toNodeHandler} from "better-auth/node";
 import {bearer} from "better-auth/plugins";
 import type {Application, NextFunction, Request, Response} from "express";
+import mergeWith from "lodash/mergeWith";
 import type {Db} from "mongodb";
 import mongoose from "mongoose";
 import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
-import {APIError} from "./errors";
-import type {AuthRecoveryMail} from "./expressServer";
+import {createOAuthHandoffPlugins} from "./betterAuthOAuthHandoff";
+import {APIError, isAPIError} from "./errors";
+import type {AuthRecoveryMail, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 import {updateRequestContextFromRequest} from "./requestContext";
@@ -106,6 +109,7 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
     });
     const message: AuthRecoveryMail = {
       html: rendered.html,
+      sensitive: true,
       subject: rendered.subject,
       text: rendered.text ?? "",
       to: user.email,
@@ -134,6 +138,24 @@ export const createBetterAuthEmailHooks = (config: BetterAuthConfig) => {
       await deliver("verifyEmail", user, token);
     },
   };
+};
+
+// The API's own origin, which the OAuth handoff never sends a token to.
+const apiOriginOf = (url: string): string => {
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    origin = "null";
+  }
+  if (origin === "null") {
+    throw new APIError({
+      detail: `"${url}" is not an absolute http(s) URL`,
+      status: 500,
+      title: "BETTER_AUTH_URL must be an absolute URL",
+    });
+  }
+  return origin;
 };
 
 /**
@@ -186,7 +208,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
   const emailHooks = createBetterAuthEmailHooks(config);
   const userModel = options.userModel;
 
-  const auth = betterAuth({
+  const defaults: BetterAuthOptions = {
     advanced: config.crossDomainCookies
       ? {
           defaultCookieAttributes: {
@@ -222,12 +244,6 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
           },
         }
       : {}),
-    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
-    // instead of the signed session cookie. Required for cross-origin/native clients and for
-    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
-    // token as a bearer header) — without it, a raw session token cannot be validated and
-    // socket auth silently fails (the sync client shows perpetually "offline").
-    plugins: [bearer()],
     rateLimit: config.disableRateLimit ? {enabled: false} : undefined,
     secret,
     session: {
@@ -238,15 +254,46 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
     },
     socialProviders: Object.keys(socialProviders).length > 0 ? socialProviders : undefined,
     trustedOrigins: config.trustedOrigins ?? [],
+  };
+
+  // Arrays from `options` replace Terreno's; lodash would otherwise merge them by index.
+  const replaceArrays = (_target: unknown, source: unknown): unknown =>
+    Array.isArray(source) ? source : undefined;
+  const merged: BetterAuthOptions = mergeWith({}, defaults, config.options, replaceArrays);
+
+  // The handoff hook mints tokens through `auth.api`, which exists only once betterAuth() returns.
+  let auth: BetterAuthInstance | undefined;
+  const handoffPlugins = config.oauthHandoff
+    ? createOAuthHandoffPlugins({
+        apiOrigin: apiOriginOf(typeof merged.baseURL === "string" ? merged.baseURL : baseURL),
+        config: config.oauthHandoff,
+        getAuth: () => auth,
+      })
+    : [];
+
+  const credentialSyncPlugins = userModel ? [createCredentialSyncPlugin(userModel)] : [];
+
+  const created = betterAuth({
+    ...merged,
+    // The bearer plugin lets clients authenticate with `Authorization: Bearer <sessionToken>`
+    // instead of the signed session cookie. Required for cross-origin/native clients and for
+    // websocket handshakes (RealtimeApp's Better Auth socket validator forwards the handshake
+    // token as a bearer header) — without it, a raw session token cannot be validated and
+    // socket auth silently fails (the sync client shows perpetually "offline").
+    // The handoff plugins come last so their callback hook sees the final redirect.
+    // The credential sync plugin keeps the legacy passport credential in step with Better Auth.
+    plugins: [bearer(), ...credentialSyncPlugins, ...(config.plugins ?? []), ...handoffPlugins],
   });
 
   // Cast through unknown: enabling the bearer plugin narrows betterAuth()'s inferred
   // return type to a plugin-specific tuple that no longer matches the plugin-agnostic
   // BetterAuthInstance alias, though the runtime instance is a valid better-auth instance.
-  return auth as unknown as BetterAuthInstance;
+  auth = created as unknown as BetterAuthInstance;
+  return auth;
 };
 
 interface BetterAuthCredentialAccount {
+  password?: string | null;
   providerId?: string;
 }
 
@@ -268,7 +315,10 @@ interface BetterAuthPasswordResetContext {
     findUserById: (userId: string) => Promise<{id?: string} | null>;
     updatePassword: (userId: string, password: string) => Promise<unknown>;
   };
-  password: {hash: (password: string) => Promise<string>};
+  password: {
+    hash: (password: string) => Promise<string>;
+    verify: (data: {hash: string; password: string}) => Promise<boolean>;
+  };
 }
 
 /**
@@ -312,6 +362,118 @@ export const applyJwtPasswordResetToBetterAuth = async (
   await ctx.internalAdapter.deleteUserSessions(betterAuthUserId);
 };
 
+/**
+ * Check `password` against the Better Auth credential account linked to an app user through
+ * `betterAuthId`. Returns "no-password" when the user has no linked Better Auth user or that user
+ * has no credential password (for example a social-only account).
+ */
+export const verifyBetterAuthCredentialPassword = async (
+  auth: BetterAuthInstance,
+  user: {betterAuthId?: string},
+  password: string
+): Promise<BetterAuthPasswordCheck> => {
+  const betterAuthUserId = typeof user.betterAuthId === "string" ? user.betterAuthId : "";
+  if (!betterAuthUserId) {
+    return "no-password";
+  }
+  const ctx = (await auth.$context) as BetterAuthPasswordResetContext;
+  const accounts = await ctx.internalAdapter.findAccounts(betterAuthUserId);
+  const credential = accounts.find(
+    (account) => account.providerId === "credential" && typeof account.password === "string"
+  );
+  if (!credential?.password) {
+    return "no-password";
+  }
+  const isMatch = await ctx.password.verify({hash: credential.password, password});
+  return isMatch ? "verified" : "wrong";
+};
+
+// Better Auth endpoints that change or revoke a user's credentials; the legacy JWT credential
+// must follow them.
+const CREDENTIAL_CHANGE_PATHS = new Set([
+  "/change-password",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+]);
+
+// The new password of an in-flight Better Auth `/reset-password`, keyed by its request. The
+// endpoint reads its JSON body before `onPasswordReset` runs, so the hook cannot read it again.
+const resetPasswordsByRequest = new WeakMap<object, string>();
+
+interface CredentialHookContext {
+  body?: Record<string, unknown>;
+  context: {returned?: unknown; session?: {user?: {id?: string}} | null};
+  path?: string;
+  request?: object;
+}
+
+/**
+ * After a Better Auth password change, set the legacy passport password of a dual-enrolled app
+ * user to the new one; after a password change or session revocation, bump `tokenEpoch` so
+ * legacy refresh tokens issued before it stop working.
+ */
+const applyBetterAuthCredentialChangeToJwt = async (
+  userModel: UserModel,
+  ctx: CredentialHookContext
+): Promise<void> => {
+  if (ctx.context.returned instanceof Error) {
+    return;
+  }
+  const betterAuthId = ctx.context.session?.user?.id;
+  if (!betterAuthId) {
+    return;
+  }
+  const appUser = await findOneOrNoneFor(userModel, {betterAuthId} as never);
+  if (!appUser) {
+    return;
+  }
+  const newPassword = ctx.body?.newPassword;
+  if (ctx.path === "/change-password" && typeof newPassword === "string") {
+    // Only an account that already has a legacy password gets the new one, so a Better Auth only
+    // account does not gain a second way to sign in.
+    const hasLegacyPassword =
+      userModel.schema.path("hash") !== undefined &&
+      Boolean(
+        await userModel.exists({_id: appUser._id, hash: {$exists: true, $ne: null}} as never)
+      );
+    if (hasLegacyPassword) {
+      await setPasswordForUser(appUser as unknown as HasSetPassword, newPassword);
+    }
+  }
+  if (userModel.schema.path("tokenEpoch") !== undefined) {
+    appUser.tokenEpoch = (appUser.tokenEpoch ?? 0) + 1;
+  }
+  await appUser.save();
+};
+
+const createCredentialSyncPlugin = (userModel: UserModel): BetterAuthPlugin => ({
+  hooks: {
+    after: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          await applyBetterAuthCredentialChangeToJwt(
+            userModel,
+            ctx as unknown as CredentialHookContext
+          );
+        }),
+        matcher: (ctx): boolean => CREDENTIAL_CHANGE_PATHS.has(ctx.path ?? ""),
+      },
+    ],
+    before: [
+      {
+        handler: createAuthMiddleware(async (ctx): Promise<void> => {
+          const newPassword = (ctx.body as Record<string, unknown> | undefined)?.newPassword;
+          if (ctx.request && typeof newPassword === "string") {
+            resetPasswordsByRequest.set(ctx.request, newPassword);
+          }
+        }),
+        matcher: (ctx): boolean => ctx.path === "/reset-password",
+      },
+    ],
+  },
+  id: "terreno-credential-sync",
+});
+
 interface PasswordResetRequestLike {
   body?: unknown;
   clone?: () => {json: () => Promise<unknown>};
@@ -334,6 +496,10 @@ export const readPasswordFromBetterAuthResetRequest = async (
 ): Promise<string> => {
   if (!request) {
     return "";
+  }
+  const stashed = resetPasswordsByRequest.get(request);
+  if (stashed) {
+    return stashed;
   }
   const attached = passwordFromUnknown(request.body);
   if (attached.length > 0) {
@@ -381,6 +547,81 @@ export const applyBetterAuthPasswordResetToJwt = async (
   await appUser.save();
 };
 
+const UNSAFE_METHODS = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+
+interface OriginCheckContext {
+  isTrustedOrigin: (url: string, settings?: {allowRelativePaths: boolean}) => boolean;
+  options: {advanced?: {disableCSRFCheck?: boolean; disableOriginCheck?: boolean | string[]}};
+}
+
+const headerValue = (value: string | string[] | undefined): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
+
+const originOfReferer = (referer: string | undefined): string | undefined => {
+  if (!referer) {
+    return undefined;
+  }
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return "null";
+  }
+};
+
+// True when the request's own `Authorization: Bearer` token is the session Better Auth resolved,
+// rather than a cookie sent beside some other header. The bearer plugin accepts the raw token or
+// the signed `token.signature` form.
+const isBearerSession = (req: Request, sessionToken: string): boolean => {
+  const match = /^Bearer\s+(.+)$/i.exec(headerValue(req.headers.authorization) ?? "");
+  if (!match || !sessionToken) {
+    return false;
+  }
+  let bearer = match[1].trim();
+  try {
+    bearer = decodeURIComponent(bearer);
+  } catch {
+    return false;
+  }
+  return bearer === sessionToken || bearer.startsWith(`${sessionToken}.`);
+};
+
+/**
+ * A session cookie rides along on requests other sites start, so a cookie-authenticated write is
+ * accepted only from an origin in Better Auth's `trustedOrigins` (which includes the API's own
+ * origin), the same rule Better Auth applies to its own routes. Bearer requests cannot be forged
+ * by another site. A request with no Origin, Referer, or cross-site Fetch Metadata did not come
+ * from a browser page, so it is not a cross-site forgery.
+ */
+const isUntrustedCookieWrite = async (
+  auth: BetterAuthInstance,
+  req: Request,
+  sessionToken: string
+): Promise<boolean> => {
+  if (!UNSAFE_METHODS.has(req.method) || !req.headers.cookie) {
+    return false;
+  }
+  if (isBearerSession(req, sessionToken)) {
+    return false;
+  }
+  const context = (await auth.$context) as unknown as OriginCheckContext;
+  const advanced = context.options.advanced;
+  const isCsrfCheckDisabled =
+    advanced?.disableCSRFCheck === true ||
+    (advanced?.disableOriginCheck === true && advanced.disableCSRFCheck === undefined);
+  if (isCsrfCheckDisabled) {
+    return false;
+  }
+  const origin =
+    headerValue(req.headers.origin) ?? originOfReferer(headerValue(req.headers.referer));
+  if (!origin) {
+    return headerValue(req.headers["sec-fetch-site"]) === "cross-site";
+  }
+  if (origin === "null") {
+    return true;
+  }
+  return !context.isTrustedOrigin(origin, {allowRelativePaths: false});
+};
+
 /**
  * Creates Express middleware that extracts the Better Auth session
  * and populates req.user with the application User model.
@@ -395,7 +636,16 @@ export const createBetterAuthSessionMiddleware = (
         headers: req.headers as Record<string, string>,
       });
 
-      if (session?.user && session?.session) {
+      if (
+        session?.user &&
+        session?.session &&
+        (await isUntrustedCookieWrite(auth, req, String(session.session.token ?? "")))
+      ) {
+        // Fall through as anonymous, like a disabled user, so protected routes answer 401.
+        logger.warn(
+          `[better-auth] Ignored a session cookie on ${req.method} ${req.path} from an untrusted origin`
+        );
+      } else if (session?.user && session?.session) {
         const betterAuthUser = session.user as BetterAuthUser;
 
         const reqWithSession = req as Request & {
@@ -403,18 +653,15 @@ export const createBetterAuthSessionMiddleware = (
           betterAuthSession?: BetterAuthSessionData;
         };
         if (userModel) {
-          // Look up the application user by betterAuthId
-          const appUser = await findOneOrNoneFor(userModel, {
-            betterAuthId: betterAuthUser.id,
-          });
-          if (appUser) {
-            reqWithSession.user = appUser as unknown as Request["user"];
-            reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
-            updateRequestContextFromRequest(req);
+          const {isDisabled, user} = await resolveBetterAuthAppUser({betterAuthUser, userModel});
+          if (isDisabled) {
+            // A disabled account's live sessions stop authenticating. Falling through as
+            // anonymous, rather than answering 401 here, keeps Better Auth's own routes
+            // (sign-out, signing in as someone else) reachable, since TerrenoApp mounts this
+            // middleware before them.
+            logger.debug(`[better-auth] User ${user.id} is disabled, ignoring their session`);
           } else {
-            // User exists in Better Auth but not synced yet - create them
-            const newUser = await syncBetterAuthUser(userModel, betterAuthUser);
-            reqWithSession.user = newUser as unknown as Request["user"];
+            reqWithSession.user = user as unknown as Request["user"];
             reqWithSession.betterAuthSession = session as unknown as BetterAuthSessionData;
             updateRequestContextFromRequest(req);
           }
@@ -448,8 +695,10 @@ export const createBetterAuthSessionMiddleware = (
 // Loose shape used when mutating Mongoose user documents during Better Auth sync.
 // The fields are added by the consumer's user schema (via baseUserPlugin or similar).
 interface MutableUserDoc {
+  _id?: unknown;
   admin?: boolean;
   email?: string;
+  emailVerified?: boolean;
   name?: string;
   betterAuthId?: string;
   oauthProvider?: string | null;
@@ -457,10 +706,71 @@ interface MutableUserDoc {
   save: () => Promise<unknown>;
 }
 
+export interface SyncBetterAuthUserOptions {
+  /**
+   * Link an existing app user by email even when Better Auth has not verified the address or
+   * the row is bound to another Better Auth id. Only for operator-run seeds that create the
+   * Better Auth account themselves; never set it for a request-driven sync.
+   */
+  trustEmail?: boolean;
+}
+
+/**
+ * An email alone does not prove the caller owns an existing app user. Link by email only when
+ * Better Auth verified the address and the row is not bound to another Better Auth account.
+ */
+const assertEmailLinkAllowed = (
+  userByEmail: MutableUserDoc,
+  betterAuthUser: BetterAuthUser
+): void => {
+  if (betterAuthUser.emailVerified === true && !userByEmail.betterAuthId) {
+    return;
+  }
+  throw new APIError({
+    detail: "Verify the email address before signing in to the existing account.",
+    disableExternalErrorTracking: true,
+    status: 409,
+    title: "An account with this email already exists",
+  });
+};
+
+/**
+ * A legacy password on a row whose email was never verified may have been set by someone who
+ * does not own the mailbox. Once the verified owner links the row, that password and the
+ * refresh tokens issued from it stop working.
+ */
+const revokeUnprovenLegacyPassword = async (
+  userModel: UserModel,
+  userByEmail: MutableUserDoc
+): Promise<void> => {
+  if (userByEmail.emailVerified === true || userModel.schema.path("hash") === undefined) {
+    return;
+  }
+  const hasLegacyPassword = await userModel.exists({
+    _id: userByEmail._id,
+    hash: {$exists: true, $ne: null},
+  } as never);
+  if (!hasLegacyPassword) {
+    return;
+  }
+  const bumpEpoch = userModel.schema.path("tokenEpoch") !== undefined;
+  await userModel.updateOne(
+    {_id: userByEmail._id} as never,
+    {
+      $unset: {hash: 1, salt: 1},
+      ...(bumpEpoch ? {$inc: {tokenEpoch: 1}} : {}),
+    } as never
+  );
+  logger.info(
+    `Revoked an unverified legacy password while linking Better Auth user ${userByEmail.id}`
+  );
+};
+
 export const syncBetterAuthUser = async (
   userModel: UserModel,
   betterAuthUser: BetterAuthUser,
-  oauthProvider?: string
+  oauthProvider?: string,
+  options: SyncBetterAuthUserOptions = {}
 ): Promise<MutableUserDoc> => {
   try {
     const existingUser = (await findOneOrNoneFor(userModel, {
@@ -481,7 +791,15 @@ export const syncBetterAuthUser = async (
     const userByEmail = (await findOneOrNoneFor(userModel, {
       email: betterAuthUser.email,
     })) as unknown as MutableUserDoc | null;
+    if (userByEmail?.betterAuthId === betterAuthUser.id) {
+      // A concurrent first contact created this row between the two lookups.
+      return userByEmail;
+    }
     if (userByEmail) {
+      if (!options.trustEmail) {
+        assertEmailLinkAllowed(userByEmail, betterAuthUser);
+        await revokeUnprovenLegacyPassword(userModel, userByEmail);
+      }
       // Link existing user to Better Auth
       userByEmail.betterAuthId = betterAuthUser.id;
       if (oauthProvider) {
@@ -508,9 +826,62 @@ export const syncBetterAuthUser = async (
     logger.info(`Created new user from Better Auth: ${newUser.id}`);
     return newUser;
   } catch (error) {
-    logger.error(`Error syncing Better Auth user: ${error}`);
+    // A duplicate key means a concurrent request created the user first; callers such as
+    // resolveBetterAuthAppUser recover from it, so it is not an error worth alerting on.
+    if ((error as {code?: number}).code === 11000) {
+      logger.debug(`Better Auth user was created concurrently: ${error}`);
+    } else if (isAPIError(error) && error.status === 409) {
+      logger.warn(`Refused to link Better Auth user ${betterAuthUser.id} by email: ${error.title}`);
+    } else {
+      logger.error(`Error syncing Better Auth user: ${error}`);
+    }
     throw error;
   }
+};
+
+export interface ResolveBetterAuthAppUserOptions {
+  userModel: UserModel;
+  betterAuthUser: BetterAuthUser;
+}
+
+export interface ResolvedBetterAuthAppUser {
+  user: MutableUserDoc & {disabled?: boolean};
+  isDisabled: boolean;
+}
+
+/**
+ * Finds the application user for a Better Auth session user, creating it on first contact,
+ * and reports whether the account is disabled. Every Better Auth entry point (REST session
+ * middleware, socket handshake) goes through this so they accept and refuse the same users.
+ */
+export const resolveBetterAuthAppUser = async ({
+  userModel,
+  betterAuthUser,
+}: ResolveBetterAuthAppUserOptions): Promise<ResolvedBetterAuthAppUser> => {
+  const findByBetterAuthId = async (): Promise<ResolvedBetterAuthAppUser["user"] | null> =>
+    (await findOneOrNoneFor(userModel, {
+      betterAuthId: betterAuthUser.id,
+    })) as unknown as ResolvedBetterAuthAppUser["user"] | null;
+
+  let user = await findByBetterAuthId();
+  if (!user) {
+    try {
+      user = (await syncBetterAuthUser(
+        userModel,
+        betterAuthUser
+      )) as ResolvedBetterAuthAppUser["user"];
+    } catch (error) {
+      // Right after sign-up the socket handshake and the first REST calls race to create the
+      // same user; the loser's insert hits the unique `_id` (or `betterAuthId`) index.
+      const isDuplicateKey = (error as {code?: number}).code === 11000;
+      const createdConcurrently = isDuplicateKey ? await findByBetterAuthId() : null;
+      if (!createdConcurrently) {
+        throw error;
+      }
+      user = createdConcurrently;
+    }
+  }
+  return {isDisabled: Boolean(user.disabled), user};
 };
 
 /**
@@ -532,18 +903,20 @@ export const mountBetterAuthRoutes = (
 };
 
 /**
- * Gets the MongoDB client from the mongoose connection.
+ * Gets a MongoDB client view whose db() is the mongoose connection's database (its dbName).
  */
 export const getMongoClientFromMongoose = (): MongoClientLike => {
   const connection = mongoose.connection;
-  const client = (connection as unknown as {client?: MongoClientLike}).client;
+  const client = (connection as unknown as {client?: {db: (dbName?: string) => Db}}).client;
   if (!client) {
     throw new APIError({
       status: 500,
       title: "Mongoose is not connected. Ensure MongoDB connection is established first.",
     });
   }
-  return client;
+  // Use the connection's database (mongoose's dbName option), not the URI default, so Better
+  // Auth's collections live beside the app's models.
+  return {db: (): Db => client.db(connection.name || undefined)};
 };
 
 /**

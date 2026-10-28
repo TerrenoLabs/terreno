@@ -4,7 +4,7 @@ All published `@terreno/*` packages share one version. Upgrade them together. Mi
 
 ## Lockstep
 
-A git tag `X.Y.Z` (no `v` prefix) is the version for every package that `.github/workflows/publish-on-tag.yml` publishes: `api`, `test`, `ui`, `rtk`, `admin-backend`, `admin-frontend`, `admin-spa`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`, `syncdb`. Publish jobs read that tag; they do not pick per-package versions.
+A git tag `X.Y.Z` (no `v` prefix) is the version for every package that `.github/workflows/publish-on-tag.yml` publishes: `api`, `test`, `ui`, `rtk`, `admin-backend`, `admin-frontend`, `admin-spa`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`, `syncdb`. Publish jobs read that tag; they do not pick per-package versions.
 
 Inside the monorepo, packages depend on each other with `workspace:*` (for example `@terreno/rtk` → `@terreno/ui`). On npm they are released at the same number. `@terreno/ui` also pins Expo-line peers (`react-native` `~0.86.0` on the 57 line). Installing `@terreno/ui@57` next to Expo 54 is outside support, same as mixing `@terreno/api@57` with `@terreno/ui@0.31`.
 

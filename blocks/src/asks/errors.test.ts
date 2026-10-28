@@ -1,0 +1,250 @@
+import {describe, expect, it} from "bun:test";
+import {z} from "zod";
+import {ASK_ERROR_CODES, type AskErrorCode, finalizeAskErrors, issuesToAskErrors} from "./errors";
+import {checkAskFileBytes, fileNotOwnedError} from "./files";
+import type {ChoiceAskInput, FilesAskInput, FormAskInput} from "./schema";
+import {resolveButtonAnswer, toSimpleCard} from "./simpleCard";
+import {validateAskInput} from "./validateInput";
+import {validateAskResponse} from "./validateResponse";
+
+const INPUT: ChoiceAskInput = {
+  options: [
+    {id: "red", label: "Red"},
+    {id: "blue", label: "Blue"},
+  ],
+  prompt: "Pick a color.",
+  select: "one",
+};
+
+const inputCodes = (input: unknown): AskErrorCode[] =>
+  validateAskInput({input, kind: "choice"}).map((error) => error.code);
+
+const responseCodes = (response: unknown, input: ChoiceAskInput = INPUT): AskErrorCode[] =>
+  validateAskResponse({input, kind: "choice", response}).map((error) => error.code);
+
+const FORM_INPUT: FormAskInput = {
+  fields: [
+    {id: "company", label: "Company", required: true, type: "text"},
+    {id: "seats", label: "Seats", max: 500, min: 1, type: "number"},
+    {id: "start", label: "Start date", type: "date"},
+  ],
+  prompt: "A few details.",
+};
+
+const formCodes = (values: unknown): AskErrorCode[] =>
+  validateAskResponse({
+    input: FORM_INPUT,
+    kind: "form",
+    response: {action: "accept", content: {values}},
+  }).map((error) => error.code);
+
+const FILES_INPUT: FilesAskInput = {accept: ["image"], maxFiles: 2, prompt: "Upload the receipt."};
+
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+
+const filesCodes = (files: unknown[]): AskErrorCode[] =>
+  validateAskResponse({
+    input: FILES_INPUT,
+    kind: "files",
+    response: {action: "accept", content: {files}},
+  }).map((error) => error.code);
+
+const PHOTO = {fileId: "file_1", filename: "receipt.png", mimeType: "image/png", size: 12};
+
+const mapIssues = (schema: z.ZodType, root: unknown) => {
+  const result = schema.safeParse(root);
+  if (result.success) {
+    throw new Error("Expected the schema to reject the value.");
+  }
+  return finalizeAskErrors(issuesToAskErrors({issues: result.error.issues, root}));
+};
+
+describe("ASK_ERROR_CODES", () => {
+  const producers: Record<AskErrorCode, () => AskErrorCode[]> = {
+    CHANGED_MISMATCH: () =>
+      validateAskResponse({
+        input: {initial: "Draft", prompt: "Edit it."},
+        kind: "markdown",
+        response: {action: "accept", content: {changed: true, markdown: "Draft"}},
+      }).map((error) => error.code),
+    DECLINE_NOT_ALLOWED: () => responseCodes({action: "decline"}, {...INPUT, allowDecline: false}),
+    DEFAULT_NOT_IN_OPTIONS: () => inputCodes({...INPUT, default: ["green"]}),
+    DUPLICATE_ID: () =>
+      inputCodes({
+        ...INPUT,
+        options: [
+          {id: "red", label: "Red"},
+          {id: "red", label: "Crimson"},
+        ],
+      }),
+    DUPLICATE_LABEL: () =>
+      validateAskInput({
+        input: {
+          ...INPUT,
+          options: [
+            {id: "red", label: "Red"},
+            {id: "crimson", label: "Red"},
+          ],
+        },
+        kind: "choice",
+        surface: "compact",
+      }).map((error) => error.code),
+    FIELD_TYPE_MISMATCH: () => formCodes({company: "Acme", seats: "12"}),
+    FILE_COUNT: () => filesCodes([PHOTO, PHOTO, PHOTO]),
+    FILE_NOT_OWNED: () => [fileNotOwnedError({index: 0}).code],
+    FILE_TOO_LARGE: () => filesCodes([{...PHOTO, size: 11 * 1024 * 1024}]),
+    FILE_TYPE_NOT_ACCEPTED: () =>
+      filesCodes([{...PHOTO, filename: "notes.txt", mimeType: "text/plain"}]),
+    INVALID_DATE: () => formCodes({company: "Acme", start: "2026-02-30"}),
+    INVALID_ENUM: () => inputCodes({...INPUT, select: "all"}),
+    INVALID_FORMAT: () =>
+      inputCodes({
+        ...INPUT,
+        options: [
+          {id: "Red", label: "Red"},
+          {id: "blue", label: "Blue"},
+        ],
+      }),
+    INVALID_TYPE: () => inputCodes({...INPUT, prompt: 7}),
+    MIME_MISMATCH: () =>
+      checkAskFileBytes({
+        bytes: PNG_BYTES,
+        index: 0,
+        maxFileSizeBytes: 1024,
+        mimeType: "image/jpeg",
+      }).map((error) => error.code),
+    MISSING_REQUIRED: () => inputCodes({options: INPUT.options, select: "one"}),
+    OPTION_NOT_OFFERED: () => responseCodes({action: "accept", content: {selected: ["green"]}}),
+    OTHER_NOT_ALLOWED: () =>
+      responseCodes({action: "accept", content: {other: "Green", selected: ["red"]}}),
+    OUT_OF_RANGE: () => formCodes({company: "Acme", seats: 0}),
+    RANGE_INVALID: () => inputCodes({...INPUT, maxSelected: 2, minSelected: 3, select: "many"}),
+    REQUIRED_FIELD: () => formCodes({seats: 12}),
+    SELECTION_COUNT: () => responseCodes({action: "accept", content: {selected: ["red", "blue"]}}),
+    TOO_FEW: () => inputCodes({...INPUT, options: [{id: "red", label: "Red"}]}),
+    TOO_LONG: () => inputCodes({...INPUT, title: "t".repeat(81)}),
+    TOO_MANY: () =>
+      inputCodes({
+        ...INPUT,
+        options: Array.from({length: 51}, (_, index) => ({
+          id: `c${index}`,
+          label: `Color ${index}`,
+        })),
+      }),
+    TOO_SHORT: () => inputCodes({...INPUT, prompt: ""}),
+    UNKNOWN_BUTTON: () =>
+      resolveButtonAnswer({
+        buttonId: "option:green",
+        card: toSimpleCard({input: INPUT, kind: "choice", toolCallId: "call_1"}),
+      }).errors.map((error) => error.code),
+    UNKNOWN_KEY: () => inputCodes({...INPUT, color: "red"}),
+  };
+
+  for (const code of Object.keys(ASK_ERROR_CODES) as AskErrorCode[]) {
+    it(`${code} is returned by a check`, () => {
+      expect(producers[code]()).toEqual([code]);
+    });
+  }
+
+  it("has a producer for every code and no others", () => {
+    expect(Object.keys(producers).sort()).toEqual(Object.keys(ASK_ERROR_CODES).sort());
+  });
+});
+
+describe("issuesToAskErrors fallbacks", () => {
+  it("reports a missing root value", () => {
+    expect(validateAskInput({input: undefined, kind: "choice"})).toEqual([
+      {
+        code: "MISSING_REQUIRED",
+        fix: "Send the value.",
+        message: "The value is required.",
+        path: "",
+      },
+    ]);
+  });
+
+  it("reports a missing list item by its index", () => {
+    expect(mapIssues(z.array(z.string()), [undefined])).toEqual([
+      {code: "MISSING_REQUIRED", fix: "Send [0].", message: "[0] is required.", path: "[0]"},
+    ]);
+  });
+
+  it("names other string formats", () => {
+    expect(mapIssues(z.object({contact: z.email()}), {contact: "not an email"})).toEqual([
+      {
+        code: "INVALID_FORMAT",
+        fix: "Change contact to match the email format.",
+        message: "contact does not match the email format.",
+        path: "contact",
+      },
+    ]);
+  });
+
+  it("keeps the message of a custom issue without an ask code", () => {
+    expect(
+      mapIssues(
+        z.string().refine(() => false, {message: "Nope."}),
+        "x"
+      )
+    ).toEqual([{code: "INVALID_FORMAT", fix: "Check the value.", message: "Nope.", path: ""}]);
+  });
+
+  it("treats a union without a discriminator as a type error", () => {
+    expect(mapIssues(z.object({value: z.union([z.string(), z.number()])}), {value: true})).toEqual([
+      {
+        code: "INVALID_TYPE",
+        fix: "Check value.",
+        message: "Invalid input",
+        path: "value",
+      },
+    ]);
+  });
+
+  it("falls back to INVALID_TYPE for issue codes asks never produce", () => {
+    expect(mapIssues(z.object({seats: z.number().multipleOf(5)}), {seats: 7})).toEqual([
+      {
+        code: "INVALID_TYPE",
+        fix: "Check seats.",
+        message: "Invalid number: must be a multiple of 5",
+        path: "seats",
+      },
+    ]);
+  });
+
+  it("describes other expected and received types", () => {
+    expect(
+      mapIssues(z.object({count: z.number(), day: z.date(), tags: z.string()}), {
+        count: {},
+        day: "2026-09-27",
+        tags: 10n,
+      })
+    ).toEqual([
+      {
+        code: "INVALID_TYPE",
+        fix: "Make count a number.",
+        message: "count must be a number, not an object.",
+        path: "count",
+      },
+      {
+        code: "INVALID_TYPE",
+        fix: "Make day date.",
+        message: "day must be date, not a string.",
+        path: "day",
+      },
+      {
+        code: "INVALID_TYPE",
+        fix: "Make tags a string.",
+        message: "tags must be a string, not bigint.",
+        path: "tags",
+      },
+    ]);
+  });
+
+  it("describes booleans and null as received values", () => {
+    expect(
+      mapIssues(z.object({a: z.string(), b: z.string()}), {a: true, b: null}).map(
+        (error) => error.message
+      )
+    ).toEqual(["a must be a string, not a boolean.", "b must be a string, not null."]);
+  });
+});

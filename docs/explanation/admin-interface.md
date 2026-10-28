@@ -56,7 +56,11 @@ legacy `AdminAuditLog`, `audit-log`, and `audit-events` names. Jobs is a custom
 screen (`name: "jobs"`); the shell lifts it the same way.
 
 Below the desktop floor (1024pt) the rail becomes a hamburger drawer. The main column is a body-style
-canvas (`neutral-050`). Nested `Page` screens use `color="transparent"` and
+canvas (`neutral-050`, or `neutral-900` in dark mode so `surface.base` cards stand out).
+The colorful teal rail has no dark palette, so dark mode always uses the clinical rail.
+Host apps must give React Navigation a theme that follows the Terreno color scheme
+(the example app uses `buildNavigationTheme` with a transparent background inside the
+admin `Stack`); otherwise its default light screen containers cover the canvas. Nested `Page` screens use `color="transparent"` and
 `padding={0}` so cards sit on that canvas. Custom screens wrap content in
 `AdminScreenPage`; the back arrow uses `router.push(routeBase)` rather than
 `router.back()` because sidebar clicks do not always leave history on web.

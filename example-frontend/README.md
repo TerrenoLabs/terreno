@@ -1,6 +1,6 @@
 # Example Frontend
 
-Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/rtk for state management, and @terreno/ui for components. Deployed to Netlify on push to master.
+Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/rtk for state management, and @terreno/ui for components. Deployed to Netlify and, during an evaluation period, to Vercel on push to master (see [Deployment](#deployment)).
 
 ## Features
 
@@ -9,6 +9,7 @@ Example Expo app demonstrating full-stack Terreno usage with @terreno/api backen
 - **Type-safe API**: Generated RTK Query hooks from backend OpenAPI spec
 - **Todo CRUD**: Complete todo list with create, read, update, delete
 - **Profile Management**: User profile viewing and editing
+- **Appearance**: Persisted Light, Dark, or Follow system theme choice under Profile → Appearance. The splash stays up until that stored choice is ready, and the status bar follows the resolved scheme.
 - **Tab Navigation**: Expo Router with file-based routing
 - **Cross-platform**: Runs on web, iOS, and Android
 - **Admin UI v2**: Profile → Admin uses `@terreno/admin-frontend` with `AdminShellLayout` (sidebar + `AdminHome` dashboard from `/admin/config`), tools/model cards, configuration, scripts, and a static “Admin UI v2 map” screen — backed by the rich `AdminApp` setup in `example-backend`
@@ -98,9 +99,21 @@ Edit `app.json` to add the `extra` field:
 | `bun run android` | Start Android emulator |
 | `bun run sdk` | Generate API SDK from backend OpenAPI spec |
 | `bun run export` | Export static web build |
+| `bun run build:vercel` | Vercel build: bake `EXPO_PUBLIC_API_URL` into `app.json` `extra`, then export |
 | `bun run test` | Run tests |
 | `bun run lint` | Lint code |
 | `bun run lint:fix` | Fix lint issues |
+
+## Deployment
+
+The web app deploys from CI to two hosts on every push to `master`, plus a preview per PR:
+
+- **Netlify** (`public/_redirects`), against the Cloud Run backend.
+- **Vercel** (`vercel.json`), at https://terrenolabs-frontend.vercel.app against the Vercel backend at https://terrenolabs-backend.vercel.app. This runs in parallel with Netlify while the Vercel topology is evaluated.
+
+`vercel.json` is wired to the real `terreno-frontend` Vercel project. It sets `"git": {"deploymentEnabled": false}`, so Vercel does not build on push; CircleCI runs `scripts/ci/vercel-deploy.sh frontend <production|preview>`. Its build command, `bun run build:vercel` (`scripts/vercelBuild.ts`), requires `EXPO_PUBLIC_API_URL` and writes `extra.BASE_URL`, `extra.apiBaseUrl`, and `extra.SOCKET_TRANSPORTS=websocket` into `app.json` before `expo export`. Run it in CI or a throwaway checkout: it rewrites `app.json`.
+
+See [Deploy to Vercel](../docs/how-to/deploy-to-vercel.md).
 
 ## Project Structure
 
@@ -114,11 +127,13 @@ app/
     profile.tsx        # User profile screen
 store/
   index.ts             # Redux store configuration
-  appState.ts          # App-level state (dark mode, language)
+  appState.ts          # App-level state (language)
   openApiSdk.ts        # Generated RTK Query hooks (DO NOT EDIT)
   sdk.ts               # SDK exports with custom endpoints
   errors.ts            # Error handling middleware
 components/            # Reusable React components
+contexts/
+  ThemePreferenceContext.tsx # Persisted light/dark/system theme provider
 constants/             # App constants
 hooks/                 # Custom React hooks
 utils/                 # Utility functions
@@ -179,7 +194,7 @@ const handleCreate = async () => {
 
 The store combines:
 - **auth**: JWT authentication (from `@terreno/rtk`)
-- **appState**: Dark mode, language preferences
+- **appState**: Language preferences
 - **openapi**: RTK Query API slice with all endpoints
 
 ### Persistence

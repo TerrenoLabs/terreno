@@ -17,7 +17,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.4 or newer — CI pins `bun-version: 1.4.0` (via `.github/actions/setup-bun-workspace` on the hot workflows). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
+- [Bun](https://bun.sh/) 1.4.4 or newer — CI pins `bun-version: 1.4.4` (via `.github/actions/setup-bun-workspace` on the hot workflows). 1.4.4 patches the Brotli decoder (CVE-2026-111497). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
 - **MongoDB replica set** — required to run `example-backend` locally (change streams power realtime and feature-flag sync). A single-node replica set is enough for development.
 
 ### Bootstrap
@@ -117,7 +117,7 @@ When you add a framework capability, exercise it in `example-backend` and/or
 Package-specific commands are listed in [AGENTS.md](AGENTS.md). You can also use Bun's filter syntax:
 
 ```bash
-bun run --filter '@terreno/ui' compile
+bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
 bun run --filter '@terreno/api' test
 ```
 
@@ -181,7 +181,7 @@ Version format: semantic versioning (`1.0.0`, `1.2.3`, `2.0.0-beta.1`). No `v` p
 
 Required repository secrets: `NPM_TOKEN`, `REPO_ADMIN_TOKEN`, `ZOOM_WEBHOOK_URL`, `ZOOM_WEBHOOK_TOKEN`.
 
-GCP infrastructure and static-site hosting live in [terraform/README.md](terraform/README.md).
+Terreno's own GCP infrastructure lives in [infra/flourish/README.md](infra/flourish/README.md). Reusable Terraform modules for Terreno apps live in [terraform/README.md](terraform/README.md).
 
 ## AI rules management
 

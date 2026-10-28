@@ -1,0 +1,5 @@
+> **clearAdminBroadcastScopes**(): `void`
+
+## Returns
+
+`void`

@@ -6,8 +6,12 @@ import type {ScrollView} from "react-native";
 
 import {Box} from "./Box";
 import {sharedResponsiveBreakpointStore} from "./ResponsiveBreakpoint";
+import {Skeleton, SkeletonCircle} from "./Skeleton";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 /** Imperative handle exposed by Box's forwarded ref. */
 interface BoxScrollHandle {
@@ -585,6 +589,86 @@ describe("Box", () => {
     });
   });
 
+  describe("accessibility state", () => {
+    it("forwards checked and disabled to a clickable Box", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          accessibilityState={{checked: true, disabled: false}}
+          onClick={() => {}}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props.accessibilityState).toEqual({checked: true, disabled: false});
+      expect(pressable.props["aria-checked"]).toBe(true);
+      expect(pressable.props["aria-disabled"]).toBe(false);
+      expect(pressable.props.accessibilityRole).toBe("checkbox");
+      expect(pressable.props.style.accessibilityState).toBeUndefined();
+    });
+
+    it("keeps a disabled clickable Box labelled but does not call onClick", async () => {
+      const onClick = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          accessibilityState={{checked: false, disabled: true}}
+          onClick={onClick}
+          testID="row"
+        />
+      );
+      const pressable = getByTestId("row-clickable");
+      expect(pressable.props["aria-label"]).toBe("Preheat the oven");
+      expect(pressable.props.accessibilityState.disabled).toBe(true);
+      await act(async () => {
+        fireEvent.press(pressable);
+      });
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("forwards checked to a Box without onClick", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box accessibilityState={{checked: false}} testID="plain" />
+      );
+      const view = getByTestId("plain");
+      expect(view.props.accessibilityState).toEqual({checked: false});
+      expect(view.props["aria-checked"]).toBe(false);
+    });
+
+    it("makes a Box a polite live region without putting it in the style", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box accessibilityLiveRegion="polite" testID="status" />
+      );
+      const view = getByTestId("status");
+      expect(view.props["aria-live"]).toBe("polite");
+      expect(view.props.style.accessibilityLiveRegion).toBeUndefined();
+    });
+
+    it("toggles a checkbox Box with Space on web", async () => {
+      const onClick = mock(() => {});
+      const preventDefault = mock(() => {});
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Toggles the item"
+          accessibilityLabel="Preheat the oven"
+          accessibilityRole="checkbox"
+          onClick={onClick}
+          testID="row"
+        />
+      );
+      await act(async () => {
+        getByTestId("row-clickable").props.onKeyDown({key: " ", preventDefault});
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe("scroll behavior", () => {
     it("should render ScrollView when scroll is enabled", () => {
       const {root} = renderWithTheme(<Box scroll />);
@@ -1057,6 +1141,72 @@ describe("Box", () => {
         fireEvent.press(getByLabelText("Press"));
       });
       expect(onClick).toHaveBeenCalled();
+    });
+  });
+
+  describe("loading", () => {
+    it("renders children when not loading", () => {
+      const {getByText} = renderWithTheme(
+        <Box loading={false}>
+          <Text>Loaded</Text>
+        </Box>
+      );
+      expect(getByText("Loaded")).toBeTruthy();
+    });
+
+    it("renders the default text skeleton instead of children while loading", () => {
+      const {getByTestId, queryByText} = renderWithTheme(
+        <Box loading testID="box">
+          <Text>Loaded</Text>
+        </Box>
+      );
+      expect(queryByText("Loaded")).toBeNull();
+      const box = getByTestId("box");
+      expect(box.props["aria-busy"]).toBe(true);
+      expect(box.props.accessibilityState).toMatchObject({busy: true});
+      expect(box.props.accessibilityLabel).toBe("Loading");
+    });
+
+    it("renders a custom loading component with a custom label", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          loading
+          loadingComponent={<SkeletonCircle testID="avatar-skeleton" />}
+          loadingLabel="Loading profile"
+          testID="box"
+        />
+      );
+      expect(getByTestId("avatar-skeleton", HIDDEN)).toBeTruthy();
+      expect(getByTestId("box").props.accessibilityLabel).toBe("Loading profile");
+    });
+
+    it("hands loadingAnimation to skeletons inside the loading component", async () => {
+      const {getByTestId} = renderWithTheme(
+        <Box loading loadingAnimation="shimmer" loadingComponent={<Skeleton testID="block" />} />
+      );
+      // Skeletons hold still until the reduce-motion setting resolves.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(getByTestId("block.shimmer", HIDDEN)).toBeTruthy();
+    });
+
+    it("keeps loading props out of the style object", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box loading loadingAnimation="none" loadingLabel="Loading" padding={2} testID="box" />
+      );
+      const style = getByTestId("box").props.style;
+      expect(style).toMatchObject({padding: 8});
+      expect(style.loading).toBeUndefined();
+      expect(style.loadingAnimation).toBeUndefined();
+      expect(style.loadingLabel).toBeUndefined();
+    });
+
+    it("ignores presses on a clickable Box while loading", () => {
+      const onClick = mock(() => {});
+      const {getByTestId} = renderWithTheme(<Box loading onClick={onClick} testID="box" />);
+      fireEvent.press(getByTestId("box-clickable"));
+      expect(onClick).not.toHaveBeenCalled();
     });
   });
 });

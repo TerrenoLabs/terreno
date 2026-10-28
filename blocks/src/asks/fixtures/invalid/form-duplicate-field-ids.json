@@ -1,0 +1,24 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "name",
+        "type": "text",
+        "label": "Name"
+      },
+      {
+        "id": "name",
+        "type": "email",
+        "label": "Email"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[1].id",
+      "code": "DUPLICATE_ID"
+    }
+  ]
+}

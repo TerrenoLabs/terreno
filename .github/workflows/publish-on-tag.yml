@@ -14,18 +14,50 @@ on:
 
 jobs:
   breaking-change-documentation:
-    name: Breaking changes have upgrade notes
+    name: Release is tagged on master with upgrade notes
     runs-on: ubuntu-latest
     steps:
+      # Full history so the tag and origin/master can be compared.
       - uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
+
+      # Every publish job checks out the dispatched ref, so dispatch this workflow
+      # from the tag itself. Otherwise master's head ships under the tag's version.
+      - name: Require the dispatched ref to be the tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          tag_sha="$(git rev-parse --verify --quiet "refs/tags/${VERSION}^{commit}" || true)"
+          if [ -z "$tag_sha" ]; then
+            echo "::error::Tag ${VERSION} does not exist"
+            exit 1
+          fi
+          if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+            echo "::error::Dispatched ref ${GITHUB_REF} is not tag ${VERSION}; use Run workflow from the tag"
+            exit 1
+          fi
 
       - name: Check release upgrade documentation
         run: bun run check:upgrade-docs "${{ inputs.version }}"
+
+      # Same gate as CircleCI publish-release: packages ship the tag's CHANGELOG.md,
+      # so a stable tag must be on master with its assembled release notes
+      # (docs/how-to/release-automation.md).
+      - name: Require merged release notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          on_master=false
+          if git merge-base --is-ancestor HEAD origin/master; then
+            on_master=true
+          fi
+          bun run scripts/ci/release/cli.ts check-tag "$VERSION" "$on_master"
 
   check-changes:
     needs: breaking-change-documentation
@@ -80,7 +112,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -164,7 +196,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -220,7 +252,7 @@ jobs:
         run: echo "Published @terreno/test@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   publish-ui:
-    needs: check-changes
+    needs: [check-changes, publish-blocks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -233,7 +265,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -359,6 +391,9 @@ jobs:
           VERSION: ${{ needs.check-changes.outputs.version }}
           UI_VERSION: ${{ steps.ui_version.outputs.ui_version }}
 
+      - name: Compile workspace dependencies
+        run: node ../.github/scripts/compile-workspace-deps.js
+
       - name: Compile
         run: bun run compile
 
@@ -387,7 +422,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -544,7 +579,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -625,7 +660,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -728,7 +763,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -819,8 +854,88 @@ jobs:
       - name: Summary
         run: echo "Published @terreno/admin-spa@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
+  publish-blocks:
+    needs: [check-changes]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: blocks
+    steps:
+      - uses: actions/checkout@v6.0.3
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then missing+=("NPM_TOKEN"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Update version
+        run: |
+          VERSION="${{ needs.check-changes.outputs.version }}"
+          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '$VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
+
+      - name: Replace catalog and workspace references
+        run: |
+          node -e "
+          const fs = require('fs');
+          const rootPkg = JSON.parse(fs.readFileSync('../package.json', 'utf8'));
+          const catalog = rootPkg.catalog || {};
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const version = process.env.VERSION;
+          for (const depType of ['dependencies', 'devDependencies', 'peerDependencies']) {
+            if (!pkg[depType]) continue;
+            for (const [key, value] of Object.entries(pkg[depType])) {
+              if (value === 'catalog:') {
+                if (!catalog[key]) throw new Error(\`Catalog entry not found for \${key}\`);
+                pkg[depType][key] = catalog[key];
+              } else if (value === 'workspace:*' && key.startsWith('@terreno/')) {
+                pkg[depType][key] = version;
+              }
+            }
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+        env:
+          VERSION: ${{ needs.check-changes.outputs.version }}
+
+      - name: Install dependencies after replacement
+        run: bun install
+
+      - name: Compile
+        run: bun run compile
+
+      - name: Run tests
+        run: bun run test
+
+      - name: Publish to npm
+        run: npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: echo "Published @terreno/blocks@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
   publish-ai:
-    needs: [check-changes, publish-api, publish-test]
+    needs: [check-changes, publish-api, publish-test, publish-blocks, publish-jobs]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -833,7 +948,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -923,7 +1038,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1007,7 +1122,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1091,7 +1206,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1181,7 +1296,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1265,7 +1380,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1349,7 +1464,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1421,7 +1536,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1505,7 +1620,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1588,7 +1703,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Use Node.js 22
         uses: actions/setup-node@v7
@@ -1658,12 +1773,12 @@ jobs:
         run: echo "Published @terreno/cli@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   update-version-on-master:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     # Run if any package was published and this is not a prerelease tag
     if: |
       always() &&
       needs.check-changes.outputs.isPrerelease != 'true' &&
-      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-rtk.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
+      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-rtk.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1714,6 +1829,7 @@ jobs:
           update_version admin-backend "${{ needs.publish-admin-backend.result }}"
           update_version admin-frontend "${{ needs.publish-admin-frontend.result }}"
           update_version admin-spa "${{ needs.publish-admin-spa.result }}"
+          update_version blocks "${{ needs.publish-blocks.result }}"
           update_version ai "${{ needs.publish-ai.result }}"
           update_version api-health "${{ needs.publish-api-health.result }}"
           update_version comms "${{ needs.publish-comms.result }}"
@@ -1790,16 +1906,18 @@ jobs:
             exit 1
           fi
 
+      # Snapshot the tag's docs; master only receives the snapshot commit.
       - uses: actions/checkout@v6.0.3
         with:
-          ref: master
+          ref: ${{ needs.check-changes.outputs.version }}
+          fetch-depth: 0
           token: ${{ secrets.REPO_ADMIN_TOKEN }}
           persist-credentials: true
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Setup Git
         run: |
@@ -1809,6 +1927,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build blocks dependency
+        working-directory: blocks
+        run: bun run compile
+
       - name: Generate docs inputs
         run: |
           bun run compile
@@ -1816,6 +1938,7 @@ jobs:
         working-directory: ui
 
       - name: Cut docs version
+        id: snapshot
         run: |
           VERSION="${{ needs.check-changes.outputs.version }}"
           cd website
@@ -1823,20 +1946,83 @@ jobs:
           bun run docs:version "$VERSION"
           bun run prune-versions
 
+      # Attach to the draft, then publish, so the master push below only
+      # deploys docs once the archive is public.
+      - name: Build and upload the archived docs site
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          VERSION="${{ needs.check-changes.outputs.version }}"
+          scripts/ci/docs-archive.sh build "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+          scripts/ci/docs-archive.sh upload "$VERSION" "$RUNNER_TEMP/docs-site.tar.gz"
+
+      - name: Publish the GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: scripts/ci/github-release.sh publish "${{ needs.check-changes.outputs.version }}"
+
+      # Runs even when the upload failed so the snapshot still reaches master.
       - name: Commit versioned docs
+        if: always() && steps.snapshot.outcome == 'success'
         run: |
           VERSION="${{ needs.check-changes.outputs.version }}"
           git add website/versioned_docs website/versioned_sidebars website/versions.json
           if git diff --cached --quiet; then
             echo "No docs version changes to commit"
-          else
-            git commit -m "chore: cut docs version ${VERSION}"
-            git pull --rebase origin master
-            git push origin master
+            exit 0
+          fi
+          git commit -m "chore: cut docs version ${VERSION}"
+          snapshot_commit="$(git rev-parse HEAD)"
+          git fetch origin master
+          # A rerun after the snapshot already landed has nothing to push.
+          if git cat-file -e "origin/master:website/versioned_docs/version-${VERSION}" 2>/dev/null; then
+            echo "Docs snapshot ${VERSION} is already on master"
+            exit 0
+          fi
+          # The tag is behind master; the snapshot only touches website/version* files.
+          git checkout --force -B docs-version origin/master
+          git cherry-pick "$snapshot_commit"
+          git pull --rebase origin master
+          git push origin HEAD:master
+
+  # Releases start as drafts so the docs archive can be attached before
+  # immutable releases lock the assets. This publishes the draft last.
+  publish-github-release:
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli, update-version-on-master]
+    # Stable X.Y.0 releases publish in cut-docs-version after the archive is
+    # attached. Everything else publishes here once npm publishing succeeded;
+    # a skipped version bump only counts for prereleases, which never bump.
+    if: |
+      always() &&
+      needs.check-changes.result == 'success' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (needs.update-version-on-master.result == 'success' || needs.check-changes.outputs.isPrerelease == 'true') &&
+      !(needs.check-changes.outputs.isPrerelease != 'true' && endsWith(needs.check-changes.outputs.version, '.0'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Validate required secrets
+        env:
+          REPO_ADMIN_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          missing=()
+          if [ -z "$REPO_ADMIN_TOKEN" ]; then missing+=("REPO_ADMIN_TOKEN"); fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
           fi
 
+      - uses: actions/checkout@v6.0.3
+
+      - name: Publish the GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: scripts/ci/github-release.sh publish "${{ needs.check-changes.outputs.version }}"
+
   notify:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1878,6 +2064,7 @@ jobs:
           add_status "@terreno/admin-backend" "${{ needs.publish-admin-backend.result }}"
           add_status "@terreno/admin-frontend" "${{ needs.publish-admin-frontend.result }}"
           add_status "@terreno/admin-spa" "${{ needs.publish-admin-spa.result }}"
+          add_status "@terreno/blocks" "${{ needs.publish-blocks.result }}"
           add_status "@terreno/ai" "${{ needs.publish-ai.result }}"
           add_status "@terreno/api-health" "${{ needs.publish-api-health.result }}"
           add_status "@terreno/comms" "${{ needs.publish-comms.result }}"

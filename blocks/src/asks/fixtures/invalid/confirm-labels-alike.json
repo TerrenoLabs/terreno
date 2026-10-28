@@ -1,0 +1,13 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Cancel your subscription?",
+    "confirmLabel": "Cancel"
+  },
+  "errors": [
+    {
+      "path": "confirmLabel",
+      "code": "DUPLICATE_LABEL"
+    }
+  ]
+}

@@ -23,6 +23,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `TERRENO_TEST_MONGODB_URI` | `@terreno/test` | ❌ | auto | Yes | tooling |
 | `TERRENO_TEST_USE_MEMORY_MONGO` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_USE_REPLSET` | `@terreno/test` | ❌ | — | No | tooling |
+| `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | `@terreno/test` | ❌ | `60000` | No | tooling |
 | `TERRENO_TEST_USE_FIXTURE_CACHE` | `@terreno/test` | ❌ | — | No | tooling |
 | `TERRENO_TEST_CACHE_DIR` | `@terreno/test` | ❌ | — | No | tooling |
 | `BUN_TEST_DISABLE_DB` | test harness | ❌ | — | No | tooling |
@@ -46,7 +47,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
-| `BETTER_AUTH_SECRET` | `@terreno/api` | ✅ if Better Auth | — | Yes | server |
+| `BETTER_AUTH_SECRET` | `@terreno/api`, example-backend | ✅ if Better Auth | example-backend outside production: a published dev-only value. With `NODE_ENV=production`, example-backend refuses to start when it is unset or equals that value | Yes | server |
 | `BETTER_AUTH_URL` | `@terreno/api` | ✅ if Better Auth | — | No | server |
 | `GOOGLE_CLIENT_ID` | `@terreno/api` | ❌ | — | No | server |
 | `GOOGLE_CLIENT_SECRET` | `@terreno/api` | ❌ | — | Yes | server |
@@ -67,11 +68,15 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `APP_ENV` | example-backend | ❌ | `development` | No | server |
 | `BACKEND_URL` | scripts, deploy | ❌ | — | No | server |
 | `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
+| `CORS_ORIGINS` | example-backend (`utils/betterAuthConfig.ts`) | ✅ for deployed web origins | localhost:8082 origins only | No | server |
+| `CROSS_DOMAIN_AUTH_COOKIES` | example-backend Better Auth config | ❌ | `false` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
 | `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
+
+`CORS_ORIGINS` is comma-separated. An entry may contain `*` (for example `https://*.preview.example.com`); use it only on a domain you control, never on a shared namespace like `vercel.app`. For `corsOrigin`, `*` becomes a `RegExp` that matches letters, digits, and hyphens but never a dot. Better Auth `trustedOrigins` receives the raw pattern and applies its own, broader wildcard matching. Never use `corsOrigin: true` in production; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#cors). Set `CROSS_DOMAIN_AUTH_COOKIES=true` when the web app and API are on different sites.
 
 ## Client / build-time
 
@@ -92,6 +97,7 @@ Configured in `expo.extra` and read via `expo-constants`:
 | `DEV_API_PORT` | `@terreno/rtk` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
 | `AUTH_DEBUG` | `@terreno/rtk` | `"true"` enables auth debug logs |
 | `WEBSOCKETS_DEBUG` | `@terreno/rtk` | `"true"` enables socket debug logs |
+| `SOCKET_TRANSPORTS` | example-frontend (`store/socketTransports.ts`) | Comma-separated Socket.IO transports passed to `useSocketConnection({transports})` and `createSyncDb({socketTransports})`. Unset keeps `polling,websocket`; the Vercel build sets `websocket` |
 | `APP_ENV` | `@terreno/rtk` | Logged at startup |
 
 Resolution order for API base URL (`rtk/src/constants.ts`):
@@ -99,6 +105,12 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 1. `EXPO_PUBLIC_API_URL` (production and dev)
 2. `extra.BASE_URL` (production only, when env unset)
 3. Dev fallbacks: `hostUri`, experience URL, `localhost`
+
+`EXPO_PUBLIC_API_URL` is inlined only into app source. Code under `node_modules`, including `@terreno/rtk`, does not see the inlined value in a production export and falls back to `extra.BASE_URL`, so set both for production web builds. `example-frontend/scripts/vercelBuild.ts` writes `extra.BASE_URL` from `EXPO_PUBLIC_API_URL` before `expo export`.
+
+### Per-environment values on hosting platforms
+
+Hosting platforms scope variables per environment. Vercel has **Production**, **Preview**, and **Development** scopes; set `EXPO_PUBLIC_API_URL` in each so each build points at its own backend. Because the value is inlined at build time, promoting a preview build to production keeps the preview backend URL. Rebuild for production instead. See [Deploy to Vercel](../how-to/deploy-to-vercel.md#configure-each-environment) and the [multi-environment checklist](../explanation/deployment-baseline.md#multi-environment-checklist).
 
 ## Development tooling
 
@@ -120,7 +132,7 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | `GEMINI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `OPENAI_API_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
 | `GOOGLE_VERTEX_PROJECT` | `@terreno/ai` | ❌ | — | No | server |
-| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | — | No | server |
+| `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | `global` | No | server |
 | `GOOGLE_VERTEX_ALLOWED_MODELS` | `@terreno/ai` | ❌ | all | No | server |
 | `CLAUDE_KEY` | tooling | ❌ | — | Yes | tooling |
 | `LANGFUSE_SECRET_KEY` | `@terreno/ai` | ❌ | — | Yes | server |
@@ -135,8 +147,11 @@ Resolution order for API base URL (`rtk/src/constants.ts`):
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `GCS_BUCKET` | example-backend, admin | ❌ | — | No | server |
+| `GCS_FOLDER_PREFIX` | example-backend `DocumentStorageApp` (`folderPrefix`) | ❌ | — | No | server |
 | `GCS_PROJECT_ID` | GCS clients | ❌ | — | No | server |
 | `GCS_SERVICE_ACCOUNT_KEY` | GCS clients | ❌ | — | Yes | server |
+
+Example-backend Cloud Run deploys set `GCS_BUCKET` (default `flourish-terreno-example-documents`). Preview deploys also set `GCS_FOLDER_PREFIX=pr-<number>/`.
 
 ## Feature flags
 
@@ -222,7 +237,7 @@ There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. Apps t
 |----------|---------|----------|---------|--------|-------|
 | `SLACK_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `SLACK_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
-| `SLACK_BOT_TOKEN` | `@terreno/api` `lookupSlackUserIdByEmail` | ❌ | — | Yes | server |
+| `SLACK_BOT_TOKEN` | `@terreno/api` Slack Web API (`lookupSlackUserIdByEmail`, private channels, invites, `chat.postMessage`) | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
 | `GOOGLE_CHAT_WEBHOOK_URL` | scripts | ❌ | — | Yes | server |
 | `ZOOM_CHAT_WEBHOOKS` | `@terreno/api` | ❌ | — | Yes | server |
@@ -278,6 +293,7 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `OTEL_SERVICE_NAME` | OpenTelemetry (example-backend) | ❌ | `example-backend` | No | server |
+| `SEED_DEFAULTS` | example-backend boot | ❌ | — | No | server |
 | `PR_NUMBER` | PR preview deploy | ❌ | — | No | server |
 | `PR_SERVICE_URL` | PR preview deploy | ❌ | — | No | server |
 | `JOBS_RUNNER` | example-backend | ❌ | `mongo` | No | server |
@@ -292,6 +308,10 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 | `CRON_SECRET_KEY` | tests | ❌ | — | Yes | tooling |
 | `WIDGET_CLIENT_SECRET` | widgets | ❌ | — | Yes | server |
 | `API_KEY` | integrations | ❌ | — | Yes | server |
+
+`SEED_DEFAULTS=true` runs the example seed (default users, all with the published password
+`testpassword123`) when the server starts. A process with `NODE_ENV=production` logs a warning and
+skips it, so no deployed revision, PR previews included, holds those accounts.
 
 ## Testing & CI (tooling only)
 
@@ -320,6 +340,7 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 
 - [Deployment baseline](../explanation/deployment-baseline.md)
 - [Build for web](../how-to/build-for-web.md)
+- [Deploy to Vercel](../how-to/deploy-to-vercel.md)
 - [Configure Better Auth](../how-to/configure-better-auth.md)
 - [Rate limiting](../how-to/rate-limiting.md)
 - [Durable background jobs](../how-to/background-jobs.md)

@@ -1,0 +1,24 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "This summary is too long for the 80-character slot. Trim it, then send it back.",
+    "initial": "Our quarterly results beat every forecast, driven by strong growth in the team plan and lower churn.",
+    "maxLength": 80
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "This summary is too long for the 80-character slot. Trim it, then send it back.",
+    "toolCallId": "call_fixture"
+  }
+}

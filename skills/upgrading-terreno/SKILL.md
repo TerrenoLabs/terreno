@@ -63,7 +63,7 @@ Compile means a **typecheck** (`tsc --noEmit` or `bun run compile` when that scr
 1. Clean git tree + branch (already enforced).
 2. Record current `@terreno/*` versions (`application_info` / `package.json`).
 3. `terreno_get_upgrade_guide` for the range (already fetched). Apply note migrations that are code edits **after** confirmation, in this same order.
-4. Bump **backend** packages: `@terreno/api`, `@terreno/test`, `@terreno/admin-backend`, `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/mcp`. `bun install`.
+4. Bump **backend** packages: `@terreno/api`, `@terreno/test`, `@terreno/admin-backend`, `@terreno/blocks` (when the app lists it; `ai` and `ui` depend on it), `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/mcp`. `bun install`.
 5. Backend `bun run compile` and backend tests. Gate: both pass.
 6. Expo SDK — invoke **`upgrading-expo`**. Skip only when Terreno majors do not require a new Expo (same Expo line). Gate: `npx expo-doctor` / install --fix as that skill requires; native rebuild if peers moved.
 7. Bump **frontend** packages: `@terreno/ui`, `@terreno/rtk`, `@terreno/syncdb`, `@terreno/admin-frontend`, `@terreno/admin-spa`. `bun install`.

@@ -31,7 +31,7 @@ describe("AIRequest Model", () => {
     it("should create a request with all fields", async () => {
       const userId = new mongoose.Types.ObjectId();
       const request = await AIRequest.create({
-        aiModel: "gemini-2.5-flash",
+        aiModel: "gemini-3.8-flash",
         error: undefined,
         metadata: {key: "value"},
         prompt: "Translate this",
@@ -42,7 +42,7 @@ describe("AIRequest Model", () => {
         userId,
       });
 
-      expect(request.aiModel).toBe("gemini-2.5-flash");
+      expect(request.aiModel).toBe("gemini-3.8-flash");
       expect(request.requestType).toBe("translation");
       expect(request.response).toBe("Translated text");
       expect(request.responseTime).toBe(1500);

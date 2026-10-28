@@ -1,0 +1,37 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "I drafted the quarterly update for the board. It covers revenue, hiring, the product roadmap for next quarter, and the two risks we discussed on Monday. Edit anything that reads wrong, then send it back.",
+    "title": "Quarterly board update for the October meeting",
+    "initial": "# Q3 update\n\nRevenue grew 18%.\n"
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Approve draft",
+        "response": {
+          "action": "accept",
+          "content": {
+            "changed": false,
+            "markdown": "# Q3 update\n\nRevenue grew 18%.\n"
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "markdown",
+    "text": "I drafted the quarterly update for the board. It covers revenue, hiring, the product roadmap for next quarter, and the two risks we…",
+    "title": "Quarterly board update for the October…",
+    "toolCallId": "call_fixture"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which plan?",
+    "select": "one",
+    "options": [
+      {"id": "team", "label": "Team"},
+      {"id": "team", "label": "A plan label that goes on and on well past the limit for option labels so that the renderer would have to cut it before it fits"}
+    ],
+    "default": ["solo"],
+    "markdown": true
+  },
+  "errors": [
+    {"path": "default[0]", "code": "DEFAULT_NOT_IN_OPTIONS"},
+    {"path": "markdown", "code": "UNKNOWN_KEY"},
+    {"path": "options[1].id", "code": "DUPLICATE_ID"},
+    {"path": "options[1].label", "code": "TOO_LONG"}
+  ]
+}

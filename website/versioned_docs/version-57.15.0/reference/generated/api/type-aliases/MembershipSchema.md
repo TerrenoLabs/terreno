@@ -1,0 +1,1 @@
+> **MembershipSchema** = `mongoose.Schema`\<[`MembershipDocument`](../interfaces/MembershipDocument.md), [`MembershipModel`](../interfaces/MembershipModel.md), [`MembershipMethods`](MembershipMethods.md)\>

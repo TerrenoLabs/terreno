@@ -1005,5 +1005,123 @@ describe("modelRouter actions", () => {
         )
       ).rejects.toMatchObject({status: 405, title: "Access denied"});
     });
+
+    const setupEditor = async (): Promise<{
+      access: ReturnType<typeof createAccess>;
+      editor: User & {roles: string[]};
+    }> => {
+      await setupDb();
+      const access = createAccess({
+        connection: mongoose.connection,
+        defaultRoles: [
+          {
+            displayName: "Editor",
+            name: "editor",
+            permissions: {todo: ["read", "update", "list"]},
+          },
+        ],
+        statements: {
+          ...terrenoStatements,
+          todo: ["create", "read", "update", "delete", "list"],
+        },
+      });
+      await access.roles.seedDefaults();
+      const id = new mongoose.Types.ObjectId();
+      const editor = {
+        _id: id as unknown as User["_id"],
+        admin: false,
+        id: id.toString(),
+        roles: ["editor"],
+      } as unknown as User & {roles: string[]};
+      return {access, editor};
+    };
+
+    const ownerOnlyScope = {
+      check: ({doc, user}: {doc?: unknown; user?: {id?: string}}): boolean =>
+        !doc || String((doc as {ownerId?: string}).ownerId) === String(user?.id),
+    };
+
+    it("applies the inherited router access.scope to the loaded document", async () => {
+      const {access, editor} = await setupEditor();
+      const req = {params: {}, user: editor} as unknown as Request;
+      const action = {method: "POST" as const, permissions: [Permissions.IsAuthenticated]};
+      const routerAccess = {resource: "todo", scope: ownerOnlyScope};
+
+      await runActionPermissions(
+        action,
+        "instance",
+        FoodModel,
+        req,
+        undefined,
+        access,
+        routerAccess
+      );
+      await expect(
+        runActionPermissions(
+          action,
+          "instance",
+          FoodModel,
+          req,
+          {name: "victim's", ownerId: new mongoose.Types.ObjectId().toString()} as never,
+          access,
+          routerAccess
+        )
+      ).rejects.toMatchObject({status: 403});
+      await runActionPermissions(
+        action,
+        "instance",
+        FoodModel,
+        req,
+        {name: "mine", ownerId: editor.id} as never,
+        access,
+        routerAccess
+      );
+    });
+
+    it("applies the inherited router access.also for the mapped method", async () => {
+      const {access, editor} = await setupEditor();
+      const req = {params: {}, user: editor} as unknown as Request;
+      const action = {method: "POST" as const, permissions: [Permissions.IsAuthenticated]};
+      const routerAccess = {also: {update: [Permissions.IsOwner]}, resource: "todo"};
+
+      await expect(
+        runActionPermissions(
+          action,
+          "instance",
+          FoodModel,
+          req,
+          {name: "victim's", ownerId: new mongoose.Types.ObjectId().toString()} as never,
+          access,
+          routerAccess
+        )
+      ).rejects.toMatchObject({status: 403});
+      await runActionPermissions(
+        action,
+        "instance",
+        FoodModel,
+        req,
+        {name: "mine", ownerId: editor.id} as never,
+        access,
+        routerAccess
+      );
+    });
+
+    it("does not apply router scope to an action that overrides access with another resource", async () => {
+      const {access, editor} = await setupEditor();
+      const req = {params: {}, user: editor} as unknown as Request;
+      await runActionPermissions(
+        {
+          access: {action: "read", resource: "todo"},
+          method: "POST",
+          permissions: [Permissions.IsAuthenticated],
+        },
+        "instance",
+        FoodModel,
+        req,
+        {name: "other resource", ownerId: new mongoose.Types.ObjectId().toString()} as never,
+        access,
+        {resource: "food", scope: ownerOnlyScope}
+      );
+    });
   });
 });

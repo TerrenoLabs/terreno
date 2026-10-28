@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["../biome.jsonc"],
+  "files": {
+    "includes": [
+      "package.json",
+      "src/**/*.ts",
+      "scripts/**/*.ts",
+      "!!**/node_modules",
+      "!!node_modules",
+      "!!**/dist",
+      "!!dist",
+      "!!**/coverage",
+      "!!coverage"
+    ]
+  },
+  "root": true
+}

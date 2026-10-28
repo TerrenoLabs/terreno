@@ -10,11 +10,15 @@ import type {SplitPageListItem, SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
 import {Spinner} from "./Spinner";
+import {SplitPageLoading} from "./SplitPageLoading";
 import {Unifier} from "./Unifier";
 
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -151,14 +155,21 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   return (
     <Box
       avoidKeyboard
-      color={color || "neutralLight"}
+      color={color || "baseAlternate"}
       flex="grow"
       height="100%"
       keyboardOffset={keyboardOffset}
       width="100%"
     >
-      {loading === true && <Spinner color="light" size="md" />}
-      {selectedId === undefined ? renderList() : renderMainContent}
+      <SplitPageLoading
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={loadingComponent}
+        loadingLabel={loadingLabel}
+        spinner={<Spinner color="light" size="md" />}
+      >
+        {selectedId === undefined ? renderList() : renderMainContent}
+      </SplitPageLoading>
     </Box>
   );
 };

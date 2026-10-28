@@ -24,11 +24,13 @@ mock.module("@react-native-async-storage/async-storage", () => ({
 }));
 
 const {configureOfflineMutationEndpoints} = await import("../offlineGate");
+const {setTokenSource} = await import("../tokenSource");
 const {LOGOUT_ACTION_TYPE, TOKEN_REFRESHED_SUCCESS} = await import("../constants");
 const {
   getBaseQuery,
   getFriendlyExpirationInfo,
   getTokenExpirationTimes,
+  jwtTokenSource,
   refreshAuthToken,
   shouldShowStillThereModal,
   staggeredBaseQuery,
@@ -550,5 +552,415 @@ describe("staggeredBaseQuery", () => {
     assert.equal(result.error?.status, 400);
     assert.equal(requests.length, 1);
     assert.deepEqual(dispatched, []);
+  });
+});
+
+interface FakeTokenSource {
+  refreshCalls: () => number;
+  setToken: (token: string | null) => void;
+  source: {
+    getToken: () => Promise<string | null>;
+    getUserId: () => Promise<string | null>;
+    onAuthChange: (callback: () => void) => () => void;
+    refresh?: () => Promise<boolean>;
+  };
+}
+
+const createFakeTokenSource = ({
+  token = "fake-token",
+  refreshedToken,
+  withRefresh = true,
+  refreshError,
+}: {
+  token?: string | null;
+  refreshedToken?: string;
+  withRefresh?: boolean;
+  refreshError?: Error;
+} = {}): FakeTokenSource => {
+  let current = token;
+  let refreshCount = 0;
+  const source: FakeTokenSource["source"] = {
+    getToken: async () => current,
+    getUserId: async () => (current ? "user-1" : null),
+    onAuthChange: () => () => {},
+  };
+  if (withRefresh) {
+    source.refresh = async (): Promise<boolean> => {
+      refreshCount += 1;
+      if (refreshError) {
+        throw refreshError;
+      }
+      if (refreshedToken) {
+        current = refreshedToken;
+      }
+      return true;
+    };
+  }
+  return {
+    refreshCalls: () => refreshCount,
+    setToken: (next) => {
+      current = next;
+    },
+    source,
+  };
+};
+
+describe("staggeredBaseQuery with a registered token source", () => {
+  let postSpy: ReturnType<typeof spyOn<typeof axios, "post">>;
+
+  beforeEach(() => {
+    globalWithWindow.window = globalThis;
+    storage.clear();
+    postSpy = spyOn(axios, "post");
+    configureOfflineMutationEndpoints([]);
+  });
+
+  afterEach(() => {
+    setTokenSource(undefined);
+    postSpy.mockRestore();
+    globalThis.fetch = originalFetch;
+    Reflect.deleteProperty(globalWithWindow, "window");
+    configureOfflineMutationEndpoints([]);
+    storage.clear();
+  });
+
+  it("sends the source's token and does not log out when no JWT is stored (#1217)", async () => {
+    const fake = createFakeTokenSource();
+    setTokenSource(fake.source);
+    const requests = installFetch([() => jsonResponse({data: {id: "1"}})]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(dispatched, []);
+    assert.deepEqual(result.data, {id: "1"});
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.headers.get("authorization"), "Bearer fake-token");
+    assert.equal(postSpy.mock.calls.length, 0);
+  });
+
+  it("sends the request without an authorization header when the token is null", async () => {
+    const fake = createFakeTokenSource({token: null});
+    setTokenSource(fake.source);
+    const requests = installFetch([() => jsonResponse({data: {id: "1"}})]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.data, {id: "1"});
+    assert.isNull(requests[0]?.headers.get("authorization") ?? null);
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("treats a token read that throws as no token", async () => {
+    setTokenSource({
+      getToken: async () => {
+        throw new Error("storage unavailable");
+      },
+      getUserId: async () => null,
+      onAuthChange: () => () => {},
+    });
+    const requests = installFetch([() => jsonResponse({data: {id: "1"}})]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.data, {id: "1"});
+    assert.isNull(requests[0]?.headers.get("authorization") ?? null);
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("refreshes once after a 401 and returns the retried response", async () => {
+    const fake = createFakeTokenSource({refreshedToken: "fresh-token"});
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({data: {id: "1"}}),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.data, {id: "1"});
+    assert.equal(fake.refreshCalls(), 1);
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0]?.headers.get("authorization"), "Bearer fake-token");
+    assert.equal(requests[1]?.headers.get("authorization"), "Bearer fresh-token");
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("calls refresh on a class-based source with its own this", async () => {
+    class ClassTokenSource {
+      private token = "class-token";
+      refreshCount = 0;
+      async getToken(): Promise<string | null> {
+        return this.token;
+      }
+      async getUserId(): Promise<string | null> {
+        return "class-user";
+      }
+      onAuthChange(): () => void {
+        return (): void => {};
+      }
+      async refresh(): Promise<boolean> {
+        this.refreshCount += 1;
+        this.token = "class-fresh-token";
+        return true;
+      }
+    }
+    const source = new ClassTokenSource();
+    setTokenSource(source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({data: {id: "1"}}),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.data, {id: "1"});
+    assert.equal(source.refreshCount, 1);
+    assert.equal(requests[1]?.headers.get("authorization"), "Bearer class-fresh-token");
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("logs out only when the retry after a refresh is also a 401", async () => {
+    const fake = createFakeTokenSource();
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({title: "Unauthorized"}, 401),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.equal(result.error?.status, 401);
+    assert.equal(fake.refreshCalls(), 1);
+    assert.equal(requests.length, 2);
+    assert.deepEqual(dispatched, [{type: LOGOUT_ACTION_TYPE}]);
+  });
+
+  it("does not keep retrying after it logs out", async () => {
+    const fake = createFakeTokenSource();
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({title: "Unauthorized"}, 401),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await staggeredBaseQuery("/todos", api, {maxRetries: 2});
+
+    assert.equal(result.error?.status, 401);
+    assert.equal(requests.length, 2);
+    assert.deepEqual(dispatched, [{type: LOGOUT_ACTION_TYPE}]);
+  });
+
+  it("retries once with a re-read token when the source has no refresh", async () => {
+    const fake = createFakeTokenSource({withRefresh: false});
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => {
+        fake.setToken("rotated-token");
+        return jsonResponse({title: "Unauthorized"}, 401);
+      },
+      () => jsonResponse({data: {id: "1"}}),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.data, {id: "1"});
+    assert.equal(requests[1]?.headers.get("authorization"), "Bearer rotated-token");
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("still retries when the refresh throws, and logs out when the retry is a 401", async () => {
+    const fake = createFakeTokenSource({refreshError: new Error("network down")});
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({title: "Unauthorized"}, 401),
+    ]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.equal(result.error?.status, 401);
+    assert.equal(fake.refreshCalls(), 1);
+    assert.equal(requests.length, 2);
+    assert.deepEqual(dispatched, [{type: LOGOUT_ACTION_TYPE}]);
+  });
+
+  it("calls refresh again after a refresh that threw synchronously", async () => {
+    let refreshCount = 0;
+    setTokenSource({
+      getToken: async () => "fake-token",
+      getUserId: async () => "user-1",
+      onAuthChange: () => () => {},
+      refresh: (): Promise<boolean> => {
+        refreshCount += 1;
+        throw new Error("sync failure");
+      },
+    });
+    installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({data: {id: "1"}}),
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({data: {id: "2"}}),
+    ]);
+
+    const first = await runBaseQuery(createApi().api);
+    const second = await runBaseQuery(createApi().api);
+
+    assert.deepEqual(first.data, {id: "1"});
+    assert.deepEqual(second.data, {id: "2"});
+    assert.equal(refreshCount, 2);
+  });
+
+  it("shares one refresh between concurrent 401s", async () => {
+    const fake = createFakeTokenSource({refreshedToken: "fresh-token"});
+    setTokenSource(fake.source);
+    const requests = installFetch([
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({title: "Unauthorized"}, 401),
+      () => jsonResponse({data: {id: "first"}}),
+      () => jsonResponse({data: {id: "second"}}),
+    ]);
+    const first = createApi({endpoint: "getFirst"});
+    const second = createApi({endpoint: "getSecond"});
+
+    const [firstResult, secondResult] = await Promise.all([
+      runBaseQuery(first.api, "/first"),
+      runBaseQuery(second.api, "/second"),
+    ]);
+
+    assert.equal(fake.refreshCalls(), 1);
+    assert.equal(requests.length, 4);
+    assert.sameDeepMembers([firstResult.data, secondResult.data], [{id: "first"}, {id: "second"}]);
+    assert.deepEqual(first.dispatched.concat(second.dispatched), []);
+  });
+
+  it("does not retry failed mutations", async () => {
+    setTokenSource(createFakeTokenSource().source);
+    const requests = installFetch([() => jsonResponse({title: "Bad Request"}, 400)]);
+    const {api, dispatched} = createApi({endpoint: "postTodos", type: "mutation"});
+
+    const result = await staggeredBaseQuery({body: {}, method: "POST", url: "/todos"}, api, {
+      maxRetries: 2,
+    });
+
+    assert.equal(result.error?.status, 400);
+    assert.equal(requests.length, 1);
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("passes public endpoints through without refreshing or logging out", async () => {
+    const fake = createFakeTokenSource();
+    setTokenSource(fake.source);
+    const requests = installFetch([() => jsonResponse({title: "Unauthorized"}, 401)]);
+    const {api, dispatched} = createApi({endpoint: "getVersionCheck"});
+
+    const result = await runBaseQuery(api, "/version-check");
+
+    assert.equal(result.error?.status, 401);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0]?.headers.get("authorization"), "Bearer fake-token");
+    assert.equal(fake.refreshCalls(), 0);
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("still defers offline mutations before reading the source", async () => {
+    configureOfflineMutationEndpoints(["postTodos"]);
+    setTokenSource(createFakeTokenSource().source);
+    const requests = installFetch([]);
+    const {api, dispatched} = createApi({endpoint: "postTodos", offline: true, type: "mutation"});
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.error, {error: "Network unavailable", status: "FETCH_ERROR"});
+    assert.equal(requests.length, 0);
+    assert.deepEqual(dispatched, []);
+  });
+
+  it("keeps the JWT behavior when jwtTokenSource is registered explicitly", async () => {
+    setTokenSource(jwtTokenSource);
+    const requests = installFetch([]);
+    const {api, dispatched} = createApi();
+
+    const result = await runBaseQuery(api);
+
+    assert.deepEqual(result.error, {
+      error: "No token found for getTodos",
+      status: "FETCH_ERROR",
+    });
+    assert.deepEqual(dispatched, [{type: LOGOUT_ACTION_TYPE}]);
+    assert.equal(requests.length, 0);
+  });
+});
+
+describe("jwtTokenSource", () => {
+  let postSpy: ReturnType<typeof spyOn<typeof axios, "post">>;
+
+  beforeEach(() => {
+    globalWithWindow.window = globalThis;
+    storage.clear();
+    postSpy = spyOn(axios, "post");
+  });
+
+  afterEach(() => {
+    postSpy.mockRestore();
+    Reflect.deleteProperty(globalWithWindow, "window");
+    Reflect.deleteProperty(axios.defaults.headers.common, "Authorization");
+    storage.clear();
+  });
+
+  it("reads the stored JWT through getAuthToken", async () => {
+    assert.isNull(await jwtTokenSource.getToken());
+    setTokens({auth: "stored-auth"});
+    assert.equal(await jwtTokenSource.getToken(), "stored-auth");
+  });
+
+  it("refreshes through refreshAuthToken and resolves true on success", async () => {
+    setTokens({refresh: "old-refresh"});
+    postSpy.mockResolvedValue({data: {data: {refreshToken: "new-refresh", token: "new-auth"}}});
+
+    assert.isTrue(await jwtTokenSource.refresh?.());
+    assert.equal(postSpy.mock.calls.length, 1);
+    assert.equal(storage.get("AUTH_TOKEN"), "new-auth");
+  });
+
+  it("resolves false when refreshAuthToken fails", async () => {
+    assert.isFalse(await jwtTokenSource.refresh?.());
+    assert.equal(postSpy.mock.calls.length, 0);
+  });
+
+  it("reads the user id from the stored JWT", async () => {
+    assert.isNull(await jwtTokenSource.getUserId());
+    const payload = encodeSegment({exp: 4102444800, id: "user-42"});
+    setTokens({auth: `${encodeSegment({alg: "HS256"})}.${payload}.signature`});
+    assert.equal(await jwtTokenSource.getUserId(), "user-42");
+    const subOnly = encodeSegment({exp: 4102444800, sub: "user-sub"});
+    setTokens({auth: `${encodeSegment({alg: "HS256"})}.${subOnly}.signature`});
+    assert.equal(await jwtTokenSource.getUserId(), "user-sub");
+    setTokens({auth: "not-a-jwt"});
+    assert.isNull(await jwtTokenSource.getUserId());
+  });
+
+  it("notifies onAuthChange subscribers after a token refresh", async () => {
+    setTokens({refresh: "old-refresh"});
+    postSpy.mockResolvedValue({data: {data: {refreshToken: "new-refresh", token: "new-auth"}}});
+    let calls = 0;
+    const unsubscribe = jwtTokenSource.onAuthChange(() => {
+      calls += 1;
+    });
+
+    await refreshAuthToken();
+    unsubscribe();
+    setTokens({refresh: "old-refresh"});
+    await refreshAuthToken();
+
+    assert.equal(calls, 1);
   });
 });

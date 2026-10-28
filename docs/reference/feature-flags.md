@@ -63,7 +63,7 @@ New code can also use OpenFeature React hooks (`useBooleanFlagValue`, `useString
 
 ## OpenFeature integration
 
-`FeatureFlagsApp` registers an OpenFeature **server** provider (`MongoFeatureFlagProvider`) on a dedicated domain (default `"feature-flags"`) so the global default provider is unchanged. The authenticated bulk endpoint **`GET {basePath}/flagConfiguration`** returns a `FlagConfiguration`-compatible map (suitable for `TypedInMemoryProvider` on the client). The legacy **`GET {basePath}/evaluate`** response shape is unchanged but is **deprecated**: responses include `Deprecation: true` and a `Sunset` HTTP-date header (~90 days). Prefer `useTerrenoFeatureFlags` / `useFeatureFlags` from `@terreno/rtk`, or migrate direct HTTP callers to `/flagConfiguration`.
+`FeatureFlagsApp` registers an OpenFeature **server** provider (`MongoFeatureFlagProvider`) on a dedicated domain (default `"feature-flags"`) so the global default provider is unchanged. The authenticated bulk endpoint **`GET {basePath}/flagConfiguration`** returns a `FlagConfiguration`-compatible map (suitable for `TypedInMemoryProvider` on the client). Disabled **boolean** flags are included and resolve to `off`, so a client can tell a turned-off flag from one that was never created. Disabled variant flags and archived flags are omitted. The legacy **`GET {basePath}/evaluate`** response shape is unchanged but is **deprecated**: responses include `Deprecation: true` and a `Sunset` HTTP-date header (~90 days). Prefer `useTerrenoFeatureFlags` / `useFeatureFlags` from `@terreno/rtk`, or migrate direct HTTP callers to `/flagConfiguration`.
 
 ### `defaultVariant` on `FeatureFlag`
 
@@ -301,4 +301,4 @@ Segment names can be referenced in flag rules via the admin UI.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `FEATURE_FLAGS_DEBUG` | Set to `"false"` to disable evaluation debug logs | Enabled |
+| `FEATURE_FLAGS_DEBUG` | Set to `"true"` to write evaluation diagnostics at `debug` level: flag key, rule field, operator, and result. User attribute values are never logged | Disabled |

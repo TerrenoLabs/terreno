@@ -16,6 +16,9 @@ import {Todo} from "./models/todo";
 import {User} from "./models/user";
 import {seedDefaultData} from "./scripts/seed-test-data";
 
+// Seeding the default dataset and then running a script over it takes 5s+ in a full run.
+const SEEDED_SCRIPT_TIMEOUT_MS = 30_000;
+
 describe("resetDatabase admin script", () => {
   it("requires an explicit override for live production resets", () => {
     assert.isFalse(isDatabaseResetAllowed({isExplicitlyAllowed: false, isProduction: true}));
@@ -30,49 +33,91 @@ describe("resetDatabase admin script", () => {
     assert.match(script?.description ?? "", /restore defaults/i);
   });
 
-  it("reports affected records without changing data during a dry run", async () => {
-    await seedDefaultData();
-    const before = await Todo.countDocuments();
+  it(
+    "reports affected records without changing data during a dry run",
+    async () => {
+      await seedDefaultData();
+      const before = await Todo.countDocuments();
 
-    const result = await resetExampleDatabase(false);
+      const result = await resetExampleDatabase(false);
 
-    assert.isTrue(result.success);
-    assert.match(result.results[0], /Dry run: would reset/);
-    assert.equal(await Todo.countDocuments(), before);
-  });
+      assert.isTrue(result.success);
+      assert.match(result.results[0], /Dry run: would reset/);
+      assert.equal(await Todo.countDocuments(), before);
+    },
+    SEEDED_SCRIPT_TIMEOUT_MS
+  );
 
-  it("clears example data, restores defaults, and preserves the superuser", async () => {
-    await seedDefaultData();
-    const user = await User.findByEmail("test@example.com");
-    assert.exists(user);
-    if (!user) {
-      assert.fail("Seeded test user is required");
-    }
-    const organization = await Organization.findExactlyOne({name: "Alpha Workspace"});
-    await Todo.create({ownerId: user._id, title: "Temporary reset record"});
-    await Project.create({
-      organizationId: String(organization._id),
-      title: "Temporary reset project",
-    });
-
-    const result = await resetExampleDatabase(true);
-
-    assert.isTrue(result.success);
-    assert.equal(await Todo.countDocuments({deleted: {$ne: true}, ownerId: user._id}), 2);
-    assert.equal(
-      await Project.countDocuments({
-        deleted: {$ne: true},
+  it(
+    "clears example data, restores defaults, and preserves the superuser",
+    async () => {
+      await seedDefaultData();
+      const user = await User.findByEmail("test@example.com");
+      assert.exists(user);
+      if (!user) {
+        assert.fail("Seeded test user is required");
+      }
+      const organization = await Organization.findExactlyOne({name: "Alpha Workspace"});
+      await Todo.create({ownerId: user._id, title: "Temporary reset record"});
+      await Project.create({
         organizationId: String(organization._id),
-      }),
-      2
-    );
-    assert.equal(await ConsentForm.countDocuments(), 3);
-    assert.equal(await FeatureFlag.countDocuments(), 5);
-    const superadmin = await User.findByEmail("superadmin@example.com");
-    assert.exists(superadmin);
-    assert.isTrue(superadmin?.admin);
-    assert.include(superadmin?.roles ?? [], "superadmin");
+        title: "Temporary reset project",
+      });
+
+      const result = await resetExampleDatabase(true);
+
+      assert.isTrue(result.success);
+      assert.equal(await Todo.countDocuments({deleted: {$ne: true}, ownerId: user._id}), 2);
+      assert.equal(
+        await Project.countDocuments({
+          deleted: {$ne: true},
+          organizationId: String(organization._id),
+        }),
+        2
+      );
+      assert.equal(await ConsentForm.countDocuments(), 3);
+      assert.equal(await FeatureFlag.countDocuments(), 6);
+      const superadmin = await User.findByEmail("superadmin@example.com");
+      assert.exists(superadmin);
+      assert.isTrue(superadmin?.admin);
+      assert.include(superadmin?.roles ?? [], "superadmin");
+    },
+    SEEDED_SCRIPT_TIMEOUT_MS
+  );
+});
+
+describe("seedChatSafetyDataset admin script", () => {
+  it("is registered for the admin script runner", () => {
+    const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+    assert.exists(script);
+    assert.match(script?.description ?? "", /chat-safety/i);
   });
+
+  it(
+    "leaves the seeded dataset unchanged on dry and wet runs",
+    async () => {
+      await seedDefaultData();
+      const script = adminScripts.find(({name}) => name === "seedChatSafetyDataset");
+      if (!script) {
+        assert.fail("seedChatSafetyDataset is not registered");
+      }
+      const dry = await script.runner(false);
+      const wet = await script.runner(true);
+      assert.isTrue(dry.success);
+      assert.isTrue(wet.success);
+      assert.isTrue(
+        dry.results.some((line) => {
+          return line.includes("left unchanged");
+        })
+      );
+      assert.isTrue(
+        wet.results.some((line) => {
+          return line.includes("left unchanged");
+        })
+      );
+    },
+    SEEDED_SCRIPT_TIMEOUT_MS
+  );
 });
 
 describe("enqueueDlqDemoJob admin script", () => {

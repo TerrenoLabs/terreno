@@ -1,0 +1,20 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Anything to leave off the grocery order?",
+    "select": "many",
+    "options": [
+      {"id": "milk", "label": "Milk"},
+      {"id": "eggs", "label": "Eggs"}
+    ],
+    "minSelected": 0,
+    "allowDecline": false
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Anything to leave off the grocery order?",
+    "handoff": true,
+    "buttons": []
+  }
+}

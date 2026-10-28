@@ -20,6 +20,11 @@ describe("parsePackageAreaFromIssueBody", () => {
     assert.equal(parsePackageAreaFromIssueBody(body), "area:api");
   });
 
+  it("maps @terreno/blocks to area:ai", (): void => {
+    const body = "### Affected package\n\n@terreno/blocks\n\n### Version";
+    assert.equal(parsePackageAreaFromIssueBody(body), "area:ai");
+  });
+
   it("maps plugins to area:dx", (): void => {
     const body = "### Affected package\n\nplugins\n\n### Kind";
     assert.equal(parsePackageAreaFromIssueBody(body), "area:dx");

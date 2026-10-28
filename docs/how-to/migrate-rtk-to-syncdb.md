@@ -152,7 +152,37 @@ import {useQuery} from "@terreno/syncdb/react";
 const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
 ```
 
-`filter` / `sort` run in JS — there are no server query params. Tombstones are excluded unless `{includeDeleted: true}`.
+`where` / `filter` / `sort` / `limit` run in JS over the local store. Tombstones are excluded unless `{includeDeleted: true}`.
+
+### Filtered, sorted, and paged list args
+
+RTK list args map to the same syntax. Pick the hook by collection size:
+
+| RTK | Whole collection synced (`collections`) | Too large to sync whole (`queryCollections`) |
+|-----|------------------------------------------|----------------------------------------------|
+| `useGetMessagesQuery({threadId})` | `useQuery("messages", {where: {threadId}})` | `useWindowQuery("messages", {where: {threadId}})` |
+| `{status: {$in: ["open", "pending"]}}` | `where: {status: {$in: [...]}}` | same |
+| `{sort: "-created"}` | `sort: "-created"` | same |
+| `{limit: 20}` | `limit: 20` | `pageSize: 20` |
+| `{page: 2}` / load more | grow `limit` | `fetchNextPage()` |
+| `data.more` / `data.total` | — | `hasMore` / `total` |
+| `isLoading` / `isFetching` / `refetch` | not needed | `isLoading` / `isFetching` / `refetch` |
+| `{skip: !threadId}` | not needed | `skip: !threadId` |
+
+```typescript
+import {useWindowQuery} from "@terreno/syncdb/react";
+
+const {data: messages, hasMore, fetchNextPage, isLoading} = useWindowQuery<Message>("messages", {
+  where: {threadId},
+  sort: "-created",
+  pageSize: 30,
+  skip: !threadId,
+});
+```
+
+Windows with different filters keep separate result lists but share one local row per
+document, so an edit to a message shown in two windows updates once. See
+[Query windows](../reference/syncdb.md#query-windows).
 
 ### Delete this RTK read code
 
@@ -305,8 +335,9 @@ export const syncDb = createSyncDb({authProvider, baseUrl, collections: ["todos"
 
 Better Auth session tokens live in the Better Auth client (`@terreno/rtk` `createBetterAuthClient`):
 
-- **Native:** `expo-secure-store`
-- **Web:** `@react-native-async-storage/async-storage`
+- **Native:** the Expo plugin's cookie jar in `expo-secure-store`
+- **Web (default):** Better Auth's HttpOnly session cookie, managed by the browser. No token is in app storage
+- **Web with `webAuth: "bearer"`:** the `set-auth-token` bearer in `localStorage` (or the `bearerStorage` you pass), readable with `getBetterAuthBearerToken()`. See [Frontend and API on different sites](configure-better-auth.md#frontend-and-api-on-different-sites)
 
 Syncdb does not store tokens itself — it calls `authProvider` on every transport/HTTP request.
 
@@ -316,11 +347,13 @@ On connect, the socket transport sends the bearer token from `getToken()`. When 
 
 ### Backend
 
+Register `BetterAuthApp` and `RealtimeApp` on the same `TerrenoApp`. `RealtimeApp` picks up the
+Better Auth instance by itself, so no extra option is needed. Legacy JWT sockets keep working
+alongside it. Only a `RealtimeApp` mounted without `TerrenoApp` needs the instance passed in:
+
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})
 ```
-
-Required for Better Auth socket sessions. Legacy JWT sockets continue to work without it.
 
 ## 8. Codegen
 

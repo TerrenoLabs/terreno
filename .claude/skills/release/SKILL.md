@@ -2,23 +2,24 @@
 name: release
 description: >-
   Cut a Terreno release — organize commits since the last tag into useful
-  release notes, flag breaking changes, decide the semver version, create the
-  GitHub release, and monitor the publish-on-tag workflow until every package
-  deploys to npm. Trigger with /release.
+  release notes, flag breaking changes, decide the semver version, open a
+  changelog pull request that the Bot merge workflow lands and tags once CI is
+  green (or merge and tag it by hand when it cannot), and monitor the CircleCI
+  publish until every package is on npm. Trigger with /release.
 disable-model-invocation: true
 ---
 # Release Terreno
 
-Cut a new Terreno release end-to-end: gather commits, write organized release notes, pick the version, create the GitHub release (which pushes the tag), and watch the npm publish workflow until all packages are live.
+One `/release` finishes the release. Do not stop after opening a pull request or after writing notes. Assemble the changelog, merge that pull request as soon as CI is green, push the tag, and watch npm until every published package is live.
 
 ## How releases work in this repo
 
-- Pushing a tag matching `X.Y.Z` (no `v` prefix, e.g. `0.18.0`) triggers `.github/workflows/publish-on-tag.yml`.
-- That workflow publishes **fourteen packages, all at the same version**: `@terreno/api`, `@terreno/test`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `@terreno/mcp`, `@terreno/syncdb`. (`demo` and the example apps are not published.)
-- Every publish job waits on `breaking-change-documentation`, which runs `bun run check:upgrade-docs "<tag>"` against the tagged commit. That job fails the whole release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing — so assembled changelog entries and the upgrade note must be on master *before* tagging.
-- Publish jobs are chained: `rtk`, `admin-frontend`, and `admin-spa` depend on `publish-ui`; `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `jobs`, and `mcp` depend on `publish-api` and `publish-test`; `admin-spa` also waits on `publish-rtk` and `publish-admin-frontend`. `api`, `test`, `ui`, and `syncdb` publish independently. A `ui`, `api`, or `test` failure cascades.
-- After the master version bump, the workflow dispatches `demo-deploy.yml` against the release tag, and for `X.Y.0` tags also cuts the versioned docs.
-- After successful publishes, the workflow commits `chore: bump package versions to X.Y.Z` back to master and sends a Zoom notification. Prerelease tags (`-beta`, `-alpha`) skip the master bump.
+- Pushing a tag matching `X.Y.Z` (no `v` prefix, e.g. `57.10.0`) triggers CircleCI `publish-release` (`.circleci/continue-config.yml`). That job checks upgrade notes, compiles once, publishes in parallel, bumps package versions on master, and notifies Zoom. For stable `X.Y.Z` tags it also runs `deploy-demo`.
+- `.github/workflows/publish-on-tag.yml` is `workflow_dispatch` only. Do not dispatch it after CircleCI has published: npm versions are immutable, so a second publish of the same version fails.
+- CircleCI publishes these packages, all at the same version: `@terreno/api`, `@terreno/test`, `@terreno/blocks`, `@terreno/ui`, `@terreno/rtk`, `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`, `@terreno/ai`, `@terreno/api-health`, `@terreno/announcements`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/jobs`, `create-terreno-app`, `@terreno/mcp`, `@terreno/syncdb`. (`demo`, the example apps, and `@terreno/cli` are not in that job.)
+- `publish-release` runs `bun run check:upgrade-docs` against the tag first. That check fails the release when the tag's `CHANGELOG.md` has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` section for the version but `mcp-server/src/docs/upgrades/<version>.md` is missing. The assembled changelog and the upgrade note must already be on master.
+- Prerelease tags (`-beta`, `-alpha`) publish to their prerelease npm dist-tag and skip the master version bump. `deploy-demo` runs only for tags with no prerelease suffix.
+- GitHub releases start as **drafts**. This repo has immutable releases on, so publishing a release locks its assets and GitHub answers `422` to any later upload. For `X.Y.0` tags, CircleCI `archive-docs-version` attaches `docs-site.tar.gz` to the draft, publishes the release, then commits the docs snapshot (`chore: cut docs version X.Y.0`) to master. For patch and prerelease tags, `publish-github-release` publishes the draft after `publish-release`. Never publish the draft yourself: that locks the release before the archive is attached. Do not dispatch the GitHub publish workflow to cut docs.
 
 ## Step 1: Preflight
 
@@ -49,7 +50,7 @@ git log <last-tag>..HEAD --oneline --no-merges
 ## Step 3: Decide the version
 
 - **Major**: pinned to the Expo SDK major. While the repo is on Expo 54/55 the major stays `0` (releases are `0.x.y`). Once the monorepo upgrades to Expo 56, releases become `56.x.y`, and each subsequent Expo SDK upgrade bumps the major to match.
-- **Minor**: standard semver — new features, new components/routes/exports, new `modelRouter` options, or any non-breaking API addition. While the major is `0`, breaking changes also bump the minor (semver 0.x convention) and must be called out in the notes.
+- **Minor**: standard semver — new features, new components/routes/exports, new `modelRouter` options, or any non-breaking API addition. While the major is `0`, breaking changes also bump the minor (semver 0.x convention) and must be called out in the notes. While the major is pinned to an Expo SDK, breaking changes also bump the minor and must be called out in the notes.
 - **Patch**: standard semver — bug fixes, performance work, and releases containing only docs, CI/workflow, skills/rules, test-coverage (`[coverage]`, `[alignRules]`), or dependency-bump commits.
 - **Prerelease**: append `-beta.1` (etc.) to test the publish pipeline without moving `latest` or bumping versions on master.
 
@@ -60,7 +61,7 @@ Scan the diff and PR bodies for anything a consumer must act on:
 - Removed or renamed exports — check the export surface directly:
 
   ```bash
-  git diff <last-tag>..HEAD -- api/src/index.ts ui/src/index.tsx rtk/src/index.ts
+  git diff <last-tag>..HEAD -- api/src/index.ts ui/src/index.tsx rtk/src/index.ts blocks/src/index.ts ai/src/index.ts
   ```
 
 - Changed function signatures or component prop types in published packages.
@@ -105,57 +106,141 @@ Rules:
 - Expo SDK, React Native, and other `isFingerprintSkip` packages are **not** bumped by `update-dependencies`. Include those native upgrades in this release (see `upgrading-expo`).
 - Merge commits that belong to one feature (e.g. an IP/plan commit plus its implementation) into a single bullet.
 - Describe user-facing impact, not implementation detail. Keep `(#123)` PR references — GitHub autolinks them.
+- Save the notes to `/tmp/release-notes.md`. They are posted in Step 6, after the changelog pull request is on master.
 
 ## Step 5b: Assemble `CHANGELOG.md` from fragments (required)
 
-PRs do not edit `CHANGELOG.md`. User-facing work lands as one file per feature in [`changelog/unreleased/`](../../changelog/unreleased/) with a YAML `category` header (`Breaking`, `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`).
+PRs do not edit `CHANGELOG.md` as they land. User-facing work lands as one file per feature in [`changelog/unreleased/`](../../changelog/unreleased/) with a YAML `category` header (`Breaking`, `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`).
 
 Before creating the tag:
 
-1. Preview pending notes: `bun run changelog:preview`. If there are no fragments, stop — do not cut an empty release (see Step 2).
-2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files.
+1. Preview pending notes: `bun run changelog:preview`. If there are no fragments, stop — do not cut an empty release (see Step 2). If a user-facing feature in the commit range has no fragment, add one before assembling so the changelog matches what shipped.
+2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files. It also regenerates the example app's what's new data (`example-frontend/constants/whatsNew.generated.json`); if you edit `CHANGELOG.md` afterwards (for example to add an upgrade note line), rerun `bun run whats-new:generate`. Commit it with `CHANGELOG.md`, or `bun run check:whats-new` fails in CI.
 3. Confirm the new version section is **non-empty** and grouped under Keep a Changelog headings.
-4. If the new section has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` heading, write `mcp-server/src/docs/upgrades/X.Y.Z.md` **in the same commit as the assembled changelog**, using the template in [`mcp-server/src/docs/upgrades/README.md`](../../mcp-server/src/docs/upgrades/README.md). Add a changelog line `Upgrade note: [\`mcp-server/src/docs/upgrades/X.Y.Z.md\`](mcp-server/src/docs/upgrades/X.Y.Z.md).` under the version heading. The tag-time `breaking-change-documentation` job fails the release without the file. Verify locally with `bun run check:upgrade-docs X.Y.Z`.
-5. Commit the assembled changelog, deleted fragments, and the upgrade note on `master` before tagging. When `master` requires a PR, merge that PR first and only then create the release, so the tagged commit contains both files.
+4. If the new section has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` heading, write `mcp-server/src/docs/upgrades/X.Y.Z.md` **in the same commit as the assembled changelog**, using the template in [`mcp-server/src/docs/upgrades/README.md`](../../mcp-server/src/docs/upgrades/README.md). Add a changelog line `Upgrade note: [\`mcp-server/src/docs/upgrades/X.Y.Z.md\`](mcp-server/src/docs/upgrades/X.Y.Z.md).` under the version heading. The tag-time upgrade-docs check fails the release without the file. Verify locally with `bun run check:upgrade-docs X.Y.Z`.
+5. If this skill (or another `.rulesync/` source) needs to change, prefer a separate pull request so **Bot merge** can land the release; otherwise edit `.rulesync/` in this same commit, run `bun run rules`, then run `bun run skills:sync` so `skills/release/SKILL.md` matches. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
+
+## Step 5c: Open the changelog pull request and merge it when CI is green (required)
+
+Never commit the release directly to master, and never tag before this pull request is merged. Master accepts changes through a squash merge.
+
+1. From latest master, create and push `release/X.Y.Z` with the assembled changelog, deleted fragments, upgrade note, and any skill updates. A Cursor cloud agent whose forge requires a `cursor/` prefix uses `cursor/release-X.Y.Z` instead.
+2. Open the pull request against master:
+
+   ```bash
+   gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
+   ```
+
+   Write `/tmp/release-pr.md` with the `Why`, `What changed`, and `Verification` sections the approval bot scores:
+
+   ```markdown
+   ## Why
+
+   Assemble the X.Y.Z changelog so the release can be tagged.
+
+   ## What changed
+
+   - Folded <n> fragments from `changelog/unreleased/` into `CHANGELOG.md` under X.Y.Z
+   - Regenerated `example-frontend/constants/whatsNew.generated.json`
+   - <Upgrade note `mcp-server/src/docs/upgrades/X.Y.Z.md`, when written>
+
+   ## Verification
+
+   | Status | Scope | Evidence / action |
+   | --- | --- | --- |
+   | ✅ Tested | Section is non-empty and grouped | `bun run check:changelog` → OK; the X.Y.Z section in `CHANGELOG.md` lists <n> entries |
+   | ✅ Tested | What's new matches the changelog | `bun run check:whats-new` → pass |
+   | ✅ Tested | Upgrade note present | `bun run check:upgrade-docs X.Y.Z` → pass |
+   ```
+
+   Drop the upgrade-note bullet and row when the release needs no upgrade note.
+
+3. **Bot merge path (default).** When the pull request touches only release-note files (`CHANGELOG.md`, `changelog/unreleased/*`, `whatsNew.generated.json`, `mcp-server/src/docs/upgrades/*.md`), the **Bot merge** workflow merges it after CI passes. It then tags the squash commit and creates the draft GitHub release from the `CHANGELOG.md` section. See [release automation](../../docs/how-to/release-automation.md). Do not merge or tag by hand. Wait for the tag, then go to Step 7:
+
+   ```bash
+   # Bot merge runs as a check on the pull request, after every other check passes.
+   gh pr checks "$PR" --watch --interval 60
+   gh pr view "$PR" --json state --jq .state  # MERGED
+   git fetch --tags origin && git rev-parse "$VERSION"
+   gh release edit "$VERSION" --notes-file /tmp/release-notes.md  # optional: richer Step 5 notes; the release stays a draft
+   ```
+
+   If **Bot merge** logs `Leaving for human review` (for example, the pull request also edits a skill), follow the manual path below. Bot-merge setup problems also go to the manual path: missing `BOT_MERGE_*` settings, or a release branch that is not stable `X.Y.Z`. Keep skill edits in a separate pull request so the release stays bot-mergeable.
+
+   **Manual path.** Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
+
+   ```bash
+   gh pr checks --watch
+   ```
+
+4. As soon as those checks are green, squash-merge. Do not wait for a second reviewer. Master requires one approving review; the release maintainer is a ruleset bypass actor, so merge with admin:
+
+   ```bash
+   gh pr merge --squash --admin --delete-branch
+   ```
+
+   If GitHub rejects the merge, stop and report. Do not create the tag.
+
+5. Update local master and confirm the squash commit is the tip:
+
+   ```bash
+   git checkout master && git pull origin master
+   ```
 
 ## Step 6: Create the release
 
-Write the notes to a file, then create the release targeting master (this pushes the tag and starts the publish workflow):
+Skip this step when **Bot merge** tagged the release (Step 5c.3). Only after Step 5c is on master. Push the tag on the squash commit (this starts CircleCI `publish-release`), then create the release as a draft:
 
 ```bash
-gh release create "$VERSION" --target master --title "$VERSION" --notes-file /tmp/release-notes.md
+git fetch origin master
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/master)"  # the Step 5 squash commit
+git tag "$VERSION" origin/master
+git push origin "refs/tags/$VERSION"
+gh release create "$VERSION" --draft --verify-tag --title "$VERSION" --notes-file /tmp/release-notes.md
 ```
+
+Create the draft right after the tag push. The CI jobs that need it wait up to 10 minutes, then fail. Keep `--draft`, and do not publish the draft by hand: CI publishes it once the docs archive is attached.
 
 ## Step 7: Monitor the publish and verify npm
 
-1. Watch the workflow until it finishes:
+1. Watch the tag commit until `ci/circleci: publish-release` succeeds. Do not watch `publish-on-tag.yml` — that workflow does not run on tag push.
 
    ```bash
-   RUN_ID=$(gh run list --workflow=publish-on-tag.yml --branch "$VERSION" --limit 1 --json databaseId -q '.[0].databaseId')
-   gh run watch "$RUN_ID" --exit-status
+   SHA=$(git rev-parse "$VERSION")
+   # Poll until publish-release is success. Failure stops the release.
+   gh api "repos/TerrenoLabs/terreno/commits/$SHA/status" \
+     --jq '.statuses[] | select(.context == "ci/circleci: publish-release") | {state, target_url}'
    ```
 
-2. Verify every package is live on npm (allow a couple of minutes of registry lag):
+   For a stable `X.Y.Z` tag, `ci/circleci: deploy-demo` runs alongside publish and should also succeed.
+
+   Then confirm CI published the release (`isDraft` is `false`). For `X.Y.0` the release must also carry `docs-site.tar.gz`:
 
    ```bash
-   for p in api test ui rtk admin-backend admin-frontend admin-spa ai api-health comms feature-flags jobs mcp syncdb; do
-     echo "@terreno/$p: $(npm view "@terreno/$p" version)"
+   gh release view "$VERSION" --json isDraft,assets --jq '{isDraft, assets: [.assets[].name]}'
+   ```
+
+   A release still in draft means `archive-docs-version` (`X.Y.0`) or `publish-github-release` (other tags) failed. Rerun the failed CircleCI job; both are safe to rerun.
+
+2. Verify every package CircleCI publishes is live on npm (allow a couple of minutes of registry lag):
+
+   ```bash
+   for p in @terreno/api @terreno/test @terreno/blocks @terreno/ui @terreno/rtk @terreno/admin-backend @terreno/admin-frontend @terreno/admin-spa @terreno/ai @terreno/api-health @terreno/announcements @terreno/comms @terreno/feature-flags @terreno/jobs create-terreno-app @terreno/mcp @terreno/syncdb; do
+     echo "$p: $(npm view "$p" version)"
    done
    ```
 
-   All fourteen must report `$VERSION`.
+   All seventeen must report `$VERSION`.
 
 3. Confirm the `chore: bump package versions to $VERSION` commit landed on master (`git fetch origin master && git log origin/master -1 --oneline`). Skipped for prereleases.
 
-4. For `X.Y.0` releases (minor/major), confirm the `chore: cut docs version $VERSION` commit landed and the docs site deployed (`docs-deploy` workflow). Patch releases rebuild the current docs version in place.
+4. **Announce breaking changes or deprecations** — post a [Discussions → Announcements](https://github.com/TerrenoLabs/terreno/discussions/categories/announcements) thread summarizing what changed, linking the `## Breaking changes` section of the release notes, the matching `CHANGELOG.md` entry, and the upgrade note in `mcp-server/src/docs/upgrades/$VERSION.md` when one exists.
 
-5. **Announce breaking changes or deprecations** — post a [Discussions → Announcements](https://github.com/TerrenoLabs/terreno/discussions/categories/announcements) thread summarizing what changed, linking the `## Breaking changes` section of the release notes, the matching `CHANGELOG.md` entry, and the upgrade note in `mcp-server/src/docs/upgrades/$VERSION.md` when one exists.
-
-6. After editing this skill or other `.rulesync/` sources, run `bun run rules` and confirm `bun run rules:check` passes.
+5. After editing this skill or other `.rulesync/` sources, run `bun run rules` and `bun run skills:sync`, and confirm `bun run rules:check` passes. That edit belongs in the Step 5c pull request, before the tag.
 
 ## Step 8: If a publish job fails
 
-1. Inspect: `gh run view "$RUN_ID" --log-failed`.
-2. Transient failure (network, registry flake): `gh run rerun "$RUN_ID" --failed`.
-3. Real failure needing a code fix: fix it via a normal PR. npm versions are immutable, so if **any** package already published for this version, do not reuse the tag — merge the fix and release the next patch version. Only if nothing published may you delete the release and tag (`gh release delete "$VERSION" --cleanup-tag`) and re-create it from the fixed master.
+1. Open the `ci/circleci: publish-release` target URL from the tag status. CircleCI holds the job log.
+2. Transient failure (network, registry flake): rerun the failed CircleCI job. The release stays a draft until the publish jobs succeed.
+3. Real failure needing a code fix: fix it via a normal PR, merge it when CI is green, and release the next patch version. Do not reuse the failed tag. npm versions are immutable once any package has published, and once a release is published this repo rejects recreating its tag — deleting the release does not free the name (`tag_name was used by an immutable release`). Delete the failed version's leftover draft with `gh release delete "$VERSION"` (keep the tag). Move the changelog section and upgrade note to the new version before tagging. Do not dispatch `.github/workflows/publish-on-tag.yml` for a version CircleCI already published.
 4. Report the final per-package publish status either way.

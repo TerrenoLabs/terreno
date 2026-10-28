@@ -1,7 +1,15 @@
+import type http from "node:http";
 import * as Sentry from "@sentry/bun";
 import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
-import {AIAdminApp, LangfuseApp} from "@terreno/ai";
+import {
+  AIAdminApp,
+  AIService,
+  createLocalObservabilityPlugin,
+  LangfuseApp,
+  ObservabilityApp,
+} from "@terreno/ai";
+import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
   AuditApp,
@@ -10,8 +18,6 @@ import {
   ConsentApp,
   checkModelsStrict,
   configureOpenApiValidator,
-  createBetterAuth,
-  getMongoClientFromMongoose,
   logger,
   Membership,
   type ModelRouterOptions,
@@ -46,10 +52,18 @@ import mongoose from "mongoose";
 import twilio from "twilio";
 import {access} from "./access";
 import {adminScripts} from "./adminScripts";
-import {addAiRoutes, aiModelsRouter} from "./api/ai";
+import {
+  addAiRoutes,
+  aiModelsRouter,
+  createModelFromKey,
+  createServerModel,
+  getAiService,
+} from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
+import {fileUploadsEnabledForRequest} from "./api/fileUploads";
 import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
+import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
 import {settingsRouter} from "./api/settings";
 import {todoRouter} from "./api/todos";
@@ -59,6 +73,8 @@ import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
 import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
+import {exampleFeatureFlagSegments} from "./featureFlagSegments";
+import {openExampleHarness, startExampleHarness} from "./harness/exampleHarness";
 import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
@@ -67,13 +83,14 @@ import {AppConfiguration} from "./models/appConfiguration";
 import {Configuration} from "./models/configuration";
 import {organizationSettingsSchema} from "./models/organizationSettings";
 import {User} from "./models/user";
-import {seedDefaultData} from "./scripts/seed-test-data";
+import {seedDefaultDataOnBoot} from "./scripts/seed-test-data";
 import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
-import {buildBetterAuthConfig, getAuthProvider, getWebOrigins} from "./utils/betterAuthConfig";
+import {buildBetterAuthConfig, getAuthProvider, getCorsOrigins} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
+import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
 import {io} from "./websockets";
 
@@ -110,10 +127,21 @@ const createOpenApiAwareRouteRegistration = (
   return registration;
 };
 
-export const start = async (skipListen = false): Promise<express.Application> => {
+/**
+ * Boots the example backend. Pass `existingServer` to have Terreno attach the app and
+ * socket.io to a server it does not listen on — how Vercel Functions serve it, WebSocket
+ * upgrades included. The process-owned workers (harness runner) only start when this
+ * process owns the listener.
+ */
+export const start = async (
+  skipListen = false,
+  existingServer?: http.Server
+): Promise<express.Application> => {
   // Cloud Run probes PORT as soon as the process starts. Bind before Mongo so a
-  // slow connect/seed cannot fail the revision.
-  const httpServer = skipListen ? undefined : await bindPortEarly(process.env.PORT || "9000");
+  // slow connect/seed cannot fail the revision. A host-owned server is already reachable.
+  const ownsListener = !skipListen && !existingServer;
+  const httpServer =
+    existingServer ?? (ownsListener ? await bindPortEarly(process.env.PORT || "9000") : undefined);
 
   // Connect to MongoDB first
   await connectToMongoDB();
@@ -153,18 +181,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
 
   try {
     const betterAuthConfig = buildBetterAuthConfig();
-    // Build the Better Auth instance eagerly (MongoDB is connected above). It is shared
-    // with the RealtimeApp socket auth validator. We cannot use BetterAuthApp.getAuth()
-    // for this: plugin.register() (which populates it) runs later inside terraApp.start(),
-    // so getAuth() is still undefined at construction time here — that left the socket with
-    // only the legacy JWT validator, rejecting Better Auth session tokens on (re)connect.
-    const betterAuthInstance = betterAuthConfig
-      ? createBetterAuth({
-          config: betterAuthConfig,
-          mongoClient: getMongoClientFromMongoose(),
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      : undefined;
 
     const adminWebsocketsDebug = await AppConfiguration.getConfig("debug.websocketsDebug");
     const websocketsDebug = WEBSOCKETS_DEBUG || adminWebsocketsDebug === true;
@@ -181,7 +197,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       },
       // Reflect specific web origins (never "*") so Better Auth's credentialed
       // cross-origin requests from the Expo web frontend pass the browser CORS check.
-      corsOrigin: getWebOrigins(),
+      corsOrigin: getCorsOrigins(),
       httpServer,
       // Cloud Run captures stdout/stderr. Keeping the console transport avoids making
       // startup depend on LoggingWinston network/auth callbacks before the port opens.
@@ -230,6 +246,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       .register(settingsRouter)
       .register(createOpenApiAwareRouteRegistration(addDevNotificationRoutes))
       .register(todoRouter)
+      .register(photoLibraryRouter)
       .register(projectOrgContextPlugin)
       .register(projectRouter)
       .register(usersRouter);
@@ -268,12 +285,6 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     if (isWebsocketService) {
       terraApp.register(
         new RealtimeApp({
-          betterAuth: betterAuthInstance
-            ? {
-                auth: betterAuthInstance,
-                userModel: User as unknown as TerrenoAuthUserModel,
-              }
-            : undefined,
           changeStream: {
             ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
           },
@@ -401,18 +412,29 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           liveUpdates: {
             socketIoServer: () => io,
           },
-          segments: {
-            "admin-users": (user: unknown) => (user as {admin?: boolean}).admin === true,
-            "has-name": (user: unknown) => Boolean((user as {name?: string}).name),
-            "oauth-users": (user: unknown) =>
-              Boolean((user as {oauthProvider?: string}).oauthProvider),
-          },
+          segments: exampleFeatureFlagSegments,
         })
       )
+      // Cloud Run sits behind one Google Front End hop. Trusting it makes req.ip the real
+      // client address so the per-IP upload limit below cannot be bypassed or shared.
+      .register({
+        register: (app: express.Application): void => {
+          if (isDeployed) {
+            app.set("trust proxy", 1);
+          }
+        },
+      })
       .register(
         new DocumentStorageApp({
+          // Public demo: any signed-in user gets a private `users/<id>/` folder.
+          access: "authenticated",
           basePath: "/documents",
           bucketName: process.env.GCS_BUCKET ?? "",
+          fileUploadsEnabled: fileUploadsEnabledForRequest,
+          // PR previews share the bucket; a per-PR prefix keeps their files apart.
+          folderPrefix: process.env.GCS_FOLDER_PREFIX,
+          // One upload per IP per minute. Mongo store so the limit holds across instances.
+          uploadRateLimit: {max: 1, store: "mongo", windowMs: 60_000},
         })
       )
       .register(new AuditApp())
@@ -421,8 +443,35 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
     terraApp.register(exampleJobsApp);
 
-    terraApp
+    // Before AdminApp, so HarnessApp's approvals inbox joins the admin sidebar. Skipped
+    // (with a warning) when Mongo is not a replica set, as in the unit tests.
+    const exampleHarness = await openExampleHarness();
+    if (exampleHarness) {
+      terraApp.register(new HarnessApp({harness: exampleHarness}));
+    }
 
+    terraApp
+      .register(
+        new ObservabilityApp({
+          accessControl: access,
+          aiService: getAiService(),
+          aiServiceFactory: (modelId) => {
+            const model = createServerModel(modelId);
+            if (!model) {
+              return undefined;
+            }
+            return new AIService({model});
+          },
+          plugins: [createLocalObservabilityPlugin()],
+          priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
+          requestAiServiceFactory: ({apiKey, modelId}) => {
+            if (!apiKey) {
+              return undefined;
+            }
+            return new AIService({model: createModelFromKey(apiKey, modelId)});
+          },
+        })
+      )
       .register(
         new AdminApp({
           accessControl: access,
@@ -509,17 +558,22 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       );
     }
 
-    if (process.env.SEED_DEFAULTS === "true") {
-      logger.info("Seeding default example data after sync collections are registered");
-      await seedDefaultData();
-    }
+    await seedDefaultDataOnBoot({isDeployed});
 
     const app = terraApp.start();
+
+    // A host-owned server takes traffic as soon as this returns, so finish the sync
+    // indexes and startup migrations first instead of racing the first requests.
+    if (existingServer) {
+      await terraApp.whenReady();
+    }
 
     if (
       shouldStartJobsWorkerInApiProcess({
         jobsStartWorkerEnv: process.env.JOBS_START_WORKER,
-        skipListen,
+        // A host-owned server (Vercel Functions) freezes between requests, so a polling
+        // worker would stall mid-job. Run `bun run jobs:worker` elsewhere instead.
+        skipListen: !ownsListener,
       })
     ) {
       await terraApp.whenReady();
@@ -532,10 +586,14 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       } catch (error: unknown) {
         logger.error(`[jobs] In-process worker failed to start; HTTP server remains up: ${error}`);
       }
-    } else if (!skipListen) {
+    } else if (ownsListener) {
       logger.info(
         "[jobs] API-process worker disabled (JOBS_START_WORKER=false); use bun run jobs:worker if needed"
       );
+    }
+
+    if (ownsListener) {
+      await startExampleHarness();
     }
 
     // Log total boot time
@@ -545,7 +603,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     return app;
   } catch (error) {
     logger.error(`Error setting up server: ${error}`);
-    if (httpServer) {
+    if (httpServer && ownsListener) {
       await closeEarlyListenHolder(httpServer);
     }
     throw error;

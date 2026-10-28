@@ -7,7 +7,7 @@
  * to a route that its shard does not declare.
  */
 export interface ShardDefinition {
-  /** False for shards that never gate a pull request (nightly load lab). */
+  /** False for shards that never gate a pull request (nightly load lab, local-only runs). */
   blocksPullRequest: boolean;
   name: string;
   /** Screens the shard exercises, relative to the repository root. */
@@ -51,7 +51,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/forgotPassword.tsx`,
       `${APP}/resetPassword.tsx`,
       `${APP}/verifyEmail.tsx`,
-      `${APP}/(tabs)/consents.tsx`,
+      `${APP}/(tabs)/documents.tsx`,
     ],
     specs: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
   },
@@ -61,11 +61,11 @@ export const E2E_SHARDS: ShardDefinition[] = [
     routes: [
       `${APP}/(tabs)/profile.tsx`,
       `${APP}/(tabs)/ai.tsx`,
-      `${APP}/(tabs)/pdf.tsx`,
-      `${APP}/(tabs)/files.tsx`,
+      `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
+      `${APP}/todo-windows/**`,
     ],
-    specs: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
+    specs: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
   },
   {
     blocksPullRequest: true,
@@ -82,6 +82,8 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "admin-table-bulk-actions",
       "admin-custom-screens",
       "admin-comms-back",
+      "harness-approvals",
+      "harness-intake",
     ],
   },
   {
@@ -95,6 +97,16 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "syncdb-storage",
       "syncdb-chaos",
     ],
+  },
+  {
+    // Needs its own web build (cross-site API URL, bearer flag), backend (OAuth handoff, mock
+    // OIDC provider) and mock provider server, so CircleCI's shared cookie-mode export cannot
+    // run it. Run it locally:
+    // `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+    blocksPullRequest: false,
+    name: "cross-site-bearer",
+    routes: [`${APP}/login.tsx`, `${APP}/(tabs)/profile.tsx`, `${APP}/(tabs)/ai.tsx`],
+    specs: ["crossSiteBearer", "crossSiteOAuth"],
   },
   {
     blocksPullRequest: false,

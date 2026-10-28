@@ -1041,7 +1041,7 @@ exports[`MarkdownView renders code blocks 1`] = `
             "lineHeight": 20,
           },
           {
-            "backgroundColor": "#D9D9D9",
+            "backgroundColor": "#CDCDCD",
             "borderColor": "#CDCDCD",
             "borderRadius": 4,
             "borderWidth": 1,
@@ -1109,7 +1109,7 @@ exports[`MarkdownView renders inline code 1`] = `
                     "lineHeight": 20,
                   },
                   {
-                    "backgroundColor": "#D9D9D9",
+                    "backgroundColor": "#CDCDCD",
                     "borderColor": "#CDCDCD",
                     "borderRadius": 3,
                     "borderWidth": 1,

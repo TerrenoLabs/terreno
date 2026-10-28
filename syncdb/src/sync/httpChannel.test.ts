@@ -1,7 +1,13 @@
 import {describe, expect, it} from "bun:test";
 
 import type {AuthProvider} from "../types";
-import {AuthRequiredError, createHttpChannel, type FetchLike} from "./httpChannel";
+import {
+  AuthRequiredError,
+  createHttpChannel,
+  type FetchLike,
+  ListRequestError,
+  QueryFieldNotAllowedError,
+} from "./httpChannel";
 
 const authProvider: Pick<AuthProvider, "getToken"> = {
   getToken: async () => "token-123",
@@ -302,6 +308,73 @@ describe("createHttpChannel", () => {
     });
   });
 
+  describe("fetchSnapshotBatch", () => {
+    const batch = {
+      limit: 2000,
+      streams: [
+        {cursor: 0, stream: "todos|owner:u1"},
+        {cursor: 4, legacyCursor: "abc", stream: "notes|owner:u1"},
+      ],
+    };
+    const page = {
+      cursor: 5,
+      entities: [],
+      frontierSeq: 5,
+      hasMore: false,
+      oldestRetainedSeq: 0,
+      stream: "todos|owner:u1",
+    };
+
+    it("POSTs the stream list with the bearer token and returns the pages", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({pages: [page]}));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).resolves.toEqual({
+        pages: [page],
+        type: "pages",
+      });
+      expect(requests[0]?.input).toBe("http://api/sync/snapshot/batch");
+      expect(requests[0]?.init?.method).toBe("POST");
+      expect(JSON.parse(String(requests[0]?.init?.body))).toEqual(batch);
+      expect(headersOf(requests[0]).Authorization).toBe("Bearer token-123");
+    });
+
+    it("maps a missing-route 404 to unsupported", async () => {
+      const {fetchImpl} = makeFetch(
+        () => new Response("Cannot POST /sync/snapshot/batch", {status: 404})
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).resolves.toEqual({type: "unsupported"});
+    });
+
+    it("rejects an APIError 404 instead of reporting the route unsupported", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json({status: 404, title: "Unknown sync collection: notes"}, 404)
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow(
+        "status 404: Unknown sync collection: notes"
+      );
+    });
+
+    it("rejects 401 with AuthRequiredError", async () => {
+      const {fetchImpl} = makeFetch(() => json({}, 401));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toBeInstanceOf(AuthRequiredError);
+    });
+
+    it("rejects other error statuses", async () => {
+      const {fetchImpl} = makeFetch(() => json({}, 403));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow("status 403");
+    });
+
+    it("rejects when pages is missing", async () => {
+      const {fetchImpl} = makeFetch(() => json({}));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchSnapshotBatch?.(batch)).rejects.toThrow("missing pages");
+    });
+  });
+
   it("uses global fetch when no fetchImpl is provided (network error path)", async () => {
     const channel = createHttpChannel({
       authProvider,
@@ -342,6 +415,64 @@ describe("createHttpChannel", () => {
         fetchImpl: makeFetch(() => json({})).fetchImpl,
       });
       await expect(empty.fetchKeyMaterial()).rejects.toThrow(/missing keyMaterial/);
+    });
+  });
+
+  describe("fetchList", () => {
+    it("qs-encodes params against the list path", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({data: [], limit: 10, more: false}));
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      await channel.fetchList?.({params: {completed: false, limit: 10, page: 1}, path: "/todos"});
+      expect(decodeURIComponent(requests[0].input)).toBe(
+        "https://api.test/todos?completed=false&limit=10&page=1"
+      );
+    });
+
+    it("raises QueryFieldNotAllowedError naming the field and allowed queryFields", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json(
+          {
+            code: "query-param-not-allowed",
+            detail: 'title is not allowed as a query param. Add "title" to queryFields…',
+            meta: {
+              allowedQueryFields: ["completed", "ownerId"],
+              model: "Todo",
+              queryParam: "title",
+            },
+            source: {parameter: "title"},
+            status: 400,
+            title: "Query parameter not allowed",
+          },
+          400
+        )
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      const error = await channel
+        .fetchList?.({params: {title: "x"}, path: "/todos"})
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(QueryFieldNotAllowedError);
+      const typed = error as QueryFieldNotAllowedError;
+      expect(typed.field).toBe("title");
+      expect(typed.allowedQueryFields).toEqual(["completed", "ownerId"]);
+      expect(typed.model).toBe("Todo");
+      expect(typed.code).toBe("query-param-not-allowed");
+      expect(typed.message).toContain('Add "title" to queryFields');
+      expect(typed.message).toContain("Allowed: completed, ownerId.");
+    });
+
+    it("raises ListRequestError with the server detail for other failures", async () => {
+      const {fetchImpl} = makeFetch(() =>
+        json({code: "list-error", detail: "boom", status: 500, title: "List error"}, 500)
+      );
+      const channel = createHttpChannel({authProvider, baseUrl: "https://api.test", fetchImpl});
+      const error = await channel
+        .fetchList?.({params: {}, path: "/todos"})
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(ListRequestError);
+      expect(error).not.toBeInstanceOf(QueryFieldNotAllowedError);
+      expect((error as ListRequestError).message).toBe(
+        "List request for /todos failed with status 500: boom"
+      );
     });
   });
 });

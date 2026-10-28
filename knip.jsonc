@@ -13,7 +13,12 @@
     ".devin/skills/expo-cicd-workflows/scripts/**",
     ".github/skills/expo-cicd-workflows/scripts/**",
     "skills/expo-cicd-workflows/scripts/**",
-    ".rulesync/skills/expo-cicd-workflows/scripts/**"
+    ".rulesync/skills/expo-cicd-workflows/scripts/**",
+    // Store-assets scripts are copied into consumer repos and run with `bun`, not imported
+    // here. Canonical source is `plugins/terreno-planning/skills`; the rest are sync output.
+    "plugins/terreno-planning/skills/store-assets/scripts/**",
+    "plugins/terreno-claude/skills/store-assets/scripts/**",
+    "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
   "ignoreBinaries": ["maestro"],
@@ -29,6 +34,9 @@
     "**/openApiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
     "example-backend/migrations/**": ["files", "exports", "types"],
+    // Bin entry points (terreno-test-shard / terreno-test-hygiene): the pure functions and
+    // types behind them are exported for their unit tests only, not as a library surface.
+    "test/src/cli/**": ["exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],
     // Runtime adapters expose these hooks only so deterministic tests can replace or
     // reset process-global browser, Metro, log-path, and console state.
@@ -47,6 +55,9 @@
     // Preserve the vendored express-openapi CommonJS API unchanged; Knip cannot trace
     // properties assigned through module.exports (including serveSwaggerUI used in index.js).
     "api/src/vendor/wesleytodd-openapi/**": ["exports", "types"],
+    // The evaluator algorithms are direct unit-test seams; production calls both through
+    // runEvaluator, while tests exercise their detailed coercion and failure contracts.
+    "ai/src/observability/evaluate.ts": ["exports"],
     // Published public types may have no in-monorepo consumer; removing them would be a
     // breaking package API change.
     "admin-spa/components/AppConfigGate.tsx": ["types"],
@@ -119,6 +130,8 @@
       // The Vertex provider is loaded dynamically only when an app opts in and supplies
       // the package through @terreno/ai's optional peer contract.
       "ignoreDependencies": ["@ai-sdk/google-vertex"],
+      // Public types used by their own implementation remain valid package API.
+      "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -176,7 +189,28 @@
       // The test logger discovers @terreno/api through a runtime require. Declaring it
       // here would cycle with API's own @terreno/test dependency and break the
       // topological order that .github/scripts/compile-workspace-deps.js relies on.
-      "ignoreDependencies": ["@sentry/bun", "@terreno/api"],
+      // The expo tests import Expo/RN modules and app aliases that the preload only mocks;
+      // they are never installed by @terreno/test or its consumers' backend entry point.
+      "ignoreDependencies": [
+        "@sentry/bun",
+        "@terreno/api",
+        "@react-native-async-storage/async-storage",
+        "@hooks/useA",
+        "@store",
+        "expo-clipboard",
+        "expo-constants",
+        "expo-haptics",
+        "expo-linking",
+        "expo-secure-store",
+        "expo-splash-screen",
+        // The service-mock tests import the SDKs their registrars replace with mock.module.
+        "@google-cloud/storage",
+        "@google-cloud/tasks",
+        "@sendgrid/mail",
+        "expo-server-sdk",
+        "google-auth-library",
+        "twilio"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/preload/**!"
@@ -271,6 +305,14 @@
         "!src/tests/**!"
       ]
     },
+    "blocks": {
+      "entry": ["src/{index,cli}.ts!"],
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!",
+        "!scripts/**!"
+      ]
+    },
     "comms": {
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -299,7 +341,10 @@
         "e2e/**/*.ts",
         "jspdf-native-stub.js",
         "fingerprint.config.js",
-        "playwright.circleci.config.ts"
+        "playwright.circleci.config.ts",
+        "playwright.smoke.config.ts",
+        "tests/bunSetup.ts",
+        "tests/testPreload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -338,6 +383,7 @@
         "@terreno/jobs!",
         "@thream/socketio-jwt!",
         "ai!",
+        "better-auth!",
         "expo-server-sdk!",
         "express!",
         "google-auth-library!",
@@ -352,11 +398,14 @@
       ],
       "entry": [
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",
         "src/scripts/runAdminScript.ts",
         "src/scripts/seed-test-data.ts",
+        "src/scripts/generatePhotoLibrary.ts",
         "src/scripts/syncConsents.ts",
         "src/scripts/configuration-example.ts",
         "src/scripts/seed-admin-spa-admin.ts",

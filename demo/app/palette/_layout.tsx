@@ -1,12 +1,13 @@
 import {isSupportedDesktopWidth} from "@terreno/ui";
 import {router, Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import type {ReactElement} from "react";
+import {type ReactElement, useCallback} from "react";
 import {Pressable, Text, useWindowDimensions} from "react-native";
 
 const Layout = (): ReactElement => {
   const {width} = useWindowDimensions();
   const isDesktopLayout = isSupportedDesktopWidth({width});
+  const hideHeaderBack = useCallback((): null => null, []);
 
   return (
     <>
@@ -15,6 +16,7 @@ const Layout = (): ReactElement => {
         screenOptions={{
           headerBackTitle: "Back",
           headerBackVisible: !isDesktopLayout,
+          headerLeft: isDesktopLayout ? hideHeaderBack : undefined,
           headerRight: () => (
             <Pressable
               onPress={async () => {

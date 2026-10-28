@@ -25,7 +25,7 @@ finds nothing to do produces **no output** and schedules the next one.
    | --- | --- |
    | `unrouted` | PR exists with no recorded reviewer/assignee |
    | `answered` | A human comment, review, or requested change arrived after the last tick |
-   | `broken` | CI failed on the current head, or the PR conflicts with its base |
+   | `broken` | CI failed on the current head, the PR conflicts with its base, or a review-bot thread is unanswered |
    | `bot-pending` | Review bots or CI still running on the current head |
    | `merged` | Merged since the last tick |
    | `closed` | Closed without merging |
@@ -38,7 +38,9 @@ finds nothing to do produces **no output** and schedules the next one.
    2. `answered` → invoke the lifecycle's Taste for that PR in a fresh subagent. Taste
       owns reading the threads, making the fix, running the pre-push gate, pushing, and
       watching CI. The loop does not answer review comments itself.
-   3. `broken` → same: one Taste invocation for that PR.
+   3. `broken` → same: one Taste invocation for that PR. Taste counts fix rounds across
+      ticks; when it returns `BLOCKED` after three, mark the PR `blocked` and surface it
+      at the top of the next report. A blocked PR is never left as a quiet `waiting`.
    4. `merged` → invoke the scan Track stage for that slice: re-measure, close findings
       with evidence, record the round.
    5. `closed` → mark the slice `abandoned` with the closing reason, return its findings

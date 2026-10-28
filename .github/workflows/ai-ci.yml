@@ -23,7 +23,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Start MongoDB
         uses: supercharge/mongodb-github-action@1.12.1
@@ -37,6 +37,10 @@ jobs:
 
       - name: Build API dependency
         working-directory: api
+        run: bun run compile
+
+      - name: Build blocks dependency
+        working-directory: blocks
         run: bun run compile
 
       - name: Lint

@@ -40,6 +40,9 @@ bun run script countRecords --model todos
 # Apply changes with --wet
 bun run script seedFeatureFlags --wet
 
+# Load the synthetic chat-safety dataset into the database this process uses
+bun run script seedChatSafetyDataset --wet
+
 # Machine-readable output for tooling
 bun run script countRecords --json --model users
 ```

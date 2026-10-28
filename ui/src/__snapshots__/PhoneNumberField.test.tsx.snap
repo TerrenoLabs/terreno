@@ -68,7 +68,7 @@ exports[`PhoneNumberField renders correctly with default props 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -170,7 +170,7 @@ exports[`PhoneNumberField renders with icon 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -263,7 +263,7 @@ exports[`PhoneNumberField uses US as default country code 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",
@@ -356,7 +356,7 @@ exports[`PhoneNumberField accepts custom country code 1`] = `
       "props": {
         "style": {
           "backgroundColor": "#FFFFFF",
-          "borderColor": "#9A9A9A",
+          "borderColor": "#949494",
           "borderRadius": 4,
           "borderWidth": 1,
           "flexDirection": "column",

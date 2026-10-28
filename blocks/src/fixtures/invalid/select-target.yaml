@@ -1,0 +1,12 @@
+v: 1
+blocks:
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: select
+          target: missing_chart
+          data: signups

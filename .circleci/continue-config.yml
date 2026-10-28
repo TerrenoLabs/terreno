@@ -1469,7 +1469,7 @@ jobs:
     environment:
       # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
       # is pinned; bump the sha deliberately (brewery has no release tag yet).
-      BREWERY_REF: 3d59a77e52ccf732c81c50e08057a489d44bca92
+      BREWERY_REF: 3e160cc6a8dbdf45fc255a399855bf32154a2ac4
     steps:
       - skip_if_fork_pull_request
       - run:

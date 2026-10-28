@@ -111,6 +111,13 @@ export interface PermissionSource {
   ttlMs?: number;
   staleOnFailure?: StaleOnFailurePolicy;
   staleMaxAgeMs?: number;
+  /**
+   * When true (the default), a failed `getGrants` for a user this process has no last-known deny
+   * posture for (cold instance, or the posture was evicted) throws a 503 instead of resolving
+   * local roles without this source's deny. Set it to `false` on additive-only sources that never
+   * return `deny`, so their outage drops only their grants.
+   */
+  failClosedWhenDenyUnknown?: boolean;
   getGrants: (args: {user: User}) => Promise<PermissionSourceGrants | null>;
 }
 
@@ -200,4 +207,9 @@ export interface TerrenoAccess<S extends Statements> {
   permission: (permissions: PermissionRequest<S>) => PermissionMethod<unknown>;
   roles: RoleManager;
   invalidateCache: (args?: {userId?: string}) => void;
+  /**
+   * The `userModel` passed to `createAccess`. Write paths use it to recognize the user model when
+   * it is compiled under a name other than `"User"`.
+   */
+  readonly userModel?: UserModel;
 }

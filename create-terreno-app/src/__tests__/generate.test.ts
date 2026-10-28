@@ -19,6 +19,7 @@ const EXPECTED_PATHS = [
   ".github/workflows/backend-ci.yml",
   ".github/workflows/frontend-ci.yml",
   ".gitignore",
+  ".mcp.json",
   "CLAUDE.md",
   "Dockerfile",
   "README.md",
@@ -140,7 +141,23 @@ describe("generateAllFiles", () => {
       `@playwright/mcp@${PLAYWRIGHT_MCP_PACKAGE_VERSION}`,
     ]);
     assert.equal(mcpJson.mcpServers["terreno-local"].command, "bunx");
-    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, ["terreno-mcp-local"]);
+    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, [
+      "-p",
+      "@terreno/mcp",
+      "terreno-mcp-local",
+    ]);
+  });
+
+  test("writes the same MCP servers for Claude Code as for Cursor", () => {
+    const files = generateAllFiles({
+      appDisplayName: "Claude MCP",
+      appName: "claude-mcp",
+    });
+    const cursorJson = files.find((file) => file.path === ".cursor/mcp.json")?.content;
+    const claudeJson = files.find((file) => file.path === ".mcp.json")?.content;
+
+    assert.isString(claudeJson);
+    assert.equal(claudeJson, cursorJson);
   });
 
   test("uses a custom MCP server URL", () => {
@@ -167,7 +184,7 @@ describe("generateAllFiles", () => {
       files.find((file) => file.path === "backend/package.json")?.content ?? "{}"
     ) as {scripts: Record<string, string>};
 
-    assert.include(dockerfile, "FROM oven/bun:1-slim");
+    assert.include(dockerfile, "FROM oven/bun:1.4.4-slim");
     assert.include(dockerfile, "ENV PORT=8080");
     assert.include(dockerfile, "EXPOSE 8080");
     assert.include(dockerfile, `CMD curl -fsS "http://127.0.0.1:\${PORT}/health"`);
@@ -194,6 +211,8 @@ describe("generateAllFiles", () => {
 
     assert.include(backendEnv, "MONGO_URI=mongodb://127.0.0.1:27017/env_app?replicaSet=rs0");
     assert.include(backendEnv, "PORT=4000");
+    // TerrenoApp registers POST /__terreno/browser-logs only when NODE_ENV=development.
+    assert.include(backendEnv, "\nNODE_ENV=development\n");
     assert.include(backendEnvExample, "MONGO_URI=");
     assert.include(backendEnvExample, "BETTER_AUTH_SECRET=");
     assert.include(backendEnvExample, "PORT=8080");
@@ -227,6 +246,11 @@ describe("generateAllFiles", () => {
       readme,
       "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md"
     );
+    assert.include(
+      readme,
+      "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md"
+    );
+    assert.include(readme, "terreno-mcp-local");
   });
 
   test("declares mongodb as a direct backend dependency for Better Auth ESM resolution", () => {
@@ -464,6 +488,8 @@ describe("generated frontend Terreno 58 compatibility", () => {
     assert.include(layout, "syncDbs={SYNC_DBS}");
     assert.include(layout, "const {userId, isLoading: isAuthLoading} = useSession();");
     assert.include(layout, "<SyncDbProvider client={syncDb}>");
+    assert.include(layout, 'import {installDevConsoleLogger} from "@terreno/syncdb/app"');
+    assert.include(layout, "installDevConsoleLogger({baseUrl});");
     assert.notInclude(layout, "PersistGate");
     for (const screen of [login, signup]) {
       assert.include(screen, "const {refresh} = useSession();");

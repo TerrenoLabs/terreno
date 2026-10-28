@@ -47,7 +47,7 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
-| `BETTER_AUTH_SECRET` | `@terreno/api` | ✅ if Better Auth | — | Yes | server |
+| `BETTER_AUTH_SECRET` | `@terreno/api`, example-backend | ✅ if Better Auth | example-backend outside production: a published dev-only value. With `NODE_ENV=production`, example-backend refuses to start when it is unset or equals that value | Yes | server |
 | `BETTER_AUTH_URL` | `@terreno/api` | ✅ if Better Auth | — | No | server |
 | `GOOGLE_CLIENT_ID` | `@terreno/api` | ❌ | — | No | server |
 | `GOOGLE_CLIENT_SECRET` | `@terreno/api` | ❌ | — | Yes | server |
@@ -68,11 +68,15 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `APP_ENV` | example-backend | ❌ | `development` | No | server |
 | `BACKEND_URL` | scripts, deploy | ❌ | — | No | server |
 | `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
+| `CORS_ORIGINS` | example-backend (`utils/betterAuthConfig.ts`) | ✅ for deployed web origins | localhost:8082 origins only | No | server |
+| `CROSS_DOMAIN_AUTH_COOKIES` | example-backend Better Auth config | ❌ | `false` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
-| `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |
+| `TERRENO_BROWSER_LOGS` | `@terreno/api` `TerrenoApp` (`POST /__terreno/browser-logs`) | ❌ | on only when `NODE_ENV=development`. `false`/`0` turns it off. `true`/`1` turns it on in any non-production environment. Ignored when `NODE_ENV=production`: the route is never registered and returns 404. See [Development browser-log ingestion](api.md#development-browser-log-ingestion). | No | server |
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
+
+`CORS_ORIGINS` is comma-separated. An entry may contain `*` (for example `https://*.preview.example.com`); use it only on a domain you control, never on a shared namespace like `vercel.app`. For `corsOrigin`, `*` becomes a `RegExp` that matches letters, digits, and hyphens but never a dot. Better Auth `trustedOrigins` receives the raw pattern and applies its own, broader wildcard matching. Never use `corsOrigin: true` in production; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#cors). Set `CROSS_DOMAIN_AUTH_COOKIES=true` when the web app and API are on different sites.
 
 ## Client / build-time
 
@@ -92,6 +96,7 @@ Configured in `expo.extra` and read via `expo-constants`:
 | `BASE_URL` | `@terreno/syncdb/config` | Production fallback when `EXPO_PUBLIC_API_URL` unset; use `__SAME_ORIGIN__` for same-origin admin SPA |
 | `DEV_API_PORT` | `@terreno/syncdb/config` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
 | `buildNumber` | `@terreno/syncdb/app` `useUpgradeCheck` | Sent to `GET /version-check`; set it with `resolveBuildNumber` |
+| `SOCKET_TRANSPORTS` | example-frontend (`store/socketTransports.ts`) | Comma-separated Socket.IO transports passed to `createSyncDb({socketTransports})`. Unset keeps `polling,websocket`; the Vercel build sets `websocket` |
 
 Resolution order for API base URL (`syncdb/src/config/resolveBaseUrls.ts`):
 
@@ -99,6 +104,12 @@ Resolution order for API base URL (`syncdb/src/config/resolveBaseUrls.ts`):
 2. `EXPO_PUBLIC_API_URL` (production and dev)
 3. `extra.BASE_URL` (production only, when env unset)
 4. Dev fallbacks: `hostUri`, experience URL, `localhost` on the dev API port
+
+`EXPO_PUBLIC_API_URL` is inlined only into app source. Code under `node_modules`, including `@terreno/rtk`, does not see the inlined value in a production export and falls back to `extra.BASE_URL`, so set both for production web builds. `example-frontend/scripts/vercelBuild.ts` writes `extra.BASE_URL` from `EXPO_PUBLIC_API_URL` before `expo export`.
+
+### Per-environment values on hosting platforms
+
+Hosting platforms scope variables per environment. Vercel has **Production**, **Preview**, and **Development** scopes; set `EXPO_PUBLIC_API_URL` in each so each build points at its own backend. Because the value is inlined at build time, promoting a preview build to production keeps the preview backend URL. Rebuild for production instead. See [Deploy to Vercel](../how-to/deploy-to-vercel.md#configure-each-environment) and the [multi-environment checklist](../explanation/deployment-baseline.md#multi-environment-checklist).
 
 ## Development tooling
 
@@ -205,7 +216,7 @@ for authenticated test sends.
 | `USE_SENTRY_LOGGING` | `@terreno/api` | ❌ | `false` | No | server |
 | `SLOW_REQUEST_THRESHOLD_MS` | `@terreno/api` | ❌ | `5000` | No | server |
 | `SLOW_DB_QUERY_THRESHOLD_MS` | `@terreno/api` | ❌ | `100` | No | server |
-| `TERRENO_LOG_FILE` | logger | ❌ | — | No | server |
+| `TERRENO_LOG_FILE` | `@terreno/api` logger | ❌ | on unless `NODE_ENV=production`. An on/off switch, not a path: `false`/`0` turns it off, and `true`/`1` turns it on even in production. Writes JSONL to `<cwd>/.terreno/logs/app.log`. | No | server |
 | `TRACE_SAMPLING_RATE` | example-backend OTEL | ❌ | `0.1` | No | server |
 | `MEMORY_SAMPLE_INTERVAL_MS` | example-backend | ❌ | `60000` | No | server |
 | `JOB_TRACE_LOGS` | workers | ❌ | — | No | server |
@@ -257,6 +268,9 @@ secrets and `PUBLIC_API_URL` / `COMMS_WEBHOOK_PUBLIC_URL` as above. See
 | `TERRENO_MCP_DOCS_DIR` | `@terreno/mcp` | ❌ | — | No | tooling |
 | `TERRENO_MCP_EVAL` | MCP eval | ❌ | — | No | tooling |
 | `TERRENO_PROJECT_ROOT` | MCP local | ❌ | — | No | tooling |
+| `TERRENO_MCP_RATE_LIMIT_MAX` | `@terreno/mcp` hosted server | ❌ | `120` (`0` disables) | No | server |
+| `TERRENO_MCP_RATE_LIMIT_WINDOW_MS` | `@terreno/mcp` hosted server | ❌ | `60000` | No | server |
+| `TERRENO_MCP_TRUST_PROXY_HOPS` | `@terreno/mcp` hosted server | ❌ | `1` when `K_SERVICE` is set (Cloud Run), else `0` | No | server |
 
 ## Background jobs
 
@@ -281,6 +295,7 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `OTEL_SERVICE_NAME` | OpenTelemetry (example-backend) | ❌ | `example-backend` | No | server |
+| `SEED_DEFAULTS` | example-backend boot | ❌ | — | No | server |
 | `PR_NUMBER` | PR preview deploy | ❌ | — | No | server |
 | `PR_SERVICE_URL` | PR preview deploy | ❌ | — | No | server |
 | `JOBS_RUNNER` | example-backend | ❌ | `mongo` | No | server |
@@ -295,6 +310,10 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 | `CRON_SECRET_KEY` | tests | ❌ | — | Yes | tooling |
 | `WIDGET_CLIENT_SECRET` | widgets | ❌ | — | Yes | server |
 | `API_KEY` | integrations | ❌ | — | Yes | server |
+
+`SEED_DEFAULTS=true` runs the example seed (default users, all with the published password
+`testpassword123`) when the server starts. A process with `NODE_ENV=production` logs a warning and
+skips it, so no deployed revision, PR previews included, holds those accounts.
 
 ## Testing & CI (tooling only)
 
@@ -323,6 +342,7 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 
 - [Deployment baseline](../explanation/deployment-baseline.md)
 - [Build for web](../how-to/build-for-web.md)
+- [Deploy to Vercel](../how-to/deploy-to-vercel.md)
 - [Configure Better Auth](../how-to/configure-better-auth.md)
 - [Rate limiting](../how-to/rate-limiting.md)
 - [Durable background jobs](../how-to/background-jobs.md)

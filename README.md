@@ -161,13 +161,15 @@ Every `@terreno/ui` component, live, with its variants and states. Source:
 ### More
 
 - [Docs](https://terreno-docs.netlify.app)
-- MCP server: `https://mcp.terreno.app`
+- MCP server: `https://mcp.terreno.app/mcp`
 
 To deploy your own apps, follow [Deploy to GCP](docs/how-to/deploy-to-gcp.md).
 
 ## MCP server
 
 Terreno's MCP server is the **tool** layer of the AI-native pillar: codegen, documentation search, and component reference. Pair it with the `/terreno-*` SDLC pipeline described in [positioning.md](docs/explanation/positioning.md) (the **process** layer; consumer packaging is still in progress).
+
+A second server, `terreno-mcp-local`, runs inside your app repository and adds what the hosted server cannot see: merged backend and client logs, `last_error`, client state, and read-only database inspection. [Set up Terreno MCP](docs/how-to/set-up-terreno-mcp.md) configures both servers; the snippets below cover only the hosted one.
 
 ### Cursor
 
@@ -177,8 +179,8 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }
@@ -190,12 +192,15 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }
 ```
+
+If `mcp.terreno.app` does not resolve on your network yet, use
+`https://mcp.terreno.flourish.health/mcp`, which serves the same server.
 
 Claude Desktop config paths: macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`.
 

@@ -1,9 +1,8 @@
-import "../../ui/src/bunSetup";
 import {mock} from "bun:test";
 import React from "react";
 
-// Loaded after the UI test preload mocks react-native. Static imports would be
-// evaluated too early and parse react-native's Flow entry.
+// Loaded after tests/testPreload.ts registers the @terreno/test Expo environment (which mocks
+// react-native). Static imports would be evaluated too early and parse react-native's Flow entry.
 const actualUi = await import("@terreno/ui");
 const actualSyncDbSdk = await import("@/store/syncDbSdk");
 

@@ -106,6 +106,12 @@ changes but otherwise keeps the body stable instead of summarizing the latest tu
 These are the only visible PR sections; optional detail is expandable; comments are
 reserved for blocked decisions or non-obvious review resolutions.
 
+The body is also the approval bot's input (`brewery approve`, scored with
+`docs/approval-rubric.md`), so its shape is strict. The headings are spelled exactly as
+above. `Why` ends with the plan's repository path and the task ids the PR delivers.
+Every `Verification` row starts with `✅`, `🧭`, or `⚠️` and names the outcome, not only
+the command. The stage-result `ip` is the plan's filename, and later stages keep it.
+
 Every stage follows the
 [documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
 read architecture docs before acting, update them in the same slice, and fail the slice

@@ -111,15 +111,40 @@ export const normalizeVertexModelId = (modelName: string): string => {
 };
 
 /**
- * Returns true when the model id is permitted. An empty/undefined allow-list permits all models.
- * Both the requested model id and allow-list entries are normalized (publisher paths and `@version`
- * suffixes stripped) so matching stays consistent with `verifyVertexModelsEnabled`.
+ * A Google publisher model id, optionally with a `publishers/google/models/` or `models/` prefix
+ * and an `@version` suffix. The provider builds the request URL from the id, so nothing else
+ * (`/`, `:`, `?`, `#`) may appear in it.
+ */
+const VERTEX_MODEL_ID_PATTERN =
+  /^(?:publishers\/google\/models\/|models\/)?([a-z0-9][a-z0-9._-]{0,127})(@[a-z0-9._-]{1,32})?$/i;
+
+/**
+ * The id the provider is given: the model id with any publisher prefix removed and its
+ * `@version` kept, or undefined when the id is not a plain Vertex model id.
+ */
+const canonicalVertexModelId = (modelId: string): string | undefined => {
+  const match = VERTEX_MODEL_ID_PATTERN.exec(modelId.trim());
+  if (!match) {
+    return undefined;
+  }
+  return `${match[1]}${match[2] ?? ""}`;
+};
+
+/**
+ * Returns true when the model id is permitted. An id that is not a plain Vertex model id is never
+ * permitted. An empty/undefined allow-list permits all other models. Both the requested model id
+ * and allow-list entries are normalized (publisher paths and `@version` suffixes stripped) so
+ * matching stays consistent with `verifyVertexModelsEnabled`.
  */
 export const isVertexModelAllowed = (modelId: string, allowedModels?: string[]): boolean => {
+  const canonical = canonicalVertexModelId(modelId);
+  if (!canonical) {
+    return false;
+  }
   if (!allowedModels || allowedModels.length === 0) {
     return true;
   }
-  const normalized = normalizeVertexModelId(modelId);
+  const normalized = normalizeVertexModelId(canonical);
   return allowedModels.some((allowed) => normalizeVertexModelId(allowed) === normalized);
 };
 
@@ -188,14 +213,18 @@ export const createVertexProvider = (
 
   const raw = factory({location, project});
 
-  const assertAllowed = (modelId: string): void => {
-    if (isVertexModelAllowed(modelId, allowedModels)) {
-      return;
+  /** The canonical id the provider is given. Throws when the model is not permitted. */
+  const assertAllowed = (modelId: string): string => {
+    const canonical = canonicalVertexModelId(modelId);
+    if (canonical && isVertexModelAllowed(canonical, allowedModels)) {
+      return canonical;
     }
     throw new APIError({
-      detail: `Model "${modelId}" is not in the configured Vertex model allow-list (${(
-        allowedModels ?? []
-      ).join(", ")}).`,
+      detail: canonical
+        ? `Model "${modelId}" is not in the configured Vertex model allow-list (${(
+            allowedModels ?? []
+          ).join(", ")}).`
+        : `Model "${modelId}" is not a Vertex model id.`,
       status: 400,
       title: "Model not permitted",
     });
@@ -203,15 +232,9 @@ export const createVertexProvider = (
 
   return {
     allowedModels,
-    imageModel: (modelId: string): ImageModel => {
-      assertAllowed(modelId);
-      return raw.image(modelId) as ImageModel;
-    },
+    imageModel: (modelId: string): ImageModel => raw.image(assertAllowed(modelId)) as ImageModel,
     isModelAllowed: (modelId: string): boolean => isVertexModelAllowed(modelId, allowedModels),
-    languageModel: (modelId: string): LanguageModel => {
-      assertAllowed(modelId);
-      return raw(modelId) as LanguageModel;
-    },
+    languageModel: (modelId: string): LanguageModel => raw(assertAllowed(modelId)) as LanguageModel,
     location,
     project,
     raw,

@@ -19,9 +19,13 @@ export interface McpServiceTokenStatics
   ) => Promise<number>;
   issueFor: (
     this: McpServiceTokenModel,
-    user: {_id: {toString(): string}},
+    user: {_id: {toString(): string}; tokenEpoch?: number},
     options: McpServiceTokenIssueOptions
   ) => Promise<{mcpServiceToken: McpServiceTokenDocument; token: string}>;
+  revokeOutdatedForUser: (
+    this: McpServiceTokenModel,
+    user: {_id: {toString(): string}; tokenEpoch?: number}
+  ) => Promise<void>;
   revokeForUser: (
     this: McpServiceTokenModel,
     user: {_id: {toString(): string}},
@@ -44,6 +48,7 @@ export interface McpServiceTokenDocument extends mongoose.Document<string> {
   lastUsedAt?: Date;
   name: string;
   revokedAt?: Date;
+  tokenEpoch?: number;
   tokenHash: string;
   tokenPrefix: string;
   updated: Date;

@@ -60,7 +60,7 @@ App
         → AIRequest.logRequest (served model id + failover metadata)
 ```
 
-`AIService` stays the only path that talks to the Vercel SDK for logged calls. Agent does not call `generateText` / `streamText` from `ai` directly.
+`AIService` stays the only path that talks to the Vercel AI SDK for logged calls. Agent does not call `generateText` / `streamText` from `ai` directly.
 
 Failover is a `LanguageModel` Proxy (same idea as `withStrippedJsonFencesModel` in `aiService.ts`): intercept `doGenerate` and `doStream`, preserve other properties from the **primary** model (`specificationVersion`, `provider`, `supportedUrls`).
 

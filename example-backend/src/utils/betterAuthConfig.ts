@@ -3,7 +3,8 @@ import {getCommsService, renderAuthMail} from "@terreno/comms";
 import type {BetterAuthPlugin} from "better-auth";
 import {genericOAuth} from "better-auth/plugins";
 
-const DEFAULT_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
+// Public, so only local development and tests may sign sessions with it.
+const DEV_BETTER_AUTH_SECRET = "terreno-example-better-auth-secret-dev-only-32";
 const DEFAULT_BETTER_AUTH_URL = "http://localhost:4000";
 
 /** Dev web origins for the Expo frontend (localhost + loopback on the frontend port). */
@@ -70,6 +71,24 @@ const buildMockOidcPlugin = (): BetterAuthPlugin | undefined => {
   });
 };
 
+/**
+ * The Better Auth signing secret. Production must supply its own: the development fallback is
+ * published in this repository, so anyone could sign session cookies with it.
+ */
+const resolveBetterAuthSecret = (): string => {
+  const fromEnv = process.env.BETTER_AUTH_SECRET;
+  if (process.env.NODE_ENV !== "production") {
+    return fromEnv || DEV_BETTER_AUTH_SECRET;
+  }
+  if (!fromEnv || fromEnv === DEV_BETTER_AUTH_SECRET) {
+    throw new APIError({
+      status: 500,
+      title: "BETTER_AUTH_SECRET is required in production when AUTH_PROVIDER=better-auth",
+    });
+  }
+  return fromEnv;
+};
+
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
   return provider ?? "better-auth";
@@ -91,6 +110,29 @@ export const getWebOrigins = (): string[] => {
   }
   return [...origins];
 };
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Converts a `CORS_ORIGINS` entry to what the `cors` middleware matches. An entry with `*`
+ * (for example `https://terreno-frontend-*-terrenolabs.vercel.app`, Vercel's per-deployment
+ * preview hostname) becomes an anchored RegExp where `*` matches one DNS label fragment —
+ * letters, digits, and hyphens, never a dot — so it cannot widen to another domain.
+ */
+export const toCorsOrigin = (origin: string): string | RegExp => {
+  if (!origin.includes("*")) {
+    return origin;
+  }
+  const pattern = origin.split("*").map(escapeRegExp).join("[a-z0-9-]+");
+  return new RegExp(`^${pattern}$`, "i");
+};
+
+/**
+ * Origins for `TerrenoApp`'s `corsOrigin`. Same list as {@link getWebOrigins}; wildcard
+ * entries become RegExps, while Better Auth `trustedOrigins` receives the raw patterns and
+ * applies its own wildcard matching.
+ */
+export const getCorsOrigins = (): Array<string | RegExp> => getWebOrigins().map(toCorsOrigin);
 
 /**
  * Web origins that may receive the OAuth one-time token. Production drops loopback origins
@@ -135,7 +177,7 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     enabled: true,
     publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
     renderAuthMail,
-    secret: process.env.BETTER_AUTH_SECRET ?? DEFAULT_BETTER_AUTH_SECRET,
+    secret: resolveBetterAuthSecret(),
     sendMail: async (message) => {
       await getCommsService().sendMail(message);
     },

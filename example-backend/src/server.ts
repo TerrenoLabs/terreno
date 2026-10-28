@@ -1,3 +1,4 @@
+import type http from "node:http";
 import * as Sentry from "@sentry/bun";
 import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
@@ -82,12 +83,12 @@ import {AppConfiguration} from "./models/appConfiguration";
 import {Configuration} from "./models/configuration";
 import {organizationSettingsSchema} from "./models/organizationSettings";
 import {User} from "./models/user";
-import {seedDefaultData} from "./scripts/seed-test-data";
+import {seedDefaultDataOnBoot} from "./scripts/seed-test-data";
 import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
-import {buildBetterAuthConfig, getAuthProvider, getWebOrigins} from "./utils/betterAuthConfig";
+import {buildBetterAuthConfig, getAuthProvider, getCorsOrigins} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
@@ -126,10 +127,21 @@ const createOpenApiAwareRouteRegistration = (
   return registration;
 };
 
-export const start = async (skipListen = false): Promise<express.Application> => {
+/**
+ * Boots the example backend. Pass `existingServer` to have Terreno attach the app and
+ * socket.io to a server it does not listen on — how Vercel Functions serve it, WebSocket
+ * upgrades included. The process-owned workers (harness runner) only start when this
+ * process owns the listener.
+ */
+export const start = async (
+  skipListen = false,
+  existingServer?: http.Server
+): Promise<express.Application> => {
   // Cloud Run probes PORT as soon as the process starts. Bind before Mongo so a
-  // slow connect/seed cannot fail the revision.
-  const httpServer = skipListen ? undefined : await bindPortEarly(process.env.PORT || "9000");
+  // slow connect/seed cannot fail the revision. A host-owned server is already reachable.
+  const ownsListener = !skipListen && !existingServer;
+  const httpServer =
+    existingServer ?? (ownsListener ? await bindPortEarly(process.env.PORT || "9000") : undefined);
 
   // Connect to MongoDB first
   await connectToMongoDB();
@@ -185,7 +197,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       },
       // Reflect specific web origins (never "*") so Better Auth's credentialed
       // cross-origin requests from the Expo web frontend pass the browser CORS check.
-      corsOrigin: getWebOrigins(),
+      corsOrigin: getCorsOrigins(),
       httpServer,
       // Cloud Run captures stdout/stderr. Keeping the console transport avoids making
       // startup depend on LoggingWinston network/auth callbacks before the port opens.
@@ -549,17 +561,22 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       );
     }
 
-    if (process.env.SEED_DEFAULTS === "true") {
-      logger.info("Seeding default example data after sync collections are registered");
-      await seedDefaultData();
-    }
+    await seedDefaultDataOnBoot({isDeployed});
 
     const app = terraApp.start();
+
+    // A host-owned server takes traffic as soon as this returns, so finish the sync
+    // indexes and startup migrations first instead of racing the first requests.
+    if (existingServer) {
+      await terraApp.whenReady();
+    }
 
     if (
       shouldStartJobsWorkerInApiProcess({
         jobsStartWorkerEnv: process.env.JOBS_START_WORKER,
-        skipListen,
+        // A host-owned server (Vercel Functions) freezes between requests, so a polling
+        // worker would stall mid-job. Run `bun run jobs:worker` elsewhere instead.
+        skipListen: !ownsListener,
       })
     ) {
       await terraApp.whenReady();
@@ -572,13 +589,13 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       } catch (error: unknown) {
         logger.error(`[jobs] In-process worker failed to start; HTTP server remains up: ${error}`);
       }
-    } else if (!skipListen) {
+    } else if (ownsListener) {
       logger.info(
         "[jobs] API-process worker disabled (JOBS_START_WORKER=false); use bun run jobs:worker if needed"
       );
     }
 
-    if (!skipListen) {
+    if (ownsListener) {
       await startExampleHarness();
     }
 
@@ -589,7 +606,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     return app;
   } catch (error) {
     logger.error(`Error setting up server: ${error}`);
-    if (httpServer) {
+    if (httpServer && ownsListener) {
       await closeEarlyListenHolder(httpServer);
     }
     throw error;

@@ -84,6 +84,7 @@ describe("mocked local tools and syncdb", () => {
     expect(output).toContain('get_syncdb_state:{"collection":"todos","entityId":"t1","limit":5}');
     expect(output).toContain('get_syncdb_state:{"includeDebugEvents":false,"name":"app"}');
     expect(output).not.toContain("get_rtk_state");
+    expect(output).not.toContain("get_client_state");
     expect(output).toContain("evaluate");
     expect(output).toContain("navigate");
     expect(output).toContain("database_query");

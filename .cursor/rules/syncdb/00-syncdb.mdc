@@ -78,6 +78,8 @@ export const apiClient = createApiClient({authProvider, baseUrl, headers: appHea
 Mount `<SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]}>` and
 `<ApiClientProvider client={apiClient}>` at the root. Read the session with `useSession()`.
 
+The default socket transport uses `["polling", "websocket"]`. On hosts without session affinity (Vercel Functions), pass `socketTransports: ["websocket"]`; see `docs/how-to/vercel-function-websockets.md`.
+
 Call `syncDb.start()` when the user is authenticated and `syncDb.stop()` on logout. Gate `mutate()` until `start()` resolves.
 
 ## React hooks (`@terreno/syncdb/react`)

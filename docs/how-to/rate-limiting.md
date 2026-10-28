@@ -108,7 +108,7 @@ const uploadLimit = createRouteRateLimitMiddleware({
 | modelRouter, admin, AI HTTP, `POST /mcp`, `POST /sync/mutate` | api |
 | `GET /health`, `/healthz`, `/openapi.json`, `/swagger` | skip |
 
-`rateLimit.skip` adds extra skips. Health/openapi/swagger always skip. Paths use Express `req.path` (not the raw request-target), without a trailing slash.
+`rateLimit.skip` adds extra skips. Health/openapi/swagger always skip. Paths use Express `req.path` (not the raw request-target), without a trailing slash. Classification also resolves `.` and `..` segments, including `%2e` forms, the way Better Auth's router does: a request is charged to the auth bucket when either the path as sent or its resolved form is a credential route (so `/api/auth/%2e/sign-in/email` counts as sign-in), and a path that contains dot segments never gets the health/openapi/swagger skip.
 
 JWT login/signup/refresh and password-reset paths skip access-token verification so a stale `Authorization` header cannot block credential exchange. Other routes still 401 on an expired JWT. Path matching uses Express `req.path` and ignores trailing slashes and letter case.
 

@@ -1,4 +1,5 @@
-// TODO: Update SplitPage native to have desktop UX for tablet sized screens
+// Native stays a stacked list/detail at every mobile breakpoint, including tablet `lg`.
+// Do not promote native tablets to the desktop side-by-side layout.
 import {useCallback, useEffect, useState} from "react";
 import flattenChildren from "react-keyed-flatten-children";
 import {Dimensions, type ListRenderItemInfo, View} from "react-native";
@@ -9,11 +10,15 @@ import type {SplitPageListItem, SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
 import {Spinner} from "./Spinner";
+import {SplitPageLoading} from "./SplitPageLoading";
 import {Unifier} from "./Unifier";
 
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -156,8 +161,15 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       keyboardOffset={keyboardOffset}
       width="100%"
     >
-      {loading === true && <Spinner color="light" size="md" />}
-      {selectedId === undefined ? renderList() : renderMainContent}
+      <SplitPageLoading
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={loadingComponent}
+        loadingLabel={loadingLabel}
+        spinner={<Spinner color="light" size="md" />}
+      >
+        {selectedId === undefined ? renderList() : renderMainContent}
+      </SplitPageLoading>
     </Box>
   );
 };

@@ -31,7 +31,7 @@ relocates those two into Platform.
   `color="transparent"`, `padding={0}` unless the screen supplies its own pad.
 - Breadcrumbs and `headerActions` enable the white top bar. Home typically uses
   `breadcrumbs={[{label: "Admin"}]}`.
-- Viewport width `< 768`: hamburger + drawer. Do not hide the shell on mobile.
+- Below the desktop floor (1024pt, `isSupportedDesktopWidth`): hamburger + drawer. Do not hide the shell on mobile.
 - Custom-screen back: `AdminScreenPage` → `router.push(backHref)`. Never
   `router.back()` as the default.
 

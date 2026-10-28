@@ -1,6 +1,7 @@
 # @terreno/mcp
 
-MCP server for Terreno - provides documentation, tools, and prompts for building full-stack apps.
+MCP servers that give coding agents Terreno docs, code generators, and live app diagnostics — part of
+Terreno, the batteries-included TypeScript framework for universal apps.
 
 ## Features
 
@@ -59,237 +60,53 @@ Code generation prompts:
 
 ## Install
 
+The hosted server needs no install: point your editor at `https://mcp.terreno.app/mcp` (MCP
+Streamable HTTP). Install the package in your app for the local stdio server:
+
 ```bash
-# From the monorepo root
-bun install
-bun run mcp:build
+bun add -d @terreno/mcp
 ```
 
-## Usage
+The local server needs Bun 1.4 or newer for its `browser` tool.
 
-### With Claude Desktop
+## Quick start
 
-Add to your Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+Add both servers to `.cursor/mcp.json` (or `.mcp.json` for Claude Code) at the app repository root:
 
 ```json
 {
   "mcpServers": {
-    "terreno": {
-      "command": "bun",
-      "args": ["/path/to/terreno/mcp-server/dist/index.js"]
-    }
+    "terreno": {"type": "http", "url": "https://mcp.terreno.app/mcp"},
+    "terreno-local": {"command": "bunx", "args": ["terreno-mcp-local"]}
   }
 }
 ```
 
-### With Claude Code CLI
+Restart the editor, then ask the agent to call `terreno_search_docs` or `application_info`.
 
-Add to your project's `.claude/settings.json`:
+## What's included
 
-```json
-{
-  "mcpServers": {
-    "terreno": {
-      "command": "bun",
-      "args": ["./mcp-server/dist/index.js"]
-    }
-  }
-}
-```
-
-### Update help (optional)
-
-When `TERRENO_HELP_API_URL` points at a Terreno backend with `AnnouncementsApp({help: {enabled: true}})`, the update-note tools also search live product announcements (published by default; pass `includeArchived: true` for archived notes). Set `TERRENO_HELP_API_TOKEN` when the help routes require authentication.
-
-## Development
-
-```bash
-# Build
-bun run build
-
-# Watch mode
-bun run dev
-
-# Start server
-bun run start
-
-# Run tests
-bun run test
-
-# Lint
-bun run lint
-```
-
-## Docker
-
-Build and run the MCP server in Docker:
-
-```bash
-# Build the image
-docker build -t terreno-mcp-server ./mcp-server
-
-# Run the container
-docker run --rm terreno-mcp-server
-```
-
-## CI/CD
-
-The MCP server includes GitHub Actions workflows:
-
-### CI Workflow (`.github/workflows/mcp-server-ci.yml`)
-- Runs on every push/PR to `mcp-server/**`
-- Lints, builds, and tests the code
-- Builds Docker image to verify it works
-
-### Deploy Workflow (`.github/workflows/mcp-server-deploy.yml`)
-- Runs on push to `master`/`main` branch
-- Deploys to Google Cloud Run
-
-### Required GitHub Secrets for Deployment
-
-Configure these secrets in your GitHub repository:
-
-| Secret | Description |
-|--------|-------------|
-| `GCP_PROJECT_ID` | Your Google Cloud project ID |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | Workload Identity Federation provider |
-| `GCP_SERVICE_ACCOUNT` | Service account email for deployment |
-| `GCP_ARTIFACT_REGISTRY` | Artifact Registry repository name |
-
-### Setting up GCP for Deployment
-
-1. Create an Artifact Registry repository:
-   ```bash
-   gcloud artifacts repositories create terreno \
-     --repository-format=docker \
-     --location=us-central1
-   ```
-
-2. Set up Workload Identity Federation for GitHub Actions:
-   ```bash
-   # Create workload identity pool
-   gcloud iam workload-identity-pools create "github" \
-     --location="global" \
-     --display-name="GitHub Actions"
-
-   # Create provider
-   gcloud iam workload-identity-pools providers create-oidc "github" \
-     --location="global" \
-     --workload-identity-pool="github" \
-     --display-name="GitHub" \
-     --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
-     --issuer-uri="https://token.actions.githubusercontent.com"
-   ```
-
-3. Grant permissions to the service account:
-   ```bash
-   # Cloud Run deployment
-   gcloud projects add-iam-policy-binding PROJECT_ID \
-     --member="serviceAccount:SA_EMAIL" \
-     --role="roles/run.admin"
-
-   # Artifact Registry push
-   gcloud artifacts repositories add-iam-policy-binding terreno \
-     --location=us-central1 \
-     --member="serviceAccount:SA_EMAIL" \
-     --role="roles/artifactregistry.writer"
-   ```
-
-## How Tools Work
-
-**Important**: MCP tools return generated code as text content. They do not create files directly. When using these tools with an AI assistant (like Claude in Cursor), the assistant should:
-
-1. Call the appropriate tool to generate code
-2. Take the returned code text and write it to the appropriate file in your project
-3. Follow up with any necessary steps (registering routes, regenerating SDK, etc.)
-
-This design allows the AI assistant to:
-- Review and adapt the generated code to your project structure
-- Make any necessary modifications before writing
-- Handle file paths based on your project's conventions
-
-## Example Tool Usage
-
-### Generate a Model
-
-```json
-{
-  "name": "terreno_generate_model",
-  "arguments": {
-    "name": "Product",
-    "fields": [
-      { "name": "title", "type": "String", "required": true },
-      { "name": "price", "type": "Number", "required": true },
-      { "name": "active", "type": "Boolean", "default": "true" }
-    ],
-    "hasOwner": true,
-    "softDelete": true
-  }
-}
-```
-
-The tool returns TypeScript code that should be written to `backend/src/models/product.ts` (or your project's model directory).
-
-### Generate a Route
-
-```json
-{
-  "name": "terreno_generate_route",
-  "arguments": {
-    "modelName": "Product",
-    "routePath": "/products",
-    "permissions": {
-      "create": "authenticated",
-      "list": "any",
-      "read": "any",
-      "update": "owner",
-      "delete": "admin"
-    },
-    "queryFields": ["active", "category"],
-    "ownerFiltered": true,
-    "sort": "-created"
-  }
-}
-```
-
-The tool returns route configuration code that should be written to `backend/src/api/product.ts`, then exported from `backend/src/api/index.ts` and registered in your server setup.
-
-### Generate a Screen
-
-```json
-{
-  "name": "terreno_generate_screen",
-  "arguments": {
-    "name": "ProductList",
-    "type": "list",
-    "modelName": "Product",
-    "fields": ["title", "price"]
-  }
-}
-```
-
-The tool returns React Native screen code that should be written to `frontend/src/screens/ProductListScreen.tsx` (or your project's screen directory).
-
-## Example Prompt Usage
-
-### Create CRUD Feature
-
-```
-Prompt: terreno_create_crud_feature
-Arguments:
-  - name: "Product"
-  - fields: "title:string,price:number,description:string,active:boolean"
-  - hasOwner: "yes"
-```
-
-This will generate a comprehensive prompt with instructions for creating:
-- Backend model with proper schema
-- API routes with permissions
-- Frontend list, detail, and form screens
+- Hosted `terreno-mcp` tools (14): `terreno_bootstrap_ai_rules`, `terreno_search_docs`,
+  `terreno_get_component_docs`, `terreno_get_upgrade_guide`, `terreno_search_update_notes`,
+  `terreno_get_update_note`, `terreno_ask_update_help`, `terreno_generate_model`,
+  `terreno_generate_route`, `terreno_generate_screen`, `terreno_generate_form_fields`,
+  `terreno_validate_model_schema`, `terreno_validate_ui_blocks`, `terreno_install_admin`
+- Local `terreno-mcp-local` tools (11): `application_info`, `database_schema`, `database_query`,
+  `read_logs`, `last_error`, `get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`, `evaluate`,
+  `navigate`, `browser`
+- Nine workflow prompts (`terreno_bootstrap`, `terreno_create_crud_feature`, `terreno_upgrade`, and
+  more) and `terreno://docs/*` documentation resources on the hosted server
+- Code generators return text with a target path; the agent writes the files
+- Rate limiting: the hosted server allows 120 requests per 60 seconds per client IP by default and
+  answers `429` with `Retry-After` beyond that
+- `TERRENO_MCP_EVAL` gate: `evaluate`, `navigate`, `syncdb_action`, and the `browser` `evaluate`
+  action run only when the local server's environment sets `TERRENO_MCP_EVAL=1` (or `true`)
 
 ## Documentation
 
-Full API reference: [docs/reference/mcp-server.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/mcp-server.md)
+- Reference (every tool, parameter, and environment variable): [docs/reference/mcp-server.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/mcp-server.md)
+- How-to: [Set up Terreno MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md)
+- How-to: [Debug a Terreno app with MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/debug-with-mcp.md)
 
 ## License and Contributing
 

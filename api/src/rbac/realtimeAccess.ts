@@ -10,6 +10,23 @@ interface RealtimeAccessEntry {
   };
 }
 
+/**
+ * REST `access.also[method]` still applies to socket document reads. An empty list allows
+ * the read; any listed permission must pass.
+ */
+const checkAlsoPermissions = async (
+  access: ModelRouterAccessOptions,
+  method: "list" | "read",
+  user?: User,
+  doc?: Record<string, unknown>
+): Promise<boolean> => {
+  const also = access.also?.[method] ?? [];
+  if (also.length === 0) {
+    return true;
+  }
+  return checkPermissions(method, also, user, doc);
+};
+
 /** The RBAC action for socket document reads: the router's `read` override, else `read`. */
 const resolveReadAction = (access: ModelRouterAccessOptions): string | null => {
   const override = access.actions?.read;
@@ -64,10 +81,12 @@ export const canReadDocumentRealtime = async (
           permissions: scopeResult as never,
           user,
         });
-        return extra.allowed;
+        if (!extra.allowed) {
+          return false;
+        }
       }
     }
-    return true;
+    return checkAlsoPermissions(access, "read", user, doc);
   }
 
   return checkPermissions("read", entry.options.permissions?.read ?? [], user, doc);

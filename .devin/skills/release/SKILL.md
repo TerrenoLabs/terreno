@@ -3,9 +3,9 @@ name: release
 description: >-
   Cut a Terreno release — organize commits since the last tag into useful
   release notes, flag breaking changes, decide the semver version, open a
-  changelog pull request, merge it as soon as CI is green, create the GitHub
-  release, and monitor the CircleCI publish until every package is on npm.
-  Trigger with /release.
+  changelog pull request that the Bot merge workflow lands and tags once CI is
+  green (or merge and tag it by hand when it cannot), and monitor the CircleCI
+  publish until every package is on npm. Trigger with /release.
 triggers:
   - user
 ---
@@ -119,7 +119,7 @@ Before creating the tag:
 2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files. It also regenerates the example app's what's new data (`example-frontend/constants/whatsNew.generated.json`); if you edit `CHANGELOG.md` afterwards (for example to add an upgrade note line), rerun `bun run whats-new:generate`. Commit it with `CHANGELOG.md`, or `bun run check:whats-new` fails in CI.
 3. Confirm the new version section is **non-empty** and grouped under Keep a Changelog headings.
 4. If the new section has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` heading, write `mcp-server/src/docs/upgrades/X.Y.Z.md` **in the same commit as the assembled changelog**, using the template in [`mcp-server/src/docs/upgrades/README.md`](../../mcp-server/src/docs/upgrades/README.md). Add a changelog line `Upgrade note: [\`mcp-server/src/docs/upgrades/X.Y.Z.md\`](mcp-server/src/docs/upgrades/X.Y.Z.md).` under the version heading. The tag-time upgrade-docs check fails the release without the file. Verify locally with `bun run check:upgrade-docs X.Y.Z`.
-5. If this skill (or another `.rulesync/` source) needs to change, edit `.rulesync/` in this same commit, run `bun run rules`, then run `bun run skills:sync` so `skills/release/SKILL.md` matches. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
+5. If this skill (or another `.rulesync/` source) needs to change, prefer a separate pull request so **Bot merge** can land the release; otherwise edit `.rulesync/` in this same commit, run `bun run rules`, then run `bun run skills:sync` so `skills/release/SKILL.md` matches. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
 
 ## Step 5c: Open the changelog pull request and merge it when CI is green (required)
 
@@ -132,7 +132,43 @@ Never commit the release directly to master, and never tag before this pull requ
    gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
    ```
 
-3. Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
+   Write `/tmp/release-pr.md` with the `Why`, `What changed`, and `Verification` sections the approval bot scores:
+
+   ```markdown
+   ## Why
+
+   Assemble the X.Y.Z changelog so the release can be tagged.
+
+   ## What changed
+
+   - Folded <n> fragments from `changelog/unreleased/` into `CHANGELOG.md` under X.Y.Z
+   - Regenerated `example-frontend/constants/whatsNew.generated.json`
+   - <Upgrade note `mcp-server/src/docs/upgrades/X.Y.Z.md`, when written>
+
+   ## Verification
+
+   | Status | Scope | Evidence / action |
+   | --- | --- | --- |
+   | ✅ Tested | Section is non-empty and grouped | `bun run check:changelog` → OK; the X.Y.Z section in `CHANGELOG.md` lists <n> entries |
+   | ✅ Tested | What's new matches the changelog | `bun run check:whats-new` → pass |
+   | ✅ Tested | Upgrade note present | `bun run check:upgrade-docs X.Y.Z` → pass |
+   ```
+
+   Drop the upgrade-note bullet and row when the release needs no upgrade note.
+
+3. **Bot merge path (default).** When the pull request touches only release-note files (`CHANGELOG.md`, `changelog/unreleased/*`, `whatsNew.generated.json`, `mcp-server/src/docs/upgrades/*.md`), the **Bot merge** workflow merges it after CI passes. It then tags the squash commit and creates the draft GitHub release from the `CHANGELOG.md` section. See [release automation](../../docs/how-to/release-automation.md). Do not merge or tag by hand. Wait for the tag, then go to Step 7:
+
+   ```bash
+   # Bot merge runs as a check on the pull request, after every other check passes.
+   gh pr checks "$PR" --watch --interval 60
+   gh pr view "$PR" --json state --jq .state  # MERGED
+   git fetch --tags origin && git rev-parse "$VERSION"
+   gh release edit "$VERSION" --notes-file /tmp/release-notes.md  # optional: richer Step 5 notes; the release stays a draft
+   ```
+
+   If **Bot merge** logs `Leaving for human review` (for example, the pull request also edits a skill), follow the manual path below. Bot-merge setup problems also go to the manual path: missing `BOT_MERGE_*` settings, or a release branch that is not stable `X.Y.Z`. Keep skill edits in a separate pull request so the release stays bot-mergeable.
+
+   **Manual path.** Wait until every check on the pull request head has finished and succeeded. Pending and failing checks block the merge. A check that was cancelled because a newer run replaced it does not count; the latest run of each workflow must be green. If a check fails for a real reason, fix it on `release/X.Y.Z` and wait again. Answer every review-bot thread before merging. After three fix rounds still red, stop and escalate per [push ownership](references/push-ownership.md); never leave the release PR red.
 
    ```bash
    gh pr checks --watch
@@ -154,7 +190,7 @@ Never commit the release directly to master, and never tag before this pull requ
 
 ## Step 6: Create the release
 
-Only after Step 5c is on master. Push the tag on the squash commit (this starts CircleCI `publish-release`), then create the release as a draft:
+Skip this step when **Bot merge** tagged the release (Step 5c.3). Only after Step 5c is on master. Push the tag on the squash commit (this starts CircleCI `publish-release`), then create the release as a draft:
 
 ```bash
 git fetch origin master

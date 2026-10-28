@@ -2,7 +2,7 @@
 
 `modelRouter` can register **actions** — named operations at collection or instance scope — alongside standard CRUD. Actions reuse the same permission model, error envelope, and OpenAPI pipeline as CRUD routes, without hand-wiring `endpoints`, `asyncHandler`, and doc loading.
 
-CRUD **create, update, and delete** (not named actions) share one write pipeline: REST, Sync, and MCP all call `executeCreate` / `executeUpdate` / `executeDelete` in `api/src/sync/executors.ts`. MCP tools map arguments and `APIError` titles onto the MCP result envelope after the executor returns. RBAC User-role stripping runs in those executors **after** `transform` / `preCreate` / `preUpdate`. MCP passes the registry `modelName` so stripping still applies when the compiled mongoose `modelName` is not `"User"`. Invalid document `_id` values (`CastError` on path `_id`, BSON invalid ObjectId) load as 404 `Document not found`; `CastError` on populate paths is a GET error, not a missing document.
+CRUD **create, update, and delete** (not named actions) share one write pipeline: REST, Sync, and MCP all call `executeCreate` / `executeUpdate` / `executeDelete` in `api/src/sync/executors.ts`. MCP tools map arguments and `APIError` titles onto the MCP result envelope after the executor returns. RBAC User-role stripping runs in those executors **after** `transform` / `preCreate` / `preUpdate`. Stripping applies to the user model: a model compiled as `"User"`, or the `userModel` passed to `createAccess` under whatever name it was compiled. Pass `userModel` to `createAccess` when your user model has another name. Invalid document `_id` values (`CastError` on path `_id`, BSON invalid ObjectId) load as 404 `Document not found`; `CastError` on populate paths is a GET error, not a missing document.
 
 ## When to use actions
 
@@ -102,6 +102,8 @@ HTTP method and scope map to a CRUD permission check:
 **405** — denied before a document is loaded (or on any collection action denial).  
 **403** — denied after the instance document is loaded (e.g. `IsOwner` with a document that fails the check).  
 **401** — unauthenticated when a permission requires auth (from existing auth middleware).
+
+With RBAC `access` on the router, an action without its own `access` inherits the router's resource and the mapped CRUD action. When the action's resource (inherited or set with `access`) matches the router's resource, the router's `access.scope` check and `access.also[method]` permissions also run, before and after the document loads, exactly as they do for the mapped CRUD method. A user whose role grants `todo:update` but who fails the router scope for a document gets **403** on that document's instance actions, the same as on `PATCH`. An action whose `access` names another resource skips the router's `scope` and `also`.
 
 `authenticateMiddleware` honors the router’s `allowAnonymous` option, same as CRUD. An action may set `allowAnonymous: true` to accept unauthenticated requests without making the router's CRUD routes or other actions anonymous. Keep a non-empty permission such as `Permissions.IsAny` and authenticate any service token in the handler.
 

@@ -48,6 +48,9 @@ export const BarChart: FC<BarChartProps> = ({
   height = DEFAULT_HEIGHT,
   legendLabel,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   onPeriodPress,
   periodLabel,
   series,
@@ -119,6 +122,9 @@ export const BarChart: FC<BarChartProps> = ({
       isEmpty={allPoints.length === 0}
       legendLabel={effectiveLegendLabel}
       loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
       testID={testID}
       tooltipText={tooltipText}
     >

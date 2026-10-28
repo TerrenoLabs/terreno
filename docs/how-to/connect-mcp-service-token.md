@@ -114,3 +114,5 @@ Revoked and expired keys fail `tools/call` immediately. Disabled user accounts a
 ## Upgrading from 57.x
 
 58.0.0 gives `McpServiceToken` String ids. Before deploying, add the `mcp-service-token-string-ids` framework migration to your `migrations/` directory and apply it. Existing tokens keep working and keep their ids as hex strings. See [Run MongoDB migrations](run-mongodb-migrations.md#framework-migrations).
+
+A password reset, Better Auth password change, or "sign out everywhere" (`revoke-sessions` / `revoke-other-sessions`) bumps the user's `tokenEpoch` and ends every key minted before it. The keys show as revoked in the list; mint a new one for each client you still use.

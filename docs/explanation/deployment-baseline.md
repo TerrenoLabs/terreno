@@ -1,6 +1,6 @@
 # Deployment baseline
 
-Every Terreno production deployment needs the same seven foundations. Provider guides ([Deploy to GCP](../how-to/deploy-to-gcp.md), future Vercel guide) map these to specific platforms; this page names them once.
+Every Terreno production deployment needs the same seven foundations. Provider guides ([Deploy to GCP](../how-to/deploy-to-gcp.md), [Deploy to Vercel](../how-to/deploy-to-vercel.md)) map these to specific platforms; this page names them once.
 
 See also the [environment variables reference](../reference/environment-variables.md).
 
@@ -44,9 +44,9 @@ Expo Router supports three web output modes. The choice determines hosting optio
 
 | Mode | Output | API routes | SSR | Hosting | Terreno status |
 |------|--------|-----------|-----|---------|----------------|
-| `single` | One `index.html` SPA | No | No | Any static host | **Current default** |
-| `static` | Per-route HTML files | No | No | Any static host | Available; better SEO |
-| `server` | `dist/client` + `dist/server` | Yes | Yes (alpha, SDK ≥ 55) | Node/Bun/edge runtime | Not yet — repo catalog is Expo `~54.0.29`; see [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md) |
+| `single` | One `index.html` SPA | No | No | Any static host | Expo's default |
+| `static` | Per-route HTML files | No | No | Any static host | Used by `example-frontend` and `demo`; better SEO |
+| `server` | `dist/client` + `dist/server` | Yes | Yes (alpha, SDK ≥ 55) | Node/Bun/edge runtime | Available (repo catalog is Expo `~57.0.14`) but unused; see [Deploy to Vercel](../how-to/deploy-to-vercel.md#advanced-server-output) and [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md) |
 
 ## Multi-environment checklist
 

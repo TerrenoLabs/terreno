@@ -143,6 +143,15 @@ describe("resources", () => {
       expect(patterns?.content).toContain("Form");
     });
 
+    test("should teach SyncDB, not RTK hooks, for collection CRUD", () => {
+      expect(patterns?.content).toContain('from "@terreno/syncdb/react"');
+      expect(patterns?.content).toContain('useQuery<Todo>("todos"');
+      expect(patterns?.content).toContain('useMutate("todos")');
+      expect(patterns?.content).toContain('sync: {scope: {type: "owner"}}');
+      expect(patterns?.content).not.toContain("useGetTodosQuery");
+      expect(patterns?.content).not.toContain("useCreateTodoMutation");
+    });
+
     test("should contain error handling patterns", () => {
       expect(patterns?.content).toContain("Error Handling");
       expect(patterns?.content).toContain("APIError");

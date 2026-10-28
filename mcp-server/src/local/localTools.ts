@@ -8,6 +8,27 @@ import {lastError, readLogs} from "./tools/readLogs.js";
 import {evaluate, navigate} from "./tools/runtime.js";
 import {getSyncDbState, syncDbAction, syncDbSnapshot} from "./tools/syncDb.js";
 
+const SYNCDB_STATE_INPUT_SCHEMA: Tool["inputSchema"] = {
+  additionalProperties: false,
+  properties: {
+    collection: {description: "SyncDB: optional collection filter", type: "string"},
+    entityId: {description: "SyncDB: optional entity id filter", type: "string"},
+    includeDebugEvents: {
+      description: "SyncDB: set false to return debug stats without event bodies",
+      type: "boolean",
+    },
+    limit: {
+      description: "SyncDB: entity limit per collection (default 500, max 2000)",
+      type: "number",
+    },
+    name: {
+      description: "SyncDB: client/store name; defaults to the first registered client",
+      type: "string",
+    },
+  },
+  type: "object",
+};
+
 export const localMcpTools: Tool[] = [
   {
     description:
@@ -85,26 +106,7 @@ export const localMcpTools: Tool[] = [
   {
     description:
       "Inspect a live SyncDB client registered by createSyncDb({debug: true}): status, entities (including tombstones/pending metadata), decoded outbox, conflicts, cursors, streams, repairs, values, and debugger events. Sensitive fields are redacted.",
-    inputSchema: {
-      additionalProperties: false,
-      properties: {
-        collection: {description: "Optional collection filter", type: "string"},
-        entityId: {description: "Optional entity id filter", type: "string"},
-        includeDebugEvents: {
-          description: "Set false to return debug stats without event bodies",
-          type: "boolean",
-        },
-        limit: {
-          description: "Entity limit per collection (default 500, max 2000)",
-          type: "number",
-        },
-        name: {
-          description: "Client/store name; defaults to the first registered client",
-          type: "string",
-        },
-      },
-      type: "object",
-    },
+    inputSchema: SYNCDB_STATE_INPUT_SCHEMA,
     name: "get_syncdb_state",
   },
   {

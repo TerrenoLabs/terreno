@@ -242,6 +242,9 @@ export const ensureApiId = (data: unknown): unknown => {
   return data;
 };
 
+/** Returned by a buildPayload callback to send nothing to that socket. */
+const SKIP_EMISSION = Symbol("skipEmission");
+
 /**
  * Generalized authorized-room emitter: iterates the sockets in `room`, runs the per-socket
  * read-permission check against `fullDocument`, builds the payload per socket (so
@@ -263,7 +266,10 @@ export const emitPayloadToAuthorizedRoom = async ({
   eventName: string;
   entry: AuthorizedEmitEntry;
   fullDocument: Record<string, unknown> | undefined;
-  /** Build the per-socket payload; a throw drops the emission for that socket only. */
+  /**
+   * Build the per-socket payload; a throw drops the emission for that socket only, and
+   * returning SKIP_EMISSION sends nothing to it.
+   */
   buildPayload: (user: User | undefined) => Promise<unknown> | unknown;
   logDebug: (msg: string) => void;
 }): Promise<void> => {
@@ -286,7 +292,10 @@ export const emitPayloadToAuthorizedRoom = async ({
           continue;
         }
         if (adminDecision === "allow") {
-          socket.emit(eventName, await buildPayload(user));
+          const adminPayload = await buildPayload(user);
+          if (adminPayload !== SKIP_EMISSION) {
+            socket.emit(eventName, adminPayload);
+          }
           continue;
         }
       }
@@ -296,7 +305,11 @@ export const emitPayloadToAuthorizedRoom = async ({
         continue;
       }
 
-      socket.emit(eventName, await buildPayload(user));
+      const payload = await buildPayload(user);
+      if (payload === SKIP_EMISSION) {
+        continue;
+      }
+      socket.emit(eventName, payload);
     } catch (error) {
       logger.error(
         `[realtime] Failed to emit ${eventName} for ${entry.modelName} to socket ${socket.id}: ${error}`

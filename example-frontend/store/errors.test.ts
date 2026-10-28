@@ -86,6 +86,20 @@ describe("reportApiError", () => {
     );
   });
 
+  it("masks password fields in logs and the Sentry context", () => {
+    reportApiError(apiError(500), {
+      body: {currentPassword: "dummy-secret-1", email: "new@example.com"},
+      method: "PATCH",
+      url: "/auth/me",
+    });
+
+    const logged = JSON.stringify([consoleDebugSpy.mock.calls, consoleWarnSpy.mock.calls]);
+    assert.ok(!logged.includes("dummy-secret-1"));
+    assert.ok(logged.includes("<REDACTED>"));
+    assert.strictEqual(setContext.mock.calls.length, 1);
+    assert.ok(!JSON.stringify(setContext.mock.calls[0][1]).includes("dummy-secret-1"));
+  });
+
   it("reports no args when the request sent none", () => {
     reportApiError(apiError(500), {method: "DELETE", url: "/todos/1"});
 

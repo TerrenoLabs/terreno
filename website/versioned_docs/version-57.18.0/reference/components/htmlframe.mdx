@@ -1,0 +1,29 @@
+---
+title: "HtmlFrame"
+description: "Sandboxed preview of agent HTML. Web uses an empty iframe sandbox. Native turns JavaScript off."
+sidebar_label: "HtmlFrame"
+slug: /reference/components/htmlframe
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# HtmlFrame
+
+Sandboxed preview of agent HTML. Web uses an empty iframe sandbox. Native turns JavaScript off.
+
+**Package:** `@terreno/ui`  
+**Categories:** Pattern  
+**Props interface:** `HtmlFrameProps`  
+**Story source:** [`demo/stories/HtmlFrame.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/HtmlFrame.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="HtmlFrame" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `html` | `string` | Yes | Sanitized HTML. The frame prepends a Content-Security-Policy meta tag. |
+| `height` | `union` |  | Frame height.  |
+| `title` | `string` |  | Accessible name for the frame. Defaults to Agent-generated preview. |

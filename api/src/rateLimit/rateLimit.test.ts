@@ -230,6 +230,34 @@ describe("HTTP rate limiting", () => {
     );
   });
 
+  it("classifies dot-segment variants of credential paths as auth", () => {
+    const variants = [
+      "/api/auth/%2e/sign-in/email",
+      "/api/auth/%2E/sign-in/email",
+      "/api/auth/./sign-in/email",
+      "/api/auth/x/../sign-in/email",
+      "/api/auth/x/%2e%2e/reset-password",
+      "/auth/./login",
+      "/x/../oauth/token",
+    ];
+    for (const path of variants) {
+      assert.equal(classifyRateLimitPolicy({method: "POST", path} as never), "auth", path);
+    }
+  });
+
+  it("does not skip rate limiting for non-canonical paths that resolve elsewhere", () => {
+    assert.isFalse(
+      shouldSkipRateLimit({
+        method: "POST",
+        path: "/openapi.json/../api/auth/sign-in/email",
+      } as never)
+    );
+    assert.isFalse(
+      shouldSkipRateLimit({method: "POST", path: "/swagger/%2e%2e/api/auth/sign-in/email"} as never)
+    );
+    assert.isTrue(shouldSkipRateLimit({method: "GET", path: "/openapi.json"} as never));
+  });
+
   it("honors rateLimit.skip for extra paths", async () => {
     const app = buildApp({
       limits: {apiMax: 1, authMax: 1},

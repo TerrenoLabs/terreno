@@ -13,6 +13,8 @@ const ignoredErrors = [
   "Registration failed - permission denied",
   "TypeError: Load failed",
   "TypeError: Failed to fetch",
+  "The current password is incorrect",
+  "Enter your current password to change your email",
 ];
 
 /** Statuses that are expected in normal use (signed out, missing record) and never reported. */
@@ -23,6 +25,20 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" &&
   (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype);
 
+/** Copy request args for logs and Sentry with password values (`password`, `currentPassword`) masked. */
+const redactPasswordArgs = (
+  args: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined => {
+  if (!args || typeof args !== "object") {
+    return args;
+  }
+  return Object.fromEntries(
+    Object.entries(args).map(([key, value]) =>
+      key.toLowerCase().includes("password") ? [key, "<REDACTED>"] : [key, value]
+    )
+  );
+};
+
 /** The request's params and JSON body, or `undefined` when it sent neither. */
 const requestArgs = (args: ApiRequestArgs): Record<string, unknown> | undefined => {
   const summary: Record<string, unknown> = {};
@@ -30,7 +46,7 @@ const requestArgs = (args: ApiRequestArgs): Record<string, unknown> | undefined 
     summary.params = args.params;
   }
   if (isPlainObject(args.body)) {
-    summary.body = args.body;
+    summary.body = redactPasswordArgs(args.body);
   } else if (typeof FormData !== "undefined" && args.body instanceof FormData) {
     summary.body = "[FormData]";
   } else if (args.body != null) {

@@ -89,10 +89,14 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
 /** Permission functions and hooks read the caller's credential type from the request context. */
 const recordMcpAuth = (auth: MCPAuthResult | undefined): void => {
   if (!auth?.user.id) {
-    setRequestContext({credential: undefined});
+    setRequestContext({credential: undefined, oauthScopes: undefined});
     return;
   }
-  setRequestContext({credential: auth.credential, userId: auth.user.id});
+  setRequestContext({
+    credential: auth.credential,
+    oauthScopes: auth.credential === "oauth" ? auth.scopes : undefined,
+    userId: auth.user.id,
+  });
 };
 
 const createMcpServerInstance = (tools: MCPToolDefinition[], user?: User): McpServer => {

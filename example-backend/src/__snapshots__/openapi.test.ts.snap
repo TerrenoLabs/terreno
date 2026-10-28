@@ -8169,6 +8169,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "format": "date-time",
                             "type": "string",
                           },
+                          "tokenEpoch": {
+                            "description": "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+                            "type": "number",
+                          },
                           "tokenHash": {
                             "description": "SHA-256 hash of the full MCP service token plaintext",
                             "type": "string",
@@ -8489,6 +8493,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "description": "When this MCP service token was revoked; unset while it remains active",
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "tokenEpoch": {
+                      "description": "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+                      "type": "number",
                     },
                     "tokenHash": {
                       "description": "SHA-256 hash of the full MCP service token plaintext",
@@ -18312,6 +18320,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "token": {
                       "description": "Push provider token identifying the device",
                       "type": "string",
+                    },
+                    "tokenEpoch": {
+                      "description": "The owner's tokenEpoch when the device registered; push stops after it changes",
+                      "type": "number",
                     },
                     "updated": {
                       "description": "When this document was last updated",

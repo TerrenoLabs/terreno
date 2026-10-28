@@ -1,6 +1,6 @@
 # Example Frontend
 
-Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/syncdb for data, session, and requests, and @terreno/ui for components. Deployed to Netlify on push to master.
+Example Expo app demonstrating full-stack Terreno usage with @terreno/api backend, @terreno/syncdb for data, session, and requests, and @terreno/ui for components. Deployed to Netlify and, during an evaluation period, to Vercel on push to master (see [Deployment](#deployment)).
 
 ## Features
 
@@ -100,9 +100,21 @@ Edit `app.json` to add the `extra` field:
 | `bun run sdk` | Generate request hooks (`store/apiSdk.ts`) from the backend OpenAPI spec |
 | `bun run sync-sdk` | Generate synced collection hooks (`store/syncDbSdk.ts`) |
 | `bun run export` | Export static web build |
+| `bun run build:vercel` | Vercel build: bake `EXPO_PUBLIC_API_URL` into `app.json` `extra`, then export |
 | `bun run test` | Run tests |
 | `bun run lint` | Lint code |
 | `bun run lint:fix` | Fix lint issues |
+
+## Deployment
+
+The web app deploys from CI to two hosts on every push to `master`, plus a preview per PR:
+
+- **Netlify** (`public/_redirects`), against the Cloud Run backend.
+- **Vercel** (`vercel.json`), at https://terrenolabs-frontend.vercel.app against the Vercel backend at https://terrenolabs-backend.vercel.app. This runs in parallel with Netlify while the Vercel topology is evaluated.
+
+`vercel.json` is wired to the real `terreno-frontend` Vercel project. It sets `"git": {"deploymentEnabled": false}`, so Vercel does not build on push; CircleCI runs `scripts/ci/vercel-deploy.sh frontend <production|preview>`. Its build command, `bun run build:vercel` (`scripts/vercelBuild.ts`), requires `EXPO_PUBLIC_API_URL` and writes `extra.BASE_URL`, `extra.apiBaseUrl`, and `extra.SOCKET_TRANSPORTS=websocket` into `app.json` before `expo export`. Run it in CI or a throwaway checkout: it rewrites `app.json`.
+
+See [Deploy to Vercel](../docs/how-to/deploy-to-vercel.md).
 
 ## Project Structure
 

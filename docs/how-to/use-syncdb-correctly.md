@@ -96,7 +96,7 @@ In tests, clean up with `Model.collection.deleteMany(...)`, which bypasses Mongo
 
 ### Deltas don't apply `queryFilter`
 
-Snapshots and `/sync/entities` apply the router's `queryFilter`. Live deltas check only `permissions.read` (or RBAC) per recipient. A router that restricts visibility only through `queryFilter` leaks rows over the socket. Every synced router's `read` permission must enforce the same restriction itself.
+Snapshots and `/sync/entities` apply the router's `queryFilter`. Live deltas check only `permissions.read` per recipient (on an RBAC router: the role, `access.scope`, and `access.also.read`, the same checks REST read applies; subscriptions also apply `access.also.list`). A router that restricts visibility only through `queryFilter` leaks rows over the socket. Every synced router's `read` permission must enforce the same restriction itself.
 
 ### Membership grants arrive late
 

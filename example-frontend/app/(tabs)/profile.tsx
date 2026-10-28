@@ -24,10 +24,12 @@ import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {
   type PatchAuthMeArgs,
   useCommsTestPushMutation,
+  useDeleteCommsPushTokensByIdMutation,
   useGetAuthMeQuery,
   usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
 } from "@/store/apiSdk";
+import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 
 /** What POST /comms/dev/testPush reports for the caller's registered devices. */
 interface TestPushResult {
@@ -49,6 +51,7 @@ const ProfileScreen: React.FC = () => {
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
   const [sendTestPush, {isLoading: isSendingTestPush}] = useCommsTestPushMutation();
+  const [deletePushToken] = useDeleteCommsPushTokensByIdMutation();
   const {
     colorSchemeSetting,
     isLoading: isThemePreferenceLoading,
@@ -79,6 +82,7 @@ const ProfileScreen: React.FC = () => {
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testPushMessage, setTestPushMessage] = useState<string | null>(null);
@@ -139,12 +143,21 @@ const ProfileScreen: React.FC = () => {
     [showSaveSuccess, updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (profile?.email ?? "").trim().toLowerCase(),
+    [email, profile?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({email: value}).unwrap();
+        await updateProfile(
+          isEmailChanged ? {currentPassword, email: value} : {email: value}
+        ).unwrap();
+        setCurrentPassword("");
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
@@ -153,7 +166,7 @@ const ProfileScreen: React.FC = () => {
         );
       }
     },
-    [showSaveSuccess, updateProfile]
+    [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
   const handleSavePassword = useCallback(
@@ -180,9 +193,12 @@ const ProfileScreen: React.FC = () => {
   );
 
   // useSession().logout signs both sync clients out (wiping local rows) before the auth server.
-  const handleLogout = useCallback((): void => {
-    void logout();
-  }, [logout]);
+  const handleLogout = useCallback(async (): Promise<void> => {
+    await releaseExpoPushTokenSafely({
+      deleteToken: async (id) => deletePushToken(id).unwrap(),
+    });
+    await logout();
+  }, [deletePushToken, logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
@@ -317,6 +333,18 @@ const ProfileScreen: React.FC = () => {
               type="email"
               value={email}
             />
+
+            {isEmailChanged && (
+              <TextField
+                disabled={isUpdating}
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
 
             <TapToEdit
               disabled={isUpdating}

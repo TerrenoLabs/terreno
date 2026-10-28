@@ -27,6 +27,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
     ".ai/**/*"
@@ -70,5 +71,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.16.2"
+  "version": "57.19.2"
 }

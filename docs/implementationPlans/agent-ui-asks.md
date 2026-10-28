@@ -115,6 +115,8 @@ How asks and blocks divide the work:
 | D25 | Compact surface mode | `surface: "compact"` on `/gpt/prompt` or `turn` offers only `ask_confirm` and a narrowed `ask_choice` (`select: one`, 2–3 options, labels ≤ 20), and appends one prompt line: keep replies to two short sentences and ask only yes/no or up to three short options. | assumed |
 | D26 | Button order and safety | Primary answer first, Cancel last. A `destructive` confirm marks its approve button `destructive`, so Apple Watch Double Tap, which triggers the first non-destructive action, can never approve it. | assumed |
 
+D27 note: Markdown images in `text` blocks and plain replies bypass `imageHosts`; this is documented as a known gap in `docs/explanation/agent-ui-asks.md`.
+
 ## Architecture
 
 ```

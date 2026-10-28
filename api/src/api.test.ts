@@ -454,6 +454,42 @@ describe("@terreno/api", () => {
       expect(res.body.data[1].name).toBe("Apple");
     });
 
+    it("list rejects sort fields outside queryFields, options.sort, and sortFields", async () => {
+      await FoodModel.create({calories: 200, hidden: true, name: "Apple", ownerId: admin._id});
+      const listOptions = {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAny],
+          delete: [Permissions.IsAny],
+          list: [Permissions.IsAny],
+          read: [Permissions.IsAny],
+          update: [Permissions.IsAny],
+        },
+        queryFields: ["name"],
+        sort: "-created" as const,
+      };
+      app.use("/food", modelRouter(FoodModel, listOptions));
+      app.use("/foodSortable", modelRouter(FoodModel, {...listOptions, sortFields: ["calories"]}));
+      server = supertest(app);
+
+      let res = await server.get("/food?sort=hidden%20name").expect(400);
+      expect(res.body.code).toBe("sort-field-not-allowed");
+      expect(res.body.meta.sortField).toBe("hidden");
+      await server.get("/food?sort=-calories").expect(400);
+      await server.get("/food?sort[calories]=1").expect(400);
+      await server.get("/food?sort=name&sort=calories").expect(400);
+
+      // queryFields and the router's default sort fields stay sortable.
+      await server.get("/food?sort=-name").expect(200);
+      await server.get("/food?sort=created%20-name").expect(200);
+      await server.get("/food?sort=%2Bname").expect(200);
+
+      // An explicit sortFields list adds fields that are not filterable.
+      res = await server.get("/foodSortable?sort=-calories").expect(200);
+      expect(res.body.data[0].name).toBe("Apple");
+      await server.get("/foodSortable?sort=hidden").expect(400);
+    });
+
     it("queryFilter error is handled", async () => {
       app.use(
         "/food",

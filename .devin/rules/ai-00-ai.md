@@ -3,7 +3,7 @@ trigger: always_on
 ---
 # @terreno/ai
 
-AI service layer for Terreno apps providing GPT chat, request logging, and admin tools. Provider-agnostic via Vercel AI SDK. This is a **backend-only** package — no React, no UI components, no frontend code.
+AI service layer for Terreno apps providing GPT chat, request logging, and admin tools. Provider-agnostic via the Vercel AI SDK (a model library, unrelated to Vercel hosting). This is a **backend-only** package — no React, no UI components, no frontend code.
 
 ## Commands
 
@@ -46,7 +46,7 @@ src/
 
 ## AIService
 
-Provider-agnostic AI service using Vercel AI SDK's `LanguageModel` interface. Consuming apps provide their own model instance.
+Provider-agnostic AI service using the Vercel AI SDK's `LanguageModel` interface. Consuming apps provide their own model instance.
 
 ### Usage
 
@@ -74,7 +74,7 @@ const aiService = new AIService({
 | `translateText({text, targetLanguage, sourceLanguage?, userId?})` | Translate text |
 | `generateChatStream({messages, systemPrompt?, userId?})` | Stream chat response |
 
-Structured helpers default to `TemperaturePresets.DETERMINISTIC` and use `JSON_VALUE_SYSTEM_PROMPT` when `systemPrompt` is omitted. They run `doGenerate` text through `normalizeLlmJsonTextForStructuredOutput` (see `parseAiJson`: fences, preamble, first balanced `{`/`[` slice, trailing commas, smart-quote fallback) before Vercel `Output.*` parsing. On failure, `logger.error` records prompt, system, raw model text, and error details; `AIRequest` rows store `response` (raw text or a sentinel), `error`, and `metadata` (`system`, `finishReason`, `errorStack`, `rawModelTextCaptured`).
+Structured helpers default to `TemperaturePresets.DETERMINISTIC` and use `JSON_VALUE_SYSTEM_PROMPT` when `systemPrompt` is omitted. They run `doGenerate` text through `normalizeLlmJsonTextForStructuredOutput` (see `parseAiJson`: fences, preamble, first balanced `{`/`[` slice, trailing commas, smart-quote fallback) before the Vercel AI SDK's `Output.*` parsing. On failure, `logger.error` records prompt, system, raw model text, and error details; `AIRequest` rows store `response` (raw text or a sentinel), `error`, and `metadata` (`system`, `finishReason`, `errorStack`, `rawModelTextCaptured`).
 
 Re-exported from `@terreno/ai`: `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, `ParseResult` types, plus `Output`, `jsonSchema`, and types `JSONValue`, `FlexibleSchema` (from the `ai` package) for building schemas in app code.
 

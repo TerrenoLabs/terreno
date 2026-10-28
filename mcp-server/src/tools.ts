@@ -775,6 +775,9 @@ export default ${name}Screen;
 `;
 };
 
+// Prop names follow @terreno/ui's field interfaces (TextFieldProps, SelectFieldProps,
+// BooleanFieldProps, DateTimeFieldProps, NumberFieldProps): `title`, `onChange`, `errorText`.
+// formFieldsTypecheck.test.ts compiles this output against @terreno/ui to catch drift.
 export const generateFormFields = (args: {
   fields: Array<{
     name: string;
@@ -793,103 +796,75 @@ export const generateFormFields = (args: {
     const label = field.label ?? field.name.charAt(0).toUpperCase() + field.name.slice(1);
     const stateName = field.name;
     const setterName = `set${field.name.charAt(0).toUpperCase() + field.name.slice(1)}`;
+    const errorProp = field.required ? `\n          errorText={errors.${field.name}}` : "";
+    const renderField = (component: string, extraProps = ""): string =>
+      `        <${component}
+          title="${label}"${extraProps}
+          value={${stateName}}
+          onChange={${setterName}}${errorProp}
+        />`;
 
     switch (field.type) {
       case "text":
         imports.add("TextField");
-        fieldComponents.push(`        <TextField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("TextField"));
         break;
       case "email":
         imports.add("EmailField");
-        fieldComponents.push(`        <EmailField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("EmailField"));
         break;
       case "password":
-        imports.add("PasswordField");
-        fieldComponents.push(`        <PasswordField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        // PasswordField is a placeholder without props; TextField type="password" masks input.
+        imports.add("TextField");
+        fieldComponents.push(renderField("TextField", '\n          type="password"'));
         break;
       case "number":
         imports.add("NumberField");
-        fieldComponents.push(`        <NumberField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("NumberField", '\n          type="number"'));
         break;
       case "textarea":
         imports.add("TextArea");
-        fieldComponents.push(`        <TextArea
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("TextArea"));
         break;
       case "select": {
         imports.add("SelectField");
         const optionsStr = field.options
           ? JSON.stringify(field.options, null, 2).replace(/\n/g, "\n          ")
           : "[]";
-        fieldComponents.push(`        <SelectField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-          options={${optionsStr}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("SelectField", `\n          options={${optionsStr}}`));
         break;
       }
       case "boolean":
         imports.add("BooleanField");
-        fieldComponents.push(`        <BooleanField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-        />`);
+        fieldComponents.push(renderField("BooleanField"));
         break;
       case "date":
       case "datetime":
         imports.add("DateTimeField");
-        fieldComponents.push(`        <DateTimeField
-          label="${label}"
-          value={${stateName}}
-          onChange={${setterName}}
-          mode="${field.type === "date" ? "date" : "datetime"}"
-        />`);
+        fieldComponents.push(renderField("DateTimeField", `\n          type="${field.type}"`));
         break;
     }
   }
 
-  const stateDeclarations = fields
-    .map((f) => {
-      const defaultValue = f.type === "boolean" ? "false" : f.type === "number" ? "0" : '""';
-      return `  const [${f.name}, set${f.name.charAt(0).toUpperCase() + f.name.slice(1)}] = useState(${defaultValue});`;
-    })
-    .join("\n");
+  // Every field value is a string (NumberField and DateTimeField included) except BooleanField.
+  const stateLines = fields.map((f) => {
+    const defaultValue = f.type === "boolean" ? "false" : '""';
+    return `  const [${f.name}, set${f.name.charAt(0).toUpperCase() + f.name.slice(1)}] = useState(${defaultValue});`;
+  });
+  if (fields.some((f) => f.required)) {
+    stateLines.push(
+      '  // Set a message to show it under a field, e.g. setErrors({title: "Title is required"}).',
+      "  const [errors, setErrors] = useState<Record<string, string | undefined>>({});"
+    );
+  }
 
-  return `import React, { useState } from "react";
+  return `import { useState } from "react";
 import { ${Array.from(imports).join(", ")} } from "@terreno/ui";
 
 // State declarations (add to your component):
-${stateDeclarations}
+${stateLines.join("\n")}
 
 // Form fields (add inside your component's return):
-{/* Form Fields */}
 <Box gap={3}>
 ${fieldComponents.join("\n")}
 </Box>
@@ -916,6 +891,21 @@ export const validateUiBlocks = (args: {document?: string}): string => {
     return "";
   }
   return `${validated.warnings.map(formatBlockIssue).join("\n")}\n`;
+};
+
+const NAMED_IMPORT_PATTERN =
+  /import\s+(?:type\s+)?(?:\w+\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+const MODEL_DOCUMENT_TYPE_PATTERN = /\b\w+Document\b/;
+
+// True when the source declares a `<Name>Document` type or imports one from the app's type files.
+// mongoose's own Document types (Document, HydratedDocument) do not count.
+const hasModelDocumentType = (source: string): boolean => {
+  if (/^\s*(?:export\s+)?(?:interface|type)\s+\w+Document\b/m.test(source)) {
+    return true;
+  }
+  return Array.from(source.matchAll(NAMED_IMPORT_PATTERN)).some(
+    ([, names, from]) => from !== "mongoose" && MODEL_DOCUMENT_TYPE_PATTERN.test(names)
+  );
 };
 
 export const validateModelSchema = (args: {schema: string}): string => {
@@ -946,10 +936,13 @@ export const validateModelSchema = (args: {schema: string}): string => {
     suggestions.push("Add addDefaultPlugins(schema) or manually add createdUpdatedPlugin");
   }
 
-  // Check for interface
-  if (!schema.includes("interface") || !schema.includes("Document")) {
+  // Check for the model's Document type: declared inline, or imported from where Terreno keeps
+  // model types (src/modelInterfaces.ts or src/types/models/).
+  if (!hasModelDocumentType(schema)) {
     issues.push("Missing TypeScript interfaces");
-    suggestions.push("Define interfaces for Document and Model types");
+    suggestions.push(
+      "Define Document and Model types in src/modelInterfaces.ts or src/types/models/ and import them into the model file"
+    );
   }
 
   // Check for findOne usage

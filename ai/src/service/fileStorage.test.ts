@@ -1,32 +1,18 @@
-import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {registerGcsMock} from "@terreno/test";
 import mongoose from "mongoose";
 
 import {FileAttachment} from "../models/fileAttachment";
 
-// Mock @google-cloud/storage so the service doesn't try to authenticate
-const bucketFileMock = {
-  delete: mock(async (_opts?: Record<string, unknown>) => [undefined]),
-  download: mock(async () => [Buffer.from("stored bytes")]),
-  getSignedUrl: mock(async () => ["https://example.com/signed-url"]),
-  save: mock(async (_buffer: Buffer, _opts: Record<string, unknown>) => [undefined]),
-};
-const bucketObj = {
-  file: mock((_key: string) => bucketFileMock),
-};
-mock.module("@google-cloud/storage", () => ({
-  Storage: class {
-    bucket = (_name: string) => bucketObj;
-  },
-}));
+// In-memory @google-cloud/storage so the service doesn't try to authenticate
+const gcs = registerGcsMock();
 
 const {FileStorageService} = await import("./fileStorage");
 
 describe("FileStorageService", () => {
   beforeEach(async () => {
     await FileAttachment.deleteMany({});
-    bucketFileMock.delete.mockClear();
-    bucketFileMock.getSignedUrl.mockClear();
-    bucketFileMock.save.mockClear();
+    gcs.reset();
   });
 
   afterEach(async () => {
@@ -51,7 +37,8 @@ describe("FileStorageService", () => {
       expect(result.gcsKey).toContain("my_file.txt");
       expect(result.size).toBe(buffer.length);
       expect(result.url).toContain("storage.googleapis.com/test-bucket");
-      expect(bucketFileMock.save).toHaveBeenCalledTimes(1);
+      expect(gcs.fileMocks.save).toHaveBeenCalledTimes(1);
+      expect(gcs.getObject({bucket: "test-bucket", name: result.gcsKey})?.contents).toEqual(buffer);
 
       const attachment = await FileAttachment.findOne({gcsKey: result.gcsKey});
       expect(attachment).toBeDefined();
@@ -62,10 +49,15 @@ describe("FileStorageService", () => {
 
   describe("download", () => {
     it("returns the bytes of the bucket file", async () => {
+      gcs.putObject({
+        bucket: "test-bucket",
+        contents: "stored bytes",
+        name: "uploads/abc/file.txt",
+      });
       const service = new FileStorageService({bucketName: "test-bucket"});
       const bytes = await service.download("uploads/abc/file.txt");
       expect(bytes.toString("utf8")).toBe("stored bytes");
-      expect(bucketObj.file).toHaveBeenCalledWith("uploads/abc/file.txt");
+      expect(gcs.file).toHaveBeenCalledWith("uploads/abc/file.txt");
     });
   });
 
@@ -73,8 +65,10 @@ describe("FileStorageService", () => {
     it("returns a signed url from the bucket file", async () => {
       const service = new FileStorageService({bucketName: "test-bucket"});
       const url = await service.getSignedUrl("uploads/abc/file.txt");
-      expect(url).toBe("https://example.com/signed-url");
-      expect(bucketFileMock.getSignedUrl).toHaveBeenCalledTimes(1);
+      expect(url).toBe(
+        "https://storage.googleapis.com/test-bucket/uploads/abc/file.txt?X-Goog-Signature=mock"
+      );
+      expect(gcs.fileMocks.getSignedUrl).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -94,7 +88,7 @@ describe("FileStorageService", () => {
       await service.delete("uploads/x/y.txt");
 
       // findOneAndUpdate may return the old doc — just verify it ran and bucket delete was called
-      expect(bucketFileMock.delete).toHaveBeenCalledTimes(1);
+      expect(gcs.fileMocks.delete).toHaveBeenCalledTimes(1);
       expect(attachment._id).toBeDefined();
     });
   });

@@ -180,6 +180,56 @@ export const createRoleManager = (args: {
     }
   };
 
+  // Users hold roles by name, so a rename changes who holds which permissions. Treat it like a
+  // permission edit: the actor must hold the role's grants, and the new name must not already
+  // bind any user or role (a stale `user.roles` entry would otherwise inherit the grants).
+  const assertRenameAllowed = async (args: {
+    actor: User;
+    existing: RbacRoleDocument;
+    newName: unknown;
+    roleName: string;
+  }): Promise<void> => {
+    const {actor, existing, newName, roleName} = args;
+    if (existing.isLocked) {
+      throw new APIError({status: 400, title: "Cannot rename a locked role"});
+    }
+    if (typeof newName !== "string" || newName.trim() === "") {
+      throw new APIError({status: 400, title: "Role name must be a non-empty string"});
+    }
+    await assertNoEscalationOrAudit({
+      action: "role.update",
+      actor,
+      permissions: existing.permissions ?? {},
+      targetRoleName: roleName,
+    });
+    if (await rbacRoleModel.exists({name: newName})) {
+      throw new APIError({status: 409, title: "A role with that name already exists"});
+    }
+    if (userModel && (await userModel.countDocuments({roles: newName})) > 0) {
+      throw new APIError({status: 409, title: "Users already hold a role with that name"});
+    }
+  };
+
+  // Keeps holders of a renamed role on the same grants.
+  const moveRoleHolders = async (args: {fromName: string; toName: string}): Promise<void> => {
+    try {
+      if (userModel) {
+        await userModel.updateMany({roles: args.fromName}, {$set: {"roles.$": args.toName}});
+      }
+      await rbacRoleModel.updateMany(
+        {excludesRoles: args.fromName},
+        {$set: {"excludesRoles.$": args.toName}}
+      );
+    } catch (error) {
+      logger.error("Failed to move role holders after a rename", {
+        error,
+        fromName: args.fromName,
+        toName: args.toName,
+      });
+      throw error;
+    }
+  };
+
   const seedDefaults = async (): Promise<void> => {
     await rbacRoleModel.seedDefaults({extraRoles: defaultRoles, statements});
   };
@@ -381,17 +431,28 @@ export const createRoleManager = (args: {
           });
         }
       }
-      if (changes.permissions) {
-        assertValidPermissionSet(changes.permissions, statements);
+      // Any `permissions` key is written below, so validate on presence, not truthiness:
+      // `false` or `""` would otherwise skip both checks and empty the role.
+      if ("permissions" in changes) {
+        const incoming: unknown = changes.permissions;
+        if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+          throw new APIError({
+            detail: "permissions must be an object of resource action lists",
+            status: 400,
+            title: "Invalid permissions",
+          });
+        }
+        assertValidPermissionSet(incoming as PermissionSet, statements);
         await assertNoEscalationOrAudit({
           action: "role.update",
           actor,
-          permissions: unionPermissionSets(existing.permissions ?? {}, changes.permissions),
+          permissions: unionPermissionSets(existing.permissions ?? {}, incoming as PermissionSet),
           targetRoleName: roleName,
         });
       }
-      if (changes.name && existing.isLocked) {
-        throw new APIError({status: 400, title: "Cannot rename a locked role"});
+      const isRename = changes.name !== undefined && changes.name !== roleName;
+      if (isRename) {
+        await assertRenameAllowed({actor, existing, newName: changes.name, roleName});
       }
       if (changes.excludesRoles && userModel) {
         const holders = await userModel.find({roles: roleName});
@@ -423,6 +484,9 @@ export const createRoleManager = (args: {
         existing.set("description", undefined);
       }
       await existing.save();
+      if (isRename) {
+        await moveRoleHolders({fromName: roleName, toName: existing.name});
+      }
       invalidateCache();
       await emitAudit({
         action: "role.update",

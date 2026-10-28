@@ -16,6 +16,7 @@ import {Permissions} from "../permissions";
 import {defaultResponseHandler} from "../transformers";
 import type {McpServiceTokenDocument} from "../types/mcpServiceToken";
 import {z} from "../zodOpenApi";
+import {userTokenEpoch} from "./auth";
 
 export const MAX_ACTIVE_MCP_SERVICE_TOKENS = 10;
 
@@ -199,13 +200,20 @@ export const createMcpServiceTokenRouter = (
           const {expiresAt: rawExpiresAt, name: rawName} = body as z.infer<typeof createBody>;
           const name = parseName(rawName);
           const expiresAt = parseExpiresAt(rawExpiresAt);
+          await McpServiceToken.revokeOutdatedForUser({
+            _id: owner._id,
+            tokenEpoch: userTokenEpoch(owner),
+          });
           const activeCount = await McpServiceToken.countActiveForUser(String(owner._id));
           if (activeCount >= MAX_ACTIVE_MCP_SERVICE_TOKENS) {
             throw new BadRequestError({
               title: `Maximum of ${MAX_ACTIVE_MCP_SERVICE_TOKENS} active MCP service tokens`,
             });
           }
-          const issued = await McpServiceToken.issueFor({_id: owner._id}, {expiresAt, name});
+          const issued = await McpServiceToken.issueFor(
+            {_id: owner._id, tokenEpoch: userTokenEpoch(owner)},
+            {expiresAt, name}
+          );
           return {
             created: issued.mcpServiceToken.created.toISOString(),
             expiresAt: issued.mcpServiceToken.expiresAt
@@ -258,7 +266,18 @@ export const createMcpServiceTokenRouter = (
       update: [],
     },
     queryFields: ["_id"],
-    queryFilter: (user?: User) => (user?.id ? {userId: user.id} : null),
+    queryFilter: async (user?: User) => {
+      if (!user?.id) {
+        return null;
+      }
+      // Tokens from before a password reset or session revocation no longer work; drop them
+      // before the list.
+      await McpServiceToken.revokeOutdatedForUser({
+        _id: user.id,
+        tokenEpoch: userTokenEpoch(user),
+      });
+      return {userId: user.id};
+    },
     responseHandler:
       mcpServiceTokenResponseHandler as ModelRouterOptions<McpServiceTokenDocument>["responseHandler"],
     sort: "-created",

@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-18T16:51:45.310Z.
+> dates are promised. Last updated: 2026-10-28T04:42:40.018Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -54,13 +54,14 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### deploy
 
 - [Deploy to GCP (generalized)](https://github.com/TerrenoLabs/terreno/issues/1005) (Improvement, In progress) — IP: [deploy-to-gcp](docs/implementationPlans/deploy-to-gcp.md) · Tasks: [deploy-to-gcp](docs/tasks/deploy-to-gcp.md)
-- [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Planned) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 
 ### dx
 
 - [Agent UI Rich Replies: steppers, checklists, galleries, and copy](https://github.com/TerrenoLabs/terreno/issues/1546) (Feature, Planned) — IP: [agent-ui-rich-replies](docs/implementationPlans/agent-ui-rich-replies.md) · Tasks: [agent-ui-rich-replies](docs/tasks/agent-ui-rich-replies.md)
+- [An end-user guide that grows with every feature](https://github.com/TerrenoLabs/terreno/issues/1642) (Feature, Shaping) — IP: [lifecycle-user-guide](docs/implementationPlans/lifecycle-user-guide.md)
 - [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, Shipped) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
 - [Demo workshop](https://github.com/TerrenoLabs/terreno/issues/1470) (Feature, Planned) — IP: [demo-workshop](docs/implementationPlans/demo-workshop.md) · Tasks: [demo-workshop](docs/tasks/demo-workshop.md)
+- [E2E tests and manual regression cases in every plan](https://github.com/TerrenoLabs/terreno/issues/1641) (Feature, In review) — IP: [e2e-and-regression-testing](docs/implementationPlans/e2e-and-regression-testing.md)
 - [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, Shipped) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)
 - [Open source launch program](https://github.com/TerrenoLabs/terreno/issues/1094) (Improvement, In progress) — IP: [oss-launch-program](docs/implementationPlans/oss-launch-program.md)
 
@@ -94,6 +95,10 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 - [App MCP server](https://github.com/TerrenoLabs/terreno/issues/1390) (Feature, Shaping) — IP: [app-mcp-server](docs/implementationPlans/app-mcp-server.md) · Tasks: [app-mcp-server](docs/tasks/app-mcp-server.md)
 - [Infrastructure MCP server (@terreno/infra-mcp)](https://github.com/TerrenoLabs/terreno/issues/1090) (Feature, Planned) — IP: [infra-mcp](docs/implementationPlans/infra-mcp.md) · Tasks: [infra-mcp](docs/tasks/infra-mcp.md)
+
+### dx
+
+- [CircleCI PR Speed Loop](https://github.com/TerrenoLabs/terreno/issues/1627) (Feature, In progress) — IP: [circleci-pr-speed-loop](docs/implementationPlans/circleci-pr-speed-loop.md)
 
 ## Target: Released
 
@@ -164,6 +169,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 ### deploy
 
+- [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/issues/1012) (Improvement, Shipped) — IP: [deploy-to-vercel](docs/implementationPlans/deploy-to-vercel.md) · Tasks: [deploy-to-vercel](docs/tasks/deploy-to-vercel.md)
 - [Deployment foundation](https://github.com/TerrenoLabs/terreno/issues/1011) (Improvement, Shipped) — IP: [deployment-foundation](docs/implementationPlans/deployment-foundation.md) · Tasks: [deployment-foundation](docs/tasks/deployment-foundation.md)
 
 ### examples

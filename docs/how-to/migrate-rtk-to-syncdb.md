@@ -17,6 +17,16 @@ Work through the steps in order. Every removed export and its replacement is in
 
 ## 1. Run the backend migrations
 
+`installDevConsoleLogger` lives on `@terreno/syncdb/app` (or `@terreno/syncdb/devConsoleLogger`). Pass the API base URL once at startup:
+
+```typescript
+import {installDevConsoleLogger} from "@terreno/syncdb/app";
+import {baseUrl} from "@terreno/syncdb/config";
+
+installDevConsoleLogger({baseUrl});
+```
+
+
 `GptHistory` and `McpServiceToken` now have String `_id`s and sync. Run both data migrations
 **before** deploying 58 frontends. See the
 [58.0.0 upgrade note](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#gpt-histories-are-a-synced-collection).

@@ -49,6 +49,17 @@ const setConnectionDb = (db: unknown): void => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("matchesQuery", () => {
+  describe("malformed predicates", () => {
+    it("fails closed instead of throwing", () => {
+      expect(matchesQuery({a: 1}, {$and: [null]})).toBe(false);
+      expect(matchesQuery({a: 1}, {$and: [{a: 1}, 5]})).toBe(false);
+      expect(matchesQuery({a: 1}, {$or: [null, {a: 1}]})).toBe(true);
+      expect(matchesQuery({a: 1}, {$or: [null, "x"]})).toBe(false);
+      expect(matchesQuery({a: 1}, {a: {$eq: {toString: 1}}})).toBe(false);
+      expect(matchesQuery({a: 1}, null as unknown as Record<string, unknown>)).toBe(false);
+    });
+  });
+
   describe("direct equality", () => {
     it("matches string equality", () => {
       expect(matchesQuery({name: "Alice"}, {name: "Alice"})).toBe(true);

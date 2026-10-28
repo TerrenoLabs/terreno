@@ -1,6 +1,7 @@
 # Build stage
 # TODO: Do this build in Github Actions
-FROM oven/bun:1 AS builder
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497). `bun build --compile` embeds this binary.
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /app
 
 COPY . .

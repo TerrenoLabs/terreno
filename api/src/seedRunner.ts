@@ -171,7 +171,9 @@ export const seedBetterAuthUser = async ({
       title: "Better Auth seed returned no user",
     });
   }
-  return syncBetterAuthUser(userModel, authUser);
+  // The seed created or signed in to this Better Auth account itself, so its email is trusted
+  // for linking an existing app user (for example one seeded under the legacy JWT flow).
+  return syncBetterAuthUser(userModel, authUser, undefined, {trustEmail: true});
 };
 
 const selectSteps = (steps: SeedStep[], only?: string[]): SeedStep[] => {

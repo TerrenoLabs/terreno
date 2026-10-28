@@ -3,6 +3,7 @@ import {ScrollView, useWindowDimensions} from "react-native";
 import {Box} from "./Box";
 import {Heading} from "./Heading";
 import {MarkdownView} from "./MarkdownView";
+import {isSupportedDesktopWidth} from "./MediaQuery";
 import {TextField} from "./TextField";
 
 interface MarkdownEditorProps {
@@ -30,7 +31,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   maxHeight = DEFAULT_MAX_HEIGHT,
 }) => {
   const {width} = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isDesktop = isSupportedDesktopWidth({width});
 
   const paneContainerStyle = {
     flex: 1,

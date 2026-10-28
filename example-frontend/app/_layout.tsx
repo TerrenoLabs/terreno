@@ -37,7 +37,7 @@ import {adminSyncDb, setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 
-installDevConsoleLogger();
+installDevConsoleLogger({baseUrl});
 
 // useSession().logout signs both sync clients out (wiping local rows, `wipeOnSignOut`) before
 // ending the auth session, while they still know the current user.
@@ -63,9 +63,7 @@ const PushTokenRegistrar: FC = () => {
     await registerExpoPushTokenSafely({
       getToken: getCurrentExpoToken,
       platform: Platform.OS,
-      postToken: async (body) => {
-        await postToken(body).unwrap();
-      },
+      postToken: async (body) => postToken(body).unwrap(),
     });
   }, [postToken]);
 

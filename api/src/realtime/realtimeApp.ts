@@ -222,6 +222,7 @@ export class RealtimeApp implements TerrenoPlugin {
           betterAuth,
           issuer: resolveTokenIssuer,
           tokenSecret,
+          userModel,
         })
       );
 

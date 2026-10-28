@@ -132,6 +132,52 @@ describe("vertex helpers", () => {
       expect(() => provider?.imageModel("imagen-4.0-fast-generate-001")).toThrow();
     });
 
+    it("rejects model ids that are not plain Vertex model ids", () => {
+      const raw = mock((modelId: string) => makeLanguageModel(modelId));
+      const image = mock((modelId: string) => makeImageModel(modelId));
+      const factory = (): VertexLanguageModelProvider =>
+        Object.assign(raw, {image}) as unknown as VertexLanguageModelProvider;
+      const crafted = [
+        "models/gemini-3.1-pro-preview:streamGenerateContent?alt=sse#/gemini-3.8-flash",
+        "gemini-3.1-pro-preview#/gemini-3.8-flash",
+        "gemini-3.1-pro-preview?x=/gemini-3.8-flash",
+        "../../other/models/gemini-3.8-flash",
+        "publishers/other/models/gemini-3.8-flash",
+        "gemini-3.8-flash:generateContent",
+      ];
+      const allowListed = createVertexProvider({
+        allowedModels: ["gemini-3.8-flash"],
+        project: "demo-project",
+        vertexFactory: factory,
+      });
+      const open = createVertexProvider({project: "demo-project", vertexFactory: factory});
+      for (const modelId of crafted) {
+        expect(allowListed?.isModelAllowed(modelId)).toBe(false);
+        expect(() => allowListed?.languageModel(modelId)).toThrow();
+        expect(() => allowListed?.imageModel(modelId)).toThrow();
+        expect(open?.isModelAllowed(modelId)).toBe(false);
+        expect(() => open?.languageModel(modelId)).toThrow();
+      }
+      expect(raw).not.toHaveBeenCalled();
+      expect(image).not.toHaveBeenCalled();
+    });
+
+    it("passes the provider the plain model id that was checked", () => {
+      const raw = mock((modelId: string) => makeLanguageModel(modelId));
+      const image = mock((modelId: string) => makeImageModel(modelId));
+      const provider = createVertexProvider({
+        allowedModels: ["gemini-3.8-flash"],
+        project: "demo-project",
+        vertexFactory: () => Object.assign(raw, {image}) as unknown as VertexLanguageModelProvider,
+      });
+      provider?.languageModel(" publishers/google/models/gemini-3.8-flash ");
+      provider?.languageModel("models/gemini-3.8-flash@001");
+      expect(raw.mock.calls.map(([modelId]) => modelId)).toEqual([
+        "gemini-3.8-flash",
+        "gemini-3.8-flash@001",
+      ]);
+    });
+
     it("resolves versioned/path model ids against the allow-list", () => {
       const provider = createVertexProvider({
         allowedModels: ["gemini-3.8-flash@001"],

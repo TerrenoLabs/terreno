@@ -1,7 +1,7 @@
 import React from "react";
 import {Text as NativeText, Platform, type TextStyle} from "react-native";
 
-import type {TextProps} from "./Common";
+import type {TextProps, TextSize} from "./Common";
 import {Hyperlink} from "./Hyperlink";
 import {useTerrenoFontsLoaded} from "./TerrenoFontProvider";
 import {useTheme} from "./Theme";
@@ -23,6 +23,9 @@ const fontSizeAndWeighMobile = {
 };
 
 const fontSizes = Platform.OS === "web" ? fontSizeAndWeightWeb : fontSizeAndWeighMobile;
+
+/** Font size in pixels that `Text` renders at `size` on the current platform. */
+export const getTextFontSize = (size: TextSize): number => fontSizes[size].size;
 
 const TextComponent = ({
   accessibilityRole,

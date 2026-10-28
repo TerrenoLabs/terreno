@@ -33,8 +33,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `api request <METHOD> <path>` | Invoke by method + path template |
 | `info` | Local `@terreno/*` versions (via MCP local tools) |
 | `logs` | Merge backend/browser JSONL, Metro events, and app CDP console (`--entries`, `--level`, `--since`, `--sources`; `last-error`) |
-| `state` | Inspect the live SyncDB client (`get_syncdb_state`): status, entities, outbox, conflicts, cursors, streams, debug events (`--collection`, `--entity-id`, `--limit`, `--name`, `--no-events`). Needs `createSyncDb({debug: true})`. The Terreno 57 `--slice` / `--query` Redux flags were removed in 58 and now exit 1 |
-| `eval` | Evaluate JavaScript in the app runtime through Metro CDP (`--code`; requires `TERRENO_MCP_EVAL=1`) |
+| `state` | Inspect the live SyncDB client (`get_syncdb_state`): status, entities, outbox, conflicts, cursors, streams, debug events (`--collection`, `--entity-id`, `--limit`, `--name`, `--no-events`). Needs `createSyncDb({debug: true})`. The Terreno 57 `--slice` / `--query` Redux flags were removed in 58 and now exit 1 || `eval` | Evaluate JavaScript in the app runtime through Metro CDP (`--code`; requires `TERRENO_MCP_EVAL=1`) |
 | `navigate` | Navigate Expo Router through Metro CDP (requires `TERRENO_MCP_EVAL=1`) |
 | `web [url]` | Automate the web app with Bun 1.4 `Bun.WebView`; ordered `--action` JSON, `--snapshot`, and `--screenshot` |
 | `db schema` | Mongo collections (`--collection-filter`, `--summary`) |

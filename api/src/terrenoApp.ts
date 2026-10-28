@@ -12,6 +12,7 @@ import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
   createBetterAuthSessionMiddleware,
+  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 import {addTerrenoDevBrowserLogsRoute} from "./browserLogsRoute";
 import {
@@ -456,7 +457,7 @@ export class TerrenoApp {
     });
     addAuthRoutes(app, options.userModel, authOptions, oapi);
 
-    if (options.logRequests !== false) {
+    if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
     }
 
@@ -527,6 +528,13 @@ export class TerrenoApp {
     if (betterAuth) {
       authOptions.syncPasswordResetToBetterAuth = async (user, password): Promise<void> => {
         await applyJwtPasswordResetToBetterAuth(betterAuth, user, password);
+      };
+      authOptions.verifyBetterAuthPassword = async (user, password) => {
+        return verifyBetterAuthCredentialPassword(
+          betterAuth,
+          user as {betterAuthId?: string},
+          password
+        );
       };
     }
     const mcpServiceTokens = resolveMcpServiceTokensOption(options.mcpServiceTokens);

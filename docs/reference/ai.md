@@ -2,6 +2,8 @@
 
 AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI SDK, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
 
+> `@terreno/ai` is provider-agnostic via the Vercel AI SDK (the `ai` package and its `@ai-sdk/*` providers). That is a model library, unrelated to Vercel hosting; on this page "Vercel" means the AI SDK unless it says hosting. To host on Vercel, see [Deploy to Vercel](../how-to/deploy-to-vercel.md).
+
 ## Table of Contents
 
 - [Install](#install)
@@ -14,6 +16,7 @@ AI service layer for Terreno backends: provider-agnostic chat via the Vercel AI 
 - [Models](#models)
 - [Route registrars](#route-registrars)
 - [AiApp plugin](#aiapp-plugin)
+- [Cost and abuse limits](#cost-and-abuse-limits)
 - [LangfuseApp plugin](#langfuseapp-plugin)
 - [Observability](#observability)
 - [Durable agent harness](#durable-agent-harness)
@@ -165,7 +168,7 @@ All generation methods log to `AIRequest` via private `logRequest()`. Logging fa
 
 - Default to `TemperaturePresets.DETERMINISTIC` when `temperature` is omitted.
 - Use `JSON_VALUE_SYSTEM_PROMPT` when `systemPrompt` is omitted.
-- Run model text through `normalizeLlmJsonTextForStructuredOutput` before Vercel `Output.*` parsing (strips fences, preamble, balanced JSON slice, trailing commas, smart-quote repair).
+- Run model text through `normalizeLlmJsonTextForStructuredOutput` before the Vercel AI SDK's `Output.*` parsing (strips fences, preamble, balanced JSON slice, trailing commas, smart-quote repair).
 - On failure: `logger.error` records prompt, system prompt, raw model text, and error details; `AIRequest` stores `response` (raw text or sentinel), `error`, and `metadata` (`system`, `finishReason`, `errorStack`, `rawModelTextCaptured`).
 
 Standalone helpers:
@@ -311,7 +314,7 @@ AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerMo
 
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
-Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, richBlocks, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources. The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. A stepper or checklist `callback.name` must also name an action whose `handles` is that block; a stepper that names any other registered action fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
+Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, richBlocks, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources in `image`, `gallery`, and `list` blocks; Markdown images in `text` blocks and plain replies are not checked against it (see [Agent UI asks](../explanation/agent-ui-asks.md)). The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. A stepper or checklist `callback.name` must also name an action whose `handles` is that block; a stepper that names any other registered action fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
 
 `uiBlocks.richBlocks` defaults to `true`: the prompt offers the rich blocks, and `stepper` when a host action has `handles: "stepper"`. The `checklist` line names the `handles: "checklist"` actions as its callback, or, without one, tells the model to leave `callback` out so ticks stay local. This is a behaviour change on upgrade: every host with `uiBlocks` on gets the new blocks in its prompt. Set `richBlocks: false` while shipped clients (for example older native builds) cannot render them; the prompt is then the same as before rich blocks, even with a stepper action registered. The opt-out changes only what the model is told to write. Validation accepts the rich blocks either way.
 
@@ -406,7 +409,7 @@ Errors raised before the stream starts return JSON `{status, title, detail, fiel
 
 Each `attachments` item is `{type: "image" | "file", url, mimeType, filename?}`. The `url` must be `http(s):` or `data:`. Client-only URLs (`blob:`, `file:`, `content:`, `ph:`) return `400` before streaming starts, because neither the model provider nor a later page load can read them. Upload the file with `POST /files/upload` first, or send it as a `data:` URL.
 
-When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, parts with a `gcsKey` are sent to the model as 1-hour signed URLs. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
+When `fileStorageService` is set, `data:` attachments are uploaded with `FileStorageService.upload`. The saved user prompt then stores the storage `url` plus `gcsKey`, not the base64 payload. The model still receives the original data for that turn. On later turns, a part whose `gcsKey` names a live `FileAttachment` owned by the conversation's owner is sent to the model as a 1-hour signed URL; any other part keeps its stored `url` and is not signed. A custom `fileStorageService` whose `upload` does not create `FileAttachment` records therefore gets no signed URLs on later turns. A failed upload returns `502 Attachment upload failed`. Without storage, attachments are saved as sent.
 
 `fileUploadsEnabled` turns uploads off without removing storage. Pass `false`, or a function that returns `false`, and any prompt that includes attachments returns `403 File uploads are disabled` before streaming. Omit it, or pass `true`, to leave uploads enabled. The example app wires this to the `file-uploads` feature flag.
 
@@ -438,7 +441,7 @@ CRUD at `/gpt/histories` via `modelRouter`:
 
 Registered with the three-argument `modelRouter("/gpt/histories", GptHistory, {sync: {scope: {type: "owner", field: "userId"}}})`, so `SyncApp` serves the histories as the sync collection `gpt/histories` on each user's stream `gpt/histories|owner:{userId}`. A client reads them with `useQuery("gpt/histories")` and renames or deletes them with `useMutate("gpt/histories")`; sync payloads go through the same response handler as REST, so they also leave out `pendingAsk.promptIndex` and `pendingAsk.responseMessages`. Register `SyncApp` (and `RealtimeApp` for live deltas) in the app. REST CRUD stays for clients that do not sync. Every history route takes the String `_id`.
 
-Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update.
+Query filtered by `userId`; sort `-updated`; query fields `userId`, `projectId`. Create sets `userId` to the caller, so `{}` is a valid create body even when the app validates request bodies. Create and update bodies drop `pendingAsk` (including dotted `pendingAsk.*` paths), so only a chat turn writes it; the OpenAPI spec marks it `readOnly` on create and update. Create and update bodies also drop any `gcsKey` on `prompts[].content[]` parts (including dotted `prompts.N.content.M.gcsKey` paths) that the history does not already store, so a client can send stored prompts back but cannot add an attachment key.
 
 Pass `chat`, the options given to `addGptRoutes`, to add two headless actions for clients that do not read server-sent events, such as a watch app. Both exist only when `chat` turns `asks` on: without `chat`, or with `asks` off, neither action exists, so a host that never turned asks on gets no new endpoints. `AiApp` adds them when its `asks` option is set.
 
@@ -527,6 +530,45 @@ new AiApp({
 | `openApiOptions` | Passed to route OpenAPI builders. Defaults to the OpenAPI instance `TerrenoApp` passes to `register` |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
 
+## Cost and abuse limits
+
+`@terreno/ai` sets no per-user limit on concurrent turns, tokens, or spend for `/gpt/prompt`
+or the headless turn action (`POST /gpt/histories/:id/turn`). Any signed-in user can start as
+many turns as the host lets through, and each one calls the model with the app's server-side
+key unless the request brings its own `x-ai-api-key`.
+
+A reply keeps running after the client disconnects. This is by design: `/gpt/prompt` saves the
+reply as a `streaming` prompt so a reload can resume it through `GET /gpt/histories/:id/stream`,
+and the turn action finishes and saves the turn whether or not the client waits. Closing the tab
+does not stop the model call or its cost.
+
+Before exposing AI routes to users, do both:
+
+1. Enable HTTP rate limiting on `TerrenoApp`. It is off unless you pass `rateLimit`. AI routes
+   fall in the `api` bucket, which counts requests, not tokens:
+
+   ```typescript
+   new TerrenoApp({
+     userModel: User,
+     rateLimit: {
+       store: "redis", // "memory" (default) | "redis" | "mongo"; use a shared store with more than one instance
+       trustProxy: 1, // behind a load balancer such as Cloud Run
+       limits: {
+         windowMs: 15 * 60 * 1000, // default 15 minutes
+         apiMax: 600, // default; lower it to bound chat turns per user or IP
+         authMax: 20, // default
+       },
+     },
+   });
+   ```
+
+   For a tighter limit on chat alone, add `createRouteRateLimitMiddleware({name, max, windowMs,
+   store, keyBy})` from `@terreno/api` in front of the AI routes. See
+   [Rate limiting](../how-to/rate-limiting.md).
+2. Set a budget, quota, or spend alert with the model provider (for example a Google Cloud
+   budget alert and Vertex AI or Gemini API quotas), so a runaway caller or bug is caught by the
+   provider even when the app's own limits are loose.
+
 ## LangfuseApp plugin
 
 Optional Langfuse admin UI and tracing:
@@ -578,7 +620,7 @@ the `chat-safety-agreement` llm-judge, and the 12-item proofread synthetic datas
 labeled for 988 vs care-team routing, toxicity, a privacy leak, and a dismissive reply.
 Admin → Scripts → `seedChatSafetyDataset`, or `bun run script seedChatSafetyDataset --wet` from
 `example-backend`, loads that set into an already-running database. `SEED_DEFAULTS=true` loads
-it on boot, including PR preview. Invalid price JSON or negative/non-numeric prices
+it on boot outside deployed (`NODE_ENV=production`) processes, which ignore the flag. Invalid price JSON or negative/non-numeric prices
 fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
 
 `POST /ai/example-summarize` (example backend) runs that seeded prompt with
@@ -727,7 +769,7 @@ Subpath imports for tree-shaking: `@terreno/ai/langfuseClient`, `@terreno/ai/lan
 ## Subpath exports
 
 Import these instead of `dist/` paths. Deep `dist/` imports break when a bundler (such as
-Vercel's) inlines them and their bare `@terreno/api` imports no longer resolve. Each
+Vercel hosting's build) inlines them and their bare `@terreno/api` imports no longer resolve. Each
 subpath shares module instances with `@terreno/ai/harness`.
 
 | Subpath | Exports |
@@ -794,6 +836,8 @@ await mcp.reconnectServer("my-server");
 await mcp.disconnect();
 ```
 
+`getTools()` merges every connected server's tools by name. When two servers offer the same name, the first server in the config keeps it and the later one is dropped with a warning. In a chat turn, MCP tools never replace a route tool or a `createRequestTools` tool of the same name: the MCP tool is dropped with a warning, so a host tool keeps its `execute` and its `needsApproval` policy.
+
 ## Gemini and Vertex helpers
 
 **Gemini Developer API** (API-key based):
@@ -819,6 +863,8 @@ const model = vertex.languageModel("gemini-3.8-flash");
 ```
 
 Env fallbacks: `GOOGLE_VERTEX_PROJECT`, `GOOGLE_VERTEX_LOCATION` (default `global`).
+
+`languageModel`, `imageModel`, and `isModelAllowed` accept only a plain model id: letters, digits, `.`, `_`, and `-`, with an optional `publishers/google/models/` or `models/` prefix and an optional `@version`. Any other id (one with another `/`, `:`, `?`, or `#`) is refused with `400 Model not permitted`, with or without `allowedModels`. With `allowedModels` set, the id without its prefix and `@version` must match an entry. The provider is given the checked id without its prefix, so a model id sent in a request body cannot name a different model than the one the allow-list checked.
 
 ## Web search types
 

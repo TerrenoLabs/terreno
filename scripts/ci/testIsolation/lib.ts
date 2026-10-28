@@ -22,8 +22,9 @@ export const isSharedSuiteTestFile = (path: string): boolean => {
   if (!/\.(test|spec)\.(ts|tsx)$/.test(path)) {
     return false;
   }
-  // Repository tooling tests are not package suites and quote mock.module as data.
-  if (path.startsWith("scripts/")) {
+  // Repository tooling tests are not package suites and quote mock.module as data. The
+  // terreno-test-hygiene linter's tests do the same: their mock.module lines are fixture strings.
+  if (path.startsWith("scripts/") || path.startsWith("test/src/cli/")) {
     return false;
   }
   return !/(^|\/)isolated\//.test(path) && !path.includes("node_modules/");

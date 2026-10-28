@@ -50,6 +50,7 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/luxon": "catalog:",
     "@types/react": "catalog:",
     "babel-preset-expo": "catalog:",
@@ -73,6 +74,7 @@
   "scripts": {
     "android": "bun expo start --android --port 8082",
     "api-sdk": "bun ../syncdb/src/codegen/cli.ts --schema ${OPENAPI_URL:-http://localhost:4000/openapi.json} --api-out ./store/apiSdk.ts --config ./syncdb-codegen.json",
+    "build:vercel": "bun scripts/vercelBuild.ts",
     "doctor": "bunx expo-doctor",
     "eas-build-post-install": "cd .. && bun run compile && bun run --filter '@terreno/ui' types",
     "export": "bun expo export --platform web",

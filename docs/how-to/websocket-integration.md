@@ -95,6 +95,20 @@ export const AnnouncementsBadge: React.FC = () => {
 - Outside a `SyncDbProvider`, pass the client: `useSocketEvent(name, handler, {client: syncDb})`.
 - `{client: null}` or `{enabled: false}` listens to nothing (for example while signed out).
 
+#### Transports
+
+The syncdb socket starts with HTTP long-polling and upgrades to WebSocket (`socketTransports: ["polling", "websocket"]`), so a restarting dev server does not fail the first handshake. Polling needs every request of a session to reach the same server process. Hosts without session affinity, such as Vercel Functions, need WebSocket only:
+
+``````typescript
+createSyncDb({
+  baseUrl,
+  collections: ["todos"],
+  socketTransports: ["websocket"],
+});
+``````
+
+Cloud Run with `--session-affinity` works with the default. See [Run Terreno WebSockets on Vercel Functions](vercel-function-websockets.md).
+
 Synced collections already update live through `useQuery` / `useEntity`; use socket events for
 everything else.
 
@@ -148,7 +162,12 @@ Something still opens its own Socket.io client. Remove it and listen through
 
 The socket sends the token from the `authProvider` passed to `createSyncDb` on every connection
 attempt. An auth rejection pauses sync (`useSyncStatus().paused === "auth"`) until the session
-refreshes. See [syncdb reference](../reference/syncdb.md).
+refreshes. On Vercel Functions, every socket closes at the Function max duration (300s by default); clients reconnect automatically. See [syncdb reference](../reference/syncdb.md) and [Run Terreno WebSockets on Vercel Functions](vercel-function-websockets.md#reconnects).
+
+### "Session ID unknown" or a 400 on `transport=polling`
+
+Polling requests for one session reached different server instances (no session affinity). Pass `socketTransports: ["websocket"]` to `createSyncDb`, or enable session affinity on the host.
+
 
 ## Security Considerations
 
@@ -162,4 +181,5 @@ refreshes. See [syncdb reference](../reference/syncdb.md).
 - [@terreno/syncdb reference](../reference/syncdb.md) — `onSocketEvent`, `useSocketEvent`
 - [Feature flags reference](../reference/feature-flags.md) — live flag updates
 - [Authentication architecture](../explanation/authentication.md)
+- [Run Terreno WebSockets on Vercel Functions](vercel-function-websockets.md) — Vercel's WebSocket beta: transports, reconnects, cross-instance state
 - [Socket.io documentation](https://socket.io/docs/v4/)

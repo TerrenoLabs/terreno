@@ -122,8 +122,10 @@ const generateMcpSettings = (args: BootstrapArgs): string => {
           type: "http",
           url: `${mcpUrl}/mcp`,
         },
+        // Generated apps do not depend on @terreno/mcp, and no npm package is named
+        // `terreno-mcp-local`, so bunx must be told which package provides the bin.
         "terreno-local": {
-          args: ["terreno-mcp-local"],
+          args: ["-p", "@terreno/mcp", "terreno-mcp-local"],
           command: "bunx",
         },
       },
@@ -161,6 +163,8 @@ const DEPLOY_BACKEND_CLOUD_RUN_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/deploy-backend-to-cloud-run.md";
 const BUILD_FOR_WEB_DOC =
   "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md";
+const SET_UP_TERRENO_MCP_DOC =
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md";
 
 const generateRootReadme = (args: BootstrapArgs): string => {
   const {appDisplayName, appName} = args;
@@ -211,6 +215,10 @@ After backend route changes, regenerate the typed API hooks in \`frontend/store/
 cd frontend && bun run sdk
 \`\`\`
 
+## AI-assisted development
+
+\`.cursor/mcp.json\` and \`.mcp.json\` connect your editor to the hosted Terreno MCP and \`terreno-mcp-local\` (logs, last error, client state, database); see [Set up Terreno MCP](${SET_UP_TERRENO_MCP_DOC}).
+
 ## Deploy
 
 Read the [deployment baseline](${DEPLOYMENT_BASELINE_DOC}) first (MongoDB replica set, auth secrets, \`EXPO_PUBLIC_*\` at build time, \`/health\`, and more).
@@ -251,7 +259,9 @@ Full walkthrough: [Build for web](${BUILD_FOR_WEB_DOC}).
 
 const generateRootDockerfile = (): string => {
   return `# Consumer Terreno backend image — builds backend/ only (not the Terreno monorepo).
-FROM oven/bun:1-slim AS builder
+# Pin 1.4.4 so the image includes the patched Brotli decoder (CVE-2026-111497).
+# Floating oven/bun:1 can resolve to an affected release.
+FROM oven/bun:1.4.4-slim AS builder
 WORKDIR /app
 
 COPY backend/package.json ./
@@ -259,7 +269,7 @@ RUN bun install
 
 COPY backend/ ./
 
-FROM oven/bun:1-slim
+FROM oven/bun:1.4.4-slim
 WORKDIR /app
 
 RUN apt-get update \\
@@ -1489,9 +1499,15 @@ import {DefaultTheme, ThemeProvider} from "expo-router/react-navigation";
 import type React from "react";
 import {useEffect} from "react";
 import "react-native-reanimated";
+import {installDevConsoleLogger} from "@terreno/syncdb/app";
 import {betterAuthClient} from "@/lib/betterAuth";
 import {apiClient} from "@/store/apiClient";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
+
+// Dev-only: forwards console errors/warnings and uncaught errors to the backend's
+// POST /__terreno/browser-logs so terreno-mcp-local \`read_logs\` / \`last_error\` can read them.
+// No-op outside __DEV__.
+installDevConsoleLogger({baseUrl});
 
 export {ErrorBoundary} from "expo-router";
 
@@ -1777,9 +1793,9 @@ export default HomeScreen;
 
 const generateFrontendTabsProfile = (): string => {
   return `import {useSession} from "@terreno/syncdb/auth";
-import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text} from "@terreno/ui";
+import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
-import {useCallback, useEffect, useState} from "react";
+import {useCallback, useEffect, useMemo, useState} from "react";
 import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
 const ProfileScreen: React.FC = () => {
@@ -1788,6 +1804,8 @@ const ProfileScreen: React.FC = () => {
   const [updateProfile] = usePatchAuthMeMutation();
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
+  const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Copy the server name into local state without resetting an in-progress email edit.
@@ -1824,14 +1842,41 @@ const ProfileScreen: React.FC = () => {
     [updateProfile]
   );
 
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (user?.email ?? "").trim().toLowerCase(),
+    [email, user?.email]
+  );
+
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
       try {
-        await updateProfile({email: value}).unwrap();
+        const body = isEmailChanged ? {currentPassword, email: value} : {email: value};
+        await updateProfile(body).unwrap();
+        setCurrentPassword("");
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError("Failed to update email");
+        setSaveError(
+          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
+        );
+      }
+    },
+    [currentPassword, isEmailChanged, updateProfile]
+  );
+
+  const handleSavePassword = useCallback(
+    async (value: string): Promise<void> => {
+      if (!value) {
+        return;
+      }
+      setSaveError(null);
+      try {
+        await updateProfile({password: value}).unwrap();
+        setPassword("");
+      } catch (err) {
+        console.error("Error updating password:", err);
+        setSaveError("Failed to update password");
       }
     },
     [updateProfile]
@@ -1866,6 +1911,24 @@ const ProfileScreen: React.FC = () => {
               title="Email"
               type="email"
               value={email}
+            />
+            {isEmailChanged && (
+              <TextField
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
+            <TapToEdit
+              helperText="Leave blank to keep your current password"
+              onSave={handleSavePassword}
+              setValue={setPassword}
+              title="New Password"
+              type="password"
+              value={password}
             />
             {saveError && <Text color="error">{saveError}</Text>}
           </Box>
@@ -2120,6 +2183,8 @@ TOKEN_ISSUER=${appName}-dev
 REFRESH_TOKEN_SECRET=dev-refresh-secret
 SESSION_SECRET=dev-session-secret
 PORT=4000
+# TerrenoApp registers POST /__terreno/browser-logs (terreno-mcp-local read_logs) only in development.
+NODE_ENV=development
 `;
 };
 
@@ -2360,6 +2425,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateRootDockerfile(), path: "Dockerfile"},
     {content: generateCursorRules(args), path: ".cursorrules"},
     {content: generateMcpSettings(args), path: ".cursor/mcp.json"},
+    {content: generateMcpSettings(args), path: ".mcp.json"},
     {content: generateClaudeMd(args), path: "CLAUDE.md"},
 
     // Backend files

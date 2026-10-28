@@ -182,7 +182,10 @@ export const registerSimpleMongoPreload = (options: SimpleMongoPreloadOptions = 
       let uri = process.env.TERRENO_TEST_MONGODB_URI?.trim();
       if (!uri && process.env.TERRENO_TEST_USE_MEMORY_MONGO === "true") {
         const {MongoMemoryServer} = await import("mongodb-memory-server");
-        memoryMongo = await MongoMemoryServer.create();
+        // A cold mongod start can exceed mongodb-memory-server's 10s default on CI machines.
+        memoryMongo = await MongoMemoryServer.create({
+          instance: {launchTimeout: resolveMongoLaunchTimeoutMs()},
+        });
         uri = memoryMongo.getUri();
       }
       const connectUri = uri ?? defaultLocalMongoUri;

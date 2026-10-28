@@ -1,19 +1,20 @@
 import type {FC, ReactNode} from "react";
 
 import {Box} from "../Box";
+import type {LoadingProps} from "../Common";
+import {getLoadingAccessibilityProps, resolveLoadingContent} from "../Skeleton";
 import {Spinner} from "../Spinner";
 import {Text} from "../Text";
 import {resolveTestID, toTestProps} from "../testing/resolveTestId";
 import {CHART_FOOTER_ROW_HEIGHT} from "./layout";
 
-export interface ChartFrameProps {
+export interface ChartFrameProps extends LoadingProps {
   accessibilityLabel?: string;
   children: ReactNode;
   emptyText: string;
   isEmpty: boolean;
   legendItems?: Array<{color: string; label: string}>;
   legendLabel?: string;
-  loading?: boolean;
   testID?: string;
   tooltipText?: string;
 }
@@ -26,26 +27,36 @@ export const ChartFrame: FC<ChartFrameProps> = ({
   legendItems,
   legendLabel,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   testID,
   tooltipText,
 }) => {
   const showPlot = !loading && !isEmpty;
+  const loadingAccessibilityProps = getLoadingAccessibilityProps({loading, loadingLabel});
 
   // alignSelf stretch keeps the frame full width even when a parent centers its children, so the
   // measured plot width comes from the container instead of the chart's own content.
   return (
     <Box
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={loadingAccessibilityProps.accessibilityLabel ?? accessibilityLabel}
+      accessibilityState={loadingAccessibilityProps.accessibilityState}
       alignSelf="stretch"
       minWidth={0}
       width="100%"
       {...toTestProps(testID)}
     >
-      {loading ? (
-        <Box padding={4}>
-          <Spinner testID={resolveTestID(testID, "spinner")} />
-        </Box>
-      ) : null}
+      {resolveLoadingContent({
+        defaultLoadingComponent: (
+          <Box padding={4}>
+            <Spinner testID={resolveTestID(testID, "spinner")} />
+          </Box>
+        ),
+        loading,
+        loadingAnimation,
+        loadingComponent,
+      })}
       {isEmpty && !loading ? <Text skipLinking>{emptyText}</Text> : null}
       {showPlot ? children : null}
       {showPlot ? (

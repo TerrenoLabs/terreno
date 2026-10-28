@@ -8,7 +8,7 @@ import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPrompts
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolveAiRunBlockedMessage, resolveAiRunError} from "../shell/aiRunAccess";
-import {AiTracesListView} from "./AiTracesListView";
+import {AiTracesHeaderActions, AiTracesListView} from "./AiTracesListView";
 import {
   DEFAULT_TRACE_SORT,
   emptyTraceFilters,
@@ -30,7 +30,10 @@ export interface AiTracesScreenWidgetProps extends AdminScreenWidgetProps {
   apiKeyHint?: string;
 }
 
-const MULTI_STAGE_FEATURE_LABEL = "Multi-stage trace test";
+const MULTI_STAGE_FEATURE_LABEL = "Test trace";
+
+const TRACES_DESCRIPTION =
+  "Every AI call your app made, with its steps, cost and scores. Pick traces to send to people for review or to save as a dataset.";
 
 export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props) => {
   const {api, apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
@@ -55,7 +58,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   const [addToDatasetError, setAddToDatasetError] = useState("");
   const [multiStageError, setMultiStageError] = useState("");
 
-  const {data, isError, isLoading} = useListQuery({
+  const {data, isError, isLoading, refetch} = useListQuery({
     ...filters,
     limit: TRACE_PAGE_SIZE,
     page,
@@ -191,7 +194,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
     try {
       const result = await runTestMultiStage({apiKey}).unwrap();
       if (!result.traceId) {
-        setMultiStageError("The workflow ran, but no local trace id was returned.");
+        setMultiStageError("The test ran, but no local trace id came back.");
         return;
       }
       router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(result.traceId)}`);
@@ -209,7 +212,19 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   }, [apiKey, apiKeyHint, multiStageBlockedMessage, playgroundAiSource, prefix, runTestMultiStage]);
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-traces">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        <AiTracesHeaderActions
+          isRunningMultiStage={testMultiStageState.isLoading}
+          multiStageBlockedMessage={multiStageBlockedMessage}
+          onRunTestMultiStage={handleRunTestMultiStage}
+          showMultiStageTest={status?.localOn === true}
+        />
+      }
+      description={TRACES_DESCRIPTION}
+      screenName="ai-traces"
+    >
       <AiTracesListView
         addToDatasetError={addToDatasetError}
         datasetId={datasetId}
@@ -222,9 +237,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         isAddingToDataset={addTracesState.isLoading}
         isEnqueueing={enqueueState.isLoading}
         isLoading={isLoading}
-        isRunningMultiStage={testMultiStageState.isLoading}
-        loadError={isError ? "Failed to load traces." : undefined}
-        more={listed.more}
+        loadError={isError ? "Could not load traces." : undefined}
         multiStageBlockedMessage={multiStageBlockedMessage}
         multiStageError={multiStageError}
         onAddToDataset={handleAddToDataset}
@@ -243,7 +256,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         onOpenReview={handleOpenReview}
         onOpenTrace={handleOpenTrace}
         onPageChange={setPage}
-        onRunTestMultiStage={handleRunTestMultiStage}
+        onRetry={refetch}
         onSortChange={handleSortChange}
         onToggleSelect={handleToggleSelect}
         page={page}

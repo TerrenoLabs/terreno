@@ -1,4 +1,4 @@
-import {Box, Spinner} from "@terreno/ui";
+import {Box, Button, Spinner} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -14,10 +14,13 @@ import {
 } from "./promptTypes";
 import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
 
+const PROMPTS_DESCRIPTION =
+  "Versioned prompts your app loads by name. Apps use the version labelled production; saving creates a new version.";
+
 export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
   const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi(api);
-  const {data, error, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
+  const {data, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
   const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();
   const [search, setSearch] = useState("");
@@ -75,16 +78,36 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
     prefix,
   ]);
 
-  const loadError = isError
-    ? error && typeof error === "object" && "data" in error
-      ? "Failed to load prompts"
-      : "Failed to load prompts"
-    : undefined;
+  const loadError = isError ? "Could not load prompts." : undefined;
+
+  const handleOpenCreate = useCallback((): void => {
+    setCreateError("");
+    setCreateOpen(true);
+  }, []);
+
+  const handleDismissCreate = useCallback((): void => {
+    setCreateOpen(false);
+  }, []);
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-prompts">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        canCreatePrompt ? (
+          <Button
+            iconName="plus"
+            onClick={handleOpenCreate}
+            testID="ai-prompts-create"
+            text="New prompt"
+            variant="primary"
+          />
+        ) : undefined
+      }
+      description={PROMPTS_DESCRIPTION}
+      screenName="ai-prompts"
+    >
       {isLoading ? (
-        <Box alignItems="center" padding={4} testID="ai-prompts-loading">
+        <Box alignItems="center" padding={5} testID="ai-prompts-loading">
           <Spinner />
         </Box>
       ) : (
@@ -106,13 +129,9 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           onCreateNameChange={setCreateName}
           onCreateSystemChange={setCreateSystem}
           onCreateTemplateChange={setCreateTemplate}
-          onDismissCreate={() => {
-            setCreateOpen(false);
-          }}
+          onDismissCreate={handleDismissCreate}
           onFolderChange={setFolder}
-          onOpenCreate={() => {
-            setCreateOpen(true);
-          }}
+          onOpenCreate={handleOpenCreate}
           onOpenPrompt={handleOpen}
           onRetry={refetch}
           onSearchChange={setSearch}

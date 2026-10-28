@@ -1,10 +1,24 @@
-import {Badge, Box, Button, Heading, Link, SelectField, Text, TextField} from "@terreno/ui";
+import {
+  Badge,
+  Banner,
+  Box,
+  Button,
+  Card,
+  Heading,
+  Link,
+  NumberField,
+  SegmentedControl,
+  SelectField,
+  Text,
+  TextField,
+} from "@terreno/ui";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
   type ObservabilityTableRow,
 } from "../shell/ObservabilityTable";
+import {EVALUATOR_TARGET_LABELS, EvaluatorKindBadge} from "./AiEvaluatorsListView";
 import {
   DIMENSION_DATA_TYPES,
   dimensionForDataType,
@@ -22,6 +36,24 @@ import {
 } from "./evaluatorTypes";
 
 type JudgePromptStatus = "error" | "idle" | "loading" | "ready";
+
+/** Order of the kind picker on the new-evaluator form. */
+const EVALUATOR_TYPE_ORDER: EvaluatorRecord["type"][] = ["human", "llm-judge", "json-assert"];
+
+/** Readable data-type labels; the API keeps boolean / numeric / categorical. */
+export const DIMENSION_DATA_TYPE_LABELS: Record<EvaluatorDimension["dataType"], string> = {
+  boolean: "Yes or no",
+  categorical: "Category",
+  numeric: "Number",
+};
+
+const DIMENSION_DATA_TYPE_HELP: Record<EvaluatorDimension["dataType"], string> = {
+  boolean: "A yes or no answer, saved as pass or fail.",
+  categorical: "One label from a list you define, such as pass, partial or fail.",
+  numeric: "A number between a minimum and a maximum.",
+};
+
+const STEP_COUNT = 6;
 
 const EVALUATOR_NEW_INTRO =
   "Evaluators turn AI results into consistent scores you can compare, filter, and review. Set up who decides the score, what they can see, and which score fields are saved.";
@@ -91,25 +123,27 @@ const EvaluatorSetupStep: React.FC<EvaluatorSetupStepProps> = ({
   title,
 }) => {
   return (
-    <Box
-      accessibilityLabel={`Step ${number} of 6: ${title}`}
-      border="default"
+    <Card
+      accessibilityLabel={`Step ${number} of ${STEP_COUNT}: ${title}`}
       gap={3}
       padding={4}
-      rounding="md"
       testID={testID}
     >
-      <Box direction="row" gap={2}>
-        <Badge status="neutral" value={String(number)} />
+      <Box direction="row" gap={3}>
+        <Box>
+          <Badge secondary status="neutral" value={String(number)} />
+        </Box>
         <Box flex="grow" gap={1}>
           <Heading size="sm">{title}</Heading>
-          <Text color="secondaryDark" size="sm">
-            {description}
-          </Text>
+          {description ? (
+            <Text color="secondaryLight" size="sm">
+              {description}
+            </Text>
+          ) : null}
         </Box>
       </Box>
       {children}
-    </Box>
+    </Card>
   );
 };
 
@@ -138,6 +172,8 @@ export interface AiEvaluatorNewViewProps {
   onAddDimension: () => void;
   onAssertionConstraintChange: (value: string) => void;
   onAssertionPathChange: (value: string) => void;
+  /** Leaves the form without saving. */
+  onCancel?: () => void;
   onCreate: () => void;
   onDescriptionChange?: (value: string) => void;
   onDimensionChange: (index: number, dimension: EvaluatorDimension) => void;
@@ -154,7 +190,7 @@ export interface AiEvaluatorNewViewProps {
 }
 
 const DIMENSION_COLUMNS: ObservabilityTableColumn[] = [
-  {minWidth: 120, title: "Key"},
+  {minWidth: 120, title: "Score"},
   {grow: 2, minWidth: 200, title: "Reviewer question"},
   {minWidth: 100, title: "Data type"},
   {minWidth: 80, title: "Range"},
@@ -163,7 +199,7 @@ const DIMENSION_COLUMNS: ObservabilityTableColumn[] = [
 
 const USAGE_COLUMNS: ObservabilityTableColumn[] = [
   {minWidth: 160, title: "Experiment"},
-  {minWidth: 90, title: "30d runs"},
+  {minWidth: 90, title: "Runs"},
   {minWidth: 90, title: "Cost"},
 ];
 
@@ -270,9 +306,9 @@ const renderTypePanel = ({
             Select a judge prompt to check its production output schema.
           </Text>
         ) : (
-          <Text color="success" size="sm">
-            Schema match check passed
-          </Text>
+          <Box alignItems="start">
+            <Badge iconName="check" secondary status="success" value="Schema match check passed" />
+          </Box>
         )}
       </Box>
     );
@@ -344,7 +380,7 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
         cells: [
           dimension.key,
           dimension.question ?? "—",
-          dimension.dataType,
+          DIMENSION_DATA_TYPE_LABELS[dimension.dataType] ?? dimension.dataType,
           dimension.range ?? "—",
           dimension.required ? "Yes" : "No",
         ],
@@ -366,37 +402,22 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
     });
   }, [usageRows]);
 
-  const chips = formatRunModeChips(evaluator.runModes);
-
   return (
     <Box gap={4} testID="ai-evaluator-detail">
-      <Box gap={2}>
-        <Heading size="md" testID="ai-evaluator-name">
-          {evaluator.name}
-        </Heading>
-        {evaluator.description ? (
-          <Text color="secondaryDark">{evaluator.description}</Text>
-        ) : undefined}
-        <Box direction="row" gap={2} wrap>
-          <Badge status="info" value={EVALUATOR_TYPE_LABELS[evaluator.type]} />
-          <Badge status="neutral" value={evaluator.target} />
-          {chips.map((chip) => {
-            return <Badge key={chip} status="neutral" value={chip} />;
-          })}
+      <Card gap={3} padding={4} testID="ai-evaluator-scores-card">
+        <Box gap={1}>
+          <Heading size="sm">Scores this evaluator saves</Heading>
+          <Text color="secondaryLight" size="sm">
+            Each row is stored as a separate score on the trace or experiment result.
+          </Text>
         </Box>
-      </Box>
-      <Box gap={2}>
-        <Heading size="sm">Scores this evaluator saves</Heading>
-        <Text color="secondaryDark" size="sm">
-          Each row is stored as a separate score on the trace or experiment result.
-        </Text>
         <ObservabilityTable
           columns={DIMENSION_COLUMNS}
           rows={dimensionRows}
           testID="ai-evaluator-dimensions"
         />
-      </Box>
-      <Box gap={2}>
+      </Card>
+      <Card gap={3} padding={4} testID="ai-evaluator-method-card">
         <Heading size="sm">How scoring works</Heading>
         {renderTypePanel({
           evaluator,
@@ -405,8 +426,8 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
           onOpenPrompt,
           routeBase,
         })}
-      </Box>
-      <Box gap={2}>
+      </Card>
+      <Card gap={3} padding={4} testID="ai-evaluator-runs-card">
         <Heading size="sm">Where it runs</Heading>
         {evaluator.type === "human" ? (
           <Text size="sm">
@@ -419,15 +440,15 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
             {Math.round(evaluator.runModes.liveSampleRate)}% of matching production traffic.
           </Text>
         )}
-      </Box>
-      <Box gap={2}>
-        <Heading size="sm">Used by (30 days)</Heading>
+      </Card>
+      <Card gap={3} padding={4} testID="ai-evaluator-usage-card">
+        <Heading size="sm">Used in the last 30 days</Heading>
         {usageError ? (
           <Text color="error" testID="ai-evaluator-used-by-error">
             {usageError}
           </Text>
         ) : usageRows.length === 0 ? (
-          <Text color="secondaryDark" testID="ai-evaluator-used-by-empty">
+          <Text color="secondaryLight" testID="ai-evaluator-used-by-empty">
             No experiments in the last 30 days.
           </Text>
         ) : (
@@ -437,8 +458,32 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
             testID="ai-evaluator-used-by"
           />
         )}
-      </Box>
+      </Card>
     </Box>
+  );
+};
+
+export interface AiEvaluatorDetailMetaProps {
+  evaluator: EvaluatorRecord;
+}
+
+/** Header badges for an evaluator: kind with icon, what it looks at, and where it runs. */
+export const AiEvaluatorDetailMeta: React.FC<AiEvaluatorDetailMetaProps> = ({evaluator}) => {
+  const chips =
+    evaluator.type === "human" ? ["People in review"] : formatRunModeChips(evaluator.runModes);
+  return (
+    <>
+      <EvaluatorKindBadge testID="ai-evaluator-kind-badge" type={evaluator.type} />
+      <Badge
+        iconName="eye"
+        secondary
+        status="neutral"
+        value={EVALUATOR_TARGET_LABELS[evaluator.target] ?? evaluator.target}
+      />
+      {chips.map((chip) => {
+        return <Badge key={chip} secondary status="neutral" value={chip} />;
+      })}
+    </>
   );
 };
 
@@ -549,13 +594,14 @@ const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
           helperText={EVALUATOR_DIMENSION_CATEGORY_HELP}
           onChange={setDraftCategory}
           testID={`ai-evaluator-dimension-${index}-category-draft`}
-          title="Category"
+          title="New category"
           value={draftCategory}
         />
         <Button
           onClick={handleAddCategory}
           testID={`ai-evaluator-dimension-${index}-add-category`}
           text="Add category"
+          variant="outline"
         />
       </Box>
       {categories.map((category) => {
@@ -592,6 +638,7 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   onAddDimension,
   onAssertionConstraintChange,
   onAssertionPathChange,
+  onCancel,
   onCreate,
   onDescriptionChange,
   onDimensionChange,
@@ -606,11 +653,25 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   target,
   type,
 }) => {
-  const handleTypeSelect = useCallback(
-    (next: EvaluatorRecord["type"]): void => {
-      onTypeChange(next);
+  const handleTypeIndexChange = useCallback(
+    (index: number): void => {
+      const next = EVALUATOR_TYPE_ORDER[index];
+      if (next) {
+        onTypeChange(next);
+      }
     },
     [onTypeChange]
+  );
+
+  const handleLiveSampleChange = useCallback(
+    (value: string): void => {
+      const parsed = Number(value);
+      if (value === "" || Number.isNaN(parsed)) {
+        return;
+      }
+      onLiveSampleRateChange(Math.min(100, Math.max(0, parsed)));
+    },
+    [onLiveSampleRateChange]
   );
 
   const methodStepDescription =
@@ -627,6 +688,10 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
 
   return (
     <Box gap={4} testID="ai-evaluator-new">
+      <Box gap={1} testID="ai-evaluator-help-intro">
+        <Heading size="sm">Create a reusable scoring rule</Heading>
+        <Text color="secondaryLight">{EVALUATOR_NEW_INTRO}</Text>
+      </Box>
       <EvaluatorSetupStep
         description="Give teammates enough context to recognize and reuse this evaluator."
         number={1}
@@ -650,32 +715,22 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
           value={description ?? ""}
         />
       </EvaluatorSetupStep>
-      <Box border="default" gap={2} padding={4} rounding="md" testID="ai-evaluator-help-intro">
-        <Heading size="sm">Create a reusable scoring rule</Heading>
-        <Text color="secondaryDark">{EVALUATOR_NEW_INTRO}</Text>
-      </Box>
       <EvaluatorSetupStep
-        description="Choose whether a person, a deterministic JSON rule, or another model decides the score."
+        description="Choose whether a person, another model, or a JSON rule decides the score."
         number={2}
         testID="ai-evaluator-step-method"
         title="Choose how scoring happens"
       >
-        <Box direction="row" gap={2} wrap>
-          {(["human", "json-assert", "llm-judge"] as const).map((entry) => {
-            return (
-              <Button
-                key={entry}
-                onClick={() => {
-                  handleTypeSelect(entry);
-                }}
-                testID={`ai-evaluator-type-${entry}`}
-                text={EVALUATOR_TYPE_LABELS[entry]}
-                variant={type === entry ? "primary" : "secondary"}
-              />
-            );
-          })}
+        <Box alignItems="start" testID="ai-evaluator-type-picker">
+          <SegmentedControl
+            items={EVALUATOR_TYPE_ORDER.map((entry) => EVALUATOR_TYPE_LABELS[entry])}
+            onChange={handleTypeIndexChange}
+            selectedIndex={EVALUATOR_TYPE_ORDER.indexOf(type)}
+            size="sm"
+            testID="ai-evaluator-type"
+          />
         </Box>
-        <Text color="secondaryDark" size="sm" testID="ai-evaluator-help-type">
+        <Text color="secondaryLight" size="sm" testID="ai-evaluator-help-type">
           {EVALUATOR_TYPE_HELP[type]}
         </Text>
       </EvaluatorSetupStep>
@@ -686,8 +741,15 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
         testID="ai-evaluator-step-target"
         title="What it evaluates"
       >
-        <Badge status="neutral" value={target} />
-        <Text color="secondaryDark" size="sm" testID="ai-evaluator-help-target">
+        <Box alignItems="start">
+          <Badge
+            iconName="eye"
+            secondary
+            status="neutral"
+            value={EVALUATOR_TARGET_LABELS[target] ?? target}
+          />
+        </Box>
+        <Text color="secondaryLight" size="sm" testID="ai-evaluator-help-target">
           {FULL_TRACE_TARGET_HELP}
         </Text>
       </EvaluatorSetupStep>
@@ -697,24 +759,31 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
         testID="ai-evaluator-step-scores"
         title="Define the scores it returns"
       >
-        <Box direction="row" gap={2} justifyContent="between">
-          <Text bold>Score fields</Text>
-          <Button onClick={onAddDimension} testID="ai-evaluator-add-dimension" text="Add score" />
-        </Box>
-        <Text color="secondaryDark" size="sm" testID="ai-evaluator-help-dimensions">
+        <Text color="secondaryLight" size="sm" testID="ai-evaluator-help-dimensions">
           {EVALUATOR_DIMENSIONS_HELP}
         </Text>
         {dimensions.map((dimension, index) => {
           return (
-            <Box
-              color="secondaryLight"
-              direction="row"
-              gap={2}
+            <Card
+              gap={3}
               key={`dimension-${index}`}
-              padding={2}
+              padding={4}
               testID={`ai-evaluator-dimension-row-${index}`}
-              wrap
             >
+              <Box alignItems="center" direction="row" justifyContent="between">
+                <Text bold>{`Score ${index + 1}`}</Text>
+                <Button
+                  disabled={dimensions.length <= 1}
+                  iconName="trash"
+                  onClick={() => {
+                    onRemoveDimension(index);
+                  }}
+                  size="sm"
+                  testID={`ai-evaluator-dimension-${index}-remove`}
+                  text="Remove"
+                  variant="ghost"
+                />
+              </Box>
               <TextField
                 helperText={EVALUATOR_DIMENSION_KEY_HELP}
                 onChange={(value) => {
@@ -734,25 +803,28 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                   title="Reviewer question (optional)"
                   value={dimension.question ?? ""}
                 />
-              ) : undefined}
-              <Box gap={1}>
-                <Text size="sm">Data type</Text>
-                <Box direction="row" gap={1} wrap>
-                  {DIMENSION_DATA_TYPES.map((dataType) => {
-                    return (
-                      <Button
-                        key={dataType}
-                        onClick={() => {
-                          onDimensionChange(index, dimensionForDataType(dimension, dataType));
-                        }}
-                        text={dataType}
-                        variant={dimension.dataType === dataType ? "primary" : "ghost"}
-                      />
-                    );
-                  })}
+              ) : null}
+              <Box gap={2}>
+                <Text bold size="sm">
+                  Answer type
+                </Text>
+                <Box alignItems="start" testID={`ai-evaluator-dimension-${index}-data-type`}>
+                  <SegmentedControl
+                    items={DIMENSION_DATA_TYPES.map(
+                      (dataType) => DIMENSION_DATA_TYPE_LABELS[dataType]
+                    )}
+                    onChange={(dataTypeIndex) => {
+                      const dataType = DIMENSION_DATA_TYPES[dataTypeIndex];
+                      if (dataType) {
+                        onDimensionChange(index, dimensionForDataType(dimension, dataType));
+                      }
+                    }}
+                    selectedIndex={DIMENSION_DATA_TYPES.indexOf(dimension.dataType)}
+                    size="sm"
+                  />
                 </Box>
-                <Text color="secondaryDark" size="sm">
-                  boolean is pass/fail, numeric is a number, categorical is a labeled bucket.
+                <Text color="secondaryLight" size="sm">
+                  {DIMENSION_DATA_TYPE_HELP[dimension.dataType]}
                 </Text>
               </Box>
               <DimensionScaleFields
@@ -760,16 +832,18 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
                 index={index}
                 onDimensionChange={onDimensionChange}
               />
-              <Button
-                onClick={() => {
-                  onRemoveDimension(index);
-                }}
-                text="Remove"
-                variant="ghost"
-              />
-            </Box>
+            </Card>
           );
         })}
+        <Box alignItems="start">
+          <Button
+            iconName="plus"
+            onClick={onAddDimension}
+            testID="ai-evaluator-add-dimension"
+            text="Add score"
+            variant="outline"
+          />
+        </Box>
       </EvaluatorSetupStep>
       <EvaluatorSetupStep
         description={methodStepDescription}
@@ -799,30 +873,30 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
         title="Choose where it runs"
       >
         {type === "human" ? (
-          <Text color="secondaryDark" size="sm">
+          <Text color="secondaryLight" size="sm">
             To use it, select traces and choose Send to human review.
           </Text>
         ) : (
           <>
-            <TextField
+            <NumberField
               helperText={EVALUATOR_LIVE_SAMPLE_HELP}
-              onChange={(value) => {
-                const parsed = Number(value);
-                if (!Number.isNaN(parsed)) {
-                  onLiveSampleRateChange(Math.min(100, Math.max(0, parsed)));
-                }
-              }}
+              onChange={handleLiveSampleChange}
               testID="ai-evaluator-live-sample"
               title="Production traces to score (%)"
+              type="number"
               value={String(Math.round(runModes.liveSampleRate))}
             />
             {runModes.liveSampleRate > 0 ? (
-              <Text color="warning" size="sm">
-                {type === "llm-judge"
-                  ? "Live scoring creates a billed judge call for each sampled trace."
-                  : "Live scoring checks each sampled trace automatically without a model call."}
-              </Text>
-            ) : undefined}
+              <Banner
+                hasIcon
+                status="warning"
+                text={
+                  type === "llm-judge"
+                    ? "Live scoring creates a billed judge call for each sampled trace."
+                    : "Live scoring checks each sampled trace automatically without a model call."
+                }
+              />
+            ) : null}
           </>
         )}
       </EvaluatorSetupStep>
@@ -830,13 +904,19 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
         <Text color="error" testID="ai-evaluator-create-error">
           {createError}
         </Text>
-      ) : undefined}
-      <Button
-        loading={isCreating}
-        onClick={onCreate}
-        testID="ai-evaluator-submit"
-        text="Create evaluator"
-      />
+      ) : null}
+      <Box direction="row" gap={2} justifyContent="end" wrap>
+        {onCancel ? (
+          <Button onClick={onCancel} testID="ai-evaluator-cancel" text="Cancel" variant="outline" />
+        ) : null}
+        <Button
+          loading={isCreating}
+          onClick={onCreate}
+          testID="ai-evaluator-submit"
+          text="Create evaluator"
+          variant="primary"
+        />
+      </Box>
     </Box>
   );
 };

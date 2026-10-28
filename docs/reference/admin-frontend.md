@@ -203,6 +203,17 @@ Auto-generates fields from model schema:
 - `date` → DateTimeField
 - `objectid` (ref) → SelectField
 - `enum` → SelectField with options
+- `object` with `items` (a nested schema path such as `tasks: {enabled: Boolean, intakePollMs: Number}`)
+  → a titled group with one control per subfield, recursing to any depth
+- `object` without `items` (`Mixed`, `Map`) and `mixed` → JSON editor
+
+A nested object group uses the field's humanized key as its heading and its `description` as
+helper text. Each subfield shows its own description and its schema default when the stored
+object has no value for it. Subfield test IDs use the dotted path, for example
+`admin-field-tasks.enabled`; the group itself is `admin-field-group-tasks`. Editing a subfield
+merges it into the parent object, and Save sends the whole object for that field. In create mode
+the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
+default are left out. Nested objects inside an array of subdocuments render the same way.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 

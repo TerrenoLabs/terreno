@@ -66,6 +66,8 @@ const getRefModel = (
 
 export interface AdminFieldRendererCoreProps extends AdminScreenProps {
   fieldKey: string;
+  /** Field label. Defaults to the humanized `fieldKey`; nested subfields pass their own key's label. */
+  label?: string;
   fieldConfig: AdminFieldConfig;
   value: AdminFieldValue;
   onChange: (value: AdminFieldValue) => void;
@@ -85,12 +87,14 @@ export interface AdminFieldRendererCoreProps extends AdminScreenProps {
 }
 
 /**
- * Renders admin form fields for all types except arrays of sub-documents.
- * Nested sub-document arrays are handled by {@link AdminNestedArrayField} via
- * {@link AdminFieldRenderer} to avoid a circular import.
+ * Renders admin form fields for all types except arrays of sub-documents and nested objects
+ * with subfield metadata. Those are handled by {@link AdminNestedArrayField} and
+ * {@link AdminNestedObjectField} via {@link AdminFieldRenderer} to avoid a circular import.
+ * Objects without `items` (Mixed, Map) fall back to the JSON editor.
  */
 export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   fieldKey,
+  label: labelProp,
   fieldConfig,
   value,
   onChange,
@@ -105,7 +109,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   readOnly,
   autocompleteFields,
 }) => {
-  const label = startCase(fieldKey);
+  const label = labelProp ?? startCase(fieldKey);
   const helperText = fieldConfig.description;
   const refModel = getRefModel(modelConfigs, USER_REF_MODEL_NAME);
   const isReadOnly = Boolean(readOnly);
@@ -296,6 +300,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
         errorText={errorText}
         helperText={helperText}
         onChange={onChange}
+        testID={`admin-field-${fieldKey}`}
         title={label}
         value={typeof value === "boolean" ? value : false}
       />

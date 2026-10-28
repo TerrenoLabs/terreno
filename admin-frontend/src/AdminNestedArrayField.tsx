@@ -2,6 +2,11 @@ import {Box, Button, Card, DraggableList, Heading, IconButton, Text, useTheme} f
 import startCase from "lodash/startCase";
 import React, {useCallback, useMemo, useRef} from "react";
 import {AdminFieldRendererCore} from "./AdminFieldRendererCore";
+import {
+  AdminNestedObjectField,
+  buildNestedObjectDefault,
+  isNestedObjectField,
+} from "./AdminNestedObjectField";
 import type {AdminApi, AdminFieldConfig, AdminFieldValue, RefRendererMap} from "./types";
 
 const FIELD_HEIGHT_ESTIMATE = 76;
@@ -31,41 +36,44 @@ interface AdminNestedArrayFieldProps {
   readOnly?: boolean;
 }
 
-/**
- * Renders a single sub-field of a nested array item. Nested arrays-of-subdocuments
- * recurse into another {@link AdminNestedArrayField}; everything else is rendered
- * by {@link AdminFieldRendererCore} directly so we avoid a require cycle through
- * the AdminFieldRenderer wrapper.
- */
-const renderNestedSubField = ({
-  api,
-  baseUrl,
-  apiBase,
-  routeBase,
-  fieldKey,
-  fieldConfig,
-  fieldValue,
-  index,
-  modelConfigs,
-  onSubFieldChange,
-  parentFormState,
-  refRenderers,
-  readOnly,
-}: {
+interface ItemFieldArgs {
   api: AdminApi;
   baseUrl?: string;
   apiBase?: string;
   routeBase?: string;
   fieldKey: string;
+  label: string;
   fieldConfig: AdminFieldConfig;
   fieldValue: AdminFieldValue;
-  index: number;
   modelConfigs?: Array<{name: string; routePath: string}>;
-  onSubFieldChange: (index: number, fieldKey: string, fieldValue: AdminFieldValue) => void;
+  onChange: (fieldValue: AdminFieldValue) => void;
   parentFormState?: Record<string, AdminFieldValue>;
   refRenderers?: RefRendererMap;
   readOnly?: boolean;
-}): React.ReactElement => {
+}
+
+/**
+ * Renders one field inside a nested array item. Nested arrays-of-subdocuments recurse into
+ * another {@link AdminNestedArrayField} and nested objects into {@link AdminNestedObjectField};
+ * everything else is rendered by {@link AdminFieldRendererCore} directly so we avoid a require
+ * cycle through the AdminFieldRenderer wrapper.
+ */
+const renderItemField = (args: ItemFieldArgs): React.ReactElement => {
+  const {
+    api,
+    baseUrl,
+    apiBase,
+    routeBase,
+    fieldKey,
+    label,
+    fieldConfig,
+    fieldValue,
+    modelConfigs,
+    onChange,
+    parentFormState,
+    refRenderers,
+    readOnly,
+  } = args;
   if (fieldConfig.type === "array" && fieldConfig.items) {
     return (
       <AdminNestedArrayField
@@ -76,13 +84,39 @@ const renderNestedSubField = ({
         items={fieldConfig.items}
         key={fieldKey}
         modelConfigs={modelConfigs}
-        onChange={(val) => onSubFieldChange(index, fieldKey, val)}
+        onChange={onChange}
         parentFormState={parentFormState}
         readOnly={readOnly}
         refRenderers={refRenderers}
         routeBase={routeBase}
-        title={startCase(fieldKey)}
+        title={label}
         value={Array.isArray(fieldValue) ? (fieldValue as Record<string, AdminFieldValue>[]) : []}
+      />
+    );
+  }
+
+  if (isNestedObjectField(fieldConfig) && fieldConfig.items) {
+    return (
+      <AdminNestedObjectField
+        fieldKey={fieldKey}
+        fields={fieldConfig.items}
+        helperText={fieldConfig.description}
+        key={fieldKey}
+        onChange={onChange}
+        readOnly={readOnly}
+        renderSubField={(sub) =>
+          renderItemField({
+            ...args,
+            fieldConfig: sub.fieldConfig,
+            fieldKey: sub.fieldKey,
+            fieldValue: sub.value,
+            label: sub.label,
+            onChange: sub.onChange,
+            readOnly: sub.readOnly,
+          })
+        }
+        title={label}
+        value={fieldValue}
       />
     );
   }
@@ -95,8 +129,9 @@ const renderNestedSubField = ({
       fieldConfig={fieldConfig}
       fieldKey={fieldKey}
       key={fieldKey}
+      label={label}
       modelConfigs={modelConfigs}
-      onChange={(val) => onSubFieldChange(index, fieldKey, val)}
+      onChange={onChange}
       parentFormState={parentFormState}
       readOnly={readOnly}
       refRenderers={refRenderers}
@@ -106,6 +141,21 @@ const renderNestedSubField = ({
   );
 };
 
+const renderNestedSubField = ({
+  index,
+  onSubFieldChange,
+  ...rest
+}: Omit<ItemFieldArgs, "label" | "onChange"> & {
+  index: number;
+  onSubFieldChange: (index: number, fieldKey: string, fieldValue: AdminFieldValue) => void;
+}): React.ReactElement => {
+  return renderItemField({
+    ...rest,
+    label: startCase(rest.fieldKey),
+    onChange: (val) => onSubFieldChange(index, rest.fieldKey, val),
+  });
+};
+
 const buildDefaultItem = (
   items: Record<string, AdminFieldConfig>
 ): Record<string, AdminFieldValue> => {
@@ -113,6 +163,8 @@ const buildDefaultItem = (
   for (const [key, config] of Object.entries(items)) {
     if (config.default != null) {
       newItem[key] = config.default;
+    } else if (isNestedObjectField(config) && config.items) {
+      newItem[key] = buildNestedObjectDefault(config.items);
     } else if (config.type === "boolean") {
       newItem[key] = false;
     } else if (config.type === "number") {

@@ -1,58 +1,32 @@
 import {Box, Button, Card, Heading, Text} from "@terreno/ui";
 import React from "react";
-import {
-  EVAL_PIPELINE_STEPS,
-  type EvalPipelineStep,
-  type EvalPipelineStepNumber,
-  JUDGE_ONCE_NOTE,
-} from "./evalPipeline";
+import {EvalStepper, type EvalStepState} from "./EvalStepper";
+import {EVAL_PIPELINE_STEPS, type EvalPipelineStepNumber, JUDGE_ONCE_NOTE} from "./evalPipeline";
 
 export interface EvalPipelineOverviewProps {
-  /** Label of the primary call to action, such as "Start an experiment". */
+  /** Label of the card's call to action, such as "Start an experiment". */
   ctaText?: string;
-  /** Steps to highlight as the ones this screen is about. */
+  /** Steps to highlight as the ones this screen is about; earlier steps show as done. */
   currentSteps?: EvalPipelineStepNumber[];
   onStart?: () => void;
   startTestID?: string;
   testID?: string;
 }
 
-const StepTile: React.FC<{isCurrent: boolean; step: EvalPipelineStep}> = ({isCurrent, step}) => {
-  return (
-    <Box
-      border={isCurrent ? "dark" : "default"}
-      color={isCurrent ? "secondaryExtraLight" : "base"}
-      flex="grow"
-      gap={1}
-      minWidth={200}
-      padding={3}
-      rounding="md"
-      testID={`ai-eval-pipeline-step-${step.number}${isCurrent ? "-current" : ""}`}
-      width={220}
-    >
-      <Box alignItems="center" direction="row" gap={2}>
-        <Box
-          alignItems="center"
-          color={isCurrent ? "primary" : "neutralLight"}
-          height={24}
-          justifyContent="center"
-          rounding="circle"
-          width={24}
-        >
-          <Text bold color={isCurrent ? "inverted" : "primary"} size="sm">
-            {String(step.number)}
-          </Text>
-        </Box>
-        <Text bold>{step.title}</Text>
-      </Box>
-      <Text color="secondaryDark" size="sm">
-        {step.summary}
-      </Text>
-    </Box>
-  );
+const stepState = (
+  stepNumber: EvalPipelineStepNumber,
+  currentSteps: EvalPipelineStepNumber[]
+): EvalStepState => {
+  if (currentSteps.includes(stepNumber)) {
+    return "now";
+  }
+  if (currentSteps.length > 0 && stepNumber < Math.min(...currentSteps)) {
+    return "done";
+  }
+  return "later";
 };
 
-/** The four-step experiment plan with the current step highlighted. */
+/** The four-step eval plan as a compact stepper, with the current steps highlighted. */
 export const EvalPipelineOverview: React.FC<EvalPipelineOverviewProps> = ({
   ctaText,
   currentSteps = [],
@@ -62,32 +36,33 @@ export const EvalPipelineOverview: React.FC<EvalPipelineOverviewProps> = ({
 }) => {
   return (
     <Card gap={3} padding={4} testID={testID}>
-      <Box gap={1}>
-        <Heading size="sm">How experiments work: four steps</Heading>
-        <Text color="secondaryDark" size="sm">
-          Every experiment follows the same plan. Steps 1 and 2 build an answer key from people;
-          step 3 checks an LLM judge against it; step 4 uses that judge to pick the best prompt.
-        </Text>
-      </Box>
-      <Box direction="row" gap={2} wrap>
-        {EVAL_PIPELINE_STEPS.map((step) => {
-          return (
-            <StepTile
-              isCurrent={currentSteps.includes(step.number)}
-              key={step.number}
-              step={step}
-            />
-          );
+      <Heading size="sm">Eval plan</Heading>
+      <EvalStepper
+        steps={EVAL_PIPELINE_STEPS.map((step) => {
+          const state = stepState(step.number, currentSteps);
+          return {
+            detail: step.summary,
+            state,
+            testID: `ai-eval-pipeline-step-${step.number}${state === "now" ? "-current" : ""}`,
+            title: step.title,
+          };
         })}
-      </Box>
-      <Box color="baseAlternate" padding={3} rounding="md" testID="ai-eval-pipeline-judge-once">
-        <Text size="sm">{JUDGE_ONCE_NOTE}</Text>
-      </Box>
+        testID={`${testID}-stepper`}
+      />
+      <Text color="secondaryLight" size="sm" testID="ai-eval-pipeline-judge-once">
+        {JUDGE_ONCE_NOTE}
+      </Text>
       {onStart && ctaText ? (
         <Box direction="row">
-          <Button iconName="flask" onClick={onStart} testID={startTestID} text={ctaText} />
+          <Button
+            iconName="flask"
+            onClick={onStart}
+            testID={startTestID}
+            text={ctaText}
+            variant="secondary"
+          />
         </Box>
-      ) : undefined}
+      ) : null}
     </Card>
   );
 };

@@ -419,3 +419,33 @@ export const parseTargetAgreementPercent = (value: string): number | undefined =
   }
   return parsed / 100;
 };
+
+/** Cost with two decimals; anything above zero but under a cent reads "<$0.01". */
+export const formatExperimentCost = (cost?: number): string => {
+  if (cost === undefined || Number.isNaN(cost)) {
+    return "—";
+  }
+  if (cost > 0 && cost < 0.01) {
+    return "<$0.01";
+  }
+  return `$${cost.toFixed(2)}`;
+};
+
+/** Plain estimate such as "About 6 generations, 2 minutes, $0.42". */
+export const formatExperimentEstimate = ({
+  estimate,
+  unit = "generations",
+}: {
+  estimate: ExperimentEstimate;
+  unit?: "generations" | "judge calls";
+}): string => {
+  const minutes = Math.max(1, Math.round(estimate.wallClockSeconds / 60));
+  const parts = [
+    `About ${estimate.generations} ${estimate.generations === 1 ? unit.replace(/s$/, "") : unit}`,
+    `${minutes} ${minutes === 1 ? "minute" : "minutes"}`,
+  ];
+  if (estimate.costUsd !== undefined) {
+    parts.push(formatExperimentCost(estimate.costUsd));
+  }
+  return parts.join(", ");
+};

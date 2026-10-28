@@ -39,7 +39,6 @@ const renderView = () => {
       experiment={experiment}
       isPromoting={false}
       onDismissPromoteConfirm={() => {}}
-      onOpenPromoteConfirm={() => {}}
       onPromote={() => {}}
       onSelectVersion={() => {}}
       promoteConfirmOpen={false}
@@ -148,7 +147,6 @@ const renderGated = (promoteVersion: number) => {
       experiment={gatedExperiment}
       isPromoting={false}
       onDismissPromoteConfirm={() => {}}
-      onOpenPromoteConfirm={() => {}}
       onPromote={() => {}}
       onSelectVersion={() => {}}
       promoteConfirmOpen={false}
@@ -158,41 +156,115 @@ const renderGated = (promoteVersion: number) => {
 };
 
 describe("AiExperimentResultsView gates", () => {
-  it("groups self-explanatory gate tiles by version with symbols and words", () => {
+  it("shows every gate in one table with a column per version and a result row", () => {
     const {getByTestId, queryByText} = renderGated(2);
 
+    expect(getByTestId("ai-experiment-gates-table")).toBeTruthy();
     expect(getByTestId("ai-experiment-gates-v1-verdict")).toHaveTextContent("Fails 1 of 3 gates");
     expect(getByTestId("ai-experiment-gates-v2-verdict")).toHaveTextContent("Passes all 3 gates");
-    expect(getByTestId("ai-experiment-gate-v1-correct")).toHaveTextContent(
-      "correctness: correct✗ FailPass rate 0.75 · needs ≥ 0.8"
-    );
-    expect(getByTestId("ai-experiment-gate-v2-helpfulness")).toHaveTextContent(
-      "helpfulness✓ PassAverage 0.88 · needs ≥ 0.75"
-    );
-    expect(getByTestId("ai-experiment-gate-v2-schema_valid")).toHaveTextContent(
-      "schema-assert: schema valid✓ PassPass rate 1.00 · needs = 1"
-    );
-    assert.isNull(queryByText(/helpfulness\.helpfulness|\bgte\b|\beq\b/));
+    expect(getByTestId("ai-experiment-gate-v1-correct")).toHaveTextContent("0.75Fail");
+    expect(getByTestId("ai-experiment-gate-v2-helpfulness")).toHaveTextContent("0.88Pass");
+    expect(getByTestId("ai-experiment-gate-v2-schema_valid")).toHaveTextContent("1.00Pass");
+    assert.exists(queryByText("correctness: correct"));
+    assert.exists(queryByText("schema-assert: schema valid"));
+    assert.isNull(queryByText(/helpfulness\.helpfulness|\bgte\b|\beq\b|✓|✗/));
   });
 
-  it("explains a blocked promote next to the promote button", () => {
-    const {getByTestId, queryByTestId} = renderGated(1);
+  it("states the verdict once as a banner", () => {
+    const {getByTestId, getByText} = renderGated(2);
 
-    expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
-      "Can't promote v1v1 fails 1 gate: correctness: correct ≥ 0.8 (got 0.75) — can't promote v1."
-    );
-    expect(getByTestId("ai-experiment-promote")).toBeDisabled();
-    assert.isNull(queryByTestId("ai-experiment-gates-passing"));
-    assert.exists(getByTestId("ai-experiment-promote-section"));
+    assert.exists(getByTestId("ai-experiment-verdict"));
+    assert.exists(getByText("v2 passes every gate and can be promoted to production."));
   });
 
-  it("confirms a promotable version passes every gate", () => {
-    const {getByTestId, queryByTestId} = renderGated(2);
-
-    expect(getByTestId("ai-experiment-gates-passing")).toHaveTextContent(
-      "Ready to promote v2v2 passes all 3 gates."
+  it("explains why nothing can be promoted when no version passes", () => {
+    const failing: ExperimentRecord = {
+      ...gatedExperiment,
+      results: {
+        ...(gatedExperiment.results as NonNullable<ExperimentRecord["results"]>),
+        gates: (gatedExperiment.results?.gates ?? []).map((gate) => ({...gate, passed: false})),
+      },
+    };
+    const {getByTestId, getByText} = renderWithTheme(
+      <AiExperimentResultsView
+        experiment={failing}
+        isPromoting={false}
+        onDismissPromoteConfirm={() => {}}
+        onPromote={() => {}}
+        onSelectVersion={() => {}}
+        promoteConfirmOpen={false}
+        promoteVersion={2}
+      />
     );
-    assert.isNull(queryByTestId("ai-experiment-gates-failing"));
-    expect(getByTestId("ai-experiment-promote")).not.toBeDisabled();
+
+    assert.exists(getByText(/No version passes every gate/));
+    expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(/v2 fails 3 gates/);
+  });
+
+  it("offers a version picker only when more than one version passes", () => {
+    const single = renderGated(2);
+    assert.isNull(single.queryByTestId("ai-experiment-promote-version"));
+    single.unmount();
+
+    const bothPass: ExperimentRecord = {
+      ...gatedExperiment,
+      results: {
+        ...(gatedExperiment.results as NonNullable<ExperimentRecord["results"]>),
+        gates: (gatedExperiment.results?.gates ?? []).map((gate) => ({...gate, passed: true})),
+      },
+    };
+    const view = renderWithTheme(
+      <AiExperimentResultsView
+        experiment={bothPass}
+        isPromoting={false}
+        onDismissPromoteConfirm={() => {}}
+        onPromote={() => {}}
+        onSelectVersion={() => {}}
+        promoteConfirmOpen={false}
+        promoteVersion={2}
+      />
+    );
+    assert.exists(view.getByTestId("ai-experiment-promote-version"));
+  });
+
+  it("labels output rows by position and shows an empty state without items", () => {
+    const {getByText, unmount} = renderView();
+    assert.exists(getByText("Item 1"));
+    unmount();
+
+    const empty = renderWithTheme(
+      <AiExperimentResultsView
+        experiment={{...experiment, items: []}}
+        isPromoting={false}
+        onDismissPromoteConfirm={() => {}}
+        onPromote={() => {}}
+        onSelectVersion={() => {}}
+        promoteConfirmOpen={false}
+        promoteVersion={2}
+      />
+    );
+    assert.exists(empty.getByTestId("ai-experiment-items-empty"));
+  });
+
+  it("shows a progress meter while running", () => {
+    const {getByTestId} = renderWithTheme(
+      <AiExperimentResultsView
+        experiment={{
+          ...gatedExperiment,
+          results: {
+            ...(gatedExperiment.results as NonNullable<ExperimentRecord["results"]>),
+            progress: {completed: 2, total: 5},
+          },
+          status: "running",
+        }}
+        isPromoting={false}
+        onDismissPromoteConfirm={() => {}}
+        onPromote={() => {}}
+        onSelectVersion={() => {}}
+        promoteConfirmOpen={false}
+        promoteVersion={2}
+      />
+    );
+    expect(getByTestId("ai-experiment-results-progress")).toHaveTextContent("2 of 5");
   });
 });

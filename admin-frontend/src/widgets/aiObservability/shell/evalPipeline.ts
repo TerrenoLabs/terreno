@@ -15,7 +15,7 @@ export interface EvalPipelineStep {
 export const EVAL_PIPELINE_STEPS: EvalPipelineStep[] = [
   {
     number: 1,
-    summary: "Collect real traces into a dataset (Traces → Add to dataset).",
+    summary: "Collect real traces into a dataset. On Traces, choose Add to dataset.",
     title: "Build a dataset",
   },
   {

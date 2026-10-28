@@ -1,16 +1,33 @@
-import {Badge, Box, Button, DataTable, type DataTableCellData, Text} from "@terreno/ui";
-import React, {useMemo} from "react";
-import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {
+  Badge,
+  Box,
+  DataTable,
+  type DataTableCellData,
+  SegmentedControl,
+  Spinner,
+  Text,
+} from "@terreno/ui";
+import React, {useCallback, useMemo, useState} from "react";
+import {ProgressMeter} from "../shell/AgreementMeter";
+import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
+import {EvalPipelineOverview} from "../shell/EvalPipelineOverview";
+import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
+import {getObservabilityStatusStyle} from "../shell/observabilityStatus";
+import {
+  EXPERIMENT_KIND_LABELS,
+  type ExperimentKind,
   type ExperimentRecord,
-  experimentProgressPercent,
+  experimentKind,
   failingGateCount,
+  formatExperimentCost,
   summarizeGatesByVersion,
 } from "./experimentTypes";
 
 export interface AiExperimentsListViewProps {
+  /** Shows the empty state's "New experiment" action. */
   canCreate?: boolean;
-  /** Dataset names by id; the table falls back to the id when a dataset is missing. */
+  /** Dataset names by id; the table falls back to the payload name, then the id. */
   datasetNames?: Record<string, string>;
   experiments: ExperimentRecord[];
   isLoading: boolean;
@@ -20,27 +37,68 @@ export interface AiExperimentsListViewProps {
   onRetry: () => void;
 }
 
+type KindFilter = "all" | ExperimentKind;
+
+const KIND_FILTERS: KindFilter[] = ["all", "judge", "prompt"];
+const KIND_FILTER_LABELS = ["All", EXPERIMENT_KIND_LABELS.judge, EXPERIMENT_KIND_LABELS.prompt];
+
+const ROW_HEIGHT = 64;
+
+interface NameCellValue {
+  id: string;
+  kind: string;
+  name: string;
+}
+
+interface StatusCellValue {
+  completed: number;
+  id: string;
+  status: ExperimentRecord["status"];
+  total: number;
+}
+
+interface ResultCellValue {
+  id: string;
+  passed: boolean;
+  text: string;
+}
+
 const experimentCost = (experiment: ExperimentRecord): number | undefined => {
   return experiment.results?.totalCostUsd ?? experiment.estimate?.costUsd;
 };
 
-const isInFlight = (experiment: ExperimentRecord): boolean => {
-  return experiment.status === "running" || experiment.status === "pending";
-};
-
-/** Per-version gate verdict for the list, e.g. "v1 fails 1 gate · v2 passes". */
-const gateSummaryText = (experiment: ExperimentRecord): string => {
+/**
+ * One gate verdict per experiment: the highest version that passes every gate, or how many gates
+ * the closest version fails. Undefined before any gate has a score.
+ */
+export const experimentResultVerdict = (
+  experiment: ExperimentRecord
+): {passed: boolean; text: string} | undefined => {
   const summaries = summarizeGatesByVersion(experiment).filter((entry) => entry.gates.length > 0);
   if (summaries.length === 0) {
-    return "—";
+    return undefined;
   }
-  return summaries
-    .map((entry) =>
-      entry.passed
-        ? `v${entry.version} passes`
-        : `v${entry.version} fails ${entry.failing.length} ${entry.failing.length === 1 ? "gate" : "gates"}`
-    )
-    .join(" · ");
+  const passing = summaries.filter((entry) => entry.passed);
+  const best = passing[passing.length - 1];
+  if (best) {
+    return {passed: true, text: `v${best.version} ready to promote`};
+  }
+  const closest = [...summaries].sort(
+    (left, right) => left.failing.length - right.failing.length
+  )[0];
+  if (!closest) {
+    return undefined;
+  }
+  return {
+    passed: false,
+    text: `Fails ${closest.failing.length} of ${closest.gates.length} ${
+      closest.gates.length === 1 ? "gate" : "gates"
+    }`,
+  };
+};
+
+const statusLabel = (experiment: ExperimentRecord): string => {
+  return getObservabilityStatusStyle({status: experiment.status}).label;
 };
 
 const experimentSearchText = (experiment: ExperimentRecord): string => experiment.name;
@@ -53,9 +111,17 @@ const buildColumns = ({
   experiments: ExperimentRecord[];
 }): ClientTableColumn<ExperimentRecord>[] => [
   {
+    cell: (experiment) => ({
+      value: {
+        id: experiment.id,
+        kind: EXPERIMENT_KIND_LABELS[experimentKind(experiment)],
+        name: experiment.name,
+      } satisfies NameCellValue,
+    }),
+    columnType: "experimentName",
     filter: {kind: "text"},
     key: "name",
-    title: "Name",
+    title: "Experiment",
     value: (experiment) => experiment.name,
     // Fits seeded names such as "Summarize v2 vs v3 (length cap)" on one line.
     width: 300,
@@ -69,78 +135,46 @@ const buildColumns = ({
     width: 240,
   },
   {
+    cell: (experiment) => ({
+      value: {
+        completed: experiment.results?.progress.completed ?? 0,
+        id: experiment.id,
+        status: experiment.status,
+        total: experiment.results?.progress.total ?? 0,
+      } satisfies StatusCellValue,
+    }),
     columnType: "experimentStatus",
-    filter: {
-      kind: "choice",
-      options: distinctChoiceOptions(experiments, (experiment) => experiment.status),
-    },
+    filter: {kind: "choice", options: distinctChoiceOptions(experiments, statusLabel)},
     key: "status",
     title: "Status",
-    value: (experiment) => experiment.status,
-    width: 140,
-  },
-  {
-    cell: (experiment) => ({
-      value: isInFlight(experiment) ? `${experimentProgressPercent(experiment)}%` : "—",
-    }),
-    filter: {kind: "numberRange"},
-    key: "progress",
-    title: "Progress",
-    value: (experiment) =>
-      isInFlight(experiment) ? experimentProgressPercent(experiment) : undefined,
-    width: 160,
+    value: statusLabel,
+    width: 180,
   },
   {
     cell: (experiment) => {
-      const cost = experimentCost(experiment);
-      return {value: cost !== undefined ? `$${cost.toFixed(2)}` : "—"};
+      const verdict = experimentResultVerdict(experiment);
+      return {
+        value: verdict
+          ? ({id: experiment.id, ...verdict} satisfies ResultCellValue)
+          : {id: experiment.id, passed: false, text: ""},
+      };
     },
+    columnType: "experimentResult",
+    filter: {kind: "numberRange", label: "Failing gates"},
+    key: "result",
+    title: "Result",
+    value: (experiment) => (experiment.results ? failingGateCount(experiment) : undefined),
+    width: 220,
+  },
+  {
+    cell: (experiment) => ({value: formatExperimentCost(experimentCost(experiment))}),
     filter: {kind: "numberRange"},
     key: "cost",
     title: "Cost",
     value: experimentCost,
-    width: 130,
-  },
-  {
-    cell: (experiment) => ({value: gateSummaryText(experiment)}),
-    filter: {kind: "numberRange", label: "Failing gates"},
-    key: "gates",
-    title: "Gates",
-    value: (experiment) => (experiment.results ? failingGateCount(experiment) : undefined),
-    width: 240,
-  },
-  {
-    cell: (experiment) => ({value: experiment.id}),
-    columnType: "experimentOpen",
-    key: "open",
-    title: "",
-    width: 88,
+    width: 110,
   },
 ];
-
-const statusBadge = (
-  status: ExperimentRecord["status"]
-): "error" | "info" | "neutral" | "success" | "warning" => {
-  if (status === "completed") {
-    return "success";
-  }
-  if (status === "failed") {
-    return "error";
-  }
-  if (status === "running") {
-    return "info";
-  }
-  return "warning";
-};
-
-const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
-  <Box justifyContent="center">
-    <Badge
-      status={statusBadge(String(cellData.value) as ExperimentRecord["status"])}
-      value={String(cellData.value ?? "")}
-    />
-  </Box>
-);
 
 export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   canCreate = true,
@@ -152,22 +186,87 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   onOpenResults,
   onRetry,
 }) => {
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+
+  const handleKindChange = useCallback((index: number): void => {
+    setKindFilter(KIND_FILTERS[index] ?? "all");
+  }, []);
+
+  const visibleExperiments = useMemo(() => {
+    if (kindFilter === "all") {
+      return experiments;
+    }
+    return experiments.filter((experiment) => experimentKind(experiment) === kindFilter);
+  }, [experiments, kindFilter]);
+
   const customColumnComponentMap = useMemo(
     () => ({
-      experimentOpen: ({cellData}: {cellData: DataTableCellData}) => (
-        <Box justifyContent="center">
-          <Button
+      experimentName: ({cellData}: {cellData: DataTableCellData}) => {
+        const value = cellData.value as NameCellValue;
+        return (
+          <Box
+            accessibilityHint="Open the experiment results"
+            accessibilityLabel={`Open ${value.name}`}
+            justifyContent="center"
             onClick={() => {
-              onOpenResults(String(cellData.value ?? ""));
+              onOpenResults(value.id);
             }}
-            size="sm"
-            testID={`ai-experiment-open-${String(cellData.value ?? "")}`}
-            text="Open"
-            variant="outline"
-          />
-        </Box>
-      ),
-      experimentStatus: StatusCell,
+          >
+            <Box gap={1} testID={`ai-experiment-open-${value.id}`}>
+              <Text bold numberOfLines={1}>
+                {value.name}
+              </Text>
+              <Text color="secondaryLight" size="sm">
+                {value.kind}
+              </Text>
+            </Box>
+          </Box>
+        );
+      },
+      experimentResult: ({cellData}: {cellData: DataTableCellData}) => {
+        const value = cellData.value as ResultCellValue;
+        if (!value.text) {
+          return (
+            <Box justifyContent="center">
+              <Text color="secondaryLight">—</Text>
+            </Box>
+          );
+        }
+        return (
+          <Box alignItems="start" justifyContent="center">
+            <Badge
+              iconName={value.passed ? "check" : "xmark"}
+              secondary
+              status={value.passed ? "success" : "error"}
+              testID={`ai-experiment-result-${value.id}`}
+              value={value.text}
+            />
+          </Box>
+        );
+      },
+      experimentStatus: ({cellData}: {cellData: DataTableCellData}) => {
+        const value = cellData.value as StatusCellValue;
+        if (value.status === "running") {
+          return (
+            <Box gap={1} justifyContent="center" width="100%">
+              <ObservabilityStatusBadge
+                label={`Running ${value.completed} of ${value.total}`}
+                status="running"
+              />
+              <ProgressMeter
+                done={value.completed}
+                testID={`ai-experiments-progress-${value.id}`}
+                total={value.total}
+              />
+            </Box>
+          );
+        }
+        return (
+          <Box alignItems="start" justifyContent="center">
+            <ObservabilityStatusBadge status={value.status} />
+          </Box>
+        );
+      },
     }),
     [onOpenResults]
   );
@@ -175,68 +274,74 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   const columns = useMemo(
     () =>
       buildColumns({
-        datasetName: (experiment) => datasetNames?.[experiment.datasetId] ?? experiment.datasetId,
-        experiments,
+        datasetName: (experiment) =>
+          datasetNames?.[experiment.datasetId] ?? experiment.datasetName ?? experiment.datasetId,
+        experiments: visibleExperiments,
       }),
-    [datasetNames, experiments]
+    [datasetNames, visibleExperiments]
   );
   const {rows: _sortedExperiments, ...table} = useClientTable({
     columns,
-    rows: experiments,
+    rows: visibleExperiments,
     searchText: experimentSearchText,
   });
 
-  return (
-    <Box gap={3} testID="ai-experiments-list">
-      <Box direction="row" gap={2} justifyContent="between" wrap>
-        <Text color="secondaryDark" size="sm">
-          Experiments run via BackgroundTask locally.
-        </Text>
-        {canCreate ? (
-          <Button onClick={onCreate} testID="ai-experiments-create" text="New experiment" />
-        ) : undefined}
-      </Box>
-      {loadError ? (
-        <Box gap={2}>
-          <Text color="error">{loadError}</Text>
-          <Button onClick={onRetry} text="Retry" variant="secondary" />
+  const renderBody = (): React.ReactNode => {
+    if (loadError) {
+      return (
+        <ObservabilityErrorState onRetry={onRetry} testID="ai-experiments-error" text={loadError} />
+      );
+    }
+    if (isLoading) {
+      return (
+        <Box alignItems="center" padding={5} testID="ai-experiments-loading">
+          <Spinner />
         </Box>
-      ) : undefined}
-      {isLoading ? (
-        <Box padding={4} testID="ai-experiments-loading">
-          <Text>Loading experiments…</Text>
+      );
+    }
+    if (experiments.length === 0) {
+      return (
+        <ObservabilityEmptyState
+          actionIconName="flask"
+          actionText={canCreate ? "New experiment" : undefined}
+          description="Run a dataset through a judge or through prompt versions to see which one passes its gates."
+          iconName="flask"
+          onAction={canCreate ? onCreate : undefined}
+          testID="ai-experiments-empty"
+          title="No experiments yet"
+        />
+      );
+    }
+    return (
+      <Box gap={3}>
+        <Box alignItems="start">
+          <SegmentedControl
+            items={KIND_FILTER_LABELS}
+            onChange={handleKindChange}
+            selectedIndex={KIND_FILTERS.indexOf(kindFilter)}
+            size="sm"
+            testID="ai-experiments-kind-filter"
+          />
         </Box>
-      ) : experiments.length === 0 ? (
-        <Box padding={4} testID="ai-experiments-empty">
-          <Text color="secondaryDark">No experiments yet.</Text>
-        </Box>
-      ) : (
         <DataTable
           {...table}
           customColumnComponentMap={customColumnComponentMap}
           emptyContent={
             <Box padding={4} testID="ai-experiments-no-matches">
-              <Text color="secondaryDark">No experiments match these filters.</Text>
+              <Text color="secondaryLight">No experiments match these filters.</Text>
             </Box>
           }
+          rowHeight={ROW_HEIGHT}
           testID="ai-experiments-table"
         />
-      )}
-      {experiments
-        .filter((experiment) => experiment.status === "running")
-        .map((experiment) => {
-          const percent = experimentProgressPercent(experiment);
-          return (
-            <Box gap={1} key={experiment.id} testID={`ai-experiments-progress-${experiment.id}`}>
-              <Text size="sm">
-                {experiment.name}: {percent}%
-              </Text>
-              <Box color="secondaryLight" height={8} width="100%">
-                <Box color="primary" height={8} width={`${percent}%`} />
-              </Box>
-            </Box>
-          );
-        })}
+      </Box>
+    );
+  };
+
+  return (
+    <Box gap={4} testID="ai-experiments-list">
+      <EvalPipelineOverview currentSteps={[3, 4]} />
+      {renderBody()}
     </Box>
   );
 };

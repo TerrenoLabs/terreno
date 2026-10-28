@@ -1,4 +1,4 @@
-import {Box, Text} from "@terreno/ui";
+import {Banner, Box} from "@terreno/ui";
 import React from "react";
 import {type EvalPipelineStepNumber, formatStepReminder} from "./evalPipeline";
 
@@ -9,7 +9,7 @@ export interface EvalStepBannerProps {
   testID?: string;
 }
 
-/** One-line reminder of where this screen sits in the four-step experiment plan. */
+/** One-line reminder of where this screen sits in the four-step eval plan. */
 export const EvalStepBanner: React.FC<EvalStepBannerProps> = ({
   activity,
   detail,
@@ -17,17 +17,8 @@ export const EvalStepBanner: React.FC<EvalStepBannerProps> = ({
   testID = "ai-eval-step-banner",
 }) => {
   return (
-    <Box
-      border="default"
-      color="secondaryExtraLight"
-      paddingX={3}
-      paddingY={2}
-      rounding="md"
-      testID={testID}
-    >
-      <Text size="sm" testID={`${testID}-text`}>
-        {formatStepReminder({activity, detail, step})}
-      </Text>
+    <Box testID={testID}>
+      <Banner hasIcon status="info" text={formatStepReminder({activity, detail, step})} />
     </Box>
   );
 };

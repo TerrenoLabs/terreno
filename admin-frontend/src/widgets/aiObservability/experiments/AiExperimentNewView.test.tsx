@@ -250,3 +250,91 @@ describe("AiExperimentNewView dataset step", () => {
     expect(getByTestId("text_input")).toHaveTextContent("Choose a dataset");
   });
 });
+
+describe("AiExperimentNewView redesign", () => {
+  it("picks the pipeline with a segmented control", async () => {
+    const onPipelineChange = mock((_pipeline?: string) => undefined);
+    const {getByTestId, getByText} = renderWithTheme(
+      <AiExperimentNewView
+        {...baseProps}
+        onPipelineChange={onPipelineChange}
+        pipeline={undefined}
+      />
+    );
+    expect(getByTestId("ai-experiment-pipeline")).toBeTruthy();
+    expect(getByTestId("ai-eval-pipeline-overview")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByText("Compare prompt versions"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onPipelineChange.mock.calls[0], ["prompt"]);
+  });
+
+  it("does not show the dataset message as an error before the user acts", () => {
+    const {getByTestId, queryByRole, queryByTestId} = renderWithTheme(
+      <AiExperimentNewView {...baseProps} datasetId="" />
+    );
+    expect(getByTestId("ai-experiment-dataset-help")).toHaveTextContent("Select a dataset.");
+    assert.isNull(queryByTestId("ai-experiment-validation-error"));
+    assert.isNull(queryByRole("alert"));
+  });
+
+  it("goes back a step with the ghost Back button", async () => {
+    const onStepChange = mock((_step: ExperimentWizardStep) => undefined);
+    const {getByTestId, queryByTestId, rerender} = renderWithTheme(
+      <AiExperimentNewView {...baseProps} onStepChange={onStepChange} />
+    );
+    assert.isNull(queryByTestId("ai-experiment-back"));
+    rerender(
+      <AiExperimentNewView {...baseProps} onStepChange={onStepChange} step={2} versions={[1, 2]} />
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("ai-experiment-back"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onStepChange.mock.calls[0], [1]);
+  });
+
+  it("shows readable evaluator kinds and calibration instead of raw type keys", () => {
+    const calibrated: EvaluatorRecord = {
+      ...(evaluators[2] as EvaluatorRecord),
+      calibration: {
+        experimentId: "exp-c",
+        experimentName: "calibrate",
+        passed: true,
+        rate: 0.95,
+        stale: false,
+        version: 2,
+      },
+    };
+    const {getByTestId, queryByText} = renderWithTheme(
+      <AiExperimentNewView
+        {...baseProps}
+        evaluators={[evaluators[1] as EvaluatorRecord, calibrated]}
+        step={3}
+      />
+    );
+    expect(getByTestId("ai-experiment-evaluator-kind-eval-1")).toHaveTextContent("JSON assert");
+    expect(getByTestId("ai-experiment-evaluator-kind-eval-judge")).toHaveTextContent("LLM judge");
+    expect(getByTestId("ai-experiment-calibration-eval-judge-percent")).toHaveTextContent("95%");
+    assert.exists(getByTestId("ai-experiment-recommended-eval-judge"));
+    assert.isNull(queryByText(/\(llm-judge\)|\(json-assert\)/));
+  });
+
+  it("writes the estimate in plain words and shows Run experiment on the last step", () => {
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AiExperimentNewView
+        {...baseProps}
+        estimate={{costUsd: 0.42, generations: 6, wallClockSeconds: 120}}
+        evaluatorIds={["eval-1"]}
+        step={4}
+        versions={[1, 2]}
+      />
+    );
+    expect(getByTestId("ai-experiment-estimate")).toHaveTextContent(
+      "About 6 generations, 2 minutes, $0.42"
+    );
+    expect(getByTestId("ai-experiment-run")).toHaveTextContent("Run experiment");
+    assert.isNull(queryByTestId("ai-experiment-next"));
+  });
+});

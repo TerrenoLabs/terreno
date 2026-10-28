@@ -1,4 +1,16 @@
-import {Badge, Box, Button, CheckBox, Heading, SelectField, Text, TextField} from "@terreno/ui";
+import {
+  Badge,
+  Banner,
+  Box,
+  Button,
+  Card,
+  CheckBox,
+  Heading,
+  SelectField,
+  Spinner,
+  Text,
+  TextField,
+} from "@terreno/ui";
 import React from "react";
 import {
   type DatasetJudgment,
@@ -14,10 +26,14 @@ import {
 } from "../evaluators/evaluatorTypes";
 import type {PromptDetail} from "../prompts/promptTypes";
 import {dimensionLabel} from "../review/reviewTypes";
+import {AgreementMeter} from "../shell/AgreementMeter";
 import {EvalStepBanner} from "../shell/EvalStepBanner";
+import {EvalStepper} from "../shell/EvalStepper";
 import {PIPELINE_ACTIVITY, PIPELINE_STEP} from "../shell/evalPipeline";
+import {buildWizardSteps, WizardFooter} from "./ExperimentWizard";
 import {
   type ExperimentEstimate,
+  formatExperimentEstimate,
   formatVersionList,
   isValidExperimentVersionCount,
   parseTargetAgreementPercent,
@@ -55,7 +71,12 @@ export interface AiJudgeExperimentStepsProps {
   versions: number[];
 }
 
-const JUDGE_STEP_LABELS = ["Judged dataset", "Question set", "Judge & versions", "Review & run"];
+const JUDGE_STEP_LABELS = [
+  "Judged dataset",
+  "Question set",
+  "Judge and versions",
+  "Review and run",
+];
 
 const JUDGE_STEP_DETAILS: Record<JudgeWizardStep, string> = {
   1: "pick a dataset humans already judged. Their answers are the answer key the LLM judge is graded against.",
@@ -65,7 +86,7 @@ const JUDGE_STEP_DETAILS: Record<JudgeWizardStep, string> = {
 };
 
 const JUDGE_REUSE_MESSAGE =
-  "Humans already answered these questions for this dataset — this experiment reuses their answers; no new human work needed.";
+  "Humans already answered these questions for this dataset. This experiment reuses their answers, so no new human work is needed.";
 
 /** Llm-judges that answer at least one of the question set's questions, most overlap first. */
 export const judgesForQuestionSet = (
@@ -192,28 +213,17 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
   const isNextDisabled = step < 4 && isStepLocked((step + 1) as JudgeWizardStep);
 
   return (
-    <Box gap={4} testID="ai-judge-wizard">
-      <Box direction="row" gap={2} wrap>
-        {JUDGE_STEP_LABELS.map((label, index) => {
-          const stepNumber = (index + 1) as JudgeWizardStep;
-          const completed = step > stepNumber;
-          return (
-            <Button
-              disabled={isStepLocked(stepNumber)}
-              key={label}
-              onClick={() => {
-                if (isStepLocked(stepNumber)) {
-                  return;
-                }
-                onStepChange(stepNumber);
-              }}
-              testID={`ai-judge-step-${stepNumber}`}
-              text={`${completed ? "✓ " : ""}${label}`}
-              variant={step === stepNumber ? "primary" : "ghost"}
-            />
-          );
+    <Card gap={4} padding={4} testID="ai-judge-wizard">
+      <EvalStepper
+        steps={buildWizardSteps({
+          current: step,
+          isLocked: isStepLocked,
+          labels: JUDGE_STEP_LABELS,
+          onStepChange,
+          testIDPrefix: "ai-judge-step",
         })}
-      </Box>
+        testID="ai-judge-stepper"
+      />
       <EvalStepBanner
         activity={PIPELINE_ACTIVITY.judge}
         detail={JUDGE_STEP_DETAILS[step]}
@@ -223,8 +233,8 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
         <Box gap={2} testID="ai-judge-step-dataset">
           {datasets.length === 0 ? (
             <Text color="secondaryDark" testID="ai-judge-datasets-empty">
-              No datasets yet. Build one from Traces → Add to dataset (step 1), then send it to
-              human review (step 2).
+              No datasets yet. On Traces, choose Add to dataset, then send the dataset to human
+              review.
             </Text>
           ) : undefined}
           {datasets.map((entry) => {
@@ -270,17 +280,11 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
             );
           })}
           {hasDataset ? (
-            <Box
-              border="success"
-              color="successLight"
-              padding={3}
-              rounding="md"
-              testID="ai-judge-dataset-reuse"
-            >
-              <Text>{JUDGE_REUSE_MESSAGE}</Text>
+            <Box testID="ai-judge-dataset-reuse">
+              <Banner hasIcon status="info" text={JUDGE_REUSE_MESSAGE} />
             </Box>
           ) : (
-            <Text color="secondaryDark" size="sm" testID="ai-judge-dataset-help">
+            <Text color="secondaryLight" size="sm" testID="ai-judge-dataset-help">
               Pick a dataset with human answers. Datasets without them are greyed out.
             </Text>
           )}
@@ -292,7 +296,7 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
             onChange={onQuestionSetChange}
             options={judgedSets.map((entry) => {
               return {
-                label: `${entry.evaluatorName} — ${entry.current} of ${entry.total} answered`,
+                label: `${entry.evaluatorName} (${entry.current} of ${entry.total} answered)`,
                 value: entry.evaluatorId,
               };
             })}
@@ -314,7 +318,7 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
             <Box gap={1} testID="ai-judge-questions">
               {questionSet.dimensions.map((dimension, index) => (
                 <Text key={dimension.key} size="sm">
-                  {`Q${index + 1} ${dimension.key} — ${dimensionLabel(dimension)}`}
+                  {`Question ${index + 1}: ${dimensionLabel(dimension)}`}
                 </Text>
               ))}
             </Box>
@@ -325,8 +329,8 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
         <Box gap={3} testID="ai-judge-step-judge">
           {judgeOptions.length === 0 ? (
             <Text color="secondaryDark" testID="ai-judge-judges-empty">
-              No LLM judge answers these questions yet. Create an llm-judge evaluator whose
-              questions use the same keys (Evaluators → New evaluator).
+              No LLM judge answers these questions yet. On Evaluators, create an LLM judge whose
+              questions use the same keys.
             </Text>
           ) : (
             <SelectField
@@ -344,18 +348,26 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
             />
           )}
           {judge && calibration ? (
-            <Box alignItems="center" direction="row" gap={2} wrap>
-              <Text size="sm">Last calibration:</Text>
-              <Badge
-                status={calibration.status}
-                testID="ai-judge-current-calibration"
-                value={calibration.label}
-              />
+            <Box
+              alignItems="center"
+              direction="row"
+              gap={2}
+              testID="ai-judge-current-calibration"
+              wrap
+            >
+              <Text size="sm">Last calibration</Text>
+              {judge.calibration?.rate !== undefined && !judge.calibration.stale ? (
+                <AgreementMeter compact rate={judge.calibration.rate} />
+              ) : (
+                <Text color="secondaryLight" size="sm">
+                  {judge.calibration?.stale ? "Out of date" : "Not calibrated yet"}
+                </Text>
+              )}
             </Box>
           ) : undefined}
           {judge && uncoveredQuestions.length > 0 ? (
             <Text color="secondaryDark" size="sm" testID="ai-judge-uncovered">
-              {`Not graded on ${uncoveredQuestions.map((dimension) => dimension.key).join(", ")} — this judge does not answer ${uncoveredQuestions.length === 1 ? "it" : "them"}.`}
+              {`Not graded on ${uncoveredQuestions.map((dimension) => dimensionLabel(dimension)).join(", ")}. This judge does not answer ${uncoveredQuestions.length === 1 ? "it" : "them"}.`}
             </Text>
           ) : undefined}
           {judge ? (
@@ -378,17 +390,14 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
                     wrap
                   >
                     <CheckBox selected={versions.includes(version.version)} />
-                    <Text>
-                      {`v${version.version}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`}
-                    </Text>
+                    <Text>{`v${version.version}`}</Text>
+                    {tags.map((tag) => (
+                      <Badge key={tag} secondary status="neutral" value={tag} />
+                    ))}
                   </Box>
                 );
               })}
-              <Text
-                color={isValidExperimentVersionCount(versions.length) ? "secondaryDark" : "error"}
-                size="sm"
-                testID="ai-judge-version-help"
-              >
+              <Text color="secondaryLight" size="sm" testID="ai-judge-version-help">
                 Select 2–3 judge prompt versions to compare. Iterate on the prompt and run again
                 until one agrees with the humans.
               </Text>
@@ -398,9 +407,9 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
       ) : undefined}
       {step === 4 ? (
         <Box gap={3} testID="ai-judge-step-review">
-          <Box color="baseAlternate" padding={3} rounding="md" testID="ai-judge-review-summary">
+          <Box testID="ai-judge-review-summary">
             <Text>
-              {`You're calibrating ${judge?.name ?? "the judge"}: ${formatVersionList(versions)} of ${judge?.judgePromptName ?? "its prompt"} will answer ${questionSet?.name ?? "the question set"}'s questions for the ${judgment?.current ?? 0} items of ${dataset?.name ?? "the dataset"} that humans already answered. Each version's answers are compared with the humans'; a version passes at ${targetRate !== undefined ? Math.round(targetRate * 1000) / 10 : "—"}% agreement or higher, and you promote the best one from the results page. No new human work is needed.`}
+              {`You're calibrating ${judge?.name ?? "the judge"}: ${formatVersionList(versions)} of ${judge?.judgePromptName ?? "its prompt"} will answer ${questionSet?.name ?? "the question set"}'s questions for the ${judgment?.current ?? 0} items of ${dataset?.name ?? "the dataset"} that humans already answered. Each version's answers are compared with the humans'; a version passes at ${targetRate !== undefined ? `${Math.round(targetRate * 1000) / 10}%` : "the target"} agreement or higher, and you promote the best one from the results page. No new human work is needed.`}
             </Text>
           </Box>
           <TextField
@@ -412,43 +421,48 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
             value={targetAgreement}
           />
           <TextField
-            helperText="Optional override for the judge model"
+            helperText="Optional. Leave blank to use the judge prompt's model."
             onChange={onModelOverrideChange}
             testID="ai-judge-model-override"
             title="Model override"
             value={modelOverride}
           />
-          {isEstimating ? <Text>Estimating…</Text> : undefined}
+          {isEstimating ? (
+            <Box alignItems="start" testID="ai-judge-estimating">
+              <Spinner size="sm" />
+            </Box>
+          ) : undefined}
           {estimate ? (
-            <Text testID="ai-judge-estimate">
-              {`~${estimate.generations} judge calls · ~${Math.round(estimate.wallClockSeconds / 60)} min${
-                estimate.costUsd !== undefined ? ` · ~$${estimate.costUsd.toFixed(2)}` : ""
-              }`}
+            <Text bold testID="ai-judge-estimate">
+              {formatExperimentEstimate({estimate, unit: "judge calls"})}
             </Text>
           ) : undefined}
-          {estimateError ? <Text color="error">{estimateError}</Text> : undefined}
-          <Button
-            disabled={targetRate === undefined}
-            loading={isCreating}
-            onClick={onRun}
-            testID="ai-judge-run"
-            text="Run calibration"
-          />
+          {estimateError ? (
+            <Text color="error" size="sm">
+              {estimateError}
+            </Text>
+          ) : undefined}
         </Box>
       ) : undefined}
-      {step < 4 ? (
-        <Button
-          disabled={isNextDisabled}
-          onClick={() => {
-            if (isNextDisabled) {
-              return;
-            }
-            onStepChange((step + 1) as JudgeWizardStep);
-          }}
-          testID="ai-judge-next"
-          text="Next"
-        />
-      ) : undefined}
-    </Box>
+      <WizardFooter
+        isLastStep={step === 4}
+        isNextDisabled={isNextDisabled}
+        isRunDisabled={targetRate === undefined}
+        isRunning={isCreating}
+        onBack={
+          step > 1
+            ? () => {
+                onStepChange((step - 1) as JudgeWizardStep);
+              }
+            : undefined
+        }
+        onNext={() => {
+          onStepChange((step + 1) as JudgeWizardStep);
+        }}
+        onRun={onRun}
+        runText="Run calibration"
+        testIDPrefix="ai-judge"
+      />
+    </Card>
   );
 };

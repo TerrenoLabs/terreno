@@ -76,9 +76,12 @@ screens, selecting a list item replaces the list with the detail pane.
 
 ## Responsive breakpoints
 
+Policy: `docs/explanation/responsive-design.md`. Width tables: `docs/reference/ui.md`.
+
 Box supports `smDirection`, `mdDirection`, `lgDirection`, and `xlDirection`. Tokens are
 platform-specific: native `sm` 320 / `md` 375 / `lg` 600 / `xl` 1024; web `lg` 1024 / `xl` 1280.
-See `docs/reference/ui.md`.
+The desktop floor is `isSupportedDesktopWidth({width})`: web `lg` and native `xl`, both 1024pt.
+Below that floor, keep the mobile layout. Native tablets (`lg`, 600–1023pt) do not get the desktop split.
 
 ```tsx
 <Box direction="column" mdDirection="row" lgDirection="row" xlDirection="column">
@@ -88,5 +91,6 @@ See `docs/reference/ui.md`.
 
 - Use raw `View` when Box props cover the need
 - Use `Dimensions.get()` — prefer `useWindowDimensions` if sizing is needed
+- Add a raw pixel cutoff such as 768. Use Box breakpoint props or `isSupportedDesktopWidth`
 - Use `SafeAreaView` — Page handles safe areas
 - Put hex colors in style when `color="primary"` works

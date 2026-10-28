@@ -253,17 +253,16 @@ radiusSm, radiusMd, radiusLg, radiusXl, radius2xl, radius3xl
 ## Utilities
 
 ```typescript
-import { useStoredState, MediaQuery, isNarrowViewport } from "@terreno/ui";
+import {isNarrowViewport, isSupportedDesktopWidth, useStoredState} from "@terreno/ui";
+import {useWindowDimensions} from "react-native";
 
 // Persist state to storage
 const [value, setValue] = useStoredState("key", defaultValue);
 
-// Responsive rendering
-<MediaQuery minWidth={768}>
-  <DesktopLayout />
-</MediaQuery>
+const {width} = useWindowDimensions();
+const isDesktopLayout = isSupportedDesktopWidth({width});
 
-// Current window is below the desktop breakpoint.
+// Current window is below the desktop floor (web lg / native xl, 1024pt).
 // isMobileDevice() is deprecated in favor of isNarrowViewport().
 if (isNarrowViewport()) {
   // Narrow-viewport code

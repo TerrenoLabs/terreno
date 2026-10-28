@@ -1,7 +1,13 @@
-import {Accordion, Box, Heading, Text} from "@terreno/ui";
+import {Accordion, Box, Heading, isSupportedDesktopWidth, Text} from "@terreno/ui";
 import React from "react";
+import {useWindowDimensions} from "react-native";
 
-export const AccordionDemo = () => {
+const useDemoIsMobile = (): boolean => {
+  const {width} = useWindowDimensions();
+  return !isSupportedDesktopWidth({width});
+};
+
+export const AccordionDemo = (): React.ReactElement => {
   return (
     <>
       <Accordion isCollapsed title="Accordion Title 1">
@@ -18,8 +24,9 @@ export const AccordionDemo = () => {
   );
 };
 
-export const AccordionDevDemo = () => {
-  const InfoChild = () => {
+export const AccordionDevDemo = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
+  const InfoChild = (): React.ReactElement => {
     return (
       <Box>
         <Text>Some children content</Text>
@@ -27,7 +34,7 @@ export const AccordionDevDemo = () => {
     );
   };
   return (
-    <Box color="base" maxWidth={480} width="100%">
+    <Box color="base" width={isMobile ? "100%" : "50%"}>
       <Box padding={4} width="100%">
         <Accordion
           includeInfoModal
@@ -46,22 +53,27 @@ export const AccordionDevDemo = () => {
   );
 };
 
-export const AccordionOnToggleDemo = () => {
+export const AccordionOnToggleDemo = (): React.ReactElement => {
   const [isCollapsed, setIsCollapsed] = React.useState(true);
   const [title, setTitle] = React.useState("Sm Title");
+  const isMobile = useDemoIsMobile();
   const [containerWidth, setContainerWidth] = React.useState<number | "100%">("100%");
 
   // Width animation is client-only so static export SSR matches the first paint.
   React.useEffect(() => {
+    if (isMobile) {
+      setContainerWidth("100%");
+      return;
+    }
     setContainerWidth(isCollapsed ? 150 : 450);
-  }, [isCollapsed]);
+  }, [isCollapsed, isMobile]);
 
   return (
     <Box color="base" width={containerWidth}>
       <Box padding={4} width="100%">
         <Accordion
           isCollapsed={isCollapsed}
-          onToggle={(isCollapse: boolean) => {
+          onToggle={(isCollapse: boolean): void => {
             setIsCollapsed(isCollapse);
             setTitle(isCollapse ? "Sm T" : "Longer Title With On Toggle");
           }}

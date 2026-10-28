@@ -1,4 +1,5 @@
-// TODO: Update SplitPage native to have desktop UX for tablet sized screens
+// Native stays a stacked list/detail at every mobile breakpoint, including tablet `lg`.
+// Do not promote native tablets to the desktop side-by-side layout.
 import {useCallback, useEffect, useState} from "react";
 import flattenChildren from "react-keyed-flatten-children";
 import {Dimensions, type ListRenderItemInfo, View} from "react-native";

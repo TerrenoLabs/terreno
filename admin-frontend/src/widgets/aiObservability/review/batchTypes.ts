@@ -1,3 +1,4 @@
+import {AGREEMENT_LEVEL_STYLE, formatRate, getAgreementLevel} from "../shell/observabilityStatus";
 import type {EvaluatorDimension, ReviewListItem, ReviewStatus} from "./reviewTypes";
 
 export type ScoreValue = boolean | number | string;
@@ -98,42 +99,7 @@ export const answerSubjectKey = (row: {datasetItemId?: string; traceId?: string}
 export const openBatchItems = (items: ReviewListItem[]): ReviewListItem[] =>
   items.filter((item) => item.status === "pending" || item.status === "in_progress");
 
-// Agreement at or above this rate is treated as "matches the humans".
-const AGREEMENT_TRUSTED = 0.9;
-const AGREEMENT_CLOSE = 0.75;
-
-export const formatPercent = (rate?: number): string => {
-  if (rate === undefined || Number.isNaN(rate)) {
-    return "—";
-  }
-  return `${Math.round(rate * 100)}%`;
-};
-
-export const agreementStatus = (rate?: number): "error" | "neutral" | "success" | "warning" => {
-  if (rate === undefined) {
-    return "neutral";
-  }
-  if (rate >= AGREEMENT_TRUSTED) {
-    return "success";
-  }
-  if (rate >= AGREEMENT_CLOSE) {
-    return "warning";
-  }
-  return "error";
-};
-
-export const agreementVerdict = (rate?: number): string => {
-  if (rate === undefined) {
-    return "No human answers yet";
-  }
-  if (rate >= AGREEMENT_TRUSTED) {
-    return "Matches humans";
-  }
-  if (rate >= AGREEMENT_CLOSE) {
-    return "Close — check disagreements";
-  }
-  return "Does not match humans";
-};
+export const formatPercent = (rate?: number): string => formatRate(rate);
 
 export const formatAnswer = (value: ScoreValue | undefined): string => {
   if (value === undefined) {
@@ -169,4 +135,28 @@ export const unwrapBatchDetail = (raw: unknown): ReviewBatchDetail | undefined =
     return data as ReviewBatchDetail;
   }
   return undefined;
+};
+
+/** Readable short label from a score key: "is_faithful" or "isFaithful" become "Is faithful". */
+export const humanizeKey = (key: string): string => {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ")
+    .trim()
+    .toLowerCase();
+  if (!words) {
+    return key;
+  }
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
+
+/** Text colour for an agreement rate, from the shared agreement cut-offs. */
+export const agreementTextColor = (
+  rate?: number
+): "error" | "secondaryDark" | "success" | "warning" => {
+  const tone = AGREEMENT_LEVEL_STYLE[getAgreementLevel(rate)].tone;
+  if (tone === "success" || tone === "warning" || tone === "error") {
+    return tone;
+  }
+  return "secondaryDark";
 };

@@ -1,4 +1,4 @@
-import {useToast} from "@terreno/ui";
+import {Button, useToast} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -14,6 +14,9 @@ import {useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
 
 // Judge prompts live in this folder; they never produce traces worth reviewing.
 const EVALUATOR_PROMPT_FOLDER = "evaluators";
+
+const BATCHES_DESCRIPTION =
+  "A batch is a fixed set of AI outputs that people answer the same questions for. Run LLM judges on it to see which ones agree with people.";
 
 const errorTitle = (error: unknown): string | undefined => {
   if (!error || typeof error !== "object") {
@@ -104,7 +107,18 @@ export const AiReviewBatchesScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   return (
     <AiObservabilityChrome
       {...props}
+      actions={
+        <Button
+          disabled={!questionSetId}
+          iconName="clock-rotate-left"
+          loading={createState.isLoading}
+          onClick={handleCreate}
+          testID="ai-review-batch-grab-recent"
+          text={`Grab ${DEFAULT_BATCH_SIZE} recent traces`}
+        />
+      }
       backHref={`${prefix}/ai-review`}
+      description={BATCHES_DESCRIPTION}
       error={statusQuery.isError}
       isLoading={statusQuery.isLoading}
       screenName="ai-review-batches"
@@ -113,11 +127,9 @@ export const AiReviewBatchesScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
       <AiReviewBatchesView
         batches={batches}
         createError={createError}
-        isCreating={createState.isLoading}
         isError={batchesQuery.isError}
         isLoading={batchesQuery.isLoading}
         name={name}
-        onCreate={handleCreate}
         onNameChange={setName}
         onOpenBatch={openBatch}
         onPromptChange={setPromptName}

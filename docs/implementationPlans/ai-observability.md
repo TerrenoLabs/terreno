@@ -512,7 +512,7 @@ clinical, finance, or other domain vocabulary.
 ### Review batches and judge agreement (shipped)
 
 Human evaluators can carry a reviewer-facing `question` per dimension; the review item screen
-renders them as Yes / No rows with **Rest Yes** and web shortcuts (`Y`, `N`, `Enter`, `S`).
+renders them as segmented **Yes** / **No** controls in a fixed left column, with web shortcuts (`Y`, `N`, `Enter`, `S`).
 
 | Screen | Name | Behavior |
 | --- | --- | --- |

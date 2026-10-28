@@ -205,13 +205,17 @@ describe("AiReviewBatchScreenWidget", () => {
     const failed = query(undefined, {isError: true});
     const errored = renderScreen(createApi({batch: failed}));
     expect(errored.getByText("Could not load this batch.")).toBeTruthy();
-    await press(errored.getByText("Retry"));
+    await press(errored.getByTestId("ai-review-batch-error-retry"));
     expect(failed.refetch).toHaveBeenCalled();
   });
 
   it("offers judges that share questions and opens the next pending item", async () => {
     const view = renderScreen(createApi({}), {apiKey: "key-1"});
-    expect(view.getByTestId("ai-review-batch-title")).toBeTruthy();
+    expect(view.getByTestId("observability-page-header-title").props.children).toBe(
+      "Recent summaries"
+    );
+    expect(view.getByTestId("ai-review-batch-question-set")).toBeTruthy();
+    expect(view.getByText("Answer 1 remaining")).toBeTruthy();
     expect(view.queryByText("tone-judge (answers 0 of 2)")).toBeNull();
     await press(view.getByTestId("ai-review-batch-answer-next"));
     expect(routerPush).toHaveBeenCalledWith("/admin/ai-review-item?id=r2");
@@ -358,8 +362,13 @@ describe("AiReviewBatchesScreenWidget", () => {
 
     // With no human evaluators there is nothing to batch against.
     const empty = renderScreen(createApi({create, evaluators: []}));
+    // The header button is disabled without a question set; call its handler to cover the guard.
+    const grab = empty.UNSAFE_root.find(
+      (node) => node.props.testID === "ai-review-batch-grab-recent" && "onClick" in node.props
+    );
+    expect(grab.props.disabled).toBe(true);
     await act(async () => {
-      await empty.UNSAFE_root.findByType(AiReviewBatchesView).props.onCreate();
+      await grab.props.onClick();
     });
     expect(empty.getByText("Choose a question set first.")).toBeTruthy();
     expect(

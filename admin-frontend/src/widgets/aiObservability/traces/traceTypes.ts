@@ -221,15 +221,6 @@ export const filterValuesToTraceFilters = (
   return filters;
 };
 
-/** Start time in the viewer's zone, short enough to stay on one line in the table. */
-export const formatStartedAt = (iso: string): string => {
-  const parsed = DateTime.fromISO(iso);
-  if (!parsed.isValid) {
-    return "—";
-  }
-  return parsed.toFormat("LLL d, HH:mm:ss");
-};
-
 export const unwrapTraceList = (raw: unknown): TraceListResponse => {
   if (Array.isArray(raw)) {
     return {

@@ -1,10 +1,10 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {renderHook} from "@testing-library/react-native";
 import {
-  agreementStatus,
-  agreementVerdict,
+  agreementTextColor,
   formatAnswer,
   formatPercent,
+  humanizeKey,
   previewText,
   unwrapBatchDetail,
   unwrapBatchList,
@@ -18,15 +18,19 @@ import {
 } from "./reviewTypes";
 
 describe("batchTypes", () => {
-  it("formats agreement as a percent with a traffic-light status", () => {
+  it("turns score keys into readable labels and colours agreement from shared cut-offs", () => {
+    expect(humanizeKey("is_faithful")).toBe("Is faithful");
+    expect(humanizeKey("isFaithful")).toBe("Is faithful");
+    expect(humanizeKey("__")).toBe("__");
+    expect(agreementTextColor(0.95)).toBe("success");
+    expect(agreementTextColor(0.8)).toBe("warning");
+    expect(agreementTextColor(0.5)).toBe("error");
+    expect(agreementTextColor(undefined)).toBe("secondaryDark");
+  });
+
+  it("formats agreement as a percent", () => {
     expect(formatPercent(31 / 32)).toBe("97%");
     expect(formatPercent(undefined)).toBe("—");
-    expect(agreementStatus(0.95)).toBe("success");
-    expect(agreementStatus(0.78)).toBe("warning");
-    expect(agreementStatus(0.5)).toBe("error");
-    expect(agreementStatus(undefined)).toBe("neutral");
-    expect(agreementVerdict(0.9)).toBe("Matches humans");
-    expect(agreementVerdict(undefined)).toBe("No human answers yet");
   });
 
   it("formats answers and previews", () => {

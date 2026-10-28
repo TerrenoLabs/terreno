@@ -1,4 +1,4 @@
-import {Box, Button, Spinner, Text, useToast} from "@terreno/ui";
+import {Badge, Box, Button, Spinner, Text, useToast} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -6,6 +6,7 @@ import {unwrapEvaluatorList} from "../evaluators/evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "../evaluators/useAiObservabilityEvaluatorsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
+import {ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {AiReviewBatchView} from "./AiReviewBatchView";
 import {formatPercent, unwrapBatchDetail} from "./batchTypes";
 import {useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
@@ -113,17 +114,59 @@ export const AiReviewBatchScreenWidget: React.FC<AiReviewBatchScreenWidgetProps>
       toast.success(
         summary?.agreement.rate === undefined
           ? `${summary?.evaluatorName ?? "Judge"} ran; answer items to compare`
-          : `${summary.evaluatorName} agrees with humans ${formatPercent(summary.agreement.rate)}`
+          : `${summary.evaluatorName} agrees with people ${formatPercent(summary.agreement.rate)}`
       );
     } catch (error) {
       setRunError(errorTitle(error) ?? "Could not run the judge.");
     }
   }, [apiKey, id, judgeId, runJudge, toast]);
 
+  const header = batch
+    ? {
+        actions: (
+          <Button
+            disabled={!nextPending}
+            iconName="play"
+            onClick={handleAnswerNext}
+            testID="ai-review-batch-answer-next"
+            text={
+              batch.counts.pending > 0 ? `Answer ${batch.counts.pending} remaining` : "All answered"
+            }
+          />
+        ),
+        meta: (
+          <>
+            <Badge
+              iconName="list-check"
+              secondary
+              status="neutral"
+              testID="ai-review-batch-question-set"
+              value={batch.evaluatorName}
+            />
+            {batch.promptName ? (
+              <Badge iconName="file-lines" secondary status="neutral" value={batch.promptName} />
+            ) : undefined}
+            {batch.datasetId ? (
+              <Badge
+                iconName="database"
+                secondary
+                status="neutral"
+                testID="ai-review-batch-dataset"
+                value={`Dataset ${batch.datasetName ?? batch.datasetId}`}
+              />
+            ) : undefined}
+          </>
+        ),
+        title: batch.name,
+      }
+    : {};
+
   const chrome = (children: React.ReactNode): React.ReactElement => (
     <AiObservabilityChrome
       {...props}
+      {...header}
       backHref={listHref}
+      description={batch?.description}
       error={statusQuery.isError}
       isLoading={statusQuery.isLoading}
       screenName="ai-review-batch"
@@ -136,7 +179,7 @@ export const AiReviewBatchScreenWidget: React.FC<AiReviewBatchScreenWidgetProps>
   if (!id) {
     return chrome(
       <Box padding={4}>
-        <Text>Missing batch id. Open a batch from Review batches.</Text>
+        <Text color="secondaryLight">Missing batch id. Open a batch from Review batches.</Text>
       </Box>
     );
   }
@@ -149,10 +192,11 @@ export const AiReviewBatchScreenWidget: React.FC<AiReviewBatchScreenWidgetProps>
   }
   if (batchQuery.isError || !batch) {
     return chrome(
-      <Box gap={2} padding={4}>
-        <Text color="error">Could not load this batch.</Text>
-        <Button onClick={() => batchQuery.refetch()} text="Retry" />
-      </Box>
+      <ObservabilityErrorState
+        onRetry={() => batchQuery.refetch()}
+        testID="ai-review-batch-error"
+        text="Could not load this batch."
+      />
     );
   }
   return chrome(
@@ -162,7 +206,6 @@ export const AiReviewBatchScreenWidget: React.FC<AiReviewBatchScreenWidgetProps>
       isRunningJudge={runState.isLoading}
       judgeId={judgeId}
       judgeOptions={judgeOptions}
-      onAnswerNext={nextPending ? handleAnswerNext : undefined}
       onJudgeChange={setJudgeId}
       onOpenItem={openItem}
       onRunJudge={handleRunJudge}

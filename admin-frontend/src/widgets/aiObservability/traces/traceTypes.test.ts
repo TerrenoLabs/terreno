@@ -7,7 +7,6 @@ import {
   flattenSpans,
   formatCost,
   formatLatency,
-  formatStartedAt,
   formatTokens,
   promptCountLabel,
   selectedSensitiveCount,
@@ -173,11 +172,5 @@ describe("traceTypes helpers", () => {
     });
     assert.equal(filterValuesToTraceFilters({status: ["ok", "bogus"]}).status, "ok");
     assert.equal(filterValuesToTraceFilters({hasScore: "false"}).hasScore, false);
-  });
-
-  it("formats start times on one short line", () => {
-    const formatted = formatStartedAt("2026-09-01T12:34:56.000Z");
-    assert.match(formatted, /^Sep \d{1,2}, \d{2}:\d{2}:56$/);
-    assert.equal(formatStartedAt("not a date"), "—");
   });
 });

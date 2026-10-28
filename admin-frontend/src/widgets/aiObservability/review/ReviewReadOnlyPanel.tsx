@@ -1,4 +1,4 @@
-import {Accordion, Box, Card, Heading, Text} from "@terreno/ui";
+import {Accordion, Box, Card, Heading, type SurfaceColor, Text} from "@terreno/ui";
 import React from "react";
 import {displayReviewValue, type ReviewPanelField, wordCount} from "./reviewTypes";
 
@@ -11,7 +11,7 @@ const FieldValue: React.FC<{field: ReviewPanelField}> = ({field}) => {
     <Box gap={1}>
       <Text>{value}</Text>
       {field.note ? (
-        <Text color="secondaryDark" size="sm">
+        <Text color="secondaryLight" size="sm">
           {field.note}
         </Text>
       ) : undefined}
@@ -38,21 +38,25 @@ const FieldValue: React.FC<{field: ReviewPanelField}> = ({field}) => {
 };
 
 export interface ReviewReadOnlyPanelProps {
+  /** Card surface; `ai` marks content the model wrote. */
+  color?: SurfaceColor;
   fields: ReviewPanelField[];
   title: string;
 }
 
-export const ReviewReadOnlyPanel: React.FC<ReviewReadOnlyPanelProps> = ({fields, title}) => (
-  <Box flex="grow" gap={2} width="100%">
-    <Heading size="lg">{title}</Heading>
-    <Card flex="grow" padding={3} width="100%">
-      <Box gap={3}>
-        {fields.length === 0 ? (
-          <Text color="secondaryDark">No data recorded.</Text>
-        ) : (
-          fields.map((field) => <FieldValue field={field} key={field.key} />)
-        )}
-      </Box>
-    </Card>
-  </Box>
+export const ReviewReadOnlyPanel: React.FC<ReviewReadOnlyPanelProps> = ({
+  color = "base",
+  fields,
+  title,
+}) => (
+  <Card color={color} flex="grow" padding={4} width="100%">
+    <Box gap={3}>
+      <Heading size="lg">{title}</Heading>
+      {fields.length === 0 ? (
+        <Text color="secondaryLight">No data recorded.</Text>
+      ) : (
+        fields.map((field) => <FieldValue field={field} key={field.key} />)
+      )}
+    </Box>
+  </Card>
 );

@@ -10,10 +10,6 @@ import {
   AiTracesListView,
   type AiTracesListViewProps,
 } from "../widgets/aiObservability/traces/AiTracesListView";
-import {
-  sortColumnToTraceSort,
-  traceSortToSortColumn,
-} from "../widgets/aiObservability/traces/traceTableSort";
 import type {TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import type {TraceListQueryArgs} from "../widgets/aiObservability/traces/useAiObservabilityTracesApi";
 
@@ -148,23 +144,44 @@ const columnByTitle = (columns: DataTableColumn[], title: string): DataTableColu
 };
 
 describe("Traces table sort mapping", () => {
-  it("maps server sort keys to DataTable columns and back", () => {
-    assert.deepEqual(traceSortToSortColumn("-startedAt"), {column: 3, direction: "desc"});
-    assert.deepEqual(traceSortToSortColumn("cost"), {column: 9, direction: "asc"});
-    assert.isUndefined(traceSortToSortColumn("created"));
+  const tableSortFor = (sort: string): unknown => {
+    const {UNSAFE_root} = renderWithTheme(<AiTracesListView {...viewProps({sort})} />);
+    return findTable(UNSAFE_root).props.sortColumn;
+  };
 
-    assert.equal(sortColumnToTraceSort({column: 9, direction: "desc"}, "-startedAt"), "-cost");
-    assert.equal(sortColumnToTraceSort({column: 8, direction: "asc"}, "-startedAt"), "tokens");
-    assert.equal(sortColumnToTraceSort({column: 10, direction: "asc"}, "cost"), "latency");
-    assert.equal(sortColumnToTraceSort({column: 1, direction: "asc"}, "cost"), "status");
-    assert.equal(sortColumnToTraceSort({column: 2, direction: "asc"}, "cost"), "name");
-    assert.equal(sortColumnToTraceSort({column: 7, direction: "desc"}, "cost"), "-spans");
-    assert.equal(sortColumnToTraceSort({column: 11, direction: "desc"}, "cost"), "-scores");
+  const sortAfterPress = async (
+    next: {column: number; direction: "asc" | "desc"} | undefined,
+    sort: string
+  ): Promise<string | undefined> => {
+    const onSortChange = mock((_sort: string) => undefined);
+    const {getByTestId} = renderWithTheme(
+      <AiTracesListView {...viewProps({onSortChange, sort})} />
+    );
+    await act(async () => {
+      fireEvent(getByTestId("ai-traces-table"), "setSortColumn", next);
+      await Promise.resolve();
+    });
+    return onSortChange.mock.calls[0]?.[0];
+  };
+
+  it("maps server sort keys to DataTable columns", () => {
+    assert.deepEqual(tableSortFor("-startedAt"), {column: 3, direction: "desc"});
+    assert.deepEqual(tableSortFor("cost"), {column: 6, direction: "asc"});
+    assert.isUndefined(tableSortFor("created"));
+  });
+
+  it("maps header presses back to server sort keys", async () => {
+    assert.equal(await sortAfterPress({column: 6, direction: "desc"}, "-startedAt"), "-cost");
+    assert.equal(await sortAfterPress({column: 4, direction: "asc"}, "-startedAt"), "tokens");
+    assert.equal(await sortAfterPress({column: 5, direction: "asc"}, "cost"), "latency");
+    assert.equal(await sortAfterPress({column: 2, direction: "asc"}, "cost"), "status");
+    assert.equal(await sortAfterPress({column: 1, direction: "asc"}, "cost"), "name");
+    assert.equal(await sortAfterPress({column: 7, direction: "desc"}, "cost"), "-scores");
     // Unsortable columns keep the current sort.
-    assert.equal(sortColumnToTraceSort({column: 5, direction: "asc"}, "cost"), "cost");
+    assert.equal(await sortAfterPress({column: 0, direction: "asc"}, "cost"), "cost");
     // Clearing a sort falls back to newest first; clearing newest first flips Started.
-    assert.equal(sortColumnToTraceSort(undefined, "-cost"), "-startedAt");
-    assert.equal(sortColumnToTraceSort(undefined, "-startedAt"), "startedAt");
+    assert.equal(await sortAfterPress(undefined, "-cost"), "-startedAt");
+    assert.equal(await sortAfterPress(undefined, "-startedAt"), "startedAt");
   });
 });
 
@@ -176,44 +193,42 @@ describe("AiTracesListView table", () => {
 
     const sortable = columns.filter((column) => column.sortable).map((column) => column.title);
     assert.deepEqual(sortable, [
+      "Trace",
       "Status",
-      "Name",
       "Started",
-      "Spans",
       "Tokens",
-      "Cost",
       "Latency",
+      "Cost",
       "Scores",
     ]);
-    assert.deepEqual(table.props.sortColumn, {column: 9, direction: "desc"});
+    assert.deepEqual(table.props.sortColumn, {column: 6, direction: "desc"});
 
     assert.deepEqual(columnByTitle(columns, "Status").filter, {
       field: "status",
       kind: "choice",
       label: "Status",
       options: [
-        {label: "ok", value: "ok"},
-        {label: "error", value: "error"},
+        {label: "OK", value: "ok"},
+        {label: "Error", value: "error"},
       ],
     });
-    assert.deepEqual(columnByTitle(columns, "Name").filter?.options, [
+    assert.deepEqual(columnByTitle(columns, "Trace").filter?.options, [
       {label: "summarize", value: "summarize"},
       {label: "safety", value: "safety"},
     ]);
-    assert.equal(columnByTitle(columns, "Name").filter?.field, "prompt");
+    assert.equal(columnByTitle(columns, "Trace").filter?.field, "prompt");
     assert.equal(columnByTitle(columns, "Started").filter?.kind, "dateRange");
-    assert.equal(columnByTitle(columns, "Sensitive").filter?.kind, "boolean");
     assert.equal(columnByTitle(columns, "Scores").filter?.field, "hasScore");
     assert.deepEqual(
       (table.props.additionalFilters as Array<{field: string}>).map((filter) => filter.field),
-      ["userId", "sessionId"]
+      ["sensitive", "userId", "sessionId"]
     );
 
     // 32px cell padding plus about 9px per character keeps these values on one line.
     for (const [title, value] of [
-      ["Cost", "$12.3456"],
-      ["Tokens", "12345678"],
-      ["Latency", "123456 ms"],
+      ["Cost", "$1,234.56"],
+      ["Tokens", "12,345,678"],
+      ["Latency", "123.4 s"],
     ] as const) {
       assert.isAtLeast(columnByTitle(columns, title).width, 32 + value.length * 9, title);
     }
@@ -221,10 +236,33 @@ describe("AiTracesListView table", () => {
 
   it("renders started, tokens, cost, and latency on single lines", () => {
     const {getByText} = renderWithTheme(<AiTracesListView {...viewProps()} />);
-    for (const value of ["12345", "$12.3456", "1234 ms"]) {
+    for (const value of ["12,345", "$12.35", "1.2 s"]) {
       expect(getByText(value).props.numberOfLines).toBe(1);
     }
-    expect(getByText(/^Sep 1, \d{2}:00:00$/).props.numberOfLines).toBe(1);
+    expect(getByText(/(ago|^in .+)$/).props.numberOfLines).toBe(1);
+  });
+
+  it("shows cost under a cent and names the trace with steps and sensitivity", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <AiTracesListView
+        {...viewProps({
+          traces: [
+            trace({
+              errorSummary: "model timeout",
+              sensitive: true,
+              status: "error",
+              usage: {costUsd: 0.004, inputTokens: 1, outputTokens: 2},
+              userId: "user-9",
+            }),
+          ],
+        })}
+      />
+    );
+    expect(getByText("<$0.01")).toBeTruthy();
+    expect(getByText("4 steps · user user-9")).toBeTruthy();
+    expect(getByText("model timeout")).toBeTruthy();
+    expect(getByTestId("ai-traces-sensitive-badge")).toBeTruthy();
+    expect(getByTestId("ai-traces-status-error")).toBeTruthy();
   });
 
   it("keeps the table and its filters when no traces match", () => {
@@ -243,7 +281,7 @@ describe("AiTracesListView table", () => {
     );
     const table = getByTestId("ai-traces-table");
     await act(async () => {
-      fireEvent(table, "setSortColumn", {column: 8, direction: "asc"});
+      fireEvent(table, "setSortColumn", {column: 4, direction: "asc"});
       fireEvent(table, "setSortColumn", undefined);
       fireEvent(table, "filterValuesChange", {sensitive: true});
       await Promise.resolve();
@@ -278,13 +316,13 @@ describe("AiTracesScreenWidget table query", () => {
     assert.equal(lastCall().page, 3);
 
     await act(async () => {
-      fireEvent(table(), "setSortColumn", {column: 9, direction: "desc"});
+      fireEvent(table(), "setSortColumn", {column: 6, direction: "desc"});
       await Promise.resolve();
     });
     assert.equal(lastCall().sort, "-cost");
     assert.equal(lastCall().page, 1);
     assert.deepEqual(findTable(view.UNSAFE_root).props.sortColumn, {
-      column: 9,
+      column: 6,
       direction: "desc",
     });
 

@@ -8,7 +8,8 @@ import {useAiObservabilityExperimentsApi} from "../experiments/useAiObservabilit
 import {judgeOutputSchemaFromDetail, unwrapPromptDetail} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
-import {AiEvaluatorDetailView} from "./AiEvaluatorPanels";
+import {ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {AiEvaluatorDetailMeta, AiEvaluatorDetailView} from "./AiEvaluatorPanels";
 import {type EvaluatorUsageRow, unwrapEvaluatorRecord} from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
@@ -20,7 +21,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
   const {useDetailQuery} = useAiObservabilityEvaluatorsApi(api);
   const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi(api);
   const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi(api);
-  const {data, isError, isLoading} = useDetailQuery(id ?? "", {skip: !id});
+  const {data, isError, isLoading, refetch} = useDetailQuery(id ?? "", {skip: !id});
   const {data: experimentsRaw, isError: isExperimentsError} = useExperimentsQuery();
   const evaluator = useMemo(() => unwrapEvaluatorRecord(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
@@ -78,7 +79,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
         <Box padding={4}>
-          <Text>Missing evaluator id.</Text>
+          <Text color="secondaryLight">Missing evaluator id.</Text>
         </Box>
       </AiObservabilityChrome>
     );
@@ -86,8 +87,13 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
 
   if (isLoading) {
     return (
-      <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
-        <Box alignItems="center" padding={4} testID="ai-evaluator-detail-loading">
+      <AiObservabilityChrome
+        {...props}
+        backHref={backHref}
+        hideHeader
+        screenName="ai-evaluator-detail"
+      >
+        <Box alignItems="center" padding={5} testID="ai-evaluator-detail-loading">
           <Spinner />
         </Box>
       </AiObservabilityChrome>
@@ -97,15 +103,24 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
   if (isError || !evaluator) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
-        <Box padding={4}>
-          <Text color="error">Failed to load evaluator.</Text>
-        </Box>
+        <ObservabilityErrorState
+          onRetry={refetch}
+          testID="ai-evaluator-detail-error"
+          text="Could not load evaluator."
+        />
       </AiObservabilityChrome>
     );
   }
 
   return (
-    <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
+    <AiObservabilityChrome
+      {...props}
+      backHref={backHref}
+      description={evaluator.description}
+      meta={<AiEvaluatorDetailMeta evaluator={evaluator} />}
+      screenName="ai-evaluator-detail"
+      title={evaluator.name}
+    >
       <AiEvaluatorDetailView
         evaluator={evaluator}
         judgeOutputSchema={judgeOutputSchema}

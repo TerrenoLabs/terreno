@@ -43,8 +43,8 @@ Skip unlabeled items in experiments unless you only need generation smoke (still
 
 ## 3. Create the prompt
 
-1. Open **Admin → AI Observability → Prompts**. The folder rail shows counts; search filters name and folder. If your role lacks `aiPrompt:create`, **Create prompt** is hidden (API writes still 403).
-2. **Create prompt** (folder, name, system, user template with `{{variables}}`). That write is immutable **v1**. Open the row to the prompt hub (**Overview**, **Versions**, **Traces**, **Experiments**).
+1. Open **Admin → AI Observability → Prompts**. The folder filter shows counts; search filters name and folder. If your role lacks `aiPrompt:create`, the header **New prompt** is hidden (API writes still 403).
+2. **New prompt** (folder, name, system, user template with `{{variables}}`). That write is immutable **v1**. Open the row to the prompt hub (**Overview**, **Versions**, **Traces**, **Experiments**).
 3. On **Versions**, edit system/template/variables/temperature when `aiPrompt:update` is allowed, then **Save as vN+1**. There is no in-place save. **Playground → Run once** (when `aiPrompt:playground` is allowed) compiles and calls the model; it does **not** create a version. **Traces** and **Experiments** show recent items for this prompt from prompt detail relationships.
 4. Do not paste that string into app routes. Apps call `AIService` with `promptName` + `promptLabel` (step 6).
 
@@ -126,16 +126,16 @@ Do this in parallel with steps 1–6 once the feature is reachable.
 4. In **Admin → AI Observability → Traces**, filter by time, prompt dropdown, status, user, session, score presence, or data sensitivity. Score and sensitivity dropdowns include both positive and negative states. Rows show a status dot, `sensitive` badge, error line, `N prompts`, tokens, cost, and latency. Open a row for the span tree (kind, indent, duration bar). Sensitive I/O disclosures start **collapsed**.
 5. Select one or more traces. The bulk bar warns when any selected row is `sensitive`. Choose **Send to human review**, read the queue explanation, and pick a human evaluator. The evaluator's dimensions become the score fields and its instructions guide the reviewer. Confirming posts `POST /ai/observability/traces/review` with `reason: "manual"`. Automatic (`llm-judge` / `json-assert`) evaluators cannot enter this queue.
 6. Open **Review queue**. Tabs show Pending / In progress / Done / Skipped counts, and pending
-   items are oldest-first. Select **Start reviewing — oldest first**.
+   items are oldest-first. Select the header **Review oldest pending**.
 7. On each item, compare **What the AI was given** with **What the AI wrote**. Long fields begin
    collapsed with a word count; structured outputs retain field labels and reviewer notes. Use
    **Raw JSON** only when the field view is insufficient.
-8. Score every required evaluator dimension on the same screen. Yes / No, the numeric slider, and
-   categorical pills sit in a fixed column on the left of each question. On web, `Y` / `N` answer
-   the highlighted question as soon as the item opens, `Enter` submits, and `S` skips. Add an
-   optional comment, then **Submit & next**. **Skip** records no score. For the second phase-1
-   intake path, use **Assign to me** to manually claim an item and move it to In progress.
-   Continue until the toast says **Queue clear**.
+8. Score every required evaluator dimension on the same screen. The segmented **Yes** / **No**
+   control, the numeric slider, and categorical pills sit in a fixed column on the left of each
+   question. On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter`
+   submits, and `S` skips. Add an optional note, then **Submit and open next**. **Skip** records
+   no score. For the second phase-1 intake path, use **Assign to me** to manually claim an item
+   and move it to In progress. Continue until the toast says **Queue clear**.
 
 Feedback is a score (`source: "user-feedback"`) fanned out to every ScoreSink. Non-owners who are not admin get 403.
 

@@ -27,6 +27,9 @@ export interface AiObservabilityScreenMeta {
 
 const AI_OBSERVABILITY_GROUP = "AI Observability";
 
+// List screens end the trail at their section; the page title already names them.
+const LIST_LEAVES = new Set(["Library", "List", "Queue"]);
+
 export const AI_OBSERVABILITY_SCREENS: Record<string, AiObservabilityScreenMeta> = {
   "ai-dataset-detail": {leaf: "Detail", section: "Datasets", title: "Dataset"},
   "ai-datasets": {leaf: "List", section: "Datasets", title: "Datasets"},
@@ -61,14 +64,9 @@ export const unwrapObservabilityStatus = (raw: unknown): ObservabilityStatusPayl
   return undefined;
 };
 
+/** Quiet status line for the chrome: whether the local observability plugin is on. */
 export const formatObservabilityStatusChip = (status: ObservabilityStatusPayload): string => {
-  const localLabel = status.localOn ? "Local on" : "Local off";
-  return [
-    localLabel,
-    `prompts:${status.primaries.prompts}`,
-    `datasets:${status.primaries.datasets}`,
-    `experiments:${status.primaries.experiments}`,
-  ].join(" · ");
+  return status.localOn ? "Local observability on" : "Local observability off";
 };
 
 const sectionHref = (section: string, routeBase: string): string => {
@@ -103,10 +101,18 @@ export const buildAiObservabilityBreadcrumbs = ({
   if (!meta) {
     return [{href: adminHref, label: "Admin"}, {label: AI_OBSERVABILITY_GROUP}];
   }
+  const sectionCrumb = {href: sectionHref(meta.section, routeBase), label: meta.section};
+  if (LIST_LEAVES.has(meta.leaf)) {
+    return [
+      {href: adminHref, label: "Admin"},
+      {label: AI_OBSERVABILITY_GROUP},
+      {label: meta.section},
+    ];
+  }
   return [
     {href: adminHref, label: "Admin"},
     {label: AI_OBSERVABILITY_GROUP},
-    {href: sectionHref(meta.section, routeBase), label: meta.section},
+    sectionCrumb,
     {label: meta.leaf},
   ];
 };

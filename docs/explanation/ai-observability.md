@@ -28,8 +28,9 @@ Telemetry sinks still fan out even when a control primary is local-only.
 Admin chrome lives in `admin-frontend`. One sidebar group **AI Observability** holds Prompts,
 Traces, Evaluators, Datasets, Experiments, and Review (Review is omitted when the local plugin is
 off). Existing **AI Requests** stays under **Screens**. Every observability screen shows
-breadcrumbs `Admin / AI Observability / <Section> / <leaf>` and a status chip from
-`GET /ai/observability/status`. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
+breadcrumbs (`Admin / AI Observability / <Section>` on lists, plus `/ <leaf>` on detail
+screens), a quiet status chip from `GET /ai/observability/status`, and one left-aligned page
+header with the screen's single primary action. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
 versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 ## Why this shape for product work

@@ -36,9 +36,17 @@ import type {
   PromptListItem,
 } from "../widgets/aiObservability/prompts/promptTypes";
 import {AiReviewItemScreenWidget} from "../widgets/aiObservability/review/AiReviewItemScreen";
-import {AiReviewItemView} from "../widgets/aiObservability/review/AiReviewItemView";
+import {
+  AiReviewItemHeaderMeta,
+  AiReviewItemNav,
+  AiReviewItemView,
+  reviewItemTitle,
+} from "../widgets/aiObservability/review/AiReviewItemView";
 import {AiReviewScreenWidget} from "../widgets/aiObservability/review/AiReviewQueueScreen";
-import {AiReviewQueueView} from "../widgets/aiObservability/review/AiReviewQueueView";
+import {
+  AiReviewQueueActions,
+  AiReviewQueueView,
+} from "../widgets/aiObservability/review/AiReviewQueueView";
 import {ReviewScoreField} from "../widgets/aiObservability/review/ReviewScoreField";
 import type {ReviewDetail, ReviewListItem} from "../widgets/aiObservability/review/reviewTypes";
 import {AiObservabilityChrome} from "../widgets/aiObservability/shell/AiObservabilityChrome";
@@ -53,7 +61,10 @@ import {
 import {AiTraceDetailScreenWidget} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
 import {AiTraceDetailView} from "../widgets/aiObservability/traces/AiTraceDetailView";
 import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesListScreen";
-import {AiTracesListView} from "../widgets/aiObservability/traces/AiTracesListView";
+import {
+  AiTracesHeaderActions,
+  AiTracesListView,
+} from "../widgets/aiObservability/traces/AiTracesListView";
 import type {TraceDetail, TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
 
@@ -556,9 +567,10 @@ describe("AiDatasetsListScreen", () => {
         <AiDatasetsScreenWidget api={createApi()} {...widgetProps} />
       );
       expect(errored.getByTestId("ai-datasets-load-error")).toBeTruthy();
+      expect(errored.getByText("Could not load datasets.")).toBeTruthy();
       listState.refetch.mockClear();
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByText("Try again"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.isAtLeast(listState.refetch.mock.calls.length, 1);
@@ -660,7 +672,7 @@ describe("AiDatasetsListScreen", () => {
         fireEvent.press(failImportButtons[failImportButtons.length - 1]!);
         await Promise.resolve();
       });
-      expect(failing.getByText("Import failed.")).toBeTruthy();
+      expect(failing.getByText("Could not import these items.")).toBeTruthy();
     });
 
     it("dismisses create and import modals", async () => {
@@ -835,7 +847,7 @@ describe("AiDatasetsListView", () => {
       expect(view.getByTestId("ai-datasets-import-result")).toBeTruthy();
       expect(view.getByTestId("ai-datasets-import-error")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(view.getByText("Retry"));
+        fireEvent.press(view.getByText("Try again"));
         await Promise.resolve();
       });
       assert.equal(onRetry.mock.calls.length, 1);
@@ -945,6 +957,7 @@ describe("AiDatasetsListView", () => {
 
     it("ignores empty file selection and failed file reads", async () => {
       const onFilePicked = mock(() => undefined);
+      const onFileReadError = mock((_message: string) => undefined);
       const originalFetch = globalThis.fetch;
       globalThis.fetch = mock(async () => {
         throw new Error("read failed");
@@ -966,6 +979,7 @@ describe("AiDatasetsListView", () => {
           onDismissCreate={() => undefined}
           onDismissImport={() => undefined}
           onFilePicked={onFilePicked}
+          onFileReadError={onFileReadError}
           onImportPasteChange={() => undefined}
           onImportSubmit={() => undefined}
           onOpenCreate={() => undefined}
@@ -981,6 +995,8 @@ describe("AiDatasetsListView", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.equal(onFilePicked.mock.calls.length, 0);
+      assert.equal(onFileReadError.mock.calls.length, 1);
+      assert.include(String(onFileReadError.mock.calls[0]?.[0]), "Could not read that file");
       globalThis.fetch = originalFetch;
     });
 
@@ -1230,7 +1246,7 @@ describe("AiEvaluatorDetailScreen", () => {
           screenName="ai-evaluator-detail"
         />
       );
-      expect(errored.getByText("Failed to load evaluator.")).toBeTruthy();
+      expect(errored.getByText("Could not load evaluator.")).toBeTruthy();
       detailState.isError = false;
       detailState.data = evaluator;
     });
@@ -1380,7 +1396,7 @@ describe("AiEvaluatorNewScreen", () => {
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "quality");
       setDimensionKey(view, "wrong-key");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-llm-judge"));
+        fireEvent.press(view.getByText("LLM judge"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -1401,7 +1417,7 @@ describe("AiEvaluatorNewScreen", () => {
       expect(view.getByTestId("ai-evaluator-schema-mismatch")).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-human"));
+        fireEvent.press(view.getByText("Human"));
         await Promise.resolve();
       });
       setDimensionKey(view, "correct");
@@ -1448,7 +1464,7 @@ describe("AiEvaluatorNewScreen", () => {
       );
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "assert");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-json-assert"));
+        fireEvent.press(view.getByText("JSON assert"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-assertion-path"), "output.text");
@@ -1485,7 +1501,7 @@ describe("AiEvaluatorNewScreen", () => {
       );
       setDimensionKey(view, "pass");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-human"));
+        fireEvent.press(view.getByText("Human"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-instructions"), "Rate quality");
@@ -1530,16 +1546,16 @@ describe("AiEvaluatorNewScreen", () => {
       assert.isOk(view.getByTestId("ai-evaluator-dimension-0-key"));
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("numeric")[0]!);
+        fireEvent.press(view.getAllByText("Number")[0]!);
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-0-min"), "8");
       await act(async () => {
-        fireEvent.press(view.getAllByText("boolean")[0]!);
+        fireEvent.press(view.getAllByText("Yes or no")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(view.getAllByText("numeric")[0]!);
+        fireEvent.press(view.getAllByText("Number")[0]!);
         await Promise.resolve();
       });
       assert.equal(view.getByTestId("ai-evaluator-dimension-0-min").props.value, "0");
@@ -1556,7 +1572,7 @@ describe("AiEvaluatorNewScreen", () => {
       ).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("categorical")[0]!);
+        fireEvent.press(view.getAllByText("Category")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
@@ -1566,11 +1582,11 @@ describe("AiEvaluatorNewScreen", () => {
       expect(view.getByText("Add at least one category for each categorical score.")).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("boolean")[0]!);
+        fireEvent.press(view.getAllByText("Yes or no")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-json-assert"));
+        fireEvent.press(view.getByText("JSON assert"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-live-sample"), "25");
@@ -1600,7 +1616,7 @@ describe("AiEvaluatorNewScreen", () => {
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "judge-check");
       setDimensionKey(view, "quality");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-llm-judge"));
+        fireEvent.press(view.getByText("LLM judge"));
         await Promise.resolve();
       });
       const judgeSelect = view.UNSAFE_root.findAllByType(SelectField).find((field) => {
@@ -1808,7 +1824,7 @@ describe("AiEvaluatorsListView", () => {
       expect(getByTestId("ai-evaluator-open-eval-1")).toBeTruthy();
     });
 
-    it("uses a distinct badge status for each evaluator type", () => {
+    it("uses one neutral badge colour for every evaluator kind and filters by kind", async () => {
       const baseEvaluator = evaluators[0];
       assert.exists(baseEvaluator);
       const allTypes: EvaluatorRecord[] = [
@@ -1816,7 +1832,7 @@ describe("AiEvaluatorsListView", () => {
         {...baseEvaluator, id: "eval-2", name: "human", type: "human"},
         {...baseEvaluator, id: "eval-3", name: "assert", type: "json-assert"},
       ];
-      const {getByTestId} = renderWithTheme(
+      const {getAllByText, getByTestId, queryByTestId} = renderWithTheme(
         <AiEvaluatorsListView
           evaluators={allTypes}
           isLoading={false}
@@ -1829,7 +1845,53 @@ describe("AiEvaluatorsListView", () => {
         return getByTestId(`ai-evaluator-type-${evaluator.type}`).props.style[0].backgroundColor;
       });
 
-      assert.equal(new Set(colors).size, 3);
+      // Colour means state, not category: kinds differ by icon and label only.
+      assert.equal(new Set(colors).size, 1);
+      expect(getByTestId("ai-evaluators-kind-filter")).toBeTruthy();
+      assert.lengthOf(getAllByText("Full trace"), 3);
+
+      await act(async () => {
+        // The kind filter renders above the table, so its segment is the first match.
+        fireEvent.press(getAllByText("JSON assert")[0]!);
+        await Promise.resolve();
+      });
+      expect(getByTestId("ai-evaluator-open-eval-3")).toBeTruthy();
+      expect(queryByTestId("ai-evaluator-open-eval-1")).toBeNull();
+    });
+
+    it("shows a retryable error and an empty state with New evaluator", async () => {
+      const onRetry = mock(() => undefined);
+      const onCreate = mock(() => undefined);
+      const errored = renderWithTheme(
+        <AiEvaluatorsListView
+          evaluators={[]}
+          isLoading={false}
+          loadError="Could not load evaluators."
+          onCreate={onCreate}
+          onOpen={() => undefined}
+          onRetry={onRetry}
+        />
+      );
+      await act(async () => {
+        fireEvent.press(errored.getByText("Try again"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.equal(onRetry.mock.calls.length, 1);
+
+      const empty = renderWithTheme(
+        <AiEvaluatorsListView
+          evaluators={[]}
+          isLoading={false}
+          onCreate={onCreate}
+          onOpen={() => undefined}
+          onRetry={onRetry}
+        />
+      );
+      await act(async () => {
+        fireEvent.press(empty.getByTestId("ai-evaluators-empty-action"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.equal(onCreate.mock.calls.length, 1);
     });
   });
 });
@@ -2099,18 +2161,15 @@ describe("AiExperimentNewScreen", () => {
         await Promise.resolve();
       });
       await waitFor(() => {
-        assert.include(
-          view.getByTestId("ai-experiment-estimate").props.children.join(""),
-          "~$0.20"
-        );
+        assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.20");
       });
 
       await act(async () => {
         stale.resolve({costUsd: 9.99, generations: 1, wallClockSeconds: 60});
         await Promise.resolve();
       });
-      assert.include(view.getByTestId("ai-experiment-estimate").props.children.join(""), "~$0.20");
-      assert.notInclude(view.getByTestId("ai-experiment-estimate").props.children.join(""), "9.99");
+      assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.20");
+      assert.notInclude(String(view.getByTestId("ai-experiment-estimate").props.children), "9.99");
 
       await act(async () => {
         fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-next");
@@ -2134,10 +2193,7 @@ describe("AiExperimentNewScreen", () => {
         await Promise.resolve();
       });
       await waitFor(() => {
-        assert.include(
-          view.getByTestId("ai-experiment-estimate").props.children.join(""),
-          "~$0.30"
-        );
+        assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.30");
       });
       assert.isNull(view.queryByText("Could not estimate experiment cost."));
     });
@@ -2412,10 +2468,21 @@ describe("AiExperimentResultsScreen", () => {
     });
 
     it("does not reset the selected version when polled experiment data updates", async () => {
-      detailData = baseExperiment;
+      // Both versions pass, so the version picker shows.
+      const bothPass: ExperimentRecord = {
+        ...baseExperiment,
+        results: {
+          ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+          gates: (baseExperiment.results?.gates ?? []).map((gate) => ({...gate, passed: true})),
+          progress: {completed: 2, total: 2},
+        },
+        status: "completed",
+      };
+      detailData = bothPass;
       const {getByTestId, rerender} = renderWithTheme(
         <AiExperimentResultsScreenWidget {...widgetProps} />
       );
+      expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v2 to production");
       await act(async () => {
         fireEvent.press(getByTestId("web_picker"));
         await Promise.resolve();
@@ -2424,16 +2491,9 @@ describe("AiExperimentResultsScreen", () => {
         fireEvent.press(getByTestId("web_dropdown_option_1"));
         await Promise.resolve();
       });
-      detailData = {
-        ...baseExperiment,
-        results: {
-          ...baseExperiment.results!,
-          progress: {completed: 2, total: 2},
-        },
-        status: "completed",
-      };
+      detailData = {...bothPass, updated: "2026-01-01T00:06:00.000Z"};
       rerender(<AiExperimentResultsScreenWidget {...widgetProps} />);
-      expect(getByTestId("ai-experiment-gates-v1")).toHaveTextContent(/v1 \(selected to promote\)/);
+      expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v1 to production");
     });
 
     it("blocks promote when gates fail and surfaces API errors", async () => {
@@ -2459,6 +2519,7 @@ describe("AiExperimentResultsScreen", () => {
       };
       const view = renderWithTheme(<AiExperimentResultsScreenWidget {...widgetProps} />);
       expect(view.getByTestId("ai-experiment-gates-failing")).toBeTruthy();
+      expect(view.getByTestId("ai-experiment-promote")).toBeDisabled();
       fireEvent.press(view.getByTestId("ai-experiment-promote"));
       await act(async () => {
         await Promise.resolve();
@@ -2468,12 +2529,17 @@ describe("AiExperimentResultsScreen", () => {
       );
     });
 
-    it("shows query errors", () => {
+    it("shows query errors with a retry", async () => {
       detailIsError = true;
 
       const view = renderWithTheme(<AiExperimentResultsScreenWidget {...widgetProps} />);
 
-      assert.exists(view.getByText("Failed to load experiment results."));
+      assert.exists(view.getByText("Could not load experiment results."));
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-experiment-results-error-retry"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      assert.isAtLeast(refetch.mock.calls.length, 1);
     });
 
     it("surfaces promote API errors and dismisses the confirmation", async () => {
@@ -2778,12 +2844,8 @@ describe("AiObservabilityChrome", () => {
 
   describe("AI observability chrome", () => {
     it("formats the status chip for local on and local off primaries", () => {
-      expect(formatObservabilityStatusChip(localOnStatus)).toBe(
-        "Local on · prompts:local · datasets:local · experiments:local"
-      );
-      expect(formatObservabilityStatusChip(localOffStatus)).toBe(
-        "Local off · prompts:remote · datasets:remote · experiments:remote"
-      );
+      expect(formatObservabilityStatusChip(localOnStatus)).toBe("Local observability on");
+      expect(formatObservabilityStatusChip(localOffStatus)).toBe("Local observability off");
     });
 
     it("unwraps both envelope and already-unwrapped status payloads", () => {
@@ -2804,6 +2866,54 @@ describe("AiObservabilityChrome", () => {
       ]);
     });
 
+    it("ends list screen breadcrumbs at the section", () => {
+      const crumbs = buildAiObservabilityBreadcrumbs({
+        routeBase: "/admin",
+        screenName: "ai-datasets",
+      });
+      expect(crumbs.map((crumb) => crumb.label)).toEqual(["Admin", "AI Observability", "Datasets"]);
+    });
+
+    it("renders the page header with title override, description, meta, and actions", () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <AiObservabilityChrome
+          actions={<Text>Header action</Text>}
+          api={stubApi}
+          config={emptyConfig}
+          description="What this screen is for."
+          meta={<Text>Header meta</Text>}
+          routeBase="/admin"
+          screenName="ai-review-batch"
+          status={localOnStatus}
+          title="Recent summaries — batch 1"
+        >
+          <Text>Body</Text>
+        </AiObservabilityChrome>
+      );
+      expect(getByTestId("observability-page-header-title")).toBeTruthy();
+      expect(getByText("Recent summaries — batch 1")).toBeTruthy();
+      expect(getByText("What this screen is for.")).toBeTruthy();
+      expect(getByText("Header meta")).toBeTruthy();
+      expect(getByText("Header action")).toBeTruthy();
+      expect(getByText("Body")).toBeTruthy();
+    });
+
+    it("hides the page header when asked", () => {
+      const {queryByTestId} = renderWithTheme(
+        <AiObservabilityChrome
+          api={stubApi}
+          config={emptyConfig}
+          hideHeader
+          routeBase="/admin"
+          screenName="ai-datasets"
+          status={localOnStatus}
+        >
+          <Text>Body</Text>
+        </AiObservabilityChrome>
+      );
+      expect(queryByTestId("observability-page-header")).toBeNull();
+    });
+
     it("renders loading, error, local-on, and local-off chip states", () => {
       const loading = renderWithTheme(<AiObservabilityStatusChip isLoading />);
       expect(loading.getByText("Checking observability…")).toBeTruthy();
@@ -2812,14 +2922,10 @@ describe("AiObservabilityChrome", () => {
       expect(errored.getByText("Observability unavailable")).toBeTruthy();
 
       const on = renderWithTheme(<AiObservabilityStatusChip status={localOnStatus} />);
-      expect(
-        on.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(on.getByText("Local observability on")).toBeTruthy();
 
       const off = renderWithTheme(<AiObservabilityStatusChip status={localOffStatus} />);
-      expect(
-        off.getByText("Local off · prompts:remote · datasets:remote · experiments:remote")
-      ).toBeTruthy();
+      expect(off.getByText("Local observability off")).toBeTruthy();
     });
 
     it("fetches loading and error states through the injected api", () => {
@@ -2860,9 +2966,7 @@ describe("AiObservabilityChrome", () => {
         }),
       } as unknown as AdminApi;
       const unwrapped = renderWithTheme(<AiObservabilityStatusChip api={unwrappedApi} />);
-      expect(
-        unwrapped.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(unwrapped.getByText("Local observability on")).toBeTruthy();
 
       const missingStatusApi = {
         enhanceEndpoints: () => missingStatusApi,
@@ -2903,9 +3007,7 @@ describe("AiObservabilityChrome", () => {
         },
       } as unknown as AdminApi;
       const fetched = renderWithTheme(<AiObservabilityStatusChip api={api} />);
-      expect(
-        fetched.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(fetched.getByText("Local observability on")).toBeTruthy();
       assert.deepEqual(statusQuery?.(), {method: "GET", url: "/ai/observability/status"});
     });
 
@@ -3718,7 +3820,7 @@ describe("AiPromptsListScreen", () => {
 
       listState = {data: undefined, error: {data: {}}, isError: true, isLoading: false};
       const errored = renderWithTheme(<AiPromptsScreenWidget {...widgetProps} />);
-      expect(errored.getByText("Failed to load prompts")).toBeTruthy();
+      expect(errored.getByText("Could not load prompts.")).toBeTruthy();
     });
 
     it("filters by folder and search and retries load errors", async () => {
@@ -3726,7 +3828,8 @@ describe("AiPromptsListScreen", () => {
       const view = renderWithTheme(<AiPromptsScreenWidget {...widgetProps} />);
       fireEvent.changeText(view.getByTestId("ai-prompts-search"), "summ");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-prompts-folder-examples"));
+        // The folder picker renders above the table, so its segment is the first match.
+        fireEvent.press(view.getAllByText("examples")[0]!);
         await Promise.resolve();
       });
       expect(view.getByTestId("ai-prompts-table")).toBeTruthy();
@@ -3734,7 +3837,7 @@ describe("AiPromptsListScreen", () => {
       listState = {data: undefined, error: {data: {}}, isError: true, isLoading: false};
       const errored = renderWithTheme(<AiPromptsScreenWidget {...widgetProps} />);
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByText("Try again"));
         await Promise.resolve();
       });
       listState = {data: loaded, error: undefined, isError: false, isLoading: false};
@@ -3822,11 +3925,11 @@ describe("AiPromptsListView", () => {
         />
       );
       expect(getByTestId("ai-prompts-empty")).toBeTruthy();
-      expect(getByText("No prompts in this folder yet.")).toBeTruthy();
+      expect(getByText("No prompts yet")).toBeTruthy();
     });
 
-    it("renders a loaded table with folder counts and latest vs production columns", () => {
-      const {getByTestId, getByText} = renderWithTheme(
+    it("renders a loaded table with folder counts and newest vs production columns", () => {
+      const {getAllByText, getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription=""
           createFolder="examples"
@@ -3841,9 +3944,11 @@ describe("AiPromptsListView", () => {
         />
       );
       expect(getByTestId("ai-prompts-table")).toBeTruthy();
-      expect(getByText("All (1)")).toBeTruthy();
-      expect(getByText("examples (1)")).toBeTruthy();
-      expect(getByText("examples/summarize")).toBeTruthy();
+      expect(getByTestId("ai-prompts-folders")).toBeTruthy();
+      expect(getByText("All")).toBeTruthy();
+      // Folder segment plus the row's folder line.
+      assert.isAtLeast(getAllByText("examples").length, 2);
+      expect(getByText("summarize")).toBeTruthy();
       expect(getByText("v2")).toBeTruthy();
       expect(getByText("v1")).toBeTruthy();
     });
@@ -3871,7 +3976,7 @@ describe("AiPromptsListView", () => {
       const onSearchChange = mock(() => undefined);
       const onCreate = mock(() => undefined);
       const onRetry = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
+      const {getAllByText, getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription="Short summary"
           createError="Name required"
@@ -3881,7 +3986,7 @@ describe("AiPromptsListView", () => {
           createSystem="You are helpful"
           createTemplate="Hi {{name}}"
           folder=""
-          loadError="Failed to load prompts"
+          loadError="Could not load prompts."
           onCreate={onCreate}
           onCreateDescriptionChange={() => undefined}
           onCreateFolderChange={() => undefined}
@@ -3901,12 +4006,12 @@ describe("AiPromptsListView", () => {
       fireEvent.changeText(getByTestId("ai-prompts-search"), "note");
       assert.isAtLeast(onSearchChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByTestId("ai-prompts-folder-examples"));
+        fireEvent.press(getAllByText("examples")[0]!);
         await Promise.resolve();
       });
       assert.isAtLeast(onFolderChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByText("Retry"));
+        fireEvent.press(getByText("Try again"));
         await Promise.resolve();
       });
       assert.equal(onRetry.mock.calls.length, 1);
@@ -4150,7 +4255,7 @@ describe("AiReviewItemScreen", () => {
         />
       );
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByTestId("ai-review-item-error-retry"));
         await new Promise((resolve) => setTimeout(resolve, 100));
       });
       assert.isAtLeast(refetch.mock.calls.length, 1);
@@ -4301,6 +4406,8 @@ describe("AiReviewItemScreen", () => {
         traceName: "summarize",
       });
       const batchQueueArgs: unknown[] = [];
+      // One object across renders, like RTK Query's cached data; a new one each render loops the reset effect.
+      const batchDetail = {...detail, batchId: "b1"};
       const batchApi = {
         enhanceEndpoints: () => batchApi,
         injectEndpoints: () => ({
@@ -4321,7 +4428,7 @@ describe("AiReviewItemScreen", () => {
             };
           },
           useAiObservabilityReviewItemQuery: () => ({
-            data: {...detail, batchId: "b1"},
+            data: batchDetail,
             isError: false,
             isLoading: false,
             refetch: mock(() => {}),
@@ -4355,7 +4462,7 @@ describe("AiReviewItemScreen", () => {
         />
       );
       expect(batchQueueArgs.at(-1)).toEqual({batchId: "b1"});
-      expect(view.getByText("Item 1 of 2 pending")).toBeTruthy();
+      expect(view.getByText("Item 1 of 2")).toBeTruthy();
 
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
@@ -4398,18 +4505,16 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={1}
           scores={{}}
-          totalPending={2}
         />
       );
-      expect(getByText("Item 1 of 2 pending")).toBeTruthy();
+      expect(reviewItemTitle({isPending: true, position: 1, totalPending: 2})).toBe("Item 1 of 2");
+      expect(reviewItemTitle({isPending: false, position: 1, totalPending: 0})).toBe("Review item");
       expect(getByText("45 words")).toBeTruthy();
       expect(queryByText(longInput)).toBeNull();
       expect(getByTestId("ai-review-raw-json")).toBeTruthy();
@@ -4426,15 +4531,12 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={onAssign}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={onSkip}
           onSubmit={onSubmit}
-          position={1}
           scores={{correct: true}}
-          totalPending={1}
         />
       );
       await act(async () => {
@@ -4453,24 +4555,25 @@ describe("AiReviewItemView", () => {
       const onPrevious = mock(() => undefined);
       const onCommentChange = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
-        <AiReviewItemView
-          comment="needs work"
-          detail={{...detail, status: "done"}}
-          isPending={false}
-          onAssign={() => undefined}
-          onCommentChange={onCommentChange}
-          onNext={onNext}
-          onPrevious={onPrevious}
-          onScoreChange={() => undefined}
-          onSkip={() => undefined}
-          onSubmit={() => undefined}
-          position={1}
-          scores={{correct: true}}
-          submitError="Could not submit this review."
-          totalPending={0}
-        />
+        <>
+          <AiReviewItemHeaderMeta detail={{...detail, status: "done"}} isPending={false} />
+          <AiReviewItemNav onNext={onNext} onPrevious={onPrevious} />
+          <AiReviewItemView
+            comment="needs work"
+            detail={{...detail, status: "done"}}
+            onAssign={() => undefined}
+            onCommentChange={onCommentChange}
+            onScoreChange={() => undefined}
+            onSkip={() => undefined}
+            onSubmit={() => undefined}
+            scores={{correct: true}}
+            submitError="Could not submit this review."
+          />
+        </>
       );
-      expect(getByText(/not in pending queue/)).toBeTruthy();
+      expect(getByText("Not in the pending queue")).toBeTruthy();
+      expect(getByText("From a trace")).toBeTruthy();
+      expect(getByTestId("ai-review-item-status")).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByText("Previous"));
         fireEvent.press(getByText("Next"));
@@ -4486,19 +4589,19 @@ describe("AiReviewItemView", () => {
     it("scores boolean dimensions when navigation handlers are absent", async () => {
       const onScoreChange = mock(() => undefined);
       const {getByTestId, getByText, UNSAFE_root} = renderWithTheme(
-        <AiReviewItemView
-          comment=""
-          detail={detail}
-          isPending
-          onAssign={() => undefined}
-          onCommentChange={() => undefined}
-          onScoreChange={onScoreChange}
-          onSkip={() => undefined}
-          onSubmit={() => undefined}
-          position={1}
-          scores={{}}
-          totalPending={1}
-        />
+        <>
+          <AiReviewItemNav />
+          <AiReviewItemView
+            comment=""
+            detail={detail}
+            onAssign={() => undefined}
+            onCommentChange={() => undefined}
+            onScoreChange={onScoreChange}
+            onSkip={() => undefined}
+            onSubmit={() => undefined}
+            scores={{}}
+          />
+        </>
       );
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-question-correct-yes"));
@@ -4524,15 +4627,12 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={1}
           scores={{}}
-          totalPending={1}
         />
       );
       await act(async () => {
@@ -4557,19 +4657,16 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={multiDetail}
-          isPending
           isSaving
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={onScoreChange}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={2}
           scores={{correct: true, helpfulness: 0.7}}
-          totalPending={3}
         />
       );
-      expect(getByText("Item 2 of 3 pending")).toBeTruthy();
+      expect(getByText("Helpfulness")).toBeTruthy();
       expect(queryByText("Mark correct only when grounded.")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-score-tone-safe"));
@@ -4621,6 +4718,12 @@ describe("AiReviewQueueScreen", () => {
     const api = {
       enhanceEndpoints: () => api,
       injectEndpoints: () => ({
+        useAiObservabilityEvaluatorsQuery: () => ({
+          data: [{dimensions: [], id: "eval-1", name: "summary-questions", type: "human"}],
+          isError: false,
+          isLoading: false,
+          refetch: mock(() => {}),
+        }),
         useAiObservabilityReviewQuery: () => listState,
         useAiObservabilityStatusQuery: () => ({
           data: statusData,
@@ -4646,11 +4749,22 @@ describe("AiReviewQueueScreen", () => {
         />
       );
       expect(view.getByTestId("ai-review-table")).toBeTruthy();
+      expect(view.getByText("summary-questions")).toBeTruthy();
+      expect(
+        view.getByText(
+          "Answer yes or no questions about AI outputs, oldest first. Items arrive from Traces and from review batches."
+        )
+      ).toBeTruthy();
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-review-start-oldest"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.include(String(routerPush.mock.calls[0]?.[0]), "ai-review-item");
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-open-batches"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      assert.include(String(routerPush.mock.calls.at(-1)?.[0]), "ai-review-batches");
     });
   });
 });
@@ -4673,45 +4787,74 @@ describe("AiReviewQueueView", () => {
   };
 
   describe("AiReviewQueueView", () => {
-    it("names both review intake paths in the empty state", () => {
+    it("names both review intake paths in the empty state and links to Traces", async () => {
+      const onOpenTraces = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
         <AiReviewQueueView
           counts={counts}
           items={[]}
           onOpenItem={() => undefined}
+          onOpenTraces={onOpenTraces}
           onRetry={() => undefined}
-          onStart={() => undefined}
           onStatusChange={() => undefined}
           status="pending"
         />
       );
       expect(getByTestId("ai-review-empty")).toBeTruthy();
-      expect(getByText(/Traces bulk action/)).toBeTruthy();
-      expect(getByText(/Assign to me for manual assignment/)).toBeTruthy();
+      expect(getByText(/send them to human review, or start a review batch/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(getByTestId("ai-review-empty-action"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(onOpenTraces).toHaveBeenCalled();
     });
 
     it("renders oldest-first row fields and starts reviewing", async () => {
       const onStart = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
-        <AiReviewQueueView
-          counts={{...counts, pending: 1}}
-          items={[item]}
-          onOpenItem={() => undefined}
-          onRetry={() => undefined}
-          onStart={onStart}
-          onStatusChange={() => undefined}
-          status="pending"
-        />
+      const {getByTestId, getByText, queryByText} = renderWithTheme(
+        <>
+          <AiReviewQueueActions canStart onStart={onStart} />
+          <AiReviewQueueView
+            counts={{...counts, pending: 1}}
+            items={[item, {...item, batchId: "b1", id: "review-item-2", outputPreview: "Short"}]}
+            onOpenItem={() => undefined}
+            onRetry={() => undefined}
+            onStatusChange={() => undefined}
+            status="pending"
+          />
+        </>
       );
       expect(getByTestId("ai-review-table")).toBeTruthy();
-      expect(getByText("generate summary")).toBeTruthy();
-      expect(getByText("summarize")).toBeTruthy();
-      expect(getByText("Unassigned")).toBeTruthy();
+      expect(getByTestId("ai-review-open-review-item-1")).toBeTruthy();
+      expect(getByText("From Traces")).toBeTruthy();
+      expect(getByText("Short")).toBeTruthy();
+      expect(getByText("Review oldest pending")).toBeTruthy();
+      expect(queryByText("Open")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-start-oldest"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onStart).toHaveBeenCalled();
+    });
+
+    it("labels where each untitled review item came from", () => {
+      const {getByText} = renderWithTheme(
+        <AiReviewQueueView
+          counts={{...counts, pending: 3}}
+          items={[
+            {...item, batchId: "b1", id: "review-item-batch"},
+            {...item, id: "review-item-eval", reason: "eval"},
+            {...item, id: "review-item-other", reason: "other"},
+          ]}
+          onOpenItem={() => undefined}
+          onRetry={() => undefined}
+          onStatusChange={() => undefined}
+          status="pending"
+        />
+      );
+      expect(getByText("From a review batch")).toBeTruthy();
+      expect(getByText("From an experiment")).toBeTruthy();
+      expect(getByText("From Traces")).toBeTruthy();
     });
 
     it("renders loading, error retry, status tabs, and open controls", async () => {
@@ -4725,7 +4868,6 @@ describe("AiReviewQueueView", () => {
           items={[]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
@@ -4739,24 +4881,23 @@ describe("AiReviewQueueView", () => {
           items={[]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
       );
+      expect(errored.getByText("Could not load the review queue.")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
-        await Promise.resolve();
+        fireEvent.press(errored.getByTestId("ai-review-error-retry"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onRetry).toHaveBeenCalled();
 
-      const {getByText} = renderWithTheme(
+      const {getByTestId, getByText} = renderWithTheme(
         <AiReviewQueueView
           counts={{...counts, done: 1, pending: 1}}
           items={[item]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
@@ -4767,10 +4908,10 @@ describe("AiReviewQueueView", () => {
       });
       assert.isAtLeast(onStatusChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByText("Open"));
+        fireEvent.press(getByTestId("ai-review-open-review-item-1"));
         await Promise.resolve();
       });
-      expect(onOpenItem).toHaveBeenCalled();
+      expect(onOpenItem).toHaveBeenCalledWith("review-item-1");
     });
   });
 });
@@ -5378,10 +5519,11 @@ describe("AiTracesListScreen", () => {
       };
     });
 
-    it("surfaces list load error in the bulk bar", () => {
+    it("surfaces a list load error with Try again", () => {
       listState = {data: undefined, isError: true, isLoading: false};
       const view = renderWithTheme(<AiTracesScreenWidget {...widgetProps} />);
-      expect(view.getByText("Failed to load traces.")).toBeTruthy();
+      expect(view.getByText("Could not load traces.")).toBeTruthy();
+      expect(view.getByTestId("ai-traces-load-error-retry")).toBeTruthy();
       listState = {
         data: {data: loaded, limit: 20, more: false, page: 1, total: 1},
         isError: false,
@@ -5538,25 +5680,30 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByTestId("ai-traces-empty")).toBeTruthy();
-      expect(getByText("No traces match these filters.")).toBeTruthy();
+      expect(getByText("No traces yet")).toBeTruthy();
     });
 
-    it("runs the multi-stage trace smoke action", async () => {
-      const onRunTestMultiStage = mock(() => undefined);
-      const {getByTestId} = renderWithTheme(
+    it("says no traces match when filters are applied", () => {
+      const {getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filterValues={{}}
+          filterValues={{status: ["error"]}}
           page={1}
           selectedIds={[]}
-          showMultiStageTest
           total={0}
           traces={[]}
           {...idleHandlers}
-          onRunTestMultiStage={onRunTestMultiStage}
         />
+      );
+      expect(getByText("No traces match these filters")).toBeTruthy();
+    });
+
+    it("runs the test trace from the header action", async () => {
+      const onRunTestMultiStage = mock(() => undefined);
+      const {getByTestId} = renderWithTheme(
+        <AiTracesHeaderActions onRunTestMultiStage={onRunTestMultiStage} showMultiStageTest />
       );
 
       await act(async () => {
@@ -5567,9 +5714,19 @@ describe("AiTracesListView", () => {
       assert.equal(onRunTestMultiStage.mock.calls.length, 1);
     });
 
-    it("disables the multi-stage action and explains why when it is blocked", () => {
+    it("disables the test trace action and explains why when it is blocked", () => {
       const onRunTestMultiStage = mock(() => undefined);
-      const {getByTestId} = renderWithTheme(
+      const header = renderWithTheme(
+        <AiTracesHeaderActions
+          multiStageBlockedMessage="Save a Gemini API key on Profile."
+          onRunTestMultiStage={onRunTestMultiStage}
+          showMultiStageTest
+        />
+      );
+      expect(header.getByTestId("ai-traces-run-multi-stage")).toBeDisabled();
+      assert.equal(onRunTestMultiStage.mock.calls.length, 0);
+
+      const body = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
@@ -5582,36 +5739,22 @@ describe("AiTracesListView", () => {
           total={0}
           traces={[]}
           {...idleHandlers}
-          onRunTestMultiStage={onRunTestMultiStage}
         />
       );
-
-      expect(getByTestId("ai-traces-multi-stage-blocked")).toHaveTextContent(
+      expect(body.getByTestId("ai-traces-multi-stage-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
       );
-      expect(getByTestId("ai-traces-run-multi-stage")).toBeDisabled();
-      assert.equal(onRunTestMultiStage.mock.calls.length, 0);
     });
 
-    it("hides the multi-stage smoke action without local trace storage", () => {
+    it("hides the test trace action without local trace storage", () => {
       const {queryByTestId} = renderWithTheme(
-        <AiTracesListView
-          {...datasetDefaults}
-          evaluatorId=""
-          evaluators={[]}
-          filterValues={{}}
-          page={1}
-          selectedIds={[]}
-          total={0}
-          traces={[]}
-          {...idleHandlers}
-        />
+        <AiTracesHeaderActions onRunTestMultiStage={() => undefined} />
       );
 
       assert.notExists(queryByTestId("ai-traces-run-multi-stage"));
     });
 
-    it("renders an error row with the error line and prompt count", () => {
+    it("renders an error row with the error line and step count", () => {
       const {getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
@@ -5626,12 +5769,12 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByText("model timeout")).toBeTruthy();
-      expect(getByText("2")).toBeTruthy();
+      expect(getByText("1 step")).toBeTruthy();
       expect(getByText("failed-call")).toBeTruthy();
     });
 
-    it("uses distinct primary and accent colors for prompt-run status dots", () => {
-      const {getByLabelText, getByTestId} = renderWithTheme(
+    it("uses the shared OK and Error status badges", () => {
+      const {getByTestId, getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
@@ -5644,14 +5787,10 @@ describe("AiTracesListView", () => {
           {...idleHandlers}
         />
       );
-      const primaryDotColor = getByTestId("ai-traces-status-ok").props.style.backgroundColor;
-      const accentDotColor = getByTestId("ai-traces-status-error").props.style.backgroundColor;
-
-      assert.isString(primaryDotColor);
-      assert.isString(accentDotColor);
-      assert.notEqual(primaryDotColor, accentDotColor);
-      expect(getByLabelText("Trace status: ok")).toBeTruthy();
-      expect(getByLabelText("Trace status: error")).toBeTruthy();
+      expect(getByTestId("ai-traces-status-ok")).toBeTruthy();
+      expect(getByTestId("ai-traces-status-error")).toBeTruthy();
+      expect(getByText("OK")).toBeTruthy();
+      expect(getByText("Error")).toBeTruthy();
     });
 
     it("renders a sensitive badge on sensitive traces", () => {
@@ -5669,7 +5808,7 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByTestId("ai-traces-sensitive-badge")).toBeTruthy();
-      expect(getByText("3")).toBeTruthy();
+      expect(getByText("3 steps")).toBeTruthy();
       expect(getByText("2")).toBeTruthy();
     });
 
@@ -5714,7 +5853,6 @@ describe("AiTracesListView", () => {
           evaluatorId="eval-1"
           evaluators={[{id: "eval-1", name: "correctness", type: "human"}]}
           filterValues={{}}
-          more
           onAddToDataset={onAddToDataset}
           onClearSelection={onClearSelection}
           onDatasetChange={() => undefined}
@@ -5764,7 +5902,27 @@ describe("AiTracesListView", () => {
       expect(getByTestId("ai-traces-review-modal")).toHaveTextContent(
         /human evaluator defines the score fields/
       );
-      expect(getByText("40 traces · more pages")).toBeTruthy();
+      expect(getByText("40 traces")).toBeTruthy();
+    });
+
+    it("links to datasets instead of a fake option when there are none", () => {
+      const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+        <AiTracesListView
+          {...datasetDefaults}
+          datasetModalOpen
+          evaluatorId=""
+          evaluators={[]}
+          filterValues={{}}
+          page={1}
+          selectedIds={[okTrace.id]}
+          total={1}
+          traces={[okTrace]}
+          {...idleHandlers}
+        />
+      );
+      expect(getByTestId("ai-traces-dataset-none")).toBeTruthy();
+      expect(getByText("Create a dataset")).toBeTruthy();
+      assert.notExists(queryByTestId("ai-traces-dataset-picker"));
     });
 
     it("wires evaluator change, page change, and dataset modal dismiss", async () => {
@@ -5782,7 +5940,6 @@ describe("AiTracesListView", () => {
             {id: "eval-2", name: "tone", type: "human"},
           ]}
           filterValues={{}}
-          more
           onAddToDataset={() => undefined}
           onClearSelection={() => undefined}
           onDatasetChange={() => undefined}
@@ -5844,7 +6001,6 @@ describe("AiTracesListView", () => {
           onOpenAddToDataset={() => undefined}
           onOpenTrace={onOpenTrace}
           onPageChange={() => undefined}
-          onRunTestMultiStage={() => undefined}
           onSortChange={onSortChange}
           onToggleSelect={() => undefined}
           page={1}
@@ -5855,7 +6011,7 @@ describe("AiTracesListView", () => {
       );
       const table = getByTestId("ai-traces-table");
       await act(async () => {
-        fireEvent(table, "setSortColumn", {column: 9, direction: "desc"});
+        fireEvent(table, "setSortColumn", {column: 6, direction: "desc"});
         fireEvent(table, "filterValuesChange", {status: ["error"], userId: "user-1"});
         await Promise.resolve();
       });
@@ -5879,24 +6035,27 @@ describe("ReviewScoreField", () => {
     routerPush.mockClear();
   });
   describe("ReviewScoreField", () => {
-    it("renders boolean dimensions as Pass and Fail controls", async () => {
+    it("renders boolean dimensions as one Yes/No control", async () => {
       const onChange = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
+      const {getByTestId, getByText, queryByText} = renderWithTheme(
         <ReviewScoreField
-          dimension={{dataType: "boolean", key: "correct", required: true}}
+          dimension={{dataType: "boolean", key: "is_correct", required: true}}
           onChange={onChange}
+          value={false}
         />
       );
-      expect(getByTestId("ai-review-score-boolean-correct")).toBeTruthy();
-      expect(getByText("Pass")).toBeTruthy();
-      expect(getByText("Fail")).toBeTruthy();
+      expect(getByTestId("ai-review-score-boolean-is_correct")).toBeTruthy();
+      expect(getByTestId("ai-review-score-is_correct-answer")).toBeTruthy();
+      expect(getByText("Is correct")).toBeTruthy();
+      expect(queryByText("Pass")).toBeNull();
+      expect(queryByText("Fail")).toBeNull();
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(getByTestId("ai-review-score-is_correct-yes"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onChange).toHaveBeenCalledWith(true);
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-fail"));
+        fireEvent.press(getByTestId("ai-review-score-is_correct-no"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onChange).toHaveBeenCalledWith(false);
@@ -5912,7 +6071,7 @@ describe("ReviewScoreField", () => {
         />
       );
       expect(getByTestId("ai-review-score-numeric-helpfulness")).toBeTruthy();
-      expect(getByText("helpfulness")).toBeTruthy();
+      expect(getByText("Helpfulness")).toBeTruthy();
       expect(getByText("0")).toBeTruthy();
       expect(getByText("1")).toBeTruthy();
       fireEvent(UNSAFE_getByType(SliderComponent), "valueChange", 0.8);
@@ -6057,6 +6216,6 @@ describe("AiExperimentResultsView", () => {
     expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
       /v2 fails 1 gate: quality: correct ≥ 0\.8 \(got 0\.40\)/
     );
-    expect(getByTestId("ai-experiment-promote")).toBeDisabled();
+    expect(getByTestId("ai-experiment-gates-v2-verdict")).toHaveTextContent("Fails 1 of 1 gate");
   });
 });

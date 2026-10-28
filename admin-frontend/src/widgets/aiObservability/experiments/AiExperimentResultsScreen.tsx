@@ -1,11 +1,49 @@
-import {Box, Spinner, Text} from "@terreno/ui";
-import {useLocalSearchParams} from "expo-router";
+import {Box, Button, Spinner, Text} from "@terreno/ui";
+import {router, useLocalSearchParams} from "expo-router";
+import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
+import {ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {AiExperimentResultsView} from "./AiExperimentResultsView";
-import {parsePromoteBlockedTitle, unwrapExperimentRecord} from "./experimentTypes";
+import {
+  type ExperimentRecord,
+  experimentKind,
+  formatExperimentCost,
+  formatPromoteBlockedReason,
+  parsePromoteBlockedTitle,
+  summarizeGatesByVersion,
+  unwrapExperimentRecord,
+} from "./experimentTypes";
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
+
+const formatRunDate = (iso: string): string => {
+  const parsed = DateTime.fromISO(iso);
+  if (!parsed.isValid) {
+    return iso;
+  }
+  return parsed.toLocal().toLocaleString(DateTime.DATETIME_MED);
+};
+
+/** Status badge, prompt, dataset, run date, and cost under the experiment name. */
+const ResultsMeta: React.FC<{experiment: ExperimentRecord}> = ({experiment}) => {
+  const cost = experiment.results?.totalCostUsd ?? experiment.estimate?.costUsd;
+  const details = [
+    `Prompt ${experiment.promptName}`,
+    `Dataset ${experiment.datasetName ?? experiment.datasetId}`,
+    formatRunDate(experiment.created),
+    cost !== undefined ? formatExperimentCost(cost) : undefined,
+  ].filter((entry): entry is string => Boolean(entry));
+  return (
+    <>
+      <ObservabilityStatusBadge status={experiment.status} testID="ai-experiment-results-status" />
+      <Text color="secondaryLight" size="sm" testID="ai-experiment-results-meta">
+        {details.join(" · ")}
+      </Text>
+    </>
+  );
+};
 
 export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
@@ -32,7 +70,11 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
     if (initializedExperimentId.current === experiment.id) {
       return;
     }
-    const latest = experiment.versions[experiment.versions.length - 1] ?? 0;
+    const passing = summarizeGatesByVersion(experiment).filter((summary) => summary.passed);
+    const latest =
+      passing[passing.length - 1]?.version ??
+      experiment.versions[experiment.versions.length - 1] ??
+      0;
     initializedExperimentId.current = experiment.id;
     setPromoteVersion(latest);
   }, [experiment]);
@@ -61,17 +103,25 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
         setPromoteConfirmOpen(false);
         refetch();
       } catch (error) {
-        setPromoteError(parsePromoteBlockedTitle(error) ?? "Promote failed.");
+        setPromoteError(parsePromoteBlockedTitle(error) ?? "Could not promote this version.");
       }
     },
     [id, promote, refetch]
   );
 
+  const handleRunAgain = useCallback((): void => {
+    if (!experiment) {
+      return;
+    }
+    const query = `datasetId=${encodeURIComponent(experiment.datasetId)}&pipeline=${experimentKind(experiment)}`;
+    router.push(`${prefix}/ai-experiment-new?${query}`);
+  }, [experiment, prefix]);
+
   if (!id) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-experiment-results">
         <Box padding={4}>
-          <Text>Missing experiment id.</Text>
+          <Text color="secondaryLight">Missing experiment id.</Text>
         </Box>
       </AiObservabilityChrome>
     );
@@ -80,7 +130,7 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
   if (isLoading) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-experiment-results">
-        <Box alignItems="center" padding={4} testID="ai-experiment-results-loading">
+        <Box alignItems="center" padding={5} testID="ai-experiment-results-loading">
           <Spinner />
         </Box>
       </AiObservabilityChrome>
@@ -90,23 +140,56 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
   if (isError || !experiment) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-experiment-results">
-        <Box padding={4}>
-          <Text color="error">Failed to load experiment results.</Text>
-        </Box>
+        <ObservabilityErrorState
+          onRetry={refetch}
+          testID="ai-experiment-results-error"
+          text="Could not load experiment results."
+        />
       </AiObservabilityChrome>
     );
   }
 
+  const promoteSummary = summarizeGatesByVersion(experiment).find(
+    (summary) => summary.version === promoteVersion
+  );
+  const isPromoteBlocked = !promoteSummary || Boolean(formatPromoteBlockedReason(promoteSummary));
+  const isRunning = experiment.status === "running" || experiment.status === "pending";
+
   return (
-    <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-experiment-results">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        <>
+          {isRunning ? null : (
+            <Button
+              iconName="rotate"
+              onClick={handleRunAgain}
+              testID="ai-experiment-run-again"
+              text="Run again"
+              variant="outline"
+            />
+          )}
+          <Button
+            disabled={isPromoteBlocked || isRunning}
+            iconName="rocket"
+            onClick={() => {
+              setPromoteConfirmOpen(true);
+            }}
+            testID="ai-experiment-promote"
+            text={`Promote v${promoteVersion} to production`}
+          />
+        </>
+      }
+      backHref={backHref}
+      meta={<ResultsMeta experiment={experiment} />}
+      screenName="ai-experiment-results"
+      title={experiment.name}
+    >
       <AiExperimentResultsView
         experiment={experiment}
         isPromoting={promoteState.isLoading}
         onDismissPromoteConfirm={() => {
           setPromoteConfirmOpen(false);
-        }}
-        onOpenPromoteConfirm={() => {
-          setPromoteConfirmOpen(true);
         }}
         onPromote={handlePromote}
         onSelectVersion={(version) => {

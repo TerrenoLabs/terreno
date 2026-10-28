@@ -104,15 +104,14 @@ describe("AiExperimentsListView table", () => {
       />
     );
     const table = tableProps(view, "ai-experiments-table");
-    expect(table.columns.map((column) => column.sortable)).toEqual([
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      false,
+    expect(table.columns.map((column) => column.title)).toEqual([
+      "Experiment",
+      "Dataset",
+      "Status",
+      "Result",
+      "Cost",
     ]);
+    expect(table.columns.map((column) => column.sortable)).toEqual([true, true, true, true, true]);
     expect(table.columns[0]?.width).toBeGreaterThanOrEqual(300);
     expect(table.columns[1]?.width).toBeGreaterThanOrEqual(240);
     expect(table.columns[1]?.filter?.options).toEqual([
@@ -146,7 +145,7 @@ describe("AiExperimentsListView table", () => {
     expect(view.getByText("ds-orphan")).toBeTruthy();
   });
 
-  it("summarizes gates per version in one column instead of badges", () => {
+  it("shows one gate verdict badge per experiment", () => {
     const gate = {
       aggregate: "mean" as const,
       dimension: "helpfulness",
@@ -176,8 +175,74 @@ describe("AiExperimentsListView table", () => {
         onRetry={() => undefined}
       />
     );
-    expect(view.getByText("v1 fails 1 gate · v2 passes")).toBeTruthy();
+    expect(view.getByTestId("ai-experiment-result-e5")).toHaveTextContent("v2 ready to promote");
     expect(view.queryByText(/gates failing/)).toBeNull();
+  });
+
+  it("says how many gates fail when no version passes", () => {
+    const gate = {
+      aggregate: "mean" as const,
+      dimension: "helpfulness",
+      evaluatorName: "helpfulness",
+      op: "gte" as const,
+      value: 0.8,
+    };
+    const view = renderWithTheme(
+      <AiExperimentsListView
+        experiments={[
+          experiment({
+            id: "e6",
+            results: {
+              gates: [
+                {...gate, actual: 0.6, passed: false, version: 1},
+                {...gate, actual: 0.7, passed: false, version: 2},
+              ],
+              lowConfidenceItemIds: [],
+              outlierItemIds: [],
+              progress: {completed: 1, total: 1},
+            } as ExperimentRecord["results"],
+          }),
+        ]}
+        isLoading={false}
+        onCreate={() => undefined}
+        onOpenResults={() => undefined}
+        onRetry={() => undefined}
+      />
+    );
+    expect(view.getByTestId("ai-experiment-result-e6")).toHaveTextContent("Fails 1 of 1 gate");
+  });
+
+  it("filters by kind with the segmented control", () => {
+    const view = renderWithTheme(
+      <AiExperimentsListView
+        experiments={[
+          experiment({id: "j1", kind: "judge", name: "Judge run"}),
+          experiment({id: "p1", kind: "prompt", name: "Prompt run"}),
+        ]}
+        isLoading={false}
+        onCreate={() => undefined}
+        onOpenResults={() => undefined}
+        onRetry={() => undefined}
+      />
+    );
+    expect(rowOrder(view, "ai-experiment-open-").sort()).toEqual(["j1", "p1"]);
+    fireEvent.press(view.getAllByText("Judge calibration")[0] as never);
+    expect(rowOrder(view, "ai-experiment-open-")).toEqual(["j1"]);
+  });
+
+  it("formats sub-cent costs", () => {
+    const view = renderWithTheme(
+      <AiExperimentsListView
+        experiments={[
+          experiment({estimate: {costUsd: 0.004} as ExperimentRecord["estimate"], id: "c1"}),
+        ]}
+        isLoading={false}
+        onCreate={() => undefined}
+        onOpenResults={() => undefined}
+        onRetry={() => undefined}
+      />
+    );
+    expect(view.getByText("<$0.01")).toBeTruthy();
   });
 });
 
@@ -293,7 +358,6 @@ describe("AiDatasetsListView table", () => {
       true,
       true,
       false,
-      false,
     ]);
     expect(table.columns[3]?.filter?.options).toEqual([{label: "summarize", value: "summarize"}]);
 
@@ -372,12 +436,20 @@ describe("AiReviewQueueView table", () => {
         ]}
         onOpenItem={onOpenItem}
         onRetry={() => undefined}
-        onStart={() => undefined}
         onStatusChange={() => undefined}
+        questionSetNames={{qs: "summary-questions"}}
         status="pending"
       />
     );
     const table = tableProps(view, "ai-review-table");
+    expect(table.columns.map((column) => column.title)).toEqual([
+      "Output",
+      "Question set",
+      "Prompt",
+      "Assignee",
+      "Waiting",
+      "Status",
+    ]);
     expect(table.columns[3]?.filter?.options).toEqual([
       {label: "Unassigned", value: "Unassigned"},
       {label: "user-1", value: "user-1"},
@@ -431,7 +503,6 @@ describe("AiReviewBatchesView table", () => {
           batch({id: "b3", name: "No judges yet"}),
         ]}
         name=""
-        onCreate={() => undefined}
         onNameChange={() => undefined}
         onOpenBatch={onOpenBatch}
         onPromptChange={() => undefined}
@@ -443,11 +514,14 @@ describe("AiReviewBatchesView table", () => {
         questionSetOptions={[]}
       />
     );
-    expect(view.getByText("example-summarize")).toBeTruthy();
+    expect(view.getByText("summary-review-questions · example-summarize")).toBeTruthy();
     expect(view.getByText("No judge run yet")).toBeTruthy();
     expect(view.getByTestId("ai-review-batch-answered-b1")).toBeTruthy();
+    expect(
+      tableProps(view, "ai-review-batches-table").columns.map((column) => column.title)
+    ).toEqual(["Batch", "Answered by people", "Best judge vs people", "Created"]);
 
-    sortBy(view, "ai-review-batches-table", 4, "desc");
+    sortBy(view, "ai-review-batches-table", 2, "desc");
     expect(rowOrder(view, "ai-review-batches-open-")).toEqual(["b2", "b1", "b3"]);
 
     filterBy(view, "ai-review-batches-table", {questionSet: ["summary-review-questions"]});

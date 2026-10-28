@@ -1,3 +1,4 @@
+import {Button} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -45,10 +46,24 @@ export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
     [prefix]
   );
 
-  const loadError = isError ? "Failed to load experiments." : undefined;
+  const loadError = isError ? "Could not load experiments." : undefined;
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-experiments">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        canCreate ? (
+          <Button
+            iconName="plus"
+            onClick={handleCreate}
+            testID="ai-experiments-create"
+            text="New experiment"
+          />
+        ) : undefined
+      }
+      description="Run a dataset through a judge or through prompt versions, and promote only what passes every gate."
+      screenName="ai-experiments"
+    >
       <AiExperimentsListView
         canCreate={canCreate}
         datasetNames={datasetNames}

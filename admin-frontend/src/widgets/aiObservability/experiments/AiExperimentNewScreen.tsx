@@ -124,7 +124,8 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
       return;
     }
     setJudgeEvaluatorId(judgeOptions[0]?.judge.id ?? "");
-    setJudgeVersions([]);
+    // Keep the same array when already empty so fresh query data cannot loop renders.
+    setJudgeVersions((current) => (current.length === 0 ? current : []));
   }, [judgeEvaluatorId, judgeOptions]);
 
   const handlePipelineChange = useCallback((next?: ExperimentPipeline): void => {

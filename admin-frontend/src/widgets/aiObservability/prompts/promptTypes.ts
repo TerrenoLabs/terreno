@@ -160,27 +160,6 @@ export const formatProduction = (production: number | "—"): string => {
   return `v${production}`;
 };
 
-export const formatUsageCalls = (usage?: PromptUsage7d): string => {
-  if (!usage) {
-    return "—";
-  }
-  return String(usage.calls);
-};
-
-export const formatUsageCost = (usage?: PromptUsage7d): string => {
-  if (!usage || usage.costUsd === undefined) {
-    return "—";
-  }
-  return `$${usage.costUsd.toFixed(4)}`;
-};
-
-export const formatLastUsed = (usage?: PromptUsage7d): string => {
-  if (!usage?.lastUsed) {
-    return "—";
-  }
-  return usage.lastUsed;
-};
-
 export const filterPrompts = ({
   folder,
   prompts,

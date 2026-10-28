@@ -25,6 +25,7 @@ export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
 
   return (
     <TwoFactorChallengeScreen
+      accountLabel="ada@example.com"
       autoFocus={false}
       error={error}
       loading={loading}
@@ -36,14 +37,24 @@ export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
 };
 
 export const TwoFactorChallengeScreenBackupCode: React.FC = (): ReactElement => {
-  return <TwoFactorChallengeScreen autoFocus={false} initialKind="backup" onSubmit={noop} />;
+  return (
+    <TwoFactorChallengeScreen
+      accountLabel="ada@example.com"
+      autoFocus={false}
+      initialKind="backup"
+      onCancel={() => {}}
+      onSubmit={noop}
+      trustDeviceDays={30}
+    />
+  );
 };
 
 export const TwoFactorChallengeScreenError: React.FC = (): ReactElement => {
   return (
     <TwoFactorChallengeScreen
+      accountLabel="ada@example.com"
       autoFocus={false}
-      error="That code didn't work. Check your authenticator app and try again."
+      error="rejected"
       onCancel={() => {}}
       onSubmit={noop}
       trustDeviceDays={30}

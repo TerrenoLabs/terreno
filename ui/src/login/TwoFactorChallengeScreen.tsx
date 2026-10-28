@@ -1,18 +1,23 @@
 import type {FC} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {View} from "react-native";
+import {Pressable, View} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
 import {Heading} from "../Heading";
+import {Icon} from "../Icon";
 import {LabeledCheckBox} from "../LabeledCheckBox";
 import {OtpField} from "../OtpField";
 import {Page} from "../Page";
 import {Text} from "../Text";
 import {TextField} from "../TextField";
+import {useTheme} from "../Theme";
+import {maskEmail} from "./loginMethods";
 import type {TwoFactorChallengeScreenProps, TwoFactorCodeKind} from "./loginTypes";
 
 const DEFAULT_CODE_LENGTH = 6;
+const TOTP_ERROR_TEXT =
+  "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now.";
 
 /**
  * The second step of a two-factor sign-in: a one-time code from an authenticator app, or a backup
@@ -42,8 +47,9 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
   error,
   trustDeviceDays,
   onCancel,
-  cancelText = "Use another method",
-  title = "Two-factor authentication",
+  cancelText = "Sign in a different way",
+  title,
+  accountLabel,
   logo,
   codeLength = DEFAULT_CODE_LENGTH,
   initialKind = "totp",
@@ -53,7 +59,8 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
   const [kind, setKind] = useState<TwoFactorCodeKind>(initialKind);
   const [totpCode, setTotpCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
-  const [trustDevice, setTrustDevice] = useState(false);
+  // Trust starts checked for an authenticator code. Backup codes keep the same choice.
+  const [trustDevice, setTrustDevice] = useState(initialKind === "totp");
   // Remounting the code cells after an error clears them and puts focus back on the first cell.
   const [otpResetKey, setOtpResetKey] = useState(0);
   // Counts finished submissions so the effect below can react after the parent's error lands.
@@ -143,115 +150,157 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
     setBackupCode("");
   }, []);
 
-  const trustDeviceLabel = `Don't ask again on this device for ${trustDeviceDays} days`;
+  const {theme} = useTheme();
+  const trustDeviceLabel = "Trust this device";
+  const resolvedTitle = title ?? (isTotp ? "Enter your code" : "Use a backup code");
+  const namedAccount = accountLabel?.includes("@") ? maskEmail(accountLabel) : accountLabel;
+  const totpDescription = namedAccount
+    ? `Open your authenticator app and enter the ${codeLength}-digit code for ${namedAccount}.`
+    : `Open your authenticator app and enter the ${codeLength}-digit code.`;
+  const displayedError = error ? (isTotp ? TOTP_ERROR_TEXT : error) : undefined;
 
   return (
     <Page navigation={undefined}>
-      <Box
-        alignItems="center"
-        alignSelf="center"
-        flex="grow"
-        justifyContent="center"
-        maxWidth={400}
-        padding={4}
-        testID={testID}
-        width="100%"
-      >
-        {Boolean(logo) && <Box marginBottom={6}>{logo}</Box>}
-
-        <Box marginBottom={4}>
-          <Heading align="center" testID={`${testID}-title`}>
-            {title}
-          </Heading>
-        </Box>
-
-        <Box gap={4} width="100%">
-          <Text align="center" testID={`${testID}-description`}>
-            {isTotp
-              ? `Enter the ${codeLength}-digit code from your authenticator app.`
-              : "Enter one of the backup codes you saved when you turned on two-factor authentication."}
-          </Text>
+      <Box alignSelf="center" flex="grow" maxWidth={400} padding={4} testID={testID} width="100%">
+        <Box flex="grow" gap={5} width="100%">
+          {Boolean(onCancel) && (
+            <Pressable
+              accessibilityRole="link"
+              disabled={loading}
+              onPress={onCancel}
+              testID={`${testID}-back`}
+            >
+              <Box alignItems="center" direction="row" gap={1}>
+                <Icon color="link" iconName="chevron-left" size="md" />
+                <Text bold color="link">
+                  Back
+                </Text>
+              </Box>
+            </Pressable>
+          )}
+          {Boolean(logo) && <Box>{logo}</Box>}
+          {Boolean(theme) && (
+            <View
+              style={{
+                alignItems: "center",
+                backgroundColor: theme!.surface.secondaryExtraLight,
+                borderRadius: theme!.radius.full,
+                height: 56,
+                justifyContent: "center",
+                width: 56,
+              }}
+            >
+              <Icon color="secondaryDark" iconName={isTotp ? "shield-halved" : "lock"} size="xl" />
+            </View>
+          )}
+          <Box gap={2}>
+            <Heading size="xl" testID={`${testID}-title`}>
+              {resolvedTitle}
+            </Heading>
+            <Text color="secondaryLight" testID={`${testID}-description`}>
+              {isTotp
+                ? totpDescription
+                : "Enter one of the backup codes you saved when you turned on two-factor sign-in. Each code works once."}
+            </Text>
+          </Box>
 
           {isTotp ? (
-            <Box alignItems="center" width="100%">
-              <OtpField
-                accessibilityLabel="Authentication code"
-                // After a rejected code the cells remount (otpResetKey) and take focus back.
-                autoFocus={autoFocus || otpResetKey > 0}
-                disabled={loading}
-                key={otpResetKey}
-                length={codeLength}
-                onChange={setTotpCode}
-                onComplete={handleOtpComplete}
-                onEnter={handleOtpEnter}
-                testID={`${testID}-otp`}
-                value={totpCode}
-              />
-            </Box>
+            <OtpField
+              accessibilityLabel="Authentication code"
+              // After a rejected code the cells remount (otpResetKey) and take focus back.
+              autoFocus={autoFocus || otpResetKey > 0}
+              disabled={loading}
+              invalid={Boolean(displayedError)}
+              key={otpResetKey}
+              length={codeLength}
+              onChange={setTotpCode}
+              onComplete={handleOtpComplete}
+              onEnter={handleOtpEnter}
+              testID={`${testID}-otp`}
+              value={totpCode}
+            />
           ) : (
             // Backup codes are case-sensitive: the "search" type turns off auto-capitalize and
             // autocorrect on native, which the "text" type leaves on.
-            <TextField
-              accessibilityLabel="Backup code"
-              autoComplete="off"
-              disabled={loading}
-              onChange={setBackupCode}
-              onEnter={handleSubmitPress}
-              placeholder="xxxxx-xxxxx"
-              returnKeyType="go"
-              testID={`${testID}-backup-input`}
-              title="Backup code"
-              type="search"
-              value={backupCode}
-            />
+            <View
+              role={displayedError ? "alert" : undefined}
+              testID={displayedError ? `${testID}-error` : undefined}
+            >
+              <TextField
+                accessibilityLabel="Backup code"
+                autoComplete="off"
+                disabled={loading}
+                errorPosition="below"
+                errorText={displayedError}
+                helperText="Dashes and spaces are optional."
+                mono
+                onChange={setBackupCode}
+                onEnter={handleSubmitPress}
+                placeholder="xxxxx-xxxxx"
+                returnKeyType="go"
+                testID={`${testID}-backup-input`}
+                title="Backup code"
+                type="search"
+                value={backupCode}
+              />
+            </View>
           )}
 
           {canTrustDevice && (
             <LabeledCheckBox
               checked={trustDevice}
               disabled={loading}
+              helperText={`We won't ask for a code here for ${trustDeviceDays} days.`}
               label={trustDeviceLabel}
               onChange={setTrustDevice}
               testID={`${testID}-trust-device`}
             />
           )}
 
-          {Boolean(error) && (
-            <View role="alert" testID={`${testID}-error`}>
-              <Text color="error">{error}</Text>
+          {Boolean(displayedError) && isTotp && (
+            <View role="alert" style={{width: "100%"}} testID={`${testID}-error`}>
+              <Box alignItems="start" direction="row" gap={2} width="100%">
+                <Icon color="error" iconName="circle-exclamation" size="sm" />
+                <View style={{flex: 1, minWidth: 0}}>
+                  <Text color="error">{displayedError}</Text>
+                </View>
+              </Box>
             </View>
           )}
+          <Button
+            disabled={loading || !isCodeComplete}
+            fullWidth
+            loading={loading}
+            onClick={handleSubmitPress}
+            testID={`${testID}-submit`}
+            text="Verify"
+          />
 
-          <Box marginTop={2}>
-            <Button
-              disabled={loading || !isCodeComplete}
-              fullWidth
-              loading={loading}
-              onClick={handleSubmitPress}
-              testID={`${testID}-submit`}
-              text="Verify"
-            />
-          </Box>
-
-          <Box alignItems="center" gap={2}>
-            <Button
+          <Box alignItems="center">
+            <Pressable
+              accessibilityRole="link"
               disabled={loading}
-              onClick={handleToggleKind}
+              onPress={handleToggleKind}
               testID={`${testID}-backup-toggle`}
-              text={isTotp ? "Use a backup code" : "Use your authenticator app"}
-              variant="muted"
-            />
-            {Boolean(onCancel) && (
-              <Button
-                disabled={loading}
-                onClick={onCancel!}
-                testID={`${testID}-cancel`}
-                text={cancelText}
-                variant="muted"
-              />
-            )}
+            >
+              <Text bold color="link">
+                {isTotp ? "Use a backup code instead" : "Use your authenticator app"}
+              </Text>
+            </Pressable>
           </Box>
         </Box>
+        {Boolean(onCancel) && (
+          <Box alignItems="center" paddingY={2}>
+            <Pressable
+              accessibilityRole="link"
+              disabled={loading}
+              onPress={onCancel}
+              testID={`${testID}-cancel`}
+            >
+              <Text color="secondaryLight">{cancelText}</Text>
+            </Pressable>
+          </Box>
+        )}
       </Box>
     </Page>
   );

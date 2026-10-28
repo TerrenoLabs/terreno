@@ -16,8 +16,8 @@ import {FieldTitle} from "./fieldElements/FieldTitle";
 import {useTheme} from "./Theme";
 
 const DEFAULT_LENGTH = 6;
-const CELL_WIDTH = 44;
-const CELL_HEIGHT = 52;
+const CELL_WIDTH = 48;
+const CELL_HEIGHT = 56;
 
 /**
  * Props for {@link OtpField}.
@@ -48,8 +48,10 @@ export interface OtpFieldProps {
   accessibilityLabel?: string;
   /** Helper text below the cells. */
   helperText?: string;
-  /** Error text above the cells; the cells get an error border. */
+  /** Error text below the cells; the cells get an error border. */
   errorText?: string;
+  /** Error border without rendering `errorText`, for a message the parent draws itself. */
+  invalid?: boolean;
   /** Disables every cell. */
   disabled?: boolean;
   /** Focuses the first empty cell on mount. */
@@ -142,6 +144,7 @@ export const OtpField: FC<OtpFieldProps> = ({
   accessibilityLabel = "Verification code",
   helperText,
   errorText,
+  invalid = false,
   disabled = false,
   autoFocus = false,
   testID = "otp-field",
@@ -228,18 +231,21 @@ export const OtpField: FC<OtpFieldProps> = ({
   const renderCell = (index: number): ReactElement => {
     const isFocused = focusedIndex === index;
     let borderColor = theme.border.dark;
-    if (errorText) {
+    let borderWidth = 1;
+    if (errorText || invalid) {
       borderColor = theme.border.error;
+      borderWidth = 2;
     }
     if (isFocused) {
       borderColor = theme.border.focus;
+      borderWidth = 3;
     }
     return (
       <TextInput
         {...ONE_TIME_CODE_PROPS}
         accessibilityLabel={`Digit ${index + 1} of ${length}`}
         accessibilityState={{disabled}}
-        aria-invalid={Boolean(errorText)}
+        aria-invalid={Boolean(errorText) || invalid}
         aria-label={`Digit ${index + 1} of ${length}`}
         autoCapitalize="none"
         autoCorrect={false}
@@ -248,6 +254,7 @@ export const OtpField: FC<OtpFieldProps> = ({
         inputMode="numeric"
         key={index}
         keyboardType="number-pad"
+        nativeID={`${testID}-cell-${index + 1}`}
         onBlur={() => handleBlur(index)}
         onChangeText={(text: string) => handleChangeText(index, text)}
         onFocus={() => handleFocus(index)}
@@ -262,9 +269,10 @@ export const OtpField: FC<OtpFieldProps> = ({
             backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
             borderColor,
             borderRadius: 4,
-            borderWidth: isFocused ? 3 : 1,
+            borderWidth,
             color: theme.text.primary,
             fontSize: 24,
+            fontWeight: "700",
             height: CELL_HEIGHT,
             padding: 0,
             textAlign: "center",
@@ -283,7 +291,6 @@ export const OtpField: FC<OtpFieldProps> = ({
   return (
     <View style={{flexDirection: "column", gap: 4}}>
       {Boolean(title) && <FieldTitle testID={`${testID}-title`} text={title!} />}
-      {Boolean(errorText) && <FieldError testID={`${testID}-error`} text={errorText!} />}
       <View
         accessibilityLabel={accessibilityLabel}
         aria-label={accessibilityLabel}
@@ -293,6 +300,7 @@ export const OtpField: FC<OtpFieldProps> = ({
       >
         {Array.from({length}, (_, index) => renderCell(index))}
       </View>
+      {Boolean(errorText) && <FieldError testID={`${testID}-error`} text={errorText!} />}
       {Boolean(helperText) && <FieldHelperText testID={`${testID}-helper`} text={helperText!} />}
     </View>
   );

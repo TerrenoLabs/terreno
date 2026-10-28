@@ -683,17 +683,18 @@ What it does:
   API with the session first: example-frontend's `logout` in `store/index.ts` stops syncdb,
   then dispatches `logout()`, and its profile screen shows both.
 - **Sign-up.** The sign-up link hides when the server's sign-up is closed (`signUp: false`).
-- **No email and password.** When the server has `emailPassword` off, the form, the Log In
+- **No email and password.** When the server has `emailPassword` off, the form, the Sign in
   button, and the forgot-password link are left out (`LoginScreen` with `fields={[]}`), and a
-  remembered email card says the method is not available.
+  remembered email row says the method is not available.
 - **Keyboard and password managers.** On web the fields sit in a real `<form>`
   ([`FormContainer`](../reference/ui.md#formcontainer)), so browsers stop warning "Password field
   is not contained in a form" and password managers fill and save the email and password. The
   email field is `autocomplete="username"` (`"username webauthn"` with passkey autofill) and the
   password `"current-password"`; on iOS and Android the same hints become `textContentType` and
   the Android autofill hint. Enter in the email field moves to the password, and Enter in the
-  password signs in through the form's submit, once. Tab goes email, password, show/hide
-  password, Log In, forgot password, sign up, providers. Pass your own `fields` with an
+  password signs in through the form's submit, once. From the email field, Tab reaches forgot
+  password, the password field, show/hide password, Sign in, then sign up. Method pills sit above
+  the form. Pass your own `fields` with an
   `autoComplete` to change a hint.
 
 `multiSession` does not work in bearer mode: the server tracks device sessions in cookies that a

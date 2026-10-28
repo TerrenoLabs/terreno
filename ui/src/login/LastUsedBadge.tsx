@@ -1,22 +1,43 @@
 import type {FC} from "react";
+import {View} from "react-native";
 
-import {Badge} from "../Badge";
-import {Box} from "../Box";
+import {Text} from "../Text";
+import {useTheme} from "../Theme";
 
-interface LastUsedBadgeProps {
-  /** Badge text, such as "Last used". */
+interface LastUsedPillProps {
+  /** Pill text, such as "Last used". */
   label: string;
-  /** Test ID for the badge. */
+  /** Test ID for the pill. */
   testID: string;
 }
 
 /**
- * Marks the sign-in method this device used last. Sits right-aligned above the method it labels.
+ * Marks the sign-in method this device used last. Sits inline after an account name, on an email
+ * label, or at the right edge of a method button.
  */
-export const LastUsedBadge: FC<LastUsedBadgeProps> = ({label, testID}) => {
+export const LastUsedPill: FC<LastUsedPillProps> = ({label, testID}) => {
+  const {theme} = useTheme();
+  if (!theme) {
+    return null;
+  }
   return (
-    <Box alignItems="end" marginBottom={1} width="100%">
-      <Badge status="info" testID={testID} value={label} />
-    </Box>
+    <View
+      style={{
+        backgroundColor: theme.surface.secondaryExtraLight,
+        borderColor: theme.surface.secondaryLight,
+        borderRadius: theme.radius.rounded,
+        borderWidth: 1,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+      }}
+      testID={testID}
+    >
+      <Text bold color="secondaryDark" size="sm">
+        {label}
+      </Text>
+    </View>
   );
 };
+
+/** @deprecated Use {@link LastUsedPill}. Kept so existing imports keep compiling. */
+export const LastUsedBadge = LastUsedPill;

@@ -99,13 +99,129 @@ export const LoginScreenNotice: React.FC = (): ReactElement => {
       fields={fields}
       lastUsedMethod="google"
       notice={{
-        actionLabel: "Continue with Google",
+        actionLabel: "Sign in with Google",
+        focusMethod: "google",
         onAction: () => {},
-        text: "This email already has an account. Sign in with Google, then link GitHub from your security settings.",
+        text: "That email is already used with Google. Sign in with Google, then link GitHub from Security.",
+        title: "You already have an account",
         tone: "warning",
       }}
       oauthProviders={brandedProviders}
       onSubmit={noop}
+    />
+  );
+};
+
+const returningAccounts = {
+  currentSessions: [
+    {email: "ada@example.com", id: "session-1", method: "github", name: "Ada Lovelace"},
+  ],
+  rememberedAccounts: [
+    {email: "grace@example.com", id: "remembered-1", method: "google", name: "Grace Hopper"},
+  ],
+};
+
+export const LoginScreenReturning: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      currentSessions={returningAccounts.currentSessions}
+      fields={fields}
+      lastUsedMethod="github"
+      oauthProviders={brandedProviders}
+      onContinue={() => {}}
+      onForget={() => {}}
+      onPasskeyPress={noop}
+      onSignUpPress={() => {}}
+      onSubmit={noop}
+      rememberedAccounts={returningAccounts.rememberedAccounts}
+    />
+  );
+};
+
+export const LoginScreenAnotherWay: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      currentSessions={returningAccounts.currentSessions}
+      fields={fields}
+      initialMethodsExpanded
+      lastUsedMethod="github"
+      oauthProviders={brandedProviders}
+      onContinue={() => {}}
+      onForget={() => {}}
+      onPasskeyPress={noop}
+      onSubmit={noop}
+      rememberedAccounts={returningAccounts.rememberedAccounts}
+    />
+  );
+};
+
+export const LoginScreenEditAccounts: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      currentSessions={returningAccounts.currentSessions}
+      fields={fields}
+      initialAccountsEditing
+      oauthProviders={brandedProviders}
+      onContinue={() => {}}
+      onForget={() => {}}
+      onSubmit={noop}
+      rememberedAccounts={returningAccounts.rememberedAccounts}
+    />
+  );
+};
+
+export const LoginScreenContinueEmail: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      continuingAccount={{
+        email: "grace@example.com",
+        id: "remembered-1",
+        method: "email",
+        name: "Grace Hopper",
+      }}
+      fields={fields}
+      onCancelContinue={() => {}}
+      onForgotPassword={() => {}}
+      onSubmit={noop}
+    />
+  );
+};
+
+export const LoginScreenSigningIn: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      fields={fields}
+      initialValues={{email: "ada@example.com", password: "secret"}}
+      loading
+      oauthProviders={brandedProviders}
+      onSubmit={noop}
+    />
+  );
+};
+
+export const LoginScreenCancelled: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      fields={fields}
+      notice={{
+        text: "GitHub sign-in was cancelled. Try again or choose another way.",
+        tone: "info",
+      }}
+      oauthProviders={brandedProviders}
+      onSubmit={noop}
+    />
+  );
+};
+
+export const LoginScreenWrongPassword: React.FC = (): ReactElement => {
+  return (
+    <LoginScreen
+      fields={fields}
+      initialValues={{email: "ada@example.com"}}
+      oauthProviders={brandedProviders}
+      onForgotPassword={() => {}}
+      onSubmit={noop}
+      passwordError="That password doesn't match. Try again or reset it."
     />
   );
 };

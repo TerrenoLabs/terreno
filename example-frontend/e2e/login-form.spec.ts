@@ -246,22 +246,21 @@ test.describe("Login keyboard", () => {
     expect(signIns.count()).toBe(0);
   });
 
-  test("Tab follows the screen: fields, show password, Log In, links, providers", async ({
+  test("Tab follows the screen: providers, then fields, forgot password, Sign in, sign up", async ({
     page,
   }) => {
     await page.getByTestId("login-screen-oauth-github").waitFor({state: "visible"});
-    // Log In takes focus only once it is enabled.
+    // Sign in takes focus only once it is enabled.
     await page.getByTestId("login-screen-email-input").fill(TEST_USER.email);
     await page.getByTestId("login-screen-password-input").fill(TEST_USER.password);
     await page.getByTestId("login-screen-email-input").focus();
 
     const expected = [
+      "login-screen-forgot-password",
       "login-screen-password-input",
       "login-screen-password-input.visibility-toggle",
       "login-screen-submit-button",
-      "login-screen-forgot-password",
       "login-screen-signup-link",
-      "login-screen-oauth-github",
     ];
     const visited: (string | null)[] = [];
     for (let step = 0; step < expected.length; step += 1) {

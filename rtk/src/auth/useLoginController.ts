@@ -207,12 +207,17 @@ export type LoginControllerScreenProps = Required<
     | "onSignUpPress"
     | "onForgotPasswordPress"
     | "initialValues"
+    | "passwordError"
+    | "continuingAccount"
+    | "onCancelContinue"
   >;
 
 /** The inline two-factor challenge, for `TwoFactorChallengeScreen`. */
 export interface LoginTwoFactorState {
   twoFactorMethods?: string[];
   error?: string;
+  /** Email the code is for, when this sign-in was by email. */
+  accountLabel?: string;
   loading: boolean;
   onSubmit: (values: TwoFactorChallengeSubmission) => Promise<void>;
   /** Returns to the login screen. */
@@ -252,7 +257,8 @@ const METHOD_NAMES: Record<string, string> = {
 };
 
 const PASSKEY_FAILED_MESSAGE = "Passkey sign-in failed. Please try again.";
-const TWO_FACTOR_FAILED_MESSAGE = "That code didn't work. Please try again.";
+const TWO_FACTOR_FAILED_MESSAGE =
+  "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now.";
 const METHOD_UNAVAILABLE_MESSAGE =
   "That sign-in method is no longer available. Choose another way to sign in.";
 
@@ -273,6 +279,14 @@ const storePendingMethod = (method: string): void => {
     sessionStorageOrNull()?.setItem(PENDING_METHOD_KEY, method);
   } catch {
     // Storage is blocked: the method is simply not recorded after the return.
+  }
+};
+
+const peekPendingMethod = (): string | undefined => {
+  try {
+    return sessionStorageOrNull()?.getItem(PENDING_METHOD_KEY) ?? undefined;
+  } catch {
+    return undefined;
   }
 };
 
@@ -389,6 +403,10 @@ export const useLoginController = ({
   const [initialValues, setInitialValues] = useState<Record<string, string> | undefined>(() =>
     initialEmail ? {email: initialEmail} : undefined
   );
+  const [continuingAccount, setContinuingAccount] = useState<LoginAccountOption | undefined>(
+    undefined
+  );
+  const [twoFactorAccountLabel, setTwoFactorAccountLabel] = useState<string | undefined>(undefined);
 
   const isBearer = (webAuth ?? getBetterAuthClientWebAuth(client).webAuth) === "bearer";
 
@@ -508,7 +526,7 @@ export const useLoginController = ({
   const returnErrorCode = Array.isArray(returnError) ? returnError[0] : returnError;
   useEffect(() => {
     if (returnErrorCode) {
-      setFailure({code: returnErrorCode, source: "url"});
+      setFailure({code: returnErrorCode, method: peekPendingMethod(), source: "url"});
     }
   }, [returnErrorCode]);
 
@@ -557,10 +575,11 @@ export const useLoginController = ({
           password: values.password ?? "",
         });
         if (result.error) {
-          setFailure(toFailure(result.error));
+          setFailure({...toFailure(result.error), method: "email"});
           return;
         }
         if (result.data?.twoFactorRedirect) {
+          setTwoFactorAccountLabel((values.email ?? "").trim());
           requireTwoFactor({method: "email", twoFactorMethods: result.data.twoFactorMethods});
           return;
         }
@@ -597,7 +616,7 @@ export const useLoginController = ({
         });
         if (result.error) {
           takePendingMethod();
-          setFailure(toFailure(result.error));
+          setFailure({...toFailure(result.error), method: provider});
           return;
         }
         // In a browser Better Auth is sending the page to the provider; the method is recorded
@@ -650,7 +669,12 @@ export const useLoginController = ({
             console.info("[terreno/rtk] Passkey autofill ended", {code: result.error.code});
             return;
           }
-          setFailure({message: result.error.message ?? PASSKEY_FAILED_MESSAGE, source: "response"});
+          setFailure({
+            code: result.error.code,
+            message: result.error.message ?? PASSKEY_FAILED_MESSAGE,
+            method: "passkey",
+            source: "response",
+          });
           return;
         }
         await finishWithResponse(result.data?.user, "passkey");
@@ -799,9 +823,11 @@ export const useLoginController = ({
         setFailure(undefined);
         if (isUsableEmail(account.email)) {
           setInfoNotice(undefined);
+          setContinuingAccount(account);
           setInitialValues({email: account.email});
           return;
         }
+        setContinuingAccount(undefined);
         const who = account.name ?? account.email;
         setInfoNotice({
           text: who
@@ -828,6 +854,12 @@ export const useLoginController = ({
     ]
   );
 
+  const cancelContinue = useCallback((): void => {
+    setContinuingAccount(undefined);
+    setFailure(undefined);
+    setInitialValues(initialEmail ? {email: initialEmail} : undefined);
+  }, [initialEmail]);
+
   const forget = useCallback(
     (account: LoginAccountOption): Promise<void> => rememberedAccounts.forget(account.id),
     [rememberedAccounts]
@@ -836,11 +868,21 @@ export const useLoginController = ({
   const feedback = useMemo(
     () =>
       getLoginFeedback({
+        attemptedMethod: failure?.method ? nameMethod(failure.method) : undefined,
         failure,
+        hasAccounts: deviceSessions.length + remembered.accounts.length > 0,
         mode: methods?.accountLinking.mode,
         originalMethod: nameMethod(remembered.lastUsedMethod),
+        originalMethodId: remembered.lastUsedMethod,
       }),
-    [failure, methods?.accountLinking.mode, nameMethod, remembered.lastUsedMethod]
+    [
+      deviceSessions.length,
+      failure,
+      methods?.accountLinking.mode,
+      nameMethod,
+      remembered.accounts.length,
+      remembered.lastUsedMethod,
+    ]
   );
 
   const isLoading = busy !== null;
@@ -900,6 +942,7 @@ export const useLoginController = ({
 
   const screenProps = useMemo(
     (): LoginControllerScreenProps => ({
+      continuingAccount,
       currentSessions,
       error: feedback.error,
       genericProviders,
@@ -908,6 +951,7 @@ export const useLoginController = ({
       loading: isLoading,
       notice: feedback.notice ?? infoNotice,
       oauthProviders,
+      onCancelContinue: cancelContinue,
       onContinue: continueAs,
       onForget: forget,
       onForgotPasswordPress: isEmailPasswordEnabled ? onForgotPasswordPress : undefined,
@@ -915,10 +959,13 @@ export const useLoginController = ({
       onSignUpPress: isSignUpOpen ? onSignUpPress : undefined,
       onSubmit: signInEmail,
       passkeyAutofill: isPasskeyOn && passkeyAutofill,
+      passwordError: feedback.passwordError,
       rememberedAccounts: rememberedOptions,
     }),
     [
+      cancelContinue,
       continueAs,
+      continuingAccount,
       currentSessions,
       feedback,
       forget,
@@ -942,13 +989,21 @@ export const useLoginController = ({
 
   const twoFactor = useMemo(
     (): LoginTwoFactorState => ({
+      accountLabel: twoFactorAccountLabel,
       error: twoFactorError,
       loading: isVerifying,
       onCancel: cancelTwoFactor,
       onSubmit: verifyTwoFactor,
       twoFactorMethods,
     }),
-    [cancelTwoFactor, isVerifying, twoFactorError, twoFactorMethods, verifyTwoFactor]
+    [
+      cancelTwoFactor,
+      isVerifying,
+      twoFactorAccountLabel,
+      twoFactorError,
+      twoFactorMethods,
+      verifyTwoFactor,
+    ]
   );
 
   return {

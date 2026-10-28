@@ -1222,38 +1222,48 @@ const [error, setError] = useState<string | undefined>(undefined);
 
 | Prop | Type | Behavior |
 | --- | --- | --- |
-| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. An empty array leaves out the whole form block: fields, the Log In button, the forgot-password link, and the "Or log in with email" dividers, for apps without email and password sign-in. |
-| `oauthProviders` | `OAuthProviderConfig[]` | Branded Google, GitHub, and Apple buttons (`SocialLoginButton`). |
-| `genericProviders` | `GenericOAuthProviderConfig[]` | Providers without a brand, such as a generic OIDC provider: `{id, label, onPress, loading?, disabled?, iconName?}`. Each renders an outline button "Continue with {label}" after the branded ones. |
-| `lastUsedMethod` | `string` | The method this device signed in with last. It gets a "Last used" badge. A provider moves above the form and to the front of the provider list; `"passkey"` moves the passkey button above the form; `"email"` badges the form in place. A method the screen does not offer is ignored. |
-| `lastUsedLabel` | `string` | Badge text. Defaults to "Last used". |
-| `currentSessions` | `LoginAccountOption[]` | Sessions already signed in on this device. Each renders a "Continue" card; one tap calls `onContinue(account, "session")`. |
-| `rememberedAccounts` | `LoginAccountOption[]` | Accounts remembered on this device. Each renders a "Continue" card (`onContinue(account, "remembered")`) and, with `onForget`, a Forget button. |
-| `onContinue` / `onForget` | callbacks | Cards render only when `onContinue` is set. Sessions never get a Forget button. |
+| `fields` | `LoginFieldConfig[]` | Form fields; `onSubmit` receives their values keyed by `name`. An empty array leaves out the email form, the Sign in button, and the forgot-password link. Method pills stay. |
+| `oauthProviders` | `OAuthProviderConfig[]` | Branded Google, GitHub, and Apple pills (`SocialLoginButton` outline). |
+| `genericProviders` | `GenericOAuthProviderConfig[]` | Providers without a brand, such as a generic OIDC provider: `{id, label, onPress, loading?, disabled?, iconName?}`. Each renders an outline pill "Continue with {label}" after the branded ones. |
+| `lastUsedMethod` | `string` | The method this device signed in with last. It gets a "Last used" pill. A provider moves to the front of the provider list; `"passkey"` leads the method stack; `"email"` pills the email label. Methods always sit above the email form. A method the screen does not offer is ignored. |
+| `lastUsedLabel` | `string` | Pill text. Defaults to "Last used". |
+| `currentSessions` | `LoginAccountOption[]` | Sessions already signed in on this device. Each renders a continue row; one tap calls `onContinue(account, "session")`. A session reads "Signed in · {email}". |
+| `rememberedAccounts` | `LoginAccountOption[]` | Accounts remembered on this device. Each renders a continue row (`onContinue(account, "remembered")`). With `onForget`, Edit reveals Remove. Sessions cannot be removed here. |
+| `onContinue` / `onForget` | callbacks | Rows render only when `onContinue` is set. Remove (`{testID}-forget-{index}`) renders only in Edit mode. |
+| `passwordError` | `string` | Wrong email or password, shown under the password field. A banner `error` is for everything else. |
+| `continuingAccount` / `onCancelContinue` | `LoginAccountOption` / `() => void` | Replaces the body with the password step for a remembered email account. Back and "Not you?" call `onCancelContinue`. |
+| `initialMethodsExpanded` | `boolean` | Returning users start with other methods behind "Sign in another way". Set this to open them. |
 | `onPasskeyPress` | `() => void \| Promise<void>` | Shows a "Sign in with a passkey" button (text via `passkeyButtonText`). |
 | `passkeyAutofill` | `boolean` | On web, sets the email field's `autocomplete` to `username webauthn` so browsers offer saved passkeys (conditional mediation). Ignored on native. |
-| `notice` | `LoginNotice` | `{tone: "info" \| "warning", text, actionLabel?, onAction?}`, shown above the form; a warning is `role="alert"` (announced at once), info is `role="status"`. |
+| `notice` | `LoginNotice` | `{tone: "info" \| "warning" \| "error", title?, text, actionLabel?, onAction?, focusMethod?}`, one banner under the heading. Warning and error are `role="alert"`. Info is `role="status"` and can be dismissed. `notice` wins over `error`. |
 | `initialValues` | `Record<string, string>` | Values the form starts with, keyed by field `name`. Passing a new object later replaces those fields and keeps what the user typed in the others, so a "Continue" card can prefill the email. |
 
-Accessibility: the button a "Last used" badge marks gets the badge in its accessible name
-("Continue with GitHub, last used"; for email, the Log In button). A `warning` notice has
-`role="alert"` and an `info` notice `role="status"`. Session cards read "Signed in on this
-device · {method}".
+Accessibility: the control a "Last used" pill marks gets the pill in its accessible name
+("Continue with GitHub, last used"; for email, the email field and the Sign in button). A
+`warning` or `error` notice has `role="alert"` and an `info` notice `role="status"`. A session
+row reads "Signed in · {email}". A remembered row reads "{Provider} · {masked email}".
 
 Keyboard and autofill: the fields sit in a `FormContainer` (`{testID}-form`), so on web they are
 in a real `<form>` that password managers recognize. The email field defaults to
 `autoComplete="username"` (or `"username webauthn"` with `passkeyAutofill` on web) and password
 fields to `"current-password"`; each input's accessible name is its field `label`. Enter in a
 field moves focus to the next field (`returnKeyType="next"`); Enter in the last field
-(`returnKeyType="go"`) submits once when Log In is enabled, and does nothing while `loading` or
-while a required field is empty. Enter and the Log In button both submit through the form's
+(`returnKeyType="go"`) submits once when Sign in is enabled, and does nothing while `loading` or
+while a required field is empty. Enter and the Sign in button both submit through the form's
 `requestSubmit()`, so browsers see a real submit and offer to save the password. A second submit
-while `onSubmit` is pending is ignored. Tab order on web follows the screen: email, password, the
-password's show/hide button, Log In, forgot password, sign up, then providers.
+while `onSubmit` is pending is ignored. Method pills sit above the form. From the email field,
+Tab reaches forgot password, the password field, its show/hide button, Sign in, then sign up.
 
 `LoginAccountOption` is `{id, name?, email?, image?, method}`. Name, email, and image are
-optional because apps remember only the method by default; a card without them reads
-"Continue with {method}". Show identity only when the app opted in to remembering it.
+optional because apps remember only the method by default; a row without them reads
+"Continue with {method}". Show identity only when the app opted in to remembering it. A remembered
+email is masked (`j***@n***.io`).
+
+The submit button reads "Sign in", and "Signing in" while `loading`. The footer is "New here?"
+plus `signUpLinkText` (default "Create an account"). With accounts on the device, the title
+defaults to "Welcome back"; otherwise "Sign in". One divider, "or sign in another way", appears
+when a returning user expands methods. One divider, "or use your email", appears only when both
+methods and the email form are on screen.
 
 **Test IDs** (with the default `testID="login-screen"`):
 
@@ -1261,15 +1271,20 @@ optional because apps remember only the method by default; a card without them r
 | --- | --- |
 | Branded or generic provider button | `login-screen-oauth-{provider}` (e.g. `login-screen-oauth-github`, `login-screen-oauth-mock-oidc`) |
 | Last-used badge | `login-screen-last-used-{method}` |
-| Continue card (sessions first, then remembered accounts) | `login-screen-continue-{index}` |
-| Forget button | `login-screen-forget-{index}` (same index as its card) |
+| Continue row (sessions first, then remembered accounts) | `login-screen-continue-{index}` |
+| Remove, only while Edit is open | `login-screen-forget-{index}` (same index as its row) |
+| Edit / Done | `login-screen-accounts-edit` |
+| Sign in another way | `login-screen-another-way` |
 | Passkey button | `login-screen-passkey-button` |
-| Notice / its action | `login-screen-notice` / `login-screen-notice-action` |
+| Notice / its action / dismiss | `login-screen-notice` / `login-screen-notice-action` / `login-screen-notice-dismiss` |
+| Banner from the `error` prop | `login-screen-error` |
+| Password step back / Not you? | `login-screen-continue-back` / `login-screen-continue-not-you` |
 | Continue-as card list | `login-screen-accounts` |
 
 `OAuthButtons`, which `LoginScreen` and `SignUpScreen` use, takes the same `genericProviders`, a
-`lastUsed={{provider, label?, testID?}}` badge, and `dividerPosition` (`"above"` by default,
-`"below"` when the buttons sit above a form, `"none"` for no divider).
+`lastUsed={{provider, label?, testID?}}` pill, and `dividerPosition` (`"above"` by default,
+`"below"` when the buttons sit above a form, `"none"` for no divider). `appearance` is `"brand"`
+(filled buttons, the sign-up default) or `"pill"` (neutral outline, what `LoginScreen` uses).
 
 ### OtpField
 
@@ -1345,14 +1360,14 @@ const [error, setError] = useState<string | undefined>(undefined);
 | Prop | Type | Behavior |
 | --- | --- | --- |
 | `onSubmit` | `(values: TwoFactorChallengeSubmission) => void \| Promise<void>` | Receives `{code, kind: "totp" \| "backup", trustDevice}`. Backup codes are trimmed. Not called while `loading` or while an earlier call is still pending. A rejection is caught, logged with `console.warn`, and clears the code. |
-| `error` | `string` | Shown under the form with `role="alert"`. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
+| `error` | `string` | For an authenticator code, the screen shows a fixed sentence under the cells (`role="alert"`), whatever string was passed. A backup code shows this string under the field. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
 | `loading` | `boolean` | Disables every control and shows a spinner on Verify. |
-| `trustDeviceDays` | `number` | Shows a "Don't ask again on this device for N days" checkbox. Unset hides it and `trustDevice` is always `false`. Better Auth trusts a device for 30 days by default. |
-| `onCancel` / `cancelText` | `() => void` / `string` | Shows a "Use another method" button (custom text via `cancelText`). |
+| `trustDeviceDays` | `number` | Shows a "Trust this device" checkbox, checked by default for an authenticator code, with helper text "We won't ask for a code here for N days." Unset hides it and `trustDevice` is always `false`. |
+| `onCancel` / `cancelText` | `() => void` / `string` | Shows a Back link and a footer link (default "Sign in a different way"). |
 | `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
-| `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. |
+| `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. The title follows the mode: "Enter your code" or "Use a backup code". |
 | `autoFocus` | `boolean` | Focuses the first code cell on mount. Defaults to `true`. Set `false` where the screen is a preview rather than the page's task, since the focus scrolls the page to the cells; a rejected code still refocuses the first cell. |
-| `title` / `logo` | `string` / `ReactNode` | Heading (default "Two-factor authentication") and an optional logo. |
+| `title` / `accountLabel` / `logo` | `string` / `string` / `ReactNode` | Heading override, the account the code is for (an email is masked), and an optional logo. |
 
 Enter in a code cell submits a complete code (the same guard as Verify applies); Enter in the
 backup-code field submits it.
@@ -1374,6 +1389,7 @@ code".
 | Error | `two-factor-challenge-error` |
 | Verify button | `two-factor-challenge-submit` |
 | Use another method | `two-factor-challenge-cancel` |
+| Back | `two-factor-challenge-back` |
 
 ### SignUpScreen
 

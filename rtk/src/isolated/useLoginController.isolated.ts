@@ -432,7 +432,9 @@ describe("useLoginController", () => {
     await act(async () => {
       await bare.result.current.twoFactor.onSubmit({code: "1", kind: "totp", trustDevice: false});
     });
-    expect(bare.result.current.twoFactor.error).toBe("That code didn't work. Please try again.");
+    expect(bare.result.current.twoFactor.error).toBe(
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+    );
 
     const throwing = renderController({
       client: fakeClient(
@@ -453,7 +455,7 @@ describe("useLoginController", () => {
       });
     });
     expect(throwing.result.current.twoFactor.error).toBe(
-      "That code didn't work. Please try again."
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
     );
 
     const noUser = renderController({
@@ -463,7 +465,9 @@ describe("useLoginController", () => {
     await act(async () => {
       await noUser.result.current.twoFactor.onSubmit({code: "1", kind: "totp", trustDevice: false});
     });
-    expect(noUser.result.current.twoFactor.error).toBe("That code didn't work. Please try again.");
+    expect(noUser.result.current.twoFactor.error).toBe(
+      "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+    );
     expect(noUser.onSignedIn).not.toHaveBeenCalled();
   });
 
@@ -484,9 +488,9 @@ describe("useLoginController", () => {
     }
     expect(texts[0]).toContain("Verify your email address, then sign in again to link");
     expect(texts[1]).toBe(
-      "An account with this email already exists. Sign in with Google, then link this sign-in method from Security."
+      "That email is already used with Google. Sign in with Google, then link it from Security."
     );
-    expect(texts[2]).toBe("This email already has an account. Sign in with Google instead.");
+    expect(texts[2]).toBe("That email already has an account. Sign in with Google instead.");
   });
 
   it("names a remembered method or a provider id that matches an Object.prototype key as text", async () => {
@@ -508,8 +512,8 @@ describe("useLoginController", () => {
       expect(labels.every((label) => typeof label === "string")).toBe(true);
     }
     expect(texts).toEqual([
-      "This email already has an account. Sign in with Proto instead.",
-      "This email already has an account. Sign in with Constructor instead.",
+      "That email already has an account. Sign in with Proto instead.",
+      "That email already has an account. Sign in with Constructor instead.",
     ]);
   });
 
@@ -524,7 +528,7 @@ describe("useLoginController", () => {
       await result.current.signInSocial("github");
     });
     expect(result.current.screenProps.notice?.text).toBe(
-      "This email already has an account. Sign in the way you did before instead."
+      "That email already has an account. Sign in the way you did before instead."
     );
   });
 
@@ -549,6 +553,7 @@ describe("useLoginController", () => {
     });
     expect(result.current.screenProps.notice).toEqual({
       text: VERIFY_EMAIL_NOTICE_TEXT,
+      title: "Verify your email",
       tone: "warning",
     });
     expect(onSignedIn).not.toHaveBeenCalled();
@@ -571,6 +576,7 @@ describe("useLoginController", () => {
     await waitForLoginScreen(result);
     expect(result.current.screenProps.notice).toEqual({
       text: SIGN_UP_CLOSED_NOTICE_TEXT,
+      title: "Sign-up is closed",
       tone: "warning",
     });
     expect(result.current.screenProps.onSignUpPress).toBeUndefined();
@@ -625,7 +631,10 @@ describe("useLoginController", () => {
     await act(async () => {
       await refused.result.current.signInEmail({email: "a@b.co", password: "x"});
     });
-    expect(refused.result.current.screenProps.error).toBe("Invalid email or password");
+    expect(refused.result.current.screenProps.passwordError).toBe(
+      "That password doesn't match. Try again or reset it."
+    );
+    expect(refused.result.current.screenProps.error).toBeUndefined();
     expect(refused.result.current.screenProps.loading).toBe(false);
 
     const throwing = renderController({
@@ -820,7 +829,11 @@ describe("useLoginController", () => {
     await act(async () => {
       await result.current.screenProps.onPasskeyPress?.();
     });
-    expect(result.current.screenProps.error).toBe("Authentication cancelled");
+    expect(result.current.screenProps.error).toBeUndefined();
+    expect(result.current.screenProps.notice).toEqual({
+      text: "Passkey sign-in was cancelled. Try again or choose another way.",
+      tone: "info",
+    });
 
     passkeyResult = {data: null, error: {status: 400}};
     await act(async () => {
@@ -1226,6 +1239,11 @@ describe("useLoginController", () => {
       );
     });
     expect(result.current.screenProps.initialValues).toEqual({email: "jane@example.com"});
+    expect(result.current.screenProps.continuingAccount).toEqual({
+      email: "jane@example.com",
+      id: "u1",
+      method: "email",
+    });
     expect(result.current.screenProps.notice).toBeUndefined();
   });
 

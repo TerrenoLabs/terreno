@@ -31,6 +31,23 @@ export const getLoginMethodLabels = ({
   return {name, phrase: name};
 };
 
+/**
+ * Masks an email for display: `josh@nang.io` becomes `j***@n***.io`. Returns the input when it
+ * is not an email.
+ */
+export const maskEmail = (email: string): string => {
+  const at = email.indexOf("@");
+  if (at <= 0 || at === email.length - 1) {
+    return email;
+  }
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  const dot = domain.lastIndexOf(".");
+  const host = dot === -1 ? domain : domain.slice(0, dot);
+  const tld = dot === -1 ? "" : domain.slice(dot);
+  return `${local.charAt(0)}***@${host.charAt(0)}***${tld}`;
+};
+
 /** Appends the last-used marker to an accessible name, e.g. "Continue with GitHub, last used". */
 export const withLastUsedLabel = ({
   label,

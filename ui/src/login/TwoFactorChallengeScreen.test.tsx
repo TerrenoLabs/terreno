@@ -41,7 +41,7 @@ describe("TwoFactorChallengeScreen", () => {
       <TwoFactorChallengeScreen onSubmit={makeOnSubmit()} />
     );
     expect(getByTestId("two-factor-challenge")).toBeTruthy();
-    expect(getByText("Two-factor authentication")).toBeTruthy();
+    expect(getByText("Enter your code")).toBeTruthy();
     expect(getByTestId("two-factor-challenge-otp-cell-1")).toBeTruthy();
     expect(getByTestId("two-factor-challenge-otp-cell-6")).toBeTruthy();
     expect(queryByTestId("two-factor-challenge-backup-input")).toBeNull();
@@ -113,12 +113,9 @@ describe("TwoFactorChallengeScreen", () => {
       <TwoFactorChallengeScreen onSubmit={onSubmit} trustDeviceDays={30} />
     );
     const checkbox = getByTestId("two-factor-challenge-trust-device");
-    expect(getByText("Don't ask again on this device for 30 days")).toBeTruthy();
+    expect(getByText("Trust this device")).toBeTruthy();
     expect(checkbox.props.role).toBe("checkbox");
-    expect(checkbox.props["aria-checked"]).toBe(false);
-
-    await pressButton(checkbox);
-    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(true);
+    expect(checkbox.props["aria-checked"]).toBe(true);
 
     await act(async () => {
       fireEvent.changeText(getByTestId("two-factor-challenge-otp-cell-1"), "654321");
@@ -134,7 +131,11 @@ describe("TwoFactorChallengeScreen", () => {
     );
     const error = getByTestId("two-factor-challenge-error");
     expect(error.props.role).toBe("alert");
-    expect(getByText("Invalid code")).toBeTruthy();
+    expect(
+      getByText(
+        "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+      )
+    ).toBeTruthy();
   });
 
   it("focuses the first code cell on mount by default", () => {
@@ -319,12 +320,12 @@ describe("TwoFactorChallengeScreen", () => {
       key: " ",
       preventDefault,
     });
-    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(true);
+    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(false);
     expect(preventDefault).toHaveBeenCalled();
     fireEvent(getByTestId("two-factor-challenge-trust-device"), "keyDown", {
       nativeEvent: {key: "Enter"},
     });
-    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(true);
+    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(false);
   });
 
   it("names the backup input Backup code", async () => {
@@ -343,7 +344,7 @@ describe("TwoFactorChallengeScreen", () => {
     );
     expect(queryByTestId("two-factor-challenge-cancel")).toBeNull();
     rerender(<TwoFactorChallengeScreen onCancel={onCancel} onSubmit={makeOnSubmit()} />);
-    expect(getByText("Use another method")).toBeTruthy();
+    expect(getByText("Sign in a different way")).toBeTruthy();
     await pressButton(getByTestId("two-factor-challenge-cancel"));
     await waitFor(() => {
       expect(onCancel).toHaveBeenCalledTimes(1);
@@ -356,6 +357,6 @@ describe("TwoFactorChallengeScreen", () => {
     );
     expect(getByTestId("two-factor-challenge-otp-cell-8")).toBeTruthy();
     expect(queryByTestId("two-factor-challenge-otp-cell-9")).toBeNull();
-    expect(getByText("Enter the 8-digit code from your authenticator app.")).toBeTruthy();
+    expect(getByText("Open your authenticator app and enter the 8-digit code.")).toBeTruthy();
   });
 });

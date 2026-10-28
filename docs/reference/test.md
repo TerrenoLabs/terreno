@@ -193,7 +193,8 @@ Pull requests also run the `New file coverage` workflow. Every newly added works
 `.ts` or `.tsx` implementation file must have at least 90% function coverage and 90%
 line coverage. Test, spec, story, generated OpenAPI SDK, `dist`, isolated-test,
 `src/types` type modules, modules whose only exports are `interface` and `type`
-aliases (TypeScript erases them, so Bun writes no LCOV record), demo
+aliases (comments and string literals do not count; TypeScript erases them, so
+Bun writes no LCOV record), demo
 `story-config/*.config.tsx`, and Expo Router route
 files (`index`, `_layout`, `+not-found`, `[param]`, plus example recovery screens
 `forgotPassword` / `resetPassword` / `verifyEmail`) are excluded. A new implementation

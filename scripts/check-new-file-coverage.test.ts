@@ -396,6 +396,8 @@ describe("isTypeOnlySource", () => {
     assert.isTrue(
       isTypeOnlySource('import type {Id} from "./id";\nexport interface Row { id: Id }\n')
     );
+    assert.isTrue(isTypeOnlySource("export interface Row {\n  id: string; // const note\n}\n"));
+    assert.isTrue(isTypeOnlySource('export type Tok = "const" | "let";\n'));
   });
 
   it("keeps modules that emit runtime code", () => {

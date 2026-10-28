@@ -215,10 +215,13 @@ export const isReExportOnlySource = (source: string): boolean => {
   );
 };
 
-const stripComments = (source: string): string => {
+const stripCommentsAndStrings = (source: string): string => {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/`(?:\\.|[^`\\])*`/g, "``")
     .trim();
 };
 
@@ -227,7 +230,7 @@ const stripComments = (source: string): string => {
  * writes no LCOV record and the new-file gate would treat the file as 0% covered.
  */
 export const isTypeOnlySource = (source: string): boolean => {
-  const code = stripComments(source);
+  const code = stripCommentsAndStrings(source);
   if (code.length === 0) {
     return false;
   }

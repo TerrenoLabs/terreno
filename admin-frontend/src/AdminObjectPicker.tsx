@@ -1,6 +1,8 @@
 import {Box, IconButton, Spinner, Text, TextField} from "@terreno/ui";
 import React, {useCallback, useEffect, useRef, useState} from "react";
 import {withQueryString} from "./adminRpc";
+import {adminOrganizationHeaders} from "./orgs/organizationHeaders";
+import {useOptionalOrgContext} from "./orgs/useOrgContext";
 import {unwrapAdminEnvelope, useAdminRpc, useAdminRpcQuery} from "./useAdminRpc";
 
 /** Generic referenced document — admin can pick from any Mongoose model so the shape varies. */
@@ -89,9 +91,11 @@ export const AdminObjectPicker: React.FC<AdminObjectPickerProps> = ({
   }, []);
 
   const rpc = useAdminRpc();
+  const organizationHeaders = adminOrganizationHeaders(useOptionalOrgContext()?.organizationId);
   const {data: searchData, isFetching: isSearching} = useAdminRpcQuery<
     {data?: PickerItem[]} | PickerItem[]
   >({
+    headers: organizationHeaders,
     rpc,
     skip: !autocomplete || !debouncedQuery,
     url: withQueryString({params: {q: debouncedQuery}, url: `${routePath}/search`}),
@@ -99,12 +103,14 @@ export const AdminObjectPicker: React.FC<AdminObjectPickerProps> = ({
   const {data: listData, isFetching: isListLoading} = useAdminRpcQuery<
     {data?: PickerItem[]} | PickerItem[]
   >({
+    headers: organizationHeaders,
     rpc,
     skip: autocomplete || !isOpen,
     url: withQueryString({params: {limit: 100, page: 1}, url: routePath}),
   });
   // Fetch the currently selected item to display its name.
   const {data: selectedItem, isLoading: isSelectedLoading} = useAdminRpcQuery<PickerItem>({
+    headers: organizationHeaders,
     rpc,
     skip: !value,
     transformResponse: unwrapAdminEnvelope,

@@ -67,7 +67,7 @@ describe("ConsentResponseViewer", () => {
   });
 
   it("shows not-found state when there is no id / data", () => {
-    const {getByText} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="" />);
+    const {getByText} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="missing" />);
     expect(getByText(/Response not found\./)).toBeDefined();
   });
 

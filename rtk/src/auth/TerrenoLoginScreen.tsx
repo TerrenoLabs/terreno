@@ -105,6 +105,7 @@ export const TerrenoLoginScreen: FC<TerrenoLoginScreenProps> = ({
       <TwoFactorChallengeScreen
         accountLabel={controller.twoFactor.accountLabel}
         error={controller.twoFactor.error}
+        initialTrustDevice={controller.twoFactor.initialTrustDevice}
         loading={controller.twoFactor.loading}
         logo={logo}
         onCancel={controller.twoFactor.onCancel}

@@ -146,6 +146,11 @@ export interface UseLoginControllerOptions {
    */
   onTwoFactorRequired?: (event: LoginTwoFactorRequiredEvent) => void;
   /**
+   * Whether "Trust this device" starts checked on the inline challenge. Defaults to checked for
+   * an authenticator code. Pass `false` to start unchecked.
+   */
+  initialTrustDevice?: boolean;
+  /**
    * Where a social sign-in returns. In bearer mode it must be one of the server's
    * `oauthHandoff.callbackPaths`, and should be this login screen's route, so the controller sees
    * the new session and records the method.
@@ -222,6 +227,11 @@ export interface LoginTwoFactorState {
   onSubmit: (values: TwoFactorChallengeSubmission) => Promise<void>;
   /** Returns to the login screen. */
   onCancel: () => void;
+  /**
+   * Whether "Trust this device" starts checked. Unset lets the screen check it for an
+   * authenticator code.
+   */
+  initialTrustDevice?: boolean;
 }
 
 export interface LoginController {
@@ -376,6 +386,7 @@ export const useLoginController = ({
   rememberIdentity,
   onSignedIn,
   onTwoFactorRequired,
+  initialTrustDevice,
   callbackURL,
   errorCallbackURL,
   error: returnError,
@@ -995,6 +1006,7 @@ export const useLoginController = ({
     (): LoginTwoFactorState => ({
       accountLabel: twoFactorAccountLabel,
       error: twoFactorError,
+      initialTrustDevice,
       loading: isVerifying,
       onCancel: cancelTwoFactor,
       onSubmit: verifyTwoFactor,
@@ -1002,6 +1014,7 @@ export const useLoginController = ({
     }),
     [
       cancelTwoFactor,
+      initialTrustDevice,
       isVerifying,
       twoFactorAccountLabel,
       twoFactorError,

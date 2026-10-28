@@ -707,8 +707,10 @@ app reads that error itself, pass it as `error`.
 #### Two-factor step
 
 When a password sign-in needs a second factor, the screen shows `TwoFactorChallengeScreen`
-inline and finishes the sign-in itself. To use your own route instead, pass
-`onTwoFactorRequired`:
+inline and finishes the sign-in itself. "Trust this device" starts checked for an authenticator
+code. Pass `initialTrustDevice={false}` to start it unchecked. The same option is on
+`useLoginController` and comes back as `twoFactor.initialTrustDevice`. To use your own route
+instead, pass `onTwoFactorRequired`:
 
 ``````typescript
 <TerrenoLoginScreen

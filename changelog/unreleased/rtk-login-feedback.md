@@ -12,4 +12,5 @@ password back to empty so the next account does not keep the previous password.
 `account_not_linked` notices name the original method and, when that method is known, offer
 "Sign in with {method}". The two-factor failure message tells the user to enter the code their
 app shows now. `TerrenoLoginScreen` passes the email that started the challenge as
-`accountLabel`.
+`accountLabel`. Pass `initialTrustDevice={false}` to start "Trust this device" unchecked;
+otherwise the inline challenge keeps the authenticator default (checked).

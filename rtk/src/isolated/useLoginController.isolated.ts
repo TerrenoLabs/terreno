@@ -369,10 +369,32 @@ describe("useLoginController", () => {
       await result.current.signInEmail({email: "jane@example.com", password: "pw"});
     });
 
+    expect(result.current.twoFactor.initialTrustDevice).toBeUndefined();
     expect(onTwoFactorRequired).toHaveBeenCalledWith({method: "email", twoFactorMethods: ["totp"]});
     expect(onSignedIn).not.toHaveBeenCalled();
     expect(result.current.step).toBe("login");
     expect(store.list()).toEqual([]);
+  });
+
+  it("forwards initialTrustDevice false onto the inline challenge", async () => {
+    const client = fakeClient(
+      {},
+      {
+        email: async () => ({
+          data: {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          error: null,
+        }),
+      }
+    );
+    const {result} = renderController({client, initialTrustDevice: false});
+    await waitForLoginScreen(result);
+
+    await act(async () => {
+      await result.current.signInEmail({email: "jane@example.com", password: "pw"});
+    });
+
+    expect(result.current.step).toBe("twoFactor");
+    expect(result.current.twoFactor.initialTrustDevice).toBe(false);
   });
 
   it("runs the inline two-factor challenge when no onTwoFactorRequired is given", async () => {

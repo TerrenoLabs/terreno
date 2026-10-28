@@ -1,3 +1,9 @@
+import {
+  AGREEMENT_LEVEL_STYLE,
+  type AgreementLevel,
+  formatRate,
+  getAgreementLevel,
+} from "../shell/observabilityStatus";
 import type {EvaluatorDimension, ReviewListItem, ReviewStatus} from "./reviewTypes";
 
 export type ScoreValue = boolean | number | string;
@@ -107,42 +113,22 @@ export const unwrapCreatedBatchId = (raw: unknown): string | undefined => {
 export const openBatchItems = (items: ReviewListItem[]): ReviewListItem[] =>
   items.filter((item) => item.status === "pending" || item.status === "in_progress");
 
-// Agreement at or above this rate is treated as "matches the humans".
-const AGREEMENT_TRUSTED = 0.9;
-const AGREEMENT_CLOSE = 0.75;
-
-export const formatPercent = (rate?: number): string => {
-  if (rate === undefined || Number.isNaN(rate)) {
-    return "—";
-  }
-  return `${Math.round(rate * 100)}%`;
-};
+export const formatPercent = (rate?: number): string => formatRate(rate);
 
 export const agreementStatus = (rate?: number): "error" | "neutral" | "success" | "warning" => {
-  if (rate === undefined) {
-    return "neutral";
-  }
-  if (rate >= AGREEMENT_TRUSTED) {
-    return "success";
-  }
-  if (rate >= AGREEMENT_CLOSE) {
-    return "warning";
-  }
-  return "error";
+  const tone = AGREEMENT_LEVEL_STYLE[getAgreementLevel(rate)].tone;
+  return tone === "info" ? "neutral" : tone;
 };
 
-export const agreementVerdict = (rate?: number): string => {
-  if (rate === undefined) {
-    return "No human answers yet";
-  }
-  if (rate >= AGREEMENT_TRUSTED) {
-    return "Matches humans";
-  }
-  if (rate >= AGREEMENT_CLOSE) {
-    return "Close — check disagreements";
-  }
-  return "Does not match humans";
+const AGREEMENT_VERDICT: Record<AgreementLevel, string> = {
+  close: "Close — check disagreements",
+  match: "Matches humans",
+  none: "No human answers yet",
+  off: "Does not match humans",
 };
+
+export const agreementVerdict = (rate?: number): string =>
+  AGREEMENT_VERDICT[getAgreementLevel(rate)];
 
 export const formatAnswer = (value: ScoreValue | undefined): string => {
   if (value === undefined) {

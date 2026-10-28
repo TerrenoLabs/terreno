@@ -10,6 +10,8 @@ export interface ReviewListItem {
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
+  /** Short preview of what the AI wrote; the queue falls back to the trace name without it. */
+  outputPreview?: string;
   promptName?: string;
   reason: string;
   status: ReviewStatus;

@@ -1,7 +1,7 @@
 import {Box, Button, Text} from "@terreno/ui";
 import React from "react";
 import {Platform} from "react-native";
-import {ReviewScoreField} from "./ReviewScoreField";
+import {ReviewScoreField, YesNoControl} from "./ReviewScoreField";
 import {dimensionLabel, type EvaluatorDimension, firstUnansweredBoolean} from "./reviewTypes";
 
 export interface ReviewQuestionListProps {
@@ -27,6 +27,7 @@ const QuestionRow: React.FC<{
         {dimension.question ? <Text bold>{`${index + 1}. ${dimension.question}`}</Text> : undefined}
         <ReviewScoreField
           dimension={dimension}
+          hideLabel={Boolean(dimension.question)}
           onChange={(next) => {
             onAnswer(dimension.key, next);
           }}
@@ -45,33 +46,15 @@ const QuestionRow: React.FC<{
       rounding="md"
       testID={`ai-review-question-${dimension.key}`}
     >
-      <Box direction="row" gap={2}>
-        <Button
-          onClick={() => {
-            onAnswer(dimension.key, true);
-          }}
-          size="sm"
-          testID={`ai-review-question-${dimension.key}-yes`}
-          text="Yes"
-          variant={value === true ? "primary" : "outline"}
-        />
-        <Button
-          onClick={() => {
-            onAnswer(dimension.key, false);
-          }}
-          size="sm"
-          testID={`ai-review-question-${dimension.key}-no`}
-          text="No"
-          variant={value === false ? "destructive" : "outline"}
-        />
-      </Box>
-      <Box flex="grow" gap={1} minWidth={200}>
+      <YesNoControl
+        onChange={(next) => {
+          onAnswer(dimension.key, next);
+        }}
+        testID={`ai-review-question-${dimension.key}`}
+        value={value}
+      />
+      <Box flex="grow" minWidth={200}>
         <Text bold={value === undefined}>{`${index + 1}. ${dimensionLabel(dimension)}`}</Text>
-        {dimension.question ? (
-          <Text color="secondaryDark" size="sm">
-            {dimension.key}
-          </Text>
-        ) : undefined}
       </Box>
     </Box>
   );
@@ -95,7 +78,7 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
   return (
     <Box gap={2} testID="ai-review-questions">
       <Box alignItems="center" direction="row" gap={2} justifyContent="between" wrap>
-        <Text color="secondaryDark" testID="ai-review-questions-progress">
+        <Text color="secondaryLight" testID="ai-review-questions-progress">
           {`${answered} of ${dimensions.length} answered`}
         </Text>
         <Button
@@ -103,11 +86,11 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
           onClick={onAnswerRestYes}
           size="sm"
           testID="ai-review-questions-rest-yes"
-          text="Rest Yes"
-          variant="secondary"
+          text="Yes to the rest"
+          variant="ghost"
         />
       </Box>
-      {instructions ? <Text color="secondaryDark">{instructions}</Text> : undefined}
+      {instructions ? <Text color="secondaryLight">{instructions}</Text> : undefined}
       {dimensions.map((dimension, index) => (
         <QuestionRow
           dimension={dimension}
@@ -119,9 +102,9 @@ export const ReviewQuestionList: React.FC<ReviewQuestionListProps> = ({
         />
       ))}
       {Platform.OS === "web" ? (
-        <Text color="secondaryDark" size="sm" testID="ai-review-shortcuts-hint">
+        <Text color="secondaryLight" size="sm" testID="ai-review-shortcuts-hint">
           {
-            "Keys: Y or N answers the highlighted question and moves on · ↑ ↓ (or K J) change question · Enter submits and opens the next item · S skips"
+            "Keys: Y or N answers the highlighted question and moves on. Up and down (or K and J) change question. Enter submits and opens the next item. S skips."
           }
         </Text>
       ) : undefined}

@@ -155,7 +155,6 @@ describe("AiReviewBatchView", () => {
       batch,
       judgeId: "",
       judgeOptions: [{label: "careful", value: "careful"}],
-      onAnswerNext: mock(() => {}),
       onJudgeChange: mock(() => {}),
       onOpenItem: mock(() => {}),
       onRunJudge: mock(() => {}),
@@ -167,23 +166,39 @@ describe("AiReviewBatchView", () => {
   };
 
   it("shows judge agreement, progress, and the selected judge's disagreements", () => {
-    const {getByTestId, getByText, getAllByText} = renderBatch();
+    const {getByTestId, getByText, getAllByText, queryByText} = renderBatch();
     expect(getByTestId("ai-review-batch-progress")).toBeTruthy();
-    expect(getByText("2 of 3 answered")).toBeTruthy();
+    expect(getByText("2 of 3")).toBeTruthy();
     expect(getAllByText("100%").length).toBeGreaterThan(0);
     expect(getAllByText("75%").length).toBeGreaterThan(0);
-    expect(getByText("Matches humans")).toBeTruthy();
+    expect(getAllByText("Matches").length).toBeGreaterThan(0);
+    expect(getAllByText("Close").length).toBeGreaterThan(0);
+    expect(getAllByText("careful-name").length).toBeGreaterThan(1);
+    expect(getByTestId("ai-review-batch-judge-count")).toBeTruthy();
+    expect(getAllByText("2").length).toBeGreaterThan(0);
     expect(getByText("Where quick-name disagrees (1)")).toBeTruthy();
-    expect(getByText("judge: No")).toBeTruthy();
-    expect(getByText("Answer 1 remaining")).toBeTruthy();
+    expect(getByText("Judge said No")).toBeTruthy();
+    expect(getByTestId("ai-review-batch-judge-selected-quick")).toBeTruthy();
+    expect(queryByText(/Q1/)).toBeNull();
+    expect(getAllByText("Faithful").length).toBeGreaterThan(0);
   });
 
-  it("runs a judge and opens the next item", async () => {
-    const {getByTestId, props} = renderBatch({judgeId: "careful"});
+  it("runs a judge from the card with a secondary button", async () => {
+    const {getByTestId, props, UNSAFE_root} = renderBatch({judgeId: "careful"});
     await press(getByTestId("ai-review-batch-run-judge"));
     expect(props.onRunJudge).toHaveBeenCalled();
-    await press(getByTestId("ai-review-batch-answer-next"));
-    expect(props.onAnswerNext).toHaveBeenCalled();
+    const run = UNSAFE_root.findAll(
+      (node) => node.props.testID === "ai-review-batch-run-judge" && "variant" in node.props
+    )[0];
+    expect(run?.props.variant).toBe("secondary");
+  });
+
+  it("shows stale questions and dataset steps as banners", () => {
+    const {getByTestId} = renderBatch({
+      batch: {...batch, datasetId: "ds1", datasetName: "gold", questionsStale: true},
+    });
+    expect(getByTestId("ai-review-batch-questions-stale")).toBeTruthy();
+    expect(getByTestId("ai-eval-step-banner")).toBeTruthy();
   });
 
   it("selects judges and opens items from table rows", async () => {
@@ -215,8 +230,7 @@ describe("AiReviewBatchView", () => {
 });
 
 describe("AiReviewBatchesView", () => {
-  it("lists batches with the best judge and grabs recent traces", async () => {
-    const onCreate = mock(() => {});
+  it("lists batches with the best judge and opens one", async () => {
     const onOpenBatch = mock(() => {});
     const {getByTestId, getByText} = renderWithTheme(
       <AiReviewBatchesView
@@ -233,7 +247,6 @@ describe("AiReviewBatchesView", () => {
           },
         ]}
         name=""
-        onCreate={onCreate}
         onNameChange={() => {}}
         onOpenBatch={onOpenBatch}
         onPromptChange={() => {}}
@@ -247,9 +260,8 @@ describe("AiReviewBatchesView", () => {
     );
     expect(getByText("97%")).toBeTruthy();
     expect(getByText("careful-name")).toBeTruthy();
-    expect(getByText("2 / 3")).toBeTruthy();
-    await press(getByTestId("ai-review-batch-grab-recent"));
-    expect(onCreate).toHaveBeenCalled();
+    expect(getByText("2 of 3")).toBeTruthy();
+    expect(getByText("summary-questions · Any prompt")).toBeTruthy();
     await press(getByTestId("ai-review-batches-open-b1"));
     expect(onOpenBatch).toHaveBeenCalledWith("b1");
   });
@@ -259,7 +271,6 @@ describe("AiReviewBatchesView", () => {
       <AiReviewBatchesView
         batches={[]}
         name=""
-        onCreate={() => {}}
         onNameChange={() => {}}
         onOpenBatch={() => {}}
         onPromptChange={() => {}}

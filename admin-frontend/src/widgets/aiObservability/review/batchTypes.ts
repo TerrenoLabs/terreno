@@ -165,3 +165,27 @@ export const unwrapBatchDetail = (raw: unknown): ReviewBatchDetail | undefined =
   }
   return undefined;
 };
+
+/** Readable short label from a score key: "is_faithful" or "isFaithful" become "Is faithful". */
+export const humanizeKey = (key: string): string => {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-.]+/g, " ")
+    .trim()
+    .toLowerCase();
+  if (!words) {
+    return key;
+  }
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+};
+
+/** Text colour for an agreement rate, from the shared agreement cut-offs. */
+export const agreementTextColor = (
+  rate?: number
+): "error" | "secondaryDark" | "success" | "warning" => {
+  const tone = AGREEMENT_LEVEL_STYLE[getAgreementLevel(rate)].tone;
+  if (tone === "success" || tone === "warning" || tone === "error") {
+    return tone;
+  }
+  return "secondaryDark";
+};

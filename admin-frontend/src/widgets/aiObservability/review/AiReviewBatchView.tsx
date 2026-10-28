@@ -1,23 +1,24 @@
-import {Badge, Box, Button, Card, Heading, SelectField, Text} from "@terreno/ui";
+import {Badge, Banner, Box, Button, Card, Heading, SelectField, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
-import {EvalStepBanner} from "../shell/EvalStepBanner";
-import {HUMAN_JUDGING_ACTIVITY} from "../shell/evalPipeline";
+import {AgreementMeter, ProgressMeter} from "../shell/AgreementMeter";
+import {formatStepReminder, HUMAN_JUDGING_ACTIVITY} from "../shell/evalPipeline";
+import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
   type ObservabilityTableRow,
 } from "../shell/ObservabilityTable";
 import {
-  agreementStatus,
-  agreementVerdict,
+  agreementTextColor,
   answerSubjectKey,
   formatAnswer,
   formatPercent,
+  humanizeKey,
   previewText,
   type ReviewBatchDetail,
   type ReviewBatchJudgeSummary,
 } from "./batchTypes";
-import {dimensionLabel, reviewStatusLabel} from "./reviewTypes";
+import {dimensionLabel} from "./reviewTypes";
 
 export interface JudgeOption {
   label: string;
@@ -31,7 +32,6 @@ export interface AiReviewBatchViewProps {
   isRunningJudge?: boolean;
   judgeId: string;
   judgeOptions: JudgeOption[];
-  onAnswerNext?: () => void;
   onJudgeChange: (value: string) => void;
   onOpenItem: (reviewItemId: string) => void;
   onRunJudge: () => void;
@@ -40,7 +40,8 @@ export interface AiReviewBatchViewProps {
   selectedJudge?: ReviewBatchJudgeSummary;
 }
 
-const questionTitle = (index: number, key: string): string => `Q${index + 1} ${key}`;
+/** Short column title for a question: its key in words, e.g. "faithful" becomes "Faithful". */
+const questionTitle = (key: string): string => humanizeKey(key);
 
 export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
   aiBlockedMessage,
@@ -48,7 +49,6 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
   isRunningJudge,
   judgeId,
   judgeOptions,
-  onAnswerNext,
   onJudgeChange,
   onOpenItem,
   onRunJudge,
@@ -57,15 +57,25 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
   selectedJudge,
 }) => {
   const {counts, dimensions} = batch;
-  const progressRate = counts.total > 0 ? counts.done / counts.total : 0;
+  const bestJudge = useMemo(() => {
+    return batch.judges.reduce<ReviewBatchJudgeSummary | undefined>((best, judge) => {
+      if (judge.agreement.rate === undefined) {
+        return best;
+      }
+      if (!best || (best.agreement.rate ?? -1) < judge.agreement.rate) {
+        return judge;
+      }
+      return best;
+    }, undefined);
+  }, [batch.judges]);
 
   const judgeColumns: ObservabilityTableColumn[] = useMemo(() => {
     return [
       {grow: 2, minWidth: 220, title: "Judge"},
-      {grow: 2, minWidth: 200, title: "Agreement with humans"},
-      ...dimensions.map((dimension, index) => ({
+      {grow: 2, minWidth: 220, title: "Agreement with people"},
+      ...dimensions.map((dimension) => ({
         minWidth: 110,
-        title: questionTitle(index, dimension.key),
+        title: questionTitle(dimension.key),
       })),
       {minWidth: 90, title: "Compared"},
     ];
@@ -78,29 +88,31 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
         accessibilityLabel: `Show disagreements for ${judge.evaluatorName}`,
         cells: [
           <Box gap={1} key="judge">
-            <Text bold={isSelected}>{`${isSelected ? "▸ " : ""}${judge.evaluatorName}`}</Text>
+            <Box alignItems="center" direction="row" gap={2} wrap>
+              <Text bold={isSelected}>{judge.evaluatorName}</Text>
+              {isSelected ? (
+                <Badge
+                  secondary
+                  status="info"
+                  testID={`ai-review-batch-judge-selected-${judge.evaluatorId}`}
+                  value="Selected"
+                />
+              ) : undefined}
+            </Box>
             {judge.judgePromptName ? (
               <Text color="secondaryDark" size="sm">
                 {judge.judgePromptName}
               </Text>
             ) : undefined}
           </Box>,
-          <Box alignItems="center" direction="row" gap={2} key="rate" wrap>
-            <Badge
-              status={agreementStatus(judge.agreement.rate)}
-              testID={`ai-review-batch-judge-rate-${judge.evaluatorId}`}
-              value={formatPercent(judge.agreement.rate)}
-            />
-            <Text color="secondaryDark" size="sm">
-              {agreementVerdict(judge.agreement.rate)}
-            </Text>
-          </Box>,
+          <AgreementMeter
+            key="rate"
+            rate={judge.agreement.rate}
+            testID={`ai-review-batch-judge-rate-${judge.evaluatorId}`}
+          />,
           ...judge.agreement.questions.map((question) =>
             question.covered ? (
-              <Text
-                color={question.rate !== undefined && question.rate < 0.75 ? "error" : "primary"}
-                key={question.key}
-              >
+              <Text bold color={agreementTextColor(question.rate)} key={question.key}>
                 {formatPercent(question.rate)}
               </Text>
             ) : (
@@ -154,10 +166,10 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
     return [
       {minWidth: 40, title: "#"},
       {grow: 3, minWidth: 260, title: "Output"},
-      {minWidth: 100, title: "Status"},
-      ...dimensions.map((dimension, index) => ({
+      {minWidth: 130, title: "Status"},
+      ...dimensions.map((dimension) => ({
         minWidth: 110,
-        title: questionTitle(index, dimension.key),
+        title: questionTitle(dimension.key),
       })),
     ];
   }, [dimensions]);
@@ -181,13 +193,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
         cells: [
           String(index + 1),
           previewText(item.output, 140),
-          <Badge
-            key="status"
-            status={
-              item.status === "done" ? "success" : item.status === "skipped" ? "neutral" : "warning"
-            }
-            value={reviewStatusLabel(item.status)}
-          />,
+          <ObservabilityStatusBadge key="status" status={item.status} />,
           ...dimensions.map((dimension) => {
             const human = item.scores?.[dimension.key];
             const judge = judgeScores?.[dimension.key];
@@ -199,7 +205,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
                 <Text>{formatAnswer(human)}</Text>
                 {isDisagreement ? (
                   <Text color="error" size="sm">
-                    {`judge: ${formatAnswer(judge)}`}
+                    {`Judge said ${formatAnswer(judge)}`}
                   </Text>
                 ) : undefined}
               </Box>
@@ -216,77 +222,73 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
 
   return (
     <Box gap={4} testID="ai-review-batch">
-      <Box alignItems="center" direction="row" gap={3} justifyContent="between" wrap>
-        <Box flex="grow" gap={1} minWidth={260}>
-          <Heading size="md" testID="ai-review-batch-title">
-            {batch.name}
-          </Heading>
-          <Box direction="row" gap={2} wrap>
-            <Badge status="info" value={batch.evaluatorName} />
-            {batch.promptName ? <Badge status="neutral" value={batch.promptName} /> : undefined}
-            {batch.datasetId ? (
-              <Badge
-                status="neutral"
-                testID="ai-review-batch-dataset"
-                value={`Dataset: ${batch.datasetName ?? batch.datasetId}`}
-              />
-            ) : undefined}
-            <Badge
-              status={counts.pending === 0 ? "success" : "warning"}
+      <Box direction="row" gap={4} testID="ai-review-batch-stats" wrap>
+        <Card flex="grow" minWidth={220} padding={4}>
+          <Box gap={2}>
+            <Text color="secondaryLight" size="sm">
+              Answered by people
+            </Text>
+            <ProgressMeter
+              done={counts.done}
               testID="ai-review-batch-progress"
-              value={`${counts.done} of ${counts.total} answered`}
+              total={counts.total}
             />
           </Box>
-          {batch.description ? (
-            <Text color="secondaryDark" size="sm">
-              {batch.description}
+        </Card>
+        <Card flex="grow" minWidth={220} padding={4}>
+          <Box gap={2}>
+            <Text color="secondaryLight" size="sm">
+              Best judge
             </Text>
-          ) : undefined}
-        </Box>
-        <Button
-          disabled={!onAnswerNext}
-          iconName="play"
-          onClick={onAnswerNext ?? (() => undefined)}
-          testID="ai-review-batch-answer-next"
-          text={counts.pending > 0 ? `Answer ${counts.pending} remaining` : "All answered"}
-        />
+            <AgreementMeter rate={bestJudge?.agreement.rate} testID="ai-review-batch-best-judge" />
+            {bestJudge ? (
+              <Text numberOfLines={1} size="sm">
+                {bestJudge.evaluatorName}
+              </Text>
+            ) : undefined}
+          </Box>
+        </Card>
+        <Card flex="grow" minWidth={160} padding={4}>
+          <Box gap={2}>
+            <Text color="secondaryLight" size="sm">
+              Judges run
+            </Text>
+            <Text bold size="lg" testID="ai-review-batch-judge-count">
+              {String(batch.judges.length)}
+            </Text>
+          </Box>
+        </Card>
       </Box>
       {batch.datasetId ? (
-        <EvalStepBanner
-          activity={HUMAN_JUDGING_ACTIVITY}
-          detail={`answer each item of ${batch.datasetName ?? "this dataset"} once. Answers are saved on the dataset, so every judge experiment reuses them while the questions stay the same.`}
-          step={2}
-        />
-      ) : undefined}
-      {batch.questionsStale ? (
-        <Box
-          border="warning"
-          color="warningLight"
-          padding={3}
-          rounding="md"
-          testID="ai-review-batch-questions-stale"
-        >
-          <Text>
-            {`The questions in ${batch.evaluatorName} changed after this batch was created. Answers given here before the change are stale and no longer count. Send the dataset to human review again to re-judge those items.`}
-          </Text>
+        <Box testID="ai-eval-step-banner">
+          <Banner
+            hasIcon
+            status="info"
+            text={formatStepReminder({
+              activity: HUMAN_JUDGING_ACTIVITY,
+              detail: `answer each item of ${batch.datasetName ?? "this dataset"} once. Answers are saved on the dataset, so every judge experiment reuses them while the questions stay the same.`,
+              step: 2,
+            })}
+          />
         </Box>
       ) : undefined}
-      <Box color="neutralLight" height={6} rounding="md" testID="ai-review-batch-progress-bar">
-        <Box
-          color="success"
-          height={6}
-          rounding="md"
-          width={`${Math.round(progressRate * 100)}%`}
-        />
-      </Box>
+      {batch.questionsStale ? (
+        <Box testID="ai-review-batch-questions-stale">
+          <Banner
+            hasIcon
+            status="warning"
+            text={`The questions in ${batch.evaluatorName} changed after this batch was created. Answers given before the change no longer count. Send the dataset to human review again to judge those items again.`}
+          />
+        </Box>
+      ) : undefined}
 
       <Card padding={4} testID="ai-review-batch-judges">
         <Box gap={3}>
           <Box gap={1}>
-            <Heading size="sm">Which judges match the humans?</Heading>
-            <Text color="secondaryDark">
+            <Heading size="sm">Which judge matches people?</Heading>
+            <Text color="secondaryLight">
               Run an LLM judge on the same items. Agreement counts only items people answered and
-              only the questions the judge also answers. 90% or more is green.
+              only the questions the judge also answers.
             </Text>
           </Box>
           <Box alignItems="end" direction="row" gap={3} wrap>
@@ -311,10 +313,11 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
               onClick={onRunJudge}
               testID="ai-review-batch-run-judge"
               text={`Run on ${counts.total} items`}
+              variant="secondary"
             />
           </Box>
           {aiBlockedMessage ? (
-            <Text color="secondaryDark" testID="ai-review-batch-ai-blocked">
+            <Text color="secondaryLight" testID="ai-review-batch-ai-blocked">
               {aiBlockedMessage}
             </Text>
           ) : undefined}
@@ -324,12 +327,12 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
             </Text>
           ) : undefined}
           {counts.done === 0 ? (
-            <Text color="secondaryDark" size="sm">
-              No human answers yet. Answer a few items first so there is something to compare.
+            <Text color="secondaryLight" size="sm">
+              No answers from people yet. Answer a few items first so there is something to compare.
             </Text>
           ) : undefined}
           {batch.judges.length === 0 ? (
-            <Text color="secondaryDark" testID="ai-review-batch-judges-empty">
+            <Text color="secondaryLight" testID="ai-review-batch-judges-empty">
               No judge has run on this batch yet.
             </Text>
           ) : (
@@ -349,7 +352,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
               {`Where ${selectedJudge.evaluatorName} disagrees (${selectedJudge.agreement.disagreements.length})`}
             </Heading>
             {disagreementRows.length === 0 ? (
-              <Text color="secondaryDark">
+              <Text color="secondaryLight">
                 {selectedJudge.agreement.compared === 0
                   ? "Nothing to compare yet."
                   : "No disagreements on the answered items."}
@@ -359,7 +362,7 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
                 columns={[
                   {grow: 3, minWidth: 260, title: "Output"},
                   {grow: 2, minWidth: 220, title: "Question"},
-                  {minWidth: 90, title: "Human"},
+                  {minWidth: 90, title: "People"},
                   {minWidth: 90, title: "Judge"},
                 ]}
                 rows={disagreementRows}
@@ -372,11 +375,14 @@ export const AiReviewBatchView: React.FC<AiReviewBatchViewProps> = ({
 
       <Card padding={4} testID="ai-review-batch-items">
         <Box gap={3}>
-          <Heading size="sm">Items and human answers</Heading>
+          <Heading size="sm">Items and answers from people</Heading>
           <Box gap={1}>
-            {dimensions.map((dimension, index) => (
-              <Text color="secondaryDark" key={dimension.key} size="sm">
-                {`${questionTitle(index, dimension.key)} — ${dimensionLabel(dimension)}`}
+            {dimensions.map((dimension) => (
+              <Text color="secondaryLight" key={dimension.key} size="sm">
+                <Text bold size="sm">
+                  {questionTitle(dimension.key)}
+                </Text>
+                {`: ${dimensionLabel(dimension)}`}
               </Text>
             ))}
           </Box>

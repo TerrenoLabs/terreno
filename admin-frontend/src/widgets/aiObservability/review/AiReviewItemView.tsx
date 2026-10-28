@@ -1,92 +1,123 @@
-import {Accordion, Badge, Box, Button, Card, Heading, Text, TextArea} from "@terreno/ui";
+import {Accordion, Badge, Box, Button, Card, Text, TextArea} from "@terreno/ui";
 import React from "react";
+import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {ReviewQuestionList} from "./ReviewQuestionList";
 import {ReviewReadOnlyPanel} from "./ReviewReadOnlyPanel";
-import {displayReviewValue, type ReviewDetail, reviewStatusLabel} from "./reviewTypes";
+import {displayReviewValue, type ReviewDetail} from "./reviewTypes";
+
+/** Page title for a review item: its place in the open queue, or that it is no longer open. */
+export const reviewItemTitle = ({
+  isPending,
+  position,
+  totalPending,
+}: {
+  isPending: boolean;
+  position: number;
+  totalPending: number;
+}): string => {
+  return isPending ? `Item ${position} of ${totalPending}` : "Review item";
+};
+
+export interface AiReviewItemHeaderMetaProps {
+  detail: ReviewDetail;
+  isPending: boolean;
+}
+
+/** Status badge and where the item came from, shown under the page title. */
+export const AiReviewItemHeaderMeta: React.FC<AiReviewItemHeaderMetaProps> = ({
+  detail,
+  isPending,
+}) => (
+  <>
+    <ObservabilityStatusBadge status={detail.status} testID="ai-review-item-status" />
+    {detail.batchName ? (
+      <Badge
+        iconName="layer-group"
+        secondary
+        status="neutral"
+        testID="ai-review-batch-name"
+        value={`Batch ${detail.batchName}`}
+      />
+    ) : undefined}
+    <Badge
+      iconName={detail.traceId ? "list" : "database"}
+      secondary
+      status="neutral"
+      testID="ai-review-item-source"
+      value={detail.traceId ? "From a trace" : "From a dataset item"}
+    />
+    {isPending ? undefined : (
+      <Text color="secondaryLight" size="sm" testID="ai-review-item-not-pending">
+        Not in the pending queue
+      </Text>
+    )}
+  </>
+);
+
+export interface AiReviewItemNavProps {
+  onNext?: () => void;
+  onPrevious?: () => void;
+}
+
+/** Outline Previous and Next buttons for the page header. */
+export const AiReviewItemNav: React.FC<AiReviewItemNavProps> = ({onNext, onPrevious}) => (
+  <>
+    <Button
+      disabled={!onPrevious}
+      iconName="chevron-left"
+      onClick={onPrevious ?? (() => undefined)}
+      testID="ai-review-previous"
+      text="Previous"
+      variant="outline"
+    />
+    <Button
+      disabled={!onNext}
+      iconName="chevron-right"
+      iconPosition="right"
+      onClick={onNext ?? (() => undefined)}
+      testID="ai-review-next"
+      text="Next"
+      variant="outline"
+    />
+  </>
+);
 
 export interface AiReviewItemViewProps {
   activeQuestionKey?: string;
   comment: string;
   detail: ReviewDetail;
-  isPending: boolean;
   isSaving?: boolean;
   onAnswerRestYes?: () => void;
   onAssign: () => void;
   onCommentChange: (value: string) => void;
-  onNext?: () => void;
-  onPrevious?: () => void;
   onScoreChange: (key: string, value: boolean | number | string) => void;
   onSkip: () => void;
   onSubmit: () => void;
-  position: number;
   scores: Record<string, boolean | number | string>;
   submitError?: string;
-  totalPending: number;
 }
 
 export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
   activeQuestionKey,
   comment,
   detail,
-  isPending,
   isSaving,
   onAnswerRestYes,
   onAssign,
   onCommentChange,
-  onNext,
-  onPrevious,
   onScoreChange,
   onSkip,
   onSubmit,
-  position,
   scores,
   submitError,
-  totalPending,
 }) => (
   <Box gap={4} testID="ai-review-item">
-    <Box alignItems="center" direction="row" gap={3} justifyContent="between" wrap>
-      <Box gap={1}>
-        {detail.batchName ? (
-          <Text color="secondaryDark" testID="ai-review-batch-name">
-            {detail.batchName}
-          </Text>
-        ) : undefined}
-        <Heading size="md">
-          {isPending
-            ? `Item ${position} of ${totalPending} pending`
-            : `${reviewStatusLabel(detail.status)} — not in pending queue`}
-        </Heading>
-        <Box direction="row" gap={2}>
-          <Badge status="info" value={reviewStatusLabel(detail.status)} />
-          <Text color="secondaryDark">
-            {detail.traceId
-              ? `Trace ${detail.traceId}`
-              : `Dataset item ${detail.datasetItemId ?? "—"}`}
-          </Text>
-        </Box>
-      </Box>
-      <Box direction="row" gap={2}>
-        <Button
-          disabled={!onPrevious}
-          onClick={onPrevious ?? (() => undefined)}
-          text="Previous"
-          variant="secondary"
-        />
-        <Button
-          disabled={!onNext}
-          onClick={onNext ?? (() => undefined)}
-          text="Next"
-          variant="secondary"
-        />
-      </Box>
-    </Box>
-
-    <Box direction="row" gap={3} wrap>
+    <Box direction="row" gap={4} wrap>
       <Box flex="grow" minWidth={300}>
         <ReviewReadOnlyPanel fields={detail.panels.given} title="What the AI was given" />
       </Box>
       <Box flex="grow" minWidth={300}>
-        <ReviewReadOnlyPanel fields={detail.panels.wrote} title="What the AI wrote" />
+        <ReviewReadOnlyPanel color="ai" fields={detail.panels.wrote} title="What the AI wrote" />
       </Box>
     </Box>
 
@@ -96,8 +127,8 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
       </Text>
     </Accordion>
 
-    <Card padding={3}>
-      <Box gap={3}>
+    <Card padding={4} testID="ai-review-questions-card">
+      <Box gap={4}>
         <ReviewQuestionList
           activeKey={activeQuestionKey}
           dimensions={detail.dimensions}
@@ -113,20 +144,17 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
           title="Note (optional)"
           value={comment}
         />
-        {submitError ? <Text color="error">{submitError}</Text> : undefined}
-        <Box direction="row" gap={2} wrap>
+        {submitError ? (
+          <Text color="error" testID="ai-review-submit-error">
+            {submitError}
+          </Text>
+        ) : undefined}
+        <Box alignItems="center" direction="row" gap={2} wrap>
           <Button
             loading={isSaving}
             onClick={onSubmit}
             testID="ai-review-submit-next"
-            text="Submit & next"
-          />
-          <Button
-            disabled={isSaving}
-            onClick={onSkip}
-            testID="ai-review-skip"
-            text="Skip"
-            variant="secondary"
+            text="Submit and open next"
           />
           <Button
             disabled={isSaving}
@@ -134,6 +162,13 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
             testID="ai-review-assign"
             text="Assign to me"
             variant="outline"
+          />
+          <Button
+            disabled={isSaving}
+            onClick={onSkip}
+            testID="ai-review-skip"
+            text="Skip"
+            variant="ghost"
           />
         </Box>
       </Box>

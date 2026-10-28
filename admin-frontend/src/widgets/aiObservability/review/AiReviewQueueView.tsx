@@ -1,16 +1,16 @@
 import {
-  Badge,
   Box,
   Button,
   DataTable,
   type DataTableCellData,
-  Heading,
   SegmentedControl,
   Spinner,
   Text,
 } from "@terreno/ui";
 import React, {useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
+import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {
   REVIEW_STATUSES,
   type ReviewListItem,
@@ -21,21 +21,45 @@ import {
 
 const assigneeLabel = (item: ReviewListItem): string => item.assigneeId ?? "Unassigned";
 
-const reviewSearchText = (item: ReviewListItem): string => `${item.traceName} ${item.id}`;
+/** Where an item came from, in reviewer words. */
+const REASON_LABELS: Record<string, string> = {
+  dataset_candidate: "From a dataset",
+  eval: "From an experiment",
+  feedback: "From user feedback",
+  manual: "From Traces",
+};
 
-const buildColumns = (items: ReviewListItem[]): ClientTableColumn<ReviewListItem>[] => [
+export const reviewSourceLabel = (item: ReviewListItem): string => {
+  if (item.batchId) {
+    return "From a review batch";
+  }
+  return REASON_LABELS[item.reason] ?? "From Traces";
+};
+
+const reviewSearchText = (item: ReviewListItem): string =>
+  `${item.outputPreview ?? ""} ${item.traceName} ${item.promptName ?? ""}`;
+
+const buildColumns = ({
+  items,
+  questionSetName,
+}: {
+  items: ReviewListItem[];
+  questionSetName: (item: ReviewListItem) => string;
+}): ClientTableColumn<ReviewListItem>[] => [
   {
+    cell: (item) => ({value: item}),
+    columnType: "reviewOutput",
     filter: {kind: "text"},
-    key: "item",
-    title: "Item",
-    value: (item) => item.id.slice(-8),
-    width: 150,
+    key: "output",
+    title: "Output",
+    value: (item) => item.outputPreview || item.traceName,
+    width: 300,
   },
   {
-    filter: {kind: "text"},
-    key: "traceName",
-    title: "What the AI did",
-    value: (item) => item.traceName,
+    filter: {kind: "choice", options: distinctChoiceOptions(items, questionSetName)},
+    key: "questionSet",
+    title: "Question set",
+    value: questionSetName,
     width: 220,
   },
   {
@@ -51,7 +75,7 @@ const buildColumns = (items: ReviewListItem[]): ClientTableColumn<ReviewListItem
     key: "assignee",
     title: "Assignee",
     value: assigneeLabel,
-    width: 200,
+    width: 180,
   },
   {
     // Sorting by enqueue time ascending lists the longest-waiting items first.
@@ -60,7 +84,7 @@ const buildColumns = (items: ReviewListItem[]): ClientTableColumn<ReviewListItem
     key: "waiting",
     title: "Waiting",
     value: (item) => item.enqueuedAt,
-    width: 150,
+    width: 130,
   },
   {
     columnType: "reviewStatus",
@@ -76,43 +100,58 @@ const buildColumns = (items: ReviewListItem[]): ClientTableColumn<ReviewListItem
     value: (item) => item.status,
     width: 150,
   },
-  {
-    cell: (item) => ({value: item.id}),
-    columnType: "reviewOpen",
-    key: "open",
-    title: "",
-    width: 88,
-  },
 ];
 
-const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
-  const status = String(cellData.value) as ReviewStatus;
-  return (
-    <Badge
-      status={
-        status === "done"
-          ? "success"
-          : status === "skipped"
-            ? "neutral"
-            : status === "in_progress"
-              ? "info"
-              : "warning"
-      }
-      value={reviewStatusLabel(status)}
+const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
+  <Box justifyContent="center">
+    <ObservabilityStatusBadge status={String(cellData.value)} />
+  </Box>
+);
+
+export interface AiReviewQueueActionsProps {
+  canStart: boolean;
+  onOpenBatches?: () => void;
+  onStart: () => void;
+}
+
+/** Header actions for the review queue: batches (outline) and the one primary action. */
+export const AiReviewQueueActions: React.FC<AiReviewQueueActionsProps> = ({
+  canStart,
+  onOpenBatches,
+  onStart,
+}) => (
+  <>
+    {onOpenBatches ? (
+      <Button
+        iconName="layer-group"
+        onClick={onOpenBatches}
+        testID="ai-review-open-batches"
+        text="Review batches"
+        variant="outline"
+      />
+    ) : undefined}
+    <Button
+      disabled={!canStart}
+      iconName="play"
+      onClick={onStart}
+      testID="ai-review-start-oldest"
+      text="Review oldest pending"
     />
-  );
-};
+  </>
+);
 
 export interface AiReviewQueueViewProps {
   counts: Record<ReviewStatus, number>;
   isError?: boolean;
   isLoading?: boolean;
   items: ReviewListItem[];
-  onOpenBatches?: () => void;
   onOpenItem: (id: string) => void;
+  /** Opens Traces, where reviewers send traces to this queue. */
+  onOpenTraces?: () => void;
   onRetry: () => void;
-  onStart: () => void;
   onStatusChange: (status: ReviewStatus) => void;
+  /** Question set names by evaluator id. */
+  questionSetNames?: Record<string, string>;
   status: ReviewStatus;
 }
 
@@ -121,31 +160,50 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
   isError,
   isLoading,
   items,
-  onOpenBatches,
   onOpenItem,
+  onOpenTraces,
   onRetry,
-  onStart,
   onStatusChange,
+  questionSetNames,
   status,
 }) => {
   const customColumnComponentMap = useMemo(
     () => ({
-      reviewOpen: ({cellData}: {cellData: DataTableCellData}) => (
-        <Button
-          onClick={() => {
-            onOpenItem(String(cellData.value));
-          }}
-          size="sm"
-          testID={`ai-review-open-${String(cellData.value)}`}
-          text="Open"
-          variant="outline"
-        />
-      ),
+      reviewOutput: ({cellData}: {cellData: DataTableCellData}) => {
+        const item = cellData.value as ReviewListItem;
+        return (
+          <Box
+            accessibilityHint="Opens this review item"
+            accessibilityLabel={`Open review item for ${item.traceName}`}
+            gap={1}
+            justifyContent="center"
+            onClick={() => {
+              onOpenItem(item.id);
+            }}
+          >
+            <Box testID={`ai-review-open-${item.id}`}>
+              <Text bold numberOfLines={1} skipLinking>
+                {item.outputPreview || item.traceName}
+              </Text>
+            </Box>
+            <Text color="secondaryLight" numberOfLines={1} size="sm">
+              {item.outputPreview ? item.traceName : reviewSourceLabel(item)}
+            </Text>
+          </Box>
+        );
+      },
       reviewStatus: StatusCell,
     }),
     [onOpenItem]
   );
-  const columns = useMemo(() => buildColumns(items), [items]);
+  const columns = useMemo(
+    () =>
+      buildColumns({
+        items,
+        questionSetName: (item) => questionSetNames?.[item.evaluatorId] ?? "—",
+      }),
+    [items, questionSetNames]
+  );
   const {rows: _sortedItems, ...table} = useClientTable({
     columns,
     rows: items,
@@ -154,30 +212,7 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
   const selectedIndex = REVIEW_STATUSES.indexOf(status);
 
   return (
-    <Box gap={3} testID="ai-review-queue">
-      <Box alignItems="center" direction="row" gap={3} justifyContent="between" wrap>
-        <Box gap={1}>
-          <Heading size="sm">Human review</Heading>
-          <Text color="secondaryDark">Oldest items appear first.</Text>
-        </Box>
-        <Box direction="row" gap={2} wrap>
-          {onOpenBatches ? (
-            <Button
-              iconName="layer-group"
-              onClick={onOpenBatches}
-              testID="ai-review-open-batches"
-              text="Review batches"
-              variant="secondary"
-            />
-          ) : undefined}
-          <Button
-            disabled={counts.pending === 0 || status !== "pending"}
-            onClick={onStart}
-            testID="ai-review-start-oldest"
-            text="Start reviewing — oldest first"
-          />
-        </Box>
-      </Box>
+    <Box gap={4} testID="ai-review-queue">
       <SegmentedControl
         badges={REVIEW_STATUSES.map((entry) => ({count: counts[entry]}))}
         items={REVIEW_STATUSES.map(reviewStatusLabel)}
@@ -195,17 +230,21 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
           <Spinner />
         </Box>
       ) : isError ? (
-        <Box gap={2} padding={4}>
-          <Text color="error">Could not load the review queue.</Text>
-          <Button onClick={onRetry} text="Retry" />
-        </Box>
+        <ObservabilityErrorState
+          onRetry={onRetry}
+          testID="ai-review-error"
+          text="Could not load the review queue."
+        />
       ) : items.length === 0 ? (
-        <Box gap={1} padding={5} testID="ai-review-empty">
-          <Heading size="sm">No {reviewStatusLabel(status).toLowerCase()} review items</Heading>
-          <Text color="secondaryDark">
-            Send traces from the Traces bulk action, then use Assign to me for manual assignment.
-          </Text>
-        </Box>
+        <ObservabilityEmptyState
+          actionIconName="list"
+          actionText={onOpenTraces ? "Go to traces" : undefined}
+          description="Select traces in Traces and send them to human review, or start a review batch."
+          iconName="inbox"
+          onAction={onOpenTraces}
+          testID="ai-review-empty"
+          title={`No ${reviewStatusLabel(status).toLowerCase()} review items`}
+        />
       ) : (
         <DataTable
           {...table}

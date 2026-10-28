@@ -1,10 +1,16 @@
-import {Box, Button, Spinner, Text, useToast} from "@terreno/ui";
+import {Box, Spinner, Text, useToast} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
-import {AiReviewItemView} from "./AiReviewItemView";
+import {ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {
+  AiReviewItemHeaderMeta,
+  AiReviewItemNav,
+  AiReviewItemView,
+  reviewItemTitle,
+} from "./AiReviewItemView";
 import {openBatchItems} from "./batchTypes";
 import {type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
 import {
@@ -230,7 +236,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         status={unwrapObservabilityStatus(statusQuery.data)}
       >
         <Box padding={4}>
-          <Text>Missing review item id. Open an item from the queue.</Text>
+          <Text color="secondaryLight">Missing review item id. Open an item from the queue.</Text>
         </Box>
       </AiObservabilityChrome>
     );
@@ -263,41 +269,46 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
         screenName="ai-review-item"
         status={unwrapObservabilityStatus(statusQuery.data)}
       >
-        <Box gap={2} padding={4}>
-          <Text color="error">Could not load this review item.</Text>
-          <Button onClick={() => detailQuery.refetch()} text="Retry" />
-        </Box>
+        <ObservabilityErrorState
+          onRetry={() => detailQuery.refetch()}
+          testID="ai-review-item-error"
+          text="Could not load this review item."
+        />
       </AiObservabilityChrome>
     );
   }
 
+  const isPending = currentIndex >= 0;
   return (
     <AiObservabilityChrome
       {...props}
+      actions={
+        <AiReviewItemNav
+          onNext={next ? () => openItem(next.id) : undefined}
+          onPrevious={previous ? () => openItem(previous.id) : undefined}
+        />
+      }
       backHref={queueHref}
       error={statusQuery.isError}
       isLoading={statusQuery.isLoading}
+      meta={<AiReviewItemHeaderMeta detail={detail} isPending={isPending} />}
       screenName="ai-review-item"
       status={unwrapObservabilityStatus(statusQuery.data)}
+      title={reviewItemTitle({isPending, position, totalPending: pending.length})}
     >
       <AiReviewItemView
         activeQuestionKey={activeQuestionKey}
         comment={comment}
         detail={detail}
-        isPending={currentIndex >= 0}
         isSaving={actionState.isLoading}
         onAnswerRestYes={handleAnswerRestYes}
         onAssign={handleAssign}
         onCommentChange={setComment}
-        onNext={next ? () => openItem(next.id) : undefined}
-        onPrevious={previous ? () => openItem(previous.id) : undefined}
         onScoreChange={handleScoreChange}
         onSkip={handleSkip}
         onSubmit={handleSubmit}
-        position={position}
         scores={scores}
         submitError={submitError}
-        totalPending={pending.length}
       />
     </AiObservabilityChrome>
   );

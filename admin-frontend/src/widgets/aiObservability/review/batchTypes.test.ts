@@ -2,9 +2,11 @@ import {afterEach, describe, expect, it, mock} from "bun:test";
 import {renderHook} from "@testing-library/react-native";
 import {
   agreementStatus,
+  agreementTextColor,
   agreementVerdict,
   formatAnswer,
   formatPercent,
+  humanizeKey,
   previewText,
   unwrapBatchDetail,
   unwrapBatchList,
@@ -18,6 +20,16 @@ import {
 } from "./reviewTypes";
 
 describe("batchTypes", () => {
+  it("turns score keys into readable labels and colours agreement from shared cut-offs", () => {
+    expect(humanizeKey("is_faithful")).toBe("Is faithful");
+    expect(humanizeKey("isFaithful")).toBe("Is faithful");
+    expect(humanizeKey("__")).toBe("__");
+    expect(agreementTextColor(0.95)).toBe("success");
+    expect(agreementTextColor(0.8)).toBe("warning");
+    expect(agreementTextColor(0.5)).toBe("error");
+    expect(agreementTextColor(undefined)).toBe("secondaryDark");
+  });
+
   it("formats agreement as a percent with a traffic-light status", () => {
     expect(formatPercent(31 / 32)).toBe("97%");
     expect(formatPercent(undefined)).toBe("—");

@@ -38,6 +38,3 @@ export const LastUsedPill: FC<LastUsedPillProps> = ({label, testID}) => {
     </View>
   );
 };
-
-/** @deprecated Use {@link LastUsedPill}. Kept so existing imports keep compiling. */
-export const LastUsedBadge = LastUsedPill;

@@ -151,6 +151,15 @@ describe("LoginScreen", () => {
     expect(getByTestId("login-screen-email-input").props.value).toBe("second@example.com");
     // Fields the new values leave out keep what the user typed.
     expect(getByTestId("login-screen-password-input").props.value).toBe("secret123");
+
+    rerender(
+      <LoginScreen
+        fields={defaultFields}
+        initialValues={{email: "second@example.com", password: ""}}
+        onSubmit={onSubmit}
+      />
+    );
+    expect(getByTestId("login-screen-password-input").props.value).toBe("");
   });
 
   it("leaves out the whole form block when there are no fields", () => {

@@ -107,6 +107,24 @@ describe("TwoFactorChallengeScreen", () => {
     expect(queryByTestId("two-factor-challenge-trust-device")).toBeNull();
   });
 
+  it("starts the trust-device checkbox unchecked when initialTrustDevice is false", async () => {
+    const onSubmit = makeOnSubmit();
+    const {getByTestId} = renderWithTheme(
+      <TwoFactorChallengeScreen
+        initialTrustDevice={false}
+        onSubmit={onSubmit}
+        trustDeviceDays={30}
+      />
+    );
+    expect(getByTestId("two-factor-challenge-trust-device").props["aria-checked"]).toBe(false);
+    await act(async () => {
+      fireEvent.changeText(getByTestId("two-factor-challenge-otp-cell-1"), "654321");
+    });
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalledWith({code: "654321", kind: "totp", trustDevice: false});
+    });
+  });
+
   it("submits trustDevice when the checkbox is checked", async () => {
     const onSubmit = makeOnSubmit();
     const {getByTestId, getByText} = renderWithTheme(
@@ -131,11 +149,7 @@ describe("TwoFactorChallengeScreen", () => {
     );
     const error = getByTestId("two-factor-challenge-error");
     expect(error.props.role).toBe("alert");
-    expect(
-      getByText(
-        "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
-      )
-    ).toBeTruthy();
+    expect(getByText("Invalid code")).toBeTruthy();
   });
 
   it("focuses the first code cell on mount by default", () => {

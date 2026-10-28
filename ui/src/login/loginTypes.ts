@@ -237,6 +237,11 @@ export interface TwoFactorChallengeScreenProps {
    */
   initialKind?: TwoFactorCodeKind;
   /**
+   * Whether "Trust this device" starts checked. Defaults to checked for an authenticator code
+   * and unchecked for a backup code. Set `false` to start unchecked.
+   */
+  initialTrustDevice?: boolean;
+  /**
    * Focuses the first code cell when the screen mounts. Turn it off when the screen is not the
    * page's main task (a preview or gallery), since focusing scrolls the page to the cells. A
    * rejected code still returns focus to the first cell.

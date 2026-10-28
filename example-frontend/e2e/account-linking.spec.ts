@@ -25,7 +25,7 @@ import {
   signUpApiUser,
 } from "./helpers/authFlows";
 import {BEARER_TOKEN_KEY} from "./helpers/crossSiteApi";
-import {loginAs} from "./helpers/login";
+import {loginAs, showOtherSignInMethods} from "./helpers/login";
 import {setMockOidcIdentity} from "./helpers/mockOidcProvider";
 
 const MOCK_OIDC_BUTTON = "login-screen-oauth-mock-oidc";
@@ -96,6 +96,7 @@ test.describe("Account linking", () => {
     // 2. Sign out, then sign in with mock OAuth on the same email.
     await signOutFromProfile(page);
     await setMockOidcIdentity(context, {email: user.email, emailVerified: true});
+    await showOtherSignInMethods(page);
     await page.getByTestId(MOCK_OIDC_BUTTON).click();
 
     // 3. The same todos show, for the same user.
@@ -141,12 +142,11 @@ test.describe("Account linking", () => {
     await loginAs(page, user);
     await signOutFromProfile(page);
     await setMockOidcIdentity(context, {email: user.email, emailVerified: true});
+    await showOtherSignInMethods(page);
     await page.getByTestId(MOCK_OIDC_BUTTON).click();
 
     const notice = page.getByTestId("login-screen-notice");
-    await expect(notice).toContainText(
-      "Sign in with email, then link this sign-in method from Security."
-    );
+    await expect(notice).toContainText("Sign in with email, then link Mock OIDC from Security.");
     await page.screenshot({fullPage: true, path: testInfo.outputPath("explicit-link.png")});
   });
 
@@ -177,7 +177,7 @@ test.describe("Account linking", () => {
     await page.getByTestId("login-screen").waitFor({state: "visible"});
 
     await expect(page.getByTestId("login-screen-notice")).toContainText(
-      "then link this sign-in method from Security."
+      "then link it from Security."
     );
     await expect(page.getByTestId("login-screen-error")).toHaveCount(0);
   });

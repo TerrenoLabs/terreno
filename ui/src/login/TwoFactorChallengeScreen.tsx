@@ -16,8 +16,6 @@ import {maskEmail} from "./loginMethods";
 import type {TwoFactorChallengeScreenProps, TwoFactorCodeKind} from "./loginTypes";
 
 const DEFAULT_CODE_LENGTH = 6;
-const TOTP_ERROR_TEXT =
-  "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now.";
 
 /**
  * The second step of a two-factor sign-in: a one-time code from an authenticator app, or a backup
@@ -53,14 +51,16 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
   logo,
   codeLength = DEFAULT_CODE_LENGTH,
   initialKind = "totp",
+  initialTrustDevice,
   autoFocus = true,
   testID = "two-factor-challenge",
 }) => {
   const [kind, setKind] = useState<TwoFactorCodeKind>(initialKind);
   const [totpCode, setTotpCode] = useState("");
   const [backupCode, setBackupCode] = useState("");
-  // Trust starts checked for an authenticator code. Backup codes keep the same choice.
-  const [trustDevice, setTrustDevice] = useState(initialKind === "totp");
+  // Trust starts checked for an authenticator code unless the caller opts out. Backup codes
+  // keep the same choice when the user switches mode.
+  const [trustDevice, setTrustDevice] = useState(initialTrustDevice ?? initialKind === "totp");
   // Remounting the code cells after an error clears them and puts focus back on the first cell.
   const [otpResetKey, setOtpResetKey] = useState(0);
   // Counts finished submissions so the effect below can react after the parent's error lands.
@@ -157,7 +157,7 @@ export const TwoFactorChallengeScreen: FC<TwoFactorChallengeScreenProps> = ({
   const totpDescription = namedAccount
     ? `Open your authenticator app and enter the ${codeLength}-digit code for ${namedAccount}.`
     : `Open your authenticator app and enter the ${codeLength}-digit code.`;
-  const displayedError = error ? (isTotp ? TOTP_ERROR_TEXT : error) : undefined;
+  const displayedError = error || undefined;
 
   return (
     <Page navigation={undefined}>

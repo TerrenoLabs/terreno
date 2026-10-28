@@ -23,7 +23,7 @@ import {
   signUpApiUser,
 } from "./helpers/authFlows";
 import {BEARER_TOKEN_KEY} from "./helpers/crossSiteApi";
-import {loginAs, waitForSignedIn} from "./helpers/login";
+import {loginAs, showOtherSignInMethods, waitForSignedIn} from "./helpers/login";
 import {setMockOidcIdentity} from "./helpers/mockOidcProvider";
 import {totpCode, totpSecretFromBase32} from "./helpers/totp";
 
@@ -122,6 +122,7 @@ const linkMockProvider = async (
 /** Fills the login form and submits it. */
 const submitLoginForm = async (page: Page, email: string, password: string): Promise<void> => {
   await openLoginScreen(page);
+  await showOtherSignInMethods(page);
   await page.getByTestId("login-screen-email-input").fill(email);
   await page.getByTestId("login-screen-password-input").fill(password);
   await page.getByTestId("login-screen-submit-button").click();
@@ -299,7 +300,9 @@ test.describe("Account security", () => {
 
     await signOutFromProfile(page);
     await submitLoginForm(page, user.email, user.password);
-    await expect(page.getByTestId("login-screen-error")).toHaveText("Invalid email or password");
+    await expect(page.getByTestId("login-screen-password-input.error")).toContainText(
+      "That password doesn't match. Try again or reset it."
+    );
 
     await loginAs(page, {...user, password: newPassword});
     await expect(page.getByTestId("todos-screen").filter({visible: true})).toBeVisible();

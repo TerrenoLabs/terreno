@@ -29,6 +29,18 @@ export const waitForSignedIn = async (page: Page): Promise<void> => {
     .waitFor({state: "visible"});
 };
 
+/** The email form and other methods sit behind "Sign in another way" once this device has an account. */
+export const showOtherSignInMethods = async (page: Page): Promise<void> => {
+  const back = page.getByTestId("login-screen-continue-back");
+  if (await back.isVisible()) {
+    await back.click();
+  }
+  const anotherWay = page.getByTestId("login-screen-another-way");
+  if (await anotherWay.isVisible()) {
+    await anotherWay.click();
+  }
+};
+
 /**
  * Signs in through the login screen. A user with `totpSecret` gets the two-factor challenge
  * answered with the current code.
@@ -38,6 +50,7 @@ export const loginAs = async (page: Page, user: E2EUser = TEST_USER): Promise<vo
     await page.goto("/login");
   }
   await page.getByTestId("login-screen").waitFor({state: "visible"});
+  await showOtherSignInMethods(page);
   await page.getByTestId("login-screen-email-input").fill(user.email);
   await page.getByTestId("login-screen-password-input").fill(user.password);
   await page.getByTestId("login-screen-submit-button").click();

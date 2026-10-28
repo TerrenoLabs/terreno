@@ -17,7 +17,9 @@ export const TwoFactorChallengeScreenDemo: React.FC = (): ReactElement => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     setLoading(false);
     if (values.kind === "totp" && values.code !== "123456") {
-      setError("That code didn't work. Check your authenticator app and try again.");
+      setError(
+        "That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
+      );
       return;
     }
     setError(undefined);
@@ -54,7 +56,7 @@ export const TwoFactorChallengeScreenError: React.FC = (): ReactElement => {
     <TwoFactorChallengeScreen
       accountLabel="ada@example.com"
       autoFocus={false}
-      error="rejected"
+      error="That code didn't work. Codes change every 30 seconds, so enter the one your app shows now."
       onCancel={() => {}}
       onSubmit={noop}
       trustDeviceDays={30}

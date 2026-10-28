@@ -761,8 +761,12 @@ export const useLoginController = ({
 
   const cancelTwoFactor = useCallback((): void => {
     setTwoFactorError(undefined);
+    setContinuingAccount(undefined);
+    // A new object so LoginScreen applies it. password: "" drops a password typed on the
+    // continue step; leaving the key out would keep that value.
+    setInitialValues({email: initialEmail ?? "", password: ""});
     setStep("login");
-  }, []);
+  }, [initialEmail]);
 
   const offeredProviders = methods?.providers;
   // True while the methods load, so the form does not flash away for servers that offer it.
@@ -824,7 +828,7 @@ export const useLoginController = ({
         if (isUsableEmail(account.email)) {
           setInfoNotice(undefined);
           setContinuingAccount(account);
-          setInitialValues({email: account.email});
+          setInitialValues({email: account.email, password: ""});
           return;
         }
         setContinuingAccount(undefined);
@@ -857,7 +861,7 @@ export const useLoginController = ({
   const cancelContinue = useCallback((): void => {
     setContinuingAccount(undefined);
     setFailure(undefined);
-    setInitialValues(initialEmail ? {email: initialEmail} : undefined);
+    setInitialValues({email: initialEmail ?? "", password: ""});
   }, [initialEmail]);
 
   const forget = useCallback(

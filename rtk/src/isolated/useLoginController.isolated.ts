@@ -1238,13 +1238,69 @@ describe("useLoginController", () => {
         "remembered"
       );
     });
-    expect(result.current.screenProps.initialValues).toEqual({email: "jane@example.com"});
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "jane@example.com",
+      password: "",
+    });
     expect(result.current.screenProps.continuingAccount).toEqual({
       email: "jane@example.com",
       id: "u1",
       method: "email",
     });
     expect(result.current.screenProps.notice).toBeUndefined();
+
+    await act(async () => {
+      await result.current.continueAs(
+        {email: "other@example.com", id: "u2", method: "email"},
+        "remembered"
+      );
+    });
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "other@example.com",
+      password: "",
+    });
+
+    act(() => result.current.screenProps.onCancelContinue?.());
+    expect(result.current.screenProps.continuingAccount).toBeUndefined();
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "start@example.com",
+      password: "",
+    });
+  });
+
+  it("leaves the password step and clears the typed password when two-factor is cancelled", async () => {
+    const client = fakeClient(
+      {},
+      {
+        email: async () => ({
+          data: {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          error: null,
+        }),
+      }
+    );
+    const {result} = renderController({client, initialEmail: "start@example.com"});
+    await waitForLoginScreen(result);
+    await act(async () => {
+      await result.current.continueAs(
+        {email: "jane@example.com", id: "u1", method: "email", name: "Jane"},
+        "remembered"
+      );
+    });
+    await act(async () => {
+      await result.current.signInEmail({email: "jane@example.com", password: "secret"});
+    });
+    expect(result.current.step).toBe("twoFactor");
+    expect(result.current.screenProps.continuingAccount?.email).toBe("jane@example.com");
+
+    await act(async () => {
+      result.current.twoFactor.onCancel();
+    });
+    expect(result.current.step).toBe("login");
+    expect(result.current.screenProps.continuingAccount).toBeUndefined();
+    expect(result.current.screenProps.initialValues).toEqual({
+      email: "start@example.com",
+      password: "",
+    });
   });
 
   it("explains a remembered method the server no longer offers, and forgets accounts", async () => {

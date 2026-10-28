@@ -1270,7 +1270,8 @@ methods and the email form are on screen.
 | Element | testID |
 | --- | --- |
 | Branded or generic provider button | `login-screen-oauth-{provider}` (e.g. `login-screen-oauth-github`, `login-screen-oauth-mock-oidc`) |
-| Last-used badge | `login-screen-last-used-{method}` |
+| Last-used badge on a method | `login-screen-last-used-{method}` |
+| Last-used badge on a continue row | `login-screen-last-used-account-{index}` |
 | Continue row (sessions first, then remembered accounts) | `login-screen-continue-{index}` |
 | Remove, only while Edit is open | `login-screen-forget-{index}` (same index as its row) |
 | Edit / Done | `login-screen-accounts-edit` |
@@ -1278,6 +1279,7 @@ methods and the email form are on screen.
 | Passkey button | `login-screen-passkey-button` |
 | Notice / its action / dismiss | `login-screen-notice` / `login-screen-notice-action` / `login-screen-notice-dismiss` |
 | Banner from the `error` prop | `login-screen-error` |
+| Wrong password, under the password field | `login-screen-password-input.error` |
 | Password step back / Not you? | `login-screen-continue-back` / `login-screen-continue-not-you` |
 | Continue-as card list | `login-screen-accounts` |
 
@@ -1360,12 +1362,13 @@ const [error, setError] = useState<string | undefined>(undefined);
 | Prop | Type | Behavior |
 | --- | --- | --- |
 | `onSubmit` | `(values: TwoFactorChallengeSubmission) => void \| Promise<void>` | Receives `{code, kind: "totp" \| "backup", trustDevice}`. Backup codes are trimmed. Not called while `loading` or while an earlier call is still pending. A rejection is caught, logged with `console.warn`, and clears the code. |
-| `error` | `string` | For an authenticator code, the screen shows a fixed sentence under the cells (`role="alert"`), whatever string was passed. A backup code shows this string under the field. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
+| `error` | `string` | Shown under the cells for an authenticator code (`role="alert"`) and under the field for a backup code. The screen shows this string as passed, including a rate limit or an expired session. The entered code clears (and the first cell refocuses) when a new error arrives, and when a submission finishes (`loading` goes from true to false, or `onSubmit` settles) with an error set, so the same error twice still clears it. |
 | `loading` | `boolean` | Disables every control and shows a spinner on Verify. |
 | `trustDeviceDays` | `number` | Shows a "Trust this device" checkbox, checked by default for an authenticator code, with helper text "We won't ask for a code here for N days." Unset hides it and `trustDevice` is always `false`. |
 | `onCancel` / `cancelText` | `() => void` / `string` | Shows a Back link and a footer link (default "Sign in a different way"). |
 | `codeLength` | `number` | Digits in a TOTP code. Defaults to 6. |
 | `initialKind` | `"totp" \| "backup"` | The mode the screen opens in. Defaults to `"totp"`. The title follows the mode: "Enter your code" or "Use a backup code". |
+| `initialTrustDevice` | `boolean` | Whether "Trust this device" starts checked. Defaults to checked for an authenticator code and unchecked for a backup code. Pass `false` to start unchecked. |
 | `autoFocus` | `boolean` | Focuses the first code cell on mount. Defaults to `true`. Set `false` where the screen is a preview rather than the page's task, since the focus scrolls the page to the cells; a rejected code still refocuses the first cell. |
 | `title` / `accountLabel` / `logo` | `string` / `string` / `ReactNode` | Heading override, the account the code is for (an email is masked), and an optional logo. |
 

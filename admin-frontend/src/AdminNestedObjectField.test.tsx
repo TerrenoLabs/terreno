@@ -150,6 +150,27 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     expect(queryByText("JSON value (string, number, boolean, object, or array)")).toBeNull();
   });
 
+  it("keeps a string leaf a text field when only its parent's name contains 'date'", () => {
+    const onChange = mock((_: AdminFieldValue) => {});
+    const {getByTestId} = renderWithTheme(
+      <AdminFieldRenderer
+        api={api}
+        fieldConfig={{
+          items: {note: {required: false, type: "string"}},
+          required: false,
+          type: "object",
+        }}
+        fieldKey="updates"
+        onChange={onChange}
+        value={{note: "hello"}}
+      />
+    );
+    const noteInput = getByTestId("admin-field-updates.note");
+    expect(noteInput.props.value).toBe("hello");
+    fireEvent.changeText(noteInput, "bye");
+    expect(onChange).toHaveBeenCalledWith({note: "bye"});
+  });
+
   it("keeps the JSON editor for objects without subfields and for mixed", () => {
     const {getAllByText} = renderWithTheme(
       <>

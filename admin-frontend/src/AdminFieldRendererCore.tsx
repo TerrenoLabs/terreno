@@ -110,6 +110,8 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   autocompleteFields,
 }) => {
   const label = labelProp ?? startCase(fieldKey);
+  // Name heuristics read the subfield's own key: a dotted path also carries its parents' names.
+  const leafKey = fieldKey.split(".").pop() ?? fieldKey;
   const helperText = fieldConfig.description;
   const refModel = getRefModel(modelConfigs, USER_REF_MODEL_NAME);
   const isReadOnly = Boolean(readOnly);
@@ -329,7 +331,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (
     fieldConfig.type === "date" ||
     fieldConfig.type === "datetime" ||
-    (fieldConfig.type === "string" && fieldKey.toLowerCase().includes("date"))
+    (fieldConfig.type === "string" && leafKey.toLowerCase().includes("date"))
   ) {
     return (
       <DateTimeField

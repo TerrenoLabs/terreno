@@ -8,7 +8,7 @@ import {useTheme} from "./Theme";
 import {textFontSizes} from "./textFontSizes";
 
 /** Font size in pixels that `Text` renders at `size` on the current platform. */
-export const getTextFontSize = (size: TextSize): number => fontSizes[size].size;
+export const getTextFontSize = (size: TextSize): number => textFontSizes[size].size;
 
 const TextComponent = ({
   accessibilityRole,

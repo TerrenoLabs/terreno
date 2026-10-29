@@ -8,12 +8,12 @@ IP: [rate-limiting.md](../implementationPlans/rate-limiting.md)
 ## Phase 1 — Tracer (memory, TerrenoApp)
 
 - [x] **Task 1.1**: Rate-limit module + TerrenoApp mount
-  - Delivers: `rateLimit: {}` on `TerrenoApp` limits HTTP; omitted option is a no-op; `POST /auth/login` uses the auth bucket (20 / 15 min); modelRouter list uses `api` (600 / 15 min); skip `/health` and `/openapi.json`; 429 `APIError` `code: "rate-limit-exceeded"` with `Retry-After` and IETF `RateLimit` / `RateLimit-Policy`; memory store; `trust proxy` default `1` when enabled
+  - Delivers: `rateLimit: {}` on `TerrenoApp` limits HTTP; omitted option used to be a no-op (Terreno 58 default-on — see Task 5.1); `POST /auth/login` uses the auth bucket (20 / 15 min); modelRouter list uses `api` (600 / 15 min); skip `/health` and `/openapi.json`; 429 `APIError` `code: "rate-limit-exceeded"` with `Retry-After` and IETF `RateLimit` / `RateLimit-Policy`; memory store; `trust proxy` default `1` when enabled
   - Files: `api/src/rateLimit/types.ts`, `api/src/rateLimit/store.ts`, `api/src/rateLimit/memoryStore.ts`, `api/src/rateLimit/policies.ts`, `api/src/rateLimit/middleware.ts`, `api/src/rateLimit/rateLimit.test.ts`, `api/src/terrenoApp.ts`, `api/src/index.ts`, `api/src/api.ts` (remove `TODO add rate limit`)
   - Blocked by: none
   - Skills: `terreno-backend-api`, `backend-test-env`, `update-docs`
   - Docs: stub section in `docs/reference/api.md` (`rateLimit` option) so the tracer is documented when it lands
-  - Acceptance: bun tests — default off (burst login no 429); auth 20 then 429; 21st list GET still 200; 601st list 429; `/health` never 429; 429 body/headers; login classified auth
+  - Acceptance: bun tests — with limiter off (`rateLimit: false`), burst login no 429; auth 20 then 429; 21st list GET still 200; 601st list 429; `/health` never 429; 429 body/headers; login classified auth
 
 ## Phase 2 — Shared stores
 

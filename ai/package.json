@@ -135,7 +135,7 @@
   "main": "dist/index.js",
   "name": "@terreno/ai",
   "peerDependencies": {
-    "@ai-sdk/google-vertex": "^4.0.142",
+    "@ai-sdk/google-vertex": "^5.0.92",
     "@ai-sdk/provider": "^4.0.26",
     "@terreno/api": "workspace:*",
     "@terreno/jobs": "workspace:*",

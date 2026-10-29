@@ -569,6 +569,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     organizations: {
       settingsSchema: organizationSettingsSchema,
     },
+    rateLimit: isDeployed ? {trustProxy: 1} : false,
     skipListen,
     // noExplicitAny: User model type mismatch
     // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch

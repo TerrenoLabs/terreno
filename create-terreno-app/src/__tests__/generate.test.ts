@@ -355,6 +355,7 @@ describe("generateAllFiles", () => {
     }).find((file) => file.path === "backend/src/server.ts")?.content;
 
     assert.include(server, "const terraApp = new TerrenoApp");
+    assert.include(server, "rateLimit: isDeployed ? {trustProxy: 1} : false");
     assert.include(server, "return terraApp");
     assert.include(server, ".start();");
     assert.notInclude(server, "return app;");

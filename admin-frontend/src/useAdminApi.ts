@@ -1,6 +1,10 @@
 import {useMemo} from "react";
 import {asDynamicHookApi} from "./dynamicHookApi";
-import {adminOrganizationHeaders, buildAdminModelEndpoints} from "./orgs/adminModelEndpoints";
+import {
+  adminOrganizationHeaders,
+  adminOrgScopedArg,
+  buildAdminModelEndpoints,
+} from "./orgs/adminModelEndpoints";
 import {useOptionalOrgContext} from "./orgs/useOrgContext";
 import type {AdminApi, EndpointBuilder} from "./types";
 
@@ -47,6 +51,12 @@ import type {AdminApi, EndpointBuilder} from "./types";
  * @see useAdminConfig for fetching model configurations
  * @see AdminModelTable for usage in the table view
  */
+/** RTK Query hook options (`skip`, `pollingInterval`, ...), passed through as given. */
+interface AdminQueryHookOptions {
+  skip?: boolean;
+  [option: string]: unknown;
+}
+
 export const useAdminApi = (api: AdminApi, routePath: string, modelName: string) => {
   const organizationId = useOptionalOrgContext()?.organizationId;
   const headers = useMemo(() => adminOrganizationHeaders(organizationId), [organizationId]);
@@ -68,12 +78,22 @@ export const useAdminApi = (api: AdminApi, routePath: string, modelName: string)
   const bulkPatchKey = `adminBulkPatch_${modelName}`;
 
   const enhanced = asDynamicHookApi(enhancedApi);
+  const useRawListQuery = enhanced[`use${capitalize(listKey)}Query`];
+  const useRawReadQuery = enhanced[`use${capitalize(readKey)}Query`];
+  // The organization rides in the argument, so switching it (such as the org switcher settling
+  // on a default after a read started) changes the argument and RTK Query fetches the new
+  // organization's entry. Kept in the closure only, the cache key moved while the subscription
+  // stayed on the old entry and the screen waited on a request that never went out.
+  const useListQuery = (params?: Record<string, unknown>, options?: AdminQueryHookOptions) =>
+    useRawListQuery(adminOrgScopedArg(params, organizationId), options);
+  const useReadQuery = (id: string, options?: AdminQueryHookOptions) =>
+    useRawReadQuery(adminOrgScopedArg(id, organizationId), options);
   return {
     useBulkPatchMutation: enhanced[`use${capitalize(bulkPatchKey)}Mutation`],
     useCreateMutation: enhanced[`use${capitalize(createKey)}Mutation`],
     useDeleteMutation: enhanced[`use${capitalize(deleteKey)}Mutation`],
-    useListQuery: enhanced[`use${capitalize(listKey)}Query`],
-    useReadQuery: enhanced[`use${capitalize(readKey)}Query`],
+    useListQuery,
+    useReadQuery,
     useUpdateMutation: enhanced[`use${capitalize(updateKey)}Mutation`],
   };
 };

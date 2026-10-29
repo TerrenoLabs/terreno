@@ -42,4 +42,31 @@ describe("OAuthButtons", () => {
     );
     expect(toJSON()).toMatchSnapshot();
   });
+
+  it("renders generic providers without branded ones", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <OAuthButtons
+        genericProviders={[
+          {id: "mock-oidc", label: "Mock OIDC", onPress: mock(() => Promise.resolve())},
+        ]}
+        providers={[]}
+        testID="oauth"
+      />
+    );
+    expect(getByTestId("oauth-mock-oidc")).toBeTruthy();
+    expect(getByText("Continue with Mock OIDC")).toBeTruthy();
+  });
+
+  it("badges the last-used provider with a default testID", () => {
+    const {getAllByTestId, getByTestId, getByText} = renderWithTheme(
+      <OAuthButtons lastUsed={{provider: "apple"}} providers={mockProviders} testID="oauth" />
+    );
+    expect(getByTestId("oauth-apple-last-used")).toBeTruthy();
+    expect(getByText("Last used")).toBeTruthy();
+    expect(getByTestId("oauth-apple").props["aria-label"]).toBe("Continue with Apple, last used");
+    const order = getAllByTestId(/^oauth-(google|github|apple)$/).map(
+      (element) => element.props.testID
+    );
+    expect(order).toEqual(["oauth-apple", "oauth-google", "oauth-github"]);
+  });
 });

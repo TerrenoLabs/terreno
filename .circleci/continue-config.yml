@@ -453,9 +453,9 @@ commands:
             source "$BASH_ENV"
             shard="<< parameters.spec >>"
             case "$shard" in
-              auth) specs="login signup consents provisionalConsent forgot-password reset-password verify-email" ;;
+              auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
               app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
-              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
+              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
@@ -1793,6 +1793,105 @@ jobs:
           skip-compile: true
           skip-web-export: true
 
+  # The cross-site web bearer specs (CROSS_SITE_SPEC_FILES in playwright.config.ts): social
+  # sign-in through the mock OIDC provider, remembered accounts, passkeys, two-factor challenges
+  # without cookies, account linking, and the Security screen. They need their own web build
+  # (cross-site API URL, bearer flag), backend (OAuth handoff, mock provider) and mock provider
+  # server, so the shared cookie-mode export cannot serve them. Like the e2e shards, the web app
+  # is a static export served on 8082 (a Metro dev server bundling beside the backend and
+  # Chromium gets OOM-killed); playwright.config.ts starts the backend and mock provider itself.
+  # Not a required check: a red run here does not block a merge.
+  e2e-cross-site:
+    executor: node22_browsers_mongo_rs_heavy
+    steps:
+      - checkout
+      - restore_e2e_dists
+      - install_bun_and_deps
+      - init_mongo_replica
+      - resolve_e2e_secrets
+      - run:
+          name: Export cross-site example-frontend web
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+            EXPO_NO_TELEMETRY: "1"
+            EXPO_PUBLIC_API_URL: "http://127.0.0.1:4000"
+            EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true"
+            NODE_OPTIONS: "--max-old-space-size=3072"
+          # --clear: Metro's transform cache keeps EXPO_PUBLIC_* values from an earlier export.
+          command: bun expo export --platform web --output-dir dist-cross-site --clear
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          name: Serve cross-site exported web
+          working_directory: ~/project/example-frontend
+          background: true
+          command: bunx serve dist-cross-site -s -l 8082
+      - run:
+          name: Wait for cross-site static web
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              code="$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8082/login || true)"
+              if [ "$code" = "200" ]; then
+                echo "static web ready after ${i} attempts"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "static web failed to become ready"
+            exit 1
+      - run:
+          name: Playwright cross-site bearer specs
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/cross-site
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            # The CircleCI overlay reuses the static web server above.
+            bunx playwright test --config playwright.circleci.config.ts \
+              --reporter=list --reporter=html --output test-results/cross-site
+      - run:
+          # account-linking.spec.ts's explicit-mode case needs a backend started with
+          # AUTH_ACCOUNT_LINKING=explicit; its verified-email cases skip themselves here.
+          name: Playwright explicit account linking
+          when: always
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_ACCOUNT_LINKING: explicit
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/explicit-linking
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            bunx playwright test --config playwright.circleci.config.ts e2e/account-linking.spec.ts \
+              --reporter=list --reporter=html --output test-results/explicit-linking
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: playwright-report-cross-site
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: playwright-test-results-cross-site
+
   # Heavier syncdb-loadlab spec — nightly/manual only, never PR-blocking
   # (mirrors GHA e2e-load-nightly).
   e2e-load:
@@ -2598,6 +2697,9 @@ workflows:
                 - admin-core
                 - admin-table
                 - syncdb
+      - e2e-cross-site:
+          requires:
+            - e2e-prepare
 
   # Started when setup continues with {"e2e-load": true} after a
   # {"run-e2e-load": true} setup-pipeline trigger.

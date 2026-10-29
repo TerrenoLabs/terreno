@@ -254,6 +254,22 @@ describe("GPTChat", () => {
     assert.deepEqual(onGeminiApiKeyChange.mock.calls, [["new-key"]]);
   });
 
+  it("saves the Gemini API key on Enter and labels the key field", async () => {
+    const onGeminiApiKeyChange = mock((_key: string) => {});
+    const {getByTestId} = renderChat({onGeminiApiKeyChange});
+
+    await press(getByTestId("gpt-api-key-button"));
+    const input = getByTestId("gpt-api-key-input");
+    assert.equal(input.props["aria-label"], "Gemini API key");
+    assert.equal(input.props.autoComplete, "off");
+    fireEvent.changeText(input, "new-key");
+    await act(async () => {
+      fireEvent(getByTestId("gpt-api-key-input"), "submitEditing");
+    });
+
+    assert.deepEqual(onGeminiApiKeyChange.mock.calls, [["new-key"]]);
+  });
+
   it("dismisses the API key modal without saving", async () => {
     const onGeminiApiKeyChange = mock((_key: string) => {});
     const {getByTestId, getByText} = renderChat({onGeminiApiKeyChange});

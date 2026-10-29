@@ -155,6 +155,8 @@ export {
   type HttpChannelConfig,
   ListRequestError,
   QueryFieldNotAllowedError,
+  RequestSupersededError,
+  type SupersedableRequestOptions,
 } from "./sync/httpChannel";
 export {createSocketTransport, type SocketTransportConfig} from "./sync/socketTransport";
 export {

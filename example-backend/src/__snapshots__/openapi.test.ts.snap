@@ -3694,6 +3694,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                               "admin",
                               "modelRouter",
                               "rbac",
+                              "security",
                             ],
                             "type": "string",
                           },
@@ -3966,6 +3967,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "admin",
                         "modelRouter",
                         "rbac",
+                        "security",
                       ],
                       "type": "string",
                     },
@@ -10134,6 +10136,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                             "type": "boolean",
                           },
+                          "disabled": {
+                            "description": "When a user is set to disable, all requests will return a 401",
+                            "type": "boolean",
+                          },
                           "email": {
                             "description": "The user's email address, used for authentication",
                             "type": "string",
@@ -10283,6 +10289,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                     "type": "boolean",
                   },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
                   "email": {
                     "description": "The user's email address, used for authentication",
                     "type": "string",
@@ -10358,6 +10368,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     },
                     "deleted": {
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
                       "type": "boolean",
                     },
                     "email": {
@@ -10668,6 +10682,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                       "type": "boolean",
                     },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
+                      "type": "boolean",
+                    },
                     "email": {
                       "description": "The user's email address, used for authentication",
                       "type": "string",
@@ -10810,6 +10828,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                     "type": "boolean",
                   },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
                   "email": {
                     "description": "The user's email address, used for authentication",
                     "type": "string",
@@ -10885,6 +10907,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     },
                     "deleted": {
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
                       "type": "boolean",
                     },
                     "email": {
@@ -26216,6 +26242,519 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/orgs/{orgId}/members/{userId}/security": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get a user's sign-in security summary",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/accounts/{providerId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Unlink provider",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/passkeys/{passkeyId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "passkeyId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Remove passkey",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/reset-two-factor": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset two-factor",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/revoke-sessions": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Sign out everywhere",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/send-password-reset": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Send password reset",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/orgs/{orgId}/members/{userId}/security/suspend-membership": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "orgId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Suspend membership",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
     "/photoLibrary/": {
       "get": {
         "parameters": [
@@ -29085,6 +29624,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                             "type": "boolean",
                           },
+                          "disabled": {
+                            "description": "When a user is set to disable, all requests will return a 401",
+                            "type": "boolean",
+                          },
                           "email": {
                             "description": "The user's email address, used for authentication",
                             "type": "string",
@@ -29234,6 +29777,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                     "type": "boolean",
                   },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
                   "email": {
                     "description": "The user's email address, used for authentication",
                     "type": "string",
@@ -29309,6 +29856,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     },
                     "deleted": {
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
                       "type": "boolean",
                     },
                     "email": {
@@ -29519,6 +30070,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                       "type": "boolean",
                     },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
+                      "type": "boolean",
+                    },
                     "email": {
                       "description": "The user's email address, used for authentication",
                       "type": "string",
@@ -29661,6 +30216,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
                     "type": "boolean",
                   },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
                   "email": {
                     "description": "The user's email address, used for authentication",
                     "type": "string",
@@ -29736,6 +30295,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     },
                     "deleted": {
                       "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "disabled": {
+                      "description": "When a user is set to disable, all requests will return a 401",
                       "type": "boolean",
                     },
                     "email": {
@@ -29957,6 +30520,589 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "summary": "Set a user's password as an admin",
         "tags": [
           "admin-users",
+        ],
+      },
+    },
+    "/users/{userId}/security": {
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get a user's sign-in security summary",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/accounts/{providerId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "providerId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Unlink provider",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/disable": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Disable account",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/enable": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Enable account",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/issue-sign-in-link": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Issue sign-in link",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/passkeys/{passkeyId}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "path",
+            "name": "passkeyId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Remove passkey",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/reset-two-factor": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset two-factor",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/revoke-sessions": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Sign out everywhere",
+        "tags": [
+          "account-security",
+        ],
+      },
+    },
+    "/users/{userId}/security/send-password-reset": {
+      "post": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "userId",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Send password reset",
+        "tags": [
+          "account-security",
         ],
       },
     },

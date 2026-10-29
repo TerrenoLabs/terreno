@@ -202,6 +202,7 @@ const AdminLayoutContent: React.FC = () => {
               <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
               <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
               <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
+              <Stack.Screen name="users/[id]/security" options={{title: "User security"}} />
               <Stack.Screen name="[model]" options={{title: "Model"}} />
             </Stack>
           </ThemeProvider>

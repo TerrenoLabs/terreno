@@ -66,7 +66,8 @@ case "$target" in
   frontend)
     node .github/scripts/compile-workspace-deps.js example-frontend admin-frontend api ai
     bun run --filter '@terreno/admin-frontend' --filter '@terreno/api' --filter '@terreno/ai' compile
-    prod_url="https://prod---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+    # STABLE_BACKEND_URL moves the stable web app with the backend (see backend-auth-env.sh).
+    prod_url="${STABLE_BACKEND_URL:-https://terreno-backend-example-7knxlrnpqq-uc.a.run.app}"
     api_url="${EXPO_PUBLIC_API_URL:-$prod_url}"
     jq --arg url "$api_url" \
       '.expo.extra.BASE_URL = $url | .expo.extra.apiBaseUrl = $url' \

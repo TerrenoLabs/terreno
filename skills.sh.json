@@ -73,7 +73,8 @@
         "update-dependencies",
         "upgrading-terreno",
         "deploy-gcp",
-        "deploy-vercel"
+        "deploy-vercel",
+        "set-up-social-login"
       ],
       "title": "GitHub and shipping"
     },

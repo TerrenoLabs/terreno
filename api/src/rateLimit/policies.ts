@@ -125,6 +125,14 @@ const betterAuthAuthPrefixes = (basePath: string): string[] => {
     `${base}/callback`,
     `${base}/oauth-handoff`,
     `${base}/one-time-token`,
+    `${base}/two-factor`,
+    `${base}/passkey`,
+    `${base}/link-social`,
+    `${base}/unlink-account`,
+    `${base}/multi-session`,
+    `${base}/oauth-proxy-callback`,
+    `${base}/expo-authorization-proxy`,
+    `${base}/terreno/set-password`,
   ];
 };
 

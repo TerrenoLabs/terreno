@@ -68,8 +68,18 @@ export const useAdminRpcQuery = <T = unknown>({
   const [isLoading, setIsLoading] = useState(Boolean(rpc) && !skip);
   const [isFetching, setIsFetching] = useState(Boolean(rpc) && !skip);
   const [generation, setGeneration] = useState(0);
-  const hasLoadedRef = useRef(false);
+  const [requestUrl, setRequestUrl] = useState(url);
+  const loadedUrlRef = useRef<string | null>(null);
   const tagsKey = providesTags.join("\u0000");
+
+  // Drop the previous URL's body before paint so a route change cannot show it.
+  if (url !== requestUrl) {
+    setRequestUrl(url);
+    setData(undefined);
+    setError(null);
+    setIsLoading(Boolean(rpc) && !skip);
+    setIsFetching(Boolean(rpc) && !skip);
+  }
 
   const refetch = useCallback((): void => {
     setGeneration((current) => current + 1);
@@ -83,13 +93,19 @@ export const useAdminRpcQuery = <T = unknown>({
       return;
     }
     let cancelled = false;
-    setIsLoading(!hasLoadedRef.current);
+    const isNewUrl = loadedUrlRef.current !== url;
+    setIsLoading(isNewUrl);
     setIsFetching(true);
+    if (isNewUrl) {
+      // The body on screen is gone, so returning to the old URL must load it again.
+      loadedUrlRef.current = null;
+      setData(undefined);
+    }
     setError(null);
     rpc({method: "GET", url})
       .then((result) => {
         if (!cancelled) {
-          hasLoadedRef.current = true;
+          loadedUrlRef.current = url;
           setData(result as T);
           setIsLoading(false);
           setIsFetching(false);

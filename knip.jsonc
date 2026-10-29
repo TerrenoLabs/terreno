@@ -165,7 +165,7 @@
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts"
+        "src/isolated/**/*.isolated.{ts,tsx}"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -332,7 +332,10 @@
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
         "expo-mcp",
         // RTK OpenAPI's CLI loads TypeScript configuration through ts-node.
-        "ts-node"
+        "ts-node",
+        // auth-experience T2 owns the lockfile and adds this ahead of its first import
+        // (T22's TOTP e2e helper). Remove the entry when T22 lands.
+        "otpauth"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

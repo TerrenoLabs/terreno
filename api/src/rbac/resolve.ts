@@ -23,6 +23,17 @@ interface SourceCacheEntry {
 interface SourceFetchResult {
   grants: PermissionSourceGrants | null;
   failed: boolean;
+  /** The source failed and its grants were dropped (not served from its stale cache). */
+  incomplete: boolean;
+}
+
+/** Options for {@link createPermissionResolver}'s `resolvePermissionsForUser`. */
+export interface ResolvePermissionsOptions {
+  /**
+   * Throw 503 instead of returning a set missing a failed source's grants. Use it where fewer
+   * permissions would loosen a check, such as comparing a target's permissions to an actor's.
+   */
+  requireComplete?: boolean;
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000;
@@ -210,18 +221,18 @@ export const createPermissionResolver = <S extends Statements>(args: {
     source: PermissionSource,
     cached: SourceCacheEntry | undefined,
     now: number
-  ): PermissionSourceGrants | null => {
+  ): SourceFetchResult => {
     const stale = grantsFromStaleCache(source, cached, now);
     if (stale) {
-      return stale;
+      return {failed: true, grants: stale, incomplete: false};
     }
     if (cached) {
-      return denyOnlyFromCache(cached);
+      return {failed: true, grants: denyOnlyFromCache(cached), incomplete: true};
     }
     const userPosture = denyPosture.get(user.id);
     if (userPosture?.has(source.name)) {
       const deny = userPosture.get(source.name);
-      return deny ? {deny} : null;
+      return {failed: true, grants: deny ? {deny} : null, incomplete: true};
     }
     if (failsClosedWhenDenyUnknown(source)) {
       throw new APIError({
@@ -230,7 +241,7 @@ export const createPermissionResolver = <S extends Statements>(args: {
         title: "Permission source unavailable",
       });
     }
-    return null;
+    return {failed: true, grants: null, incomplete: true};
   };
 
   const fetchSourceGrants = async (
@@ -245,14 +256,14 @@ export const createPermissionResolver = <S extends Statements>(args: {
       try {
         const grants = await source.getGrants({user});
         recordDenyPosture(user.id, source, grants);
-        return {failed: false, grants};
+        return {failed: false, grants, incomplete: false};
       } catch (error) {
         logger.warn("Permission source refresh failed during uncached resolution", {
           error: error instanceof Error ? error.message : String(error),
           policy: source.staleOnFailure ?? "deny",
           source: source.name,
         });
-        return {failed: true, grants: grantsAfterSourceFailure(user, source, cached, now)};
+        return grantsAfterSourceFailure(user, source, cached, now);
       }
     }
 
@@ -264,32 +275,31 @@ export const createPermissionResolver = <S extends Statements>(args: {
     const cachedAfterTouch = userSources.get(source.name);
 
     if (cachedAfterTouch && now - cachedAfterTouch.fetchedAt < ttlMs) {
-      return {failed: false, grants: cachedAfterTouch.grants};
+      return {failed: false, grants: cachedAfterTouch.grants, incomplete: false};
     }
 
     try {
       const grants = await source.getGrants({user});
       userSources.set(source.name, {fetchedAt: now, grants});
       recordDenyPosture(user.id, source, grants);
-      return {failed: false, grants};
+      return {failed: false, grants, incomplete: false};
     } catch (error) {
       logger.warn("Permission source refresh failed", {
         error: error instanceof Error ? error.message : String(error),
         policy: source.staleOnFailure ?? "deny",
         source: source.name,
       });
-      return {
-        failed: true,
-        grants: grantsAfterSourceFailure(user, source, cachedAfterTouch, now),
-      };
+      return grantsAfterSourceFailure(user, source, cachedAfterTouch, now);
     }
   };
 
   const resolveEffectivePermissions = async (
     user: User,
-    shouldCache: boolean
+    shouldCache: boolean,
+    requireComplete = false
   ): Promise<PermissionSet> => {
     const cacheKey = permissionCacheKey(user);
+    // A cached set is always complete: a set computed during a source outage is never cached.
     if (shouldCache) {
       const cached = permissionCache.get(cacheKey);
       if (cached && cached.expiresAt > DateTime.now().toMillis()) {
@@ -304,8 +314,15 @@ export const createPermissionResolver = <S extends Statements>(args: {
     let anySourceFailed = false;
 
     for (const source of sources) {
-      const {failed, grants} = await fetchSourceGrants(user, source, shouldCache);
+      const {failed, grants, incomplete} = await fetchSourceGrants(user, source, shouldCache);
       anySourceFailed = anySourceFailed || failed;
+      if (incomplete && requireComplete) {
+        throw new APIError({
+          detail: `Permission source ${source.name} failed, so its grants are unknown`,
+          status: 503,
+          title: "Permission source unavailable",
+        });
+      }
       sourceResults.set(source.name, grants);
       if (!grants) {
         continue;
@@ -348,8 +365,11 @@ export const createPermissionResolver = <S extends Statements>(args: {
     return permissions;
   };
 
-  const resolvePermissionsForUser = async (user: User): Promise<PermissionSet> => {
-    return resolveEffectivePermissions(user, true);
+  const resolvePermissionsForUser = async (
+    user: User,
+    options: ResolvePermissionsOptions = {}
+  ): Promise<PermissionSet> => {
+    return resolveEffectivePermissions(user, true, options.requireComplete === true);
   };
 
   const resolvePermissionsForUserUncached = async (user: User): Promise<PermissionSet> => {

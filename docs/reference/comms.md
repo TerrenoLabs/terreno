@@ -442,3 +442,11 @@ verify links as `${publicAppUrl}/resetPassword?token=...` and
 `${publicAppUrl}/verifyEmail?token=...`. Pass `templates` to override subject/text/html
 per template id (`resetPassword` | `verifyEmail`). Variables: `resetUrl`, `verifyUrl`,
 `publicAppUrl`, `token`.
+
+The same helpers render the security notifications `AccountSecurityApp` sends: the `security*`
+template ids (`securityPasswordChanged`, `securityPasskeyAdded`, `securityTwoFactorDisabled`, and
+the rest in `SECURITY_MAIL_TEMPLATE_IDS` from `@terreno/api`). Those pass their values in `data`
+and no `token`. HTML bodies get HTML-escaped values; subject and text get the raw values. Pass it
+as `AccountSecurityApp` `notifications.render` to render them with comms. The templates,
+placeholders, and sending rules are in
+[Account security: Notifications](account-security.md#notifications).

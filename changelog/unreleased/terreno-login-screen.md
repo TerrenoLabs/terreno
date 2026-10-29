@@ -1,0 +1,10 @@
+---
+category: Added
+---
+
+- `@terreno/rtk` adds `TerrenoLoginScreen`, a drop-in login screen, and `useLoginController`, the hook behind it. They read the server's `/terreno/methods` and skip the screen when a session is live. They offer "Continue as" cards for this device's signed-in sessions (`multiSession`, not in bearer mode) and its remembered accounts, a session card hiding the same user's remembered card. They badge the last used method from the remembered-accounts store, offer passkeys (button and web autofill), and sign in socially through the OAuth handoff in bearer mode or `signIn.social` otherwise. The two-factor step runs inline unless `onTwoFactorRequired` routes to the app's own screen. Each finished sign-in is recorded in the remembered-accounts store.
+- `getLoginFeedback` turns server refusals into login guidance: `account_not_linked` worded for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` as "verify your email", and `signup_disabled` (and the ID-token "signup disabled") as "ask your administrator for access", with the sign-up link hidden. Text from a URL is never shown.
+- `getBetterAuthClientWebAuth(client)` reports whether a client is in web bearer mode and the token it holds. `recordRememberedSignIn` records a sign-in finished on an app's own screen.
+- `@terreno/ui` `LoginScreen` takes `initialValues`, which prefill form fields; a new object later replaces those fields and keeps what the user typed in the others. With `fields={[]}` it leaves out the form block (fields, Log In, forgot-password, and the email dividers), and `TerrenoLoginScreen` does that when the server has email and password off. `OAuthButtons` takes `dividerPosition: "none"`.
+- `TerrenoLoginScreen` takes `onStepChange`, called with each step the screen moves to, so an app that already holds a session can leave a login route the screen could not skip.
+- A remembered method or a provider id that matches an `Object.prototype` key (`__proto__`, `constructor`) is named from the id ("Proto", "Constructor") instead of an inherited value.

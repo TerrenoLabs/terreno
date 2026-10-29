@@ -2,6 +2,11 @@ export interface E2EUser {
   email: string;
   name: string;
   password: string;
+  /**
+   * Base32 TOTP secret for a user with two-factor on. `loginAs` answers the challenge with the
+   * current code from it.
+   */
+  totpSecret?: string;
 }
 
 export const TEST_USER: E2EUser = {

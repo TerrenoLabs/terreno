@@ -204,6 +204,8 @@ export const Avatar: FC<AvatarProps> = ({
     >
       <Pressable
         aria-role="button"
+        // Only an editable avatar does anything when pressed, so only that one takes focus.
+        focusable={showEditIcon}
         style={{
           borderRadius: 1,
           cursor: showEditIcon ? "pointer" : "auto",

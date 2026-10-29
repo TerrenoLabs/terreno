@@ -1,8 +1,24 @@
+export {ISSUE_SIGN_IN_LINK_PERMISSION} from "./accountSecurity/accessActions";
+export * from "./accountSecurity/accountSecurityApp";
+export * from "./accountSecurity/accountSecurityService";
+export {suspendMembershipAction} from "./accountSecurity/membershipActions";
+export {
+  createOrgSecurityAuthorizer,
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "./accountSecurity/orgSecurityRoutes";
+export {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
+export * from "./accountSecurity/securityEvents";
+export * from "./accountSecurity/securityNotifications";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";
 export {AuditApp, type AuditAppOptions} from "./audit/auditApp";
 export {
+  AUDIT_EVENT_SOURCES,
   type AuditEventDocument,
   type AuditEventModel,
   type AuditEventOperation,
@@ -35,6 +51,9 @@ export * from "./authRecovery";
 export * from "./authTokens";
 export * from "./betterAuth";
 export * from "./betterAuthApp";
+export * from "./betterAuthChallengeHeaders";
+export * from "./betterAuthFeatures";
+export * from "./betterAuthMethods";
 export * from "./betterAuthSetup";
 export * from "./browserLogsRoute";
 export * from "./config";

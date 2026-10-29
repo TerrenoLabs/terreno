@@ -79,9 +79,10 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 
 | CircleCI shard | Specs |
 | --- | --- |
-| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
+| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` `two-factor` |
 | `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
-| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
+| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` `org-admin-security` `admin-user-security` |
+| `e2e-cross-site` (not required) | the cross-site specs below, then `account-linking` with `E2E_ACCOUNT_LINKING=explicit` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |
 
@@ -89,14 +90,42 @@ Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loa
 not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when that job
 failed.
 
-`e2e/crossSiteBearer.spec.ts` and `e2e/crossSiteOAuth.spec.ts` have no CircleCI job: they need
-a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000`,
-`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` and `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`, a backend
-with `BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
-`MOCK_OIDC_ISSUER`, and the mock OIDC provider on `127.0.0.1:4555`. Naming either spec file (or
+The cross-site specs (`CROSS_SITE_SPEC_FILES` in `playwright.config.ts`:
+`e2e/crossSiteBearer.spec.ts`, `e2e/crossSiteOAuth.spec.ts`, `e2e/authMethods.spec.ts`,
+`e2e/crossSiteChallenges.spec.ts`, `e2e/crossSiteLogin.spec.ts`,
+`e2e/account-linking.spec.ts`, `e2e/account-security.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
+check, rather than in an `e2e` shard: they need
+a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
+`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
+`BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
+`MOCK_OIDC_ISSUER` (the login page shows the mock provider's button because
+`/api/auth/terreno/methods` then lists `mock-oidc`), and the mock OIDC provider on
+`127.0.0.1:4555`. Naming any of those spec files (or
 setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
-`cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. CI serves a static
+export instead of a Metro dev server, which gets OOM-killed bundling beside the backend and
+Chromium. To run the specs exactly as `e2e-cross-site` does:
+
+```bash
+cd example-frontend
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+  bun expo export --platform web --output-dir dist-cross-site --clear
+bunx serve dist-cross-site -s -l 8082 &
+CI=true E2E_CROSS_SITE_BEARER=true MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
+  bunx playwright test --config playwright.circleci.config.ts --reporter=list
+```
+
+`--clear` matters: Metro's cache keeps the `EXPO_PUBLIC_*` values of an earlier export. A new
+spec that needs
+the mock provider or cookie-less sessions joins `CROSS_SITE_SPEC_FILES` and the
+`cross-site-bearer` shard in `scripts/ci/e2eAffected/shards.ts`.
+
+`e2e/account-linking.spec.ts` has cases for the backend's `explicit` linking mode, which skip
+unless the backend reports that mode. `E2E_ACCOUNT_LINKING=explicit` starts the backend with
+`AUTH_ACCOUNT_LINKING=explicit`; run that spec alone, because the other specs expect the default
+`verified-email` (`e2e-cross-site` does this as its second step):
+`cd example-frontend && E2E_ACCOUNT_LINKING=explicit bunx playwright test e2e/account-linking.spec.ts`.
 
 ### Deployed bearer smoke (`deploy-frontend-preview`)
 

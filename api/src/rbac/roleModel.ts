@@ -26,6 +26,7 @@ export interface RoleDefinition {
 
 export interface RbacRoleDocument {
   _id: mongoose.Types.ObjectId;
+  appliedGrants: string[];
   name: string;
   displayName: string;
   description?: string;
@@ -75,6 +76,47 @@ const observabilityReadOnlyPermissionSpec = (statements: Statements): Permission
   return defaults;
 };
 
+interface SeededRoleGrant {
+  /** Stable id recorded in `appliedGrants` once the grant has been merged. */
+  id: string;
+  permissions: PermissionSet;
+}
+
+/**
+ * Operator grants added after the role first shipped. Each is merged into an existing operator
+ * row once and then recorded in `appliedGrants`, so an admin who later revokes it keeps it
+ * revoked across restarts.
+ */
+const OPERATOR_ADDED_GRANTS: SeededRoleGrant[] = [
+  {id: "user.manageSecurity", permissions: {user: ["manageSecurity"]}},
+  // An app that opts User into per-model admin access (`adminUser`) gates the admin User list
+  // and record on it instead of `user`. Operators find users there to reach their Security
+  // screen, so they need the same read they already hold on `user`.
+  {id: "adminUser.read", permissions: {adminUser: ["read"]}},
+];
+
+/** Whether the app declares every resource and action a grant adds. */
+const isGrantDeclared = (grant: SeededRoleGrant, statements: Statements): boolean =>
+  Object.entries(grant.permissions).every(([resource, actions]) =>
+    actions.every((action) => statements[resource]?.includes(action))
+  );
+
+/**
+ * Grants added to a seeded role after it shipped. A grant on a resource the app does not declare
+ * is left out (and not recorded as applied), so it is merged once the app declares it.
+ */
+const addedGrantsFor = (role: RoleDefinition, statements: Statements): SeededRoleGrant[] =>
+  role === organizationOperatorRole
+    ? OPERATOR_ADDED_GRANTS.filter((grant) => isGrantDeclared(grant, statements))
+    : [];
+
+const mergeGrants = (permissions: PermissionSet, grants: SeededRoleGrant[]): PermissionSet =>
+  grants.reduce(
+    (merged, grant) =>
+      mergeMissingResourcePermissions(merged, grant.permissions, Object.keys(grant.permissions)),
+    permissions
+  );
+
 /**
  * Insert missing default roles. Existing unsealed roles are left unchanged so admin
  * customizations survive process restarts. Sealed roles are refreshed from code.
@@ -102,6 +144,14 @@ const upsertSeededRole = async (
           OBSERVABILITY_RBAC_RESOURCES
         );
         await existing.save();
+      } else {
+        const applied = new Set(existing.appliedGrants ?? []);
+        const pending = addedGrantsFor(role, statements).filter((grant) => !applied.has(grant.id));
+        if (pending.length > 0) {
+          existing.permissions = mergeGrants(existing.permissions, pending);
+          existing.appliedGrants = [...applied, ...pending.map((grant) => grant.id)];
+          await existing.save();
+        }
       }
       return;
     }
@@ -114,14 +164,17 @@ const upsertSeededRole = async (
     await existing.save();
     return;
   }
+  // A new row starts with every added grant, so none is merged in later.
+  const addedGrants = addedGrantsFor(role, statements);
   await model.create({
+    appliedGrants: addedGrants.map((grant) => grant.id),
     description: role.description,
     displayName: role.displayName,
     excludesRoles: role.excludesRoles ?? [],
     isLocked: role.isLocked ?? false,
     isSealed: role.isSealed ?? false,
     name: role.name,
-    permissions,
+    permissions: mergeGrants(permissions, addedGrants),
   });
 };
 
@@ -139,7 +192,7 @@ export const organizationOperatorRole: RoleDefinition = {
   permissions: {
     admin: ["access"],
     organization: ["create", "list", "read", "update", "delete", "manageMembers", "disable"],
-    user: ["list", "read", "update"],
+    user: ["list", "read", "update", "manageSecurity"],
   },
 };
 
@@ -183,6 +236,12 @@ export const terrenoDefaultRoles: RoleDefinition[] = [
 
 const rbacRoleSchema = new mongoose.Schema<RbacRoleDocument, RbacRoleModel>(
   {
+    appliedGrants: {
+      default: [],
+      description:
+        "Ids of grants added to a seeded role after it shipped that were already merged in, so a revoked grant is not re-added",
+      type: [String],
+    },
     description: {
       description: "Human-readable description of the role",
       type: String,

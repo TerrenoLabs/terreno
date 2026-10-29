@@ -1,5 +1,6 @@
 {
   "catalog": {
+    "@better-auth/passkey": "1.7.4",
     "@biomejs/biome": "^2.3.6",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/titillium-web": "^0.4.1",

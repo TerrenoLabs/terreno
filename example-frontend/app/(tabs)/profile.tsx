@@ -1,5 +1,12 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import {
+  canOpenAdminPage,
+  SIGN_OUT_FAILED_MESSAGE,
+  selectBetterAuthError,
+  selectBetterAuthIsSigningOut,
+  selectBetterAuthUserId,
+  useFeatureFlags,
+} from "@terreno/rtk";
 import {
   Badge,
   Banner,
@@ -7,6 +14,7 @@ import {
   Box,
   Button,
   Card,
+  FormContainer,
   Heading,
   Page,
   Spinner,
@@ -35,6 +43,9 @@ const ProfileScreen: React.FC = () => {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const userId = useSelector(selectBetterAuthUserId);
+  // Set when a sign-out could not reach the server and the session stayed.
+  const isSignOutFailed = useSelector(selectBetterAuthError) === SIGN_OUT_FAILED_MESSAGE;
+  const isSigningOut = useSelector(selectBetterAuthIsSigningOut);
   const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
   const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
@@ -65,7 +76,6 @@ const ProfileScreen: React.FC = () => {
 
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -153,27 +163,6 @@ const ProfileScreen: React.FC = () => {
     [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      setSaveSuccess(false);
-      try {
-        await updateProfile({password: value}).unwrap();
-        setPassword("");
-        showSaveSuccess();
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update password"
-        );
-      }
-    },
-    [showSaveSuccess, updateProfile]
-  );
-
   const handleLogout = useCallback(async (): Promise<void> => {
     // Release this device's push token while the session can still authenticate the request.
     await releaseExpoPushTokenSafely({
@@ -214,6 +203,10 @@ const ProfileScreen: React.FC = () => {
 
   const handleNavigateToMcp = useCallback((): void => {
     router.push("/settings/mcp");
+  }, [router]);
+
+  const handleNavigateToSecurity = useCallback((): void => {
+    router.push("/settings/security");
   }, [router]);
 
   const handleNavigateToNotificationSettings = useCallback((): void => {
@@ -291,7 +284,7 @@ const ProfileScreen: React.FC = () => {
         )}
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} testID="profile-account-form">
             <Heading size="lg">Account Details</Heading>
 
             <TapToEdit
@@ -318,6 +311,8 @@ const ProfileScreen: React.FC = () => {
 
             {isEmailChanged && (
               <TextField
+                accessibilityLabel="Current password"
+                autoComplete="current-password"
                 disabled={isUpdating}
                 helperText="Enter your current password to change your email"
                 onChange={setCurrentPassword}
@@ -327,18 +322,6 @@ const ProfileScreen: React.FC = () => {
                 value={currentPassword}
               />
             )}
-
-            <TapToEdit
-              disabled={isUpdating}
-              editable={!isUpdating}
-              helperText="Leave blank to keep current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              testID="profile-password-input"
-              title="New Password"
-              type="password"
-              value={password}
-            />
 
             {saveSuccess && (
               <Box testID="profile-save-success">
@@ -351,7 +334,21 @@ const ProfileScreen: React.FC = () => {
                 <Text color="error">{saveError}</Text>
               </Box>
             )}
-          </Box>
+
+            <Text color="secondaryLight" size="sm">
+              Change your password, linked sign-in methods, passkeys, two-factor authentication and
+              signed-in devices in Security.
+            </Text>
+            <Box alignItems="start">
+              <Button
+                iconName="shield-halved"
+                onClick={handleNavigateToSecurity}
+                testID="profile-security-link"
+                text="Security"
+                variant="secondary"
+              />
+            </Box>
+          </FormContainer>
         </Card>
 
         <Card marginBottom={6} testID="profile-roles-card">
@@ -383,14 +380,17 @@ const ProfileScreen: React.FC = () => {
         </Card>
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} onSubmit={handleSaveApiKey} testID="profile-gemini-form">
             <Heading size="lg">Gemini API Key</Heading>
             <Text color="secondaryLight" size="sm">
               Paste your Gemini API key to enable AI chat and the admin prompt playground. The key
               is stored locally on your device.
             </Text>
             <TextField
+              accessibilityLabel="Gemini API key"
+              autoComplete="off"
               onChange={setApiKeyInput}
+              onEnter={apiKeyInput.trim() ? handleSaveApiKey : undefined}
               placeholder="Enter your Gemini API key"
               testID="profile-gemini-key-input"
               title="API Key"
@@ -419,7 +419,7 @@ const ProfileScreen: React.FC = () => {
                 variant="destructive"
               />
             </Box>
-          </Box>
+          </FormContainer>
         </Card>
 
         <Card marginBottom={6} testID="profile-dark-mode-card">
@@ -504,8 +504,14 @@ const ProfileScreen: React.FC = () => {
             <Text color="secondaryLight" testID="profile-logged-in-as">
               Logged in as {profile?.email}
             </Text>
+            {isSignOutFailed ? (
+              <Text color="error" testID="profile-logout-error">
+                {SIGN_OUT_FAILED_MESSAGE}
+              </Text>
+            ) : null}
             <Button
               iconName="right-from-bracket"
+              loading={isSigningOut}
               onClick={handleLogout}
               testID="profile-logout-button"
               text="Logout"

@@ -19,6 +19,8 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-form",
     "admin-todo-crud",
     "admin-title-update-depth",
+    "org-admin-security",
+    "admin-user-security",
   ],
   "admin-table": [
     "admin-table-search-filter",
@@ -40,12 +42,14 @@ const E2E_SHARDS: Record<string, string[]> = {
   ],
   auth: [
     "login",
+    "login-form",
     "signup",
     "consents",
     "provisionalConsent",
     "forgot-password",
     "reset-password",
     "verify-email",
+    "two-factor",
   ],
   syncdb: [
     "syncdb-load-delta",

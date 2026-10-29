@@ -52,17 +52,22 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/resetPassword.tsx`,
       `${APP}/verifyEmail.tsx`,
       `${APP}/(tabs)/documents.tsx`,
+      // login-form checks the password forms on the profile and security screens too.
+      `${APP}/(tabs)/profile.tsx`,
+      `${APP}/settings/security.tsx`,
       `${APP}/consent-sign/**`,
       `${APP}/admin/consent-responses/**`,
     ],
     specs: [
       "login",
+      "login-form",
       "signup",
       "consents",
       "provisionalConsent",
       "forgot-password",
       "reset-password",
       "verify-email",
+      "two-factor",
     ],
   },
   {
@@ -73,6 +78,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/ai.tsx`,
       `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
+      `${APP}/settings/security.tsx`,
       `${APP}/todo-windows/**`,
       `${APP}/todo-browser/**`,
     ],
@@ -91,7 +97,15 @@ export const E2E_SHARDS: ShardDefinition[] = [
     blocksPullRequest: true,
     name: "admin-core",
     routes: [`${APP}/admin/**`, `${APP}/(tabs)/profile.tsx`],
-    specs: ["admin", "admin-home", "admin-form", "admin-todo-crud", "admin-title-update-depth"],
+    specs: [
+      "admin",
+      "admin-home",
+      "admin-form",
+      "admin-todo-crud",
+      "admin-title-update-depth",
+      "org-admin-security",
+      "admin-user-security",
+    ],
   },
   {
     blocksPullRequest: true,
@@ -121,12 +135,26 @@ export const E2E_SHARDS: ShardDefinition[] = [
   {
     // Needs its own web build (cross-site API URL, bearer flag), backend (OAuth handoff, mock
     // OIDC provider) and mock provider server, so CircleCI's shared cookie-mode export cannot
-    // run it. Run it locally:
-    // `cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+    // run it. CircleCI's non-required `e2e-cross-site` job runs it (and the explicit-linking
+    // pass); locally: `cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`.
     blocksPullRequest: false,
     name: "cross-site-bearer",
-    routes: [`${APP}/login.tsx`, `${APP}/(tabs)/profile.tsx`, `${APP}/(tabs)/ai.tsx`],
-    specs: ["crossSiteBearer", "crossSiteOAuth"],
+    routes: [
+      `${APP}/login.tsx`,
+      `${APP}/signup.tsx`,
+      `${APP}/(tabs)/profile.tsx`,
+      `${APP}/(tabs)/ai.tsx`,
+      `${APP}/settings/security.tsx`,
+    ],
+    specs: [
+      "crossSiteBearer",
+      "crossSiteOAuth",
+      "authMethods",
+      "crossSiteChallenges",
+      "crossSiteLogin",
+      "account-linking",
+      "account-security",
+    ],
   },
   {
     blocksPullRequest: false,

@@ -166,6 +166,7 @@ new TerrenoApp({userModel: User})
 | `modelRouter` | `audit: true` or `{redact?: string[]}` after successful HTTP create/update/delete and array push/update/remove |
 | `AdminApp` | Auto when `AuditApp` is registered (`source: "admin"`). `onAdminAudit` is extra |
 | RBAC | `createAccess({auditSink: persistRbacAuditToAuditEvent})` (`source: "rbac"`) |
+| `AccountSecurityApp` | Each recovery action that changes something (`source: "security"`). See [Account security](account-security.md) |
 
 HTTP is list+read only: `GET /audit-events` with `Permissions.IsAdmin`. Empty create/update/delete permission arrays mean POST/PATCH/DELETE return **405**, including `/admin/audit-events` (`admin.adminPermissions`). Non-admin list is also **405** (`permissionMiddleware`). There is no `isDeletedPlugin`; rows are not soft-deleted.
 
@@ -468,8 +469,12 @@ setupServer({
 - `POST /auth/signup` — Create user account
 - `POST /auth/login` — Authenticate with email/password
 - `POST /auth/refresh_token` — Refresh access token
-- `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists
-- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the RTK client
+- `POST /auth/forgotPassword` — Always 202; mails a reset link only when the email exists (with
+  `BetterAuthApp` registered, only when that user already has a JWT password)
+- `POST /auth/resetPassword` — `{token, password}`; also aliased at `POST /resetPassword` for the
+  RTK client. With `BetterAuthApp` registered, a token for a user without a JWT password gets 400
+  `legacy-password-reset-unavailable` and sets no password (`POST /auth/login` has no second
+  factor); that user resets through Better Auth
 - `POST /auth/sendVerification` — Authenticated; 202 only after delivery succeeds; mails a verification link when `emailVerified` is not true
 - `POST /auth/verifyEmail` — `{token}` sets `emailVerified` true
 - `GET /auth/me` — Get current user profile
@@ -567,8 +572,8 @@ case instead of 202. Email lookup is case-insensitive. Successful reset calls `s
 `tokenEpoch` so outstanding **refresh** tokens and MCP credentials (`mcp_` service tokens and
 `mcpat_`/`mcprt_` OAuth grants) fail, and returns new JWT tokens. When
 `BetterAuthApp` is registered, JWT reset also updates that user's Better Auth password
-and deletes Better Auth sessions. Better Auth password reset updates the JWT password
-and `tokenEpoch` for the matching app User. Access
+and deletes Better Auth sessions. Better Auth password reset updates the JWT password of the
+matching app User when it already has one, and bumps its `tokenEpoch`. Access
 tokens stay valid until expiry (default 15m). `POST /resetPassword`
 matches the `@terreno/rtk` `resetPassword` mutation path (`password` or `newPassword`).
 
@@ -668,9 +673,11 @@ Set `publicAppUrl`, `sendMail`, and `renderAuthMail` (from `@terreno/comms`) so 
 Those hooks throw 501 and do not send when `publicAppUrl` is missing, so links are never
 relative. Password reset also sets `revokeSessionsOnPasswordReset`, so existing Better Auth sessions
 are deleted when that reset path succeeds. JWT `POST /auth/resetPassword` updates the
-Better Auth password and deletes those sessions when `BetterAuthApp` is registered.
+Better Auth password and deletes those sessions when `BetterAuthApp` is registered; it only
+serves app `User`s that already have a JWT password then (others get 400
+`legacy-password-reset-unavailable`, and `POST /auth/forgotPassword` mails them nothing).
 With a user model, Better Auth `reset-password` sets the same password as the app `User`'s JWT
-password and bumps `tokenEpoch`. `change-password` sets the new JWT password only on an app
+password when that `User` already has one, and bumps `tokenEpoch` either way. `change-password` sets the new JWT password only on an app
 `User` that already has one. `change-password`, `revoke-sessions`, and `revoke-other-sessions`
 bump `tokenEpoch` for the linked app `User`, so JWT refresh tokens and MCP credentials issued
 before the change stop working.
@@ -695,9 +702,10 @@ trusted origin (`trustedOrigins` plus the API's own origin), or that has neither
 browser headers are unchanged; `advanced.disableCSRFCheck` disables the check.
 
 On first contact, `syncBetterAuthUser` finds the app `User` by `betterAuthId` and creates it
-when missing. It links an existing app `User` that has the same email only when Better Auth has
-verified that email and the row has no other `betterAuthId`. Otherwise the session does not set
-`req.user` and the socket handshake is refused, until the address is verified. When a verified
+when missing. It links an existing app `User` that has the same email only when the row has no
+other `betterAuthId` and Better Auth has verified that email or the request's password matches the
+row's passport hash (see the plugin rules below). Otherwise the session does not set `req.user`
+and the socket handshake is refused. When a verified
 email links a row whose own `emailVerified` is not `true`, its legacy passport password is removed
 and `tokenEpoch` is bumped, because whoever set that password never proved the mailbox. Seeds
 that create the Better Auth account themselves pass `{trustEmail: true}` as the fourth argument
@@ -709,6 +717,43 @@ registered `BetterAuthApp` instance for socket sessions. With a user model (its 
 `TerrenoApp`'s), the handshake creates the app `User` on first contact and refuses disabled users.
 The legacy JWT socket handshake loads the same user model and refuses a token whose user is
 disabled or missing (`createSocketAuthMiddleware({tokenSecret, userModel})`).
+
+With a user model, the `terreno-app-user-sync` plugin guards Better Auth user creation and syncs
+the app `User` as each Better Auth session is created
+(`syncBetterAuthUser(userModel, betterAuthUser, oauthProvider?, {password?, trustEmail?})`):
+
+- An app `User` with the same email that no Better Auth user has claimed is claimed only when the
+  email is verified, or when the request's plaintext password (`/sign-up/email`,
+  `/sign-in/email`) verifies against that `User`'s passport-local-mongoose hash. The hash check
+  runs on a detached copy, so passport's `limitAttempts` counters never change.
+- Before a Better Auth user is created, the same rule runs on the provider-reported
+  `emailVerified` and the sign-up password. A refusal answers 409 with
+  `code: "VERIFY_EMAIL_TO_USE_ACCOUNT"` (an OAuth callback redirects with that `error`) and
+  creates nothing: no Better Auth user, account, or verification email. A `User` already bound to
+  another Better Auth account is refused the same way with `code: "ACCOUNT_ALREADY_EXISTS"`.
+- At session creation the rule runs again; `syncBetterAuthUser` throws `APIError` 409
+  `VERIFY_EMAIL_TO_USE_ACCOUNT` ("Verify your email to use this account") and the sign-in answers
+  the same 409. No second `User` is inserted.
+- The provider id of a social or generic OAuth sign-in fills `oauthProvider` on create and link.
+- Emails match ignoring case (the address is matched literally, not as a pattern).
+- `BetterAuthApp` without its own `userModel` adopts `TerrenoApp`'s before it creates Better Auth
+  (`adoptUserModel`), so the plugin is installed whenever a user model is in play. Adopting after
+  the instance exists throws at boot. Callers of `createBetterAuth` must pass `userModel`
+  themselves.
+- A password-proven link that fails to save fails the sign-in with 500 `APP_USER_LINK_FAILED`.
+  Other sync failures are logged and the session proceeds; the session middleware retries.
+
+With a user model, Terreno's `onPasswordReset` sets the same password on the app `User`'s
+passport hash when it already has one, and bumps `tokenEpoch` either way. A `User` without a JWT
+password (a social-only account) does not gain one, since `POST /auth/login` has no second
+factor. It reads the new password (`newPassword`, or `password` for
+the email-OTP and phone-number resets) from the parsed body of the Better Auth endpoint being
+served, through Better Auth's endpoint context. Better Auth reads an HTTP body before the hook
+runs, so the request it passes cannot be read again. HTTP requests and direct `auth.api` calls
+both work.
+
+`accountLinking: {mode: "never"}` refuses `POST {basePath}/link-social` with 403
+`LINKING_DISABLED`. See [Account linking](../explanation/account-linking.md).
 
 **Social sign-in for a web app on another site (`oauthHandoff`):**
 
@@ -734,14 +779,119 @@ Endpoints it adds, under `basePath` (default `/api/auth`):
   `callbackPaths` on one of `webOrigins`, `errorCallbackURL` (optional) is on one of
   `webOrigins`, and `trustedOrigins` allows both. It also answers 400 when `Sec-Fetch-Dest` is
   set and is not `document`. The OAuth callback then redirects to `callbackURL` with
-  `#ott=<token>`, a single-use token that expires in three minutes.
+  `#ott=<token>`, a single-use token that expires in three minutes. With `oauthProxy` on a
+  preview, the session is created on the preview's `GET {basePath}/callback/:id/oauth-proxy`
+  (or the deprecated `GET {basePath}/oauth-proxy-callback`) after the production server
+  receives the provider's return, and that redirect carries the `#ott` instead.
 - `POST {basePath}/one-time-token/verify` — Body `{token}`. Exchanges the token once for the
   session and the `set-auth-token` header, and sets no cookie. `GET
   {basePath}/one-time-token/generate` is refused.
+- `POST {basePath}/oauth-handoff/link-intent` — Bearer- or cookie-authenticated. Body
+  `{provider, callbackURL, errorCallbackURL?}`. Both URLs must be absolute and on one of
+  `webOrigins` that `trustedOrigins` allows; `callbackPaths` do not apply, since no token travels
+  on a link's return (400; Better Auth's origin check answers 403 first for a URL outside
+  `trustedOrigins`). Answers
+  `{token, startURL}`: a single-use link token that expires in three minutes, stored hashed in
+  Better Auth's verification table (`terreno-link-intent:<hash>`) and bound to the caller's
+  session. Answers 401 without a session and 403 `LINKING_DISABLED` when account linking is off.
+- `POST {basePath}/oauth-handoff/link-start` — Form body `token=<token>`, submitted as a page
+  navigation (`application/x-www-form-urlencoded` only). Answers 400 when `Sec-Fetch-Dest` is set
+  and is not `document`, and 403 when `Origin` is missing, `null`, or not one of `webOrigins`,
+  without using the token. Web origins must not serve `Referrer-Policy: no-referrer` or
+  `same-origin`, which make the form's `Origin` `null`. Otherwise it uses the token up (400, no redirect, when unknown, used, or
+  expired), runs Better Auth's link flow as the token's session, sets only the OAuth state
+  cookie, and redirects to the provider. A link that cannot start redirects to
+  `errorCallbackURL` (or `callbackURL`) with `error=session_expired`, `error=provider_not_found`,
+  or `error=link_failed`. The provider callback links the account and redirects to `callbackURL`
+  with no `#ott`, since no session is created. rtk's `linkSocialWithHandoff` drives both steps;
+  see [Linking a provider in bearer mode](../how-to/configure-better-auth.md#linking-a-provider-in-bearer-mode).
 
-With the opt-in `rateLimit`, both paths are in the auth bucket.
+With the opt-in `rateLimit`, every path above is in the auth bucket. Better Auth's own limiter
+allows three starts, three link intents, and three link starts per ten seconds per IP.
+
+**Sign-in methods discovery (`GET {basePath}/terreno/methods`):**
+
+Every Better Auth server answers `GET {basePath}/terreno/methods` (default
+`/api/auth/terreno/methods`) with the sign-in methods it has enabled, so a login screen renders
+only those. It needs no session. Read it from a frontend with `useAuthMethods(authClient)` from
+`@terreno/rtk`.
+
+``````json
+{
+  "accountLinking": {"mode": "verified-email"},
+  "emailPassword": true,
+  "multiSession": false,
+  "passkey": false,
+  "providers": ["github", "google", "mock-oidc"],
+  "signUp": true,
+  "twoFactor": false
+}
+``````
+
+- `providers` — Sorted ids of every OAuth provider that can start a sign-in: the configured
+  `googleOAuth`, `githubOAuth`, and `appleOAuth` providers, plus every `genericOAuth` provider id
+  from `plugins`. The endpoint is public, so every configured provider id is published, including
+  generic providers meant only for integrations or internal staff. A generic provider whose
+  discovery failed at startup is left out.
+- `emailPassword` — Better Auth's `emailAndPassword.enabled` (on unless `options` turns it off).
+- `signUp` — `true` when email and password is on and `emailAndPassword.disableSignUp` is not set
+  (`signUp: {mode: "closed"}` sets it).
+- `accountLinking.mode` — From Better Auth's `account.accountLinking`: `"never"` when
+  `enabled: false`, `"explicit"` when `disableImplicitLinking: true`, otherwise
+  `"verified-email"` (Better Auth's default: a same-email sign-in links when the provider reports
+  a verified email).
+- `passkey`, `twoFactor`, `multiSession` — `true` when the `passkey`, `two-factor`, or
+  `multi-session` plugin is in the final plugin list: set by the `passkey`, `twoFactor`, and
+  `multiSession` config fields, or added through `plugins`. See
+  [Auth features](../how-to/configure-better-auth.md#auth-features).
+
+The values come from Better Auth's final context on each request, so `options` overrides and
+plugin-registered providers are reflected.
+
+**Set a first password (`POST {basePath}/terreno/set-password`):**
+
+Every Better Auth server serves `POST {basePath}/terreno/set-password` (default
+`/api/auth/terreno/set-password`) so a signed-in user who has no password, such as one who signed
+up with a provider, can add one. Better Auth's own `setPassword` is server-only. rtk's
+`useAccountSecurity` calls it from the password card's "Set a password" form.
+
+| Request | Response |
+| --- | --- |
+| Body `{newPassword}` with a bearer or session cookie, and no password yet | `200 {status: true}` with `cache-control: no-store`; the user can now sign in with email and password |
+| The user already has a password | `409` `PASSWORD_ALREADY_SET` (change it with `/change-password`). Of two concurrent sets, one succeeds and the other gets this 409; one credential row remains |
+| No session, or a revoked one (the session is read from the database, not the cookie cache) | `401` |
+| The session signed in longer ago than Better Auth's `session.freshAge` (a day by default) | `403` `SESSION_NOT_FRESH`: sign in again first, so a stolen old session cannot add a lasting password |
+| Shorter than `emailAndPassword.minPasswordLength` (8) or longer than `maxPasswordLength` (128) | `400` `PASSWORD_TOO_SHORT` / `PASSWORD_TOO_LONG` |
+| Email and password sign-in is off | `400` `EMAIL_PASSWORD_DISABLED` |
+
+With a `userModel`, the new password is also set on the app User's passport-local-mongoose hash
+(when the model has one), so `POST /auth/login` accepts it on dual-enrolled apps, and the request
+records a `password-set` security event. The app User is the one whose `betterAuthId` matches, or
+else the one with the same email, but only when the Better Auth email is verified and that User is
+not linked to another Better Auth user. A successful `POST {basePath}/change-password` syncs the
+same way and also bumps the app User's `tokenEpoch`, so the old password stops working at
+`POST /auth/login` (which has no second factor) and outstanding JWT refresh tokens stop
+refreshing (see
+[Self-service events](account-security.md#self-service-events)). With the opt-in `rateLimit`, the
+path is in the auth bucket.
+
+**Challenge header (`X-Terreno-Auth-Challenge`):**
+
+With `twoFactor` or `passkey` configured, a request that sends `X-Terreno-Auth-Challenge` (`-`
+when empty) gets back the challenge cookies its response sets (`two_factor`, `trust_device`, the
+passkey challenge, and `dont_remember` when it comes with a two-factor challenge) in the same
+header, as URL-search-params `name=value` pairs with the signed cookie values; an empty value
+means the cookie expired. Only values the response sets are carried. Such a sign-in that
+answers with a two-factor challenge has no `set-auth-token`. The header is listed in
+`Access-Control-Expose-Headers`. On `{basePath}/two-factor/*`, `/passkey/*`, and `/sign-in/*`,
+the header's challenge cookies are merged into the request's cookies unless a real cookie of
+the same name is present; other names, including session cookies, are ignored. rtk's bearer mode
+uses it; see
+[Challenges without cookies](../explanation/authentication.md#challenges-without-cookies).
 
 **Endpoints (when enabled):**
+- `GET /api/auth/terreno/methods` — Enabled sign-in methods (public)
+- `POST /api/auth/terreno/set-password` — Add a first password for the signed-in user
 - `POST /api/auth/signup/email` — Email/password signup
 - `POST /api/auth/signin/email` — Email/password signin
 - `GET /api/auth/signin/{provider}` — Initiate OAuth (google, github, apple)
@@ -1256,6 +1406,14 @@ source's deny posture for the user. Under every policy:
   role mappings, membership lookups). Their cold failure then drops only their grants and local
   roles apply. The built-in organization membership source (`createAccess({organizations: true})`)
   sets it.
+- Dropped grants make a user look less privileged, which is safe for the user being authorized
+  but not for the target of "may this actor act on that user?". Pass
+  `access.getPermissions({user, requireComplete: true})` for such a target: when a failed source's
+  grants were dropped (not served from a `"use-stale"` cache), it throws 503
+  `Permission source unavailable` instead of returning the partial set. The account-security
+  reach check, the RBAC user-write guard, and the RoleManager target-privilege rule
+  (`access.roles.assign`, `unassign`, `previewAssignment`, and `assertCanModifyUser`, so also
+  `PUT /rbac/users/:id/roles` and admin user writes) resolve their target this way.
 
 ## Request Validation
 

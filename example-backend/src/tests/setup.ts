@@ -35,6 +35,20 @@ registerSimpleMongoPreload({
     Reflect.deleteProperty(process.env, "MIGRATIONS_DIR");
     Reflect.deleteProperty(process.env, "BETTER_AUTH_OAUTH_HANDOFF");
     Reflect.deleteProperty(process.env, "MOCK_OIDC_ISSUER");
+    Reflect.deleteProperty(process.env, "AUTH_ACCOUNT_LINKING");
+    Reflect.deleteProperty(process.env, "AUTH_SIGN_UP");
+    Reflect.deleteProperty(process.env, "PASSKEY_RP_ID");
+    Reflect.deleteProperty(process.env, "FRONTEND_URL");
+    Reflect.deleteProperty(process.env, "OAUTH_PROXY_PRODUCTION_URL");
+    for (const key of [
+      "APPLE_CLIENT_ID",
+      "APPLE_CLIENT_SECRET",
+      "APPLE_TEAM_ID",
+      "APPLE_KEY_ID",
+      "APPLE_PRIVATE_KEY",
+    ]) {
+      Reflect.deleteProperty(process.env, key);
+    }
   },
   testEnv: {
     extra: {

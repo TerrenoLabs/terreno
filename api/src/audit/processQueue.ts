@@ -3,6 +3,7 @@ import {timingSafeEqual} from "node:crypto";
 import type {Request, Response} from "express";
 
 import {APIError} from "../errors";
+import {AUDIT_EVENT_SOURCES} from "./auditEventModel";
 import {AUDIT_SECRET_HEADER} from "./cloudTasksEnqueue";
 import type {AuditEventWrite} from "./record";
 import {persistEnqueuedAuditEvent} from "./record";
@@ -33,7 +34,7 @@ const isAuditEventWrite = (value: unknown): value is AuditEventWrite => {
     "read",
     "update",
   ];
-  const validSources: AuditEventWrite["source"][] = ["admin", "modelRouter", "rbac"];
+  const validSources: readonly AuditEventWrite["source"][] = AUDIT_EVENT_SOURCES;
   const validVerbs: AuditEventWrite["verb"][] = ["created", "deleted", "updated", "viewed"];
   return (
     typeof record.modelName === "string" &&

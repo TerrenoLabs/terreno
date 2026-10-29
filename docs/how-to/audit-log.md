@@ -54,6 +54,22 @@ Admin diffs also omit each model's `hiddenFields` and `excludeFields`.
 
 RBAC mutations fan into the same collection when `createAccess({auditSink: persistRbacAuditToAuditEvent})` is set. `source` is `rbac`.
 
+### 4. Account security actions
+
+`AccountSecurityApp` writes the same collection for account recovery. It refuses to start
+unless `AuditApp` is registered (or you pass `audit: false`).
+
+| `source` | Written by | `modelName` / `recordId` | `after` |
+| --- | --- | --- | --- |
+| `admin` | AdminApp POST/PATCH/DELETE | Model / document id | Changed fields |
+| `modelRouter` | `modelRouter` with `audit` | Model / document id | Changed fields |
+| `rbac` | `createAccess({auditSink: persistRbacAuditToAuditEvent})` | RBAC target | Role change |
+| `security` | `AccountSecurityApp` recovery actions (2FA reset and later actions) | `User` / target user id | `{securityAction, organizationId?}` |
+
+A recovery call that changes nothing (resetting 2FA that is already off) writes no row. List
+one user's security history with `GET /audit-events?source=security&recordId=<userId>`. Routes
+and action names: [Account security reference](../reference/account-security.md).
+
 `organizationId` is copied onto the event when `req.organization` is set (`id` or `_id`), otherwise from the request org AsyncLocalStorage, then `X-Organization-Id`, then the mutated document's `organizationId` string. Socket admin-window mutates attach `organizationId` on the payload so non-tenant models still land in the selected organization's audit log. The field is omitted when none of those exist. Admin list/read for `AuditEvent` is not organization-scoped, so unscoped rows stay visible when no organization is selected.
 
 `actorId` comes from `req.user.id` (or `_id`). Only a 24-hex Mongo ObjectId is stored;
@@ -63,7 +79,7 @@ shape still writes the event with `actorId` omitted and a warning logged.
 Update and delete snapshot `before` only when `audit` is on. If that `toJSON` throws, the
 mutation still completes and the event is recorded without a `before` snapshot.
 
-### 4. Fire-and-forget persist
+### 5. Fire-and-forget persist
 
 HTTP handlers do not await Mongo. Diffs still run before the response so `before` / `after` are captured. Failures log; the mutation stays 2xx.
 
@@ -83,6 +99,6 @@ Authenticated malformed queue payloads are acknowledged without persistence. The
 become valid on retry, and returning a non-2xx response would make Cloud Tasks retry the
 same poison task indefinitely.
 
-### 5. Retention
+### 6. Retention
 
 Omit `retentionDays` or set `0` to keep events forever (no TTL index). `new AuditApp({retentionDays: 90})` creates a Mongo TTL index on `created` with `expireAfterSeconds = 90 * 86400`, replacing the default `{created: 1}` field index so Mongo does not reject a duplicate key pattern. Mongo expires documents in the background; lowering or removing TTL later requires dropping that index yourself (`db.auditevents.dropIndex(...)`) — Mongoose will not remove it.

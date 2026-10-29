@@ -3,7 +3,12 @@ import mongoose from "mongoose";
 
 import {logger} from "../logger";
 import {getOrgContext, ORGANIZATION_ID_HEADER} from "../orgs/orgContext";
-import type {AuditEventModel, AuditEventOperation, AuditEventVerb} from "./auditEventModel";
+import type {
+  AuditEventModel,
+  AuditEventOperation,
+  AuditEventSource,
+  AuditEventVerb,
+} from "./auditEventModel";
 import {changedFieldDiff, recordLabelFromDoc, toAuditPlain} from "./diff";
 
 export interface ModelRouterAuditOptions {
@@ -28,7 +33,7 @@ export interface AuditEventWrite {
   organizationId?: string;
   recordId?: string;
   recordLabel?: string;
-  source: "admin" | "modelRouter" | "rbac";
+  source: AuditEventSource;
   verb: AuditEventVerb;
 }
 

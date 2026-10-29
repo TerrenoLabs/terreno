@@ -67,7 +67,7 @@ const isTypingTarget = (target: unknown): boolean => {
 };
 
 /** Map a keydown to a review action; typing in a field or using modifiers never triggers one. */
-export const reviewShortcutAction = (event: ShortcutKeyEvent): ReviewShortcutAction | undefined => {
+const reviewShortcutAction = (event: ShortcutKeyEvent): ReviewShortcutAction | undefined => {
   if (isHandled(event)) {
     return undefined;
   }

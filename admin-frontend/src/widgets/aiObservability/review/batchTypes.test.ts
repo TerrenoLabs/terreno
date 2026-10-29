@@ -14,7 +14,6 @@ import {
   focusReviewPage,
   type ReviewShortcutAction,
   reviewAnswerKey,
-  reviewShortcutAction,
   useReviewShortcuts,
 } from "./reviewShortcuts";
 import {
@@ -166,10 +165,9 @@ describe("review question helpers", () => {
         tagName: "SPAN",
       },
     };
-    assert.equal(reviewShortcutAction(segment), "no");
     assert.equal(reviewAnswerKey(segment), "no");
-    assert.equal(reviewShortcutAction(segment), undefined);
-    assert.equal(reviewShortcutAction({key: "y", target: {tagName: "INPUT"}}), undefined);
+    assert.equal(reviewAnswerKey(segment), undefined);
+    assert.equal(reviewAnswerKey({key: "y", target: {tagName: "INPUT"}}), undefined);
   });
 
   it("focuses the page and blurs a focused note field", () => {

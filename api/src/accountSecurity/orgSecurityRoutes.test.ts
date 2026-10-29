@@ -683,6 +683,20 @@ describe("org-admin recovery routes", () => {
       });
     });
 
+    it("lets a platform operator recover a member who holds an org-only grant", async () => {
+      const {app, orgA} = await buildScopedApp();
+      const operator = await signUp(app, "scoped-platform-operator", ["operator"]);
+      const target = await signUpWithTwoFactor(app, "scoped-operator-target");
+      await addMember(orgA, target.id);
+      extraGrant = {orgId: orgA, userId: target.id};
+
+      // The same grant blocks an org-admin (their membership is the reach context) and
+      // does not block platform staff, who are judged outside the organization.
+      expect((await orgSummary(app, operator.token, orgA, target.id)).status).toBe(200);
+      const reset = await orgAction(app, operator.token, orgA, target.id, "reset-two-factor");
+      expect(reset.status).toBe(200);
+    });
+
     it("still allows an org-admin acting on another org-admin of the org", async () => {
       const {app, orgA, orgAdmin} = await buildScopedApp();
       const target = await signUpWithTwoFactor(app, "scoped-peer-admin");

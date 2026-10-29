@@ -41,7 +41,9 @@ run the same handlers, and every change writes a security `AuditEvent`.
 `Membership` in that org has `roleName: "org-admin"`.
 
 Nobody can act on themselves, or on someone who holds a permission they lack. An org-admin can't
-reach platform staff or `admin: true` users, members of other orgs, or suspended members.
+reach platform staff or `admin: true` users, members of other orgs, or suspended members. Platform
+staff on the org path are judged the same way as on the platform path, so an org-only permission
+does not block them.
 
 ## Platform path
 

@@ -93,7 +93,8 @@ platform staff. `OrgsApp` mounts the same recovery handlers the platform uses at
   the org is named only with `notifications.includeOrgName`). Apps that want more can set
   `orgRecovery.minMembershipDays` to refuse members who joined too recently.
 - **Platform staff** holding `user:manageSecurity` pass the org checks. The target must still be
-  an active member of the org in the path.
+  an active member of the org in the path. Their reach check is the platform one: both sides are
+  resolved outside the organization, so an org-only grant does not put the member out of reach.
 
 See [Recover a locked-out user](../how-to/recover-locked-out-user.md) for who can do what, and
 the [account security reference](../reference/account-security.md#org-admin-routes) for every

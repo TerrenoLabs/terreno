@@ -103,9 +103,11 @@ Each route runs the same steps before its handler:
 
 Routes mounted with `mountSecurityRoutes` (such as the org-admin prefix) run the same steps.
 Each user's permissions are resolved in their own context. On the platform routes both are
-resolved outside any organization. On the org-admin routes the actor is resolved under their own
-membership in `:orgId` and the target under theirs, so org-scoped grants count for both and a
-target is never judged by the acting org-admin's membership.
+resolved outside any organization. On the org-admin routes an org-admin is resolved under their
+own membership in `:orgId` and the target under theirs, so org-scoped grants count for both and a
+target is never judged by the acting org-admin's membership. Platform staff on an org route are
+resolved outside the organization, the same as `/users/:id/security`. An org-only grant on the
+member does not block an operator who can already recover that user on the platform path.
 
 ## Org-admin routes
 
@@ -660,7 +662,7 @@ type SecurityAuthorizer = (args: {
 
 `orgScope` (`{organization, actorMembership?, targetMembership}`) makes the reach check resolve
 each user under their own membership in that organization. Omit it for routes that are not
-org-scoped.
+org-scoped, and for a platform operator on the org prefix.
 
 A route action is `{id, method, path, isSupported, isApplicable, run, platformOnly?, orgOnly?,
 requiredPermission?}`. `requiredPermission` (such as `{user: ["issueSignInLink"]}`) is checked on

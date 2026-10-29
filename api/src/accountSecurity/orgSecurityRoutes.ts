@@ -7,7 +7,8 @@
  * reachable through an org, and `orgRecovery.minMembershipDays` (default 0) can refuse members
  * who joined too recently, so attaching an existing user by email and acting on them at once
  * fails. The shared pipeline then applies D9 (no self-targeting, no target holding permissions
- * the actor lacks). Platform staff holding `user:manageSecurity` always pass the org checks.
+ * the actor lacks). Platform staff holding `user:manageSecurity` always pass the org checks,
+ * and their reach check is the platform one: both sides are resolved outside the organization.
  */
 
 import type {Request, Router} from "express";
@@ -135,7 +136,8 @@ const assertMembershipOldEnough = ({
  * 403 unless the actor is platform staff or an active org-admin of the org; 404 unless the
  * target holds an active membership in the org (suspended members are out of reach); then, for
  * org-admin actors, 403 for platform-role or `admin: true` targets and members younger than
- * `minMembershipDays`.
+ * `minMembershipDays`. Platform staff omit `orgScope`, so the shared reach check resolves both
+ * users outside the organization, the same way `/users/:id/security` does.
  */
 export const createOrgSecurityAuthorizer = ({
   access,
@@ -190,7 +192,10 @@ export const createOrgSecurityAuthorizer = ({
       targetMembership,
     };
     if (isPlatform) {
-      return {actor, org, orgScope};
+      // An org-only grant must not block staff who can already recover this user on
+      // /users/:id/security. Passing orgScope would judge that grant against an actor
+      // who has no membership in the org.
+      return {actor, org};
     }
 
     await assertNotPlatformTarget({targetUserId, userModel});

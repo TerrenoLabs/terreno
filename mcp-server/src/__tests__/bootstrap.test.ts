@@ -1,12 +1,53 @@
 import {describe, expect, test} from "bun:test";
+import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, join} from "node:path";
 import {assert} from "chai";
 
 import {
   bootstrapPrompts,
   bootstrapTools,
+  generateAiRulesFiles,
   handleBootstrapPromptRequest,
   handleBootstrapToolCall,
+  RULESYNC_GENERATE_COMMAND,
+  RULESYNC_OVERWRITE_WARNING,
+  RULESYNC_TARGETS,
 } from "../bootstrap.js";
+
+const RULESYNC_RULE_PREFIX = ".rulesync/rules/";
+
+const findFile = (files: Array<{path: string; content: string}>, path: string): string => {
+  const file = files.find((f) => f.path === path);
+  assert.exists(file, `missing ${path}`);
+  return file?.content ?? "";
+};
+
+const parseFrontmatter = (content: string): string => {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n/);
+  return match?.[1] ?? "";
+};
+
+const writeFiles = (root: string, files: Array<{path: string; content: string}>): void => {
+  for (const file of files) {
+    const target = join(root, file.path);
+    mkdirSync(dirname(target), {recursive: true});
+    writeFileSync(target, file.content);
+  }
+};
+
+const runRulesyncGenerate = (cwd: string): {exitCode: number; output: string} => {
+  const rulesyncDir = dirname(Bun.resolveSync("rulesync/package.json", import.meta.dir));
+  const result = Bun.spawnSync({
+    cmd: [process.execPath, join(rulesyncDir, "dist/cli/index.js"), "generate"],
+    cwd,
+    env: {...process.env, NO_COLOR: "1"},
+  });
+  return {
+    exitCode: result.exitCode,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`,
+  };
+};
 
 describe("bootstrap", () => {
   describe("bootstrapTools", () => {
@@ -71,7 +112,6 @@ describe("bootstrap", () => {
 
       expect(text).toContain("# Bootstrap AI Rules for Rules App");
       expect(text).toContain(".rulesync/rules/00-root.md");
-      expect(text).toContain(".rulesync/rules/01-claudecode-root.md");
       expect(text).toContain("backend/AGENTS.md");
       expect(text).toContain("backend/CLAUDE.md");
       expect(text).toContain("frontend/AGENTS.md");
@@ -79,13 +119,42 @@ describe("bootstrap", () => {
       expect(text).toContain("rulesync.jsonc");
     });
 
-    test("should include setup instructions for rulesync", () => {
+    test("instructions run rulesync generate, not the removed sync command", () => {
       const result = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "R App",
         appName: "r-app",
       });
-      expect(result.content[0].text).toContain("rulesync sync");
-      expect(result.content[0].text).toContain("npm install -g rulesync");
+      const text = result.content[0].text;
+      assert.equal(RULESYNC_GENERATE_COMMAND, "bunx rulesync@9 generate");
+      assert.include(text, RULESYNC_GENERATE_COMMAND);
+      assert.notInclude(text, "rulesync sync");
+      assert.notInclude(text, "npm install -g rulesync");
+      assert.notInclude(text, ".windsurfrules");
+      assert.include(text, ".rulesync/rules/10-project.md");
+    });
+
+    test("instructions warn that generate overwrites hand edits before running it", () => {
+      const text = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
+        appDisplayName: "Warn App",
+        appName: "warn-app",
+      }).content[0].text;
+      for (const path of [
+        "CLAUDE.md",
+        "AGENTS.md",
+        ".claude/rules/",
+        ".cursor/rules/",
+        ".github/instructions/",
+        ".rulesync/rules/10-project.md",
+      ]) {
+        assert.include(RULESYNC_OVERWRITE_WARNING, path);
+      }
+      const warningAt = text.indexOf(RULESYNC_OVERWRITE_WARNING);
+      const cursorrulesAt = text.indexOf("Delete the stale `.cursorrules`");
+      const generateAt = text.indexOf(`   ${RULESYNC_GENERATE_COMMAND}`);
+      assert.isAbove(warningAt, -1);
+      assert.isAbove(cursorrulesAt, -1);
+      assert.isAbove(generateAt, warningAt);
+      assert.isAbove(generateAt, cursorrulesAt);
     });
 
     test("should strip frontmatter from backend/frontend AGENTS files", () => {
@@ -171,6 +240,114 @@ describe("bootstrap", () => {
     });
   });
 
+  describe("generateAiRulesFiles - rulesync output", () => {
+    const files = generateAiRulesFiles({appDisplayName: "Sync Rules", appName: "sync-rules"});
+
+    test("rulesync.jsonc lists only targets rulesync 9 accepts", () => {
+      const config = JSON.parse(findFile(files, "rulesync.jsonc"));
+      assert.deepEqual(config.targets, ["cursor", "claudecode", "copilot", "agentsmd"]);
+      assert.deepEqual(config.targets, [...RULESYNC_TARGETS]);
+      assert.notInclude(config.targets, "windsurf");
+      assert.deepEqual(config.features, ["rules"]);
+      assert.isTrue(config.delete);
+      assert.notProperty(config, "baseDirs");
+    });
+
+    test("root rule keeps everything create-terreno-app's CLAUDE.md and .cursorrules say", () => {
+      // Lines from create-terreno-app/src/generate.ts (generateClaudeMd, generateCursorRules);
+      // rulesync replaces CLAUDE.md and supersedes .cursorrules with the root rule.
+      const root = findFile(files, ".rulesync/rules/00-root.md");
+      for (const line of [
+        "# Sync Rules",
+        "## Project Structure",
+        "cd backend && bun install",
+        "cd frontend && bun install",
+        "cd backend && bun run dev",
+        "port 8082",
+        "cd frontend && bun run sdk",
+        "## Adding Features",
+        "1. Create model in `backend/src/models/`",
+        "2. Create route in `backend/src/api/`",
+        "3. Register route in `backend/src/server.ts`",
+        "4. Regenerate SDK: `cd frontend && bun run sdk`",
+        "5. Create screens in `frontend/app/`",
+        "## Backend Conventions",
+        "- Use `modelRouter` for CRUD endpoints",
+        "- Use `APIError` for error responses",
+        "## Frontend Conventions",
+        "- Use generated SDK hooks from `@/store/openApiSdk` for non-synced routes only",
+        "- Never modify `openApiSdk.ts` manually - regenerate with `bun run sdk`",
+        "Use Redux Toolkit for state management",
+        "## AI Assistance",
+        "- Use Luxon",
+        "- Use functional components with `React.FC` type",
+        "- Wrap callbacks in `useCallback`",
+      ]) {
+        assert.include(root, line);
+      }
+      const minimal = findFile(
+        generateAiRulesFiles({appDisplayName: "Min", appName: "min", packages: ["api"]}),
+        ".rulesync/rules/00-root.md"
+      );
+      assert.include(minimal, "## Adding Features");
+      assert.include(minimal, "## Frontend Conventions");
+    });
+
+    test("emits one root rule that covers every configured target", () => {
+      const ruleFiles = files.filter((f) => f.path.startsWith(RULESYNC_RULE_PREFIX));
+      assert.deepEqual(
+        ruleFiles.map((f) => f.path),
+        [".rulesync/rules/00-root.md"]
+      );
+      const frontmatter = parseFrontmatter(findFile(files, ".rulesync/rules/00-root.md"));
+      assert.include(frontmatter, "root: true");
+      assert.include(frontmatter, 'targets: ["cursor", "claudecode", "copilot", "agentsmd"]');
+      for (const file of files) {
+        assert.notInclude(file.content, "localRoot", file.path);
+        assert.notInclude(file.content, "windsurf", file.path);
+      }
+    });
+
+    test("rulesync generate succeeds and keeps consumer rules across a re-bootstrap", () => {
+      const root = mkdtempSync(join(tmpdir(), "terreno-airules-"));
+      try {
+        writeFiles(root, files);
+        writeFiles(root, [
+          {
+            content:
+              '---\ntargets: ["*"]\ndescription: "Acme backend"\nglobs: ["backend/**"]\n---\n\n# Acme backend\n\n- Store money as integer cents.\n',
+            path: ".rulesync/rules/10-project.md",
+          },
+        ]);
+
+        const first = runRulesyncGenerate(root);
+        assert.equal(first.exitCode, 0, first.output);
+        for (const generated of [
+          "CLAUDE.md",
+          "AGENTS.md",
+          ".cursor/rules/00-root.mdc",
+          ".github/copilot-instructions.md",
+          ".claude/rules/10-project.md",
+          ".cursor/rules/10-project.mdc",
+        ]) {
+          assert.isTrue(existsSync(join(root, generated)), `missing ${generated}`);
+        }
+        assert.isFalse(existsSync(join(root, "CLAUDE.local.md")));
+
+        // Re-bootstrap rewrites the Terreno-owned files; the consumer source survives.
+        writeFiles(root, files);
+        const second = runRulesyncGenerate(root);
+        assert.equal(second.exitCode, 0, second.output);
+        assert.isTrue(existsSync(join(root, ".rulesync/rules/10-project.md")));
+        assert.isTrue(existsSync(join(root, ".claude/rules/10-project.md")));
+        assert.isTrue(existsSync(join(root, "backend/CLAUDE.md")));
+        assert.isTrue(existsSync(join(root, "frontend/AGENTS.md")));
+      } finally {
+        rmSync(root, {force: true, recursive: true});
+      }
+    }, 30_000);
+  });
+
   describe("handleBootstrapToolCall - unknown", () => {
     test("should return error for unknown bootstrap tool", () => {
       const result = handleBootstrapToolCall("bootstrap_unknown", {});
@@ -200,7 +377,14 @@ describe("bootstrap", () => {
       expect(text).toContain("bunx create-terreno-app");
       expect(text).not.toContain("terreno_bootstrap_app");
       expect(text).toContain("terreno_bootstrap_ai_rules");
-      expect(text).toContain("rulesync");
+      expect(text).toContain(RULESYNC_GENERATE_COMMAND);
+      expect(text).not.toContain("npm install -g rulesync");
+      expect(text).not.toContain("windsurfrules");
+      expect(text).toContain(RULESYNC_OVERWRITE_WARNING);
+      expect(text).toContain("delete the stale root `.cursorrules`");
+      expect(text.indexOf(RULESYNC_OVERWRITE_WARNING)).toBeLessThan(
+        text.indexOf(RULESYNC_GENERATE_COMMAND)
+      );
     });
 
     test("should return unknown message for unknown prompt", () => {

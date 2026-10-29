@@ -5,11 +5,17 @@ enforced in code before and after this judgment; your level moves only inside th
 
 ## Levels
 
-| Level | Meaning | Examples |
-| --- | --- | --- |
-| low | A mistake is cheap and visible; the PR proves itself | docs; tests, snapshots, fixtures; copy and i18n strings; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; one-line bug fixes with a regression test |
-| medium | Ordinary product logic a reviewer would read once | new or changed behavior with tests; UI changes with screenshots; new endpoints with permission tests; minor dependency bumps; refactors inside one package |
-| high | A mistake is costly, hidden, or hard to undo | auth, sessions, permissions; schema and migrations; data backfills; billing; PHI handling; secrets, env, infra, Dockerfiles; CI; public API shape; lockstep framework bumps; feature-flag removals; reverts of security changes; hotfix branches with commits not on master; deleted or skipped tests |
+Most features are medium. High is reserved for security-related code.
+
+| Level | Human approvals | Meaning | Examples |
+| --- | --- | --- | --- |
+| low | None, once automated review and security checks are green | A mistake is cheap and visible; the PR proves itself | docs; copy and i18n strings; tests, snapshots, fixtures; internal-only features (admin screens, dev tooling, scripts no user runs); additive changes behind a feature flag that defaults off; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; one-line bug fixes with a regression test |
+| medium | One person | Ordinary product changes, and changes to sensitive areas | new or changed behavior with tests; UI changes with screenshots; new endpoints with permission tests; schema changes, migrations, and backfills; caching (RTK tags, syncdb, HTTP/CDN caching); app updates (expo-updates, `eas.json`, `app.json`, release channels); AI system prompts and tool definitions; billing; infra, Dockerfiles, CI; public API shape; dependency minor and major bumps; feature-flag removals; hotfix branches; deleted or skipped tests |
+| high | One person | Security-related code, where a mistake is costly, hidden, or hard to undo | auth, sessions, tokens, Better Auth and Passport config; permissions, RBAC, `queryFilter`s that scope data to a user; MCP OAuth; `socketAuth` and `sessionRevalidation`; secrets and env files; crypto, hashing, signature verification (webhook verifiers); PHI handling, consent, and audit logging; rate limits on unauthenticated routes; CORS and trusted origins; IAM, network, and firewall rules in infra; dependencies added for auth, crypto, or parsing untrusted input; reverts of security changes |
+
+A PR is high only when it changes how the system decides who may see or do something,
+or how secrets, credentials, or PHI are handled. Touching a security-adjacent file for an
+unrelated reason (a typo, a log message, a rename) is judged by what the change does.
 
 ## Dimensions
 
@@ -100,13 +106,14 @@ A finding here is blocking when it is certain and should-fix when it is likely.
 - A new runtime dependency is named in the PR body with the reason and is on the catalog
   in `.rulesync/rules/01-dependency-catalog.md` or justified against it; a missing reason
   lowers Architecture. Dev-only additions need no reason.
-- Patch bumps of catalog packages with green CI stay low. Minor bumps are medium. Major
-  bumps, Expo SDK and React Native upgrades, Better Auth and Mongoose majors, and
-  lockfile-only changes without a `package.json` change are high.
+- Patch bumps of catalog packages with green CI stay low. Minor and major bumps, Expo SDK
+  and React Native upgrades, Mongoose majors, and lockfile-only changes without a
+  `package.json` change are medium. Better Auth and other auth or crypto majors are high.
 - A bump that changes generated output (`bun.lock`, snapshots, `openApiSdk.ts`,
   `plugins/terreno-claude/`) ships the regenerated output in the same PR.
 - A new dependency's license passes `bun run check:licenses`.
-- A `patches/` change is high: it edits a third party and needs the upstream issue linked.
+- A `patches/` change is medium (high when it patches an auth, crypto, or parsing
+  dependency): it edits a third party and needs the upstream issue linked.
 - Removing a dependency the code still imports is a correctness finding; `knip` must stay
   at zero findings.
 
@@ -137,7 +144,8 @@ A finding here is blocking when it is certain and should-fix when it is likely.
 
 ## Signals that move the level
 
-- Raise one level: more than two packages touched; deletions outnumber additions in
+- Raise one level, never above medium unless the change is security-related: more than
+  two packages touched; deletions outnumber additions in
   source; a `TODO`, `FIXME`, or commented-out code added; explicit `any` added; PR body
   missing `Why`, `What changed`, or `Verification`; `WIP` in the title; the plan edited
   in the same PR to match the code.

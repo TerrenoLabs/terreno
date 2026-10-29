@@ -30,7 +30,7 @@ Work down this list and stop at the first layer that meets the need:
 
 ## Documentation
 
-1. Read `docs/reference/ui.md`, `docs/reference/components/`, and the relevant explanation pages before changing components or theme contracts.
+1. Read `docs/reference/ui.md`, `docs/explanation/responsive-design.md`, `docs/reference/components/`, and the relevant explanation pages before changing components, width-dependent layout, or theme contracts.
 2. Implement against that design.
 3. Update those pages (and a demo story) in the same slice with `update-docs`.
 4. Ship without matching docs is a failed slice.
@@ -39,7 +39,7 @@ Work down this list and stop at the first layer that meets the need:
 
 ```
 references/
-  layout.md              Box, Page, Card, SplitPage — spacing and flex
+  layout.md              Box, Page, Card, ListDetailLayout, SplitPage — spacing and flex
   forms.md               TextField, SelectField, DateTimeField, validation
   data-display.md        DataTable, Badge, Text, Heading
   feedback.md            Modal, Toast, Spinner, Banner
@@ -150,7 +150,8 @@ import {Modal, Text} from "@terreno/ui";
 | Flex layout | `Box` |
 | Full screen | `Page` |
 | Grouped content | `Card` |
-| Two-column layout | `SplitPage` |
+| List/detail with routes (mail, inbox, records) | `ListDetailLayout` in the group's `_layout.tsx` |
+| List/detail without routes (inside a modal) | `SplitPage` |
 | Text input | `TextField`, `TextArea`, `EmailField`, `PasswordField` |
 | Dropdown | `SelectField`, `MultiselectField` |
 | Date/time | `DateTimeField` |

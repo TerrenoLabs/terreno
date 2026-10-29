@@ -126,4 +126,40 @@ describe("mobile consent PDF generation", () => {
     });
     expect(shareCalls[0].filename).toMatch(/^consent-response-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
+  it("passes the provisional signer and date, without the note, for a user's history entry", async () => {
+    await generateConsentHistoryPdf({
+      _id: "history-3",
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00.000Z",
+      provisional: true,
+      provisionalSignedBy: {name: "Dana Rivera"},
+    });
+
+    expect((templateCalls[0] as {provisionalSignature?: unknown}).provisionalSignature).toEqual({
+      signedAt: "2026-10-20T15:30:00.000Z",
+      signedByName: "Dana Rivera",
+      voidedAt: undefined,
+    });
+  });
+
+  it("passes the provisional signature with note and IP for an admin response", async () => {
+    await generateConsentPdf({
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00.000Z",
+      provisional: true,
+      provisionalNote: "Phone",
+      provisionalSignedBy: {email: "dana@example.com"},
+      provisionalSignerIp: "10.0.0.7",
+      userId: "member-1",
+      voidedAt: "2026-10-21T09:00:00.000Z",
+    });
+
+    expect((templateCalls[0] as {provisionalSignature?: unknown}).provisionalSignature).toEqual({
+      note: "Phone",
+      signedAt: "2026-10-20T15:30:00.000Z",
+      signedByName: "dana@example.com",
+      signerIp: "10.0.0.7",
+      voidedAt: "2026-10-21T09:00:00.000Z",
+    });
+  });
 });

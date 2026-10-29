@@ -3,8 +3,9 @@ import {ActivityIndicator, useWindowDimensions, View} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
-import {CARD_MOBILE_BREAKPOINT, Card} from "../Card";
+import {Card} from "../Card";
 import {Heading} from "../Heading";
+import {isSupportedDesktopWidth} from "../MediaQuery";
 import {Page} from "../Page";
 import {Text} from "../Text";
 import {useTheme} from "../Theme";
@@ -42,9 +43,9 @@ export const AccountSecurityScreen: FC<AccountSecurityScreenProps> = ({
 }) => {
   const {theme} = useTheme();
   const {width: windowWidth} = useWindowDimensions();
-  // Narrow windows draw cards edge to edge, so the screen adds no side padding of its own and
-  // insets its text to line up with the cards' content instead.
-  const isFullBleed = windowWidth <= CARD_MOBILE_BREAKPOINT;
+  // Below the desktop floor, cards run edge to edge, so the screen adds no side padding of its
+  // own and insets its text to line up with the cards' content instead.
+  const isFullBleed = !isSupportedDesktopWidth({width: windowWidth});
   const textInset = isFullBleed ? 4 : 0;
 
   const hasSignInMethods = Boolean(linkedAccounts) || Boolean(password);

@@ -1,4 +1,6 @@
-// TODO: Update SplitPage native to have desktop UX for tablet sized screens
+// Native SplitPage stays a stacked list/detail at every mobile breakpoint, including tablet `lg`.
+// Prefer `ListDetailLayout` for new list/detail screens: it keeps the selected item in the route
+// and splits into two panes when the layout is wide enough.
 import {useCallback, useEffect, useState} from "react";
 import flattenChildren from "react-keyed-flatten-children";
 import {Dimensions, type ListRenderItemInfo, View} from "react-native";

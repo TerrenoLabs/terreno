@@ -9,7 +9,6 @@ import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
 import {
   baseUrl,
-  installTerrenoDevConsoleLogger,
   selectBetterAuthIsLoading,
   selectBetterAuthUserId,
   setRealtimeSocket,
@@ -18,6 +17,7 @@ import {
   useTerrenoFeatureFlags,
   useUpgradeCheck,
 } from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
@@ -46,7 +46,7 @@ import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 
-installTerrenoDevConsoleLogger();
+installTerrenoDevConsoleLogger({baseUrl});
 
 interface ProfileData {
   _id: string;
@@ -343,7 +343,9 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="consent-sign/[userId]" />
         <Stack.Screen name="todo-windows/index" />
+        <Stack.Screen name="todo-browser" />
       </Stack>
     </ThemeProvider>
   );

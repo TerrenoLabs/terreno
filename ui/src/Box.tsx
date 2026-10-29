@@ -31,6 +31,28 @@ import {getLoadingAccessibilityProps, resolveLoadingContent} from "./Skeleton";
 import {useTheme} from "./Theme";
 import {Unifier} from "./Unifier";
 
+const ARIA_SELECTABLE_ROLES = new Set([
+  "columnheader",
+  "gridcell",
+  "option",
+  "row",
+  "rowheader",
+  "tab",
+  "treeitem",
+]);
+
+/**
+ * react-native-web turns `accessibilityState.selected` into `aria-selected`.
+ * A button cannot have that attribute, so a clickable row keeps `aria-current`
+ * only and drops `selected` from the state object on web.
+ */
+const omitSelectedState = (
+  state: NonNullable<AccessibilityProps["accessibilityState"]>
+): NonNullable<AccessibilityProps["accessibilityState"]> => {
+  const {selected: _selected, ...rest} = state;
+  return rest;
+};
+
 const ALIGN_CONTENT = {
   around: "space-around",
   between: "space-between",
@@ -427,15 +449,35 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
     props.accessibilityState || isLoading
       ? {...props.accessibilityState, ...loadingAccessibilityProps.accessibilityState}
       : undefined;
+  const accessibilityRoleProp = (props as AccessibilityProps).accessibilityRole;
+  // ARIA allows aria-selected only on selectable roles. Any other Box, such as a clickable
+  // list row (a button), marks the selected item with aria-current instead.
+  const sendsAriaSelected = ARIA_SELECTABLE_ROLES.has(accessibilityRoleProp ?? "");
+  const selectedAriaProps =
+    accessibilityState?.selected === undefined
+      ? {}
+      : sendsAriaSelected
+        ? {"aria-selected": accessibilityState.selected}
+        : {"aria-current": accessibilityState.selected ? ("true" as const) : undefined};
+  const hostAccessibilityState =
+    accessibilityState &&
+    Platform.OS === "web" &&
+    accessibilityState.selected !== undefined &&
+    !sendsAriaSelected
+      ? omitSelectedState(accessibilityState)
+      : accessibilityState;
   const accessibilityStateProps = accessibilityState
     ? {
-        accessibilityState,
+        ...(hostAccessibilityState && Object.keys(hostAccessibilityState).length > 0
+          ? {accessibilityState: hostAccessibilityState}
+          : {}),
         ...(accessibilityState.checked !== undefined
           ? {"aria-checked": accessibilityState.checked}
           : {}),
         ...(accessibilityState.disabled !== undefined
           ? {"aria-disabled": accessibilityState.disabled}
           : {}),
+        ...selectedAriaProps,
         ...(accessibilityState.busy !== undefined ? {"aria-busy": accessibilityState.busy} : {}),
       }
     : {};
@@ -445,7 +487,7 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
   // itself translates to accessibilityRole under the hood) by default; an explicit
   // `accessibilityRole` prop is only forwarded literally when the caller opts in.
   if (props.onClick) {
-    const explicitAccessibilityRole = (props as AccessibilityProps).accessibilityRole;
+    const explicitAccessibilityRole = accessibilityRoleProp;
     // Content is not there yet while loading, so presses are held until it is.
     const isDisabled = accessibilityState?.disabled === true || isLoading;
     // Per ARIA, Space toggles a checkbox or switch; react-native-web only maps Space to buttons.

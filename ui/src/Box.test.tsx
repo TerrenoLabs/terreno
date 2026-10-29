@@ -2,7 +2,7 @@ import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import type {ScrollView} from "react-native";
+import {Platform, type ScrollView} from "react-native";
 
 import {Box} from "./Box";
 import {sharedResponsiveBreakpointStore} from "./ResponsiveBreakpoint";
@@ -628,6 +628,66 @@ describe("Box", () => {
         fireEvent.press(pressable);
       });
       expect(onClick).not.toHaveBeenCalled();
+    });
+
+    it("marks a selected clickable row with aria-current", () => {
+      const originalOS = Platform.OS;
+      Platform.OS = "web";
+      try {
+        const {getByTestId} = renderWithTheme(
+          <Box
+            accessibilityHint="Opens the message"
+            accessibilityLabel="Quarterly report"
+            accessibilityState={{selected: true}}
+            onClick={() => {}}
+            testID="row"
+          />
+        );
+        const pressable = getByTestId("row-clickable");
+        expect(pressable.props.accessibilityState).toBeUndefined();
+        expect(pressable.props["aria-current"]).toBe("true");
+        expect(pressable.props["aria-selected"]).toBeUndefined();
+      } finally {
+        Platform.OS = originalOS;
+      }
+    });
+
+    it("drops aria-current from an unselected row", () => {
+      const originalOS = Platform.OS;
+      Platform.OS = "web";
+      try {
+        const {getByTestId} = renderWithTheme(
+          <Box
+            accessibilityHint="Opens the message"
+            accessibilityLabel="Quarterly report"
+            accessibilityState={{selected: false}}
+            onClick={() => {}}
+            testID="row"
+          />
+        );
+        const pressable = getByTestId("row-clickable");
+        expect(pressable.props.accessibilityState).toBeUndefined();
+        expect(pressable.props["aria-current"]).toBeUndefined();
+        expect(pressable.props["aria-selected"]).toBeUndefined();
+      } finally {
+        Platform.OS = originalOS;
+      }
+    });
+
+    it("sends aria-selected for a selectable role", () => {
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Shows the inbox"
+          accessibilityLabel="Inbox"
+          accessibilityRole="tab"
+          accessibilityState={{selected: false}}
+          onClick={() => {}}
+          testID="tab"
+        />
+      );
+      const pressable = getByTestId("tab-clickable");
+      expect(pressable.props["aria-selected"]).toBe(false);
+      expect(pressable.props["aria-current"]).toBeUndefined();
     });
 
     it("forwards checked to a Box without onClick", () => {

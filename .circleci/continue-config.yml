@@ -453,8 +453,8 @@ commands:
             source "$BASH_ENV"
             shard="<< parameters.spec >>"
             case "$shard" in
-              auth) specs="login login-form signup consents forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
+              auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -1460,15 +1460,16 @@ jobs:
   # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
   # never installs or executes code from the PR checkout: the working tree is reset to
   # origin/master before anything runs. It waits for every other
-  # check on the head before judging, so it runs once, last. Comment-only while
-  # approveLevels is empty. A not-approved verdict is not a pipeline failure.
+  # check on the head before judging, so it runs once, last. It approves only levels in
+  # approveLevels (low); medium and high get a comment for a human. A not-approved
+  # verdict is not a pipeline failure.
   approve:
     executor: node22
     resource_class: small
     environment:
       # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
       # is pinned; bump the sha deliberately (brewery has no release tag yet).
-      BREWERY_REF: 3d59a77e52ccf732c81c50e08057a489d44bca92
+      BREWERY_REF: 3e160cc6a8dbdf45fc255a399855bf32154a2ac4
     steps:
       - skip_if_fork_pull_request
       - run:

@@ -39,7 +39,7 @@ describe("rbac role model", () => {
     expect(superadmin.permissions.user).toContain("delete");
     expect(superadmin.permissions.featureFlag).toContain("list");
     expect(superadmin.permissions.consentForm).toContain("list");
-    expect(superadmin.permissions.consentResponse).toEqual(["list", "read"]);
+    expect(superadmin.permissions.consentResponse).toEqual(["list", "read", "signOnBehalf"]);
     expect(superadmin.permissions.organization).toContain("list");
 
     expect(await RbacRole.findOne({name: "operator"})).toBeNull();
@@ -246,6 +246,59 @@ describe("rbac role model", () => {
     expect(admin.permissions.aiDataset).toEqual([...terrenoStatements.aiDataset]);
     expect(admin.permissions.aiEvaluator).toEqual([...terrenoStatements.aiEvaluator]);
     expect(admin.permissions.aiExperiment).toEqual([...terrenoStatements.aiExperiment]);
+  });
+
+  it("seeds admin with consentResponse:signOnBehalf", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
+  });
+
+  it("adds consentResponse:signOnBehalf to an existing unsealed admin role on re-seed", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne({name: "admin"}, {$set: {permissions: {user: ["read"]}}});
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.user).toEqual(["read"]);
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
+  });
+
+  it("keeps existing consentResponse grants when merging signOnBehalf into admin", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne(
+      {name: "admin"},
+      {$set: {permissions: {consentResponse: ["list", "read"]}}}
+    );
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.consentResponse).toEqual(["list", "read", "signOnBehalf"]);
+  });
+
+  it("does not merge into a sealed admin role, which is refreshed from code instead", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.create({
+      displayName: "Admin",
+      isLocked: true,
+      isSealed: true,
+      name: "admin",
+      permissions: {customApp: ["deploy"], user: ["read"]},
+    });
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.customApp).toBeUndefined();
+    expect(admin.permissions.user).toEqual(["create", "list", "read", "update", "updateIdentity"]);
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
   });
 
   it("seeds auditor with observability list and read grants", async () => {

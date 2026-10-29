@@ -168,6 +168,22 @@ exports[`openApi gets the openapi.json 1`] = `
                                 "_id": {
                                   "type": "string",
                                 },
+                                "addendums": {
+                                  "description": "Extra details about this food category",
+                                  "items": {
+                                    "properties": {
+                                      "_id": {
+                                        "type": "string",
+                                      },
+                                      "text": {
+                                        "description": "The additional category detail",
+                                        "type": "string",
+                                      },
+                                    },
+                                    "type": "object",
+                                  },
+                                  "type": "array",
+                                },
                                 "created": {
                                   "format": "date-time",
                                   "type": "string",
@@ -538,6 +554,22 @@ exports[`openApi gets the openapi.json 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -836,6 +868,22 @@ exports[`openApi gets the openapi.json 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -1266,6 +1314,22 @@ exports[`openApi gets the openapi.json 1`] = `
                           "_id": {
                             "type": "string",
                           },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
                           "created": {
                             "format": "date-time",
                             "type": "string",
@@ -1629,6 +1693,22 @@ exports[`openApi gets the openapi.json 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -1927,6 +2007,22 @@ exports[`openApi gets the openapi.json 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -2434,6 +2530,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                                 "_id": {
                                   "type": "string",
                                 },
+                                "addendums": {
+                                  "description": "Extra details about this food category",
+                                  "items": {
+                                    "properties": {
+                                      "_id": {
+                                        "type": "string",
+                                      },
+                                      "text": {
+                                        "description": "The additional category detail",
+                                        "type": "string",
+                                      },
+                                    },
+                                    "type": "object",
+                                  },
+                                  "type": "array",
+                                },
                                 "created": {
                                   "format": "date-time",
                                   "type": "string",
@@ -2804,6 +2916,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -3102,6 +3230,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -3532,6 +3676,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                           "_id": {
                             "type": "string",
                           },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
                           "created": {
                             "format": "date-time",
                             "type": "string",
@@ -3895,6 +4055,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -4193,6 +4369,22 @@ exports[`openApi gets the openapi.json with custom endpoint 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -4716,6 +4908,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                                 "_id": {
                                   "type": "string",
                                 },
+                                "addendums": {
+                                  "description": "Extra details about this food category",
+                                  "items": {
+                                    "properties": {
+                                      "_id": {
+                                        "type": "string",
+                                      },
+                                      "text": {
+                                        "description": "The additional category detail",
+                                        "type": "string",
+                                      },
+                                    },
+                                    "type": "object",
+                                  },
+                                  "type": "array",
+                                },
                                 "created": {
                                   "format": "date-time",
                                   "type": "string",
@@ -4927,6 +5135,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -5066,6 +5290,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -5337,6 +5577,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                           "_id": {
                             "type": "string",
                           },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
                           "created": {
                             "format": "date-time",
                             "type": "string",
@@ -5541,6 +5797,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -5680,6 +5952,22 @@ exports[`openApi populate gets the openapi.json with populate 1`] = `
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",

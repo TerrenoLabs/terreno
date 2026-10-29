@@ -22,6 +22,7 @@ interface RecordedCall {
 
 interface DeployRun {
   calls: RecordedCall[];
+  root: string;
   status: number | null;
   stderr: string;
 }
@@ -103,13 +104,68 @@ const runFrontendDeploy = (args: string[]): DeployRun => {
       const [tool, cwd, webBearer, ...rest] = line.split("|");
       return {args: rest.join("|"), cwd, tool, webBearer};
     });
-  return {calls, status: result.status, stderr: result.stderr};
+  return {calls, root, status: result.status, stderr: result.stderr};
 };
 
 afterEach((): void => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, {force: true, recursive: true});
   }
+});
+
+const runDemoDeploy = (args: string[]): DeployRun => {
+  const root = mkdtempSync(join(tmpdir(), "netlify-deploy-demo-"));
+  tempDirs.push(root);
+  const logPath = join(root, "calls.log");
+  const binDir = join(root, "bin");
+  for (const dir of ["bin", "scripts/ci", "demo/scripts"]) {
+    mkdirSync(join(root, dir), {recursive: true});
+  }
+  copyFileSync(netlifyScript, join(root, "scripts/ci/netlify-deploy.sh"));
+
+  writeExecutable(
+    join(binDir, "bun"),
+    stubScript(logPath, 'if [ "$*" = "run export" ]; then mkdir -p dist; fi')
+  );
+  writeExecutable(join(binDir, "bunx"), stubScript(logPath));
+  writeExecutable(join(binDir, "node"), stubScript(logPath));
+  writeExecutable(join(root, "demo/scripts/fix-netlify-assets.sh"), stubScript(logPath));
+  writeExecutable(
+    join(root, "scripts/ci/github-deployment-lib.sh"),
+    `with_github_deployment() {
+  shift 3
+  "$@"
+}
+`
+  );
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NETLIFY_AUTH_TOKEN: "test-token",
+    NETLIFY_DEMO_SITE_ID: "test-demo-site",
+    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+  };
+  delete env.BASH_ENV;
+  delete env.ENV;
+  delete env.NETLIFY_WAIT_FOR_HEALTH_URL;
+
+  const result = spawnSync("bash", [join(root, "scripts/ci/netlify-deploy.sh"), ...args], {
+    encoding: "utf8",
+    env,
+  });
+  return {calls: [], root, status: result.status, stderr: result.stderr};
+};
+
+describe("netlify-deploy.sh demo deep links", (): void => {
+  it("rewrites unknown demo paths to index.html", (): void => {
+    const run = runDemoDeploy(["demo", "preview", "pr-1617"]);
+
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(
+      readFileSync(join(run.root, "demo/dist/_redirects"), "utf8"),
+      "/*    /index.html   200\n"
+    );
+  });
 });
 
 describe("netlify-deploy.sh frontend web bearer build", (): void => {

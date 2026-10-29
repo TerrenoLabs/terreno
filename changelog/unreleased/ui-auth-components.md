@@ -15,5 +15,5 @@ your own `Page` or `ScrollView`. Also exported: the `AccountSecurityScreenProps`
 `Heading` gains an optional `level` (1–6): with it, the heading renders `role="heading"` and
 `aria-level` (an `<h1>`–`<h6>` on web, the header accessibility role on native); without it,
 output is unchanged. The account security cards' titles are now level 2 headings and the screen
-title level 1. `Card` exports `CARD_MOBILE_BREAKPOINT` (768), the window width at or below which
-it draws edge to edge.
+title level 1. Below the desktop floor (`isSupportedDesktopWidth`), `Card` and
+`AccountSecurityScreen` draw edge to edge.

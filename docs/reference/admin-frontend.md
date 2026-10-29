@@ -382,6 +382,19 @@ Auto-generates fields from model schema:
 - `date` → DateTimeField
 - `objectid` (ref) → SelectField
 - `enum` → SelectField with options
+- `object` with `items` (a nested schema path such as `tasks: {enabled: Boolean, intakePollMs: Number}`)
+  → a titled group with one control per subfield, recursing to any depth
+- `object` without `items` (`Mixed`, `Map`) and `mixed` → JSON editor
+
+A nested object group uses the field's humanized key as its heading and its `description` as
+helper text. Each subfield shows its own description and its schema default when the stored
+object has no value for it. Subfield test IDs use the dotted path, for example
+`admin-field-tasks.enabled`; the group itself is `admin-field-group-tasks`. Editing a subfield
+merges it into the parent object, and Save sends the whole object for that field. In create mode
+the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
+default are left out. Nested objects inside an array of subdocuments render the same way; their
+test IDs add the array key and item index (`admin-field-servers.0.media.port`), and new array
+items follow the same default rules.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 
@@ -474,6 +487,34 @@ Renders reference fields as clickable links.
   baseUrl="/admin"
 />
 ``````
+
+### Consent records and PDFs
+
+`ConsentResponseViewer` (admin, one `ConsentResponse`) and `ConsentHistory` (the signed-in
+user's own `GET /consents/my` entries) download a consent record as a PDF:
+`generateConsentPdf(response)` and `generateConsentHistoryPdf(entry)`. Web builds the PDF with
+jsPDF; native renders `buildConsentPdfHtml` from `@terreno/ui` and shares it with
+`sharePdfFromHtml`.
+
+When the response is provisional (staff signed on the user's behalf), both PDFs add a
+"Provisional signature" section: the signer and date, and "Voided <date>" when it was voided.
+The admin PDF also includes the signer's note and IP address. The user's own PDF never
+includes the note.
+
+Both views can also print a record: `ConsentResponseViewer`'s "Print" button
+(`consent-response-print-button`) and each `ConsentHistory` entry's print icon
+(`consent-history-print-{entryId}`, in the expanded details) call `printConsentHtml` from
+`@terreno/ui` with `buildConsentPdfHtml` HTML, including the provisional block. The
+"Download PDF" buttons are unchanged.
+
+Provisional display:
+
+- `ConsentResponseViewer` adds a "Provisional Signature" card (`consent-response-provisional`)
+  with a "Provisional" badge, the signer, signing date, note, signer IP, and, once voided, a
+  "Voided" badge (`consent-response-provisional-voided`), void date, and reason.
+- `ConsentHistory` marks provisional entries with a "Provisional" badge and "Signed on your
+  behalf by <name>" (`consent-history-provisional-{entryId}`), plus "Voided" when voided. It
+  never shows the note.
 
 ## Hooks
 

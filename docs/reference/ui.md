@@ -4,7 +4,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 
 ## Key exports
 
-- Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
+- Layout: `Box`, `Page`, `ListDetailLayout`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
 - Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`, `OtpField`, `FormContainer`
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
@@ -1062,7 +1062,95 @@ Types: `SimpleAskCardProps`, and `SimpleCard` and `SimpleCardButton` from `@terr
 story: `SimpleAskCard`. Its demo answers a plan card on a watch-sized 198×242 pt screen, and its
 "Every fixture" story draws every valid fixture's card at that size.
 
+### ListDetailLayout
+
+Route-driven list/detail layout, such as a mail inbox. Use it as a route group's `_layout.tsx`.
+On a phone it is an expo-router `Stack`: the group's index route shows the list, and opening an
+item pushes the detail route with the native animation and swipe-back. When the layout is at least
+`splitAtWidth` wide, the list stays in a left pane and the `Stack` shows the detail beside it.
+
+The width is the layout's own measured width, so it decides correctly inside a sidebar or an admin
+rail. Before the first layout event, it uses the window width. The `Stack` stays in the same place
+in the tree at every width, so it never remounts when a tablet rotates or a browser resizes, and
+the open item stays open: crossing the breakpoint makes no router call. The
+`list` element does move between the index screen and the left pane, so it remounts at the
+breakpoint and its scroll position resets; keep list state such as filters or search text in the route or a store. The list pane
+has no `Stack` header, so it applies safe-area insets on its top, left, and bottom edges.
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `list` | `ReactElement` | required | The list. Rendered in the left pane when split, and by `ListDetailIndex` when not |
+| `detailHref` | `(id: string) => Href` | required | Where selecting an item navigates |
+| `indexHref` | `string` | required | The group's own path, such as `/mail` |
+| `emptyDetail` | `ReactElement` | none | Shown in the detail pane when split and nothing is open |
+| `splitAtWidth` | `number` | `768` | Split when the layout is at least this many pixels wide |
+| `listWidth` | `number` | `360` | Width of the list pane when split |
+| `detailRoute` | `string` | `"[id]"` | The child route name that holds the detail |
+| `paramName` | `string` | `"id"` | The route param that holds the item id |
+| `screenOptions` | `Stack` `screenOptions` | none | Passed through to the `Stack` |
+| `children` | `Stack.Screen` elements | none | Passed through to the `Stack` |
+
+`ListDetailIndex` is the group's `index.tsx` screen. It renders `list` when stacked, and
+`emptyDetail` when the list already sits in the left pane.
+
+`useListDetail()` returns `{isSplit, selectedId, select, clear}` and throws outside a
+`ListDetailLayout`.
+
+- `selectedId` is the `paramName` param of the route directly below `indexHref` whose segment is
+  `detailRoute`. It is `undefined` on the index route, and an `id` from a parent dynamic segment
+  never counts.
+- `select(id)` pushes `detailHref(id)`. When split with another item open, it replaces the open
+  detail instead, so the stack is never deeper than the list plus one detail and back always
+  returns to the list. When split, selecting the open item again does nothing.
+- `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it pops back to the
+  index inside this `Stack` and never leaves the group. It does nothing when no item is open.
+
+When split, the list is already on screen, so the header's back never returns to it: `Stack`
+screens get `headerBackVisible: false`, `animation: "none"`, and a `headerLeft` back button
+(`list-detail-leave`) that leaves the group through the parent navigator, or nothing when the
+parent cannot go back. The web header ignores `headerBackVisible`, so `headerLeft` draws it. Your
+`screenOptions` win where they set the same key. A static web export writes a detail URL only when
+`[id].tsx` exports `generateStaticParams` for that id; other ids need the host's `index.html`
+fallback. Mark the open row with
+`accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
+it as `aria-current="true"` on web). See
+[Build a list/detail screen](../how-to/build-list-detail-screens.md).
+
+| Element | testID |
+| --- | --- |
+| Layout root | `list-detail-layout` |
+| List pane (split only) | `list-detail-list-pane` |
+| Detail pane, which holds the `Stack` | `list-detail-detail-pane` |
+| Empty detail (split, nothing open) | `list-detail-empty` |
+
+```typescript
+// app/mail/_layout.tsx
+import {ListDetailIndex, ListDetailLayout, Text} from "@terreno/ui";
+
+export const unstable_settings = {initialRouteName: "index"};
+
+const MailLayout: React.FC = () => (
+  <ListDetailLayout
+    detailHref={(id) => `/mail/${id}`}
+    emptyDetail={<Text>Select a message</Text>}
+    indexHref="/mail"
+    list={<MailList />}
+  />
+);
+export default MailLayout;
+
+// app/mail/index.tsx
+const MailIndex: React.FC = () => <ListDetailIndex />;
+export default MailIndex;
+
+// app/mail/[id].tsx is an ordinary route screen that reads its id with useLocalSearchParams.
+```
+
 ### SplitPage
+
+Prefer [`ListDetailLayout`](#listdetaillayout) for new list/detail screens: it keeps the selected
+item in the route, so deep links and back navigation work, and it splits on native tablets.
+SplitPage remains supported for list/detail views that do not have their own routes.
 
 Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list, and
 `renderContent` or children for the detail pane. On large screens both panes stay visible. On small
@@ -1135,6 +1223,110 @@ The bubble stays off screen at `opacity: 0` until the trigger is measured, then 
 On web, that container is portaled to `document.body` (`position: fixed`, `z-index: 999999`, `pointerEvents: "box-none"`), so a toast stays above an open `Modal` and its backdrop. The web container is sized with `100%` rather than the measured window, so statically exported pages (where `Dimensions` reports 0×0 at build time) still center the toast on screen. Native iOS and Android keep the in-tree absolute container sized to the window.
 
 Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
+
+## Consent components
+
+Client side of `ConsentApp` ([API reference](api.md#consent-forms-consentapp),
+[concepts](../explanation/consent-forms.md)). Lazily exported from the package root.
+
+### ConsentNavigator and ConsentFormScreen
+
+`ConsentNavigator` wraps app content, fetches `GET /consents/pending` through
+`useConsentForms(api, baseUrl)`, and renders `ConsentFormScreen` for each pending form until
+the list is empty. `ConsentFormScreen` shows the form's markdown (with `{{variable}}`
+substitution), required checkboxes, an optional signature, the scroll-to-bottom gate, and the
+agree and decline buttons.
+
+When staff signed the form provisionally, the pending form carries
+`provisionalSignature: {signedAt, signedByName}` (`ConsentFormPublic`), and the screen shows
+"Signed on your behalf by <name> on <date>" above the content (`testID`
+`consent-form-provisional-notice`, date in Luxon `DATETIME_MED` for the screen's `locale`). The user still agrees or
+declines themselves: the scroll gate, checkboxes, and signature work as for any other form.
+The signer's note is never shown.
+
+`useConsentForms.ts` also exports two helpers the consent components share:
+`applyConsentVariables(content, variables?)` replaces `{{name}}` placeholders and leaves
+unknown ones as written, and `resolveConsentLocale(form, locale)` picks the content locale to
+show: the exact locale, then its language (`en-GB` → `en`), then the form's default.
+
+### ProvisionalConsentSigner and useProvisionalConsent
+
+For staff who record consent on a user's behalf. The server must grant the viewer
+`consentResponse:signOnBehalf` (or `user.admin` when `ConsentApp` has no `accessControl`).
+
+```tsx
+import {ProvisionalConsentSigner} from "@terreno/ui";
+
+<ProvisionalConsentSigner api={terrenoApi} userId={memberId} />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `api` | RTK Query api | The consumer api, as passed to `ConsentNavigator` |
+| `baseUrl` | `string` | Optional prefix for consent routes |
+| `userId` | `string` | The user being signed for |
+| `onSigned` | `(response) => void` | Called with the stored `ConsentResponse` after a provisional signature |
+| `onError` | `(error) => void` | Called with the server error when signing fails |
+| `variables` | `Record<string, string>` | Values for `{{name}}` placeholders in form content |
+
+It lists every form that applies to the user (`GET /consent-responses/status`) with a status
+badge: "Pending", "Signed provisionally by <signer> on <date>", "Signed by user on <date>",
+or "Declined by user on <date>". It shows a spinner while loading and the server error with
+a Retry button on failure. Lazily exported from the package root.
+
+Pending forms have a "Sign on behalf" button. Declined forms do not: the user's own decline
+always decides the status, so a provisional signature would not count. It opens the form read-only
+(`MarkdownView`, `variables` applied, in the viewer's locale, then that locale's language,
+then the form's default) with a required "Note" box. "Sign provisionally" stays disabled until
+the note has text. Submitting sends `{userId, consentFormId, note, locale}` to
+`POST /consent-responses/provisional`, then returns to the list with a confirmation naming
+the signer and time, and calls `onSigned`. A server error shows under the note and calls
+`onError`. The signer never ticks the form's checkboxes or draws a signature: those stay the
+user's.
+
+Provisional, signed, and declined rows have a "Print" button, and so does the confirmation
+after signing. It calls `printConsentHtml` with `buildConsentPdfHtml` HTML: the form content,
+its status, and, when there is a provisional signature, the "Provisional signature" block with
+the signer, date, and note. Provisional rows also have "Void". It opens a dialog that asks for
+a required reason, sends it to `POST /consent-responses/:id/void`, and refetches, so the row
+returns to "Pending". A void error shows in the dialog and calls `onError`.
+
+`useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
+refetch, sign, isSigning, voidSignature, isVoiding}`. `statuses` are `ProvisionalConsentStatusRow`s
+(`{form, status, isConsented, respondedAt?, provisional?}`). `sign({consentFormId, note,
+locale?})` signs for the hook's `userId` and resolves to the `ConsentResponse`, or rejects
+with the RTK error. `voidSignature({responseId, reason})` voids a provisional signature the
+same way. The hook injects `getConsentStatus`, `signConsentProvisionally`, and
+`voidProvisionalConsent` once per `(api, baseUrl)`. Signing and voiding invalidate the
+`ConsentStatus` and `PendingConsents` tags.
+
+testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
+`provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
+`provisional-consent-row-{formId}`, `provisional-consent-status-{formId}`,
+`provisional-consent-open-{formId}`, `provisional-consent-form-content`,
+`provisional-consent-note-input`, `provisional-consent-submit-button`,
+`provisional-consent-cancel-button`, `provisional-consent-submit-error`,
+`provisional-consent-success`, `provisional-consent-success-print`,
+`provisional-consent-print-{formId}`, `provisional-consent-void-{formId}`,
+`provisional-consent-void-modal` (confirm button `provisional-consent-void-modal.primary`),
+`provisional-consent-void-reason-input`, `provisional-consent-void-error`.
+
+### Consent printouts
+
+`buildConsentPdfHtml(data)` builds a self-contained HTML document for a consent response
+(response details, user info, checkboxes, audit trail, signature, content snapshot). Native
+apps turn it into a PDF with `sharePdfFromHtml({html, filename})`.
+
+`printConsentHtml({html})` opens the print dialog for that HTML: `expo-print` `printAsync`
+on native, and on web a hidden `iframe` (`srcdoc`) whose window is printed, so the app page
+itself is not. The iframe is removed after printing, or at the next print if the browser
+never reports that printing finished, so consent HTML does not linger in the page. The
+promise rejects if printing throws.
+
+`PdfTemplateData.provisionalSignature?: {signedAt, signedByName, note?, signerIp?, voidedAt?}`
+adds a "Provisional signature" section with the signer and date (ISO dates are printed with
+Luxon `DATETIME_FULL`), the escaped note and signer IP when given, and "Voided <date>" when
+voided. Pass `note` and `signerIp` only on admin printouts: the user never sees the note.
 
 ## Authentication Components
 
@@ -2340,7 +2532,9 @@ const county = formattedCountyCode("6075"); // "6075" (Santa Cruz County, CA)
 
 ## Media Query Helpers
 
-Responsive design utilities for breakpoints and device detection.
+Responsive design utilities for breakpoints and device detection. The policy
+(support levels, which widths to test, how layouts should adapt) is
+[Responsive design](../explanation/responsive-design.md).
 
 ``````typescript
 import {
@@ -2348,6 +2542,7 @@ import {
   mediaQueryLargerThan,
   mediaQuerySmallerThan,
   isNarrowViewport,
+  isSupportedDesktopWidth,
 } from "@terreno/ui";
 
 // Read the current breakpoint
@@ -2368,6 +2563,11 @@ if (mediaQuerySmallerThan("lg")) {
 // Current window is below the desktop breakpoint
 if (isNarrowViewport()) {
   console.info("Narrow viewport");
+}
+
+// Same floor for a width you already measured
+if (isSupportedDesktopWidth({width: 1280})) {
+  console.info("Desktop layout");
 }
 ``````
 
@@ -2395,6 +2595,8 @@ On web, `sm` (320) and `md` (375) still classify widths below 1024 so layouts ca
 
 `isNarrowViewport()` is true below the supported desktop floor: native width < 1024 (`xl`), web width < 1024 (`lg`). `isMobileDevice()` is the same check and is deprecated in favor of `isNarrowViewport`.
 
+`isSupportedDesktopWidth({width})` is the same floor for a width you already have (for example from `useWindowDimensions`). It does not read `Dimensions` itself. Web `lg` and native `xl` both start at 1024pt, so a 768pt window is narrow on both surfaces.
+
 Responsive `Box` direction props update automatically when the window resizes or a device rotates:
 
 ``````typescript
@@ -2410,11 +2612,18 @@ Responsive `Box` direction props update automatically when the window resizes or
 All responsive Boxes share one dimension listener; non-responsive Boxes do not subscribe.
 When multiple direction props match, the largest active breakpoint wins (`xl` over `lg` over `md` over `sm`).
 
-`Box` takes an optional `accessibilityState` of `{checked?, disabled?}`. It is sent to screen
-readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and a
-clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
+`Box` takes an optional `accessibilityState` of `{checked?, disabled?, selected?}`. It is sent to
+screen readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and
+a clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
 label stay. A clickable Box with `accessibilityRole` `checkbox` or `switch` also toggles on
 Space on web, as ARIA expects.
+
+`selected` is sent as `aria-selected` when `accessibilityRole` is a selectable role (`tab`,
+`option`, `row`, `gridcell`, `treeitem`, `columnheader`, `rowheader`). On any other Box, such as a
+clickable list row, ARIA does not allow `aria-selected`, so `selected: true` is sent as
+`aria-current="true"` instead. On web that row does not also receive
+`accessibilityState.selected`, because react-native-web would turn it into `aria-selected`
+on the button. iOS and Android still read `accessibilityState.selected`.
 
 ```tsx
 <Box

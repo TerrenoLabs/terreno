@@ -501,6 +501,8 @@ export const start = async (
       )
       .register(
         new ConsentApp({
+          // Staff whose roles grant consentResponse:signOnBehalf may sign consent for others.
+          accessControl: access,
           auditTrail: true,
           resolveConsentForms: (user, forms) => (user.admin ? [] : forms),
           supportedLocales: ["en", "es"],

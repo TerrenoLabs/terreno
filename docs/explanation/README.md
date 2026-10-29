@@ -15,6 +15,8 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Loop engineering](loop-engineering.md) — Fresh-invocation lifecycle, state, evidence, and orchestration boundaries
 - [GitHub issue lifecycle](../how-to/github-issue-lifecycle.md) — Pick-ready issues and plan comments for Pick/Roast
 - [Install agent skills](../how-to/install-agent-skills.md) — `npx skills add TerrenoLabs/terreno`
+- [AI development loop](ai-development-loop.md) — The five-stage Ask, Generate, Run, Observe, Fix loop, what the agent can and cannot see, and how it composes with expo-mcp, Playwright MCP, and Maestro
+- [Agent guidelines](agent-guidelines.md) — How hosted docs, per-package `.ai/` guidelines, and `.rulesync/` rules reach an agent, and how apps extend them
 - [AI observability](ai-observability.md) — Two planes (telemetry vs control), plugins vs LangfuseApp, SOP loop
 - [Durable agent harness](durable-agent-harness.md) — Phases, checkpoints, and why the audit span shares the checkpoint transaction
 - [AI-powered workflows](ai-workflows.md) — Autonomous documentation, testing, and maintenance workflows
@@ -35,8 +37,10 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Versioning policy](versioning-policy.md) — Lockstep `@terreno/*` versions, pre-1.0 breaks, deprecation window
 - [How admin interfaces are shaped](admin-interface.md) — Screens, sidebar, `apiBase` vs `routeBase`
 - [Admin plugin frontend widgets](admin-plugin-frontend.md) — Widget IDs from backend plugins
+- [Consent forms](consent-forms.md) — Versions, responses, the consent gate, and why provisional signatures don't clear it
 - [Consent admin migration](admin-consent-migration.md) — Which consent screens stay hand-written
 - [Public roadmap process](roadmap-process.md) — GitHub roadmap vs Linear execution
 - [Example app coverage](example-coverage.md) — Which framework capabilities the example apps exercise
 - [Repository settings](repository-settings.md) — Maintainer GitHub settings that cannot be committed
 - [Why Terreno owns chart SVG](charts.md) — Owned `react-native-svg` vs victory-native
+- [Responsive design](responsive-design.md) — Support levels, breakpoints, and the desktop floor

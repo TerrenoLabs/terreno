@@ -27,6 +27,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
 - [Enable the framework audit log](audit-log.md) — `AuditApp`, per-router `audit`, append-only events
+- [Sign consent on a user's behalf](sign-consent-on-behalf.md) — Provisional consent signatures: RBAC grant, signer screen, status checks, void, print
 - [Seed a database](seed-a-database.md) — Idempotent sync, dry runs, and guarded reset-and-reseed
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API
@@ -36,8 +37,8 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Recover a locked-out user](recover-locked-out-user.md) — Platform and org-admin recovery: 2FA, passkeys, providers, sessions, suspend
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
-- [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
-- [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
+- [Set up Terreno MCP](set-up-terreno-mcp.md) — Connect Cursor or Claude Code to the hosted docs/codegen server and the local runtime server
+- [Debug with MCP](debug-with-mcp.md) — Follow a failure from symptom to verified fix with the local MCP tools
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
@@ -51,6 +52,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Upgrade banner](upgrade-banner.md) — Soft warning and hard-block app update UX
 - [Upgrade Terreno](upgrade-terreno.md) — Lockstep `@terreno/*` bumps, note range, order, rollback
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
+- [Build a list/detail screen](build-list-detail-screens.md) — `ListDetailLayout` route group: list on a phone, list + detail panes on a tablet, selection in the URL
 - [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots

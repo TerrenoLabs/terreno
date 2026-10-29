@@ -58,6 +58,9 @@ case "$target" in
     bun run --filter '@terreno/ui' types
     (cd demo && bun run export)
     bash demo/scripts/fix-netlify-assets.sh demo/dist
+    # Fixture messages are real files via generateStaticParams. Any other id, such as a
+    # removed message, still has to load the client so it can show the missing-message screen.
+    printf '/*    /index.html   200\n' > demo/dist/_redirects
     publish_dir="demo/dist"
     ;;
   frontend)

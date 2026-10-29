@@ -15,12 +15,14 @@
  * debug broadcast bridge. Reach for `client.store`/`client.outbox` (or the React
  * hooks) instead, and open an issue if something genuinely needs promoting.
  *
- * Two other entry points exist:
+ * Three other entry points exist:
  * - `@terreno/syncdb/react` (src/react/index.ts) — React bindings. They live on
  *   their own subpath because react is an optional peer dependency and this entry
  *   must stay importable without it.
  * - `@terreno/syncdb/testing` (src/testing/index.ts) — test doubles such as
  *   `createFakeTransport`, kept out of production bundles.
+ * - `@terreno/syncdb/devConsoleLogger` (src/devConsoleLogger.ts) — the dev console
+ *   logger alone, so `@terreno/rtk` can re-export it without bundling the client.
  */
 
 // --- Client ---------------------------------------------------------------
@@ -181,3 +183,14 @@ export type {
   SyncDebugSnapshot,
   SyncDebugStats,
 } from "./debug/debugLog";
+
+// --- Dev console logger ---------------------------------------------------
+// Dev-only bridge from client console errors to the backend's
+// `POST /__terreno/browser-logs` route (read back by terreno-mcp-local `read_logs`).
+// Also exposed as `@terreno/syncdb/devConsoleLogger` so callers can import it
+// without bundling the sync client.
+
+export {
+  type InstallTerrenoDevConsoleLoggerArgs,
+  installTerrenoDevConsoleLogger,
+} from "./devConsoleLogger";

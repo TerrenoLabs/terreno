@@ -52,6 +52,9 @@ export type RbacRoleModel = Model<RbacRoleDocument> & {
 
 export {READ_ONLY_ROLE_PERMISSIONS} from "./statements";
 
+/** Resources whose default admin grants are added to existing unsealed admin roles on seed. */
+const ADMIN_MERGED_RESOURCES = [...OBSERVABILITY_RBAC_RESOURCES, "consentResponse"] as const;
+
 const observabilityAdminPermissionSpec = (): PermissionSet => ({
   aiDataset: [...terrenoStatements.aiDataset],
   aiEvaluator: [...terrenoStatements.aiEvaluator],
@@ -131,7 +134,7 @@ const upsertSeededRole = async (
         existing.permissions = mergeMissingResourcePermissions(
           existing.permissions,
           permissions,
-          OBSERVABILITY_RBAC_RESOURCES
+          ADMIN_MERGED_RESOURCES
         );
         await existing.save();
       } else if (role.name === "auditor") {
@@ -212,6 +215,7 @@ export const terrenoDefaultRoles: RoleDefinition[] = [
       adminAnnouncementClickEvent: ["read"],
       adminAnnouncementImpression: ["read"],
       configuration: ["read", "update"],
+      consentResponse: ["signOnBehalf"],
       user: ["create", "list", "read", "update", "updateIdentity"],
       ...observabilityAdminPermissionSpec(),
     },

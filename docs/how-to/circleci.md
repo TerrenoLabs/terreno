@@ -371,10 +371,17 @@ To teach the agent from what reviewers actually say, run
 <file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
 path rules from the review comments since the last pass.
 
-Rollout: `approveLevels` is `[]`, so every PR gets a `COMMENT` review that says the
-risk level and why, and nothing approves. After a dozen PRs, compare the levels with
-how humans reviewed them, tune the path rules and rubric, then set
-`"approveLevels": ["low"]` in a one-line PR. The prompts and answers behind each
+Levels and human approvals (defined in `docs/approval-rubric.md`):
+
+| Level | Human approvals | Examples |
+| --- | --- | --- |
+| low | None once automated review and security checks are green | docs, copy, internal-only features, additive changes behind a flag |
+| medium | One person | ordinary product changes, and sensitive areas such as caching, app updates, and AI system prompts |
+| high | One person | security-related code: auth, permissions, secrets, crypto, PHI handling |
+
+`approveLevels` is `["low"]`, so the App's approval satisfies master's one-review rule
+for low PRs. Medium and high PRs get a `COMMENT` review that says the risk level and
+why, and a human approves. The prompts and answers behind each
 verdict are stored as the `brewery-approve` job artifact. Full reference:
 [brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
 

@@ -60,6 +60,15 @@ export * from "./config";
 export * from "./configurationApp";
 export * from "./configurationPlugin";
 export * from "./consentApp";
+export {
+  type ConsentStatus,
+  type ConsentStatusForm,
+  type ConsentStatusProvisional,
+  type ConsentStatusRow,
+  type ConsentStatusSigner,
+  getConsentStatuses,
+  type ResolveConsentForms,
+} from "./consentStatus";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";

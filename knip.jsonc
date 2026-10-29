@@ -92,7 +92,8 @@
         "scripts/**/*.test.ts",
         ".github/scripts/**/*.test.ts",
         "scripts/ci/prepare-package-publish.mjs",
-        "scripts/charts/compareRenderedSnapshots.ts"
+        "scripts/charts/compareRenderedSnapshots.ts",
+        "scripts/captureListDetail.ts"
       ],
       // Policy/release scripts are development entries, not production modules.
       "project": [

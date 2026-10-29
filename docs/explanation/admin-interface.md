@@ -55,7 +55,7 @@ row is `AuditEvent` when `AuditApp` is registered. `isAuditLogModel` also matche
 legacy `AdminAuditLog`, `audit-log`, and `audit-events` names. Jobs is a custom
 screen (`name: "jobs"`); the shell lifts it the same way.
 
-Below 768px the rail becomes a hamburger drawer. The main column is a body-style
+Below the desktop floor (1024pt) the rail becomes a hamburger drawer. The main column is a body-style
 canvas (`neutral-050`, or `neutral-900` in dark mode so `surface.base` cards stand out).
 The colorful teal rail has no dark palette, so dark mode always uses the clinical rail.
 Host apps must give React Navigation a theme that follows the Terreno color scheme

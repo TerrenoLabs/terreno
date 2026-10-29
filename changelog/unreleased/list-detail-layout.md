@@ -6,3 +6,4 @@ category: Added
 - `Box` `accessibilityState.selected`. A clickable row sends it as `aria-current="true"` on web; a selectable `accessibilityRole` (`tab`, `option`, `row`, ...) sends `aria-selected`.
 - The demo inbox exports each fixture message (`generateStaticParams`), and the Netlify demo deploy rewrites any other path to `index.html`, so `/demo/list-detail/2` and `/demo/sidebar-navigation/mail/2` load on refresh.
 - The example todo browser shows a spinner while a deep-linked todo is still syncing, and “This todo does not exist” only after sync is idle and the row is absent.
+- A clickable `Box` with `selected` sends only `aria-current` on web. `selected` is left off the host `accessibilityState`, so react-native-web does not also set `aria-selected` on the button.

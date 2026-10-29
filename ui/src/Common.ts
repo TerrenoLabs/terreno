@@ -807,7 +807,9 @@ export interface BoxPropsBase extends WithTestID, LoadingProps {
    * Checked, disabled, and selected state for screen readers, sent as `accessibilityState` and as
    * `aria-checked` / `aria-disabled`. `selected` is sent as `aria-selected` on a selectable
    * `accessibilityRole` (`tab`, `option`, `row`, ...) and as `aria-current="true"` on any other Box,
-   * such as a clickable list row. On a clickable Box, `disabled: true` also stops presses.
+   * such as a clickable list row. On web that row does not also keep `selected` in
+   * `accessibilityState`, because react-native-web would emit `aria-selected` on the button.
+   * On a clickable Box, `disabled: true` also stops presses.
    */
   accessibilityState?: BoxAccessibilityState;
   /**

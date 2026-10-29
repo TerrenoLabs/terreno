@@ -1586,7 +1586,9 @@ Space on web, as ARIA expects.
 `selected` is sent as `aria-selected` when `accessibilityRole` is a selectable role (`tab`,
 `option`, `row`, `gridcell`, `treeitem`, `columnheader`, `rowheader`). On any other Box, such as a
 clickable list row, ARIA does not allow `aria-selected`, so `selected: true` is sent as
-`aria-current="true"` instead. iOS and Android read `accessibilityState.selected` either way.
+`aria-current="true"` instead. On web that row does not also receive
+`accessibilityState.selected`, because react-native-web would turn it into `aria-selected`
+on the button. iOS and Android still read `accessibilityState.selected`.
 
 ```tsx
 <Box

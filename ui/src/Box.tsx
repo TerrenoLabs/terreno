@@ -41,6 +41,18 @@ const ARIA_SELECTABLE_ROLES = new Set([
   "treeitem",
 ]);
 
+/**
+ * react-native-web turns `accessibilityState.selected` into `aria-selected`.
+ * A button cannot have that attribute, so a clickable row keeps `aria-current`
+ * only and drops `selected` from the state object on web.
+ */
+const omitSelectedState = (
+  state: NonNullable<AccessibilityProps["accessibilityState"]>
+): NonNullable<AccessibilityProps["accessibilityState"]> => {
+  const {selected: _selected, ...rest} = state;
+  return rest;
+};
+
 const ALIGN_CONTENT = {
   around: "space-around",
   between: "space-between",
@@ -440,15 +452,25 @@ const BoxComponent = React.forwardRef((props: BoxProps, ref) => {
   const accessibilityRoleProp = (props as AccessibilityProps).accessibilityRole;
   // ARIA allows aria-selected only on selectable roles. Any other Box, such as a clickable
   // list row (a button), marks the selected item with aria-current instead.
+  const sendsAriaSelected = ARIA_SELECTABLE_ROLES.has(accessibilityRoleProp ?? "");
   const selectedAriaProps =
     accessibilityState?.selected === undefined
       ? {}
-      : ARIA_SELECTABLE_ROLES.has(accessibilityRoleProp ?? "")
+      : sendsAriaSelected
         ? {"aria-selected": accessibilityState.selected}
         : {"aria-current": accessibilityState.selected ? ("true" as const) : undefined};
+  const hostAccessibilityState =
+    accessibilityState &&
+    Platform.OS === "web" &&
+    accessibilityState.selected !== undefined &&
+    !sendsAriaSelected
+      ? omitSelectedState(accessibilityState)
+      : accessibilityState;
   const accessibilityStateProps = accessibilityState
     ? {
-        accessibilityState,
+        ...(hostAccessibilityState && Object.keys(hostAccessibilityState).length > 0
+          ? {accessibilityState: hostAccessibilityState}
+          : {}),
         ...(accessibilityState.checked !== undefined
           ? {"aria-checked": accessibilityState.checked}
           : {}),

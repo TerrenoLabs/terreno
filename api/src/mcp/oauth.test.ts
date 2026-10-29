@@ -204,13 +204,17 @@ describe("MCP OAuth authorization server", () => {
       expect(res.body).toMatchObject({
         authorization_endpoint: `${ISSUER}/oauth/authorize`,
         code_challenge_methods_supported: ["S256"],
-        grant_types_supported: ["authorization_code", "refresh_token"],
+        grant_types_supported: ["authorization_code", "refresh_token", "client_credentials"],
         issuer: ISSUER,
         registration_endpoint: `${ISSUER}/oauth/register`,
         response_types_supported: ["code"],
         revocation_endpoint: `${ISSUER}/oauth/revoke`,
         token_endpoint: `${ISSUER}/oauth/token`,
-        token_endpoint_auth_methods_supported: ["none"],
+        token_endpoint_auth_methods_supported: [
+          "none",
+          "client_secret_basic",
+          "client_secret_post",
+        ],
       });
     });
   });
@@ -879,6 +883,165 @@ describe("MCP OAuth authorization server", () => {
     expect(res.body.paths["/oauth/authorize/{request}/approve"].post.operationId).toBe(
       "approveMcpOAuthRequest"
     );
+  });
+  describe("client credentials", () => {
+    const basicAuthorization = (clientId: string, clientSecret: string): string => {
+      const encoded = Buffer.from(
+        `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`
+      ).toString("base64");
+      return `Basic ${encoded}`;
+    };
+
+    it("issues an access token for client_credentials and no refresh token", async () => {
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Sandbox agent",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+
+      const token = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", basicAuthorization(created.client.clientId, created.clientSecret))
+        .type("form")
+        .send({grant_type: "client_credentials"});
+
+      expect(token.status).toBe(200);
+      expect(token.body.access_token.startsWith("mcpat_")).toBe(true);
+      expect(token.body.refresh_token).toBeUndefined();
+      expect(token.body.token_type).toBe("Bearer");
+      expect(token.headers["cache-control"]).toBe("no-store");
+      expect(created.client.clientSecretHash).not.toBe(created.clientSecret);
+      const call = await callMcp(app, token.body.access_token as string);
+      expect(call.status).toBe(200);
+      expect(toolPayload(call.text)).toMatchObject({
+        credential: "oauth",
+        userId: String(notAdminId),
+      });
+    });
+
+    it("accepts client_secret_post and rejects the other method, a bad secret, and a public client", async () => {
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Reader",
+        tokenEndpointAuthMethod: "client_secret_post",
+        userId: notAdminId,
+      });
+      const posted = await supertest(app).post("/oauth/token").type("form").send({
+        client_id: created.client.clientId,
+        client_secret: created.clientSecret,
+        grant_type: "client_credentials",
+      });
+      const asBasic = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", basicAuthorization(created.client.clientId, created.clientSecret))
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      const badSecret = await supertest(app).post("/oauth/token").type("form").send({
+        client_id: created.client.clientId,
+        client_secret: "not-the-secret",
+        grant_type: "client_credentials",
+      });
+      const publicClient = await registerClient(app);
+      const publicGrant = await supertest(app).post("/oauth/token").type("form").send({
+        client_id: publicClient,
+        grant_type: "client_credentials",
+      });
+
+      expect(posted.status).toBe(200);
+      expect(posted.body.refresh_token).toBeUndefined();
+      expect(asBasic.status).toBe(401);
+      expect(asBasic.body.error).toBe("invalid_client");
+      expect(badSecret.status).toBe(401);
+      expect(badSecret.body.error).toBe("invalid_client");
+      expect(publicGrant.status).toBe(400);
+      expect(publicGrant.body.error).toBe("unsupported_grant_type");
+    });
+
+    it("refuses a disabled user and ends the token after a password reset", async () => {
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Sandbox agent",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const authorization = basicAuthorization(created.client.clientId, created.clientSecret);
+      const issued = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", authorization)
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      expect(issued.status).toBe(200);
+
+      const reset = await AuthToken.issueFor({_id: String(notAdminId)}, "passwordReset");
+      const passwordReset = await supertest(app)
+        .post("/auth/resetPassword")
+        .send({password: "reset-password-123", token: reset.token});
+      expect(passwordReset.status).toBe(200);
+      expect((await callMcp(app, issued.body.access_token as string)).status).toBe(401);
+
+      await UserModel.updateOne({_id: notAdminId}, {$set: {disabled: true}});
+      const again = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", authorization)
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      expect(again.status).toBe(400);
+      expect(again.body.error).toBe("invalid_grant");
+    });
+
+    it("ends every token when the client is revoked or deleted", async () => {
+      const revokedClient = await McpOAuthClient.issueConfidential({
+        clientName: "Revoked",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const deletedClient = await McpOAuthClient.issueConfidential({
+        clientName: "Deleted",
+        tokenEndpointAuthMethod: "client_secret_post",
+        userId: notAdminId,
+      });
+      const revokedToken = await supertest(app)
+        .post("/oauth/token")
+        .set(
+          "Authorization",
+          basicAuthorization(revokedClient.client.clientId, revokedClient.clientSecret)
+        )
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      const deletedToken = await supertest(app).post("/oauth/token").type("form").send({
+        client_id: deletedClient.client.clientId,
+        client_secret: deletedClient.clientSecret,
+        grant_type: "client_credentials",
+      });
+      expect(revokedToken.status).toBe(200);
+      expect(deletedToken.status).toBe(200);
+
+      await McpOAuthClient.revoke(revokedClient.client.clientId);
+      await McpOAuthClient.deleteOne({clientId: deletedClient.client.clientId});
+
+      expect((await callMcp(app, revokedToken.body.access_token as string)).status).toBe(401);
+      expect((await callMcp(app, deletedToken.body.access_token as string)).status).toBe(401);
+      const afterRevoke = await supertest(app)
+        .post("/oauth/token")
+        .set(
+          "Authorization",
+          basicAuthorization(revokedClient.client.clientId, revokedClient.clientSecret)
+        )
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      expect(afterRevoke.status).toBe(401);
+      expect(afterRevoke.body.error).toBe("invalid_client");
+    });
+
+    it("rejects client_credentials during dynamic client registration", async () => {
+      const res = await supertest(app)
+        .post("/oauth/register")
+        .send({
+          grant_types: ["authorization_code", "client_credentials"],
+          redirect_uris: [REDIRECT_URI],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid_client_metadata");
+    });
   });
 });
 

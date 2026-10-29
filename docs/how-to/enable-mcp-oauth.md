@@ -2,7 +2,7 @@
 
 Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1, when your app signs users in with Terreno JWTs. Terreno runs the authorization server; your app hosts one consent screen.
 
-Use [a service token](connect-mcp-service-token.md) instead for clients that take a static Bearer key (Perplexity, Cursor, Claude Code).
+Use [a service token](connect-mcp-service-token.md) when the client can only hold a static Bearer key (Perplexity, Cursor, Claude Code). For a headless client that can perform a token request, use [client credentials](#headless-clients-client-credentials) instead.
 
 ## Prerequisites
 
@@ -100,6 +100,30 @@ Give the client the MCP URL, `https://api.example.com/mcp`. It discovers the res
 
 For Claude.ai: **Settings → Connectors → Add custom connector**, paste the MCP URL, and connect. For ChatGPT: create a connector with the MCP URL and choose OAuth.
 
+## Headless clients (client credentials)
+
+A sandbox or another server has no browser, so it cannot run the authorization-code flow. Create a confidential client bound to a service-account user. The helper returns the secret once. Store it, then exchange it at `POST /oauth/token`. Dynamic registration stays public-only and still rejects client secrets.
+
+```typescript
+import {McpOAuthClient} from "@terreno/api";
+
+const {client, clientSecret} = await McpOAuthClient.issueConfidential({
+  clientName: "Sandbox agent",
+  tokenEndpointAuthMethod: "client_secret_basic", // or "client_secret_post"
+  userId: serviceAccount._id,
+});
+```
+
+`client_secret_basic` sends `Authorization: Basic` with the form-encoded `client_id:client_secret`. `client_secret_post` sends `client_id` and `client_secret` in the form body. The client must use the method it was created with.
+
+```bash
+curl -X POST https://api.example.com/oauth/token \
+  -H "Authorization: Basic $(printf '%s' "$CLIENT_ID:$CLIENT_SECRET" | base64)" \
+  -d grant_type=client_credentials
+```
+
+The response is an `mcpat_…` access token and no refresh token. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` and deleting the client both end every token that client holds.
+
 ## 4. Check it
 
 ```bash
@@ -130,7 +154,7 @@ Refresh tokens rotate on every use. If an old refresh token comes back, Terreno 
 
 ## Security notes
 
-- Only public clients with PKCE `S256` are supported. `plain` PKCE and client secrets are rejected.
+- Public clients use PKCE `S256` only. `plain` PKCE is rejected. Confidential clients use `client_credentials` with `client_secret_basic` or `client_secret_post`. `private_key_jwt` is not supported. Dynamic registration cannot create a confidential client.
 - Tokens, codes, and refresh tokens are stored as SHA-256 hashes.
 - Registration, authorize, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
 - If a browser-based client (such as the MCP Inspector) runs discovery from another origin, allow that origin in `corsOrigin`.

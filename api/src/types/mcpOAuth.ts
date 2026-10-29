@@ -1,22 +1,49 @@
 import type mongoose from "mongoose";
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "../plugins";
 
-/** A client registered through dynamic client registration (RFC 7591). Public clients only. */
+export type McpOAuthTokenEndpointAuthMethod = "none" | "client_secret_basic" | "client_secret_post";
+
+/** Options for `McpOAuthClient.issueConfidential`. The secret is returned once. */
+export interface McpOAuthConfidentialClientOptions {
+  clientId?: string;
+  clientName: string;
+  scope?: string;
+  tokenEndpointAuthMethod: Exclude<McpOAuthTokenEndpointAuthMethod, "none">;
+  userId: mongoose.Types.ObjectId | string;
+}
+
+/**
+ * A public authorization-code client, or a confidential `client_credentials` client bound to a
+ * user. Public clients leave `tokenEndpointAuthMethod` unset.
+ */
 export interface McpOAuthClientDocument extends mongoose.Document {
   _id: mongoose.Types.ObjectId;
   clientId: string;
   clientName?: string;
+  /** SHA-256 hash of the client secret. Set only for confidential clients. */
+  clientSecretHash?: string;
   created: Date;
   grantTypes: string[];
   redirectUris: string[];
   responseTypes: string[];
+  revokedAt?: Date;
   scope?: string;
+  tokenEndpointAuthMethod?: McpOAuthTokenEndpointAuthMethod;
   updated: Date;
+  /** User a `client_credentials` token acts as. */
+  userId?: mongoose.Types.ObjectId;
 }
 
 interface McpOAuthClientStatics
   extends FindExactlyOnePlugin<McpOAuthClientDocument>,
-    FindOneOrNonePlugin<McpOAuthClientDocument> {}
+    FindOneOrNonePlugin<McpOAuthClientDocument> {
+  issueConfidential: (
+    this: McpOAuthClientModel,
+    options: McpOAuthConfidentialClientOptions
+  ) => Promise<{client: McpOAuthClientDocument; clientSecret: string}>;
+  /** Mark the client revoked and end every token it holds. */
+  revoke: (this: McpOAuthClientModel, clientId: string) => Promise<McpOAuthClientDocument | null>;
+}
 
 export interface McpOAuthClientModel
   extends mongoose.Model<McpOAuthClientDocument>,
@@ -83,6 +110,11 @@ export interface McpOAuthTokenDocument extends mongoose.Document {
   clientId: string;
   created: Date;
   familyId: string;
+  /**
+   * False for an access-only `client_credentials` token. The stored refresh hash is then of a
+   * discarded secret and must not be exchanged.
+   */
+  hasRefreshToken?: boolean;
   refreshExpiresAt: Date;
   refreshTokenHash: string;
   resource?: string;
@@ -98,6 +130,8 @@ export interface McpOAuthTokenIssueOptions {
   accessTokenTtlSeconds: number;
   clientId: string;
   familyId?: string;
+  /** When false, issue an access token only and do not return a refresh token. Default true. */
+  includeRefreshToken?: boolean;
   refreshTokenTtlSeconds: number;
   resource?: string;
   scope?: string;
@@ -115,8 +149,10 @@ interface McpOAuthTokenStatics
   ) => Promise<{
     accessToken: string;
     mcpOAuthToken: McpOAuthTokenDocument;
-    refreshToken: string;
+    refreshToken?: string;
   }>;
+  /** Revoke every family issued to this client. */
+  revokeClient: (this: McpOAuthTokenModel, clientId: string) => Promise<void>;
   revokeFamily: (this: McpOAuthTokenModel, familyId: string) => Promise<void>;
   verifyAccessToken: (
     this: McpOAuthTokenModel,

@@ -26,14 +26,14 @@ None — operator steps stay in `docs/how-to/enable-mcp-oauth.md`. No end-user g
 
 ## Tasks
 
-- [ ] **T1** — Accept any port on a registered loopback redirect URI (#1655)
+- [x] **T1** — Accept any port on a registered loopback redirect URI (#1655)
   - Depends on: none
-  - Files: `api/src/mcp/oauth.ts`, `api/src/mcp/oauth.test.ts`, `docs/how-to/enable-mcp-oauth.md`, `docs/reference/api.md`, `changelog/unreleased/mcp-oauth-loopback-redirect.md`
+  - Files: `api/src/mcp/oauth.ts`, `api/src/mcp/oauth.test.ts`, `api/src/models/mcpOAuthClient.ts`, `docs/how-to/enable-mcp-oauth.md`, `docs/reference/api.md`, `changelog/unreleased/mcp-oauth-loopback-redirect.md`
   - Root cause: `api/src/mcp/oauth.ts` authorize requires `client.redirectUris.includes(redirectUri)`, so a registered `http://127.0.0.1:33418/callback` rejects `http://127.0.0.1:<other>/callback`
   - Proof: `api/src/mcp/oauth.test.ts` "sends the authorization code to the requested loopback port" fails on the base with `400 invalid_request` and passes on the branch with a redirect to that port
   - Closes: #1655
 
-- [ ] **T2** — Issue client_credentials access tokens for confidential MCP clients (#1653)
+- [x] **T2** — Issue client_credentials access tokens for confidential MCP clients (#1653)
   - Depends on: T1
   - Files: `api/src/mcp/oauth.ts`, `api/src/mcp/oauthMetadata.ts`, `api/src/mcp/oauth.test.ts`, `api/src/models/mcpOAuthClient.ts`, `api/src/models/mcpOAuthToken.ts`, `api/src/types/mcpOAuth.ts`, `api/src/index.ts`, `docs/how-to/enable-mcp-oauth.md`, `docs/reference/api.md`, `changelog/unreleased/mcp-oauth-client-credentials.md`
   - Root cause: `SUPPORTED_GRANT_TYPES` and `/oauth/token` only accept authorization-code and refresh-token grants for public clients

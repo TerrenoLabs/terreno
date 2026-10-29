@@ -31,10 +31,15 @@ export interface StaffUser extends User {
 
 export interface FoodCategory {
   _id?: string;
+  addendums?: FoodCategoryAddendum[];
   name: string;
   show: boolean;
   created: Date;
   updated: Date;
+}
+
+export interface FoodCategoryAddendum {
+  text: string;
 }
 
 export interface Food {
@@ -124,6 +129,14 @@ export const StaffUserModel = UserModel.discriminator("Staff", staffUserSchema);
 
 const foodCategorySchema = new Schema<FoodCategory>(
   {
+    addendums: {
+      description: "Extra details about this food category",
+      type: [
+        new Schema<FoodCategoryAddendum>({
+          text: {description: "The additional category detail", type: String},
+        }),
+      ],
+    },
     name: {description: "The name of the food category", type: String},
     show: {description: "Whether this category is visible", type: Boolean},
   },

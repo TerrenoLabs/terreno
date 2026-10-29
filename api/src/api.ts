@@ -1373,14 +1373,15 @@ const _buildModelRouter = <T>(
         });
       }
       // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument. Merge into a detached copy: the array elements are the
-      // loaded document's live subdocuments, and only the body that survives the hooks below
-      // may change the document.
+      // other parts of the subdocument. Merge plain data from the detached copy: $clone() loses
+      // the subdocument's parent, so assigning a nested document array to it can throw in
+      // Mongoose's setters. The loaded document's live subdocuments must not change until only
+      // the body that survives the hooks below is applied.
       if (operation === "PATCH" && isValidObjectId(itemId)) {
-        const current = array[index] as {$clone?: () => object} | object;
+        const current = array[index] as {toObject?: () => object} | object;
         const detached =
-          typeof (current as {$clone?: unknown}).$clone === "function"
-            ? (current as {$clone: () => object}).$clone()
+          typeof (current as {toObject?: unknown}).toObject === "function"
+            ? (current as {toObject: () => object}).toObject()
             : {...current};
         Object.assign(detached, req.body[field]);
         array[index] = detached;

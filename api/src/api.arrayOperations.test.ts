@@ -869,4 +869,75 @@ describe("array subdocument PATCH with a stripping preUpdate", () => {
     expect(stored?.categories?.[1]?.show).toBe(true);
     expect(String(stored?.categories?.[1]?._id)).toBe(String(categoryId));
   });
+
+  it("persists nested subdocument arrays across repeated PATCHes", async () => {
+    await mountStrippingRouter((body) => body);
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "First"}]}})
+      .expect(200);
+
+    const secondPatch = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Second"}]}})
+      .expect(200);
+
+    expect(secondPatch.body.data.categories[0].addendums[0].text).toBe("Second");
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Second");
+  });
+
+  it("updates a sibling field when an array item already has nested subdocuments", async () => {
+    await mountStrippingRouter((body) => body);
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Existing"}]}})
+      .expect(200);
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "Renamed"}})
+      .expect(200);
+
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Renamed");
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Existing");
+  });
+
+  it("keeps nested subdocuments unchanged when preUpdate strips the array field", async () => {
+    await mountStrippingRouter((body) => {
+      const {categories: _categories, ...rest} = body;
+      return rest;
+    });
+    const categoryId = apple.categories[0]._id;
+    await FoodModel.updateOne(
+      {_id: apple._id},
+      {$set: {"categories.0.addendums": [{text: "Existing"}]}}
+    );
+
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Changed"}], name: "Renamed"}})
+      .expect(200);
+
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Fruit");
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Existing");
+  });
+
+  it("applies nested subdocuments returned by preUpdate and keeps the item id", async () => {
+    await mountStrippingRouter((body) => ({...body}));
+    const categoryId = apple.categories[0]._id;
+    const res = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Applied"}]}})
+      .expect(200);
+
+    expect(res.body.data.categories[0]._id).toBe(String(categoryId));
+    expect(res.body.data.categories[0].addendums[0].text).toBe("Applied");
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(String(stored?.categories?.[0]?._id)).toBe(String(categoryId));
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Applied");
+  });
 });

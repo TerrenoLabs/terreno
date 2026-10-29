@@ -1,11 +1,13 @@
 /**
  * One todo in the todo browser, read from the route's `[id]` param.
  */
-import {Box, Button, Heading, Text} from "@terreno/ui";
+import {useSyncStatus} from "@terreno/syncdb/react";
+import {Box, Button, Heading, Spinner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import {DateTime} from "luxon";
 import type React from "react";
 import {useCallback} from "react";
+import {todoBrowserDetailGate} from "@/components/todoBrowserDetailGate";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
 import {useTodo, useUpdateTodo} from "@/store/syncDbSdk";
 
@@ -14,7 +16,13 @@ const TodoBrowserDetail: React.FC = () => {
   const {data} = useTodo(id);
   const [patchTodo] = useUpdateTodo();
   const isSyncDbReady = useSyncDbReady();
+  const syncStatus = useSyncStatus();
   const completed = Boolean(data?.completed);
+  const phase = todoBrowserDetailGate({
+    hasTodo: Boolean(data),
+    isSyncDbReady,
+    isSyncing: syncStatus.isSyncing,
+  });
 
   const handleToggle = useCallback((): void => {
     if (!isSyncDbReady || !id) {
@@ -22,6 +30,14 @@ const TodoBrowserDetail: React.FC = () => {
     }
     patchTodo({data: {completed: !completed}, id});
   }, [completed, id, isSyncDbReady, patchTodo]);
+
+  if (!id || phase === "loading") {
+    return (
+      <Box alignItems="center" flex="grow" justifyContent="center" padding={6}>
+        <Spinner testID="todo-browser-detail-loading" />
+      </Box>
+    );
+  }
 
   if (!data) {
     return (

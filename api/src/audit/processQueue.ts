@@ -30,10 +30,11 @@ const isAuditEventWrite = (value: unknown): value is AuditEventWrite => {
     "arrayUpdate",
     "create",
     "delete",
+    "read",
     "update",
   ];
   const validSources: AuditEventWrite["source"][] = ["admin", "modelRouter", "rbac"];
-  const validVerbs: AuditEventWrite["verb"][] = ["created", "deleted", "updated"];
+  const validVerbs: AuditEventWrite["verb"][] = ["created", "deleted", "updated", "viewed"];
   return (
     typeof record.modelName === "string" &&
     record.modelName.length > 0 &&

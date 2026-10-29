@@ -14,6 +14,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - [Middleware](#middleware)
 - [Logging & Tracing](#logging--tracing)
 - [Extensibility](#extensibility)
+- [Consent forms (ConsentApp)](#consent-forms-consentapp)
 - [In-app notifications](#in-app-notifications)
 - [Webhooks & Notifications](#webhooks--notifications)
 - [HTTP Client](#http-client)
@@ -539,7 +540,9 @@ Request logs redact credential values at any depth in request bodies and in URL 
 any key whose name contains `password`, `passwd`, `passphrase`, `passcode`, `token`, `secret`,
 `verifier`, `signature`, `apikey`, `authorization`, `credential`, or `privatekey` (case and `_`/`-`
 ignored, so `currentPassword`, `refresh_token`, `client_secret`, and `idToken.token` all match), or
-that has `code`, `otp`, or `pin` as a word (`code`, `zipCode`, `otp_code`). Changing the mailbox through `PATCH /auth/me`
+that has `code`, `otp`, `pin`, `note`, or `reason` as a word (`code`, `zipCode`, `otp_code`,
+`provisionalNote`). `note` and `reason` are free text that can hold PHI, such as a provisional
+consent signer's note. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also
 sets `emailVerified` to false and invalidates unused `emailVerification` tokens; changing letter
@@ -1541,7 +1544,8 @@ background job can be followed across many log lines, both in plain-text console
 transports (Google Cloud Logging, Sentry).
 
 > Never use `console.log` for permanent server logs — use `logger` or a scoped logger. Request
-> logging already redacts password, token, secret, and code fields in bodies and query strings;
+> logging already redacts password, token, secret, code, note, and reason fields in bodies and
+> query strings;
 > never log secrets, full auth tokens, or raw passwords.
 
 ### Quick reference
@@ -1970,6 +1974,168 @@ setupServer({
 - Testable in isolation
 - Optional/configurable functionality
 - Clean separation of concerns
+
+## Consent forms (ConsentApp)
+
+Versioned consent forms, user responses, and the consent gate. Concepts:
+[Consent forms](../explanation/consent-forms.md).
+
+```typescript
+import {ConsentApp, TerrenoApp} from "@terreno/api";
+
+new TerrenoApp({userModel: User})
+  .register(new ConsentApp({accessControl: access, auditTrail: true}))
+  .start();
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `accessControl` | — | RBAC access control. When set, roles granting `consentResponse:signOnBehalf` may sign provisionally for other users. When unset, only `user.admin` may, and register logs a warning |
+| `auditTrail` | `false` | Store IP address, user agent, and content snapshots on responses, and mount `GET /consents/audit/:userId` |
+| `resolveConsentForms` | — | `(user, forms) => forms` narrows the active forms that apply to a user |
+| `supportedLocales` | — | Accepted for app configuration; `ConsentApp` does not read it |
+| `aiConfig` | — | `{generateContent, translateContent}` enables `POST /consent-forms/generate` and `/translate` |
+
+### Endpoints
+
+| Method + path | Who | Description |
+| --- | --- | --- |
+| `GET/POST/PATCH/DELETE /consent-forms` | admin | Form CRUD |
+| `POST /consent-forms/:id/publish` | admin | Copy the form to `version + 1`, activate it, deactivate other versions |
+| `GET /consent-responses`, `GET /consent-responses/:id` | admin | Read responses, populated with form and user |
+| `POST /consent-responses/provisional` | sign-on-behalf | Record a provisional signature for another user |
+| `GET /consent-responses/status?userId=` | sign-on-behalf | Consent status of each form that applies to a user |
+| `POST /consent-responses/:id/void` | sign-on-behalf | Void a provisional signature made in error |
+| `GET /consents/pending` | user | Active forms the user has not answered themselves at the current version |
+| `POST /consents/respond` | user | `{consentFormId, agreed, locale, checkboxValues?, signature?}` |
+| `GET /consents/my` | user | The user's own responses with form data |
+| `GET /consents/audit/:userId` | admin | Full audit history (only with `auditTrail`) |
+
+"sign-on-behalf" means an authenticated user with `consentResponse:signOnBehalf` when
+`accessControl` is set, otherwise `user.admin`. Others get 405.
+
+### `POST /consent-responses/provisional`
+
+Body: `{userId, consentFormId, note, locale?}`. `note` is required, trimmed, and at most 2000
+characters. `locale` defaults to the form's `defaultLocale`.
+
+Creates a `ConsentResponse` for `userId` with `provisional: true`, `agreed: true`,
+`agreedAt` (server time), `provisionalSignedBy` (the caller), `provisionalNote`, and
+`formVersionSnapshot`. With `auditTrail`, it also stores `contentSnapshot`,
+`provisionalSignerIp`, and `provisionalSignerUserAgent`. `ipAddress`, `userAgent`,
+`signature`, and `signedAt` stay unset: they describe the user's own device and signature.
+
+Returns `{data: ConsentResponse}` with `provisionalSignedBy` populated as `{_id, name, email}`.
+The form stays in the target user's `/consents/pending` until they respond themselves.
+
+| Status | When |
+| --- | --- |
+| 400 | Missing or invalid ids, blank or too-long note, `userId` is the caller, inactive form, or the form is filtered out for the target user by `resolveConsentForms` |
+| 404 | Unknown user or form |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each provisional signature writes an `AuditEvent`
+(`modelName: "ConsentResponse"`, `operation: "create"`, `after: {action: "signOnBehalf",
+userId, consentFormId}`, `actorId`: the signer).
+
+`/consent-responses` and its actions are in OpenAPI, so `bun run sdk` generates
+`useConsentresponsesProvisionalMutation`, `useConsentresponsesStatusQuery`, and
+`useConsentresponsesVoidMutation`. The other
+ConsentApp routes are not in OpenAPI.
+
+### `POST /consent-responses/:id/void`
+
+Body: `{reason}` (required, trimmed, at most 2000 characters). Sets `voidedAt`, `voidedBy`
+(the caller), and `voidReason` on a provisional response and returns
+`{data: ConsentResponse}` with `provisionalSignedBy` and `voidedBy` populated. The record is
+never deleted. A voided signature no longer counts: `getConsentStatuses` ignores it, and
+`/consents/pending` drops its `provisionalSignature`.
+
+| Status | When |
+| --- | --- |
+| 400 | Blank or too-long reason, the response is not provisional, or it is already voided |
+| 404 | Unknown response |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each void writes an `AuditEvent` (`operation: "update"`,
+`verb: "updated"`, `after: {action: "voidProvisional", userId, consentFormId}`).
+
+### `GET /consent-responses/status` and `getConsentStatuses`
+
+`GET /consent-responses/status?userId=<id>` returns `{data: ConsentStatusRow[]}`, one row per
+active form that applies to the user (after `resolveConsentForms`), in form order. 400 when
+`userId` is missing or malformed, 404 for an unknown user, 405 for callers who may not sign
+on behalf of others. With `AuditApp` registered, each read writes an `AuditEvent`
+(`operation: "read"`, `verb: "viewed"`, `after: {action: "viewStatus", userId}`).
+
+The same rows come from the exported helper, for server code that needs the "considered
+signed" answer:
+
+```typescript
+import {getConsentStatuses} from "@terreno/api";
+
+const rows = await getConsentStatuses({userId, resolveConsentForms});
+const allConsented = rows.every((row) => row.isConsented);
+```
+
+```typescript
+interface ConsentStatusRow {
+  form: ConsentStatusForm; // the form as clients receive it: string ids, content as an object
+  status: "pending" | "provisional" | "signed" | "declined";
+  isConsented: boolean; // true for "signed" and "provisional"
+  respondedAt?: Date; // agreedAt of the response that decided the status
+  provisional?: {
+    responseId: string;
+    signedAt: Date;
+    signedBy: {id: string; name?: string; email?: string} | null;
+    note?: string;
+  };
+}
+```
+
+Only non-voided responses to each form's current version count:
+
+1. The user's own latest response decides: `agreed` → `signed`, declined → `declined`.
+2. Otherwise a provisional response → `provisional`.
+3. Otherwise → `pending`.
+
+`provisional` is set whenever a provisional response exists for the current version, even
+when the user's own answer decides the status. The helper throws `APIError` 400 for a
+malformed `userId` and 404 for an unknown user.
+
+### Admin columns
+
+The "Consent Responses" admin model lists `provisional`, offers a "Provisional" boolean
+filter, and populates `provisionalSignedBy` (`name`, `email`).
+
+### Provisional data on user-facing payloads
+
+The user sees who signed on their behalf and when. They never see the signer's note or the
+signer's request metadata.
+
+| Endpoint | Adds |
+| --- | --- |
+| `GET /consents/pending` | `provisionalSignature?: {signedAt, signedByName}` on each form, from the latest non-voided provisional response for the form's current version. Absent when there is none. Provisional responses never remove a form from this list |
+| `GET /consents/my` | `provisional: boolean`, `provisionalSignedBy: {name} \| null`, and `voidedAt` on each entry. No note, IP, or user agent of the signer, and no void reason |
+| `GET /consents/audit/:userId` | `provisional`, `provisionalSignedBy: {_id, name, email} \| null`, `provisionalNote`, `provisionalSignerIp`, `provisionalSignerUserAgent`, `voidedAt`, `voidedBy: {_id, name, email} \| null`, `voidReason` |
+
+`signedByName` falls back to the signer's email, then `"Staff"`.
+
+### RBAC
+
+`terrenoStatements.consentResponse` is `["list", "read", "signOnBehalf"]`. The built-in
+`admin` role grants `consentResponse: ["signOnBehalf"]`. Seeding adds it to existing unsealed
+`admin` roles without removing other grants. `superadmin` has every action.
+
+### Response fields
+
+| Field | Notes |
+| --- | --- |
+| `provisional` | `false` by default; `true` only on responses from `/consent-responses/provisional` |
+| `provisionalSignedBy` | User ref; required when `provisional` |
+| `provisionalNote` | Required when `provisional`; max 2000 characters |
+| `provisionalSignerIp`, `provisionalSignerUserAgent` | Signer's request metadata, with `auditTrail` |
+| `voidedAt`, `voidedBy`, `voidReason` | Set only by the void action |
 
 ## In-app notifications
 

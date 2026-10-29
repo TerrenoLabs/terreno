@@ -27,6 +27,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
 - [Enable the framework audit log](audit-log.md) — `AuditApp`, per-router `audit`, append-only events
+- [Sign consent on a user's behalf](sign-consent-on-behalf.md) — Provisional consent signatures: RBAC grant, signer screen, status checks, void, print
 - [Seed a database](seed-a-database.md) — Idempotent sync, dry runs, and guarded reset-and-reseed
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API

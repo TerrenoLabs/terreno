@@ -1039,6 +1039,110 @@ On web, that container is portaled to `document.body` (`position: fixed`, `z-ind
 
 Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
 
+## Consent components
+
+Client side of `ConsentApp` ([API reference](api.md#consent-forms-consentapp),
+[concepts](../explanation/consent-forms.md)). Lazily exported from the package root.
+
+### ConsentNavigator and ConsentFormScreen
+
+`ConsentNavigator` wraps app content, fetches `GET /consents/pending` through
+`useConsentForms(api, baseUrl)`, and renders `ConsentFormScreen` for each pending form until
+the list is empty. `ConsentFormScreen` shows the form's markdown (with `{{variable}}`
+substitution), required checkboxes, an optional signature, the scroll-to-bottom gate, and the
+agree and decline buttons.
+
+When staff signed the form provisionally, the pending form carries
+`provisionalSignature: {signedAt, signedByName}` (`ConsentFormPublic`), and the screen shows
+"Signed on your behalf by <name> on <date>" above the content (`testID`
+`consent-form-provisional-notice`, date in Luxon `DATETIME_MED` for the screen's `locale`). The user still agrees or
+declines themselves: the scroll gate, checkboxes, and signature work as for any other form.
+The signer's note is never shown.
+
+`useConsentForms.ts` also exports two helpers the consent components share:
+`applyConsentVariables(content, variables?)` replaces `{{name}}` placeholders and leaves
+unknown ones as written, and `resolveConsentLocale(form, locale)` picks the content locale to
+show: the exact locale, then its language (`en-GB` → `en`), then the form's default.
+
+### ProvisionalConsentSigner and useProvisionalConsent
+
+For staff who record consent on a user's behalf. The server must grant the viewer
+`consentResponse:signOnBehalf` (or `user.admin` when `ConsentApp` has no `accessControl`).
+
+```tsx
+import {ProvisionalConsentSigner} from "@terreno/ui";
+
+<ProvisionalConsentSigner api={terrenoApi} userId={memberId} />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `api` | RTK Query api | The consumer api, as passed to `ConsentNavigator` |
+| `baseUrl` | `string` | Optional prefix for consent routes |
+| `userId` | `string` | The user being signed for |
+| `onSigned` | `(response) => void` | Called with the stored `ConsentResponse` after a provisional signature |
+| `onError` | `(error) => void` | Called with the server error when signing fails |
+| `variables` | `Record<string, string>` | Values for `{{name}}` placeholders in form content |
+
+It lists every form that applies to the user (`GET /consent-responses/status`) with a status
+badge: "Pending", "Signed provisionally by <signer> on <date>", "Signed by user on <date>",
+or "Declined by user on <date>". It shows a spinner while loading and the server error with
+a Retry button on failure. Lazily exported from the package root.
+
+Pending forms have a "Sign on behalf" button. Declined forms do not: the user's own decline
+always decides the status, so a provisional signature would not count. It opens the form read-only
+(`MarkdownView`, `variables` applied, in the viewer's locale, then that locale's language,
+then the form's default) with a required "Note" box. "Sign provisionally" stays disabled until
+the note has text. Submitting sends `{userId, consentFormId, note, locale}` to
+`POST /consent-responses/provisional`, then returns to the list with a confirmation naming
+the signer and time, and calls `onSigned`. A server error shows under the note and calls
+`onError`. The signer never ticks the form's checkboxes or draws a signature: those stay the
+user's.
+
+Provisional, signed, and declined rows have a "Print" button, and so does the confirmation
+after signing. It calls `printConsentHtml` with `buildConsentPdfHtml` HTML: the form content,
+its status, and, when there is a provisional signature, the "Provisional signature" block with
+the signer, date, and note. Provisional rows also have "Void". It opens a dialog that asks for
+a required reason, sends it to `POST /consent-responses/:id/void`, and refetches, so the row
+returns to "Pending". A void error shows in the dialog and calls `onError`.
+
+`useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
+refetch, sign, isSigning, voidSignature, isVoiding}`. `statuses` are `ProvisionalConsentStatusRow`s
+(`{form, status, isConsented, respondedAt?, provisional?}`). `sign({consentFormId, note,
+locale?})` signs for the hook's `userId` and resolves to the `ConsentResponse`, or rejects
+with the RTK error. `voidSignature({responseId, reason})` voids a provisional signature the
+same way. The hook injects `getConsentStatus`, `signConsentProvisionally`, and
+`voidProvisionalConsent` once per `(api, baseUrl)`. Signing and voiding invalidate the
+`ConsentStatus` and `PendingConsents` tags.
+
+testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
+`provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
+`provisional-consent-row-{formId}`, `provisional-consent-status-{formId}`,
+`provisional-consent-open-{formId}`, `provisional-consent-form-content`,
+`provisional-consent-note-input`, `provisional-consent-submit-button`,
+`provisional-consent-cancel-button`, `provisional-consent-submit-error`,
+`provisional-consent-success`, `provisional-consent-success-print`,
+`provisional-consent-print-{formId}`, `provisional-consent-void-{formId}`,
+`provisional-consent-void-modal` (confirm button `provisional-consent-void-modal.primary`),
+`provisional-consent-void-reason-input`, `provisional-consent-void-error`.
+
+### Consent printouts
+
+`buildConsentPdfHtml(data)` builds a self-contained HTML document for a consent response
+(response details, user info, checkboxes, audit trail, signature, content snapshot). Native
+apps turn it into a PDF with `sharePdfFromHtml({html, filename})`.
+
+`printConsentHtml({html})` opens the print dialog for that HTML: `expo-print` `printAsync`
+on native, and on web a hidden `iframe` (`srcdoc`) whose window is printed, so the app page
+itself is not. The iframe is removed after printing, or at the next print if the browser
+never reports that printing finished, so consent HTML does not linger in the page. The
+promise rejects if printing throws.
+
+`PdfTemplateData.provisionalSignature?: {signedAt, signedByName, note?, signerIp?, voidedAt?}`
+adds a "Provisional signature" section with the signer and date (ISO dates are printed with
+Luxon `DATETIME_FULL`), the escaped note and signer IP when given, and "Voided <date>" when
+voided. Pass `note` and `signerIp` only on admin printouts: the user never sees the note.
+
 ## Authentication Components
 
 ### SocialLoginButton

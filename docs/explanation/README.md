@@ -36,6 +36,7 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Versioning policy](versioning-policy.md) — Lockstep `@terreno/*` versions, pre-1.0 breaks, deprecation window
 - [How admin interfaces are shaped](admin-interface.md) — Screens, sidebar, `apiBase` vs `routeBase`
 - [Admin plugin frontend widgets](admin-plugin-frontend.md) — Widget IDs from backend plugins
+- [Consent forms](consent-forms.md) — Versions, responses, the consent gate, and why provisional signatures don't clear it
 - [Consent admin migration](admin-consent-migration.md) — Which consent screens stay hand-written
 - [Public roadmap process](roadmap-process.md) — GitHub roadmap vs Linear execution
 - [Example app coverage](example-coverage.md) — Which framework capabilities the example apps exercise

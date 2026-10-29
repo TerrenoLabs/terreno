@@ -296,6 +296,34 @@ Renders reference fields as clickable links.
 />
 ``````
 
+### Consent records and PDFs
+
+`ConsentResponseViewer` (admin, one `ConsentResponse`) and `ConsentHistory` (the signed-in
+user's own `GET /consents/my` entries) download a consent record as a PDF:
+`generateConsentPdf(response)` and `generateConsentHistoryPdf(entry)`. Web builds the PDF with
+jsPDF; native renders `buildConsentPdfHtml` from `@terreno/ui` and shares it with
+`sharePdfFromHtml`.
+
+When the response is provisional (staff signed on the user's behalf), both PDFs add a
+"Provisional signature" section: the signer and date, and "Voided <date>" when it was voided.
+The admin PDF also includes the signer's note and IP address. The user's own PDF never
+includes the note.
+
+Both views can also print a record: `ConsentResponseViewer`'s "Print" button
+(`consent-response-print-button`) and each `ConsentHistory` entry's print icon
+(`consent-history-print-{entryId}`, in the expanded details) call `printConsentHtml` from
+`@terreno/ui` with `buildConsentPdfHtml` HTML, including the provisional block. The
+"Download PDF" buttons are unchanged.
+
+Provisional display:
+
+- `ConsentResponseViewer` adds a "Provisional Signature" card (`consent-response-provisional`)
+  with a "Provisional" badge, the signer, signing date, note, signer IP, and, once voided, a
+  "Voided" badge (`consent-response-provisional-voided`), void date, and reason.
+- `ConsentHistory` marks provisional entries with a "Provisional" badge and "Signed on your
+  behalf by <name>" (`consent-history-provisional-{entryId}`), plus "Voided" when voided. It
+  never shows the note.
+
 ## Hooks
 
 ### useAdminConfig

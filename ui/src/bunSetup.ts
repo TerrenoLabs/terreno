@@ -936,6 +936,15 @@ mock.module("expo-clipboard", () => ({
   setStringAsync: mock(() => Promise.resolve(undefined)),
 }));
 
+// Mock expo-print (native print and PDF export). Tests drive these mocks through
+// `import * as Print from "expo-print"` instead of registering their own module mock.
+mock.module("expo-print", () => ({
+  printAsync: mock(async (_options: {html?: string}): Promise<void> => {}),
+  printToFileAsync: mock(
+    async (_options: {html?: string}): Promise<{uri: string}> => ({uri: "file:///tmp/consent.pdf"})
+  ),
+}));
+
 // Mock expo-localization
 mock.module("expo-localization", () => ({
   getCalendars: mock(() => [

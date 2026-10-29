@@ -329,8 +329,10 @@ updating, and removing array items:
 
 Each operation runs like a `PATCH` that replaces the whole field. The transform, `preUpdate`,
 and RBAC write checks see `{[field]: newArray}`, and only the body they return is saved. A
-`PATCH` of a subdocument merges into a copy of the item, so a hook (or admin `readonlyFields`)
-that drops the field leaves the stored item unchanged.
+`PATCH` of a subdocument merges into a plain-data copy of the item, so a hook (or admin
+`readonlyFields`) that drops the field leaves the stored item unchanged. It deliberately does not
+use `Subdocument.$clone()`: that clone has no parent, and assigning a nested document array to it
+causes Mongoose setters to fail.
 
 `:id` must be an ObjectId. Any other id leaves this router so a later route on the same
 prefix can handle it. `POST /ai/observability/evaluators` is not an array push on a model

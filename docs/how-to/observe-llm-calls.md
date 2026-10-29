@@ -286,7 +286,7 @@ So `?prompt=base-rules` on the trace list finds every call that used the shared 
 4. Open an item: `GET /ai/observability/review/:id` returns evaluator dimensions plus `given` / `wrote` panels (variable labels when present, otherwise raw keys).
 5. `POST /ai/observability/review/:id` with `action: "submit"` writes dimension-keyed scores through every ScoreSink and marks the item `done` (it leaves the pending list). `skip` and `assign` move status to `skipped` / `in_progress`.
 
-The seeded queue uses `output-quality-questions` and `helpfulness-questions`: three required yes/no questions on one screen. Re-running `bun run backend:seed` updates those question sets in place and points any queue item still using `correctness-human` or `helpfulness-human` at the matching three-question set. On the item screen, **What the AI was given** and **What the AI wrote** are equal columns. The output card uses the `ai` surface, and each heading sits inside its card. Segmented Yes / No (and a numeric or categorical control) sit in a fixed left column. On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter` submits, and `S` skips.
+The seeded queue uses `output-quality-questions` and `helpfulness-questions`: three required yes/no questions on one screen. Re-running `bun run backend:seed` updates those question sets in place and points any queue item still using `correctness-human` or `helpfulness-human` at the matching three-question set. On the item screen, **What the AI was given** and **What the AI wrote** are headings above equal columns. Each column's card holds the field labels (for example source text) and the values. The output card uses the `ai` surface. Segmented Yes / No (and a numeric or categorical control) sit in a fixed left column. On web, `Y` / `N` answer the highlighted question as soon as the item opens, including when a Yes/No segment is focused, `Enter` submits, and `S` skips.
 
 ## Check that an LLM judge agrees with people
 
@@ -298,14 +298,15 @@ the same list of questions for. Then run LLM judges over the same traces and com
    `{key: "covers_every_item", dataType: "boolean", question: "Does it mention every todo?"}`.
    The seed installs `summary-review-questions` with four questions.
 2. Open **AI Observability → Review batches** (or **Review batches** in the Review queue header),
-   pick the question set and (optionally) a prompt, and press the header **Grab 10 recent
-   traces**. API: `POST /ai/observability/review/batches` with
+   pick the question set and (optionally) a prompt, and press **Save batch** on the New batch
+   card. That grabs the 10 newest successful traces. API: `POST /ai/observability/review/batches` with
    `{evaluatorId, promptName?, limit?: 10, name?}`. It takes the newest successful traces with an
    output that are not already in a batch for that question set, so pressing it again gives the
    next 10. Pass `traceIds` instead to pick traces by hand.
-3. Reviewers press **Answer N remaining**. Each item shows the input and output side by side, in
-   equal columns, and every question as a segmented **Yes** / **No** in a fixed left column. On
-   web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter` submits and
+3. Reviewers press **Answer N remaining**. Each item shows **What the AI was given** and **What
+   the AI wrote** as headings above equal columns, and every question as a segmented **Yes** /
+   **No** in a fixed left column. On web, `Y` / `N` answer the highlighted question as soon as the
+   item opens, including when a Yes/No segment is focused, `Enter` submits and
    opens the next item in the batch (**Submit and open next**), and `S` skips. Items someone
    assigned to themselves (in progress) stay in the batch's next/previous walk until they are
    submitted or skipped.

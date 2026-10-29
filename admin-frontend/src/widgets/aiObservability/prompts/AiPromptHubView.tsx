@@ -45,7 +45,7 @@ export interface AiPromptHubViewProps {
   selectedVersion: number;
 }
 
-const HUB_TABS = ["Overview", "Versions", "Traces", "Experiments"];
+const HUB_TABS = ["Versions", "Traces", "Experiments"];
 
 const TRACE_COLUMNS: ObservabilityTableColumn[] = [
   {grow: 2, minWidth: 180, title: "Trace"},
@@ -211,30 +211,32 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
         selectedIndex={tabIndex}
         testID="ai-prompt-hub-tabs"
       />
-      {tabIndex === 0 ? <PromptOverviewPanel detail={detail} /> : undefined}
-      {tabIndex === 1 ? (
-        <AiPromptEditorView
-          canPlayground={permissions.canPlayground}
-          canPromote={permissions.canPromote}
-          canUpdate={permissions.canUpdate}
-          detail={detail}
-          isApiKeyLoading={isApiKeyLoading}
-          isRunningPlayground={isRunningPlayground}
-          isSaving={isSaving}
-          isSettingProduction={isSettingProduction}
-          onRunPlayground={onRunPlayground}
-          onSaveVersion={onSaveVersion}
-          onSelectVersion={onSelectVersion}
-          onSetProduction={onSetProduction}
-          playgroundBlockedMessage={playgroundBlockedMessage}
-          playgroundError={playgroundError}
-          playgroundResult={playgroundResult}
-          productionError={productionError}
-          saveError={saveError}
-          selectedVersion={selectedVersion}
-        />
+      {tabIndex === 0 ? (
+        <Box gap={4} testID="ai-prompt-versions">
+          <PromptOverviewPanel detail={detail} />
+          <AiPromptEditorView
+            canPlayground={permissions.canPlayground}
+            canPromote={permissions.canPromote}
+            canUpdate={permissions.canUpdate}
+            detail={detail}
+            isApiKeyLoading={isApiKeyLoading}
+            isRunningPlayground={isRunningPlayground}
+            isSaving={isSaving}
+            isSettingProduction={isSettingProduction}
+            onRunPlayground={onRunPlayground}
+            onSaveVersion={onSaveVersion}
+            onSelectVersion={onSelectVersion}
+            onSetProduction={onSetProduction}
+            playgroundBlockedMessage={playgroundBlockedMessage}
+            playgroundError={playgroundError}
+            playgroundResult={playgroundResult}
+            productionError={productionError}
+            saveError={saveError}
+            selectedVersion={selectedVersion}
+          />
+        </Box>
       ) : undefined}
-      {tabIndex === 2 ? (
+      {tabIndex === 1 ? (
         <RelationshipPanel
           columns={TRACE_COLUMNS}
           emptyLabel="No traces recorded for this prompt yet."
@@ -246,7 +248,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
           total={detail.relationships.traces.total}
         />
       ) : undefined}
-      {tabIndex === 3 ? (
+      {tabIndex === 2 ? (
         <RelationshipPanel
           columns={EXPERIMENT_COLUMNS}
           emptyLabel="No experiments reference this prompt yet."

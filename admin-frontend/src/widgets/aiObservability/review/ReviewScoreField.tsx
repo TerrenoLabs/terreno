@@ -1,6 +1,8 @@
 import {Box, Button, Heading, Slider, Text, TextField} from "@terreno/ui";
-import React from "react";
+import React, {useCallback} from "react";
+import {Pressable} from "react-native";
 import {humanizeKey} from "./batchTypes";
+import {reviewAnswerKey} from "./reviewShortcuts";
 import {categoricalOptions, type EvaluatorDimension, numericRange} from "./reviewTypes";
 
 const YES_NO_OPTIONS: Array<{answer: boolean; key: "no" | "yes"; label: string}> = [
@@ -14,49 +16,82 @@ export interface YesNoControlProps {
   value?: boolean | number | string;
 }
 
+interface AnswerKeyEvent {
+  altKey?: boolean;
+  ctrlKey?: boolean;
+  key: string;
+  metaKey?: boolean;
+  preventDefault: () => void;
+  target?: unknown;
+}
+
 /**
  * One segmented Yes/No control for review answers, styled like SegmentedControl. Neither answer
  * is destructive; the control is `{testID}-answer` and each segment `{testID}-yes|no`.
+ * Y/N on a focused segment answers that question; the page shortcut does the same when focus is
+ * elsewhere.
  */
-export const YesNoControl: React.FC<YesNoControlProps> = ({onChange, testID, value}) => (
-  <Box
-    alignSelf="start"
-    color="neutralLight"
-    direction="row"
-    gap={1}
-    padding={1}
-    rounding="3xl"
-    testID={`${testID}-answer`}
-  >
-    {YES_NO_OPTIONS.map((option) => {
-      const isSelected = value === option.answer;
-      return (
-        <Box
-          accessibilityHint={`Answers ${option.label.toLowerCase()}`}
-          accessibilityLabel={option.label}
-          accessibilityRole="radio"
-          accessibilityState={{checked: isSelected}}
-          alignItems="center"
-          color={isSelected ? "base" : "transparent"}
-          key={option.key}
-          minWidth={56}
-          onClick={() => {
-            onChange(option.answer);
-          }}
-          paddingX={3}
-          paddingY={1}
-          rounding="3xl"
-        >
-          <Box testID={`${testID}-${option.key}`}>
-            <Text bold={isSelected} size="sm" skipLinking>
-              {option.label}
-            </Text>
-          </Box>
-        </Box>
-      );
-    })}
-  </Box>
-);
+export const YesNoControl: React.FC<YesNoControlProps> = ({onChange, testID, value}) => {
+  const handleKeyDown = useCallback(
+    (event: AnswerKeyEvent): void => {
+      const action = reviewAnswerKey(event);
+      if (!action) {
+        return;
+      }
+      event.preventDefault();
+      onChange(action === "yes");
+    },
+    [onChange]
+  );
+
+  return (
+    <Box
+      alignSelf="start"
+      color="neutralLight"
+      direction="row"
+      gap={1}
+      padding={1}
+      rounding="3xl"
+      testID={`${testID}-answer`}
+    >
+      {YES_NO_OPTIONS.map((option) => {
+        const isSelected = value === option.answer;
+        const keyDownProps: {onKeyDown?: (event: AnswerKeyEvent) => void} = {
+          onKeyDown: handleKeyDown,
+        };
+        return (
+          <Pressable
+            {...keyDownProps}
+            accessibilityHint={`Answers ${option.label.toLowerCase()}`}
+            accessibilityLabel={option.label}
+            accessibilityRole="radio"
+            accessibilityState={{checked: isSelected}}
+            // RN web maps dataSet to data-review-answer so Y/N still count when the segment is focused.
+            {...({dataSet: {reviewAnswer: "true"}} as React.ComponentProps<typeof Pressable>)}
+            key={option.key}
+            onPress={() => {
+              onChange(option.answer);
+            }}
+            testID={`${testID}-${option.key}`}
+          >
+            <Box
+              alignItems="center"
+              color={isSelected ? "base" : "transparent"}
+              minWidth={56}
+              paddingX={3}
+              paddingY={1}
+              rounding="3xl"
+            >
+              <Text bold={isSelected} size="sm" skipLinking>
+                {option.label}
+              </Text>
+            </Box>
+          </Pressable>
+        );
+      })}
+    </Box>
+  );
+};
 
 export interface ReviewScoreFieldProps {
   dimension: EvaluatorDimension;

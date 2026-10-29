@@ -99,6 +99,23 @@ describe("ReviewQuestionList", () => {
     expect(onAnswer).toHaveBeenCalledWith("faithful", true);
   });
 
+  it("answers a focused Yes/No segment from Y and N", async () => {
+    const onAnswer = mock(() => {});
+    const {getByTestId} = renderWithTheme(
+      <ReviewQuestionList dimensions={QUESTIONS} onAnswer={onAnswer} scores={{}} />
+    );
+    const yes = getByTestId("ai-review-question-faithful-yes");
+    await act(async () => {
+      fireEvent(yes, "keyDown", {
+        key: "n",
+        preventDefault: () => undefined,
+        target: {dataset: {reviewAnswer: "true"}, tagName: "DIV"},
+      });
+      await Promise.resolve();
+    });
+    expect(onAnswer).toHaveBeenCalledWith("faithful", false);
+  });
+
   it("puts answers in a fixed left column and highlights the active question", () => {
     const view = renderWithTheme(
       <ReviewQuestionList
@@ -245,6 +262,7 @@ describe("AiReviewBatchesView", () => {
           },
         ]}
         name=""
+        onCreate={() => {}}
         onNameChange={() => {}}
         onOpenBatch={onOpenBatch}
         onPromptChange={() => {}}
@@ -269,6 +287,7 @@ describe("AiReviewBatchesView", () => {
       <AiReviewBatchesView
         batches={[]}
         name=""
+        onCreate={() => {}}
         onNameChange={() => {}}
         onOpenBatch={() => {}}
         onPromptChange={() => {}}

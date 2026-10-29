@@ -29,6 +29,25 @@ describe("LocalPromptStore", () => {
     await registerObsExperiment().deleteMany({});
   });
 
+  it("returns version schemas from prompt detail", async () => {
+    const outputSchema = {
+      properties: {helpfulness: {type: "number"}},
+      required: ["helpfulness"],
+      type: "object",
+    };
+    await store.create({
+      folder: "evaluators",
+      name: "eval-judge-helpfulness",
+      outputFieldNotes: {helpfulness: "0 to 1"},
+      outputSchema,
+      system: "Score helpfulness",
+      type: "chat",
+    });
+    const detail = await store.getDetail("eval-judge-helpfulness");
+    assert.deepEqual(detail.versions[0]?.outputSchema, outputSchema);
+    assert.deepEqual(detail.versions[0]?.outputFieldNotes, {helpfulness: "0 to 1"});
+  });
+
   it("round-trips an optional description on create, list, and detail", async () => {
     await store.create({
       description: "Summarizes user notes for clinicians",

@@ -98,6 +98,10 @@ describe("AiPromptHubView", () => {
 
     expect(view.getByTestId("ai-prompt-description")).toHaveTextContent("Operator-facing summary");
     expect(view.getByTestId("ai-prompt-folder")).toBeTruthy();
+    expect(view.getByTestId("ai-prompt-editor-form")).toBeTruthy();
+    expect(view.getByText(/Instructions the model follows/)).toBeTruthy();
+    expect(view.getByText(/The message sent to the model/)).toBeTruthy();
+    expect(view.queryByText("Overview")).toBeNull();
 
     fireEvent.press(view.getByText("Versions"));
     expect(view.queryByTestId("ai-prompt-save-next")).toBeNull();

@@ -1,7 +1,7 @@
 import {Box, Spinner, Text} from "@terreno/ui";
-import {useLocalSearchParams} from "expo-router";
+import {router, useLocalSearchParams} from "expo-router";
 import {DateTime} from "luxon";
-import React, {useMemo} from "react";
+import React, {useCallback, useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {unwrapExperimentList} from "../experiments/experimentTypes";
 import {useAiObservabilityExperimentsApi} from "../experiments/useAiObservabilityExperimentsApi";
@@ -75,6 +75,13 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
       });
   }, [evaluator, experimentsRaw]);
 
+  const handleOpenExperiment = useCallback(
+    (experimentId: string): void => {
+      router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
+    },
+    [prefix]
+  );
+
   if (!id) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
@@ -125,6 +132,7 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
         evaluator={evaluator}
         judgeOutputSchema={judgeOutputSchema}
         judgePromptStatus={judgePromptStatus}
+        onOpenExperiment={handleOpenExperiment}
         routeBase={prefix}
         usageError={isExperimentsError ? "Could not load experiments." : undefined}
         usageRows={usageRows}

@@ -1,4 +1,4 @@
-import {Button, useToast} from "@terreno/ui";
+import {useToast} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -107,16 +107,6 @@ export const AiReviewBatchesScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   return (
     <AiObservabilityChrome
       {...props}
-      actions={
-        <Button
-          disabled={!questionSetId}
-          iconName="clock-rotate-left"
-          loading={createState.isLoading}
-          onClick={handleCreate}
-          testID="ai-review-batch-grab-recent"
-          text={`Grab ${DEFAULT_BATCH_SIZE} recent traces`}
-        />
-      }
       backHref={`${prefix}/ai-review`}
       description={BATCHES_DESCRIPTION}
       error={statusQuery.isError}
@@ -127,9 +117,11 @@ export const AiReviewBatchesScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
       <AiReviewBatchesView
         batches={batches}
         createError={createError}
+        isCreating={createState.isLoading}
         isError={batchesQuery.isError}
         isLoading={batchesQuery.isLoading}
         name={name}
+        onCreate={handleCreate}
         onNameChange={setName}
         onOpenBatch={openBatch}
         onPromptChange={setPromptName}

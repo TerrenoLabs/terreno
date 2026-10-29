@@ -4,27 +4,29 @@ url: http://localhost:8082/
 # signed in and create-todo.yaml added "Buy groceries").
 # Do not launchApp — reload resets syncdb and the authenticated session timing.
 
+# Maestro web publishes a pressable's accessible name as its id. The Browse button's
+# testID never appears in that tree.
 - extendedWaitUntil:
     visible:
-      id: "todos-browse-button"
+      id: "Browse"
     timeout: 30000
 
 - tapOn:
-    id: "todos-browse-button"
+    id: "Browse"
 
 - extendedWaitUntil:
     visible:
       id: "todo-browser-list"
     timeout: 30000
 
-# Tap the first browser row by id so a hidden copy of the title on the todos screen never matches.
+# The todos screen keeps this title as text under "Edit title". The browser row's
+# accessible name is the title, so the id matches only that row.
 - tapOn:
-    id: "todo-browser-item-.*-clickable"
-    index: 0
+    id: "Buy groceries"
 
 - extendedWaitUntil:
     visible:
-      id: "todo-browser-detail-toggle"
+      id: "Mark complete"
     timeout: 30000
 
 # The list is still on screen beside the detail (wide viewport) or one back away (phone).

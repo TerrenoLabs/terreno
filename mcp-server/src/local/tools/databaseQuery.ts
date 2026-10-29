@@ -2,6 +2,7 @@ import {existsSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
 import {resolveTerrenoProjectRoot} from "../projectRoot.js";
+import {withLocalMongoDb} from "./localMongo.js";
 
 const readEnvValue = (envPath: string, key: string): string | undefined => {
   if (!existsSync(envPath)) {
@@ -130,17 +131,7 @@ export const databaseQuery = async (args: DatabaseQueryArgs): Promise<string> =>
     return "No Mongo URI found. Set `MONGO_URI` in `backend/.env` or export `MONGO_URI`.";
   }
 
-  const mongoose = await import("mongoose");
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(mongoUri);
-    }
-
-    const db = mongoose.connection.db;
-    if (!db) {
-      return "Connected to Mongo but `connection.db` is not available.";
-    }
-
+  return withLocalMongoDb(mongoUri, async (db) => {
     const coll = db.collection(args.collection);
     const cap = Math.min(Math.max(args.limit ?? 50, 1), 200);
 
@@ -178,7 +169,5 @@ export const databaseQuery = async (args: DatabaseQueryArgs): Promise<string> =>
     }
 
     return "Unreachable";
-  } finally {
-    await mongoose.disconnect().catch(() => undefined);
-  }
+  });
 };

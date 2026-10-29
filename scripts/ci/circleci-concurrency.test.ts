@@ -38,7 +38,15 @@ const E2E_SHARDS: Record<string, string[]> = {
     "pdf",
     "notifications",
   ],
-  auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
+  auth: [
+    "login",
+    "signup",
+    "consents",
+    "provisionalConsent",
+    "forgot-password",
+    "reset-password",
+    "verify-email",
+  ],
   syncdb: [
     "syncdb-load-delta",
     "syncdb-offline",

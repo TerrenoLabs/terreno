@@ -1,16 +1,28 @@
 import {DemoHeaderControls} from "@components/DemoHeaderControls";
 import {EmbedModeProvider} from "@contexts/EmbedModeContext";
-import {isNarrowViewport, useTheme} from "@terreno/ui";
+import {isSupportedDesktopWidth, useTheme} from "@terreno/ui";
 import {Stack, useGlobalSearchParams} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import type {ReactElement} from "react";
+import {type ReactElement, useCallback, useEffect, useState} from "react";
+import {useWindowDimensions} from "react-native";
 
 const DemoStackHeaderRight = (): ReactElement => <DemoHeaderControls modeTarget="dev" />;
 
 const Layout = (): ReactElement => {
   const {embed} = useGlobalSearchParams<{embed?: string}>();
-  const isEmbedMode = embed === "1" || embed === "true";
+  const [isEmbedMode, setIsEmbedMode] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const {colorScheme, theme} = useTheme();
+  const {width} = useWindowDimensions();
+  const isDesktopLayout = isSupportedDesktopWidth({width});
+  const showHeaderBack = hasMounted && !isEmbedMode && !isDesktopLayout;
+  const hideHeaderBack = useCallback((): null => null, []);
+
+  // Static export SSR cannot see ?embed=1, so defer embed chrome until after hydration.
+  useEffect(() => {
+    setHasMounted(true);
+    setIsEmbedMode(embed === "1" || embed === "true");
+  }, [embed]);
 
   return (
     <EmbedModeProvider isEmbedMode={isEmbedMode}>
@@ -19,7 +31,8 @@ const Layout = (): ReactElement => {
         screenOptions={{
           contentStyle: {backgroundColor: theme.surface.base},
           headerBackTitle: "Back",
-          headerBackVisible: !isEmbedMode && isNarrowViewport(),
+          headerBackVisible: showHeaderBack,
+          headerLeft: showHeaderBack ? undefined : hideHeaderBack,
           headerRight: isEmbedMode ? undefined : DemoStackHeaderRight,
           headerShown: !isEmbedMode,
           headerStyle: {backgroundColor: theme.surface.base},

@@ -18,6 +18,7 @@ import type {GPTMemoryModal as GPTMemoryModalComponent} from "../GPTMemoryModal"
 import type {LineChart as LineChartComponent} from "../LineChart";
 import type {MarkdownEditor as MarkdownEditorComponent} from "../MarkdownEditor";
 import type {MarkdownEditorField as MarkdownEditorFieldComponent} from "../MarkdownEditorField";
+import type {ProvisionalConsentSigner as ProvisionalConsentSignerComponent} from "../ProvisionalConsentSigner";
 import type {Scorecard as ScorecardComponent} from "../Scorecard";
 import type {SparklineChart as SparklineChartComponent} from "../SparklineChart";
 import type {UpgradeRequiredScreen as UpgradeRequiredScreenComponent} from "../UpgradeRequiredScreen";
@@ -43,6 +44,7 @@ export const heavyOptionalModuleFactories = {
   LineChart: () => import("../LineChart"),
   MarkdownEditor: () => import("../MarkdownEditor"),
   MarkdownEditorField: () => import("../MarkdownEditorField"),
+  ProvisionalConsentSigner: () => import("../ProvisionalConsentSigner"),
   Scorecard: () => import("../Scorecard"),
   SparklineChart: () => import("../SparklineChart"),
   UpgradeRequiredScreen: () => import("../UpgradeRequiredScreen"),
@@ -113,6 +115,11 @@ export const ConsentNavigator = createLazyNamedExport(
   heavyOptionalModuleFactories.ConsentNavigator,
   "ConsentNavigator"
 ) as unknown as typeof ConsentNavigatorComponent;
+
+export const ProvisionalConsentSigner = createLazyNamedExport(
+  heavyOptionalModuleFactories.ProvisionalConsentSigner,
+  "ProvisionalConsentSigner"
+) as unknown as typeof ProvisionalConsentSignerComponent;
 
 export const DonutChart = createLazyNamedExport(
   heavyOptionalModuleFactories.DonutChart,

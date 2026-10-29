@@ -84,4 +84,32 @@ describe("generateConsentPdf mobile", () => {
     assert.deepEqual(template.fields, [{label: "Decision:", value: "Declined"}]);
     assert.deepEqual(template.userInfo, {email: undefined, name: undefined, userId: "legacy-user"});
   });
+  it("passes the full provisional signature to the native template", async () => {
+    await generateConsentPdf({
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00Z",
+      provisional: true,
+      provisionalNote: "Guardian agreed by phone",
+      provisionalSignedBy: {_id: "staff-1", name: "Dana Rivera"},
+      provisionalSignerIp: "10.0.0.7",
+      userId: "member-1",
+    });
+
+    const template = buildConsentPdfHtml.mock.calls[0]?.[0] as {
+      provisionalSignature?: Record<string, unknown>;
+    };
+    assert.deepEqual(template.provisionalSignature, {
+      note: "Guardian agreed by phone",
+      signedAt: "2026-10-20T15:30:00Z",
+      signedByName: "Dana Rivera",
+      signerIp: "10.0.0.7",
+      voidedAt: undefined,
+    });
+  });
+
+  it("leaves provisionalSignature unset for the user's own response", async () => {
+    await generateConsentPdf({agreed: true, userId: "member-1"});
+    const template = buildConsentPdfHtml.mock.calls[0]?.[0] as {provisionalSignature?: unknown};
+    assert.isUndefined(template.provisionalSignature);
+  });
 });

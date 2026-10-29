@@ -15,6 +15,7 @@ export {
   getBreakpointSurface,
   isBreakpointAtLeast,
   isSupportedDesktopViewport,
+  isSupportedDesktopWidth,
   NATIVE_BREAKPOINT_MIN_WIDTH,
   type ResponsiveBreakpoint,
   WEB_BREAKPOINT_MIN_WIDTH,

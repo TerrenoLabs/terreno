@@ -69,6 +69,9 @@ const operationFromVerb = (verb: AuditEventVerb): AuditEventOperation => {
   if (verb === "deleted") {
     return "delete";
   }
+  if (verb === "viewed") {
+    return "read";
+  }
   return "update";
 };
 

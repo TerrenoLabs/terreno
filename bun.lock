@@ -644,6 +644,7 @@
       "devDependencies": {
         "@biomejs/biome": "catalog:",
         "@modelcontextprotocol/client": "catalog:",
+        "@terreno/test": "workspace:*",
         "@types/bun": "catalog:",
         "@types/luxon": "catalog:",
         "@types/node": "catalog:",
@@ -717,6 +718,7 @@
         "@types/luxon": "catalog:",
         "@types/node": "catalog:",
         "@types/react": "catalog:",
+        "chai": "catalog:",
         "expo-sqlite": "catalog:",
         "fake-indexeddb": "^6.0.0",
         "react": "catalog:",

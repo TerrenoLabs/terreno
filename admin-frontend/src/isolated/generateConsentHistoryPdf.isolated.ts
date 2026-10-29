@@ -73,6 +73,7 @@ mock.module("@terreno/ui", () => ({
 Platform.OS = "web";
 
 import {generateConsentHistoryPdf} from "../generateConsentHistoryPdf";
+import {formatDate} from "../pdfUtils";
 import type {ConsentHistoryEntry} from "../useConsentHistory";
 
 const getRenderedText = (): string[] =>
@@ -247,5 +248,37 @@ describe("generateConsentHistoryPdf", () => {
     });
     expect(buildConsentPdfHtml).toHaveBeenCalled();
     expect(sharePdfFromHtml).toHaveBeenCalled();
+  });
+  it("draws the provisional signer and date for the user, without a note", async () => {
+    await generateConsentHistoryPdf({
+      ...baseEntry(),
+      agreedAt: "2026-10-20T15:30:00Z",
+      provisional: true,
+      provisionalSignedBy: {name: "Dana Rivera"},
+    });
+
+    const text = getRenderedText();
+    expect(text).toContain("Provisional signature");
+    expect(text).toContain("Dana Rivera");
+    expect(text).toContain(formatDate("2026-10-20T15:30:00Z"));
+    expect(text).not.toContain("Note:");
+    expect(text).not.toContain("Signer IP:");
+  });
+
+  it("marks a voided provisional signature", async () => {
+    await generateConsentHistoryPdf({
+      ...baseEntry(),
+      provisional: true,
+      provisionalSignedBy: null,
+      voidedAt: "2026-10-21T09:00:00Z",
+    });
+    const text = getRenderedText();
+    expect(text).toContain("Staff");
+    expect(text).toContain(`Voided ${formatDate("2026-10-21T09:00:00Z")}`);
+  });
+
+  it("draws no provisional section for the user's own entry", async () => {
+    await generateConsentHistoryPdf({...baseEntry(), provisional: false});
+    expect(getRenderedText()).not.toContain("Provisional signature");
   });
 });

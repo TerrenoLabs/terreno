@@ -14,6 +14,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - [Middleware](#middleware)
 - [Logging & Tracing](#logging--tracing)
 - [Extensibility](#extensibility)
+- [Consent forms (ConsentApp)](#consent-forms-consentapp)
 - [In-app notifications](#in-app-notifications)
 - [Webhooks & Notifications](#webhooks--notifications)
 - [HTTP Client](#http-client)
@@ -539,7 +540,9 @@ Request logs redact credential values at any depth in request bodies and in URL 
 any key whose name contains `password`, `passwd`, `passphrase`, `passcode`, `token`, `secret`,
 `verifier`, `signature`, `apikey`, `authorization`, `credential`, or `privatekey` (case and `_`/`-`
 ignored, so `currentPassword`, `refresh_token`, `client_secret`, and `idToken.token` all match), or
-that has `code`, `otp`, or `pin` as a word (`code`, `zipCode`, `otp_code`). Changing the mailbox through `PATCH /auth/me`
+that has `code`, `otp`, `pin`, `note`, or `reason` as a word (`code`, `zipCode`, `otp_code`,
+`provisionalNote`). `note` and `reason` are free text that can hold PHI, such as a provisional
+consent signer's note. Changing the mailbox through `PATCH /auth/me`
 invalidates unused `passwordReset` AuthTokens for that user even when the schema has no
 `emailVerified` field. When the schema uses `emailVerificationPlugin`, mailbox change also
 sets `emailVerified` to false and invalidates unused `emailVerification` tokens; changing letter
@@ -1474,6 +1477,27 @@ See [Schema metadata explanation](../explanation/schema-metadata.md).
 
 ## Middleware
 
+### Error middleware
+
+`TerrenoApp` ends the app with `apiUnauthorizedMiddleware`, `apiErrorMiddleware`,
+and `apiFallthroughErrorMiddleware`, in that order. `apiErrorMiddleware` answers with a JSONAPI
+error body for these errors:
+
+| Error | Status | Title |
+|-------|--------|-------|
+| `APIError` (or a subclass) | its `status` | its `title` |
+| Mongoose `ValidationError` or `CastError` | 400 | `Validation failed`, with `meta.fields` |
+| Malformed JSON or urlencoded body (`entity.parse.failed`) | 400 | `Malformed request body` |
+| Body over the parser `limit` (`entity.too.large`, `parameters.too.many`) | 413 | `Request body too large` |
+| Unsupported body charset or encoding | 415 | `Unsupported request body encoding` |
+| Aborted or truncated body (`request.aborted`, `request.size.invalid`) | 400 | `Request body incomplete` |
+
+Body-parser errors keep the parser's message in `detail`, are logged at `warn`, and skip Sentry.
+`bodyParserErrorToAPIError(err)` and `mongooseErrorToAPIError(err)` are exported for custom error
+handlers; each returns `null` for errors it does not handle. Anything else reaches
+`apiFallthroughErrorMiddleware`, which logs `Fallthrough error: <error>` with the stack at `error`
+level and answers `500 {"status":500,"title":"Internal server error"}`.
+
 ### openApiEtagMiddleware
 
 Adds ETag support to the `/openapi.json` endpoint for efficient caching.
@@ -1520,7 +1544,8 @@ background job can be followed across many log lines, both in plain-text console
 transports (Google Cloud Logging, Sentry).
 
 > Never use `console.log` for permanent server logs — use `logger` or a scoped logger. Request
-> logging already redacts password, token, secret, and code fields in bodies and query strings;
+> logging already redacts password, token, secret, code, note, and reason fields in bodies and
+> query strings;
 > never log secrets, full auth tokens, or raw passwords.
 
 ### Quick reference
@@ -1756,19 +1781,98 @@ To correlate with Cloud Trace, ensure clients or load balancers send `x-cloud-tr
 
 ### Development browser-log ingestion
 
-`TerrenoApp` mounts `POST /__terreno/browser-logs` only when `NODE_ENV=development`, or when
-`TERRENO_BROWSER_LOGS=true` in another non-production environment. Production always returns 404;
-set `TERRENO_BROWSER_LOGS=false` to disable the route in development.
+`POST /__terreno/browser-logs` lets a running client write its console errors and warnings to a
+file on the backend, where the local MCP `read_logs` and `last_error` tools can read them. The
+Terreno dev console logger (`installTerrenoDevConsoleLogger`) is the client that sends them. The
+route lives in `api/src/browserLogsRoute.ts`.
 
-The route accepts loopback requests for local browser development. Non-loopback clients must
-authenticate through the app's normal JWT or Better Auth middleware. `TerrenoApp` mounts the route
-after its optional rate limiter, so configured API limits also apply to ingestion.
+**When the route exists.** `TerrenoApp` calls `addTerrenoDevBrowserLogsRoute(app)` while it builds
+the app. `setupServer` does not register the route. An app built on `setupServer` can call the
+exported `addTerrenoDevBrowserLogsRoute(app)` itself. The check runs once, when the route is added:
 
-The request body is `{entries: Array<{level?, message?, stack?, timestamp?}>}`. Batches are capped
-at 100 entries and 256 kB. Accepted rows are truncated to bounded field lengths and appended as
-mode-`0600` JSONL under `<backend cwd>/.terreno/logs/browser.log`. The file restarts with the latest
-batch before it would exceed 5 MB. The local MCP `read_logs` / `last_error` tools and
-`terreno logs --sources browser` consume that file.
+| `NODE_ENV` | `TERRENO_BROWSER_LOGS` | Route |
+|------------|------------------------|-------|
+| `production` | any value, including `true` | Not registered |
+| anything else, or unset | `false` or `0` | Not registered |
+| anything else, or unset | `true` or `1` | Registered |
+| `development` | unset or any other value | Registered |
+| not `development`, or unset | unset or any other value | Not registered |
+
+An unregistered route falls through to the app's normal not-found handling, so the request gets a
+404. Production always returns 404. `TERRENO_BROWSER_LOGS=true` cannot turn the route on there.
+`NODE_ENV` unset counts as "not `development`", so the route is off unless
+`TERRENO_BROWSER_LOGS=true` is set.
+
+**Who may post.** The route accepts a request when `req.user` is set or when the socket's remote
+address is loopback (`127.0.0.1`, `::1`, or `::ffff:127.0.0.1`). Any other request gets 403. The
+check reads the socket address, not `X-Forwarded-For`. `TerrenoApp` mounts the route after JWT
+decoding, the Better Auth session middleware, and the optional rate limiter. Remote clients can
+authenticate the usual way, and configured API limits apply to ingestion too.
+
+**Request body.**
+
+``````json
+{"entries": [{"level": "error", "message": "Cannot read properties of undefined", "stack": "TypeError: ...", "timestamp": "2026-10-12T00:29:20.067+00:00"}]}
+``````
+
+| Field | Type | Handling |
+|-------|------|----------|
+| `entries` | array | Required and non-empty. At most 100 items. |
+| `entries[].level` | string | Defaults to `info`. Truncated to 32 characters. |
+| `entries[].message` | any | A string is kept as is. Any other value is JSON-stringified. Truncated to 8,000 characters. |
+| `entries[].stack` | string | Optional. Truncated to 16,000 characters. Left out of the line when it is not a string. |
+| `entries[].timestamp` | string | Kept as sent. When missing or empty, the server uses Luxon `DateTime.now().toISO()`. |
+
+Items that are not objects are skipped, and the request still succeeds.
+
+**Responses.**
+
+| Status | When |
+|--------|------|
+| `204` | The batch was accepted and written. |
+| `400` | The body has no `entries` array, or the array is empty: `{"error": "Expected { entries: [...] }"}`. |
+| `403` | The client is neither loopback nor authenticated. |
+| `413` | The parsed body is over 256 kB, or `entries` has more than 100 items. |
+| `404` | The route is not registered (see the table above). |
+
+The route has its own `express.json({limit: "256kb"})` parser. Under `TerrenoApp`, the app-wide
+JSON parser runs first with a larger limit, so the route measures the parsed body itself and
+answers 413.
+
+**Output file.** Each accepted item becomes one JSON line in
+`<process.cwd()>/.terreno/logs/browser.log`. The directory is created if needed, and the file is
+created with mode `0600`. The path follows the backend's working directory. In this monorepo,
+`bun run backend:dev` runs in `example-backend/`, so the file is
+`example-backend/.terreno/logs/browser.log`. A line looks like this:
+
+``````json
+{"level":"warn","message":"TASK-1.2 direct POST probe","source":"browser","timestamp":"2026-10-12T00:29:20.067+00:00"}
+``````
+
+Each line has `level`, `message`, `source` (always `"browser"`), `stack` (only when present), and
+`timestamp`, in that order. There is no rotation and no backup file. If a batch would push the file
+past 5 MB, the file is overwritten with that batch and all earlier lines are lost.
+
+**Who reads it.** The local MCP `read_logs` tool (source `browser`), the `last_error` tool, and
+`terreno logs --sources browser` / `terreno logs last-error` read `browser.log` from each of these
+directories that exists under the project root: `backend/.terreno/logs`,
+`example-backend/.terreno/logs`, and `.terreno/logs`. Backend logs go to `app.log` in the same
+directory. That file comes from the Winston JSONL transport, which `TERRENO_LOG_FILE` switches on
+or off (see [Environment variables](environment-variables.md#observability)).
+
+**Client behavior.** The Terreno dev console logger runs only in development builds (`__DEV__`). It
+captures `console.error`, `console.warn`, uncaught errors, and unhandled rejections. It sends them
+in batches of up to 100, about 400 ms after the first one is queued. If a post fails, it retries
+once and then drops the batch without reporting anything. A missing route (404) or a 403 therefore
+shows up only as an empty `browser.log`. Uncaught errors and unhandled rejections whose value is
+an `Error` carry a `stack`. `console.error` and `console.warn` entries do not. An error passed to
+React Native's `ErrorUtils` handler is logged only after the previous handler returns. On web the
+default handler rethrows, so the logger skips that error: its caller may still catch it, as Expo's
+web `import()` does while it loads a split bundle. If nothing catches it, the window `error` or
+`unhandledrejection` listener logs it.
+
+On the client, `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` posts to this
+route in `__DEV__` builds. The `@terreno/rtk` export of the same name is a deprecated re-export.
 
 ### Message style
 
@@ -1870,6 +1974,168 @@ setupServer({
 - Testable in isolation
 - Optional/configurable functionality
 - Clean separation of concerns
+
+## Consent forms (ConsentApp)
+
+Versioned consent forms, user responses, and the consent gate. Concepts:
+[Consent forms](../explanation/consent-forms.md).
+
+```typescript
+import {ConsentApp, TerrenoApp} from "@terreno/api";
+
+new TerrenoApp({userModel: User})
+  .register(new ConsentApp({accessControl: access, auditTrail: true}))
+  .start();
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `accessControl` | — | RBAC access control. When set, roles granting `consentResponse:signOnBehalf` may sign provisionally for other users. When unset, only `user.admin` may, and register logs a warning |
+| `auditTrail` | `false` | Store IP address, user agent, and content snapshots on responses, and mount `GET /consents/audit/:userId` |
+| `resolveConsentForms` | — | `(user, forms) => forms` narrows the active forms that apply to a user |
+| `supportedLocales` | — | Accepted for app configuration; `ConsentApp` does not read it |
+| `aiConfig` | — | `{generateContent, translateContent}` enables `POST /consent-forms/generate` and `/translate` |
+
+### Endpoints
+
+| Method + path | Who | Description |
+| --- | --- | --- |
+| `GET/POST/PATCH/DELETE /consent-forms` | admin | Form CRUD |
+| `POST /consent-forms/:id/publish` | admin | Copy the form to `version + 1`, activate it, deactivate other versions |
+| `GET /consent-responses`, `GET /consent-responses/:id` | admin | Read responses, populated with form and user |
+| `POST /consent-responses/provisional` | sign-on-behalf | Record a provisional signature for another user |
+| `GET /consent-responses/status?userId=` | sign-on-behalf | Consent status of each form that applies to a user |
+| `POST /consent-responses/:id/void` | sign-on-behalf | Void a provisional signature made in error |
+| `GET /consents/pending` | user | Active forms the user has not answered themselves at the current version |
+| `POST /consents/respond` | user | `{consentFormId, agreed, locale, checkboxValues?, signature?}` |
+| `GET /consents/my` | user | The user's own responses with form data |
+| `GET /consents/audit/:userId` | admin | Full audit history (only with `auditTrail`) |
+
+"sign-on-behalf" means an authenticated user with `consentResponse:signOnBehalf` when
+`accessControl` is set, otherwise `user.admin`. Others get 405.
+
+### `POST /consent-responses/provisional`
+
+Body: `{userId, consentFormId, note, locale?}`. `note` is required, trimmed, and at most 2000
+characters. `locale` defaults to the form's `defaultLocale`.
+
+Creates a `ConsentResponse` for `userId` with `provisional: true`, `agreed: true`,
+`agreedAt` (server time), `provisionalSignedBy` (the caller), `provisionalNote`, and
+`formVersionSnapshot`. With `auditTrail`, it also stores `contentSnapshot`,
+`provisionalSignerIp`, and `provisionalSignerUserAgent`. `ipAddress`, `userAgent`,
+`signature`, and `signedAt` stay unset: they describe the user's own device and signature.
+
+Returns `{data: ConsentResponse}` with `provisionalSignedBy` populated as `{_id, name, email}`.
+The form stays in the target user's `/consents/pending` until they respond themselves.
+
+| Status | When |
+| --- | --- |
+| 400 | Missing or invalid ids, blank or too-long note, `userId` is the caller, inactive form, or the form is filtered out for the target user by `resolveConsentForms` |
+| 404 | Unknown user or form |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each provisional signature writes an `AuditEvent`
+(`modelName: "ConsentResponse"`, `operation: "create"`, `after: {action: "signOnBehalf",
+userId, consentFormId}`, `actorId`: the signer).
+
+`/consent-responses` and its actions are in OpenAPI, so `bun run sdk` generates
+`useConsentresponsesProvisionalMutation`, `useConsentresponsesStatusQuery`, and
+`useConsentresponsesVoidMutation`. The other
+ConsentApp routes are not in OpenAPI.
+
+### `POST /consent-responses/:id/void`
+
+Body: `{reason}` (required, trimmed, at most 2000 characters). Sets `voidedAt`, `voidedBy`
+(the caller), and `voidReason` on a provisional response and returns
+`{data: ConsentResponse}` with `provisionalSignedBy` and `voidedBy` populated. The record is
+never deleted. A voided signature no longer counts: `getConsentStatuses` ignores it, and
+`/consents/pending` drops its `provisionalSignature`.
+
+| Status | When |
+| --- | --- |
+| 400 | Blank or too-long reason, the response is not provisional, or it is already voided |
+| 404 | Unknown response |
+| 405 | The caller may not sign on behalf of others |
+
+With `AuditApp` registered, each void writes an `AuditEvent` (`operation: "update"`,
+`verb: "updated"`, `after: {action: "voidProvisional", userId, consentFormId}`).
+
+### `GET /consent-responses/status` and `getConsentStatuses`
+
+`GET /consent-responses/status?userId=<id>` returns `{data: ConsentStatusRow[]}`, one row per
+active form that applies to the user (after `resolveConsentForms`), in form order. 400 when
+`userId` is missing or malformed, 404 for an unknown user, 405 for callers who may not sign
+on behalf of others. With `AuditApp` registered, each read writes an `AuditEvent`
+(`operation: "read"`, `verb: "viewed"`, `after: {action: "viewStatus", userId}`).
+
+The same rows come from the exported helper, for server code that needs the "considered
+signed" answer:
+
+```typescript
+import {getConsentStatuses} from "@terreno/api";
+
+const rows = await getConsentStatuses({userId, resolveConsentForms});
+const allConsented = rows.every((row) => row.isConsented);
+```
+
+```typescript
+interface ConsentStatusRow {
+  form: ConsentStatusForm; // the form as clients receive it: string ids, content as an object
+  status: "pending" | "provisional" | "signed" | "declined";
+  isConsented: boolean; // true for "signed" and "provisional"
+  respondedAt?: Date; // agreedAt of the response that decided the status
+  provisional?: {
+    responseId: string;
+    signedAt: Date;
+    signedBy: {id: string; name?: string; email?: string} | null;
+    note?: string;
+  };
+}
+```
+
+Only non-voided responses to each form's current version count:
+
+1. The user's own latest response decides: `agreed` → `signed`, declined → `declined`.
+2. Otherwise a provisional response → `provisional`.
+3. Otherwise → `pending`.
+
+`provisional` is set whenever a provisional response exists for the current version, even
+when the user's own answer decides the status. The helper throws `APIError` 400 for a
+malformed `userId` and 404 for an unknown user.
+
+### Admin columns
+
+The "Consent Responses" admin model lists `provisional`, offers a "Provisional" boolean
+filter, and populates `provisionalSignedBy` (`name`, `email`).
+
+### Provisional data on user-facing payloads
+
+The user sees who signed on their behalf and when. They never see the signer's note or the
+signer's request metadata.
+
+| Endpoint | Adds |
+| --- | --- |
+| `GET /consents/pending` | `provisionalSignature?: {signedAt, signedByName}` on each form, from the latest non-voided provisional response for the form's current version. Absent when there is none. Provisional responses never remove a form from this list |
+| `GET /consents/my` | `provisional: boolean`, `provisionalSignedBy: {name} \| null`, and `voidedAt` on each entry. No note, IP, or user agent of the signer, and no void reason |
+| `GET /consents/audit/:userId` | `provisional`, `provisionalSignedBy: {_id, name, email} \| null`, `provisionalNote`, `provisionalSignerIp`, `provisionalSignerUserAgent`, `voidedAt`, `voidedBy: {_id, name, email} \| null`, `voidReason` |
+
+`signedByName` falls back to the signer's email, then `"Staff"`.
+
+### RBAC
+
+`terrenoStatements.consentResponse` is `["list", "read", "signOnBehalf"]`. The built-in
+`admin` role grants `consentResponse: ["signOnBehalf"]`. Seeding adds it to existing unsealed
+`admin` roles without removing other grants. `superadmin` has every action.
+
+### Response fields
+
+| Field | Notes |
+| --- | --- |
+| `provisional` | `false` by default; `true` only on responses from `/consent-responses/provisional` |
+| `provisionalSignedBy` | User ref; required when `provisional` |
+| `provisionalNote` | Required when `provisional`; max 2000 characters |
+| `provisionalSignerIp`, `provisionalSignerUserAgent` | Signer's request metadata, with `auditTrail` |
+| `voidedAt`, `voidedBy`, `voidReason` | Set only by the void action |
 
 ## In-app notifications
 

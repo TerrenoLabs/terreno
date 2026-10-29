@@ -115,6 +115,7 @@ workflows:
             api/.* run-jobs true
             test/.* run-jobs true
             mcp-server/.* run-mcp-server true
+            ui/src/.* run-mcp-server true
             create-terreno-app/.* run-create-terreno-app true
             scripts/check-coverage\.ts run-api true
             scripts/check-coverage\.ts run-rtk true

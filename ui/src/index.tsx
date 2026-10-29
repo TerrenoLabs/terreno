@@ -94,6 +94,7 @@ export {
   LineChart,
   MarkdownEditor,
   MarkdownEditorField,
+  ProvisionalConsentSigner,
   Scorecard,
   SparklineChart,
   UpgradeRequiredScreen,
@@ -121,6 +122,7 @@ export * from "./PasswordField";
 export * from "./PhoneNumberField";
 export * from "./Popover";
 export * from "./PortalHost";
+export type * from "./ProvisionalConsentSigner";
 export * from "./pdfHtmlTemplate";
 export * from "./Radio";
 export * from "./RadioField";
@@ -190,6 +192,7 @@ export * from "./useAcknowledgeAnnouncement";
 export * from "./useAnnouncements";
 export * from "./useAppLaunchOrForeground";
 export * from "./useConsentForms";
+export * from "./useProvisionalConsent";
 export * from "./useStoredState";
 export * from "./useSubmitConsent";
 export * from "./WebAddressAutocomplete";

@@ -126,6 +126,30 @@ Never commit the release directly to master, and never tag before this pull requ
    gh pr create --base master --title "Assemble Terreno X.Y.Z release notes" --body-file /tmp/release-pr.md
    ```
 
+   Write `/tmp/release-pr.md` with the `Why`, `What changed`, and `Verification` sections the approval bot scores:
+
+   ```markdown
+   ## Why
+
+   Assemble the X.Y.Z changelog so the release can be tagged.
+
+   ## What changed
+
+   - Folded <n> fragments from `changelog/unreleased/` into `CHANGELOG.md` under X.Y.Z
+   - Regenerated `example-frontend/constants/whatsNew.generated.json`
+   - <Upgrade note `mcp-server/src/docs/upgrades/X.Y.Z.md`, when written>
+
+   ## Verification
+
+   | Status | Scope | Evidence / action |
+   | --- | --- | --- |
+   | ✅ Tested | Section is non-empty and grouped | `bun run check:changelog` → OK; the X.Y.Z section in `CHANGELOG.md` lists <n> entries |
+   | ✅ Tested | What's new matches the changelog | `bun run check:whats-new` → pass |
+   | ✅ Tested | Upgrade note present | `bun run check:upgrade-docs X.Y.Z` → pass |
+   ```
+
+   Drop the upgrade-note bullet and row when the release needs no upgrade note.
+
 3. **Bot merge path (default).** When the pull request touches only release-note files (`CHANGELOG.md`, `changelog/unreleased/*`, `whatsNew.generated.json`, `mcp-server/src/docs/upgrades/*.md`), the **Bot merge** workflow merges it after CI passes. It then tags the squash commit and creates the draft GitHub release from the `CHANGELOG.md` section. See [release automation](../../docs/how-to/release-automation.md). Do not merge or tag by hand. Wait for the tag, then go to Step 7:
 
    ```bash

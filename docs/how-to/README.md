@@ -27,6 +27,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
 - [Enable the framework audit log](audit-log.md) — `AuditApp`, per-router `audit`, append-only events
+- [Sign consent on a user's behalf](sign-consent-on-behalf.md) — Provisional consent signatures: RBAC grant, signer screen, status checks, void, print
 - [Seed a database](seed-a-database.md) — Idempotent sync, dry runs, and guarded reset-and-reseed
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API
@@ -34,8 +35,8 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Password reset and email verification](password-reset.md) — JWT routes, comms templates, Better Auth hooks
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
-- [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
-- [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
+- [Set up Terreno MCP](set-up-terreno-mcp.md) — Connect Cursor or Claude Code to the hosted docs/codegen server and the local runtime server
+- [Debug with MCP](debug-with-mcp.md) — Follow a failure from symptom to verified fix with the local MCP tools
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin

@@ -21,7 +21,8 @@ const mcpOAuthClientSchema = new mongoose.Schema<McpOAuthClientDocument, McpOAut
       type: [String],
     },
     redirectUris: {
-      description: "Exact redirect URIs the client registered",
+      description:
+        "Registered redirect URIs. Loopback hosts (localhost, 127.0.0.1, [::1]) match any port; every other URI must match exactly",
       type: [String],
     },
     responseTypes: {

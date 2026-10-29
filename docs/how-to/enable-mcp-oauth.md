@@ -46,6 +46,8 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   });
   ```
 
+  A loopback redirect (`localhost`, `127.0.0.1`, or `[::1]`) matches any port. Register one URI, for example `http://127.0.0.1:33418/callback`, and a native client can send `http://127.0.0.1:<ephemeral>/callback` with the same scheme, host, path, and query. The authorization code is sent to the port the client used. `localhost` and `127.0.0.1` do not match each other. Every other redirect URI must match exactly.
+
 - **Registration on.** Turn it on only when clients you cannot pre-register must connect. Set `dynamicClientRegistration: true` and list `allowedRedirectHosts`, which limits where a registered client may send codes. Claude.ai redirects to `claude.ai`, ChatGPT to `chatgpt.com`. Use `*.example.com` for subdomains, and add `localhost` only if you want local clients with loopback `http://` redirects. Keep rate limiting on.
 
   ```typescript

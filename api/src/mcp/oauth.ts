@@ -312,6 +312,41 @@ const addRegistrationRoute = (app: Application, oauth: ResolvedMcpOAuthOptions):
   );
 };
 
+/**
+ * RFC 8252 §7.3: a native client binds an ephemeral port, so a loopback redirect matches a
+ * registered loopback URI when scheme, hostname, path, and query match. The port is ignored.
+ * `localhost`, `127.0.0.1`, and `[::1]` stay distinct hosts. Every other URI stays an exact match.
+ */
+const redirectUriMatchesRegistered = (requested: string, registered: string[]): boolean => {
+  if (registered.includes(requested)) {
+    return true;
+  }
+  let requestedUrl: URL;
+  try {
+    requestedUrl = new URL(requested);
+  } catch {
+    return false;
+  }
+  if (!LOOPBACK_HOSTS.has(requestedUrl.hostname)) {
+    return false;
+  }
+  return registered.some((candidate) => {
+    let registeredUrl: URL;
+    try {
+      registeredUrl = new URL(candidate);
+    } catch {
+      return false;
+    }
+    return (
+      LOOPBACK_HOSTS.has(registeredUrl.hostname) &&
+      registeredUrl.protocol === requestedUrl.protocol &&
+      registeredUrl.hostname === requestedUrl.hostname &&
+      registeredUrl.pathname === requestedUrl.pathname &&
+      registeredUrl.search === requestedUrl.search
+    );
+  });
+};
+
 const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
   app.get(
     "/oauth/authorize",
@@ -330,7 +365,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
       const redirectUri =
         requestedRedirect ??
         (client.redirectUris.length === 1 ? client.redirectUris[0] : undefined);
-      if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
+      if (!redirectUri || !redirectUriMatchesRegistered(redirectUri, client.redirectUris)) {
         throw new OAuthProtocolError(
           "invalid_request",
           "redirect_uri does not match a registered redirect URI"

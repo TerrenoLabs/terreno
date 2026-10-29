@@ -361,6 +361,97 @@ describe("MCP OAuth authorization server", () => {
       expect(res.body.error).toBe("invalid_request");
     });
 
+    it("sends the authorization code to the requested loopback port", async () => {
+      await McpOAuthClient.create({
+        clientId: "claude-code",
+        clientName: "Claude Code",
+        grantTypes: ["authorization_code", "refresh_token"],
+        redirectUris: ["http://127.0.0.1:33418/callback"],
+        responseTypes: ["code"],
+      });
+      const {challenge} = createPkce();
+
+      const authorize = await startAuthorization(app, {
+        client_id: "claude-code",
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: "http://127.0.0.1:54321/callback",
+        response_type: "code",
+        state: "loopback-state",
+      });
+
+      expect(authorize.status).toBe(302);
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      expect(approve.status).toBe(200);
+      const redirect = new URL(approve.body.data.redirectUrl);
+      expect(redirect.origin).toBe("http://127.0.0.1:54321");
+      expect(redirect.pathname).toBe("/callback");
+      expect(redirect.searchParams.get("code")).toBeString();
+      expect(redirect.searchParams.get("state")).toBe("loopback-state");
+    });
+
+    it("accepts any port for localhost and [::1] loopback redirects", async () => {
+      await McpOAuthClient.create({
+        clientId: "claude-code-localhost",
+        grantTypes: ["authorization_code"],
+        redirectUris: ["http://localhost:33418/callback", "http://[::1]:33418/callback"],
+        responseTypes: ["code"],
+      });
+      const {challenge} = createPkce();
+
+      const localhost = await startAuthorization(app, {
+        client_id: "claude-code-localhost",
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: "http://localhost:9/callback",
+        response_type: "code",
+      });
+      const ipv6 = await startAuthorization(app, {
+        client_id: "claude-code-localhost",
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: "http://[::1]:9/callback",
+        response_type: "code",
+      });
+
+      expect(localhost.status).toBe(302);
+      expect(ipv6.status).toBe(302);
+    });
+
+    it("keeps loopback matching exact for path, query, host, and non-loopback ports", async () => {
+      await McpOAuthClient.create({
+        clientId: "claude-code-strict",
+        grantTypes: ["authorization_code"],
+        redirectUris: [
+          "http://localhost:33418/callback",
+          "https://claude.ai/api/mcp/auth_callback",
+        ],
+        responseTypes: ["code"],
+      });
+      const {challenge} = createPkce();
+      const attempt = (redirectUri: string) =>
+        startAuthorization(app, {
+          client_id: "claude-code-strict",
+          code_challenge: challenge,
+          code_challenge_method: "S256",
+          redirect_uri: redirectUri,
+          response_type: "code",
+        });
+
+      const otherPath = await attempt("http://localhost:9/other");
+      const otherQuery = await attempt("http://localhost:9/callback?extra=1");
+      const otherHost = await attempt("http://127.0.0.1:9/callback");
+      const otherPublicPort = await attempt("https://claude.ai:8443/api/mcp/auth_callback");
+
+      expect(otherPath.status).toBe(400);
+      expect(otherQuery.status).toBe(400);
+      expect(otherHost.status).toBe(400);
+      expect(otherPublicPort.status).toBe(400);
+      expect(otherPath.body.error).toBe("invalid_request");
+    });
+
     it("rejects a wrong code_verifier and burns the code", async () => {
       const flow = await approvedCode(app, agent);
 

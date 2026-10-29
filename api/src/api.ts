@@ -1430,7 +1430,37 @@ const _buildModelRouter = <T>(
     // Using .save here runs the risk of a versioning error if you try to make two simultaneous
     // updates. We won't wind up with corrupted data, just an API error.
     try {
-      Object.assign(doc, body);
+      const bodyRecord = body as Record<string, unknown>;
+      const finalArray = bodyRecord[field];
+      const liveArray = (doc as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(finalArray) && Array.isArray(liveArray)) {
+        const mergedArray = finalArray.map((item) => {
+          if (!item || typeof item !== "object") {
+            return item;
+          }
+          const itemIdValue = (item as {id?: unknown}).id ?? (item as {_id?: unknown})._id;
+          if (itemIdValue == null) {
+            return item;
+          }
+          const liveItem = liveArray.find((live) => {
+            if (!live || typeof live !== "object") {
+              return false;
+            }
+            const liveId = (live as {id?: unknown}).id ?? (live as {_id?: unknown})._id;
+            return String(liveId) === String(itemIdValue);
+          });
+          if (liveItem && typeof liveItem === "object" && (liveItem as {$__?: unknown}).$__) {
+            Object.assign(liveItem, item);
+            return liveItem;
+          }
+          return item;
+        });
+        (doc as unknown as Record<string, unknown>)[field] = mergedArray;
+        const {[field]: _arrayField, ...restBody} = bodyRecord;
+        Object.assign(doc, restBody);
+      } else {
+        Object.assign(doc, body);
+      }
       await doc.save();
     } catch (error: unknown) {
       throw passthroughOrWrapWrite(error, {

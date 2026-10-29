@@ -38,7 +38,7 @@ export interface FoodCategory {
   updated: Date;
 }
 
-export interface FoodCategoryAddendum {
+interface FoodCategoryAddendum {
   text: string;
 }
 

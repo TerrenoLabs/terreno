@@ -255,6 +255,7 @@ testIDs (fixed, for app e2e): `list-detail-layout`, `list-detail-list-pane`,
   - Under the default, iPads at least 768pt wide in portrait split.
   - iPad mini portrait (744pt) and narrow iPad Split View get the phone layout.
 - Apps set `unstable_settings = {initialRouteName: "index"}` in the group layout so that a deep link on a phone has the list to go back to. The how-to and both examples do this.
+- The demo static export lists each fixture id from `generateStaticParams` on both `[id]` routes. The Netlify demo deploy also rewrites unknown paths to `index.html`. Without those, `/demo/list-detail/2` and `/demo/sidebar-navigation/mail/2` 404 on the static host.
 - The list pane remounts when crossing the breakpoint, so its scroll position resets. The open item does not.
 - No backend, model, or SDK change: T5 reuses existing synced todos. No PHI is involved.
 

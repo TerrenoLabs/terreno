@@ -111,6 +111,25 @@ router.push("/mail/3", {withAnchor: true});
 whose segment is `detailRoute` (default `[id]`). An `id` from a parent dynamic segment, such as
 `/orgs/[id]/mail`, never counts.
 
+## Publish the detail URL
+
+A static web export (`web.output: "static"`) writes an HTML file only for paths
+`generateStaticParams` returns. Without it, opening `/mail/3` directly is a 404 on a host that
+does not rewrite unknown paths.
+
+```tsx
+// app/mail/[id].tsx
+export const generateStaticParams = (): {id: string}[] =>
+  messages.map((message) => ({id: message.id}));
+```
+
+Ids that are not known at build time need the host fallback from
+[Build for web](build-for-web.md): Netlify `_redirects` with `/* /index.html 200`, or the Vercel
+rewrite in [Deploy to Vercel](deploy-to-vercel.md). The demo inbox exports one page per fixture
+message at `/demo/list-detail/:id` and `/demo/sidebar-navigation/mail/:id`. The Netlify demo
+deploy also writes that fallback, so an id outside the fixtures still opens the missing-message
+screen.
+
 ## Keep list state across the breakpoint
 
 The open item survives a rotation or a browser resize. The `list` element does not: it moves

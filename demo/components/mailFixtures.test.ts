@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
 
-import {findMailMessage, formatReceivedAt, MAIL_MESSAGES} from "./mailFixtures";
+import {findMailMessage, formatReceivedAt, MAIL_MESSAGES, mailStaticParams} from "./mailFixtures";
 
 describe("mailFixtures", () => {
   it("builds 30 messages with unique ids, newest first", () => {
@@ -14,6 +14,10 @@ describe("mailFixtures", () => {
     expect(findMailMessage("3")?.subject).toBe("Lunch order for the offsite");
     expect(findMailMessage("999")).toBeUndefined();
     expect(findMailMessage(undefined)).toBeUndefined();
+  });
+
+  it("lists every fixture id for the static export", () => {
+    expect(mailStaticParams()).toEqual(MAIL_MESSAGES.map((message) => ({id: message.id})));
   });
 
   it("formats the received time as month, day, and clock time", () => {

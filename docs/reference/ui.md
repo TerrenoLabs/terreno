@@ -1012,7 +1012,9 @@ When split, the list is already on screen, so the header's back never returns to
 screens get `headerBackVisible: false`, `animation: "none"`, and a `headerLeft` back button
 (`list-detail-leave`) that leaves the group through the parent navigator, or nothing when the
 parent cannot go back. The web header ignores `headerBackVisible`, so `headerLeft` draws it. Your
-`screenOptions` win where they set the same key. Mark the open row with
+`screenOptions` win where they set the same key. A static web export writes a detail URL only when
+`[id].tsx` exports `generateStaticParams` for that id; other ids need the host's `index.html`
+fallback. Mark the open row with
 `accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
 it as `aria-current="true"` on web). See
 [Build a list/detail screen](../how-to/build-list-detail-screens.md).

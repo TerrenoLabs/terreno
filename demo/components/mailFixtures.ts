@@ -52,6 +52,11 @@ export const findMailMessage = (id: string | undefined): MailMessageFixture | un
   return MAIL_MESSAGES.find((message) => message.id === id);
 };
 
+/** Paths a static web export should write for the demo inbox. */
+export const mailStaticParams = (): {id: string}[] => {
+  return MAIL_MESSAGES.map((message) => ({id: message.id}));
+};
+
 export const formatReceivedAt = (receivedAt: string): string => {
   return DateTime.fromISO(receivedAt).toFormat("LLL d, h:mm a");
 };

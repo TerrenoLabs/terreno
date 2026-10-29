@@ -979,6 +979,7 @@ const DataTableComponent: FC<DataTableProps> = ({
   filterValues,
   onFilterValuesChange,
   onQueryChange,
+  toolbarAlign = "center",
 }) => {
   const {theme} = useTheme();
   const tableTestIDs = resolveDataTableTestIDsFromProps({testID, testIDs});
@@ -1118,7 +1119,7 @@ const DataTableComponent: FC<DataTableProps> = ({
     >
       {showSearch || showNativeFilters || showAdditionalFilters ? (
         <Box
-          alignItems="center"
+          alignItems={toolbarAlign}
           direction="row"
           gap={2}
           marginBottom={2}

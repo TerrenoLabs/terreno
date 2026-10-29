@@ -44,8 +44,8 @@ Skip unlabeled items in experiments unless you only need generation smoke (still
 ## 3. Create the prompt
 
 1. Open **Admin → AI Observability → Prompts**. The folder filter shows counts; search filters name and folder. If your role lacks `aiPrompt:create`, the header **New prompt** is hidden (API writes still 403).
-2. **New prompt** (folder, name, system, user template with `{{variables}}`). That write is immutable **v1**. Open the row to the prompt hub (**Overview**, **Versions**, **Traces**, **Experiments**).
-3. On **Versions**, edit system/template/variables/temperature when `aiPrompt:update` is allowed, then **Save as vN+1**. There is no in-place save. **Playground → Run once** (when `aiPrompt:playground` is allowed) compiles and calls the model; it does **not** create a version. **Traces** and **Experiments** show recent items for this prompt from prompt detail relationships.
+2. **New prompt** (folder, name, system, user template with `{{variables}}`). That write is immutable **v1**. Open the row to the prompt hub (**Versions**, **Traces**, **Experiments**).
+3. **Versions** shows the description, folder, tags, and the editor together. Edit system/template/variables/temperature when `aiPrompt:update` is allowed, then **Save as vN+1**. There is no in-place save. System and template fields explain what each one is for. **Playground → Run once** (when `aiPrompt:playground` is allowed) compiles and calls the model; it does **not** create a version. **Traces** and **Experiments** show recent items for this prompt from prompt detail relationships.
 4. Do not paste that string into app routes. Apps call `AIService` with `promptName` + `promptLabel` (step 6).
 
 Read-only auditors with `aiPrompt:list` and `read` can review overview metadata and relationship tabs but do not see create, save, promote, or playground controls. Operators with the full `aiPrompt` action set see those controls. UI gating follows `permissions` on `GET /ai/observability/status`; assign roles in **Admin → Roles** per [API reference — AI observability RBAC](../reference/api.md#ai-observability-rbac).

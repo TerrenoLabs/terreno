@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {renderHook} from "@testing-library/react-native";
+import {assert} from "chai";
 import {
   agreementTextColor,
   formatAnswer,
@@ -9,7 +10,13 @@ import {
   unwrapBatchDetail,
   unwrapBatchList,
 } from "./batchTypes";
-import {focusReviewPage, type ReviewShortcutAction, useReviewShortcuts} from "./reviewShortcuts";
+import {
+  focusReviewPage,
+  type ReviewShortcutAction,
+  reviewAnswerKey,
+  reviewShortcutAction,
+  useReviewShortcuts,
+} from "./reviewShortcuts";
 import {
   dimensionLabel,
   firstUnansweredBoolean,
@@ -129,6 +136,7 @@ describe("review question helpers", () => {
     press({key: "x"});
     press({key: "y", metaKey: true});
     press({key: "y", target: {tagName: "TEXTAREA"}});
+    press({key: "y", target: {dataset: {reviewAnswer: "true"}, tagName: "INPUT"}});
     press({key: "y", target: {tagName: "DIV"}});
     expect(actions).toEqual([
       "yes",
@@ -141,11 +149,27 @@ describe("review question helpers", () => {
       "previous",
       "previous",
       "yes",
+      "yes",
     ]);
     hook.unmount();
     expect(capture).toBe(true);
     expect(removedCapture).toBe(true);
     expect(removed).toBe(1);
+  });
+
+  it("answers Y or N on a focused Yes/No segment once", () => {
+    const segment = {
+      key: "n",
+      preventDefault: () => undefined,
+      target: {
+        parentElement: {dataset: {reviewAnswer: "true"}, tagName: "DIV"},
+        tagName: "SPAN",
+      },
+    };
+    assert.equal(reviewShortcutAction(segment), "no");
+    assert.equal(reviewAnswerKey(segment), "no");
+    assert.equal(reviewShortcutAction(segment), undefined);
+    assert.equal(reviewShortcutAction({key: "y", target: {tagName: "INPUT"}}), undefined);
   });
 
   it("focuses the page and blurs a focused note field", () => {

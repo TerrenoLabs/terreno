@@ -612,7 +612,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 | --- | --- | --- |
 | GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
 | POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
-| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels |
+| GET | `/ai/observability/prompts/:name` | Prompt + versions + labels. Each version includes `inputSchema`, `outputSchema`, and `outputFieldNotes` when set, so judge schema checks can see required dimensions such as `helpfulness` |
 | POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |
 | POST | `/ai/observability/prompts/:name/labels` | Move `production` or `staging`; `outgoingVersion` is the previous pointer |
 | POST | `/ai/observability/prompts/:name/playground` | Compile `{{var}}` + one `AIService` call; returns compiled messages, output, latency, tokens, cost; creates no version. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey, modelId})` when the server service is absent (`apiKey` comes from `x-ai-api-key`) |

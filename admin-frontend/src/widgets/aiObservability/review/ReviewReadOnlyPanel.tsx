@@ -49,14 +49,16 @@ export const ReviewReadOnlyPanel: React.FC<ReviewReadOnlyPanelProps> = ({
   fields,
   title,
 }) => (
-  <Card color={color} flex="grow" padding={4} width="100%">
-    <Box gap={3}>
-      <Heading size="lg">{title}</Heading>
-      {fields.length === 0 ? (
-        <Text color="secondaryLight">No data recorded.</Text>
-      ) : (
-        fields.map((field) => <FieldValue field={field} key={field.key} />)
-      )}
-    </Box>
-  </Card>
+  <Box gap={2} width="100%">
+    <Heading size="lg">{title}</Heading>
+    <Card color={color} flex="grow" padding={4} width="100%">
+      <Box gap={3}>
+        {fields.length === 0 ? (
+          <Text color="secondaryLight">No data recorded.</Text>
+        ) : (
+          fields.map((field) => <FieldValue field={field} key={field.key} />)
+        )}
+      </Box>
+    </Card>
+  </Box>
 );

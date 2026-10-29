@@ -151,6 +151,7 @@ export interface AiEvaluatorDetailViewProps {
   evaluator: EvaluatorRecord;
   judgeOutputSchema?: Record<string, unknown>;
   judgePromptStatus?: JudgePromptStatus;
+  onOpenExperiment?: (experimentId: string) => void;
   onOpenPrompt?: (name: string) => void;
   routeBase: string;
   usageError?: string;
@@ -369,6 +370,7 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
   evaluator,
   judgeOutputSchema,
   judgePromptStatus,
+  onOpenExperiment,
   onOpenPrompt,
   routeBase,
   usageError,
@@ -398,9 +400,15 @@ export const AiEvaluatorDetailView: React.FC<AiEvaluatorDetailViewProps> = ({
           row.costUsd !== undefined ? `$${row.costUsd.toFixed(2)}` : "—",
         ],
         key: row.experimentId ?? `usage-${index}`,
+        onClick:
+          onOpenExperiment && row.experimentId
+            ? () => {
+                onOpenExperiment(row.experimentId);
+              }
+            : undefined,
       };
     });
-  }, [usageRows]);
+  }, [onOpenExperiment, usageRows]);
 
   return (
     <Box gap={4} testID="ai-evaluator-detail">

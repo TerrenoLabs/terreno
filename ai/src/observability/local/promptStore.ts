@@ -292,6 +292,9 @@ export class LocalPromptStore implements PromptRegistry {
     versions: Array<{
       config?: Record<string, unknown>;
       created: string;
+      inputSchema?: Record<string, unknown>;
+      outputFieldNotes?: Record<string, string>;
+      outputSchema?: Record<string, unknown>;
       sensitive: boolean;
       system?: string;
       template?: string;
@@ -319,6 +322,9 @@ export class LocalPromptStore implements PromptRegistry {
         return {
           config: row.config,
           created: DateTime.fromJSDate(row.created).toUTC().toISO() ?? "",
+          ...(row.inputSchema ? {inputSchema: row.inputSchema} : {}),
+          ...(row.outputFieldNotes ? {outputFieldNotes: row.outputFieldNotes} : {}),
+          ...(row.outputSchema ? {outputSchema: row.outputSchema} : {}),
           sensitive: row.sensitive,
           system: row.system,
           template: row.template,

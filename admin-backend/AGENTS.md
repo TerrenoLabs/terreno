@@ -218,7 +218,7 @@ router.get("/yourRoute/:id", [
 
 React Native UI component library (a large component library):
 
-- **Layout**: Box, Page, SplitPage, Card
+- **Layout**: Box, Page, ListDetailLayout, SplitPage, Card
 - **Forms**: TextField, SelectField, DateTimeField, CheckBox
 - **Display**: Text, Heading, Badge, DataTable
 - **Actions**: Button, IconButton, Link

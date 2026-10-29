@@ -216,6 +216,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {name: "Host", reason: "Portal host is application shell, not a visual story"},
   {name: "IconRegistryProvider", reason: "Icon registry is application shell"},
+  {name: "ListDetailIndex", reason: "Covered by the ListDetailLayout story"},
   {
     name: "NotificationBell",
     reason:

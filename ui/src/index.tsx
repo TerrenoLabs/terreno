@@ -73,6 +73,7 @@ export * from "./InfoTooltipButton";
 export * from "./icons/BarsFilterIcon";
 export type * from "./LineChart";
 export * from "./Link";
+export * from "./ListDetailLayout";
 export {
   AIRequestExplorer,
   AiSuggestionBox,

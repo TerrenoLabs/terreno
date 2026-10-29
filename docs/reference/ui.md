@@ -4,7 +4,7 @@ React Native UI component library (a large component library). Layout (Box, Page
 
 ## Key exports
 
-- Layout: `Box`, `Page`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
+- Layout: `Box`, `Page`, `ListDetailLayout`, `SplitPage`, `Card`, `ChartCard`, `DashboardGrid`, `DashboardGridItem`
 - Forms: `TextField`, `SelectField`, `DateTimeField`, `CheckBox`
 - Display: `Text`, `Heading`, `Badge`, `DataTable`, `Scorecard`, `SparklineChart`, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`
 - Actions: `Button`, `IconButton`, `Link`
@@ -965,7 +965,95 @@ Types: `SimpleAskCardProps`, and `SimpleCard` and `SimpleCardButton` from `@terr
 story: `SimpleAskCard`. Its demo answers a plan card on a watch-sized 198×242 pt screen, and its
 "Every fixture" story draws every valid fixture's card at that size.
 
+### ListDetailLayout
+
+Route-driven list/detail layout, such as a mail inbox. Use it as a route group's `_layout.tsx`.
+On a phone it is an expo-router `Stack`: the group's index route shows the list, and opening an
+item pushes the detail route with the native animation and swipe-back. When the layout is at least
+`splitAtWidth` wide, the list stays in a left pane and the `Stack` shows the detail beside it.
+
+The width is the layout's own measured width, so it decides correctly inside a sidebar or an admin
+rail. Before the first layout event, it uses the window width. The `Stack` stays in the same place
+in the tree at every width, so it never remounts when a tablet rotates or a browser resizes, and
+the open item stays open: crossing the breakpoint makes no router call. The
+`list` element does move between the index screen and the left pane, so it remounts at the
+breakpoint and its scroll position resets; keep list state such as filters or search text in the route or a store. The list pane
+has no `Stack` header, so it applies safe-area insets on its top, left, and bottom edges.
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `list` | `ReactElement` | required | The list. Rendered in the left pane when split, and by `ListDetailIndex` when not |
+| `detailHref` | `(id: string) => Href` | required | Where selecting an item navigates |
+| `indexHref` | `string` | required | The group's own path, such as `/mail` |
+| `emptyDetail` | `ReactElement` | none | Shown in the detail pane when split and nothing is open |
+| `splitAtWidth` | `number` | `768` | Split when the layout is at least this many pixels wide |
+| `listWidth` | `number` | `360` | Width of the list pane when split |
+| `detailRoute` | `string` | `"[id]"` | The child route name that holds the detail |
+| `paramName` | `string` | `"id"` | The route param that holds the item id |
+| `screenOptions` | `Stack` `screenOptions` | none | Passed through to the `Stack` |
+| `children` | `Stack.Screen` elements | none | Passed through to the `Stack` |
+
+`ListDetailIndex` is the group's `index.tsx` screen. It renders `list` when stacked, and
+`emptyDetail` when the list already sits in the left pane.
+
+`useListDetail()` returns `{isSplit, selectedId, select, clear}` and throws outside a
+`ListDetailLayout`.
+
+- `selectedId` is the `paramName` param of the route directly below `indexHref` whose segment is
+  `detailRoute`. It is `undefined` on the index route, and an `id` from a parent dynamic segment
+  never counts.
+- `select(id)` pushes `detailHref(id)`. When split with another item open, it replaces the open
+  detail instead, so the stack is never deeper than the list plus one detail and back always
+  returns to the list. When split, selecting the open item again does nothing.
+- `clear()` calls `router.dismissTo(indexHref)` when an item is open, so it pops back to the
+  index inside this `Stack` and never leaves the group. It does nothing when no item is open.
+
+When split, the list is already on screen, so the header's back never returns to it: `Stack`
+screens get `headerBackVisible: false`, `animation: "none"`, and a `headerLeft` back button
+(`list-detail-leave`) that leaves the group through the parent navigator, or nothing when the
+parent cannot go back. The web header ignores `headerBackVisible`, so `headerLeft` draws it. Your
+`screenOptions` win where they set the same key. A static web export writes a detail URL only when
+`[id].tsx` exports `generateStaticParams` for that id; other ids need the host's `index.html`
+fallback. Mark the open row with
+`accessibilityState={{selected: true}}` so screen readers announce it (a clickable `Box` row sends
+it as `aria-current="true"` on web). See
+[Build a list/detail screen](../how-to/build-list-detail-screens.md).
+
+| Element | testID |
+| --- | --- |
+| Layout root | `list-detail-layout` |
+| List pane (split only) | `list-detail-list-pane` |
+| Detail pane, which holds the `Stack` | `list-detail-detail-pane` |
+| Empty detail (split, nothing open) | `list-detail-empty` |
+
+```typescript
+// app/mail/_layout.tsx
+import {ListDetailIndex, ListDetailLayout, Text} from "@terreno/ui";
+
+export const unstable_settings = {initialRouteName: "index"};
+
+const MailLayout: React.FC = () => (
+  <ListDetailLayout
+    detailHref={(id) => `/mail/${id}`}
+    emptyDetail={<Text>Select a message</Text>}
+    indexHref="/mail"
+    list={<MailList />}
+  />
+);
+export default MailLayout;
+
+// app/mail/index.tsx
+const MailIndex: React.FC = () => <ListDetailIndex />;
+export default MailIndex;
+
+// app/mail/[id].tsx is an ordinary route screen that reads its id with useLocalSearchParams.
+```
+
 ### SplitPage
+
+Prefer [`ListDetailLayout`](#listdetaillayout) for new list/detail screens: it keeps the selected
+item in the route, so deep links and back navigation work, and it splits on native tablets.
+SplitPage remains supported for list/detail views that do not have their own routes.
 
 Master-detail layout. Pass `listViewData` plus `renderListViewItem` for the list, and
 `renderContent` or children for the detail pane. On large screens both panes stay visible. On small
@@ -1489,11 +1577,18 @@ Responsive `Box` direction props update automatically when the window resizes or
 All responsive Boxes share one dimension listener; non-responsive Boxes do not subscribe.
 When multiple direction props match, the largest active breakpoint wins (`xl` over `lg` over `md` over `sm`).
 
-`Box` takes an optional `accessibilityState` of `{checked?, disabled?}`. It is sent to screen
-readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and a
-clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
+`Box` takes an optional `accessibilityState` of `{checked?, disabled?, selected?}`. It is sent to
+screen readers as `accessibilityState` and as `aria-checked` / `aria-disabled`, on both a plain and
+a clickable Box. On a clickable Box, `disabled: true` also stops presses while the role and
 label stay. A clickable Box with `accessibilityRole` `checkbox` or `switch` also toggles on
 Space on web, as ARIA expects.
+
+`selected` is sent as `aria-selected` when `accessibilityRole` is a selectable role (`tab`,
+`option`, `row`, `gridcell`, `treeitem`, `columnheader`, `rowheader`). On any other Box, such as a
+clickable list row, ARIA does not allow `aria-selected`, so `selected: true` is sent as
+`aria-current="true"` instead. On web that row does not also receive
+`accessibilityState.selected`, because react-native-web would turn it into `aria-selected`
+on the button. iOS and Android still read `accessibilityState.selected`.
 
 ```tsx
 <Box

@@ -705,6 +705,7 @@ mock.module("expo-router", () => ({
   router: {
     back: mock(() => {}),
     canGoBack: mock(() => true),
+    dismissTo: mock(() => {}),
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),

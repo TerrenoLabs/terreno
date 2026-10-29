@@ -340,6 +340,7 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="notifications" />
         <Stack.Screen name="consent-sign/[userId]" />
         <Stack.Screen name="todo-windows/index" />
+        <Stack.Screen name="todo-browser" />
       </Stack>
     </ThemeProvider>
   );

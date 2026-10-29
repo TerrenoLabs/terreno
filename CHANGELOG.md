@@ -20,9 +20,9 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
-## [57.19.3] - 2026-10-29
+## [57.19.4] - 2026-10-29
 
-Upgrade note: [`mcp-server/src/docs/upgrades/57.19.3.md`](mcp-server/src/docs/upgrades/57.19.3.md).
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.4.md`](mcp-server/src/docs/upgrades/57.19.4.md).
 
 ### Added
 

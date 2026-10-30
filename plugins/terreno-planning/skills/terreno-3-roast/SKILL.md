@@ -60,7 +60,9 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    simulator for mobile-focused work (direct simulator commands when the app has no
    Maestro), and a report with a Result line. It is report-only and never edits the
    tree; a missing `testID` or flow is `FAIL` for Pick. A flow it could not run is
-   `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`. Skip
+   `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`; so is a required
+   leg, such as the simulator for mobile-focused work, that the report lists only as
+   not run or remaining risk. Skip
    that child when this task has no UI/runtime files.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`.

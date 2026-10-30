@@ -69,17 +69,17 @@ names the flow.
 
 ```
 ## UI Verification Report
-- **Result:** [PASS | FAIL | UNVERIFIED — blocker]
+- **Result:** [PASS | FAIL | UNVERIFIED — blocker] (worst outcome across every required leg, including Simulator)
 - **Flow under test:** [entry point -> action -> expected visible result]
 - **Compile:** [pass | fail — error | skipped — parent already ran]
 - **Lint:** [pass | fail — error | skipped — parent already ran]
 - **Tests:** [pass | fail — which | skipped]
 - **Environment:** [app URL(s), viewport(s), credentials used (names only), stack you started or ports taken]
 - **Checks:** [per app × viewport: right page / not blank / no error overlay / console clean / DOM assertion / interaction proof / screenshot — pass | fail — detail]
-- **Simulator:** [Maestro flow(s) or direct commands run, device: PASS | FAIL — failure | UNVERIFIED — blocker | n/a — not a mobile-focused change]
+- **Simulator:** [Maestro flow(s) or direct commands run, device: PASS | FAIL — failure | UNVERIFIED — blocker | n/a — change matches none of the mobile-focused triggers in step 6]
 - **Interaction:** [the steps taken and the assertion after each]
 - **Evidence artifacts:** [paths or links to screenshots/videos/gist, or none if blocked]
-- **Remaining risk:** [states or platforms not exercised]
+- **Remaining risk:** [states or platforms the change does not require; a required leg that did not run is UNVERIFIED, not risk]
 ```
 
 Prefix each verified item with pass, warning, or fail. If an environment limitation prevented verification (no browser, no MongoDB, ports taken, no simulator), say exactly what could not be verified rather than implying it passed.
@@ -88,6 +88,6 @@ Prefix each verified item with pass, warning, or fail. If an environment limitat
 
 - Never use `waitForTimeout()` in any Playwright code you write.
 - Leave dev servers running only if the caller asked for manual follow-up testing; otherwise stop them, and stop only what you started.
-- Report outcomes faithfully — a check you could not run is "not verified", not "passed".
+- Report outcomes faithfully — a required check you could not run is UNVERIFIED with its blocker, and makes the Result UNVERIFIED, never PASS.
 - Login + feature exercise is required for authenticated apps; do not treat app-start-only as complete verification.
 - Do not spawn nested reviewers.

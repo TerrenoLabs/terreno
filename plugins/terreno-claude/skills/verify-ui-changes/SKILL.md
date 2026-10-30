@@ -527,8 +527,11 @@ open). Then **Result** (PASS / FAIL / UNVERIFIED, one line), **Flow under test**
 app × viewport: the checks table, the interaction steps, the DOM assertions, every
 screenshot labelled, the recording, and the console log; then per simulator flow:
 result, device, failure text, final screen, recording, log tail. Concise, but concrete
-enough that a PR reviewer trusts it without re-running. A platform you did not run
-stays under remaining risk.
+enough that a PR reviewer trusts it without re-running. **Result** is the worst outcome
+across every required leg: any FAIL makes it FAIL, otherwise any UNVERIFIED leg makes it
+UNVERIFIED. A required leg that did not run, such as the simulator for a mobile-focused
+change, is UNVERIFIED with its blocker, never remaining risk. Only platforms the change
+does not require go under remaining risk.
 
 ## GitHub Reviewer Evidence
 

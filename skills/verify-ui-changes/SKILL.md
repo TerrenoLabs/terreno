@@ -4,7 +4,8 @@ description: >-
   Mandatory when any feature touches the frontend. Bring up a stack you own, log in,
   drive the change under the required checks (right page, not blank, no error overlay,
   console clean, DOM assertion, interaction proof, screenshot), run the repository's
-  Maestro flows on the simulator for mobile-focused work, and post screenshots and
+  Maestro flows on the simulator for mobile-focused work (direct simulator commands when
+  the app has no Maestro), and post screenshots and
   video to the PR or a secret gist in the report format. Lifecycle composition: Pick
   for implementation runtime checks, Roast for independent proof, and Taste after a
   UI-affecting review/CI fix.
@@ -60,7 +61,8 @@ Do not open or update a PR for frontend work until this loop is complete.
    valid credentials; assert each error message, the redirect, and the console". Cover
    the error, empty, disabled, and loading states the change touches. Drive the UI
    through `testID`s; if an element has none, add one to the component first
-   (`{screen}-{element}-{qualifier}`), never a class or structural selector.
+   (`{screen}-{element}-{qualifier}`), never a class or structural selector. As Roast's
+   independent verifier, do not add it: report the missing `testID` (see "Who edits").
 4. **Log in and exercise the changed feature** with the seeded accounts documented
    below: navigate to the affected screen and run the flow end to end, not just confirm
    the app or page loads. Visual or layout work gets a desktop and a phone viewport.
@@ -83,11 +85,13 @@ Do not open or update a PR for frontend work until this loop is complete.
    are primary; screenshots support visual claims, they do not replace them. A console
    error in the changed code path is a failure even when the shot looks right: explain
    it or fix it (see "Baselining console warnings" for the demo app).
-7. **Mobile-focused change? Run the matching Maestro flow on the simulator** (section
-   below). Web alone is not enough.
+7. **Mobile-focused change? Verify it on the simulator** (section below): the matching
+   Maestro flow when the app has Maestro configured, direct simulator commands when it
+   does not. Web alone is not enough.
 8. **If anything fails: fix it and re-verify immediately.** Do not stop to report a
    half-working state. Retry a failing tool or UI action once before calling it a
-   blocker. Repeat until zero failures.
+   blocker. Repeat until zero failures. As Roast's independent verifier, do not fix:
+   report FAIL with the evidence (see "Who edits").
 9. **Publish and report** in the report format below: to the PR `Verification` table
    (see "GitHub Reviewer Evidence"), or to a secret gist when the repository's
    `verify-ui` publish script exists or there is no PR yet. Give the user the link plus
@@ -100,11 +104,32 @@ behavior, safe areas, push, camera / permissions, auth storage, `*.ios.tsx`,
 `*.android.tsx`, `*.native.tsx`, `Platform.OS` branches, or the ticket says "mobile" or
 "app".
 
-Phone apps are verified with the repository's **Maestro** flows (`<app>/maestro/`) on the
-app's dedicated simulator, not with an ad-hoc tap script. Run the flow that matches the
-change. No matching flow? Add one next to the existing flows, reusing their launch and
-login subflows, with `testID` selectors and `extendedWaitUntil` instead of sleeps; it is
-part of the change and stays in the repository. A missing or stale dev client
+**Maestro configured** (the app has a `<app>/maestro/` directory with flows): verify with
+those **Maestro** flows on the app's dedicated simulator, not with an ad-hoc tap script.
+Run the flow that matches the change. No matching flow? Add one next to the existing
+flows, reusing their launch and login subflows, with `testID` selectors and
+`extendedWaitUntil` instead of sleeps; it is part of the change and stays in the
+repository. Maestro configured but the CLI or Java missing: install them with the
+repository's documented command, or report UNVERIFIED.
+
+**Maestro not configured** (no `<app>/maestro/`): do not set Maestro up as part of the
+change. Drive the simulator with direct commands instead, from a temporary script kept
+outside the tree:
+
+| Step | iOS simulator | Android emulator |
+|---|---|---|
+| Boot and install | `xcrun simctl boot <device>`, `xcrun simctl install booted <app>` | `emulator -avd <avd>`, `adb install <apk>` |
+| Open the screen | `xcrun simctl openurl booted <scheme>://<path>` | `adb shell am start -a android.intent.action.VIEW -d <scheme>://<path>` |
+| Tap and type | `idb ui tap <x> <y>`, `idb ui text "<text>"` | `adb shell input tap <x> <y>`, `adb shell input text "<text>"` |
+| Assert | `idb ui describe-all` (find the `testID` and expected text) | `adb exec-out uiautomator dump /dev/tty` (find the `resource-id` and expected text) |
+| Evidence | `xcrun simctl io booted screenshot <file>`, `xcrun simctl io booted recordVideo <file>` | `adb exec-out screencap -p > <file>`, `adb shell screenrecord <file>` |
+
+Take tap coordinates from the accessibility tree, not from guesses. Assert on the tree
+after each interaction; a screenshot alone is not an assertion. The same required checks
+and outcomes apply. Without `idb`, iOS can only open screens and capture evidence, so an
+iOS flow that needs taps is UNVERIFIED (`idb` missing) unless you install it.
+
+A missing or stale dev client
 (`Cannot find native module`) is rebuilt with the repository's documented command, then
 the flow reruns. The flow deep-links the dev client to Metro, so Metro and the backend
 must be the stack you started: "started by you" means the process you recorded is still
@@ -113,11 +138,19 @@ followed by a developer's Metro or a backend on staging is not yours. If the sim
 or dev client is unavailable, the report says **UNVERIFIED (simulator)**; a passing web
 check never stands in for the mobile one. Keep the three outcomes apart: a flow that ran
 and failed is FAIL, a flow that never ran (stack not yours, no simulator or dev client,
-simulator would not boot, Maestro or Java missing, no report written) is UNVERIFIED
+simulator would not boot, Maestro, Java, or `idb` missing, no report written) is UNVERIFIED
 with the blocker, and neither is ever reported as the other. A repository runner should
 encode that in its exit codes (for example 2 for failed, 3 for UNVERIFIED). Also check
 what web cannot: the keyboard does not cover inputs, safe areas, and the tablet vs
 phone layout fork.
+
+## Who edits
+
+Only the implementer (Pick, or a Taste fix) changes the tree: adds `testID`s, adds
+Maestro flows, and fixes failures. Roast's independent verifier (the `ui-verifier`
+agent) runs the same loop report-only. A missing `testID` or Maestro flow, or a failing
+check, is FAIL with the evidence; a check it could not run is UNVERIFIED with the
+blocker. It never edits the tree to make a run pass.
 
 ## Evidence rules
 
@@ -523,7 +556,8 @@ Post UI verification evidence to GitHub through the PR body so reviewers can see
 - "There's a console error but it's probably unrelated." Explain it or fix it.
 - "I'll mention it might need testing." Verify it or mark it UNVERIFIED.
 - "It works on web, and it's React Native, so it works on the phone." Not for
-  mobile-focused features. Run the Maestro flow on the simulator.
+  mobile-focused features. Run the Maestro flow, or direct simulator commands when the
+  app has no Maestro, on the simulator.
 - "Something is already on the port, I'll just use it." It may be staging. Stop and say
   the ports are taken.
 

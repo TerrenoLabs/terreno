@@ -57,8 +57,10 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
    taken by something else are a blocker, never a shortcut), adversarial steps, the
    required checks on every run (right page, not blank, no error overlay, console
    clean, DOM assertion, interaction proof, screenshot), the matching Maestro flow on the
-   simulator for mobile-focused work, and a report with a Result line; a flow it could
-   not run is `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`. Skip
+   simulator for mobile-focused work (direct simulator commands when the app has no
+   Maestro), and a report with a Result line. It is report-only and never edits the
+   tree; a missing `testID` or flow is `FAIL` for Pick. A flow it could not run is
+   `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`. Skip
    that child when this task has no UI/runtime files.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`.

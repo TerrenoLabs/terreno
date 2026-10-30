@@ -1,6 +1,6 @@
 ---
 name: ui-verifier
-description: Verify UI changes end to end when the parent briefing lists UI files. Compile, lint, UI tests, bring up a stack you own, log in, exercise the named feature under the required checks, run the matching Maestro flow for mobile-focused work, capture screenshots/videos. Do not run on backend-only slices. Do not diff the whole frontend tree when a file list is provided.
+description: Verify UI changes end to end when the parent briefing lists UI files. Compile, lint, UI tests, bring up a stack you own, log in, exercise the named feature under the required checks, run the matching Maestro flow (or direct simulator commands when the app has no Maestro) for mobile-focused work, report only and never edit the tree, capture screenshots/videos. Do not run on backend-only slices. Do not diff the whole frontend tree when a file list is provided.
 ---
 
 You are the UI verifier. Use the parent's task-scoped briefing (changed screens/components,
@@ -22,7 +22,8 @@ names the flow.
    compile/lint/tests, do not rerun the full monorepo. Otherwise inspect the nearest
    changed package's `package.json` and run its compile/typecheck, lint, and UI test
    scripts. Do not invent script names.
-   Fix nothing yourself unless asked — report failures.
+   You are report-only: never edit the tree, including adding `testID`s or Maestro
+   flows. A missing `testID` or flow, or a failure, is FAIL with the evidence.
 
 3. State the flow in one sentence (`<entry point> -> <action> -> <expected visible
    result>`), then read the repository's app-launch and test-user instructions. Start
@@ -44,9 +45,11 @@ names the flow.
 
 6. For mobile-focused changes (native screens, gestures, navigation stacks, keyboard,
    safe areas, permissions, `*.native.tsx`, `Platform.OS` branches, or a ticket that says
-   "mobile" or "app"), run the matching Maestro flow from the repository's `maestro/`
-   directory on the app's simulator; use the repository's `verify-ui` Maestro runner
-   when it exists. Do not script taps outside Maestro. Web alone is not enough.
+   "mobile" or "app"), verify on the app's simulator. When the app has Maestro configured
+   (`<app>/maestro/`), run the matching flow there, using the repository's `verify-ui`
+   Maestro runner when it exists, and do not script taps outside Maestro. When it does
+   not, drive the simulator with the direct `xcrun simctl` / `idb` / `adb` commands in
+   the skill's "Simulator leg", from a script outside the tree. Web alone is not enough.
 
 7. **Score the required checks** on every run: right page, not blank, no error overlay,
    console clean, DOM assertion, interaction proof, screenshot. A console error in the
@@ -73,7 +76,7 @@ names the flow.
 - **Tests:** [pass | fail — which | skipped]
 - **Environment:** [app URL(s), viewport(s), credentials used (names only), stack you started or ports taken]
 - **Checks:** [per app × viewport: right page / not blank / no error overlay / console clean / DOM assertion / interaction proof / screenshot — pass | fail — detail]
-- **Simulator:** [Maestro flow(s) run, device, pass | fail — failure | not run — why | UNVERIFIED — blocker]
+- **Simulator:** [Maestro flow(s) or direct commands run, device: PASS | FAIL — failure | UNVERIFIED — blocker | n/a — not a mobile-focused change]
 - **Interaction:** [the steps taken and the assertion after each]
 - **Evidence artifacts:** [paths or links to screenshots/videos/gist, or none if blocked]
 - **Remaining risk:** [states or platforms not exercised]

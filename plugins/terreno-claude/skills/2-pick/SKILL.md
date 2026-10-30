@@ -73,8 +73,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
     architecture and public docs in this slice using the documentation contract. Run any
     mandatory runtime/UI/safety verification declared by repository instructions or
     supporting skills; for a user-facing change that is `verify-ui-changes` (own stack,
-    adversarial steps, the required checks, the Maestro flow for mobile-focused work,
-    evidence outside the tree). Missing mandatory capability is `BLOCKED`, not skipped.
+    adversarial steps, the required checks, the Maestro flow for mobile-focused work or
+    direct simulator commands when the app has no Maestro, evidence outside the tree). Missing mandatory capability is `BLOCKED`, not skipped.
     Missing docs for a user-visible or architectural change is `FAIL`.
 11. **Record.** Record the completed task/slice in execution state with commands,
     evidence, artifacts, docs files, and attempts. Do not commit a separate task-file

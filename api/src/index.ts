@@ -351,8 +351,10 @@ export type {
   McpOAuthAuthorizationDocument,
   McpOAuthAuthorizationStatus,
   McpOAuthClientDocument,
+  McpOAuthConfidentialClientOptions,
   McpOAuthRevokedFamilyDocument,
   McpOAuthTokenDocument,
+  McpOAuthTokenEndpointAuthMethod,
 } from "./types/mcpOAuth";
 export * from "./utils";
 export * from "./versionCheckPlugin";

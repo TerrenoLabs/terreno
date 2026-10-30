@@ -141,9 +141,9 @@ describe("AiPromptHubView", () => {
     fireEvent.press(view.getByText("Versions"));
     fireEvent.press(view.getByTestId("ai-prompt-insert-reference"));
     await waitFor(() => {
-      expect(view.getByTestId("ai-prompt-reference-picker")).toBeTruthy();
+      expect(view.getByTestId("ai-prompt-reference-modal")).toBeTruthy();
     });
-    fireEvent.press(view.getByTestId("ai-prompt-reference-confirm"));
+    fireEvent.press(view.getByTestId("ai-prompt-reference-modal.primary"));
     await waitFor(() => {
       expect(view.getByTestId("ai-prompt-template").props.value).toContain("{{> base-rules}}");
     });

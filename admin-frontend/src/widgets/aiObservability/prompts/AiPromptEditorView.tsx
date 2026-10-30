@@ -210,14 +210,23 @@ const AiPromptEditorForm: React.FC<{
               Adds {"{{> name}}"} so this prompt includes another prompt's production text.
             </Text>
           </Box>
-          {referenceOpen ? (
-            <Box
-              border="default"
-              gap={3}
-              padding={3}
-              rounding="md"
-              testID="ai-prompt-reference-picker"
-            >
+          <Modal
+            onDismiss={() => {
+              setReferenceOpen(false);
+            }}
+            primaryButtonDisabled={!referenceName}
+            primaryButtonOnClick={handleInsertReference}
+            primaryButtonText="Insert"
+            secondaryButtonOnClick={() => {
+              setReferenceOpen(false);
+            }}
+            secondaryButtonText="Cancel"
+            size="md"
+            testID="ai-prompt-reference-modal"
+            title="Reference another prompt"
+            visible={referenceOpen}
+          >
+            <Box gap={3}>
               <SelectField
                 onChange={setReferenceName}
                 options={promptNames.map((name) => ({label: name, value: name}))}
@@ -244,24 +253,8 @@ const AiPromptEditorForm: React.FC<{
               <Text color="secondaryDark" size="sm">
                 {`Inserts {{> ${referenceName}}} on its own line. That follows the other prompt's production label.`}
               </Text>
-              <Box direction="row" gap={2}>
-                <Button
-                  disabled={!referenceName}
-                  onClick={handleInsertReference}
-                  testID="ai-prompt-reference-confirm"
-                  text="Insert"
-                />
-                <Button
-                  onClick={() => {
-                    setReferenceOpen(false);
-                  }}
-                  testID="ai-prompt-reference-cancel"
-                  text="Cancel"
-                  variant="secondary"
-                />
-              </Box>
             </Box>
-          ) : undefined}
+          </Modal>
         </Box>
       ) : undefined}
       <TextField

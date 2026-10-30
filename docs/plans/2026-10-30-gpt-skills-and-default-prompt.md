@@ -328,7 +328,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests
   - Docs: T12
 
-- [ ] **T5** — Offer skills in chat through a catalog, load_skill, and /name
+- [x] **T5** — Offer skills in chat through a catalog, load_skill, and /name
   - Depends on: T4
   - Why ordered: reads T3 skills; shares `ai/src/types/index.ts` with T2 and T4
   - Files: ai/src/service/skills.ts, ai/src/service/chatTurn.ts, ai/src/types/index.ts, ai/src/routes/gptSkills.test.ts

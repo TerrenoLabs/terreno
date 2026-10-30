@@ -71,6 +71,7 @@ import {
   uiBlocksSystemPrompt,
 } from "./prompts";
 import {sanitizeBlocksText} from "./sanitizeHtml";
+import {resolveTurnSkills} from "./skills";
 
 export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
@@ -1243,15 +1244,17 @@ const buildSystemPrompt = async ({
   return effectiveSystemPrompt;
 };
 
-/** Route, per-request, and MCP tools, plus the ask tools when asks are offered. */
+/** Route, per-request, MCP, and built-in tools, plus the ask tools when asks are offered. */
 const collectTools = async ({
   askKinds,
+  builtInTools,
   options,
   req,
   supportsTools,
   surface,
 }: {
   askKinds: AskKind[];
+  builtInTools?: Record<string, Tool>;
   options: GptRouteOptions;
   req: express.Request;
   supportsTools: boolean;
@@ -1259,7 +1262,10 @@ const collectTools = async ({
 }): Promise<Record<string, Tool> | undefined> => {
   const {createRequestTools, mcpService, tools: routeTools} = options;
   const requestTools = createRequestTools ? createRequestTools(req) : undefined;
-  if (!supportsTools || (!routeTools && !requestTools && !mcpService && askKinds.length === 0)) {
+  if (
+    !supportsTools ||
+    (!routeTools && !requestTools && !mcpService && !builtInTools && askKinds.length === 0)
+  ) {
     return undefined;
   }
   const allTools: Record<string, Tool> = {...(routeTools ?? {}), ...(requestTools ?? {})};
@@ -1278,6 +1284,13 @@ const collectTools = async ({
     } catch {
       // MCP tool discovery failure should not block the request
     }
+  }
+  // Built-in tools are part of a feature's contract, so a host tool of the same name gives way.
+  for (const [name, builtInTool] of Object.entries(builtInTools ?? {})) {
+    if (Object.hasOwn(allTools, name)) {
+      logger.warn(`Replacing the host tool ${name} with the built-in ${name} tool`, {tool: name});
+    }
+    allTools[name] = builtInTool;
   }
   if (askKinds.length === 0) {
     return allTools;
@@ -1816,6 +1829,17 @@ export const runChatTurn = async ({
     return;
   }
 
+  // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
+  const modelId = aiService.modelId;
+  const supportsTools = !modelId?.includes("image");
+  // Resolved before the turn starts so an unknown `/name` is a 400 that saves nothing.
+  const turnSkills = await resolveTurnSkills({
+    isEnabled: options.skills === true,
+    prompt: body.prompt,
+    supportsTools,
+    userId,
+  });
+
   const turn = await startTurn({aiService, askAnswer, body, options, req, userId});
   const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
     turn;
@@ -1828,6 +1852,11 @@ export const runChatTurn = async ({
     systemPrompt,
     userId,
   });
+  if (turnSkills.systemPrompt) {
+    effectiveSystemPrompt = effectiveSystemPrompt
+      ? `${effectiveSystemPrompt}\n\n${turnSkills.systemPrompt}`
+      : turnSkills.systemPrompt;
+  }
   const observability = await aiService.resolveGenerateObservability({
     promptLabel,
     promptName,
@@ -1837,12 +1866,10 @@ export const runChatTurn = async ({
   });
   effectiveSystemPrompt = observability.systemPrompt;
 
-  // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
-  const modelId = aiService.modelId;
-  const supportsTools = !modelId?.includes("image");
   const offeredAskKinds = supportsTools ? askKindsForSurface({kinds: askKinds, surface}) : [];
   const allTools = await collectTools({
     askKinds: offeredAskKinds,
+    builtInTools: turnSkills.tools,
     options,
     req,
     supportsTools,

@@ -462,6 +462,12 @@ export interface GptRouteOptions {
    * override replaces it. A function that throws is logged and the turn continues without it.
    */
   defaultSystemPrompt?: DefaultSystemPrompt;
+  /**
+   * Offers the user's enabled skills in tool-capable chat turns: a `## Skills` catalog in the
+   * system prompt (globals first, at most 50), the built-in `load_skill` tool, and leading `/name`
+   * tokens that add `## Active skill: <name>` sections. Off by default.
+   */
+  skills?: boolean;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;

@@ -107,10 +107,17 @@ login subflows, with `testID` selectors and `extendedWaitUntil` instead of sleep
 part of the change and stays in the repository. A missing or stale dev client
 (`Cannot find native module`) is rebuilt with the repository's documented command, then
 the flow reruns. The flow deep-links the dev client to Metro, so Metro and the backend
-must be the stack you started. If the simulator or dev client is unavailable, the report
-says **UNVERIFIED (simulator)**; a passing web check never stands in for the mobile one.
-Also check what web cannot: the keyboard does not cover inputs, safe areas, and the
-tablet vs phone layout fork.
+must be the stack you started: "started by you" means the process you recorded is still
+alive and holds the port, not that a pid file exists. A stack that crashed and was
+followed by a developer's Metro or a backend on staging is not yours. If the simulator
+or dev client is unavailable, the report says **UNVERIFIED (simulator)**; a passing web
+check never stands in for the mobile one. Keep the three outcomes apart: a flow that ran
+and failed is FAIL, a flow that never ran (stack not yours, no simulator or dev client,
+simulator would not boot, Maestro or Java missing, no report written) is UNVERIFIED
+with the blocker, and neither is ever reported as the other. A repository runner should
+encode that in its exit codes (for example 2 for failed, 3 for UNVERIFIED). Also check
+what web cannot: the keyboard does not cover inputs, safe areas, and the tablet vs
+phone layout fork.
 
 ## Evidence rules
 

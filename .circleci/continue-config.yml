@@ -72,6 +72,9 @@ parameters:
   run-rulesync:
     type: boolean
     default: false
+  run-dagger-spike:
+    type: boolean
+    default: false
   run-syncdb:
     type: boolean
     default: false
@@ -682,6 +685,45 @@ jobs:
             echo "run-e2e=<< pipeline.parameters.run-e2e >>"
             echo "run-repo-policies=<< pipeline.parameters.run-repo-policies >>"
             echo "run-rulesync=<< pipeline.parameters.run-rulesync >>"
+
+  # Dagger spike: same `dagger call` on a machine executor vs a Docker executor + remote Docker.
+  dagger-machine:
+    machine:
+      image: ubuntu-2404:current
+    resource_class: large
+    steps:
+      - checkout
+      - run:
+          name: Install Dagger CLI
+          command: |
+            curl -fsSL https://dl.dagger.io/dagger/install.sh | DAGGER_VERSION=0.21.11 BIN_DIR=$HOME/.local/bin sh
+            echo 'export PATH=$HOME/.local/bin:$PATH' >> "$BASH_ENV"
+      - run:
+          name: Lint and test via Dagger (cold)
+          command: |
+            time dagger call example-backend-lint
+            time dagger call example-backend-test
+      - run:
+          name: Rerun via Dagger (warm engine)
+          command: time dagger call example-backend-test
+
+  dagger-remote-docker:
+    docker:
+      - image: cimg/base:current
+    resource_class: large
+    steps:
+      - checkout
+      - setup_remote_docker
+      - run:
+          name: Install Dagger CLI
+          command: |
+            curl -fsSL https://dl.dagger.io/dagger/install.sh | DAGGER_VERSION=0.21.11 BIN_DIR=$HOME/.local/bin sh
+            echo 'export PATH=$HOME/.local/bin:$PATH' >> "$BASH_ENV"
+      - run:
+          name: Lint and test via Dagger (cold)
+          command: |
+            time dagger call example-backend-lint
+            time dagger call example-backend-test
 
   api-ci:
     executor: node22_mongo
@@ -2543,6 +2585,12 @@ workflows:
     when: << pipeline.parameters.run-rulesync >>
     jobs:
       - rulesync-check
+
+  dagger-spike:
+    when: << pipeline.parameters.run-dagger-spike >>
+    jobs:
+      - dagger-machine
+      - dagger-remote-docker
 
   syncdb:
     when: << pipeline.parameters.run-syncdb >>

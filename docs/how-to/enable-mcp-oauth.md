@@ -122,7 +122,7 @@ curl -X POST https://api.example.com/oauth/token \
   -d grant_type=client_credentials
 ```
 
-The response is an `mcpat_…` access token and no refresh token. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` and deleting the client both end every token that client holds.
+The response is an `mcpat_…` access token and no refresh token. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` ends every token that client holds, and a revoked client cannot start a new authorization or token grant. `deleteOne`, `findOneAndDelete`, and `deleteMany` do the same. `bulkWrite` skips those hooks, so use `revoke` when a bulk write removes clients.
 
 ## 4. Check it
 

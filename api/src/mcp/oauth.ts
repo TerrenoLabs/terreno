@@ -358,7 +358,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
         throw new OAuthProtocolError("invalid_request", "client_id is required");
       }
       const client = await McpOAuthClient.findOneOrNone({clientId});
-      if (!client) {
+      if (!client || client.revokedAt) {
         throw new OAuthProtocolError("invalid_request", "Unknown client_id");
       }
       // RFC 6749 §4.1.2.1: never redirect to an unverified URI, so these two fail in place.
@@ -855,6 +855,13 @@ const exchangeClientCredentials = async (
     tokenEpoch: userTokenEpoch(user),
     userId: client.userId,
   });
+  // revoke() can land after the pre-issue read and before this pair exists. A new family has
+  // no tombstone yet, so drop the pair when the client is already revoked.
+  const current = await McpOAuthClient.findOneOrNone({clientId: client.clientId});
+  if (!current || current.revokedAt) {
+    await McpOAuthToken.revokeFamily(issued.mcpOAuthToken.familyId);
+    throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
+  }
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,

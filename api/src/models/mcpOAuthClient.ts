@@ -88,6 +88,13 @@ mcpOAuthClientSchema.pre("findOneAndDelete", async function () {
   await revokeTokensForClient(existing?.clientId);
 });
 
+mcpOAuthClientSchema.pre("deleteMany", async function () {
+  const clients = await this.model.find(this.getFilter()).select({clientId: 1});
+  for (const client of clients) {
+    await revokeTokensForClient(client.clientId);
+  }
+});
+
 mcpOAuthClientSchema.statics = {
   ...mcpOAuthClientSchema.statics,
   async issueConfidential(

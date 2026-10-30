@@ -349,6 +349,24 @@ describe("MCP OAuth authorization server", () => {
       expect(redirect.searchParams.get("state")).toBe("s");
     });
 
+    it("rejects authorization for a revoked client without redirecting", async () => {
+      const clientId = await registerClient(app);
+      await McpOAuthClient.revoke(clientId);
+      const {challenge} = createPkce();
+
+      const res = await startAuthorization(app, {
+        client_id: clientId,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: REDIRECT_URI,
+        response_type: "code",
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid_request");
+      expect(res.headers.location).toBeUndefined();
+    });
+
     it("answers in place, without redirecting, for an unregistered redirect_uri", async () => {
       const clientId = await registerClient(app);
       const {challenge} = createPkce();
@@ -1029,6 +1047,63 @@ describe("MCP OAuth authorization server", () => {
         .send({grant_type: "client_credentials"});
       expect(afterRevoke.status).toBe(401);
       expect(afterRevoke.body.error).toBe("invalid_client");
+    });
+
+    it("ends tokens when the client is removed with deleteMany", async () => {
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Bulk",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const issued = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", basicAuthorization(created.client.clientId, created.clientSecret))
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      expect(issued.status).toBe(200);
+
+      await McpOAuthClient.deleteMany({clientId: created.client.clientId});
+
+      expect((await callMcp(app, issued.body.access_token as string)).status).toBe(401);
+      const again = await supertest(app)
+        .post("/oauth/token")
+        .set("Authorization", basicAuthorization(created.client.clientId, created.clientSecret))
+        .type("form")
+        .send({grant_type: "client_credentials"});
+      expect(again.status).toBe(401);
+      expect(again.body.error).toBe("invalid_client");
+    });
+
+    it("discards a client_credentials token when the client is revoked during issuance", async () => {
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Racy",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        await McpOAuthClient.revoke(options.clientId);
+        return realIssue(options);
+      });
+      let token: supertest.Response;
+      try {
+        token = await supertest(app)
+          .post("/oauth/token")
+          .set("Authorization", basicAuthorization(created.client.clientId, created.clientSecret))
+          .type("form")
+          .send({grant_type: "client_credentials"});
+      } finally {
+        issueSpy.mockRestore();
+      }
+
+      expect(token.status).toBe(401);
+      expect(token.body.error).toBe("invalid_client");
+      expect(
+        await McpOAuthToken.countDocuments({
+          clientId: created.client.clientId,
+          revokedAt: {$exists: false},
+        })
+      ).toBe(0);
     });
 
     it("rejects client_credentials during dynamic client registration", async () => {

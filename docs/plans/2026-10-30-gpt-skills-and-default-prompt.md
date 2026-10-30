@@ -297,7 +297,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, mongoose-schema-safety, model-router-actions
   - Docs: T12
 
-- [ ] **T4** — Upload SKILL.md and .zip skill packages
+- [x] **T4** — Upload SKILL.md and .zip skill packages
   - Depends on: T2, T3
   - Why ordered: T2: shares `ai/src/types/index.ts`
   - Files: ai/src/service/skillPackage.ts, ai/src/service/skillPackage.test.ts, ai/src/routes/skills.ts, ai/src/routes/skillsUpload.test.ts, ai/src/service/fileStorage.ts, ai/src/service/fileStorage.test.ts, ai/src/types/index.ts, ai/package.json, package.json

@@ -14,10 +14,12 @@
     "ai": "catalog:",
     "ajv": "catalog:",
     "csv-parse": "catalog:",
+    "fflate": "catalog:",
     "google-auth-library": "^10.5.0",
     "luxon": "catalog:",
     "multer": "catalog:",
-    "sanitize-html": "catalog:"
+    "sanitize-html": "catalog:",
+    "yaml": "catalog:"
   },
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {

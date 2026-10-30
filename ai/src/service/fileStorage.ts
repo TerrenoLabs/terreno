@@ -6,6 +6,8 @@ import {FileAttachment} from "../models/fileAttachment";
 export interface UploadFileParams {
   buffer: Buffer;
   filename: string;
+  /** First segment(s) of the storage key; defaults to `uploads`. */
+  keyPrefix?: string;
   mimeType: string;
   userId: import("mongoose").Types.ObjectId;
 }
@@ -33,10 +35,16 @@ export class FileStorageService {
     return this.storage.bucket(this.bucketName);
   }
 
-  async upload({buffer, filename, mimeType, userId}: UploadFileParams): Promise<UploadFileResult> {
+  async upload({
+    buffer,
+    filename,
+    keyPrefix = "uploads",
+    mimeType,
+    userId,
+  }: UploadFileParams): Promise<UploadFileResult> {
     const timestamp = DateTime.now().toMillis();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const gcsKey = `uploads/${userId.toString()}/${timestamp}-${sanitizedFilename}`;
+    const gcsKey = `${keyPrefix}/${userId.toString()}/${timestamp}-${sanitizedFilename}`;
 
     const file = this.bucket.file(gcsKey);
     await file.save(buffer, {

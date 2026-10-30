@@ -47,6 +47,33 @@ describe("FileStorageService", () => {
     });
   });
 
+  describe("upload keys", () => {
+    it("uses the uploads prefix by default", async () => {
+      const service = new FileStorageService({bucketName: "test-bucket"});
+      const userId = new mongoose.Types.ObjectId();
+      const result = await service.upload({
+        buffer: Buffer.from("x"),
+        filename: "a b.png",
+        mimeType: "image/png",
+        userId,
+      });
+      expect(result.gcsKey).toMatch(new RegExp(`^uploads/${userId}/\\d+-a_b\\.png$`));
+    });
+
+    it("uses a custom keyPrefix when given", async () => {
+      const service = new FileStorageService({bucketName: "test-bucket"});
+      const userId = new mongoose.Types.ObjectId();
+      const result = await service.upload({
+        buffer: Buffer.from("x"),
+        filename: "a b.png",
+        keyPrefix: "skills/abc",
+        mimeType: "image/png",
+        userId,
+      });
+      expect(result.gcsKey).toMatch(new RegExp(`^skills/abc/${userId}/\\d+-a_b\\.png$`));
+    });
+  });
+
   describe("download", () => {
     it("returns the bytes of the bucket file", async () => {
       gcs.putObject({

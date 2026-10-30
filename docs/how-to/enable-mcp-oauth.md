@@ -140,8 +140,10 @@ const {client, clientSecret} = await McpOAuthClient.issueConfidential({
 `client_secret_basic` sends `Authorization: Basic` with the form-encoded `client_id:client_secret`. `client_secret_post` sends `client_id` and `client_secret` in the form body. The client must use the method it was created with.
 
 ```bash
+# Form-encode the id and secret before base64. A raw colon join breaks when either value contains '%' or ':'.
+AUTH=$(node -e 'const [id, secret] = process.argv.slice(1); process.stdout.write(Buffer.from(`${encodeURIComponent(id)}:${encodeURIComponent(secret)}`).toString("base64"))' "$CLIENT_ID" "$CLIENT_SECRET")
 curl -X POST https://api.example.com/oauth/token \
-  -H "Authorization: Basic $(printf '%s' "$CLIENT_ID:$CLIENT_SECRET" | base64)" \
+  -H "Authorization: Basic $AUTH" \
   -d grant_type=client_credentials
 ```
 

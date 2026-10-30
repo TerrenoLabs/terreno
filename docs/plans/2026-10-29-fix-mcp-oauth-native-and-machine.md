@@ -10,7 +10,7 @@ Selected: https://github.com/TerrenoLabs/terreno/issues/1655 https://github.com/
 | --- | --- | --- | --- | --- |
 | #1655 | MCP OAuth: loopback redirect URIs should match any port | fix | `api/src/mcp/oauth.ts` authorize uses exact `redirectUris.includes` | T1 |
 | #1653 | MCP OAuth has no machine grant | fix | token route and metadata only allow public authorization-code clients | T2 |
-| #1654 | MCP OAuth consent endpoints require JWT/Better Auth | decide | consent routes use `authenticateMiddleware()`; three extension designs are open | none |
+| #1654 | MCP OAuth consent endpoints require JWT/Better Auth | docs | `authenticateMiddleware()` already continues when `req.user` is set | docs |
 
 ## E2E tests
 
@@ -59,12 +59,10 @@ None — operator steps stay in `docs/how-to/enable-mcp-oauth.md`. No end-user g
 | Should dynamic registration mint confidential clients? | No. Only `issueConfidential`. | Registration is unauthenticated. A public registration endpoint that mints secrets widens who can create a machine identity. |
 | `credential: "oauth"` or `"oauth-client"`? | `"oauth"` | The issue allows either. `/mcp` already treats `mcpat_` tokens as `oauth`, including scope checks and epoch revocation. |
 
-## Not fixed in this run
+## Consent (#1654)
 
-| Issue | Disposition | Next action |
-| --- | --- | --- |
-| #1654 | fixed (docs) | Documented the existing `req.user` short-circuit in `docs/how-to/enable-mcp-oauth.md` and `docs/reference/api.md`. `resolveConsentUser` and a built-in consent page stay out. |
+Documented the existing `req.user` short-circuit in `docs/how-to/enable-mcp-oauth.md` and `docs/reference/api.md`. `resolveConsentUser` and a built-in consent page stay out. No changelog fragment: the middleware behavior was already shipped.
 
 ## Sign-off
 
-Status: approved 2026-10-29 (tap: #1655 #1653; #1654 excluded as decide)
+Status: approved 2026-10-29 (tap: #1655 #1653; #1654 documented `req.user` short-circuit)

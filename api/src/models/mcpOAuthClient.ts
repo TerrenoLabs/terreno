@@ -2,7 +2,7 @@ import {randomUUID} from "node:crypto";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
-import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, findOneOrNoneFor} from "../plugins";
+import {createdUpdatedPlugin, findExactlyOne, findOneOrNone} from "../plugins";
 import type {
   McpOAuthClientDocument,
   McpOAuthClientModel,
@@ -79,12 +79,13 @@ mcpOAuthClientSchema.pre("deleteOne", {document: true, query: false}, async func
 });
 
 mcpOAuthClientSchema.pre("deleteOne", {document: false, query: true}, async function () {
-  const existing = await findOneOrNoneFor(this.model, this.getFilter());
+  // deleteOne removes one document. A filter that matches several must not throw.
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({clientId: 1});
   await revokeTokensForClient(existing?.clientId);
 });
 
 mcpOAuthClientSchema.pre("findOneAndDelete", async function () {
-  const existing = await findOneOrNoneFor(this.model, this.getFilter());
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({clientId: 1});
   await revokeTokensForClient(existing?.clientId);
 });
 

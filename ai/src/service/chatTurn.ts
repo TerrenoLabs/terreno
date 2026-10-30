@@ -1140,17 +1140,52 @@ const startTurn = async ({
 const lastUserText = (prompts: GptHistoryPrompt[]): string =>
   prompts.findLast((prompt) => prompt.type === "user")?.text ?? "";
 
-/** The request's system prompt with project context and the Langfuse prompt prepended. */
+/**
+ * The app-wide default system prompt for this request, trimmed. A failing function must not
+ * break the turn, so it is logged and treated as unset.
+ */
+const resolveDefaultSystemPrompt = async ({
+  options,
+  req,
+}: {
+  options: GptRouteOptions;
+  req: express.Request;
+}): Promise<string | undefined> => {
+  const {defaultSystemPrompt} = options;
+  if (defaultSystemPrompt === undefined) {
+    return undefined;
+  }
+  try {
+    const value =
+      typeof defaultSystemPrompt === "function"
+        ? await defaultSystemPrompt({req})
+        : defaultSystemPrompt;
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    return trimmed || undefined;
+  } catch (error) {
+    logger.warn("Default system prompt skipped: resolving it failed", {
+      error: (error as Error).message,
+    });
+    return undefined;
+  }
+};
+
+/**
+ * The request's system prompt with project context, the Langfuse prompt, and the app-wide
+ * default prepended, in that order, so the default comes first.
+ */
 const buildSystemPrompt = async ({
   history,
   options,
   projectId,
+  req,
   systemPrompt,
   userId,
 }: {
   history: GptHistoryDocument;
   options: GptRouteOptions;
   projectId: unknown;
+  req: express.Request;
   systemPrompt: unknown;
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<string | undefined> => {
@@ -1197,6 +1232,13 @@ const buildSystemPrompt = async ({
     } catch (err) {
       logger.debug(`Langfuse system prompt skipped: ${(err as Error).message}`);
     }
+  }
+
+  const defaultSystemPrompt = await resolveDefaultSystemPrompt({options, req});
+  if (defaultSystemPrompt) {
+    effectiveSystemPrompt = effectiveSystemPrompt
+      ? `${defaultSystemPrompt}\n\n${effectiveSystemPrompt}`
+      : defaultSystemPrompt;
   }
   return effectiveSystemPrompt;
 };
@@ -1782,6 +1824,7 @@ export const runChatTurn = async ({
     history,
     options,
     projectId,
+    req,
     systemPrompt,
     userId,
   });

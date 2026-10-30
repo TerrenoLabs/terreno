@@ -9,7 +9,13 @@ import {AIRequest} from "./models/aiRequest";
 import {GptHistory} from "./models/gptHistory";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
-import {createScriptedModel, modelCall, textStep, toolCallStep} from "./tests/chatHarness";
+import {
+  createScriptedModel,
+  modelCall,
+  systemPromptOf,
+  textStep,
+  toolCallStep,
+} from "./tests/chatHarness";
 import {authAsUserWithCredentials, ensureTestUsers, UserModel} from "./tests/helpers";
 
 const AI_APP_TEST_USER = {
@@ -117,6 +123,24 @@ describe("AiApp", () => {
       "ask_form",
       "ask_files",
     ]);
+  });
+
+  it("passes defaultSystemPrompt to the gpt routes, so it leads the system prompt", async () => {
+    const {AIService} = await import("./service/aiService");
+    const model = createScriptedModel({steps: [textStep("ok")]});
+    const aiService = new AIService({model: model as unknown as LanguageModel});
+    const plugin = new AiApp({aiService, defaultSystemPrompt: "Answer in French."});
+    const app = new TerrenoApp({
+      configureApp: (router) => plugin.register(router as unknown as express.Application),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    const agent = await authAsUser(app);
+
+    const res = await agent.post("/gpt/prompt").send({prompt: "Hi", systemPrompt: "Req"});
+
+    expect(res.status).toBe(200);
+    expect(systemPromptOf(modelCall(model, 0))).toBe("Answer in French.\n\nReq");
   });
 
   it("adds the documented headless turn actions to the history routes", async () => {

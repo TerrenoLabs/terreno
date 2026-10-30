@@ -247,7 +247,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: none
   - Docs: this file
 
-- [ ] **T2** — Prepend an app-wide default system prompt to chat turns
+- [x] **T2** — Prepend an app-wide default system prompt to chat turns
   - Depends on: none
   - Files: ai/src/types/index.ts, ai/src/aiApp.ts, ai/src/service/chatTurn.ts, ai/src/configuration.ts, ai/src/index.ts, ai/src/routes/defaultSystemPrompt.test.ts
   - Criteria:

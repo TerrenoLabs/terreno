@@ -12,6 +12,7 @@ export type {AIAdminAppOptions} from "./aiAdminApp";
 export {AIAdminApp} from "./aiAdminApp";
 export type {AiAppOptions} from "./aiApp";
 export {AiApp} from "./aiApp";
+export {aiConfigurationSchema, configurationPromptGetter} from "./configuration";
 export {LangfuseApp} from "./langfuseApp";
 export {getCached, invalidateCache, LangfuseCache, setCached} from "./langfuseCache";
 export {

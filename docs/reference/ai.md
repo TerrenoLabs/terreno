@@ -285,6 +285,34 @@ Generated images (image-output models such as `gemini-3-pro-image`) arrive as SS
 
 AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerModelFn(modelId)` → configured `aiService`. When none resolves, `/gpt/prompt` streams a canned demo reply and `/gpt/remix` returns it. This happens whether or not `demoMode` is set.
 
+#### Default system prompt
+
+`defaultSystemPrompt` (on `addGptRoutes` and `AiApp`) is an app-wide system prompt for every chat turn, on `/gpt/prompt` and the headless `turn` action. It is a string, or a function `({req}) => string | undefined | Promise<string | undefined>` called once per turn with the signed-in `req.user`. The system prompt order is:
+
+1. the default system prompt
+2. the Langfuse prompt (`langfuseSystemPromptName`)
+3. project context and memories
+4. the request's `systemPrompt`
+5. the asks, blocks, and compact sections, when those options are on
+
+The value is trimmed. An empty or whitespace-only value, or `undefined`, adds nothing. A function that throws is logged with `logger.warn` and the turn continues without it. An admin `promptName` override replaces the whole prompt, the default included. Image-output models receive it too.
+
+To let admins edit it, mount `aiConfigurationSchema` on the app's `configurationPlugin` model and read it per turn with `configurationPromptGetter`:
+
+```typescript
+import {AiApp, aiConfigurationSchema, configurationPromptGetter} from "@terreno/ai";
+import {configurationPlugin} from "@terreno/api";
+import mongoose, {Schema} from "mongoose";
+
+const appConfigSchema = new Schema({ai: aiConfigurationSchema /* , ...other sections */});
+appConfigSchema.plugin(configurationPlugin);
+const AppConfig = mongoose.model("AppConfig", appConfigSchema);
+
+new AiApp({aiService, defaultSystemPrompt: configurationPromptGetter(AppConfig, "ai.systemPrompt")});
+```
+
+`aiConfigurationSchema` (`_id: false`) has `systemPrompt` ("Default system prompt for every GPT chat") and `imageStylePrompt` ("Style guidance added to every generated image prompt"), both strings defaulting to `""`. `configurationPromptGetter(model, path)` returns a function that reads `model.getConfig(path)` on each turn and returns `undefined` for an empty value.
+
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
 Pass `uiBlocks: true` (or `{hostActions, html, imageHosts, repair, richBlocks, datasetTtlDays, datasetMaxRows}`) to require each assistant reply to be a block document. `html: true` allows `html` blocks and sanitizes them before they are stored. `imageHosts` lists hostnames allowed on `https` image sources in `image`, `gallery`, and `list` blocks; Markdown images in `text` blocks and plain replies are not checked against it (see [Agent UI asks](../explanation/agent-ui-asks.md)). The client receives that document once, after missing action ids are filled, `repair: true` rewrites it, and html is sanitized, and before `{ask}`. `{replace: "text", text}` is sent only when text was already streamed and then changed. `datasetTtlDays` defaults to `0` (keep the dataset). `datasetMaxRows` defaults to 50,000. Off by default; with it off, the system prompt, SSE events, `/gpt/datasets`, and `/gpt/actions` are unchanged. When it is on, the system prompt gains `TERRENO_UI_BLOCKS_SYSTEM_PROMPT` (host callback names included when `hostActions` is set). After the final text, the route validates it and sends `{blocks: {ok, errors, warnings}}` before `{done}`. `hostActions` is the callback allowlist: a name outside it fails with `UNKNOWN_HOST_ACTION`. A stepper or checklist `callback.name` must also name an action whose `handles` is that block; a stepper that names any other registered action fails with `UNKNOWN_HOST_ACTION`. `{repair: true}` runs one repair call when validation fails and stores that reply. A document that is still invalid is stored with a `Block validation errors:` note so the next turn sees it. See [Validate a block document locally](../how-to/agent-ui-blocks.md).
@@ -350,7 +378,7 @@ With `asks` on, pass the same options to `addGptHistoryRoutes` as `chat` to add 
 | `historyId` | string? | Continue this conversation; omit to start one. Required with `askResponse`. |
 | `askResponse` | object? | The answer to the pending ask: `{toolCallId, action, content?, reason?}`. Read only when `asks` is on. Send it instead of `prompt`, without `attachments`. See [Answer an ask](agent-ui-asks.md#answer-an-ask). |
 | `surface` | `"full"` \| `"compact"`? | Where the user reads and answers. Default `"full"`. `"compact"` is a watch or another small screen: the model gets only button-sized asks and is asked for replies of at most two short sentences. Any other value returns 400. See [Compact surface](agent-ui-asks.md#compact-surface). |
-| `systemPrompt` | string? | System prompt for this turn; project context and the Langfuse prompt are prepended |
+| `systemPrompt` | string? | System prompt for this turn; the default system prompt, the Langfuse prompt, and project context are prepended |
 | `attachments` | array? | `{type: "image" \| "file", url, mimeType, filename?}` items added to the user message |
 | `model` | string? | Model id passed to `createModelFn` or `createServerModelFn` |
 | `projectId` | string? | Project whose context and memories are prepended to the system prompt; saved on a history that has none |
@@ -487,6 +515,7 @@ new AiApp({
 | `asks` | Let the model ask the user typed questions in chat: `true` or `{approvals, kinds, maxFileSizeBytes}`. `approvals` sets the [approval ask](agent-ui-asks.md#approval-asks) for host tools with `needsApproval`. Passed to `addGptRoutes`, and adds the headless `pendingAsks` and `turn` actions to `/gpt/histories`; see [Agent UI Asks](agent-ui-asks.md). `maxFileSizeBytes` also caps `/files/upload`. |
 | `createModelFn` | Build model from per-request `x-ai-api-key` |
 | `createServerModelFn` | Server-side model factory (e.g. Vertex ADC) without per-request key |
+| `defaultSystemPrompt` | App-wide default system prompt, put first in every chat turn. A string, or `({req}) => string \| undefined` (sync or async), such as `configurationPromptGetter(AppConfig, "ai.systemPrompt")`. See [Default system prompt](#default-system-prompt) |
 | `demoMode` | Not read. The routes send a canned demo reply whenever no AI service resolves |
 | `fileStorageService` + `gcsBucket` | Enable file upload routes, durable `/gpt/prompt` attachments, and `files` ask answers that name uploads by `fileId` |
 | `fileUploadsEnabled` | `false` or a function returning `false` rejects uploads and chat attachments with `403`. Omit to leave uploads enabled |

@@ -411,6 +411,14 @@ export interface UiBlocksOptions {
   richBlocks?: boolean;
 }
 
+/**
+ * An app-wide default system prompt: a string, or a function of the request that returns one.
+ * The result is trimmed; empty or `undefined` adds nothing.
+ */
+export type DefaultSystemPrompt =
+  | string
+  | ((args: {req: import("express").Request}) => string | undefined | Promise<string | undefined>);
+
 export interface GptRouteOptions {
   /** Pre-configured AIService. Optional when using per-request keys or demo mode. */
   aiService?: import("../service/aiService").AIService;
@@ -448,6 +456,12 @@ export interface GptRouteOptions {
    * `POST /gpt/actions`. `{repair: true}` runs one repair call when that check fails.
    */
   uiBlocks?: boolean | UiBlocksOptions;
+  /**
+   * App-wide default system prompt, put first in every chat turn's system prompt (before the
+   * Langfuse prompt, project context, and the request's `systemPrompt`). An admin `promptName`
+   * override replaces it. A function that throws is logged and the turn continues without it.
+   */
+  defaultSystemPrompt?: DefaultSystemPrompt;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;

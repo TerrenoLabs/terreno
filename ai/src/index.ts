@@ -41,6 +41,7 @@ export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
+export {GptSkill, setSkillFileStorage} from "./models/gptSkill";
 export {getProjectModel, Project} from "./models/project";
 export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
 export {LocalDatasetStore} from "./observability/local/datasetStore";
@@ -104,6 +105,7 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {addSkillRoutes} from "./routes/skills";
 export {findAgentBlock} from "./service/agentBlocks";
 export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
@@ -155,3 +157,9 @@ export {
 } from "./service/vertex";
 export type {WebSearchProvider, WebSearchResult} from "./service/webSearchTool";
 export * from "./types";
+export type {
+  GptSkillDocument,
+  GptSkillFile,
+  GptSkillModel,
+  GptSkillScope,
+} from "./types/skills";

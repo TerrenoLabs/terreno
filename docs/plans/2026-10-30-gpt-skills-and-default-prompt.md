@@ -270,7 +270,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, backend-test-env, ai-prompt-governance
   - Docs: T12
 
-- [ ] **T3** — Add the GptSkill model and /gpt/skills CRUD with user and global scopes
+- [x] **T3** — Add the GptSkill model and /gpt/skills CRUD with user and global scopes
   - Depends on: none
   - Files: ai/src/models/gptSkill.ts, ai/src/routes/skills.ts, ai/src/routes/skills.test.ts, ai/src/types/skills.ts
   - Criteria:

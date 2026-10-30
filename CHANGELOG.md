@@ -20,6 +20,60 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.19.4] - 2026-10-29
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.4.md`](mcp-server/src/docs/upgrades/57.19.4.md).
+
+### Added
+
+- The hosted Terreno MCP server rate limits JSON-RPC calls per client IP (default 120 requests per 60 seconds). Excess calls get HTTP 429 with a JSON-RPC error naming the limit and retry window. Configure with `TERRENO_MCP_RATE_LIMIT_MAX` (`0` disables), `TERRENO_MCP_RATE_LIMIT_WINDOW_MS`, and `TERRENO_MCP_TRUST_PROXY_HOPS`.
+- **Provisional consent signing.** Staff can record consent on a user's behalf with
+  `POST /consent-responses/provisional` and a required note. Pass `accessControl` to
+  `ConsentApp` and grant the new `consentResponse:signOnBehalf` RBAC action (the built-in
+  `admin` role gets it on the next role seed); without RBAC only `user.admin` may sign. A
+  provisional signature counts as consent but leaves the form in the user's consent gate,
+  which now shows "Signed on your behalf by <name> on <date>". The user's own answer always
+  wins.
+- `getConsentStatuses({userId})` (`@terreno/api`) and `GET /consent-responses/status` return
+  each form's `pending`, `provisional`, `signed`, or `declined` status. `POST
+  /consent-responses/:id/void` voids a provisional signature and keeps the record. With
+  `AuditApp`, signing, voiding, and status reads write audit events; audit events gain a
+  `read` operation and a `viewed` verb.
+- `ProvisionalConsentSigner` and `useProvisionalConsent` (`@terreno/ui`) list a user's forms,
+  sign with a note, print, and void. `printConsentHtml` prints consent HTML on native and web,
+  and `buildConsentPdfHtml` renders a "Provisional signature" section.
+- `ConsentResponseViewer` and `ConsentHistory` (`@terreno/admin-frontend`) show provisional
+  signatures and gain Print buttons, and their PDFs include the provisional signature.
+
+### Changed
+
+- `@terreno/admin-frontend` renders a nested (non-array) object field that has `items` in its admin config as a titled group with one control per subfield, instead of a JSON text box. Groups recurse to any depth and also render inside array-of-subdocument items. `Mixed`, `Map`, and objects without `items` keep the JSON editor, and a field `widget` still takes precedence. Subfield test IDs use the dotted path (`admin-field-tasks.enabled`, group `admin-field-group-tasks`); inside array items, nested groups are prefixed with the array key and item index (`admin-field-servers.0.media.port`). New array items and create-mode nested objects start from subfield defaults and leave out system fields and enums, refs, dates, and `Mixed` subfields that have no default. Save still sends the whole object for the field.
+- The hosted Terreno MCP server moves to `https://mcp.terreno.app/mcp`. The README, docs, and `create-terreno-app` now use it. `https://mcp.terreno.flourish.health/mcp` keeps serving for at least one more release; update `.cursor/mcp.json`, `.mcp.json`, and `claude mcp add` registrations as described in `docs/how-to/set-up-terreno-mcp.md`.
+- Card, MarkdownEditor, the admin shell, and the admin filter drawer switch to the narrow layout below the desktop floor (1024pt) instead of 768pt. Admin home and the example sync debugger stack their side-by-side panes below that floor. Demo headers and stories read the live window width instead of a one-time viewport check. `isSupportedDesktopWidth` reports that floor. `ADMIN_FILTER_MOBILE_BREAKPOINT` is 1024.
+
+### Deprecated
+
+- `installTerrenoDevConsoleLogger` moves to `@terreno/syncdb` (also `@terreno/syncdb/devConsoleLogger`) and takes `{baseUrl}`. The `@terreno/rtk` export is a deprecated wrapper that keeps working with no arguments.
+- `terreno-mcp-local` adds `get_client_state`, which inspects either the RTK Query store or a SyncDB client and returns a `layer` field (`rtk`, `syncdb`, `syncdb+rtk`, or `none`). `get_rtk_state` is now a deprecated alias for one release and returns the same wrapped response. `terreno state` uses the new tool.
+
+### Fixed
+
+- `@terreno/api` answers a malformed JSON request body with 400 `Malformed request body` instead of 500 `Internal server error`. `apiErrorMiddleware` now converts body-parser client errors with the new `bodyParserErrorToAPIError` helper and keeps the parser's status: an oversized body returns 413 `Request body too large`, and an unsupported charset returns 415 `Unsupported request body encoding`. The parser's message is in `detail`. These errors are logged at `warn` and are not sent to Sentry.
+- OpenAPI specs and model metadata from `@terreno/api` no longer mark a field as required when
+  its Mongoose `required` is a function. Such a field is only required on some documents, so
+  generated SDKs now type it as optional (for example `ConsentResponse.provisionalNote` and
+  `GptHistory.text`). Saving still enforces the condition.
+- Apps generated by `create-terreno-app` now send web console errors and warnings to the backend, so `read_logs` and `last_error` with the `browser` source see them. The generated `frontend/app/_layout.tsx` calls `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` at startup, and the generated `backend/.env` sets `NODE_ENV=development` so `TerrenoApp` registers `POST /__terreno/browser-logs`. In an existing app, add both lines; see `docs/how-to/set-up-terreno-mcp.md`.
+- `create-terreno-app` MCP configs now start `terreno-mcp-local` with `bunx -p @terreno/mcp terreno-mcp-local`. The old `bunx terreno-mcp-local` entry failed in generated apps because no npm package has that name. Generated apps also get a root `.mcp.json` for Claude Code with the same servers as `.cursor/mcp.json`. In an existing app, add `"-p", "@terreno/mcp"` before `"terreno-mcp-local"` in the `terreno-local` args; see `docs/how-to/set-up-terreno-mcp.md`.
+- `installTerrenoDevConsoleLogger` no longer logs `Requiring unknown module "<id>"` on the first lazy component load on web (for example `ConsentNavigator` after login). Metro reports the missing split-bundle module to `ErrorUtils` while Expo's web `import()` probes it, and Expo then catches the rethrown error and loads the bundle. The logger now records an `ErrorUtils` error only after the previous handler consumes it. An error that is rethrown and never caught is still logged by the window listeners, and unhandled rejections now include the `Error` stack.
+- `terreno_bootstrap_ai_rules` now returns files that `rulesync generate` accepts with rulesync 9. `rulesync.jsonc` and the root rule target `cursor`, `claudecode`, `copilot`, and `agentsmd` (rulesync 9 has no `windsurf` target; Windsurf reads `AGENTS.md`). The single `.rulesync/rules/00-root.md` root rule now covers Claude Code, so the tool no longer returns the `01-claudecode-root.md` `localRoot` rule that rulesync rejected; delete it if an earlier bootstrap left it behind. The instructions run `bunx rulesync@9 generate` instead of the removed `rulesync sync`. The root rule now includes everything `create-terreno-app` writes to `CLAUDE.md` and `.cursorrules` (including the "Adding Features" steps), and the instructions say to delete the superseded `.cursorrules` and to move hand edits to `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.cursor/rules/`, and `.github/instructions/` into `.rulesync/rules/10-project.md` before generating, because `rulesync generate` overwrites or deletes them.
+- `terreno_generate_form_fields` now emits code that compiles against `@terreno/ui`: fields use `title`, `onChange`, and `errorText` (not `label`, `onChangeText`/`onChangeValue`, `error`), dates use `type` (not `mode`), `NumberField` gets `type="number"` and a string value, passwords use `TextField type="password"`, and required fields declare the `errors` state they read. A test type-checks the output against the `@terreno/ui` declarations so prop drift fails CI. The `terreno://docs/ui` form-field example uses the same props.
+- `terreno_validate_model_schema` no longer reports "Missing TypeScript interfaces" when the model imports its `Document` type from `src/types/models/` or `src/modelInterfaces.ts`; it still reports a model with no `Document` type.
+- The hosted Terreno MCP image now builds the full `@terreno/ui` props data and the versioned docs search corpus, so `terreno_get_component_docs` knows every component and `terreno_search_docs` searches versioned docs instead of only the bundled resources. The `terreno://docs/patterns` resource now shows SyncDB collection CRUD instead of the deprecated RTK pattern.
+- `terreno-mcp-local` CDP tools (`read_logs` source `app`, `last_error`, `get_client_state`, `evaluate`, `navigate`) connect to Metro again on Expo 57. The debugger socket now sends the `Origin` header React Native dev-middleware requires, and when another debugger such as React Native DevTools takes the session the status names Metro's close reason.
+- `terreno-mcp-local` `database_schema` and `database_query` work under Bun again. They previously failed with `undefined is not an object (evaluating 'mongoose.connection.readyState')` whenever a Mongo URI was found; each call now uses its own short-lived connection.
+- Prevented modelRouter array-item PATCH requests with nested subdocument arrays from failing after the first update.
+
 ## [57.19.2] - 2026-10-26
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.19.2.md`](mcp-server/src/docs/upgrades/57.19.2.md).

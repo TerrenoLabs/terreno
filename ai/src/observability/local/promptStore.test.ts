@@ -142,6 +142,51 @@ describe("LocalPromptStore", () => {
     ).toBe(2);
   });
 
+  it("lists prompts whose saved text references this prompt", async () => {
+    await store.create({
+      folder: "shared",
+      name: "base-rules",
+      template: "Be brief.",
+      type: "text",
+    });
+    await store.moveLabel("base-rules", {label: "production", version: 1});
+    await store.create({
+      folder: "examples",
+      name: "triage-intake",
+      template: "{{> base-rules}}\nTriage the form.",
+      type: "text",
+    });
+    await store.createVersion("triage-intake", {
+      template: "No shared rules.",
+      type: "text",
+    });
+    await store.create({
+      folder: "examples",
+      name: "pinned-caller",
+      template: "{{> base-rules version=1}}",
+      type: "text",
+    });
+    await store.create({
+      folder: "examples",
+      name: "unrelated",
+      template: "base-rules is only mentioned in prose.",
+      type: "text",
+    });
+
+    const detail = await store.getDetail("base-rules");
+    expect(detail.usedBy).toEqual({
+      items: [
+        {folder: "examples", name: "pinned-caller", versions: [1]},
+        {folder: "examples", name: "triage-intake", versions: [1]},
+      ],
+      limit: 20,
+      total: 2,
+    });
+
+    const caller = await store.getDetail("triage-intake");
+    expect(caller.usedBy).toEqual({items: [], limit: 20, total: 0});
+  });
+
   it("filters hub traces by prompt version and keeps unfiltered detail", async () => {
     await store.create({
       folder: "examples",

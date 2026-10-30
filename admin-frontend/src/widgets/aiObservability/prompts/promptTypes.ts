@@ -39,6 +39,12 @@ export interface PromptRelatedTraceSummary {
   status: "error" | "ok";
 }
 
+export interface PromptUsedBy {
+  folder: string;
+  name: string;
+  versions: number[];
+}
+
 export interface PromptRelationships {
   experiments: {
     items: PromptRelatedExperimentSummary[];
@@ -73,6 +79,12 @@ export interface PromptDetail {
   name: string;
   relationships: PromptRelationships;
   tags: string[];
+  /** Other prompts whose saved text contains `{{> this name}}`, capped like other relationships. */
+  usedBy: {
+    items: PromptUsedBy[];
+    limit: number;
+    total: number;
+  };
   versions: PromptVersionDetail[];
 }
 
@@ -81,10 +93,22 @@ const emptyRelationships = (): PromptRelationships => ({
   traces: {items: [], limit: 20, total: 0},
 });
 
+const emptyUsedBy = (): PromptDetail["usedBy"] => ({items: [], limit: 20, total: 0});
+
+const normalizeUsedBy = (
+  usedBy: PromptDetail["usedBy"] | PromptUsedBy[] | undefined
+): PromptDetail["usedBy"] => {
+  if (Array.isArray(usedBy)) {
+    return {items: usedBy, limit: 20, total: usedBy.length};
+  }
+  return usedBy ?? emptyUsedBy();
+};
+
 const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
   return {
     ...detail,
     relationships: detail.relationships ?? emptyRelationships(),
+    usedBy: normalizeUsedBy(detail.usedBy),
   };
 };
 
@@ -102,6 +126,23 @@ export interface FolderCount {
 }
 
 export const ALL_FOLDERS = "";
+
+/**
+ * The registry tag that pulls another prompt's production body into this one.
+ * Keep this aligned with `promptReferencePattern` in `@terreno/ai`: `{{> name}}`.
+ */
+const promptReferenceTag = (name: string): string => {
+  return `{{> ${name}}}`;
+};
+
+/** Appends a prompt reference, keeping it on its own line when the field already has text. */
+export const appendPromptReference = (current: string, name: string): string => {
+  const tag = promptReferenceTag(name);
+  if (current.trim().length === 0) {
+    return tag;
+  }
+  return current.endsWith("\n") ? `${current}${tag}` : `${current}\n${tag}`;
+};
 
 export const TEMPERATURE_PRESETS: Array<{label: string; value: string}> = [
   {label: "Deterministic (0)", value: "0"},

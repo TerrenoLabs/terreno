@@ -14,6 +14,7 @@ import {DateTime} from "luxon";
 import React, {useCallback, useState} from "react";
 import {AiPromptPlaygroundView} from "./AiPromptPlaygroundView";
 import {
+  appendPromptReference,
   nextVersionFromDetail,
   outgoingProductionCopy,
   type PlaygroundRunResult,
@@ -46,6 +47,8 @@ export interface AiPromptEditorViewProps {
     type: "chat" | "text";
     variables?: Array<{key: string; required: boolean}>;
   }) => Promise<void>;
+  /** Other prompt names the operator can insert as `{{> name}}`. */
+  promptNames?: string[];
   onSelectVersion: (version: number) => void;
   onSetProduction: (version: number) => Promise<void>;
   playgroundBlockedMessage?: string;
@@ -113,6 +116,7 @@ const AiPromptEditorForm: React.FC<{
   onOpenProduction: () => void;
   onSaveVersion: AiPromptEditorViewProps["onSaveVersion"];
   productionError?: string;
+  promptNames: string[];
   saveError?: string;
 }> = ({
   canPromote,
@@ -124,6 +128,7 @@ const AiPromptEditorForm: React.FC<{
   onOpenProduction,
   onSaveVersion,
   productionError,
+  promptNames,
   saveError,
 }) => {
   const [type, setType] = useState<"chat" | "text">(current.type);
@@ -135,6 +140,21 @@ const AiPromptEditorForm: React.FC<{
   const [temperature, setTemperature] = useState(
     String((current.config?.temperature as number | undefined) ?? 0.3)
   );
+  const [referenceOpen, setReferenceOpen] = useState(false);
+  const [referenceName, setReferenceName] = useState(promptNames[0] ?? "");
+  const [referenceTarget, setReferenceTarget] = useState<"system" | "template">("template");
+
+  const handleInsertReference = useCallback((): void => {
+    if (!referenceName) {
+      return;
+    }
+    if (referenceTarget === "system" && type === "chat") {
+      setSystem((currentSystem) => appendPromptReference(currentSystem, referenceName));
+    } else {
+      setTemplate((currentTemplate) => appendPromptReference(currentTemplate, referenceName));
+    }
+    setReferenceOpen(false);
+  }, [referenceName, referenceTarget, type]);
 
   const handleSaveAsNext = useCallback(async (): Promise<void> => {
     await onSaveVersion({
@@ -179,6 +199,71 @@ const AiPromptEditorForm: React.FC<{
         title="Template"
         value={template}
       />
+      {canUpdate ? (
+        <Box gap={2}>
+          <Box alignItems="center" direction="row" gap={2} wrap>
+            <Button
+              disabled={promptNames.length === 0}
+              onClick={() => {
+                setReferenceName(promptNames[0] ?? "");
+                setReferenceTarget("template");
+                setReferenceOpen(true);
+              }}
+              testID="ai-prompt-insert-reference"
+              text="Insert prompt reference"
+              variant="outline"
+            />
+            <Text color="secondaryDark" size="sm">
+              Adds {"{{> name}}"} so this prompt includes another prompt's production text.
+            </Text>
+          </Box>
+          <Modal
+            onDismiss={() => {
+              setReferenceOpen(false);
+            }}
+            primaryButtonDisabled={!referenceName}
+            primaryButtonOnClick={handleInsertReference}
+            primaryButtonText="Insert"
+            secondaryButtonOnClick={() => {
+              setReferenceOpen(false);
+            }}
+            secondaryButtonText="Cancel"
+            size="md"
+            testID="ai-prompt-reference-modal"
+            title="Reference another prompt"
+            visible={referenceOpen}
+          >
+            <Box gap={3}>
+              <SelectField
+                onChange={setReferenceName}
+                options={promptNames.map((name) => ({label: name, value: name}))}
+                requireValue
+                testID="ai-prompt-reference-name"
+                title="Prompt"
+                value={referenceName}
+              />
+              {type === "chat" ? (
+                <SelectField
+                  onChange={(value) => {
+                    setReferenceTarget(value as "system" | "template");
+                  }}
+                  options={[
+                    {label: "Template", value: "template"},
+                    {label: "System", value: "system"},
+                  ]}
+                  requireValue
+                  testID="ai-prompt-reference-target"
+                  title="Insert into"
+                  value={referenceTarget}
+                />
+              ) : undefined}
+              <Text color="secondaryDark" size="sm">
+                {`Inserts {{> ${referenceName}}} on its own line. That follows the other prompt's production label.`}
+              </Text>
+            </Box>
+          </Modal>
+        </Box>
+      ) : undefined}
       <TextField
         disabled={!canUpdate}
         helperText="Comma-separated names. Schema summary of the selected version is read-only below."
@@ -248,6 +333,7 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
   playgroundError,
   playgroundResult,
   productionError,
+  promptNames = [],
   saveError,
   selectedVersion,
 }) => {
@@ -369,6 +455,7 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
             }}
             onSaveVersion={onSaveVersion}
             productionError={productionError}
+            promptNames={promptNames}
             saveError={saveError}
           />
         )}

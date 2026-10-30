@@ -66,7 +66,7 @@ export const toHumanAnswerViews = (
       return [
         evaluatorId,
         {
-          answeredAt: DateTime.fromJSDate(new Date(answer.answeredAt)).toUTC().toISO() ?? "",
+          answeredAt: DateTime.fromJSDate(answer.answeredAt).toUTC().toISO() ?? "",
           fingerprint: answer.fingerprint,
           reviewItemId: answer.reviewItemId,
           scores: answer.scores,

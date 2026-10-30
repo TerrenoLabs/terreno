@@ -1,5 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
-import {fireEvent} from "@testing-library/react-native";
+import {fireEvent, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiPromptHubView} from "./AiPromptHubView";
@@ -45,6 +45,7 @@ const detail: PromptDetail = {
     },
   },
   tags: ["gold"],
+  usedBy: {items: [], limit: 20, total: 0},
   versions: [
     {
       sensitive: false,
@@ -98,6 +99,7 @@ describe("AiPromptHubView", () => {
 
     expect(view.getByTestId("ai-prompt-description")).toHaveTextContent("Operator-facing summary");
     expect(view.getByTestId("ai-prompt-folder")).toBeTruthy();
+    expect(view.getByTestId("ai-prompt-used-by-empty")).toBeTruthy();
     expect(view.getByTestId("ai-prompt-editor-form")).toBeTruthy();
     expect(view.getByText(/Instructions the model follows/)).toBeTruthy();
     expect(view.getByText(/The message sent to the model/)).toBeTruthy();
@@ -115,6 +117,60 @@ describe("AiPromptHubView", () => {
     fireEvent.press(view.getByText("Experiments"));
     expect(view.getByTestId("ai-prompt-experiments")).toBeTruthy();
     expect(view.getByText("summarize-rollout")).toBeTruthy();
+  });
+
+  it("lists prompts that reference this one and opens them", async () => {
+    const onOpenPrompt = mock(() => {});
+    const view = renderWithTheme(
+      <AiPromptHubView
+        {...baseProps}
+        detail={{
+          ...detail,
+          usedBy: {
+            items: [{folder: "examples", name: "triage-intake", versions: [1, 3]}],
+            limit: 20,
+            total: 1,
+          },
+        }}
+        onOpenPrompt={onOpenPrompt}
+      />
+    );
+    expect(view.getByText("examples · v1, v3")).toBeTruthy();
+    fireEvent.press(view.getByTestId("ai-prompt-used-by-triage-intake"));
+    await waitFor(() => {
+      expect(onOpenPrompt).toHaveBeenCalledWith("triage-intake");
+    });
+  });
+
+  it("inserts a prompt reference into the template", async () => {
+    const view = renderWithTheme(
+      <AiPromptHubView {...baseProps} promptNames={["base-rules", "tone"]} />
+    );
+    fireEvent.press(view.getByText("Versions"));
+    fireEvent.press(view.getByTestId("ai-prompt-insert-reference"));
+    await waitFor(() => {
+      expect(view.getByTestId("ai-prompt-reference-modal")).toBeTruthy();
+    });
+    fireEvent.press(view.getByTestId("ai-prompt-reference-modal.primary"));
+    await waitFor(() => {
+      expect(view.getByTestId("ai-prompt-template").props.value).toContain("{{> base-rules}}");
+    });
+  });
+
+  it("caps the used-by list and shows a plain name when navigation is absent", () => {
+    const callers = [{folder: "examples", name: "triage-intake", versions: [2]}];
+    const view = renderWithTheme(
+      <AiPromptHubView
+        {...baseProps}
+        detail={{
+          ...detail,
+          usedBy: {items: callers, limit: 20, total: 4},
+        }}
+        onOpenPrompt={undefined}
+      />
+    );
+    expect(view.getByTestId("ai-prompt-used-by-total")).toHaveTextContent("Showing 1 of 4.");
+    expect(view.getByTestId("ai-prompt-used-by-triage-intake")).toHaveTextContent("triage-intake");
   });
 
   it("shows version write controls for operators", () => {

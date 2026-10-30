@@ -51,6 +51,20 @@ export interface PromptRelationships {
   };
 }
 
+/** Another prompt whose saved system or template contains `{{> name}}`. */
+export interface PromptUsedBy {
+  folder: string;
+  name: string;
+  versions: number[];
+}
+
+/** Bounded used-by list, same cap as trace and experiment relationships. */
+export interface PromptUsedByPage {
+  items: PromptUsedBy[];
+  limit: number;
+  total: number;
+}
+
 export interface PromptVersionFields {
   config?: Record<string, unknown>;
   inputSchema?: Record<string, unknown>;
@@ -142,6 +156,11 @@ const versionBody = (system?: string, template?: string): string => {
     return system;
   }
   return template ?? "";
+};
+
+/** Matches `{{> name}}`, `{{> name label=…}}`, and `{{> name version=n}}`. */
+const promptReferencePattern = (name: string): RegExp => {
+  return new RegExp(`\\{\\{>\\s*${escapeRegex(name)}(\\s|\\}\\})`);
 };
 
 const escapeRegex = (value: string): string => {
@@ -289,6 +308,7 @@ export class LocalPromptStore implements PromptRegistry {
     name: string;
     relationships: PromptRelationships;
     tags: string[];
+    usedBy: PromptUsedByPage;
     versions: Array<{
       config?: Record<string, unknown>;
       created: string;
@@ -318,6 +338,7 @@ export class LocalPromptStore implements PromptRegistry {
       name: prompt.name,
       relationships: await this.loadRelationships(prompt.name, options?.promptVersion),
       tags: prompt.tags,
+      usedBy: await this.loadUsedBy(prompt.name),
       versions: versions.map((row) => {
         return {
           config: row.config,
@@ -618,6 +639,47 @@ export class LocalPromptStore implements PromptRegistry {
     };
   }
 
+  /**
+   * Prompts that mention this name in a saved `{{> name}}` tag, with the versions that do.
+   * The current prompt is omitted so a self-tag does not list itself.
+   */
+  private async loadUsedBy(name: string): Promise<PromptUsedByPage> {
+    const versions = await registerObsPromptVersion().find({
+      $or: [{system: promptReferencePattern(name)}, {template: promptReferencePattern(name)}],
+    });
+    const versionsByPromptId = new Map<string, number[]>();
+    for (const version of versions) {
+      const promptId = String(version.promptId);
+      const current = versionsByPromptId.get(promptId) ?? [];
+      current.push(version.version);
+      versionsByPromptId.set(promptId, current);
+    }
+    const empty = {items: [], limit: PROMPT_RELATIONSHIP_LIMIT, total: 0};
+    if (versionsByPromptId.size === 0) {
+      return empty;
+    }
+    const prompts = await registerObsPrompt().find({
+      _id: {$in: [...versionsByPromptId.keys()]},
+    });
+    const items = prompts
+      .filter((prompt) => prompt.name !== name)
+      .map((prompt) => {
+        return {
+          folder: prompt.folder,
+          name: prompt.name,
+          versions: [...(versionsByPromptId.get(String(prompt._id)) ?? [])].sort(
+            (left, right) => left - right
+          ),
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return {
+      items: items.slice(0, PROMPT_RELATIONSHIP_LIMIT),
+      limit: PROMPT_RELATIONSHIP_LIMIT,
+      total: items.length,
+    };
+  }
+
   private async loadRelationships(
     promptName: string,
     promptVersion?: number
@@ -770,7 +832,7 @@ export class LocalPromptStore implements PromptRegistry {
     const queue = [name];
     while (queue.length > 0) {
       const target = queue.shift() as string;
-      const includesTarget = new RegExp(`\\{\\{>\\s*${escapeRegex(target)}(\\s|\\}\\})`);
+      const includesTarget = promptReferencePattern(target);
       const promptIds = await ObsPromptVersion.distinct("promptId", {
         $or: [{system: includesTarget}, {template: includesTarget}],
       });

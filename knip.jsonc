@@ -58,6 +58,9 @@
     // The evaluator algorithms are direct unit-test seams; production calls both through
     // runEvaluator, while tests exercise their detailed coercion and failure contracts.
     "ai/src/observability/evaluate.ts": ["exports"],
+    // reviewShortcutAction is the keydown seam. Production calls it only inside this
+    // module; tests import it to assert modifier and typing suppression.
+    "admin-frontend/src/widgets/aiObservability/review/reviewShortcuts.ts": ["exports"],
     // Published public types may have no in-monorepo consumer; removing them would be a
     // breaking package API change.
     "admin-spa/components/AppConfigGate.tsx": ["types"],

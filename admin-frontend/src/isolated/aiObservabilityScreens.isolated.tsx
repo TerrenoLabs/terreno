@@ -1975,7 +1975,33 @@ describe("AiExperimentNewScreen", () => {
           counts: {auto: 0, human: 2, needsReview: 0, total: 2},
           created: "2026-01-01T00:00:00.000Z",
           id: "ds-1",
+          judgments: [
+            {
+              answered: 2,
+              current: 2,
+              evaluatorId: "eval-human",
+              evaluatorName: "review queue",
+              stale: 0,
+              total: 2,
+            },
+            {
+              answered: 1,
+              current: 1,
+              evaluatorId: "eval-tone-human",
+              evaluatorName: "tone review",
+              stale: 0,
+              total: 2,
+            },
+          ],
           name: "gold",
+          tags: [],
+          updated: "2026-01-02T00:00:00.000Z",
+        },
+        {
+          counts: {auto: 0, human: 0, needsReview: 0, total: 1},
+          created: "2026-01-01T00:00:00.000Z",
+          id: "ds-plain",
+          name: "ungraded",
           tags: [],
           updated: "2026-01-02T00:00:00.000Z",
         },
@@ -1992,6 +2018,38 @@ describe("AiExperimentNewScreen", () => {
           runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
           target: "full trace",
           type: "human",
+        },
+        {
+          confidenceAlertBelow: 0.5,
+          dimensions: [{dataType: "boolean", key: "tone", required: true}],
+          id: "eval-tone-human",
+          name: "tone review",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+          target: "full trace",
+          type: "human",
+        },
+        {
+          confidenceAlertBelow: 0.5,
+          dimensions: [{dataType: "boolean", key: "correct", required: true}],
+          id: "eval-judge",
+          judgePromptName: "summarize",
+          name: "tone judge",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+          target: "full trace",
+          type: "llm-judge",
+        },
+        {
+          confidenceAlertBelow: 0.5,
+          dimensions: [
+            {dataType: "boolean", key: "correct", required: true},
+            {dataType: "boolean", key: "tone", required: true},
+          ],
+          id: "eval-judge-tone",
+          judgePromptName: "summarize",
+          name: "full judge",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+          target: "full trace",
+          type: "llm-judge",
         },
         {
           confidenceAlertBelow: 0.5,
@@ -2310,6 +2368,80 @@ describe("AiExperimentNewScreen", () => {
         await Promise.resolve();
       });
       expect(view.getByTestId("ai-experiment-step-review")).toBeTruthy();
+    });
+
+    it("runs a judge calibration from a judged dataset", async () => {
+      setExpoSearchParams(() => ({pipeline: "judge"}));
+      estimateShouldFail = false;
+      createShouldFail = false;
+      routerPush.mockClear();
+      const view = renderWithTheme(
+        <AiExperimentNewScreenWidget
+          api={stableApi}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="ai-experiment-new"
+        />
+      );
+      fireEvent.changeText(view.getByTestId("ai-experiment-name"), "calibrate tone");
+      fireEvent.press(view.getByTestId("ai-judge-dataset-send-review-ds-plain"));
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-dataset-ds-1-clickable"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      expect(view.getByTestId("ai-judge-step-question-set")).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-tone-human"));
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-human"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      expect(view.getByTestId("ai-judge-step-judge")).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-judge-tone"));
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-judge"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-2-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      await waitFor(() => {
+        expect(view.getByTestId("ai-judge-estimate")).toBeTruthy();
+      });
+
+      estimateShouldFail = true;
+      fireEvent.changeText(view.getByTestId("ai-judge-model-override"), "gpt-test");
+      await waitFor(() => {
+        expect(view.getByText("Could not estimate experiment cost.")).toBeTruthy();
+      });
+
+      estimateShouldFail = false;
+      createShouldFail = true;
+      fireEvent.press(view.getByTestId("ai-judge-run"));
+      await waitFor(() => {
+        expect(view.getByText("Could not start experiment.")).toBeTruthy();
+      });
+
+      createShouldFail = false;
+      fireEvent.press(view.getByTestId("ai-judge-run"));
+      await waitFor(() => {
+        expect(routerPush).toHaveBeenCalled();
+      });
     });
   });
 });
@@ -3159,6 +3291,12 @@ describe("AiPromptEditorScreen", () => {
 
   const injectedHooks = {
     useAiObservabilityPromptQuery: () => detailState,
+    useAiObservabilityPromptsQuery: () => ({
+      data: [],
+      isError: false,
+      isLoading: false,
+      refetch: mock(() => {}),
+    }),
     useAiObservabilityStatusQuery: () => ({
       data: statusData,
       isError: false,
@@ -4666,7 +4804,7 @@ describe("AiReviewItemView", () => {
           scores={{correct: true, helpfulness: 0.7}}
         />
       );
-      expect(getByText("Helpfulness")).toBeTruthy();
+      expect(getByText("2. helpfulness")).toBeTruthy();
       expect(queryByText("Mark correct only when grounded.")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-score-tone-safe"));

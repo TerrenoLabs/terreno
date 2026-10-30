@@ -237,8 +237,6 @@ prompt with `{{> name}}`.
 
 2. Reference it from each prompt's `system` or `template`. In the prompt editor, open the version and choose **Insert prompt reference**. That opens a modal where you pick the shared prompt. That appends:
 
-
-
    ```text
    {{> base-rules}}
    Triage the intake form.

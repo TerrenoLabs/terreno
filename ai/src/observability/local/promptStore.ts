@@ -58,6 +58,13 @@ export interface PromptUsedBy {
   versions: number[];
 }
 
+/** Bounded used-by list, same cap as trace and experiment relationships. */
+export interface PromptUsedByPage {
+  items: PromptUsedBy[];
+  limit: number;
+  total: number;
+}
+
 export interface PromptVersionFields {
   config?: Record<string, unknown>;
   inputSchema?: Record<string, unknown>;
@@ -301,7 +308,7 @@ export class LocalPromptStore implements PromptRegistry {
     name: string;
     relationships: PromptRelationships;
     tags: string[];
-    usedBy: PromptUsedBy[];
+    usedBy: PromptUsedByPage;
     versions: Array<{
       config?: Record<string, unknown>;
       created: string;
@@ -630,7 +637,7 @@ export class LocalPromptStore implements PromptRegistry {
    * Prompts that mention this name in a saved `{{> name}}` tag, with the versions that do.
    * The current prompt is omitted so a self-tag does not list itself.
    */
-  private async loadUsedBy(name: string): Promise<PromptUsedBy[]> {
+  private async loadUsedBy(name: string): Promise<PromptUsedByPage> {
     const versions = await registerObsPromptVersion().find({
       $or: [{system: promptReferencePattern(name)}, {template: promptReferencePattern(name)}],
     });
@@ -641,13 +648,14 @@ export class LocalPromptStore implements PromptRegistry {
       current.push(version.version);
       versionsByPromptId.set(promptId, current);
     }
+    const empty = {items: [], limit: PROMPT_RELATIONSHIP_LIMIT, total: 0};
     if (versionsByPromptId.size === 0) {
-      return [];
+      return empty;
     }
     const prompts = await registerObsPrompt().find({
       _id: {$in: [...versionsByPromptId.keys()]},
     });
-    return prompts
+    const items = prompts
       .filter((prompt) => prompt.name !== name)
       .map((prompt) => {
         return {
@@ -659,6 +667,11 @@ export class LocalPromptStore implements PromptRegistry {
         };
       })
       .sort((left, right) => left.name.localeCompare(right.name));
+    return {
+      items: items.slice(0, PROMPT_RELATIONSHIP_LIMIT),
+      limit: PROMPT_RELATIONSHIP_LIMIT,
+      total: items.length,
+    };
   }
 
   private async loadRelationships(

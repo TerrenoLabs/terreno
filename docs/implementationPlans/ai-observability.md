@@ -121,7 +121,7 @@ schema or route is rewritten later.
 | Q64 | Existing roles | Auditor receives read/list through the existing read-only sentinel; Super Admin receives all; Admin is seeded with full observability access |
 | Q65 | Existing admin users | Legacy `admin: true` remains a full-access fallback. RBAC-only users receive exactly their granted observability actions |
 | Q66 | Prompt description | Prompt metadata gains an optional consumer-authored description. Folder remains consumer-defined |
-| Q67 | Prompt hub | Prompt detail shows description plus related traces and experiments. Live relationships are derived from stored prompt name/version evidence rather than manually maintained usage records |
+| Q67 | Prompt hub | Prompt detail shows description, related traces and experiments, and `usedBy` (other prompts whose saved text contains `{{> this name}}`, capped like those relationships). The version editor inserts `{{> name}}` from a modal. Live relationships are derived from stored prompt name/version evidence rather than manually maintained usage records |
 
 ### Competitor coverage (why the SDK is split)
 
@@ -500,7 +500,7 @@ not authorization.
 
 The prompt detail screen is the relationship hub:
 
-- Overview shows folder, tags, optional description, and current production/latest versions.
+- Overview shows folder, tags, optional description, current production/latest versions, and the prompts that reference this one.
 - Versions keeps the immutable editor and history.
 - Traces lists calls related to this prompt and supports version filtering.
 - Experiments lists runs related to this prompt without loading unrelated experiments.

@@ -88,7 +88,7 @@ describe("AiPromptEditorScreenWidget", () => {
       },
     },
     tags: [],
-    usedBy: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {temperature: 0.3},
@@ -240,6 +240,23 @@ describe("AiPromptEditorScreenWidget", () => {
       expect(detailArgs.some((arg) => JSON.stringify(arg) === JSON.stringify(expected))).toBe(true);
     });
   };
+
+  it("drops the previous version pin when the prompt name changes", async () => {
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    await waitForDetailArg({name: "summarize", promptVersion: 2});
+    fireEvent.press(view.getByText("Versions"));
+    fireEvent.press(view.getByTestId("ai-prompt-version-1"));
+    await waitForDetailArg({name: "summarize", promptVersion: 1});
+
+    detailArgs.length = 0;
+    readExpoSearchParams.current = () => ({name: "triage-intake"});
+    view.rerender(<AiPromptEditorScreenWidget {...widgetProps} />);
+
+    await waitForDetailArg({name: "triage-intake"});
+    expect(detailArgs.some((arg) => arg.name === "triage-intake" && arg.promptVersion === 1)).toBe(
+      false
+    );
+  });
 
   it("requests prompt detail with latest promptVersion after bootstrap", async () => {
     renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);

@@ -45,7 +45,7 @@ const detail: PromptDetail = {
     },
   },
   tags: ["gold"],
-  usedBy: [],
+  usedBy: {items: [], limit: 20, total: 0},
   versions: [
     {
       sensitive: false,
@@ -122,7 +122,11 @@ describe("AiPromptHubView", () => {
         {...baseProps}
         detail={{
           ...detail,
-          usedBy: [{folder: "examples", name: "triage-intake", versions: [1, 3]}],
+          usedBy: {
+            items: [{folder: "examples", name: "triage-intake", versions: [1, 3]}],
+            limit: 20,
+            total: 1,
+          },
         }}
         onOpenPrompt={onOpenPrompt}
       />

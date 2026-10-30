@@ -55,7 +55,7 @@ const detail: PromptDetail = {
     traces: {items: [], limit: 20, total: 0},
   },
   tags: ["ops"],
-  usedBy: [],
+  usedBy: {items: [], limit: 20, total: 0},
   versions: [version({version: 1}), version({system: "Be brief", version: 2})],
 };
 

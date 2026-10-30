@@ -44,16 +44,26 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   const [cachedDetail, setCachedDetail] = useState<
     {detail: PromptDetail; name: string} | undefined
   >(undefined);
+  const [scopeName, setScopeName] = useState(name);
+  const nameChanged = name !== scopeName;
+  // Used by navigates to another prompt on this same screen. Drop the previous
+  // version pin during render so the new name is not queried at that version.
+  if (nameChanged) {
+    setScopeName(name);
+    setSelectedVersion(undefined);
+    setPinnedQueryVersion(undefined);
+    setCachedDetail(undefined);
+  }
 
   const detailQueryArg = useMemo(() => {
     if (!name) {
       return {name: ""};
     }
-    if (pinnedQueryVersion === undefined) {
+    if (nameChanged || pinnedQueryVersion === undefined) {
       return {name};
     }
     return {name, promptVersion: pinnedQueryVersion};
-  }, [name, pinnedQueryVersion]);
+  }, [name, nameChanged, pinnedQueryVersion]);
 
   const promptListQuery = useListQuery({});
   const promptNames = useMemo(() => {

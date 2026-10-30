@@ -155,13 +155,17 @@ describe("LocalPromptStore", () => {
     });
 
     const detail = await store.getDetail("base-rules");
-    expect(detail.usedBy).toEqual([
-      {folder: "examples", name: "pinned-caller", versions: [1]},
-      {folder: "examples", name: "triage-intake", versions: [1]},
-    ]);
+    expect(detail.usedBy).toEqual({
+      items: [
+        {folder: "examples", name: "pinned-caller", versions: [1]},
+        {folder: "examples", name: "triage-intake", versions: [1]},
+      ],
+      limit: 20,
+      total: 2,
+    });
 
     const caller = await store.getDetail("triage-intake");
-    expect(caller.usedBy).toEqual([]);
+    expect(caller.usedBy).toEqual({items: [], limit: 20, total: 0});
   });
 
   it("filters hub traces by prompt version and keeps unfiltered detail", async () => {

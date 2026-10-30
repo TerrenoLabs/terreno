@@ -79,8 +79,12 @@ export interface PromptDetail {
   name: string;
   relationships: PromptRelationships;
   tags: string[];
-  /** Other prompts whose saved text contains `{{> this name}}`. */
-  usedBy: PromptUsedBy[];
+  /** Other prompts whose saved text contains `{{> this name}}`, capped like other relationships. */
+  usedBy: {
+    items: PromptUsedBy[];
+    limit: number;
+    total: number;
+  };
   versions: PromptVersionDetail[];
 }
 
@@ -89,11 +93,22 @@ const emptyRelationships = (): PromptRelationships => ({
   traces: {items: [], limit: 20, total: 0},
 });
 
+const emptyUsedBy = (): PromptDetail["usedBy"] => ({items: [], limit: 20, total: 0});
+
+const normalizeUsedBy = (
+  usedBy: PromptDetail["usedBy"] | PromptUsedBy[] | undefined
+): PromptDetail["usedBy"] => {
+  if (Array.isArray(usedBy)) {
+    return {items: usedBy, limit: 20, total: usedBy.length};
+  }
+  return usedBy ?? emptyUsedBy();
+};
+
 const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
   return {
     ...detail,
     relationships: detail.relationships ?? emptyRelationships(),
-    usedBy: detail.usedBy ?? [],
+    usedBy: normalizeUsedBy(detail.usedBy),
   };
 };
 
@@ -112,7 +127,10 @@ export interface FolderCount {
 
 export const ALL_FOLDERS = "";
 
-/** The registry tag that pulls another prompt's production body into this one. */
+/**
+ * The registry tag that pulls another prompt's production body into this one.
+ * Keep this aligned with `promptReferencePattern` in `@terreno/ai`: `{{> name}}`.
+ */
 const promptReferenceTag = (name: string): string => {
   return `{{> ${name}}}`;
 };

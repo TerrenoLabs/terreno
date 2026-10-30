@@ -98,9 +98,14 @@ const PromptOverviewPanel: React.FC<{
       </Box>
       <Box gap={2} testID="ai-prompt-used-by">
         <Heading size="sm">Used by</Heading>
-        {detail.usedBy.length > 0 ? (
+        {detail.usedBy.items.length > 0 ? (
           <Box gap={2}>
-            {detail.usedBy.map((entry) => (
+            {detail.usedBy.total > detail.usedBy.items.length ? (
+              <Text color="secondaryDark" size="sm" testID="ai-prompt-used-by-total">
+                {`Showing ${detail.usedBy.items.length} of ${detail.usedBy.total}.`}
+              </Text>
+            ) : undefined}
+            {detail.usedBy.items.map((entry) => (
               <Box alignItems="center" direction="row" gap={2} key={entry.name} wrap>
                 {onOpenPrompt ? (
                   <Button

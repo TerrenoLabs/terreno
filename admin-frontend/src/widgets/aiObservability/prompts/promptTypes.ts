@@ -113,7 +113,7 @@ export interface FolderCount {
 export const ALL_FOLDERS = "";
 
 /** The registry tag that pulls another prompt's production body into this one. */
-export const promptReferenceTag = (name: string): string => {
+const promptReferenceTag = (name: string): string => {
   return `{{> ${name}}}`;
 };
 

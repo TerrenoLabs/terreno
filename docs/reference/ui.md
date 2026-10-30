@@ -628,6 +628,25 @@ Each history row keeps rename and delete in a three-dot overflow menu (`gpt-hist
 
 Image content parts render copy-image and (web) download actions. The message copy button on an image-only reply copies the image, not text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
 
+Each `tool-call` message renders a collapsible tool row with testID `gpt-tool-call-{toolName}`. Pass `toolLabel` to replace the default "Tool: {toolName}" text, which is also the row's accessibility label. It receives `{toolName, args, result?}`; `result` is set once the call's `tool-result` message is in `currentMessages`, so a label can read "Generating image…" until then. Return `undefined` (or an empty string) to keep the default. When the result is an object with an `error` string, the row shows that error text (`gpt-tool-call-error-{toolName}`).
+
+Each image content part renders with testID `gpt-message-image-{messageIndex}-{partIndex}`, where `messageIndex` is the message's index in `currentMessages` and `partIndex` its index in `contentParts`.
+
+```tsx
+<GPTChat
+  {...chatProps}
+  toolLabel={({args, result, toolName}) => {
+    if (toolName === "load_skill") {
+      return `Used skill ${String(args.name)}`;
+    }
+    if (toolName === "generate_image") {
+      return result === undefined ? "Generating image…" : "Generated image";
+    }
+    return undefined;
+  }}
+/>
+```
+
 The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo Library** and **Document**. On web both open a browser file input from the press itself and return `data:` URLs, so attachments survive a reload; on native they use `expo-image-picker` and `expo-document-picker`.
 
 ```tsx
@@ -671,7 +690,7 @@ into a URL.
 />
 ```
 
-Operator steps: [Add a GPT chat mascot](../how-to/add-gpt-chat-mascot.md). Demo story: `GPTChat` → `Mascot`.
+Operator steps: [Add a GPT chat mascot](../how-to/add-gpt-chat-mascot.md). Demo stories: `GPTChat` → `Mascot`, `GPTChat` → `ToolRows`.
 Blocks playground: `BlocksPlayground`.
 The example AI screen demonstrates a consumer selecting one of four bundled mascot
 images once per mount.

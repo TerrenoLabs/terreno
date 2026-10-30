@@ -5,6 +5,7 @@ import {
   GPTChatMascot,
   GPTChatNoHistory,
   GPTChatStreaming,
+  GPTChatToolRows,
 } from "@stories/GPTChat.stories";
 import {GPTChat} from "@terreno/ui";
 
@@ -53,6 +54,10 @@ export const GPTChatConfiguration: DemoConfiguration = {
     Streaming: {
       description: "Assistant reply in progress.",
       render: () => <GPTChatStreaming />,
+    },
+    ToolRows: {
+      description: "Tool rows labelled with toolLabel, including a failed tool result.",
+      render: () => <GPTChatToolRows />,
     },
   },
 };

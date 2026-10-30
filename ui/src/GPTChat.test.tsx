@@ -1718,3 +1718,146 @@ blocks:
     assert.isNull(queryByText("The preview appears when this reply finishes."));
   });
 });
+
+describe("GPTChat tool row labels and status", () => {
+  const loadSkillCall = (): GPTChatMessage => ({
+    content: "",
+    role: "tool-call",
+    toolCall: {args: {name: "house-style"}, toolCallId: "call_1", toolName: "load_skill"},
+  });
+
+  it("shows 'Tool: load_skill' when no toolLabel is given", () => {
+    const {getByLabelText, getByText} = renderChat({currentMessages: [loadSkillCall()]});
+
+    assert.isOk(getByText("Tool: load_skill"));
+    assert.isOk(getByLabelText("Tool: load_skill"));
+  });
+
+  it("gives each tool row the testID gpt-tool-call-{toolName}", () => {
+    const {getByTestId} = renderChat({currentMessages: [loadSkillCall()]});
+
+    assert.isOk(getByTestId("gpt-tool-call-load_skill"));
+  });
+
+  it("shows the toolLabel text and uses it as the accessibility label", () => {
+    const {getByLabelText, getByText, queryByText} = renderChat({
+      currentMessages: [loadSkillCall()],
+      toolLabel: () => "Used skill house-style",
+    });
+
+    assert.isOk(getByText("Used skill house-style"));
+    assert.isOk(getByLabelText("Used skill house-style"));
+    assert.isNull(queryByText("Tool: load_skill"));
+  });
+
+  it("passes toolName and args to toolLabel", () => {
+    const toolLabel = mock(
+      ({args, toolName}: {args: Record<string, unknown>; toolName: string}) =>
+        `${toolName}:${String(args.name)}`
+    );
+    const {getByText} = renderChat({currentMessages: [loadSkillCall()], toolLabel});
+
+    assert.isOk(getByText("load_skill:house-style"));
+  });
+
+  it("falls back to 'Tool: …' when toolLabel returns undefined", () => {
+    const {getByLabelText, getByText} = renderChat({
+      currentMessages: [loadSkillCall()],
+      toolLabel: () => undefined,
+    });
+
+    assert.isOk(getByText("Tool: load_skill"));
+    assert.isOk(getByLabelText("Tool: load_skill"));
+  });
+
+  it("shows the error text of a tool result that has an error string", () => {
+    const messages: GPTChatMessage[] = [
+      {
+        content: "",
+        role: "tool-call",
+        toolCall: {args: {prompt: "a cat"}, toolCallId: "call_2", toolName: "generate_image"},
+      },
+      {
+        content: "",
+        role: "tool-result",
+        toolResult: {
+          result: {error: "Image limit reached for this turn"},
+          toolCallId: "call_2",
+          toolName: "generate_image",
+        },
+      },
+    ];
+    const {getByText} = renderChat({currentMessages: messages});
+
+    assert.isOk(getByText(/Image limit reached for this turn/));
+  });
+
+  it("passes result to toolLabel only once the tool result arrives", () => {
+    const toolLabel = ({result}: {result?: unknown}): string =>
+      result === undefined ? "Generating image…" : "Generated image";
+    const call: GPTChatMessage = {
+      content: "",
+      role: "tool-call",
+      toolCall: {args: {prompt: "a cat"}, toolCallId: "call_3", toolName: "generate_image"},
+    };
+    const pending = renderChat({currentMessages: [call], toolLabel});
+    assert.isOk(pending.getByText("Generating image…"));
+    pending.unmount();
+
+    const done = renderChat({
+      currentMessages: [
+        call,
+        {
+          content: "",
+          role: "tool-result",
+          toolResult: {result: {url: "file:abc"}, toolCallId: "call_3", toolName: "generate_image"},
+        },
+      ],
+      toolLabel,
+    });
+    assert.isOk(done.getByText("Generated image"));
+    assert.isNull(done.queryByText("Generating image…"));
+  });
+
+  it("shows a tool result error on the tool row itself", () => {
+    const {getByTestId} = renderChat({
+      currentMessages: [
+        {
+          content: "",
+          role: "tool-call",
+          toolCall: {args: {prompt: "a cat"}, toolCallId: "call_4", toolName: "generate_image"},
+        },
+        {
+          content: "",
+          role: "tool-result",
+          toolResult: {
+            result: {error: "Image limit reached for this turn"},
+            toolCallId: "call_4",
+            toolName: "generate_image",
+          },
+        },
+      ],
+    });
+
+    const row = getByTestId("gpt-tool-call-generate_image");
+    assert.isOk(within(row).getByText("Image limit reached for this turn"));
+  });
+
+  it("gives each image part gpt-message-image-{messageIndex}-{partIndex}", () => {
+    const messages: GPTChatMessage[] = [
+      {content: "Make two cats", role: "user"},
+      {
+        content: "Here you go",
+        contentParts: [
+          {mimeType: "image/png", type: "image", url: "https://example.com/a.png"},
+          {mimeType: "image/png", type: "image", url: "https://example.com/b.png"},
+        ],
+        role: "assistant",
+      },
+    ];
+    const {getByTestId} = renderChat({currentMessages: messages});
+
+    assert.isOk(getByTestId("gpt-message-image-1-0"));
+    assert.isOk(getByTestId("gpt-message-image-1-1"));
+  });
+});

@@ -483,7 +483,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-frontend-tests, verify-ui-changes, accessibility-testing
   - Docs: G1
 
-- [ ] **T13** — Let GPTChat label tool rows and show their status
+- [x] **T13** — Let GPTChat label tool rows and show their status
   - Depends on: none
   - Files: ui/src/GPTChat.tsx, ui/src/GPTChat.test.tsx, ui/src/Common.ts, demo/stories/GPTChat.stories.tsx, docs/reference/ui.md
   - Criteria:

@@ -88,6 +88,7 @@ describe("AiPromptEditorScreenWidget", () => {
       },
     },
     tags: [],
+    usedBy: [],
     versions: [
       {
         config: {temperature: 0.3},
@@ -180,6 +181,12 @@ describe("AiPromptEditorScreenWidget", () => {
           refetch: detailState.refetch,
         };
       },
+      useAiObservabilityPromptsQuery: () => ({
+        data: [],
+        isError: false,
+        isLoading: false,
+        refetch: () => {},
+      }),
       useAiObservabilityStatusQuery: () => ({
         data: operatorObservabilityStatus(statusOverrides),
         isError: false,

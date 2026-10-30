@@ -1,5 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {
+  appendPromptReference,
   filterPrompts,
   folderCounts,
   formatPlaygroundMetrics,
@@ -54,6 +55,7 @@ const detail: PromptDetail = {
     traces: {items: [], limit: 20, total: 0},
   },
   tags: ["ops"],
+  usedBy: [],
   versions: [version({version: 1}), version({system: "Be brief", version: 2})],
 };
 
@@ -110,6 +112,16 @@ describe("promptTypes helpers", () => {
     expect(productionVersionFromDetail(detail)).toBe(1);
     expect(outgoingProductionCopy({detail, selectedVersion: 2})).toContain(
       "outgoing production version is v1"
+    );
+  });
+
+  it("appends a prompt reference on its own line", () => {
+    expect(appendPromptReference("", "base-rules")).toBe("{{> base-rules}}");
+    expect(appendPromptReference("Triage the form.", "base-rules")).toBe(
+      "Triage the form.\n{{> base-rules}}"
+    );
+    expect(appendPromptReference("Triage the form.\n", "base-rules")).toBe(
+      "Triage the form.\n{{> base-rules}}"
     );
   });
 

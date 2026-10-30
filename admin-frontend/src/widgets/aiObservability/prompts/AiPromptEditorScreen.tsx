@@ -12,6 +12,7 @@ import {
   type PlaygroundRunResult,
   type PromptDetail,
   unwrapPromptDetail,
+  unwrapPromptList,
   unwrapPromptPayload,
 } from "./promptTypes";
 import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
@@ -33,6 +34,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
   const {
     useCreateVersionMutation,
     useDetailQuery,
+    useListQuery,
     usePlaygroundMutation,
     useSetLabelMutation,
     useStatusQuery,
@@ -52,6 +54,14 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
     }
     return {name, promptVersion: pinnedQueryVersion};
   }, [name, pinnedQueryVersion]);
+
+  const promptListQuery = useListQuery({});
+  const promptNames = useMemo(() => {
+    return unwrapPromptList(promptListQuery.data)
+      .map((prompt) => prompt.name)
+      .filter((promptName) => promptName !== name)
+      .sort((left, right) => left.localeCompare(right));
+  }, [name, promptListQuery.data]);
 
   const {data, isError, isFetching, isLoading, refetch} = useDetailQuery(detailQueryArg, {
     skip: !name,
@@ -215,6 +225,9 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
         onOpenExperiment={(experimentId) => {
           router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
         }}
+        onOpenPrompt={(promptName) => {
+          router.push(`${prefix}/ai-prompt-editor?name=${encodeURIComponent(promptName)}`);
+        }}
         onOpenTrace={(traceId) => {
           router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(traceId)}`);
         }}
@@ -227,6 +240,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
         playgroundError={playgroundError}
         playgroundResult={playgroundResult}
         productionError={labelState.isError ? "Could not set production." : undefined}
+        promptNames={promptNames}
         relationshipsError={relationshipsError}
         saveError={createState.isError ? "Could not save a new version." : undefined}
         selectedVersion={version}

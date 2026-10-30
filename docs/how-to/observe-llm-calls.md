@@ -235,7 +235,9 @@ prompt with `{{> name}}`.
      -d '{"label":"production","version":1}'
    ```
 
-2. Reference it from each prompt's `system` or `template`:
+2. Reference it from each prompt's `system` or `template`. In the prompt editor, open the version and choose **Insert prompt reference**, then pick the shared prompt. That appends:
+
+
 
    ```text
    {{> base-rules}}

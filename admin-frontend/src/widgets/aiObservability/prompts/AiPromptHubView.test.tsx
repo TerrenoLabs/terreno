@@ -1,5 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
-import {fireEvent} from "@testing-library/react-native";
+import {fireEvent, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiPromptHubView} from "./AiPromptHubView";
@@ -45,6 +45,7 @@ const detail: PromptDetail = {
     },
   },
   tags: ["gold"],
+  usedBy: [],
   versions: [
     {
       sensitive: false,
@@ -98,6 +99,7 @@ describe("AiPromptHubView", () => {
 
     expect(view.getByTestId("ai-prompt-description")).toHaveTextContent("Operator-facing summary");
     expect(view.getByTestId("ai-prompt-folder")).toBeTruthy();
+    expect(view.getByTestId("ai-prompt-used-by-empty")).toBeTruthy();
 
     fireEvent.press(view.getByText("Versions"));
     expect(view.queryByTestId("ai-prompt-save-next")).toBeNull();
@@ -111,6 +113,40 @@ describe("AiPromptHubView", () => {
     fireEvent.press(view.getByText("Experiments"));
     expect(view.getByTestId("ai-prompt-experiments")).toBeTruthy();
     expect(view.getByText("summarize-rollout")).toBeTruthy();
+  });
+
+  it("lists prompts that reference this one and opens them", async () => {
+    const onOpenPrompt = mock(() => {});
+    const view = renderWithTheme(
+      <AiPromptHubView
+        {...baseProps}
+        detail={{
+          ...detail,
+          usedBy: [{folder: "examples", name: "triage-intake", versions: [1, 3]}],
+        }}
+        onOpenPrompt={onOpenPrompt}
+      />
+    );
+    expect(view.getByText("examples · v1, v3")).toBeTruthy();
+    fireEvent.press(view.getByTestId("ai-prompt-used-by-triage-intake"));
+    await waitFor(() => {
+      expect(onOpenPrompt).toHaveBeenCalledWith("triage-intake");
+    });
+  });
+
+  it("inserts a prompt reference into the template", async () => {
+    const view = renderWithTheme(
+      <AiPromptHubView {...baseProps} promptNames={["base-rules", "tone"]} />
+    );
+    fireEvent.press(view.getByText("Versions"));
+    fireEvent.press(view.getByTestId("ai-prompt-insert-reference"));
+    await waitFor(() => {
+      expect(view.getByTestId("ai-prompt-reference-picker")).toBeTruthy();
+    });
+    fireEvent.press(view.getByTestId("ai-prompt-reference-confirm"));
+    await waitFor(() => {
+      expect(view.getByTestId("ai-prompt-template").props.value).toContain("{{> base-rules}}");
+    });
   });
 
   it("shows version write controls for operators", () => {

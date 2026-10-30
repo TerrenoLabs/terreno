@@ -39,6 +39,12 @@ export interface PromptRelatedTraceSummary {
   status: "error" | "ok";
 }
 
+export interface PromptUsedBy {
+  folder: string;
+  name: string;
+  versions: number[];
+}
+
 export interface PromptRelationships {
   experiments: {
     items: PromptRelatedExperimentSummary[];
@@ -73,6 +79,8 @@ export interface PromptDetail {
   name: string;
   relationships: PromptRelationships;
   tags: string[];
+  /** Other prompts whose saved text contains `{{> this name}}`. */
+  usedBy: PromptUsedBy[];
   versions: PromptVersionDetail[];
 }
 
@@ -85,6 +93,7 @@ const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
   return {
     ...detail,
     relationships: detail.relationships ?? emptyRelationships(),
+    usedBy: detail.usedBy ?? [],
   };
 };
 
@@ -102,6 +111,20 @@ export interface FolderCount {
 }
 
 export const ALL_FOLDERS = "";
+
+/** The registry tag that pulls another prompt's production body into this one. */
+export const promptReferenceTag = (name: string): string => {
+  return `{{> ${name}}}`;
+};
+
+/** Appends a prompt reference, keeping it on its own line when the field already has text. */
+export const appendPromptReference = (current: string, name: string): string => {
+  const tag = promptReferenceTag(name);
+  if (current.trim().length === 0) {
+    return tag;
+  }
+  return current.endsWith("\n") ? `${current}${tag}` : `${current}\n${tag}`;
+};
 
 export const TEMPERATURE_PRESETS: Array<{label: string; value: string}> = [
   {label: "Deterministic (0)", value: "0"},

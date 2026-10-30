@@ -264,7 +264,7 @@ describe("AdminHome", () => {
     restoreWindowWidth?.();
     restoreWindowWidth = setWindowWidth(800);
     configState.config = buildConfig();
-    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("column");
   });
 
@@ -272,7 +272,7 @@ describe("AdminHome", () => {
     restoreWindowWidth?.();
     restoreWindowWidth = setWindowWidth(1024);
     configState.config = buildConfig();
-    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    const {getByTestId} = renderWithTheme(<AdminHome baseUrl="/admin" />);
     expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("row");
   });
 
@@ -280,7 +280,7 @@ describe("AdminHome", () => {
     restoreWindowWidth?.();
     restoreWindowWidth = setWindowWidth(1024);
     configState.config = buildConfig();
-    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" embedded />);
+    const {getByTestId} = renderWithTheme(<AdminHome baseUrl="/admin" embedded />);
     expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("column");
   });
 });

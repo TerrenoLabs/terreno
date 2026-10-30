@@ -504,7 +504,7 @@ describe("generated frontend Terreno 58 compatibility", () => {
 
     assert.include(
       profile,
-      'import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk"'
+      'import {useGetAuthMeQuery, usePatchAuthMeMutation, type PatchAuthMeArgs} from "@/store/apiSdk"'
     );
     assert.include(profile, "const {data: user, isLoading} = useGetAuthMeQuery();");
     assert.include(profile, "const {logout} = useSession();");

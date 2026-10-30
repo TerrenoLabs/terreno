@@ -116,7 +116,7 @@ describe("AdminShell", () => {
     restoreWindowWidth = setWindowWidth(800);
 
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );

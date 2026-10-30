@@ -1467,6 +1467,7 @@ export const useLazyGetAuthMeQuery = (
   });
 
 export type PatchAuthMeArgs = {
+  currentPassword?: string;
   email?: string;
   name?: string;
 };
@@ -1797,7 +1798,7 @@ const generateFrontendTabsProfile = (): string => {
 import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
+import {useGetAuthMeQuery, usePatchAuthMeMutation, type PatchAuthMeArgs} from "@/store/apiSdk";
 
 const ProfileScreen: React.FC = () => {
   const {logout} = useSession();
@@ -1873,7 +1874,8 @@ const ProfileScreen: React.FC = () => {
       }
       setSaveError(null);
       try {
-        await updateProfile({password: value}).unwrap();
+        // PATCH /auth/me OpenAPI types omit password; keep the RTK-era request shape.
+        await updateProfile({password: value} as PatchAuthMeArgs).unwrap();
         setPassword("");
       } catch (err) {
         console.error("Error updating password:", err);

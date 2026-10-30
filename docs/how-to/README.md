@@ -51,6 +51,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Call external APIs](call-external-apis.md) — Authenticated HTTP client, retries, and error normalization for third-party integrations
 - [Upgrade banner](upgrade-banner.md) — Soft warning and hard-block app update UX
 - [Upgrade Terreno](upgrade-terreno.md) — Lockstep `@terreno/*` bumps, note range, order, rollback
+- [Automate Terreno upgrades](automate-terreno-upgrades.md) — Hourly workflow that launches one upgrade agent when a week-old release is out and no upgrade is open
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
 - [Build a list/detail screen](build-list-detail-screens.md) — `ListDetailLayout` route group: list on a phone, list + detail panes on a tablet, selection in the URL
 - [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components

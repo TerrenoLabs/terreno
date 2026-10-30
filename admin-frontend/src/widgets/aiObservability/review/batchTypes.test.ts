@@ -3,9 +3,11 @@ import {renderHook} from "@testing-library/react-native";
 import {assert} from "chai";
 import {
   agreementTextColor,
+  answerSubjectKey,
   formatAnswer,
   formatPercent,
   humanizeKey,
+  openBatchItems,
   previewText,
   unwrapBatchDetail,
   unwrapBatchList,
@@ -46,6 +48,16 @@ describe("batchTypes", () => {
     expect(formatAnswer(undefined)).toBe("—");
     expect(previewText("a\n  b", 10)).toBe("a b");
     expect(previewText("x".repeat(20), 10)).toBe(`${"x".repeat(9)}…`);
+  });
+
+  it("pairs answers by dataset item and keeps open batch rows", () => {
+    expect(answerSubjectKey({datasetItemId: "item-1", traceId: "trace-1"})).toBe("item-1");
+    expect(answerSubjectKey({traceId: "trace-1"})).toBe("trace-1");
+    expect(answerSubjectKey({})).toBe("");
+    const pending = {id: "a", status: "pending" as const};
+    const active = {id: "b", status: "in_progress" as const};
+    const done = {id: "c", status: "done" as const};
+    expect(openBatchItems([pending, active, done] as never)).toEqual([pending, active]);
   });
 
   it("unwraps list and detail payloads", () => {

@@ -157,6 +157,22 @@ describe("AiPromptHubView", () => {
     });
   });
 
+  it("caps the used-by list and shows a plain name when navigation is absent", () => {
+    const callers = [{folder: "examples", name: "triage-intake", versions: [2]}];
+    const view = renderWithTheme(
+      <AiPromptHubView
+        {...baseProps}
+        detail={{
+          ...detail,
+          usedBy: {items: callers, limit: 20, total: 4},
+        }}
+        onOpenPrompt={undefined}
+      />
+    );
+    expect(view.getByTestId("ai-prompt-used-by-total")).toHaveTextContent("Showing 1 of 4.");
+    expect(view.getByTestId("ai-prompt-used-by-triage-intake")).toHaveTextContent("triage-intake");
+  });
+
   it("shows version write controls for operators", () => {
     const view = renderWithTheme(<AiPromptHubView {...baseProps} />);
     fireEvent.press(view.getByText("Versions"));

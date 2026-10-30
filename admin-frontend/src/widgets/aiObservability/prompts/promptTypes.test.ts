@@ -64,11 +64,21 @@ describe("promptTypes helpers", () => {
     expect(unwrapPromptList(sample)).toEqual(sample);
     expect(unwrapPromptList({data: sample})).toEqual(sample);
     expect(unwrapPromptList(undefined)).toEqual([]);
+    expect(unwrapPromptList({data: {data: sample}})).toEqual(sample);
   });
 
   it("unwraps detail payloads", () => {
     expect(unwrapPromptDetail(detail)?.name).toBe("summarize");
     expect(unwrapPromptDetail({data: detail})?.name).toBe("summarize");
+    const legacy = unwrapPromptDetail({
+      ...detail,
+      usedBy: [{folder: "ops", name: "caller", versions: [1]}],
+    });
+    expect(legacy?.usedBy).toEqual({
+      items: [{folder: "ops", name: "caller", versions: [1]}],
+      limit: 20,
+      total: 1,
+    });
   });
 
   it("counts folders and filters by folder plus search", () => {
@@ -126,7 +136,10 @@ describe("promptTypes helpers", () => {
   });
 
   it("parses template variables and falls back when the version list is empty", () => {
-    expect(templateVariableKeys("Hi {{first}} and {{ last }}")).toEqual(["first", "last"]);
+    expect(templateVariableKeys("Hi {{first}} and {{ last }} and {{first}}")).toEqual([
+      "first",
+      "last",
+    ]);
     expect(
       variableNamesFromVersion(version({template: "Hi {{topic}}", variables: [], version: 1}))
     ).toEqual(["topic"]);
@@ -147,5 +160,13 @@ describe("promptTypes helpers", () => {
         tokens: {totalTokens: 9},
       })
     ).toBe("12 ms · 9 tokens · $0.0100");
+    expect(
+      formatPlaygroundMetrics({
+        compiledMessages: [],
+        latencyMs: 4,
+        output: "ok",
+        tokens: {inputTokens: 2, outputTokens: 3},
+      })
+    ).toBe("4 ms · 2+3 tokens");
   });
 });

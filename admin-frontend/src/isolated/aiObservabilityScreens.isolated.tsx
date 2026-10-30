@@ -3159,6 +3159,12 @@ describe("AiPromptEditorScreen", () => {
 
   const injectedHooks = {
     useAiObservabilityPromptQuery: () => detailState,
+    useAiObservabilityPromptsQuery: () => ({
+      data: [],
+      isError: false,
+      isLoading: false,
+      refetch: mock(() => {}),
+    }),
     useAiObservabilityStatusQuery: () => ({
       data: statusData,
       isError: false,
@@ -4666,7 +4672,7 @@ describe("AiReviewItemView", () => {
           scores={{correct: true, helpfulness: 0.7}}
         />
       );
-      expect(getByText("Helpfulness")).toBeTruthy();
+      expect(getByText("2. helpfulness")).toBeTruthy();
       expect(queryByText("Mark correct only when grounded.")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-score-tone-safe"));

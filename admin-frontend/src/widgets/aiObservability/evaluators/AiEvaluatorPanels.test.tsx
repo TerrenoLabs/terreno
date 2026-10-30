@@ -281,6 +281,35 @@ describe("AiEvaluatorDetailView", () => {
     expect(usage.getByText("$1.20")).toBeTruthy();
   });
 
+  it("opens the experiment from a usage row", async () => {
+    const onOpenExperiment = mock(() => undefined);
+    const {getByTestId} = renderWithTheme(
+      <AiEvaluatorDetailView
+        evaluator={{
+          dimensions: [{dataType: "numeric", key: "helpfulness", range: "0-1", required: true}],
+          id: "eval-help",
+          judgePromptName: "eval-judge-helpfulness",
+          name: "helpfulness",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+          target: "full trace",
+          type: "llm-judge",
+        }}
+        judgeOutputSchema={{properties: {helpfulness: {type: "number"}}}}
+        onOpenExperiment={onOpenExperiment}
+        routeBase="/admin"
+        usageRows={[
+          {costUsd: 0.4, experimentId: "exp-9", experimentName: "helpfulness-compare", runs: 2},
+        ]}
+      />
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("ai-evaluator-used-by-row-exp-9-clickable"));
+      await Promise.resolve();
+    });
+    assert.equal(onOpenExperiment.mock.calls.length, 1);
+    assert.equal(onOpenExperiment.mock.calls[0]?.[0], "exp-9");
+  });
+
   it("puts kind, target, and run modes in the header meta", () => {
     const {getByTestId, getByText} = renderWithTheme(
       <AiEvaluatorDetailMeta

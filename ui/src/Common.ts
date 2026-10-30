@@ -3132,6 +3132,11 @@ export interface DataTableProps extends WithTestID {
    * Returns a stable key for row test ids. Defaults to row index when omitted.
    */
   getRowTestID?: (row: DataTableCellData[], rowIndex: number) => string | number;
+  /**
+   * Vertical alignment of the search field and Filters button. `end` lines the button up with
+   * the search input when the field has a title.
+   */
+  toolbarAlign?: "center" | "end";
   /** Toolbar search string (controlled). Omit with `searchFields` to hide search. */
   search?: string;
   /** Fields included in generic `$or` search params. */

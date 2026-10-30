@@ -503,6 +503,7 @@ describe("AiReviewBatchesView table", () => {
           batch({id: "b3", name: "No judges yet"}),
         ]}
         name=""
+        onCreate={() => undefined}
         onNameChange={() => undefined}
         onOpenBatch={onOpenBatch}
         onPromptChange={() => undefined}

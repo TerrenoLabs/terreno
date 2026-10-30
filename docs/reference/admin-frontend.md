@@ -508,14 +508,15 @@ when production is unset. Widgets do not couple to host Redux.
 `ai-prompts` lists prompts with a folder `SegmentedControl` (All plus each folder, with counts),
 search, type, Production and Newest version columns, 7-day calls, last used, and a header **New
 prompt** when `aiPrompt:create` is allowed. The create modal
-includes an optional **Description** (saved on the prompt record and shown on the hub Overview tab).
-`ai-prompt-editor?name=` is a prompt hub with **Overview**, **Versions**, **Traces**, and
-**Experiments** tabs. Overview shows optional description, folder, tags, and latest vs production
-badges. Traces and Experiments render bounded relationship rows from
+includes an optional **Description** (saved on the prompt record and shown on the hub Versions screen).
+`ai-prompt-editor?name=` is a prompt hub with **Versions**, **Traces**, and
+**Experiments** tabs. Versions shows optional description, folder, tags, latest vs production
+badges, and the version editor on one screen. System and template fields include helper text.
+Traces and Experiments render bounded relationship rows from
 `GET /ai/observability/prompts/:name?promptVersion=` (the hub pins the selected version, defaulting
 to latest after the first load, so related traces and experiments are filtered server-side while the
-full immutable version list stays on the detail payload). The **Versions** tab
-hosts the versioned editor: full-width version history rows show `vN`, every label attached to
+full immutable version list stays on the detail payload). The **Versions** screen
+hosts the versioned editor under that metadata: full-width version history rows show `vN`, every label attached to
 that version, and its creation time on one line. The selected row is highlighted. Editor /
 Playground tabs appear on Versions when allowed; **Save as vN+1**, **Set vN as production…**, and
 playground **Run once** hide when `aiPrompt:update`, `aiPrompt:promote`, or `aiPrompt:playground`
@@ -566,17 +567,20 @@ oldest pending**, which opens the first pending item; the empty state points to 
 batches.
 
 `ai-review-batches` lists batches with answered-by-people progress and the best judge's agreement.
-Pick a question set and optional prompt, then the header primary **Grab 10 recent traces** creates
-a batch. `ai-review-batch?id=` shows progress, **Answer N remaining**, **Run on N items** for a
+The search field and **More filters** button sit on the same baseline. Pick a question set and optional
+prompt, then **Save batch** on the New batch card creates
+a batch from the 10 newest successful traces. `ai-review-batch?id=` shows progress, **Answer N remaining**, **Run on N items** for a
 chosen judge, and **Which judge matches people?** with an `AgreementMeter` per judge.
 
 `ai-review-item?id=` is titled "Item N of M" (or "Review item" when not pending), with status and
 source badges under the title and outline **Previous** / **Next** in the header. **What the AI was
-given** and **What the AI wrote** are equal columns; the model output card uses the `ai` surface.
+given** and **What the AI wrote** are headings above equal columns; each card holds the field
+labels and values, and the model output card uses the `ai` surface.
 Long fields start collapsed with a word count; reviewer notes and a collapsed Raw JSON disclosure
 stay available. Every question is on one screen: the segmented **Yes** / **No** control (or a
 numeric slider or categorical pills) is a fixed-width column on the left and the question is on
-the right. On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter`
+the right. On web, `Y` / `N` answer the highlighted question as soon as the item opens, including
+when a Yes/No segment is focused, `Enter`
 submits, and `S` skips. Actions are **Submit and open next**, **Assign to me**, and **Skip**;
 completion toasts report the remaining count or **Queue clear** (**Batch complete** inside a
 batch). The nested admin stack hides its header (`headerShown: false`); `AdminScreenPage` owns
@@ -595,8 +599,9 @@ model-call impact. The optional purpose is saved as the evaluator description an
 detail screen. LLM judge schema feedback stays idle until a prompt is selected, then shows
 loading/error states and only checks dimensions after its production schema loads.
 `ai-evaluator-detail?id=` leads with the evaluator name, description, and type/target/run-mode
-badges, then explains the saved scores, how scoring works, where it runs, and a **Used by** list
-derived from recent experiments. A failed experiments request shows **Could not load experiments.**
+badges, then explains the saved scores, how scoring works, where it runs, and a **Used in the last 30 days**
+table derived from recent experiments. Each experiment name opens that experiment's results.
+A failed experiments request shows **Could not load experiments.**
 instead of an empty 30-day list. Its dimension and usage rows use the shared `ObservabilityTable` instead of
 `DataTable`, which sizes to a height-constrained parent and collapses inside a scrolling page. LLM
 judge details show loading or load-failed feedback while resolving the judge prompt; schema

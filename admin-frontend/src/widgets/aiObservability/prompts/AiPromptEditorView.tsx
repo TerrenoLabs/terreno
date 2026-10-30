@@ -25,6 +25,11 @@ import {
   TEMPERATURE_PRESETS,
 } from "./promptTypes";
 
+const SYSTEM_HELPER_TEXT =
+  "Instructions the model follows on every call. Shown to the model, not the person using the app.";
+const TEMPLATE_HELPER_TEXT =
+  "The message sent to the model. Use {{variable}} placeholders for values filled in at run time.";
+
 export interface AiPromptEditorViewProps {
   canPlayground?: boolean;
   canPromote?: boolean;
@@ -177,6 +182,7 @@ const AiPromptEditorForm: React.FC<{
       {type === "chat" ? (
         <TextArea
           disabled={!canUpdate}
+          helperText={SYSTEM_HELPER_TEXT}
           onChange={setSystem}
           rows={6}
           testID="ai-prompt-system"
@@ -186,6 +192,7 @@ const AiPromptEditorForm: React.FC<{
       ) : undefined}
       <TextArea
         disabled={!canUpdate}
+        helperText={TEMPLATE_HELPER_TEXT}
         onChange={setTemplate}
         rows={10}
         testID="ai-prompt-template"
@@ -355,7 +362,7 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
   return (
     <Box flex="grow" gap={4} testID="ai-prompt-editor">
       <Box gap={2} testID="ai-prompt-version-list">
-        <Heading size="sm">Versions</Heading>
+        <Heading size="sm">Version history</Heading>
         <Box border="default" rounding="md">
           {detail.versions
             .slice()

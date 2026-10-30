@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Card,
   DataTable,
   type DataTableCellData,
@@ -119,9 +120,11 @@ export interface BatchOption {
 export interface AiReviewBatchesViewProps {
   batches: ReviewBatchListItem[];
   createError?: string;
+  isCreating?: boolean;
   isError?: boolean;
   isLoading?: boolean;
   name: string;
+  onCreate: () => void;
   onNameChange: (value: string) => void;
   onOpenBatch: (id: string) => void;
   onPromptChange: (value: string) => void;
@@ -136,9 +139,11 @@ export interface AiReviewBatchesViewProps {
 export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
   batches,
   createError,
+  isCreating,
   isError,
   isLoading,
   name,
+  onCreate,
   onNameChange,
   onOpenBatch,
   onPromptChange,
@@ -238,7 +243,7 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
         />
       ) : batches.length === 0 ? (
         <ObservabilityEmptyState
-          description={`Choose a question set below, then grab ${DEFAULT_BATCH_SIZE} recent traces to start one.`}
+          description={`Choose a question set below, then save the batch. That grabs the ${DEFAULT_BATCH_SIZE} newest traces.`}
           iconName="layer-group"
           testID="ai-review-batches-empty"
           title="No batches yet"
@@ -256,6 +261,7 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
           onFilterValuesChange={handleFilterValuesChange}
           rowHeight={72}
           testID="ai-review-batches-table"
+          toolbarAlign="end"
         />
       )}
 
@@ -305,6 +311,16 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
               {createError}
             </Text>
           ) : undefined}
+          <Box alignItems="start">
+            <Button
+              disabled={!questionSetId}
+              iconName="floppy-disk"
+              loading={isCreating}
+              onClick={onCreate}
+              testID="ai-review-batch-grab-recent"
+              text="Save batch"
+            />
+          </Box>
           {questionSetOptions.length === 0 ? (
             <Text color="secondaryLight" size="sm">
               Create a human evaluator with one score per question first.

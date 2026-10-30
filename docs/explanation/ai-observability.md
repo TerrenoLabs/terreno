@@ -30,7 +30,8 @@ Traces, Evaluators, Datasets, Experiments, and Review (Review is omitted when th
 off). Existing **AI Requests** stays under **Screens**. Every observability screen shows
 breadcrumbs (`Admin / AI Observability / <Section>` on lists, plus `/ <leaf>` on detail
 screens), a quiet status chip from `GET /ai/observability/status`, and one left-aligned page
-header with the screen's single primary action. Prompt detail is a hub (Overview, Versions, Traces, Experiments);
+header with the screen's single primary action. Prompt detail is a hub (Versions, Traces, Experiments).
+Versions shows the description, folder, tags, and the version editor on one screen;
 versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 ## Why this shape for product work

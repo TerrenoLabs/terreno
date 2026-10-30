@@ -228,7 +228,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
 
 ## Tasks
 
-- [ ] **T1** — Write the e2e guide at docs/testing/e2e.md
+- [x] **T1** — Write the e2e guide at docs/testing/e2e.md
   - Depends on: none
   - Files: docs/testing/e2e.md
   - Criteria:

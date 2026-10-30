@@ -1166,6 +1166,46 @@ describe("MCP OAuth authorization server", () => {
       expect(again.body.error).toBe("invalid_client");
     });
 
+    it("revokes only the client a multi-match deleteOne removes", async () => {
+      const kept = await McpOAuthClient.issueConfidential({
+        clientName: "Kept",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const removed = await McpOAuthClient.issueConfidential({
+        clientName: "Removed",
+        tokenEndpointAuthMethod: "client_secret_basic",
+        userId: notAdminId,
+      });
+      const issue = (clientId: string, clientSecret: string) =>
+        supertest(app)
+          .post("/oauth/token")
+          .set("Authorization", basicAuthorization(clientId, clientSecret))
+          .type("form")
+          .send({grant_type: "client_credentials"});
+      const keptToken = await issue(kept.client.clientId, kept.clientSecret);
+      const removedToken = await issue(removed.client.clientId, removed.clientSecret);
+      expect(keptToken.status).toBe(200);
+      expect(removedToken.status).toBe(200);
+
+      await McpOAuthClient.deleteOne({tokenEndpointAuthMethod: "client_secret_basic"});
+
+      const remaining = await McpOAuthClient.find({
+        tokenEndpointAuthMethod: "client_secret_basic",
+      }).select({clientId: 1});
+      expect(remaining).toHaveLength(1);
+      const survivorStillWorks =
+        remaining[0]?.clientId === kept.client.clientId
+          ? keptToken.body.access_token
+          : removedToken.body.access_token;
+      const removedAccessToken =
+        remaining[0]?.clientId === kept.client.clientId
+          ? removedToken.body.access_token
+          : keptToken.body.access_token;
+      expect((await callMcp(app, survivorStillWorks as string)).status).toBe(200);
+      expect((await callMcp(app, removedAccessToken as string)).status).toBe(401);
+    });
+
     it("discards a client_credentials token when the client is revoked during issuance", async () => {
       const created = await McpOAuthClient.issueConfidential({
         clientName: "Racy",

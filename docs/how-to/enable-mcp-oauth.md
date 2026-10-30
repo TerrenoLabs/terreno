@@ -46,7 +46,7 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   });
   ```
 
-  A loopback redirect (`localhost`, `127.0.0.1`, or `[::1]`) matches any port. Register one URI, for example `http://127.0.0.1:33418/callback`, and a native client can send `http://127.0.0.1:<ephemeral>/callback` with the same scheme, host, path, and query. The authorization code is sent to the port the client used. `localhost` and `127.0.0.1` do not match each other. Every other redirect URI must match exactly.
+  A loopback redirect (`localhost`, `127.0.0.1`, or `[::1]`) matches any port. Register one URI, for example `http://127.0.0.1:33418/callback`, and a native client can send `http://127.0.0.1:<ephemeral>/callback` with the same scheme, host, path, and query. The authorization code is sent to the port the client used. `localhost` and `127.0.0.1` do not match each other. Every other redirect URI must match exactly. There is no per-client opt-out. Another process on that host can listen on a different port and receive the code. PKCE `S256` is what stops that process from exchanging it.
 
 - **Registration on.** Turn it on only when clients you cannot pre-register must connect. Set `dynamicClientRegistration: true` and list `allowedRedirectHosts`, which limits where a registered client may send codes. Claude.ai redirects to `claude.ai`, ChatGPT to `chatgpt.com`. Use `*.example.com` for subdomains, and add `localhost` only if you want local clients with loopback `http://` redirects. Keep rate limiting on.
 
@@ -94,7 +94,7 @@ The three endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthReques
 
 `authenticateMiddleware()` calls `next()` when `req.user` is already set, so the consent routes do not require a JWT or a Better Auth session. Set the approving user in `addMiddleware`, which runs before these routes. Limit that to the consent paths. `GET /oauth/authorize` stays the unauthenticated redirect that starts the flow.
 
-The user object needs `_id`. Approve issues the grant to that id and records that user's `tokenEpoch`.
+The user object needs `_id`. Approve issues the grant to that id and records that user's `tokenEpoch`. `userForThisRequest` must resolve a session the app has already verified, such as a signed session cookie. Do not set `req.user` from an unverified header or query parameter. That user becomes the subject of the grant.
 
 ```typescript
 new TerrenoApp({userModel: User, mcpOAuth: {consentUrl, enabled: true, issuer}})

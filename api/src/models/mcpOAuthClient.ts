@@ -79,14 +79,22 @@ mcpOAuthClientSchema.pre("deleteOne", {document: true, query: false}, async func
 });
 
 mcpOAuthClientSchema.pre("deleteOne", {document: false, query: true}, async function () {
-  // deleteOne removes one document. A filter that matches several must not throw.
-  const [existing] = await this.model.find(this.getFilter()).limit(1).select({clientId: 1});
-  await revokeTokensForClient(existing?.clientId);
+  // deleteOne removes one document. Pin that document so its tokens are the ones revoked.
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({_id: 1, clientId: 1});
+  if (!existing) {
+    return;
+  }
+  this.setQuery({_id: existing._id});
+  await revokeTokensForClient(existing.clientId);
 });
 
 mcpOAuthClientSchema.pre("findOneAndDelete", async function () {
-  const [existing] = await this.model.find(this.getFilter()).limit(1).select({clientId: 1});
-  await revokeTokensForClient(existing?.clientId);
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({_id: 1, clientId: 1});
+  if (!existing) {
+    return;
+  }
+  this.setQuery({_id: existing._id});
+  await revokeTokensForClient(existing.clientId);
 });
 
 mcpOAuthClientSchema.pre("deleteMany", async function () {

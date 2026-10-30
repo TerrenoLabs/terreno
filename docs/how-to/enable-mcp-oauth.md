@@ -1,6 +1,6 @@
 # Enable MCP OAuth for a JWT app
 
-Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1, when your app signs users in with Terreno JWTs. Terreno runs the authorization server; your app hosts one consent screen.
+Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1. Terreno runs the authorization server; your app hosts one consent screen. A Terreno JWT is the usual way to approve that screen. An app with its own session sets `req.user` first. See [Apps without a Terreno JWT](#apps-without-a-terreno-jwt).
 
 Use [a service token](connect-mcp-service-token.md) when the client can only hold a static Bearer key (Perplexity, Cursor, Claude Code). For a headless client that can perform a token request, use [client credentials](#headless-clients-client-credentials) instead.
 
@@ -89,6 +89,29 @@ The client sends the user's browser to `/oauth/authorize`. Terreno checks the cl
    ```
 
 The three endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`), so `bun run sdk` generates hooks for them. A request expires after 10 minutes (400 `Authorization request expired`), and a decided request cannot be decided again (409). The endpoints refuse `mcp_` and OAuth bearers, so an agent cannot approve itself.
+
+### Apps without a Terreno JWT
+
+`authenticateMiddleware()` calls `next()` when `req.user` is already set, so the consent routes do not require a JWT or a Better Auth session. Set the approving user in `addMiddleware`, which runs before these routes. Limit that to the consent paths. `GET /oauth/authorize` stays the unauthenticated redirect that starts the flow.
+
+The user object needs `_id`. Approve issues the grant to that id and records that user's `tokenEpoch`.
+
+```typescript
+new TerrenoApp({userModel: User, mcpOAuth: {consentUrl, enabled: true, issuer}})
+  .addMiddleware(async (req, _res, next) => {
+    if (!req.path.startsWith("/oauth/authorize/")) {
+      next();
+      return;
+    }
+    const user = await userForThisRequest(req);
+    if (user) {
+      req.user = user;
+    }
+    next();
+  });
+```
+
+Call `GET /oauth/authorize/<request>` and `POST .../approve` or `.../deny` with no `Authorization` header. `mcp_` and `mcpat_` bearers are still rejected on those routes.
 
 ## 3. Connect a client
 

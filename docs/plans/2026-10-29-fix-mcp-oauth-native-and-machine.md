@@ -63,7 +63,7 @@ None — operator steps stay in `docs/how-to/enable-mcp-oauth.md`. No end-user g
 
 | Issue | Disposition | Next action |
 | --- | --- | --- |
-| #1654 | decide | Pick one contract: document the existing `req.user` short-circuit, add `mcpOAuth.resolveConsentUser`, or export approve/deny helpers. Recommendation: document the short-circuit now; add `resolveConsentUser` only if middleware-before-auth is not an acceptable supported path. Skip a built-in consent page unless Terreno will maintain that UI. |
+| #1654 | fixed (docs) | Documented the existing `req.user` short-circuit in `docs/how-to/enable-mcp-oauth.md` and `docs/reference/api.md`. `resolveConsentUser` and a built-in consent page stay out. |
 
 ## Sign-off
 

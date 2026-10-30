@@ -895,6 +895,53 @@ describe("MCP OAuth authorization server", () => {
     });
   });
 
+  it("approves consent when middleware already set req.user", async () => {
+    const user = await UserModel.findById(notAdminId);
+    const consentApp = new TerrenoApp({
+      mcpOAuth: oauthOptions,
+      skipListen: true,
+      userModel: typedUserModel,
+    })
+      .addMiddleware((req, _res, next) => {
+        if (req.path.startsWith("/oauth/authorize/")) {
+          req.user = user ?? undefined;
+        }
+        next();
+      })
+      .register(noteRouter())
+      .build();
+    const clientId = await registerClient(consentApp);
+    const {challenge, verifier} = createPkce();
+    const authorize = await startAuthorization(consentApp, {
+      client_id: clientId,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      state: "consent-user",
+    });
+    const requestId = requestIdFrom(authorize.headers.location);
+    const unsigned = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+    const pending = await supertest(consentApp).get(`/oauth/authorize/${requestId}`);
+    const approve = await supertest(consentApp).post(`/oauth/authorize/${requestId}/approve`);
+
+    expect(unsigned.status).toBe(401);
+    expect(pending.status).toBe(200);
+    expect(pending.body.data.clientName).toBe("Claude");
+    expect(approve.status).toBe(200);
+    const redirect = new URL(approve.body.data.redirectUrl);
+    const token = await exchangeCode(consentApp, {
+      clientId,
+      code: redirect.searchParams.get("code") as string,
+      verifier,
+    });
+    expect(token.status).toBe(200);
+    expect(toolPayload((await callMcp(consentApp, token.body.access_token)).text)).toEqual({
+      credential: "oauth",
+      userId: String(notAdminId),
+    });
+  });
+
   it("documents the consent endpoints in OpenAPI", async () => {
     const res = await supertest(app).get("/openapi.json");
 

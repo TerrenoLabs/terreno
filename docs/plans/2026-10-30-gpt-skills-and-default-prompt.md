@@ -298,7 +298,8 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Docs: T12
 
 - [ ] **T4** — Upload SKILL.md and .zip skill packages
-  - Depends on: T2, T3 (T2: shares `ai/src/types/index.ts`)
+  - Depends on: T2, T3
+  - Why ordered: T2: shares `ai/src/types/index.ts`
   - Files: ai/src/service/skillPackage.ts, ai/src/service/skillPackage.test.ts, ai/src/routes/skills.ts, ai/src/routes/skillsUpload.test.ts, ai/src/service/fileStorage.ts, ai/src/service/fileStorage.test.ts, ai/src/types/index.ts, ai/package.json, package.json
   - Criteria:
     - `POST /gpt/skills/upload` parses frontmatter (`yaml`) and zip (`fflate`, added to the root `catalog` and referenced from `ai/package.json`).
@@ -328,7 +329,8 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Docs: T12
 
 - [ ] **T5** — Offer skills in chat through a catalog, load_skill, and /name
-  - Depends on: T4 (reads T3 skills; shares `ai/src/types/index.ts` with T2 and T4)
+  - Depends on: T4
+  - Why ordered: reads T3 skills; shares `ai/src/types/index.ts` with T2 and T4
   - Files: ai/src/service/skills.ts, ai/src/service/chatTurn.ts, ai/src/types/index.ts, ai/src/routes/gptSkills.test.ts
   - Criteria:
     - With `skills: true`, a tool-capable turn's system prompt contains a `## Skills`
@@ -523,7 +525,8 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Docs: G2
 
 - [ ] **T11** — Prove admin default prompt and global skills end to end
-  - Depends on: T1, T8, T10 (needs the T9 Skills screen; shares `docs/user-guide/README.md` with T9 and T10)
+  - Depends on: T1, T8, T10
+  - Why ordered: needs the T9 Skills screen; shares `docs/user-guide/README.md` with T9 and T10
   - Files: example-frontend/e2e/admin-ai-configuration.spec.ts, docs/user-guide/README.md, docs/user-guide/admin/ai-assistant-settings.md
   - Criteria:
     - On Admin → Configuration → AI, an admin edits **System prompt** and **Image style

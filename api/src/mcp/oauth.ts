@@ -597,6 +597,18 @@ interface TokenResponse {
   token_type: "Bearer";
 }
 
+/**
+ * A revoke can land after the token route has loaded the client and before this pair exists.
+ * A new family has no tombstone yet, so drop the pair when the client is already revoked.
+ */
+const discardIssuedIfClientRevoked = async (clientId: string, familyId: string): Promise<void> => {
+  const current = await McpOAuthClient.findOneOrNone({clientId});
+  if (!current || current.revokedAt) {
+    await McpOAuthToken.revokeFamily(familyId);
+    throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
+  }
+};
+
 const exchangeAuthorizationCode = async (
   body: Record<string, unknown>,
   clientId: string,
@@ -681,6 +693,7 @@ const exchangeAuthorizationCode = async (
   if (!issued.refreshToken) {
     throw new OAuthProtocolError("server_error", "Expected a refresh token", 500);
   }
+  await discardIssuedIfClientRevoked(clientId, issued.mcpOAuthToken.familyId);
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -751,6 +764,7 @@ const exchangeRefreshToken = async (
   if (!issued.refreshToken) {
     throw new OAuthProtocolError("server_error", "Expected a refresh token", 500);
   }
+  await discardIssuedIfClientRevoked(clientId, issued.mcpOAuthToken.familyId);
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -855,13 +869,7 @@ const exchangeClientCredentials = async (
     tokenEpoch: userTokenEpoch(user),
     userId: client.userId,
   });
-  // revoke() can land after the pre-issue read and before this pair exists. A new family has
-  // no tombstone yet, so drop the pair when the client is already revoked.
-  const current = await McpOAuthClient.findOneOrNone({clientId: client.clientId});
-  if (!current || current.revokedAt) {
-    await McpOAuthToken.revokeFamily(issued.mcpOAuthToken.familyId);
-    throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
-  }
+  await discardIssuedIfClientRevoked(client.clientId, issued.mcpOAuthToken.familyId);
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,

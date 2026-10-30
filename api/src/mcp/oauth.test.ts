@@ -621,6 +621,27 @@ describe("MCP OAuth authorization server", () => {
 
       expect(res.status).toBe(401);
     });
+
+    it("discards an authorization-code exchange when the client is revoked during issuance", async () => {
+      const flow = await approvedCode(app, agent);
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        await McpOAuthClient.revoke(options.clientId);
+        return realIssue(options);
+      });
+      let token: supertest.Response;
+      try {
+        token = await exchangeCode(app, flow);
+      } finally {
+        issueSpy.mockRestore();
+      }
+
+      expect(token.status).toBe(401);
+      expect(token.body.error).toBe("invalid_client");
+      expect(
+        await McpOAuthToken.countDocuments({clientId: flow.clientId, revokedAt: {$exists: false}})
+      ).toBe(0);
+    });
   });
 
   describe("refresh tokens", () => {
@@ -732,6 +753,30 @@ describe("MCP OAuth authorization server", () => {
 
       expect(responses.map((res) => res.body.error)).toEqual(["invalid_grant", "invalid_grant"]);
       expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
+    });
+
+    it("discards a refresh when the client is revoked during issuance", async () => {
+      const flow = await approvedCode(app, agent);
+      const first = await exchangeCode(app, flow);
+      expect(first.status).toBe(200);
+      const realIssue = McpOAuthToken.issue.bind(McpOAuthToken);
+      const issueSpy = spyOn(McpOAuthToken, "issue").mockImplementation(async (options) => {
+        await McpOAuthClient.revoke(options.clientId);
+        return realIssue(options);
+      });
+      let refreshed: supertest.Response;
+      try {
+        refreshed = await refresh(app, flow.clientId, first.body.refresh_token as string);
+      } finally {
+        issueSpy.mockRestore();
+      }
+
+      expect(refreshed.status).toBe(401);
+      expect(refreshed.body.error).toBe("invalid_client");
+      expect((await callMcp(app, first.body.access_token as string)).status).toBe(401);
+      expect(
+        await McpOAuthToken.countDocuments({clientId: flow.clientId, revokedAt: {$exists: false}})
+      ).toBe(0);
     });
   });
 

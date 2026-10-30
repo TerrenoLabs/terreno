@@ -9,13 +9,21 @@ Most features are medium. High is reserved for security-related code.
 
 | Level | Human approvals | Meaning | Examples |
 | --- | --- | --- | --- |
-| low | None, once automated review and security checks are green | A mistake is cheap and visible; the PR proves itself | docs; copy and i18n strings; tests, snapshots, fixtures; internal-only features (admin screens, dev tooling, scripts no user runs); additive changes behind a feature flag that defaults off; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; one-line bug fixes with a regression test |
-| medium | One person | Ordinary product changes, and changes to sensitive areas | new or changed behavior with tests; UI changes with screenshots; new endpoints with permission tests; schema changes, migrations, and backfills; caching (RTK tags, syncdb, HTTP/CDN caching); app updates (expo-updates, `eas.json`, `app.json`, release channels); AI system prompts and tool definitions; billing; infra, Dockerfiles, CI; public API shape; dependency minor and major bumps; feature-flag removals; hotfix branches; deleted or skipped tests |
+| low | None, once automated review and security checks are green | A mistake is cheap and visible; the PR proves itself | docs; copy and i18n strings; tests, snapshots, fixtures; internal-only features (admin screens, dev tooling, scripts no user runs); additive changes behind a feature flag that defaults off; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; one-line bug fixes with a regression test; small presentational UI tweaks (see below) |
+| medium | One person | Ordinary product changes, and changes to sensitive areas | new or changed behavior with tests; UI changes with screenshots beyond a small presentational tweak; new endpoints with permission tests; schema changes, migrations, and backfills; caching (RTK tags, syncdb, HTTP/CDN caching); app updates (expo-updates, `eas.json`, `app.json`, release channels); AI system prompts and tool definitions; billing; infra, Dockerfiles, CI; public API shape (removed, renamed, or retyped exports, props, or endpoints); dependency minor and major bumps; feature-flag removals; hotfix branches; deleted or skipped tests |
 | high | One person | Security-related code, where a mistake is costly, hidden, or hard to undo | auth, sessions, tokens, Better Auth and Passport config; permissions, RBAC, `queryFilter`s that scope data to a user; MCP OAuth; `socketAuth` and `sessionRevalidation`; secrets and env files; crypto, hashing, signature verification (webhook verifiers); PHI handling, consent, and audit logging; rate limits on unauthenticated routes; CORS and trusted origins; IAM, network, and firewall rules in infra; dependencies added for auth, crypto, or parsing untrusted input; reverts of security changes |
 
 A PR is high only when it changes how the system decides who may see or do something,
 or how secrets, credentials, or PHI are handled. Touching a security-adjacent file for an
 unrelated reason (a typo, a log message, a rename) is judged by what the change does.
+
+A **small presentational UI tweak** is low. It changes how one component looks or when it
+shows something (layout, spacing, copy, color, a display delay or debounce, an animation)
+and nothing else: no data fetching or syncdb/RTK changes, no navigation, no change to what
+a user can submit or do, no auth or consent screens. It may add an optional prop with a
+default, and that default may change what every consumer sees, as long as the old look is
+one prop away. It still needs tests that would fail without the change and before/after
+screenshots or video. A changelog fragment and docs update do not raise it.
 
 ## Dimensions
 

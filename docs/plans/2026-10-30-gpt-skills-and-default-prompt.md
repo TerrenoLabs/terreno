@@ -506,7 +506,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-frontend-tests, accessibility-testing
   - Docs: `docs/reference/ui.md` GPTChat props (in this task)
 
-- [ ] **T10** — Show skill loads and generated images in the chat
+- [x] **T10** — Show skill loads and generated images in the chat
   - Depends on: T1, T8, T9, T13
   - Files: example-frontend/app/(tabs)/ai.tsx, example-frontend/e2e/helpers/mockGpt.ts, example-frontend/e2e/ai-image-generation.spec.ts, docs/user-guide/README.md, docs/user-guide/ai/generate-images.md
   - Criteria:

@@ -7,3 +7,4 @@ page format is in the planning plugin's user guide contract.
 | Area | Page | Audience | Title |
 | --- | --- | --- | --- |
 | ai | [skills.md](ai/skills.md) | user | Teach the AI assistant a skill |
+| ai | [generate-images.md](ai/generate-images.md) | user | Generate images in the AI chat |

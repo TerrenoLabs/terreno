@@ -15,6 +15,7 @@ import {
   type SelectedFile,
   Spinner,
   selectedFileMimeType,
+  type ToolLabelInput,
   useStoredState,
 } from "@terreno/ui";
 import type {Href} from "expo-router";
@@ -72,6 +73,25 @@ const componentCaption = (text: string): string | undefined => {
   }
   const count = value.blocks.length;
   return count === 1 ? "1 component" : `${count} components`;
+};
+
+/** Row text for built-in AI tools; other tools keep GPTChat's default label. */
+const toolLabel = ({args, result, toolName}: ToolLabelInput): string | undefined => {
+  if (toolName === "load_skill") {
+    return typeof args.name === "string" ? `Used skill ${args.name}` : "Used skill";
+  }
+  if (toolName !== "generate_image") {
+    return undefined;
+  }
+  if (result === undefined) {
+    return "Generating image…";
+  }
+  const hasError =
+    typeof result === "object" &&
+    result !== null &&
+    "error" in result &&
+    typeof result.error === "string";
+  return hasError ? "Image not generated" : "Generated image";
 };
 
 interface TurnRequest {
@@ -243,9 +263,10 @@ const GPT_MASCOT_IMAGES: ImageSourcePropType[] = [
 const AiScreen: React.FC = () => {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>(undefined);
   // Remember the open chat so a reload can reopen it and re-attach to an in-flight reply
+  // `null` marks "no open chat": storage cannot round-trip `undefined` as JSON
   const [storedHistoryId, setStoredHistoryId, isStoredHistoryIdLoading] = useStoredState<
-    string | undefined
-  >("gptCurrentHistoryId", undefined);
+    string | null
+  >("gptCurrentHistoryId", null);
   const hasRestoredHistoryRef = useRef(false);
   const resumeAbortRef = useRef<AbortController | null>(null);
   const [currentMessages, setCurrentMessages] = useState<GPTChatMessage[]>([]);
@@ -547,7 +568,7 @@ const AiScreen: React.FC = () => {
     if (!userId || !hasRestoredHistoryRef.current) {
       return;
     }
-    void setStoredHistoryId(currentHistoryId);
+    void setStoredHistoryId(currentHistoryId ?? null);
   }, [currentHistoryId, setStoredHistoryId, userId]);
 
   // Stop following a resumed reply when leaving the screen
@@ -1138,6 +1159,7 @@ const AiScreen: React.FC = () => {
           "Upload a receipt",
         ]}
         testID="chat"
+        toolLabel={toolLabel}
         uiBlocks
       />
     </Box>

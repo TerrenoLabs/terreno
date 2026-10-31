@@ -42,7 +42,8 @@
     "test": "bun test src/",
     "test:agent": "AGENT=1 bun test --only-failures src/",
     "test:ci": "bun test src/",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
   "version": "57.20.0"

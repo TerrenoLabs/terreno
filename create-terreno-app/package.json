@@ -53,7 +53,8 @@
     "test": "bun run compile && bun test src/",
     "test:agent": "AGENT=1 bun test --only-failures src/",
     "test:ci": "bun run compile && bun test src/",
-    "test:coverage": "bun run compile && bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run compile && bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "type": "module",
   "version": "57.20.0"

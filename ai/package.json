@@ -165,7 +165,8 @@
     "test": "bun test --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do bun test --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
     "test:agent": "AGENT=1 bun test --only-failures --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do AGENT=1 bun test --only-failures --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
     "test:ci": "bun test --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do bun test --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
   "version": "57.20.0"

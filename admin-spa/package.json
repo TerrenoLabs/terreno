@@ -102,6 +102,7 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts",
     "test:e2e": "playwright test",
     "test:integration": "playwright test --config playwright.integration.config.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "web": "expo start --web --port 8083"
   },
   "types": "./src/dist/index.d.ts",

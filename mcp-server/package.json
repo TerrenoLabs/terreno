@@ -104,7 +104,8 @@
     "test": "bun test --max-concurrency=1 src/",
     "test:agent": "AGENT=1 bun test --only-failures --max-concurrency=1 src/",
     "test:ci": "bun test --max-concurrency=1 src/",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.typecheck.json"
   },
   "type": "module",
   "version": "57.20.0"

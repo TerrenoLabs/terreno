@@ -1,7 +1,7 @@
 import {type AskValidationError, validateAskInput} from "@terreno/blocks";
 import type React from "react";
 import {useCallback, useRef, useState} from "react";
-import type {Text as NativeText} from "react-native";
+import type {TextInstance} from "react-native";
 
 import {Box} from "../Box";
 import type {IconName} from "../Common";
@@ -33,7 +33,7 @@ export interface AskCardProps {
    * The pending ask's question, an accessible header. Pass it to
    * `AccessibilityInfo.setAccessibilityFocus` to move screen reader focus to the ask.
    */
-  promptRef?: React.Ref<NativeText>;
+  promptRef?: React.Ref<TextInstance>;
   /**
    * Turns the files picked for a `files` ask into the answer's refs on Submit: uploads
    * (`{fileId}`) or data URLs (`{url}`). Defaults to data URLs (`resolveAskFilesAsDataUrls`).

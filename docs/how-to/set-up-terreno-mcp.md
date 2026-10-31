@@ -1,7 +1,7 @@
 # Set up Terreno MCP
 
-Connect your editor to both Terreno MCP servers:
-
+Configure both Terreno servers: the hosted server supplies documentation and generators; the local
+stdio server inspects the app, database, logs, Metro, and SyncDB state.
 - **`terreno`** (hosted, Streamable HTTP) supplies documentation search and code generators.
 - **`terreno-local`** (stdio, runs in your repository) reads the app's packages, database, logs,
   Metro, and client state.

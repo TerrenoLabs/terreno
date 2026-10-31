@@ -30,7 +30,7 @@ const validBlocks = (): Record<string, unknown> => {
 describe("POST /gpt/actions", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("keeps the default handler cap at 10 seconds", () => {
@@ -199,7 +199,7 @@ describe("POST /gpt/actions", () => {
     expect(res.body.meta.fields["blocks[0].color"]).toEqual(expect.stringContaining("UNKNOWN_KEY"));
   });
 
-  it("rejects a missing body, a bad history id, and a history that does not exist", async () => {
+  it("rejects a missing body and a history that does not exist, by any string id", async () => {
     await ensureTestUsers();
     const app = buildApp({
       model,
@@ -216,9 +216,10 @@ describe("POST /gpt/actions", () => {
       messageId: "m1",
       name: "export_csv",
     };
-    const badId = await agent.post("/gpt/actions").send(body);
-    expect(badId.status).toBe(400);
-    expect(badId.body.title).toBe("historyId is not valid");
+    // History ids are Strings (UUIDs or migrated ObjectId hex), so any string is looked up.
+    const unknownId = await agent.post("/gpt/actions").send(body);
+    expect(unknownId.status).toBe(404);
+    expect(unknownId.body.title).toBe("History not found");
 
     const missing = await agent.post("/gpt/actions").send({
       ...body,
@@ -284,7 +285,7 @@ blocks:
 describe("POST /gpt/actions with scaleStepperHostAction", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   const setup = async (
@@ -396,7 +397,7 @@ blocks:
 describe("POST /gpt/actions with toggleChecklistHostAction", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   const setup = async (

@@ -1,530 +1,401 @@
-# How to Migrate from @terreno/rtk to @terreno/syncdb
+# How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)
 
-This guide is **AI-context-first**: it is written for an agent (or human) performing a screen-by-screen migration, not as a codemod. Work through one concern at a time — reads, then writes, then conflicts, then sync-status UX — and delete RTK-era code as you go.
+Terreno 58 deletes `@terreno/rtk` and every Redux dependency. `@terreno/syncdb` is the only
+frontend data and session layer:
 
-`@terreno/syncdb` supersedes `@terreno/rtk` for **data synchronization** (CRUD reads/writes, offline queue, realtime convergence). It does not replace the generated OpenAPI SDK, Better Auth Redux wiring, or feature-flag infrastructure.
+| Concern | 57.x (`@terreno/rtk` + Redux) | 58 (`@terreno/syncdb`) |
+|---------|-------------------------------|------------------------|
+| Collection CRUD | RTK Query hooks from `store/openApiSdk.ts` | `useQuery` / `useMutate` (`@terreno/syncdb/react`) |
+| Every other route (`/auth/me`, actions, AI, consents) | RTK Query hooks from `store/openApiSdk.ts` | Generated hooks in `store/apiSdk.ts` on the request client (`@terreno/syncdb/api`) |
+| Session | `generateBetterAuthSlice` / `generateAuthSlice` + Redux selectors | `SessionProvider` + `useSession()` (`@terreno/syncdb/auth`) |
+| Feature flags, server pushes | `useSocketConnection` (second socket) + `useTerrenoFeatureFlags(api, …)` | `useSocketEvent` on the sync socket + `useTerrenoFeatureFlags({client, socket})` (`@terreno/syncdb/flags`) |
+| Base URLs, upgrade check, RBAC, dev logger, MCP tools | `@terreno/rtk` root | `@terreno/syncdb/config`, `@terreno/syncdb/app` |
+| App state | Redux slice + `redux-persist` | React context / `useStoredState` |
 
-`modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
+Work through the steps in order. Every removed export and its replacement is in
+[the export table](#every-removed-export).
 
-`installTerrenoDevConsoleLogger` moved to `@terreno/syncdb`. The `@terreno/rtk` export is a **deprecated** re-export kept for the deprecation window. Change the import and pass the base URL:
+## 1. Run the backend migrations
+
+`installDevConsoleLogger` lives on `@terreno/syncdb/app` (or `@terreno/syncdb/devConsoleLogger`). Pass the API base URL once at startup:
 
 ```typescript
-import {baseUrl} from "@terreno/rtk";
-import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+import {installDevConsoleLogger} from "@terreno/syncdb/app";
+import {baseUrl} from "@terreno/syncdb/config";
 
-installTerrenoDevConsoleLogger({baseUrl});
+installDevConsoleLogger({baseUrl});
 ```
 
-## 1. Before you start
 
-| Decision | Requirement | Why |
-|----------|-------------|-----|
-| **Better Auth first?** | Recommended before or in parallel with data migration | `betterAuthAdapter` is the shipped `AuthProvider`; socket sessions work cleanly with `RealtimeApp({betterAuth})`. Legacy JWT sockets still work during transition. |
-| **Backend version** | `@terreno/api` with `SyncApp`, `RealtimeApp`, `syncPlugin`, `isDeletedPlugin` | Without backend sync registration, the client has nothing to talk to. |
-| **MongoDB replica set** | Required for `RealtimeApp` change streams | Single-node replset is fine for dev. |
-| **Per-collection rollout** | One synced collection at a time | REST and sync share the same write path; migrate screen-by-screen. |
-| **Redux** | Keep Redux for auth, feature flags, app state; drop RTK Query for migrated collections | See §2. |
+`GptHistory` and `McpServiceToken` now have String `_id`s and sync. Run both data migrations
+**before** deploying 58 frontends. See the
+[58.0.0 upgrade note](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#gpt-histories-are-a-synced-collection).
 
-**Auth can migrate before data (M3).** A typical two-step order:
+Every collection the app reads or writes as a list needs the sync backend: `syncPlugin` +
+`isDeletedPlugin` on the schema, a `sync` config on `modelRouter`, and `SyncApp` + `RealtimeApp`
+on a MongoDB replica set. See [Backend setup](../reference/syncdb.md#backend-setup).
 
-1. **Step A — Auth:** Move login/session to Better Auth (`generateBetterAuthSlice`, `betterAuthAdapter`, `syncDb.start()` on login). Screens can still read/write via RTK Query during this step.
-2. **Step B — Data:** For each collection, replace RTK Query hooks with syncdb hooks and delete the RTK path for that screen.
-
-The example app completed both steps. Product Todos and eligible built-in admin
-String-`_id` model CRUD use syncdb. Profile and other non-synced routes keep
-generated RTK hooks; admin RPC uses its host-bound fetch client.
-
-**Validation (Task 3.5):** The profile screen (`example-frontend/app/(tabs)/profile.tsx`) was reviewed against this guide. `useGetMeQuery` / `usePatchMeMutation` are **non-synced** custom SDK routes — the guide §8 explicitly says to keep them on RTK. No profile migration is required; the guide is sufficient for that case.
-
-Reference: [`docs/reference/syncdb.md`](../reference/syncdb.md), and the package [`syncdb/README.md`](https://github.com/TerrenoLabs/terreno/blob/release-56.0.0/syncdb/README.md).
-
-## 2. Install and configure
-
-### Install packages
+## 2. Swap the packages
 
 ```bash
-bun install @terreno/syncdb
-bunx expo install expo-sqlite   # native persistence — install in the app, rebuild native
+bun remove @terreno/rtk @reduxjs/toolkit react-redux redux-persist @rtk-query/codegen-openapi
+bun add @terreno/syncdb
+bunx expo install expo-sqlite expo-secure-store @react-native-async-storage/async-storage
 ```
 
-### Create the sync client
+Keep `better-auth`, `@better-auth/expo`, and `@openfeature/react-sdk` / `@openfeature/web-sdk`
+if the app uses them; they are optional peers of `@terreno/syncdb`. Rebuild native clients
+after adding `expo-sqlite`.
 
-**After** (`example-frontend/store/syncdb.ts`):
+Pin `better-auth`, `@better-auth/expo`, and `@better-auth/passkey` to the same `1.7.4`.
+Mixed 1.6 and 1.7 versions fail to type-check, and the 1.7 Expo plugin needs the async storage
+methods `createBetterAuthClient` provides. The server needs `nativeApps: true`, or native
+sign-out answers `403 Missing or null Origin`. See
+[Better Auth 1.7 and native sign-in](../../mcp-server/src/docs/upgrades/58.0.0.md#better-auth-17-and-native-sign-in).
+
+Delete `store/index.ts`, `store/appState.ts`, `store/sdk.ts`, `store/openApiSdk.ts`,
+`store/betterAuthApi.ts`, `openapi-config.ts`, `scripts/generate-sdk.ts`, and
+`tsconfig.codegen.json`.
+
+## 3. Create the clients
+
+One `authProvider` feeds the sync client and the request client, so both send the same token
+and refresh on a 401 the same way.
 
 ```typescript
-import {baseUrl} from "@terreno/rtk";
-import {betterAuthAdapter, createSyncDb} from "@terreno/syncdb";
-import {betterAuthClient} from "@/lib/betterAuth";
+// lib/betterAuth.ts
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 
-const authProvider = betterAuthAdapter(betterAuthClient, {pollIntervalMs: 60_000});
+export const betterAuthClient = createBetterAuthClient({
+  baseURL: baseUrl,
+  scheme: "myapp",
+  storagePrefix: "myapp",
+});
+```
+
+```typescript
+// store/syncdb.ts
+import {betterAuthAdapter, bridgeBetterAuthReactClient, createSyncDb} from "@terreno/syncdb";
+import {baseUrl} from "@terreno/syncdb/config";
+import {betterAuthClient} from "@/lib/betterAuth";
+import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient));
 
 export const syncDb = createSyncDb({
   authProvider,
   baseUrl,
-  collections: ["todos"],
-  name: "terreno-example",
-  debug: __DEV__ ? {capacity: 1000} : false,
+  collections: [...SYNC_COLLECTIONS],
+  name: "myapp",
+  wipeOnSignOut: true,
 });
 ```
 
-### Start/stop on auth
+```typescript
+// store/apiClient.ts
+import {createApiClient} from "@terreno/syncdb/api";
+import {appHeaders, baseUrl} from "@terreno/syncdb/config";
+import {authProvider} from "@/store/syncdb";
 
-**After** (`example-frontend/app/_layout.tsx`):
+export const apiClient = createApiClient({
+  authProvider,
+  baseUrl,
+  credentials: "include",
+  headers: appHeaders,
+  onError: (error) => console.warn(error.message),
+});
+```
+
+Apps on `@terreno/api` JWT routes (no Better Auth) use `jwtAuthAdapter` as the
+`authProvider` and `SessionProvider` `source`. See
+[JWT auth (legacy)](../reference/syncdb.md#jwt-auth-legacy).
+
+## 4. Replace the Redux store with providers
+
+```tsx
+// app/_layout.tsx
+import {installDevConsoleLogger} from "@terreno/syncdb/app";
+import {SessionProvider} from "@terreno/syncdb/auth";
+import {ApiClientProvider, SyncDbProvider} from "@terreno/syncdb/react";
+
+installDevConsoleLogger();
+
+const RootLayout: React.FC = () => (
+  <SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+    <ApiClientProvider client={apiClient}>
+      <SyncDbProvider client={syncDb}>
+        <App />
+      </SyncDbProvider>
+    </ApiClientProvider>
+  </SessionProvider>
+);
+```
+
+Start the sync client when a user signs in:
 
 ```typescript
+const {userId} = useSession();
+
+// Start syncdb for the signed-in user; stop it on sign-out or user switch.
 useEffect(() => {
   if (!userId) {
     return;
   }
-  let stopped = false;
-  syncDb
-    .start()
-    .then(() => {
-      if (!stopped) {
-        setSyncDbReady(true);
-      }
-    })
-    .catch((error) => {
-      console.error("[syncdb] Failed to start client", error);
-    });
+  void syncDb.start();
   return () => {
-    stopped = true;
-    setSyncDbReady(false);
     void syncDb.stop();
   };
-}, [userId, syncDbStartAttempt]);
+}, [userId]);
 ```
 
-Gate writes with a ready flag (`useSyncDbReady`) so `mutate()` is not called before `start()` resolves a user.
+Mount `<SyncDbProvider>` unconditionally, not only while `userId` is set: unmounting it during
+logout throws in screens that are still on screen. `logout()` waits for the server and keeps the
+session if sign-out fails; show `useSession().isSigningOut` on the sign-out button.
 
-### Wrap screens with `SyncDbProvider`
+Remove `<Provider store={store}>`, `<PersistGate>`, `configureStore`, and every
+`useSelector` / `useDispatch`. Move app-state slices to React context or `useStoredState`
+from `@terreno/ui`.
 
-**After** (`example-frontend/app/(tabs)/index.tsx`):
+| Redux session code | Replacement |
+|--------------------|-------------|
+| `useSelector(selectBetterAuthUserId)` / `useSelectCurrentUserId()` | `useSession().userId` |
+| `useSelector(selectBetterAuthIsAuthenticated)` | `useSession().isAuthenticated` |
+| `useSelector(selectBetterAuthUser)` | `useSession().user` |
+| `useSelector(selectBetterAuthIsLoading)` / `useSelectIsAuthenticating()` | `useSession().isLoading` (Better Auth) or `useJwtAuth().isAuthenticating` (JWT) |
+| `dispatch(logout())` / `LOGOUT_ACTION_TYPE` listeners | `await useSession().logout()`; extra cleanup goes in `SessionProvider` `onLogout` |
+| `dispatch(api.util.resetApiState())` on logout | `apiClient.reset()` in `onLogout` |
 
-```tsx
-import {SyncDbProvider} from "@terreno/syncdb/react";
-import {syncDb} from "@/store/syncdb";
+## 5. Regenerate the SDK
 
-const TodosScreen = () => (
-  <SyncDbProvider client={syncDb}>
-    <SyncTodosScreen />
-  </SyncDbProvider>
-);
+`terreno-syncdb-codegen --api-out` replaces `@rtk-query/codegen-openapi`. It emits typed hooks
+for every operation without `x-terreno-sync`, with the same names RTK codegen used.
+
+```json
+{
+  "scripts": {
+    "sdk": "terreno-syncdb-codegen --schema ${OPENAPI_URL:-http://localhost:4000/openapi.json} --api-out ./store/apiSdk.ts",
+    "sync-sdk": "terreno-syncdb-codegen --schema ${OPENAPI_URL:-http://localhost:4000/openapi.json} --out ./store/syncDbSdk.ts"
+  }
+}
 ```
 
-The example also mounts `SyncDbProvider` at the root (`_layout.tsx`) for `SyncHealthToast`.
+With the backend running, run `bun run sdk && bun run sync-sdk`, then change imports:
 
-### Redux store: keep vs remove
+| 57.x | 58 |
+|------|----|
+| `import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk"` | `import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk"` |
+| `import {usePostGptPromptMutation} from "@/store/openApiSdk"` | `import {usePostGptPromptMutation} from "@/store/apiSdk"` |
+| `api.injectEndpoints({endpoints: …})` | `useApiQuery` / `useApiMutation` from `@terreno/syncdb/react`, or document the route in OpenAPI and regenerate |
+| `api.util.invalidateTags([...])` | `apiClient.invalidateTags([...])` |
+| `api.util.updateQueryData(...)` | Move the collection to syncdb, or `refetch()` |
 
-| Keep on Redux | Remove for migrated collections |
-|---------------|--------------------------------|
-| `generateBetterAuthSlice` / session | `generateAuthSlice` (JWT) once Better Auth ships |
-| `terrenoApi` reducer for **non-synced** routes | `useGetTodosQuery` / todo mutations |
-| `createOfflineMiddleware` + offline slice | `realtimeList` / `realtimeDocument` for that collection |
-| Feature-flag / app-state slices | Per-screen `isLoading` spinners tied to RTK mutations |
+Hooks keep the `{data, error, isLoading, isFetching, refetch}` and `[trigger, state]` shapes,
+and `.unwrap()` still resolves the data or throws. Errors are `ApiError` (`status`,
+`data.title`, `data.detail`). See [Regenerate the API SDK](generate-the-client-sdk.md).
 
-**Before** (`origin/master:example-frontend/store/index.ts`): `generateAuthSlice`, `createOfflineMiddleware`, offline payload sessionStorage.
-
-**After** (`example-frontend/store/index.ts`): `generateBetterAuthSlice`, `terrenoApi` only — no offline middleware.
-
-## 3. Reads
-
-There is no `isLoading` for reads after bootstrap — data is already in the local store.
-
-### List reads
-
-**Before** (`origin/master:example-frontend/app/(tabs)/index.tsx`):
+## 6. Move flags, pushes, and app utilities
 
 ```typescript
-const {data: todosData, isLoading, refetch, isFetching} = useGetTodosQuery({}, {skip: !userId});
-const todos = todosData?.data ?? [];
+import {useTerrenoFeatureFlags} from "@terreno/syncdb/flags";
+import {useSocketEvent} from "@terreno/syncdb/react";
+import {canOpenAdminPage, useUpgradeCheck} from "@terreno/syncdb/app";
+
+// Flags ride the sync socket; no second socket.
+useTerrenoFeatureFlags({client: apiClient, skip: !userId, socket: syncDb, userId});
+
+// Server pushes that used useSocketConnection().socket.on(...)
+useSocketEvent("announcementPublished", (payload) => console.info("announcement", payload));
+
+const {isRequired, isWarning, onUpdate} = useUpgradeCheck({recheckOnForeground: true});
+const isAdmin = canOpenAdminPage({admin: me?.admin, permissions: me?.permissions});
 ```
 
-**After** (`example-frontend/components/SyncTodosScreen.tsx`):
+| 57.x | 58 |
+|------|----|
+| `useSocketConnection({baseUrl, getAuthToken, …})` | Delete. The syncdb client owns the one socket. |
+| `socket.on(event, handler)` | `useSocketEvent(event, handler)` or `syncDb.onSocketEvent(event, handler)` |
+| `useTerrenoFeatureFlags(api, {skip, socket, userId})` | `useTerrenoFeatureFlags({client, skip, socket: syncDb, userId})` |
+| `useFeatureFlags(api, options)` | `useFeatureFlags({client, skip, socket, userId})` |
+| `useRealtimeDebug(baseUrl)` / `setRealtimeDebug` | `createSyncDb({debug: …})` and the terreno-mcp-local `get_syncdb_state` tool |
+| `useMCPTools({baseURL})` | `useMCPTools({authProvider, baseURL})` |
+| `installTerrenoDevConsoleLogger()` | `installDevConsoleLogger()` |
+| `import {resolveBuildNumber} from "@terreno/rtk/buildNumber"` | `import {resolveBuildNumber} from "@terreno/syncdb/buildNumber"` |
 
-```typescript
-import {useEntity, useEntityIds} from "@terreno/syncdb/react";
+## 7. Move collection screens to syncdb
 
-const incompleteIds = useEntityIds<SyncTodo>("todos", {
-  filter: (t) => !t.completed,
-  sort: sortByCreatedDesc,
-});
+There is no `isLoading` for reads after bootstrap; data is already local. Writes apply locally,
+queue in the outbox, and replay in the background.
 
-// Per row:
-const {data} = useEntity<SyncTodo>("todos", id);
-```
-
-For small lists, `useQuery` is fine:
-
-```typescript
-import {useQuery} from "@terreno/syncdb/react";
-const todos = useQuery<Todo>("todos", {filter: (t) => !t.completed});
-```
-
-`where` / `filter` / `sort` / `limit` run in JS over the local store. Tombstones are excluded unless `{includeDeleted: true}`.
-
-### Filtered, sorted, and paged list args
-
-RTK list args map to the same syntax. Pick the hook by collection size:
-
-| RTK | Whole collection synced (`collections`) | Too large to sync whole (`queryCollections`) |
-|-----|------------------------------------------|----------------------------------------------|
-| `useGetMessagesQuery({threadId})` | `useQuery("messages", {where: {threadId}})` | `useWindowQuery("messages", {where: {threadId}})` |
-| `{status: {$in: ["open", "pending"]}}` | `where: {status: {$in: [...]}}` | same |
-| `{sort: "-created"}` | `sort: "-created"` | same |
-| `{limit: 20}` | `limit: 20` | `pageSize: 20` |
-| `{page: 2}` / load more | grow `limit` | `fetchNextPage()` |
-| `data.more` / `data.total` | — | `hasMore` / `total` |
-| `isLoading` / `isFetching` / `refetch` | not needed | `isLoading` / `isFetching` / `refetch` |
-| `{skip: !threadId}` | not needed | `skip: !threadId` |
-
-```typescript
-import {useWindowQuery} from "@terreno/syncdb/react";
-
-const {data: messages, hasMore, fetchNextPage, isLoading} = useWindowQuery<Message>("messages", {
-  where: {threadId},
-  sort: "-created",
-  pageSize: 30,
-  skip: !threadId,
-});
-```
-
-Windows with different filters keep separate result lists but share one local row per
-document, so an edit to a message shown in two windows updates once. See
-[Query windows](../reference/syncdb.md#query-windows).
-
-### Delete this RTK read code
-
-- `useGetTodosQuery` / `useGet*Query` for the migrated collection
-- `isLoading`, `isFetching`, `refetch`, `RefreshControl` wired to list fetch
-- `skip: !userId` guards on list queries (replace with `useSyncDbReady` on writes; reads are safe once bootstrapped)
-- `realtimeList("todos")` / `realtimeDocument("todos")` in `store/sdk.ts` for that collection
-
-## 4. Writes
-
-Writes are synchronous from the UI's perspective: local apply + outbox enqueue + background replay.
-
-### Create / update / delete
-
-**Before** (`origin/master:example-frontend/app/(tabs)/index.tsx`):
-
-```typescript
-const [createTodo, {isLoading: isCreating}] = usePostTodosMutation();
-const [updateTodo] = usePatchTodosByIdMutation();
-const [deleteTodo] = useDeleteTodosByIdMutation();
-
-await createTodo({title, completed: false}).unwrap();
-await updateTodo({id, completed: true}).unwrap();
-await deleteTodo(id).unwrap();
-```
-
-**After** (`example-frontend/components/SyncTodosScreen.tsx`):
+| RTK Query | syncdb |
+|-----------|--------|
+| `useGetTodosQuery({completed: false})` | `useQuery("todos", {where: {completed: false}})` |
+| `{sort: "-created", limit: 20}` | `sort: "-created", limit: 20` |
+| Collection too large to sync whole, `{page}` / `more` / `total` | `useWindowQuery("messages", {where, sort, pageSize})` with `fetchNextPage`, `hasMore`, `total` |
+| `useGetTodosByIdQuery(id)` | `useEntity("todos", id)` |
+| `usePostTodosMutation()` | `useMutate("todos").create({data: {_id: generateMutationId(), …}})` |
+| `usePatchTodosByIdMutation()` | `useMutate("todos").update({id, data})` |
+| `useDeleteTodosByIdMutation()` | `useMutate("todos").remove({id})` |
+| Optimistic `updateQueryData`, refetch-after-mutate, write spinners | Delete; writes are local and immediate |
+| 409 / `If-Unmodified-Since` handling | `useConflicts()` + a resolution UI (`ConflictSheet`) |
+| `useOfflineStatus()` / `useServerStatus()` + `OfflineBanner` | `useSyncStatus()` + `SyncStatusBanner` / `SyncHealthToast` |
+| `createOfflineMiddleware` / `configureOfflineMutationEndpoints` | Delete; the outbox replays every write |
 
 ```typescript
 import {generateMutationId} from "@terreno/syncdb";
-import {useMutate} from "@terreno/syncdb/react";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
 
+const todos = useQuery<Todo>("todos", {where: {completed: false}, sort: "-created"});
 const {create, update, remove} = useMutate("todos");
 
-const id = generateMutationId();
-create({data: {_id: id, title, completed: false, created: DateTime.now().toISO()}});
+create({data: {_id: generateMutationId(), title, completed: false}});
 update({id, data: {completed: true}});
 remove({id});
 ```
 
-Client-minted `_id` on creates lets the optimistic row render before the server acks.
+Client-minted `_id`s let the optimistic row render before the server acknowledges it.
+Rejected writes surface as conflicts in `useConflicts()` (resolve with `useServer` or
+`keepMine`) or as `failedCount` in `useSyncStatus()`. `paused: "auth"` means replay waits for
+the same user to sign back in; wire `SyncStatusBanner` `onAuthRequired` to the login flow.
+Example: `example-frontend/components/SyncTodosScreen.tsx`.
 
-### Delete this RTK write code
+| Event | Local store and outbox |
+|-------|------------------------|
+| 401 or expired session | Kept; replay resumes after the same user signs in |
+| `useSession().logout()` with `wipeOnSignOut: true` | Wiped |
+| A different user signs in | Wiped |
+| Schema version mismatch or web decrypt failure | Wiped and re-bootstrapped |
 
-- `usePost*Mutation`, `usePatch*Mutation`, `useDelete*Mutation` for the migrated collection
-- `.unwrap()` / try-catch around mutation promises for happy-path UX
-- **`isLoading` / `isCreating` / `isUpdating` spinners on write buttons** — syncdb writes do not await the server
-- Manual optimistic cache updates (`updateQueryData`, `upsertQueryData`, temporary local rows in component state)
-- `refetch()` or tag invalidation after mutate (`invalidatesTags` for that collection)
-- `createOfflineMiddleware` endpoint list entries for that collection (`configureOfflineMutationEndpoints`)
-- `If-Unmodified-Since` / 409 handling in custom mutation code (conflicts move to `useConflicts()`)
+## 8. Update ui and admin call sites
 
-Server rejection surfaces later as outbox nacks — conflicts in `useConflicts()`, terminal failures in `getSyncStatus().failedCount`.
+| 57.x | 58 |
+|------|----|
+| `<ConsentNavigator api={terrenoApi}>` | `<ConsentNavigator client={apiClient}>` |
+| `<AnnouncementNavigator api={terrenoApi} …>` | `<AnnouncementNavigator client={apiClient} …>` |
+| `useConsentForms(api, baseUrl)`, `useSubmitConsent(api, baseUrl)`, `useAnnouncements(api, …)`, `useAcknowledgeAnnouncement(api, …)` | Same hooks with `client` as the first argument |
+| `useServerStatus()` → `OfflineBanner` | `useSyncStatus()` → `OfflineBanner queueLength={queuedCount}` |
+| Admin `api` prop, `useAdminApi(api, …)` | Removed; see [Admin no longer takes an RTK `api`](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#admin-no-longer-takes-an-rtk-api) |
+| `getAdminAuthHeaders` from `@/store/betterAuthApi` | `() => authProvider.getToken()` as a Bearer header, passed to `AdminProvider` `getAuthHeaders` |
 
-## 5. Conflicts
+## Copy the example app's changes
 
-A **conflict** means the client's `baseVersion` (last seen `_syncSeq`) disagrees with the server. The server returns a `conflict` nack:
+Native build config, auth wiring, and phone layout fixes the example app needed are listed in
+[Example app changes to copy](../../mcp-server/src/docs/upgrades/58.0.0.md#example-app-changes-to-copy).
 
-- HTTP: `POST /sync/mutate` → **409** with `{nack: {code: "conflict", serverDoc, serverSeq, ...}}`
-- Socket: `sync:nack` with `code: "conflict"`
-
-The client records the conflict locally; the UI must let the user pick a side.
-
-### Strategies
-
-| Strategy | When to use |
-|----------|-------------|
-| `useServer` | Accept canonical server data (or tombstone if server deleted the doc) |
-| `keepMine` | Re-enqueue local changes with a fresh `baseVersion` |
-
-```typescript
-import {useConflicts} from "@terreno/syncdb/react";
-
-const {conflicts, resolve} = useConflicts();
-resolve({mutationId, strategy: "useServer"});
-resolve({mutationId, strategy: "keepMine"});
-```
-
-### Minimum UI
-
-The example app uses:
-
-- `SyncConflictsController` — single app-wide sheet state (`example-frontend/components/SyncConflictsController.tsx`)
-- `ConflictSheet` rendered from `SyncHealthToast` (`example-frontend/app/_layout.tsx`)
-- `SyncStatusBanner` conflict badge → `openConflicts("todos")` (`example-frontend/components/SyncTodosScreen.tsx`)
-
-Copy that pattern or build equivalent: show local vs server fields, two resolution actions, block further edits on conflicted entities until resolved.
-
-## 6. Sync status
-
-Replace **request-loading UX** with **sync-state UX**.
-
-| RTK era | Syncdb era |
-|---------|------------|
-| `isLoading` on queries | No list loading spinner (data is local) |
-| `useOfflineStatus` / `useServerStatus` | `useSyncStatus()` |
-| `OfflineBanner` on fetch failure | `SyncStatusBanner` + `SyncHealthToast` |
-| Pull-to-refresh `refetch()` | Optional `client.forceResync()` for support tooling |
-
-**After** (`example-frontend/components/SyncTodosScreen.tsx`):
-
-```typescript
-import {useSyncStatus} from "@terreno/syncdb/react";
-import {SyncStatusBanner} from "@terreno/ui";
-
-const syncStatus = useSyncStatus();
-
-<SyncStatusBanner
-  isOnline={syncStatus.isOnline}
-  queuedCount={syncStatus.queuedCount}
-  conflictCount={syncStatus.conflictCount}
-  failedCount={syncStatus.failedCount}
-  paused={syncStatus.paused}
-  draining={syncStatus.draining}
-  sentThisDrain={syncStatus.sentThisDrain}
-  totalThisDrain={syncStatus.totalThisDrain}
-  onOpenConflicts={openConflictSheet}
-  onAuthRequired={handleAuthRequired}
-/>
-```
-
-`SyncHealthToast` (`example-frontend/components/SyncHealthToast.tsx`) adds persistent toasts for per-collection conflicts/failures and an initial "Syncing…" toast with optional force reload.
-
-`paused: "auth"` means replay is halted until the same user re-authenticates — wire `onAuthRequired` to your login flow.
-
-## 7. Auth
-
-**Auth can ship before data migration.** Complete Better Auth + `betterAuthAdapter` first; keep RTK Query for reads/writes until each screen migrates.
-
-### Better Auth adapter
-
-**After** (`example-frontend/store/syncdb.ts`):
-
-```typescript
-import {betterAuthAdapter, createSyncDb} from "@terreno/syncdb";
-import {betterAuthClient} from "@/lib/betterAuth";
-
-const authProvider = betterAuthAdapter(syncAuthClient, {pollIntervalMs: 60_000});
-
-export const syncDb = createSyncDb({authProvider, baseUrl, collections: ["todos"], name: "terreno-example"});
-```
-
-`betterAuthAdapter` implements `AuthProvider`:
-
-- `getToken()` / `getUserId()` — read session per request (not cached)
-- `onAuthChange` — session atom subscription (example bridges `$store.atoms.session`)
-- `refresh()` — one silent refresh per auth-pause episode
-
-### Token storage
-
-Better Auth session tokens live in the Better Auth client (`@terreno/rtk` `createBetterAuthClient`):
-
-- **Native:** the Expo plugin's cookie jar in `expo-secure-store`
-- **Web (default):** Better Auth's HttpOnly session cookie, managed by the browser. No token is in app storage
-- **Web with `webAuth: "bearer"`:** the `set-auth-token` bearer in `localStorage` (or the `bearerStorage` you pass), readable with `getBetterAuthBearerToken()`. See [Frontend and API on different sites](configure-better-auth.md#frontend-and-api-on-different-sites)
-
-Syncdb does not store tokens itself — it calls `authProvider` on every transport/HTTP request.
-
-### Socket auth and `sync:auth-expired`
-
-On connect, the socket transport sends the bearer token from `getToken()`. When the server's session re-validation sweep finds an expired/disabled session, it emits `sync:auth-expired` then disconnects (`api/src/realtime/sessionRevalidation.ts`). The client maps this to `paused: "auth"` — **no local wipe**, outbox preserved (INV-2).
-
-### Backend
-
-Register `BetterAuthApp` and `RealtimeApp` on the same `TerrenoApp`. `RealtimeApp` picks up the
-Better Auth instance by itself, so no extra option is needed. Legacy JWT sockets keep working
-alongside it. Only a `RealtimeApp` mounted without `TerrenoApp` needs the instance passed in:
-
-```typescript
-new RealtimeApp({betterAuth: {auth, userModel: User}})
-```
-
-## 8. Codegen
-
-Synced collections use `bun run sync-sdk`, which runs `terreno-syncdb-codegen` from
-`@terreno/syncdb`. It reads `/openapi.json`, finds list operations tagged
-`x-terreno-sync`, and writes `store/syncDbSdk.ts` (`SYNC_COLLECTIONS` plus friendly
-hooks such as `useTodos` / `useTodo` / `useCreateTodo`). Do not edit that file.
-Custom collections call `createCollectionHooks` in a sibling file. Names are chosen
-so they do not collide with RTK `openApiSdk.ts` during dual-stack migration.
+## 9. Verify
 
 ```bash
-# Backend running on port 4000
-cd example-frontend && bun run sync-sdk
+rg -l "@terreno/rtk|@reduxjs/toolkit|react-redux|redux-persist|rtk-query" --glob '!**/node_modules/**' .
+bun run compile && bun run lint && bun test
 ```
 
-### Does `bun run sdk` still work?
+The search returns nothing. Run the app on an iOS and an Android dev client, not only web. Then sign in, open each screen that read or wrote data, sign out,
+and sign in as a second user.
 
-**Yes.** `example-frontend/package.json` still defines:
+## Every removed export
 
-```json
-"sdk": "bun scripts/generate-sdk.ts && bun biome check --write scripts/generate-sdk.ts"
-```
+Every export of `@terreno/rtk` 57.x and its 58 replacement. Paths: `api` =
+`@terreno/syncdb/api`, `app` = `@terreno/syncdb/app`, `auth` = `@terreno/syncdb/auth`,
+`config` = `@terreno/syncdb/config`, `flags` = `@terreno/syncdb/flags`, `react` =
+`@terreno/syncdb/react`, root = `@terreno/syncdb`.
 
-It runs `@rtk-query/codegen-openapi` against `openapi-config.ts` and writes `store/openApiSdk.ts`.
+### Request client and generated SDK (`emptyApi`, `tagGenerator`, `mongooseSlice`, `sessionApi`)
 
-### What changes post-migration
+| Removed | Replacement |
+|---------|-------------|
+| `emptySplitApi` | `createApiClient` (api) + `ApiClientProvider` (react) |
+| `getBaseQuery`, `staggeredBaseQuery` | `createApiClient` (api): auth header, 401 → refresh → retry, timeout |
+| `useGetVersionCheckQuery`, `useLazyGetVersionCheckQuery` | `useUpgradeCheck` (app), or the generated `useGetVersionCheckQuery` in `store/apiSdk.ts` |
+| `VersionCheckResponse` | `VersionCheckResponse` (app) |
+| `refreshAuthToken` | `authProvider.refresh()` |
+| `getTokenExpirationTimes`, `shouldShowStillThereModal` | Same names (auth), JWT apps only |
+| `getFriendlyExpirationInfo` | Removed (debug string). Use `getTokenExpirationTimes` (auth). |
+| `generateTags` | Removed. Codegen derives `providesTags` / `invalidatesTags` from OpenAPI tags. |
+| `ListResponse`, `populateId` | Removed. List envelopes keep `{data, more, page, total}`; generated `<Name>Res` types describe them. |
+| `createSessionApi` | Removed (no consumers). Use `createApiClient` (api). |
 
-| Still generated | Stop using for migrated collections |
-|-----------------|-------------------------------------|
-| Auth routes, `GET /auth/me`, AI routes, feature flags, ObjectId admin compatibility CRUD | Collection CRUD — import from `store/syncDbSdk.ts` instead |
-| Custom REST / RPC endpoints | Todo `realtimeList` / `realtimeDocument` wiring in `store/sdk.ts` |
+### Session and auth (`authSlice`, `betterAuthSlice`, `betterAuthClient`, `betterAuthTypes`)
 
-Keep running `bun run sdk` after backend route changes — non-synced screens still import from `store/sdk.ts`.
+| Removed | Replacement |
+|---------|-------------|
+| `createBetterAuthClient`, `BetterAuthClient` | Same names (auth) |
+| `createStorageAdapter`, `StorageAdapter`, `repairCookieJar`, `withCookieJarRepair` | Same names (auth) |
+| `BetterAuthClientConfig`, `BetterAuthUser`, `BetterAuthSession`, `BetterAuthSessionData`, `BetterAuthOAuthProvider` | Same names (auth) |
+| `BetterAuthClientInterface` | `BetterAuthSessionClientLike` (auth) |
+| `generateBetterAuthSlice`, `BetterAuthSlice`, `GenerateBetterAuthSliceConfig`, `BetterAuthState` | `SessionProvider` + `useSession()` (auth); `createSessionStore` for non-React code |
+| `selectBetterAuthState`, `selectBetterAuthIsAuthenticated`, `selectBetterAuthUserId`, `selectBetterAuthUser`, `selectBetterAuthIsLoading`, `selectBetterAuthError` | `useSession()` → `{isAuthenticated, userId, user, isLoading, error}` |
+| `generateAuthSlice` (JWT) | `jwtAuthAdapter` + `SessionProvider source={adapter}` + `useJwtAuth({adapter})` (auth) |
+| `generateProfileEndpoints` | Generated `useGetAuthMeQuery` / `usePatchAuthMeMutation` in `store/apiSdk.ts` |
+| `EmailLoginRequest`, `EmailSignupRequest`, `GoogleLoginRequest`, `ResetPasswordRequest` | Same names (auth) |
+| `UserResponse` | `JwtAuthResponse` (auth) |
+| `selectCurrentUserId`, `useSelectCurrentUserId` | `useSession().userId` |
+| `selectIsAuthenticating`, `useSelectIsAuthenticating` | `useJwtAuth().isAuthenticating` / `useSession().isLoading` |
+| `selectLastTokenRefreshTimestamp` | Removed. Subscribe with `authProvider.onAuthChange`. |
+| `getAuthToken` | `authProvider.getToken()` |
+| `LOGOUT_ACTION_TYPE`, `TOKEN_REFRESHED_SUCCESS` | Removed (Redux action types). Use `SessionProvider` `onLogout` and `authProvider.onAuthChange`. |
+| `RootState` | Removed (no Redux store) |
+| `AUTH_DEBUG`, `logAuth` | Removed. Set `createSyncDb({debug})` for sync and auth-pause events. |
 
-Workflow:
+### Config and platform (`constants`, `platform`)
 
-```bash
-# Backend running on port 4000
-cd example-frontend && bun run sdk
-cd example-frontend && bun run sync-sdk
-```
+| Removed | Replacement |
+|---------|-------------|
+| `baseUrl`, `baseWebsocketsUrl`, `baseTasksUrl` | Same names (config) |
+| `resolveBaseUrls`, `resolveDevApiPort`, `BaseUrls`, `ExpoConstantsShape`, `SAME_ORIGIN_SENTINEL`, `DEFAULT_DEV_API_PORT` | Same names (config) |
+| `IsWeb` | `isWeb` (config) or `Platform.OS === "web"` |
+| — | New: `appHeaders()` (config) sends `App-Version` and `App-Platform` |
 
-### Syncdb hooks codegen
+### Sockets and realtime (`socket`, `useRealtimeDebug`, `constants`)
 
-For collections with `sync` enabled on the backend, generate local-first hooks from the same OpenAPI spec:
+| Removed | Replacement |
+|---------|-------------|
+| `useSocketConnection`, `SocketConnection`, `UseSocketConnectionOptions` | The `createSyncDb` socket; `useSocketEvent` (react) and `syncDb.onSocketEvent` (root) |
+| `useRealtimeDebug`, `setRealtimeDebug`, `isWebsocketsDebugEnabled`, `logSocket` | `createSyncDb({debug})`, `useSyncDebugLog` (react), terreno-mcp-local `get_syncdb_state` |
 
-```bash
-cd example-frontend && bun run sync-sdk
-```
+### Feature flags (`useFeatureFlags`, `useTerrenoFeatureFlags`)
 
-This writes `store/syncDbSdk.ts` with friendly hooks (`useTodos`, `useCreateTodo`, …) that intentionally differ from RTK names so both SDKs can coexist during migration. Import synced screens from `@/store/syncDbSdk`, not `store/sdk.ts`.
+| Removed | Replacement |
+|---------|-------------|
+| `useFeatureFlags(api, options)`, `UseFeatureFlagsOptions` | `useFeatureFlags({client, skip, socket, userId})`, `UseFeatureFlagsOptions` (flags) |
+| `resolveFeatureFlagsOptions` | Removed. Options are one object. |
+| `useTerrenoFeatureFlags(api, options)`, `UseTerrenoFeatureFlagsOptions`, `UseTerrenoFeatureFlagsResult` | `useTerrenoFeatureFlags({client, skip, socket, userId})` and the same types (flags) |
+| `TerrenoFlagDefinition`, `TerrenoFlagConfiguration` | Same names (flags) |
+| `FlagsApi` | Removed. Pass an `ApiClient` as `client`. |
 
-### Built-in admin
+### Offline queue (`offlineSlice`, `offlineMiddleware`, `offlineGate`, `useOfflineStatus`, `useServerStatus`)
 
-For a synced String-`_id` model, set `sync.adminBroadcast: true` on its existing
-`modelRouter` sync config and inject a dedicated `createSyncDb` client with
-`windowCollections` into `AdminProvider`. REST remains the list membership,
-search, sort, pagination, and bulk-patch surface; TinyBase overlays rows and
-`useMutate` handles create/update/delete. Pass the host's `useConflicts()` result
-as `syncConflicts`.
+| Removed | Replacement |
+|---------|-------------|
+| `offlineSlice`, `offlineReducer`, `setOnlineStatus`, `enqueue`, `dequeue`, `clearQueue`, `addConflict`, `dismissConflict`, `clearConflicts`, `setSyncing` | The syncdb outbox. Write with `useMutate`; conflicts in `useConflicts()` (react). |
+| `OfflineState`, `QueuedMutation`, `ConflictRecord` | `SyncStatus` from `useSyncStatus()`; conflicts from `useConflicts()` / `listConflicts` (root) |
+| `selectIsOnline`, `selectIsOnlineSafe`, `selectOfflineQueue`, `selectQueueLength`, `selectConflicts`, `selectUndismissedConflicts`, `selectIsSyncing` | `useSyncStatus()` → `{isOnline, queuedCount, conflictCount, failedCount, isSyncing}` and `useConflicts()` |
+| `createOfflineMiddleware`, `OfflineMiddlewareConfig`, `isNetworkFetchError`, `shouldReplayQueuedMutation`, `buildOptimisticCreateItem` | Removed. syncdb applies writes locally and replays the outbox. |
+| `configureOfflineMutationEndpoints`, `shouldDeferOfflineMutation` | Removed. Every syncdb write is queued. |
+| `useOfflineStatus`, `OfflineStatus`, `useServerStatus`, `ServerStatus`, `ServerStatusOptions` | `useSyncStatus()` (react) |
 
-Admin RPC (config, scripts, roles, comms, consent, documents, version config,
-background tasks) uses admin-frontend's host-bound native fetch client. Do not
-add new admin `injectEndpoints`. Terreno 57 keeps `useAdminApi` and the required
-`api` prop only for ObjectId/API-only compatibility; Terreno 58 removes them.
+### App utilities (`useUpgradeCheck`, `usePermissions`, `devConsoleLogger`, `devStore`, `useMCPTools`, `useTerrenoChat`, `buildNumber`)
 
-## 9. Feature flags
+| Removed | Replacement |
+|---------|-------------|
+| `useUpgradeCheck` | `useUpgradeCheck` (app); runs on the request client from `ApiClientProvider` |
+| `hasPermission`, `canOpenAdminPage`, `PermissionSet`, `PermissionRequest`, `ADMIN_PAGE_RESOURCE`, `ADMIN_PAGE_ACTION`, `ADMIN_PAGE_PERMISSION` | Same names (app) |
+| `createPermissionSelectors`, `selectPermissions`, `useSelectPermissions`, `useCan`, `DEFAULT_PERMISSION_API_REDUCER_PATH` | Removed. Read `permissions` from `useGetAuthMeQuery()` and call `hasPermission` (app). |
+| `installTerrenoDevConsoleLogger` | `installDevConsoleLogger` (app) |
+| `resetTerrenoDevConsoleLoggerForTests` | Removed from the public API |
+| `registerTerrenoDevStore` | Removed. `createSyncDb({debug})` registers the client for terreno-mcp-local (`get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`). |
+| `useMCPTools`, `MCPToolInfo`, `UseMCPToolsOptions`, `UseMCPToolsResult` | Same names (app); pass `authProvider` |
+| `useTerrenoChat`, `UseTerrenoChatOptions` | Removed (no consumers). Use `useChat` from `@ai-sdk/react` with a bearer header from `authProvider.getToken()`, or `GPTChat` from `@terreno/ui`. |
+| `@terreno/rtk/buildNumber`: `coerceBuildNumber`, `resolveBuildNumber` | `@terreno/syncdb/buildNumber` (node-only) |
 
-Post-migration, feature flags stay on `@terreno/rtk` + OpenFeature — **not** on syncdb.
+### Removed before 58
 
-**After** (`example-frontend/app/_layout.tsx`):
-
-```typescript
-import {OpenFeatureProvider} from "@openfeature/react-sdk";
-import {useTerrenoFeatureFlags} from "@terreno/rtk";
-
-const OpenFeatureBridge = ({children, socket}) => {
-  const bridgeUserId = useSelector(selectBetterAuthUserId) ?? undefined;
-  useTerrenoFeatureFlags(terrenoApi, {skip: !bridgeUserId, socket, userId: bridgeUserId});
-  return <OpenFeatureProvider domain="feature-flags">{children}</OpenFeatureProvider>;
-};
-```
-
-See [`docs/reference/feature-flags.md`](../reference/feature-flags.md) and [`docs/how-to/add-feature-flags.md`](add-feature-flags.md).
-
-**Example app gap:** todos do **not** gate on a feature flag — `SyncTodosScreen` is syncdb-only. For a gradual rollout, add a boolean flag and render the RTK screen when off, syncdb screen when on (see §10). The reference migration intentionally skipped flag wiring to keep one data path for e2e tests.
-
-## 10. Rollback
-
-### Per-screen feature flag
-
-Ship both implementations behind a flag:
-
-- Flag **off** → legacy RTK Query screen
-- Flag **on** → syncdb screen
-
-Both bundles ship until you flip the default and delete the RTK path.
-
-The example app does **not** use this pattern for todos.
-
-### What local data survives
-
-| Event | Local IndexedDB / SQLite | Outbox |
-|-------|------------------------|--------|
-| Logout / 401 | **Kept** (INV-2) | **Kept** — same user can sign back in and replay |
-| Different-user login | **Wiped** | **Wiped** |
-| `signOut()` default | **Kept** | **Kept** |
-| `signOut()` with `wipeOnSignOut: true` | **Wiped** | **Wiped** |
-| Schema version mismatch | **Wiped** + re-bootstrap | Re-built |
-| Decrypt failure (web, default) | **Wiped** + re-bootstrap | Re-built |
-
-`wipeLocalData` clears store tables, persisted databases, and cached encryption keys (`syncdb/src/storage/wipe.ts`).
-
-Rolling back a **screen** to RTK does not automatically clear syncdb data — stale local todos may still exist until user switch or explicit wipe. Plan for that if you flip the flag off in production.
-
-## 11. Checklist
-
-Copy and track per collection:
-
-```
-[ ] 1. Backend: isDeletedPlugin + syncPlugin on schema
-[ ] 2. Backend: modelRouter sync scope configured
-[ ] 3. Backend: SyncApp + RealtimeApp registered; Mongo replica set running
-[ ] 4. Backend: ensureSyncIndexes succeeds at startup
-[ ] 5. Frontend: @terreno/syncdb installed; expo-sqlite in app (native)
-[ ] 6. Frontend: createSyncDb client + betterAuthAdapter
-[ ] 7. Frontend: syncDb.start()/stop() wired to auth in root layout
-[ ] 8. Frontend: SyncDbProvider wraps migrated screens
-[ ] 9. Reads: useGet*Query → useQuery / useEntityIds + useEntity
-[ ] 10. Writes: usePost/Patch/Delete*Mutation → useMutate().create/update/remove
-[ ] 11. Deleted RTK: mutation isLoading spinners, refetch-after-mutate, offline middleware entries, realtime cache patches
-[ ] 12. Conflicts: useConflicts + resolution UI (ConflictSheet or equivalent)
-[ ] 13. Sync status: useSyncStatus + SyncStatusBanner / health toasts (not query isLoading)
-[ ] 14. Auth: Better Auth session + onAuthRequired → re-login when paused
-[ ] 15. Codegen: bun run sdk still run for non-synced routes; remove todo hooks from screens
-[ ] 16. Feature flags: OpenFeature bridge still fed via useTerrenoFeatureFlags (if used)
-[ ] 17. Rollback plan: feature flag or accept stale local data on revert
-[ ] 18. Verify: CRUD, offline create/edit/delete, reconnect, conflict both strategies, user switch
-```
-
-## Backend prerequisites (detail)
-
-Before a collection can sync:
-
-- [ ] `isDeletedPlugin` on schema (soft delete required)
-- [ ] `syncPlugin` on schema (`_syncSeq` stamping)
-- [ ] `modelRouter("/path", Model, {sync: {scope: ...}})` three-argument form
-- [ ] Custom scopes include `snapshotFilter`
-- [ ] `new SyncApp({getUserScopes?, accessControl?})` for tenant/custom scopes and admin-window `admin:access` (mount `AdminApp` too so admin `queryFilter` / resource actions apply to hydrate and `|admin` deltas)
-- [ ] `new RealtimeApp({betterAuth?})` + MongoDB replica set
-- [ ] No `updateMany`, `deleteMany`, `deleteOne`, `findOneAndDelete`, or `bulkWrite` on synced models
-
-## What stays on @terreno/rtk
-
-- Generated OpenAPI SDK for non-synced routes
-- Better Auth Redux slice (`generateBetterAuthSlice`)
-- Feature flags (`useTerrenoFeatureFlags` / `useFeatureFlags`)
-- Socket connection for flags and legacy realtime (until removed)
-- `@terreno/rtk` is not being removed
+`realtimeList`, `realtimeDocument`, `setRealtimeSocket`, `getRealtimeSocket`,
+`useSyncConnection`, and `RealtimeEvent` went with the legacy RTK realtime path. See
+[Legacy RTK realtime is removed](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#legacy-rtk-realtime-is-removed).
 
 ## Further reading
 
-- [`docs/reference/syncdb.md`](../reference/syncdb.md) — full API reference
-- [`syncdb/README.md`](https://github.com/TerrenoLabs/terreno/blob/release-56.0.0/syncdb/README.md) — architecture and protocol detail
-- [`docs/how-to/configure-better-auth.md`](configure-better-auth.md) — Better Auth setup
+- [`@terreno/syncdb` reference](../reference/syncdb.md)
+- [Local-first data](../explanation/local-first-data.md)
+- [Configure Better Auth](configure-better-auth.md)
+- [Use syncdb correctly](use-syncdb-correctly.md)

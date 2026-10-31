@@ -30,6 +30,25 @@ export const down = async ({dryRun, mongoose}): Promise<void> => {
 };
 ```
 
+## Framework migrations
+
+Some Terreno releases ship a data migration in a package. Wire it in with a one-line wrapper file, so it runs, dry-runs, and records history like your own files:
+
+```typescript
+// migrations/20261022120000-mcp-service-token-string-ids.ts
+import {mcpServiceTokenStringIdsMigration} from "@terreno/api";
+
+export const id = "20261022120000-mcp-service-token-string-ids";
+export const up = mcpServiceTokenStringIdsMigration.up;
+```
+
+| Package | Export | Since | What it does |
+| --- | --- | --- | --- |
+| `@terreno/api` | `mcpServiceTokenStringIdsMigration` | 58.0.0 | Re-keys ObjectId `McpServiceToken` rows to hex-string `_id`s. Idempotent; no `down`. |
+| `@terreno/ai` | `gptHistoryStringIdsMigration` | 58.0.0 | Re-keys ObjectId `GptHistory` rows to hex-string `_id`s and rewrites `AIDataset.historyId`. Idempotent; no `down`. |
+
+The upgrade note for each release says which framework migrations to add.
+
 ## First apply
 
 1. Generate a draft from the current models vs the last `schemaAfter` snapshot:

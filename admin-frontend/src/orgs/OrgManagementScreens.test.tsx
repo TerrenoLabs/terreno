@@ -1,155 +1,184 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
-const readState: {
-  data?: unknown;
-  error?: unknown;
-  isFetching: boolean;
-  isLoading: boolean;
-} = {isFetching: false, isLoading: false};
-const refetchMembers = mock(() => {});
-const membersState: {
-  data?: unknown;
-  error?: unknown;
-  isLoading: boolean;
-  refetch?: () => void;
-} = {isLoading: false, refetch: refetchMembers};
-const updateOrganization = mock(() => ({unwrap: async () => ({})}));
-const attachMember = mock(() => ({unwrap: async () => ({})}));
-const updateMember = mock(() => ({unwrap: async () => ({})}));
-const removeMember = mock(() => ({unwrap: async () => ({})}));
 const routerPush = mock(() => {});
 
 mock.module("expo-router", () => ({router: {push: routerPush}}));
 
 import {AdminProvider} from "../AdminProvider";
-import type {AdminApi} from "../types";
 import {OrgMembersScreen} from "./OrgMembersScreen";
 import {OrgSettingsScreen} from "./OrgSettingsScreen";
 
-/**
- * Stands in for the host RTK Query API so the real `useOrganizationsApi` runs.
- * Mocking that module instead would leak process-wide and make the suite order-dependent.
- */
-const createOrganizationsApi = (): AdminApi => {
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => ({
-      useOrgCreateMutation: () => [mock(() => ({unwrap: async () => ({})})), {isLoading: false}],
-      useOrgDeleteMutation: () => [mock(() => ({})), {isLoading: false}],
-      useOrgListQuery: () => ({isLoading: false}),
-      useOrgMemberAttachMutation: () => [attachMember, {isLoading: false}],
-      useOrgMemberRemoveMutation: () => [removeMember, {isLoading: false}],
-      useOrgMembersQuery: () => membersState,
-      useOrgMemberUpdateMutation: () => [updateMember, {isLoading: false}],
-      useOrgMineQuery: () => ({isLoading: false}),
-      useOrgReadQuery: () => readState,
-      useOrgUpdateMutation: () => [updateOrganization, {isLoading: false}],
-    }),
-  };
-  return api as unknown as AdminApi;
+interface FetchCall {
+  body?: unknown;
+  headers: Record<string, string>;
+  method: string;
+  url: string;
+}
+
+interface StubResponse {
+  body?: unknown;
+  pending?: boolean;
+  status?: number;
+}
+
+const calls: FetchCall[] = [];
+const pendingResolvers: Array<() => void> = [];
+/** Responses keyed by `"METHOD url"`; unmatched requests answer `{data: {}}`. */
+const routes = new Map<string, StubResponse>();
+const originalFetch = globalThis.fetch;
+
+/** Routes the real `useOrganizationsApi` fetch client through `routes`. */
+const installFetch = (): void => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const headers: Record<string, string> = {};
+    new Headers(init?.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+    const call: FetchCall = {
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      headers,
+      method: init?.method ?? "GET",
+      url: String(input),
+    };
+    calls.push(call);
+    const {
+      body,
+      pending,
+      status = 200,
+    } = routes.get(`${call.method} ${call.url}`) ?? {
+      body: {data: {}},
+    };
+    if (pending) {
+      await new Promise<void>((resolve) => {
+        pendingResolvers.push(resolve);
+      });
+    }
+    if (status === 204) {
+      return new Response(null, {status});
+    }
+    return new Response(JSON.stringify(body ?? {}), {
+      headers: {"Content-Type": "application/json"},
+      status,
+    });
+  }) as typeof fetch;
 };
 
-const api = createOrganizationsApi();
+const renderOrg = (ui: React.ReactElement): ReturnType<typeof renderWithTheme> =>
+  renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      {ui}
+    </AdminProvider>
+  );
+
+const findCall = (method: string, url: string): FetchCall | undefined =>
+  calls.find((call) => call.method === method && call.url === url);
+
+const MEMBERSHIP = {
+  _id: "membership-1",
+  roleName: "org-admin",
+  status: "active",
+  userId: {_id: "user-1", email: "admin@example.com", name: "Admin"},
+};
+
+const SECURITY_SUMMARY = {
+  actions: [{destructive: false, id: "send-password-reset", label: "Send password reset"}],
+  betterAuthLinked: true,
+  disabled: false,
+  emailVerified: true,
+  lastSignIn: {at: null, method: "email"},
+  legacyPassword: false,
+  passkeys: {count: 0, items: []},
+  password: true,
+  providers: [],
+  sessions: {active: 1},
+  twoFactor: {backupCodesRemaining: null, enabled: false},
+  userId: "user-1",
+};
 
 describe("organization management screens", () => {
   beforeEach(() => {
-    readState.data = {data: {_id: "org-1", name: "Acme", settings: {region: "us"}}};
-    readState.error = undefined;
-    readState.isFetching = false;
-    readState.isLoading = false;
-    membersState.data = {
-      data: [
-        {
-          _id: "membership-1",
-          roleName: "org-admin",
-          status: "active",
-          userId: {_id: "user-1", email: "admin@example.com", name: "Admin"},
-        },
-      ],
-    };
-    membersState.error = undefined;
-    membersState.isLoading = false;
-    updateOrganization.mockClear();
-    refetchMembers.mockClear();
-    attachMember.mockClear();
-    updateMember.mockClear();
-    removeMember.mockClear();
+    calls.length = 0;
+    routes.clear();
+    routes.set("GET /orgs/org-1", {
+      body: {data: {_id: "org-1", name: "Acme", settings: {region: "us"}}},
+    });
+    routes.set("GET /orgs/org-1/members", {body: {data: [MEMBERSHIP]}});
     routerPush.mockClear();
-    attachMember.mockImplementation(() => ({unwrap: async () => ({})}));
-    updateMember.mockImplementation(() => ({unwrap: async () => ({})}));
-    removeMember.mockImplementation(() => ({unwrap: async () => ({})}));
+    installFetch();
+  });
+
+  afterEach(() => {
+    for (const resolve of pendingResolvers.splice(0)) {
+      resolve();
+    }
+    globalThis.fetch = originalFetch;
   });
 
   it("shows a spinner while organization settings are loading", () => {
-    readState.isLoading = true;
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+    routes.set("GET /orgs/org-1", {pending: true});
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
 
     assert.isNull(screen.queryByTestId("org-settings-save"));
     assert.isNull(screen.queryByText("Could not load organization settings."));
   });
 
-  it("shows a spinner while RTK still serves a previous organization id", () => {
-    readState.isLoading = false;
-    readState.isFetching = false;
-    readState.data = {data: {_id: "org-old", name: "Old Org", settings: {}}};
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+  it("shows a spinner while the read still serves a previous organization id", async () => {
+    routes.set("GET /orgs/org-1", {body: {data: {_id: "org-old", name: "Old Org", settings: {}}}});
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
+    await waitFor(() => {
+      assert.isDefined(findCall("GET", "/orgs/org-1"));
+    });
+    await act(async () => {});
 
     assert.isNull(screen.queryByTestId("org-settings-save"));
     assert.isNull(screen.queryByText("Could not load organization settings."));
   });
 
-  it("shows the backend load error title when settings fail to load", () => {
-    readState.isLoading = false;
-    readState.data = undefined;
-    readState.error = {data: {title: "Organization not found"}};
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+  it("reads the organization with its X-Organization-Id header", async () => {
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
 
-    assert.isNotNull(screen.getByText("Organization not found"));
+    expect(await screen.findByTestId("org-settings-save")).toBeTruthy();
+    expect(findCall("GET", "/orgs/org-1")?.headers["x-organization-id"]).toBe("org-1");
   });
 
-  it("shows the fallback load error when the organization is missing", () => {
-    readState.error = undefined;
-    readState.data = undefined;
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+  it("shows the backend load error title when settings fail to load", async () => {
+    routes.set("GET /orgs/org-1", {body: {title: "Organization not found"}, status: 404});
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
 
-    assert.isNotNull(screen.getByText("Could not load organization settings."));
+    assert.isNotNull(await screen.findByText("Organization not found"));
   });
 
-  it("navigates to members from Manage members", () => {
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+  it("shows the fallback load error when the organization is missing", async () => {
+    routes.set("GET /orgs/org-1", {status: 204});
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
 
-    fireEvent(screen.getByText("Manage members"), "click");
+    assert.isNotNull(await screen.findByText("Could not load organization settings."));
+  });
+
+  it("navigates to members from Manage members", async () => {
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
+
+    fireEvent(await screen.findByText("Manage members"), "click");
     assert.equal(routerPush.mock.calls.length, 1);
     assert.equal(routerPush.mock.calls[0]?.[0], "/admin/orgs/org-1/members");
   });
 
   it("rejects invalid settings JSON before saving", async () => {
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
+    const jsonField = await screen.findByTestId("org-settings-json");
 
     await act(async () => {
-      fireEvent.changeText(screen.getByTestId("org-settings-json"), "[1,2,3]");
+      fireEvent.changeText(jsonField, "[1,2,3]");
     });
     await act(async () => {
       fireEvent(screen.getByTestId("org-settings-save"), "click");
     });
     assert.isNotNull(screen.getByText("Settings must be a JSON object."));
-    assert.equal(updateOrganization.mock.calls.length, 0);
+    assert.isUndefined(findCall("PATCH", "/orgs/org-1"));
 
     await act(async () => {
       fireEvent.changeText(screen.getByTestId("org-settings-json"), "{bad-json");
@@ -158,31 +187,25 @@ describe("organization management screens", () => {
       fireEvent(screen.getByTestId("org-settings-save"), "click");
     });
     assert.isNotNull(screen.getByText("Settings must be valid JSON."));
-    assert.equal(updateOrganization.mock.calls.length, 0);
+    assert.isUndefined(findCall("PATCH", "/orgs/org-1"));
   });
 
   it("shows the backend save error title when settings fail to persist", async () => {
-    updateOrganization.mockImplementation(() => ({
-      unwrap: async () => Promise.reject({data: {title: "Slug already taken"}}),
-    }));
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
+    routes.set("PATCH /orgs/org-1", {body: {title: "Slug already taken"}, status: 409});
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
+    const save = await screen.findByTestId("org-settings-save");
 
     await act(async () => {
-      fireEvent(screen.getByTestId("org-settings-save"), "click");
+      fireEvent(save, "click");
     });
     await waitFor(() => {
-      assert.isNotNull(screen.getByTestId("org-settings-error"));
       assert.equal(screen.getByTestId("org-settings-error").props.children, "Slug already taken");
     });
   });
 
   it("saves organization settings and shows the billing placeholder", async () => {
-    const screen = renderWithTheme(
-      <OrgSettingsScreen api={api} organizationId="org-1" routeBase="/admin" />
-    );
-    expect(screen.getByText("Billing is not available yet.")).toBeTruthy();
+    const screen = renderOrg(<OrgSettingsScreen organizationId="org-1" routeBase="/admin" />);
+    expect(await screen.findByText("Billing is not available yet.")).toBeTruthy();
     await act(async () => {
       fireEvent.changeText(screen.getByTestId("org-settings-name"), "Acme Updated");
       fireEvent.changeText(screen.getByTestId("org-settings-json"), '{"region":"eu"}');
@@ -190,16 +213,21 @@ describe("organization management screens", () => {
     await act(async () => {
       fireEvent(screen.getByTestId("org-settings-save"), "click");
     });
-    expect(updateOrganization).toHaveBeenCalledWith({
-      body: {name: "Acme Updated", settings: {region: "eu"}},
-      id: "org-1",
+    await waitFor(() => {
+      expect(findCall("PATCH", "/orgs/org-1")).toMatchObject({
+        body: {name: "Acme Updated", settings: {region: "eu"}},
+        headers: {"x-organization-id": "org-1"},
+      });
     });
   });
 
   it("shows disabled Invite and attaches an existing user", async () => {
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    expect(await screen.findByText("admin@example.com")).toBeTruthy();
     expect(screen.getByLabelText("Invite").props.accessibilityState.disabled).toBe(true);
-    expect(screen.getByText("admin@example.com")).toBeTruthy();
+    // Invite is a disabled placeholder; its handler is a no-op until invitations ship.
+    screen.UNSAFE_getByProps({text: "Invite"}).props.onClick();
+    expect(findCall("GET", "/orgs/org-1/members")?.headers["x-organization-id"]).toBe("org-1");
     await act(async () => {
       fireEvent(screen.getByTestId("org-members-add"), "click");
     });
@@ -209,48 +237,57 @@ describe("organization management screens", () => {
     await act(async () => {
       fireEvent.press(screen.getByText("Add member"));
     });
-    expect(attachMember).toHaveBeenCalledWith({
-      body: {email: "new@example.com", roleName: "member"},
-      id: "org-1",
+    await waitFor(() => {
+      expect(findCall("POST", "/orgs/org-1/members")).toMatchObject({
+        body: {email: "new@example.com", roleName: "member"},
+        headers: {"x-organization-id": "org-1"},
+      });
     });
   });
 
-  it("renders members from RTK-unwrapped list data", () => {
-    membersState.data = [
-      {
-        _id: "membership-1",
-        roleName: "org-admin",
-        status: "active",
-        userId: {_id: "user-1", email: "admin@example.com", name: "Admin"},
-      },
-    ];
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+  it("renders members from an unwrapped list response", async () => {
+    routes.set("GET /orgs/org-1/members", {body: [MEMBERSHIP]});
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
 
-    expect(screen.getByText("admin@example.com")).toBeTruthy();
+    expect(await screen.findByText("admin@example.com")).toBeTruthy();
     expect(screen.getByTestId("org-members-table")).toBeTruthy();
   });
 
-  it("shows the backend last-admin error", async () => {
-    updateMember.mockImplementation(() => ({
-      unwrap: async () => Promise.reject({data: {title: "Cannot remove the last org-admin"}}),
-    }));
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+  it("changes a member role", async () => {
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const makeMember = await screen.findByLabelText("Make member");
 
     await act(async () => {
-      fireEvent(screen.getByLabelText("Make member"), "click");
+      fireEvent(makeMember, "click");
     });
     await waitFor(() => {
-      expect(screen.getByText("Cannot remove the last org-admin")).toBeTruthy();
+      expect(findCall("PATCH", "/orgs/org-1/members/membership-1")).toMatchObject({
+        body: {roleName: "member"},
+        headers: {"x-organization-id": "org-1"},
+      });
     });
   });
 
-  it("shows attach errors inside the open modal", async () => {
-    attachMember.mockImplementation(() => ({
-      unwrap: async () => Promise.reject({data: {title: "User not found"}}),
-    }));
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+  it("shows the backend last-admin error", async () => {
+    routes.set("PATCH /orgs/org-1/members/membership-1", {
+      body: {title: "Cannot remove the last org-admin"},
+      status: 409,
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const makeMember = await screen.findByLabelText("Make member");
+
     await act(async () => {
-      fireEvent(screen.getByTestId("org-members-add"), "click");
+      fireEvent(makeMember, "click");
+    });
+    expect(await screen.findByText("Cannot remove the last org-admin")).toBeTruthy();
+  });
+
+  it("shows attach errors inside the open modal", async () => {
+    routes.set("POST /orgs/org-1/members", {body: {title: "User not found"}, status: 404});
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const add = await screen.findByTestId("org-members-add");
+    await act(async () => {
+      fireEvent(add, "click");
     });
     await act(async () => {
       fireEvent.changeText(screen.getByTestId("org-members-email"), "missing@example.com");
@@ -265,10 +302,12 @@ describe("organization management screens", () => {
   });
 
   it("opens the security panel for an active member and closes it", async () => {
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
 
+    routes.set("GET /orgs/org-1/members/user-1/security", {body: {data: SECURITY_SUMMARY}});
+    const security = await screen.findByLabelText("Security for Admin");
     await act(async () => {
-      fireEvent(screen.getByLabelText("Security for Admin"), "click");
+      fireEvent(security, "click");
     });
     expect(screen.getByTestId("org-members-security-panel")).toBeTruthy();
     expect(screen.getByText("Security: Admin")).toBeTruthy();
@@ -280,95 +319,85 @@ describe("organization management screens", () => {
   });
 
   it("reloads members after a security action", async () => {
-    const originalFetch = globalThis.fetch;
-    const summary = {
-      actions: [{destructive: false, id: "send-password-reset", label: "Send password reset"}],
-      betterAuthLinked: true,
-      disabled: false,
-      emailVerified: true,
-      lastSignIn: {at: null, method: "email"},
-      legacyPassword: false,
-      passkeys: {count: 0, items: []},
-      password: true,
-      providers: [],
-      sessions: {active: 1},
-      twoFactor: {backupCodesRemaining: null, enabled: false},
-      userId: "user-1",
-    };
-    const requested: string[] = [];
-    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      requested.push(`${init?.method ?? "GET"} ${String(input)}`);
-      const body =
-        init?.method === "POST"
-          ? {data: {action: "send-password-reset", changed: true}}
-          : {data: summary};
-      return new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}});
-    }) as typeof fetch;
-    try {
-      const screen = renderWithTheme(
-        <AdminProvider api={api} apiBase="/admin" credentials="same-origin" routeBase="/admin">
-          <OrgMembersScreen api={api} organizationId="org-1" />
-        </AdminProvider>
+    routes.set("GET /orgs/org-1/members/user-1/security", {body: {data: SECURITY_SUMMARY}});
+    routes.set("POST /orgs/org-1/members/user-1/security/send-password-reset", {
+      body: {data: {action: "send-password-reset", changed: true}},
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const securityButton = await screen.findByTestId("org-members-security-user-1");
+    await act(async () => {
+      fireEvent(securityButton, "click");
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("org-members-security-panel-action-send-password-reset")
+      ).toBeTruthy();
+    });
+    const memberLoads = (): number =>
+      calls.filter((call) => call.method === "GET" && call.url === "/orgs/org-1/members").length;
+    const loadsBefore = memberLoads();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByTestId("org-members-security-panel-action-send-password-reset"),
+        "click"
       );
-      await act(async () => {
-        fireEvent(screen.getByTestId("org-members-security-user-1"), "click");
-      });
-      await waitFor(() => {
-        expect(
-          screen.getByTestId("org-members-security-panel-action-send-password-reset")
-        ).toBeTruthy();
-      });
-      await act(async () => {
-        fireEvent(
-          screen.getByTestId("org-members-security-panel-action-send-password-reset"),
-          "click"
-        );
-      });
-      await waitFor(() => {
-        expect(screen.getByText("Password reset email sent")).toBeTruthy();
-      });
-      expect(requested).toContain("POST /orgs/org-1/members/user-1/security/send-password-reset");
-      expect(refetchMembers).toHaveBeenCalledTimes(1);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Password reset email sent")).toBeTruthy();
+    });
+
+    expect(
+      findCall("POST", "/orgs/org-1/members/user-1/security/send-password-reset")
+    ).toBeDefined();
+    await waitFor(() => {
+      expect(memberLoads()).toBe(loadsBefore + 1);
+    });
   });
 
   it("reactivates a suspended member instead of offering security", async () => {
-    membersState.data = {
-      data: [
-        {
-          _id: "membership-2",
-          roleName: "member",
-          status: "suspended",
-          userId: {_id: "user-2", email: "member@example.com"},
-        },
-      ],
-    };
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+    routes.set("GET /orgs/org-1/members", {
+      body: {
+        data: [
+          {
+            _id: "membership-2",
+            roleName: "member",
+            status: "suspended",
+            userId: {_id: "user-2", email: "member@example.com"},
+          },
+        ],
+      },
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
 
+    const reactivate = await screen.findByTestId("org-members-reactivate-user-2");
     expect(screen.queryByTestId("org-members-security-user-2")).toBeNull();
     await act(async () => {
-      fireEvent(screen.getByTestId("org-members-reactivate-user-2"), "click");
+      fireEvent(reactivate, "click");
     });
-    expect(updateMember).toHaveBeenCalledWith({
-      body: {status: "active"},
-      id: "org-1",
-      memberId: "membership-2",
+    await waitFor(() => {
+      expect(findCall("PATCH", "/orgs/org-1/members/membership-2")).toMatchObject({
+        body: {status: "active"},
+        headers: {"x-organization-id": "org-1"},
+      });
     });
   });
 
   it("shows the reactivate error title", async () => {
-    membersState.data = {
-      data: [{_id: "membership-2", roleName: "member", status: "suspended", userId: "user-2"}],
-    };
-    updateMember.mockImplementation(() => ({
-      unwrap: async () => Promise.reject({data: {title: "Membership not found"}}),
-    }));
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+    routes.set("GET /orgs/org-1/members", {
+      body: {
+        data: [{_id: "membership-2", roleName: "member", status: "suspended", userId: "user-2"}],
+      },
+    });
+    routes.set("PATCH /orgs/org-1/members/membership-2", {
+      body: {title: "Membership not found"},
+      status: 404,
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
 
+    const reactivate = await screen.findByTestId("org-members-reactivate-user-2");
     await act(async () => {
-      fireEvent(screen.getByTestId("org-members-reactivate-user-2"), "click");
+      fireEvent(reactivate, "click");
     });
     await waitFor(() => {
       expect(screen.getByText("Membership not found")).toBeTruthy();
@@ -376,14 +405,53 @@ describe("organization management screens", () => {
   });
 
   it("removes a member from the row action", async () => {
-    const screen = renderWithTheme(<OrgMembersScreen api={api} organizationId="org-1" />);
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const remove = await screen.findByLabelText("Remove");
     await act(async () => {
-      fireEvent(screen.getByLabelText("Remove"), "click");
+      fireEvent(remove, "click");
     });
-    expect(removeMember).toHaveBeenCalledWith({
-      body: {},
-      id: "org-1",
-      memberId: "membership-1",
+    await waitFor(() => {
+      const call = findCall("DELETE", "/orgs/org-1/members/membership-1");
+      expect(call?.headers["x-organization-id"]).toBe("org-1");
+      expect(call?.body).toBeUndefined();
     });
+  });
+
+  it("shows the remove error and members load error", async () => {
+    routes.set("DELETE /orgs/org-1/members/membership-1", {
+      body: {title: "Remove blocked"},
+      status: 409,
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const remove = await screen.findByLabelText("Remove");
+    await act(async () => {
+      fireEvent(remove, "click");
+    });
+    expect(await screen.findByText("Remove blocked")).toBeTruthy();
+    screen.unmount();
+
+    routes.set("GET /orgs/org-1/members", {body: {title: "boom"}, status: 500});
+    const failed = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    expect(await failed.findByText("Could not load organization members.")).toBeTruthy();
+  });
+
+  it("requires an email before attaching and clears the modal on cancel", async () => {
+    routes.set("GET /orgs/org-1/members", {
+      body: {data: [{...MEMBERSHIP, roleName: "member", userId: "user-2"}]},
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    expect(await screen.findByText("user-2")).toBeTruthy();
+    await act(async () => {
+      fireEvent(screen.getByTestId("org-members-add"), "click");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Add member"));
+    });
+    expect(screen.getByText("Email is required.")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByText("Cancel"));
+    });
+    expect(screen.queryByText("Email is required.")).toBeNull();
+    assert.isUndefined(findCall("POST", "/orgs/org-1/members"));
   });
 });

@@ -3,14 +3,13 @@
  */
 
 import {
-  baseUrl,
   completeBetterAuthOAuthHandoff,
   createBetterAuthClient,
   createRememberedAccountsStore,
   getBetterAuthBearerToken,
-  IsWeb,
   signInSocialWithHandoff,
-} from "@terreno/rtk";
+} from "@terreno/syncdb/auth";
+import {baseUrl, isWeb} from "@terreno/syncdb/config";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
@@ -25,10 +24,10 @@ const BETTER_AUTH_STORAGE_PREFIX = "terreno-example";
  * session cookie. Set `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` when the web app and the API are
  * on different sites, where browsers block or partition third-party cookies. Native ignores it.
  */
-const isWebBearerAuth = IsWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
+export const isWebBearerAuth = isWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
 
-// `baseUrl` from @terreno/rtk is the single source of truth every other caller
-// (RTK Query, sockets, syncdb) already uses. A separate resolver here previously
+// `baseUrl` from @terreno/syncdb/config is the single source of truth every other caller
+// (the API client, sockets, syncdb) already uses. A separate resolver here previously
 // fell back to `extra.BASE_URL` (localhost:4000) in dev, which points at the
 // device itself on an Android emulator instead of the host machine.
 //
@@ -77,7 +76,7 @@ const OAUTH_RETURN_PATH = "/login";
  * Better Auth would resolve the path against the API's host.
  */
 export const getLoginCallbackURL = (): string => {
-  if (isWebBearerAuth || !IsWeb || typeof window === "undefined" || !window.location?.origin) {
+  if (isWebBearerAuth || !isWeb || typeof window === "undefined" || !window.location?.origin) {
     return OAUTH_RETURN_PATH;
   }
   return `${window.location.origin}${OAUTH_RETURN_PATH}`;
@@ -93,7 +92,7 @@ const SECURITY_RETURN_PATH = "/settings/security";
  * Auth's Expo plugin turns into a deep link.
  */
 export const getSecurityCallbackURL = (): string => {
-  if (!IsWeb || typeof window === "undefined" || !window.location?.origin) {
+  if (!isWeb || typeof window === "undefined" || !window.location?.origin) {
     return SECURITY_RETURN_PATH;
   }
   return `${window.location.origin}${SECURITY_RETURN_PATH}`;
@@ -201,11 +200,11 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Number of `getSession()` attempts `getSessionToken()` makes before giving up.
- * Callers (the AI tab, GCS settings, and the Sync Lab's raw fetches) only call this
- * once they believe the user is signed in — right after login/session-sync resolved a
- * userId into Redux — so an empty session on the first attempt is more likely a
- * transient race (the freshly-set session cookie not yet consistently queryable) than
- * a real signed-out state.
+ * Callers (the AI chat stream, GCS settings, Sync Lab) only call this once the session
+ * reports a signed-in user, so an empty session on the first attempt is more likely a
+ * transient race (the freshly-set session cookie not yet consistently queryable) than a
+ * real signed-out state. Those callers have no retry of their own, so a transient empty
+ * result here would otherwise fail the request.
  */
 const GET_SESSION_TOKEN_RETRY_ATTEMPTS = 3;
 const GET_SESSION_TOKEN_RETRY_DELAY_MS = 250;

@@ -4,8 +4,11 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
 
 const REGRESSION_TITLE = "Review the sync status banner — admin window verified";
 const AUTOCORRECT_LOOP_TITLE =
@@ -41,8 +44,8 @@ const readState: {data: Record<string, unknown> | null; isLoading: boolean} = {
 };
 
 const configureUpdateDepthAdminApiDouble = (): void => {
-  resetUseAdminApiDouble();
-  configureUseAdminApiDouble({
+  resetAdminModelApiDouble();
+  configureAdminModelApiDouble({
     useBulkPatchMutation: () => [
       mock(() => ({unwrap: async () => ({updated: 1})})),
       {isLoading: false},
@@ -113,19 +116,12 @@ const renderTodoEditForm = (
 ): ReturnType<typeof renderWithTheme> =>
   renderWithTheme(
     <AdminProvider
-      api={{} as unknown as AdminApi}
       apiBase="/admin"
       getAuthHeaders={() => ({})}
       syncConflicts={syncConflicts}
       syncDb={syncDb}
     >
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        itemId="todo-1"
-        mode="edit"
-        modelName="Todo"
-      />
+      <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />
     </AdminProvider>
   );
 
@@ -227,19 +223,12 @@ describe("AdminModelForm update-depth regression (setOptions triggers parent re-
   it("preserves per-character typing when setOptions forces a parent re-render each keystroke", async () => {
     const form = (
       <AdminProvider
-        api={{} as unknown as AdminApi}
         apiBase="/admin"
         getAuthHeaders={() => ({})}
         syncConflicts={{conflicts: [], resolve: () => {}}}
         syncDb={syncDb}
       >
-        <AdminModelForm
-          api={{} as unknown as AdminApi}
-          apiBase="/admin"
-          itemId="todo-1"
-          mode="edit"
-          modelName="Todo"
-        />
+        <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />
       </AdminProvider>
     );
     const view = renderWithTheme(form);
@@ -272,19 +261,12 @@ describe("AdminModelForm update-depth regression (setOptions triggers parent re-
   it("does not recurse when navigation.setOptions forces a parent re-render on title change", async () => {
     const form = (
       <AdminProvider
-        api={{} as unknown as AdminApi}
         apiBase="/admin"
         getAuthHeaders={() => ({})}
         syncConflicts={{conflicts: [], resolve: () => {}}}
         syncDb={syncDb}
       >
-        <AdminModelForm
-          api={{} as unknown as AdminApi}
-          apiBase="/admin"
-          itemId="todo-1"
-          mode="edit"
-          modelName="Todo"
-        />
+        <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />
       </AdminProvider>
     );
     const view = renderWithTheme(form);

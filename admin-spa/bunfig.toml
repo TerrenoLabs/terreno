@@ -8,5 +8,6 @@ coveragePathIgnorePatterns = [
   "**/node_modules/**",
   "../api/**",
   "../ui/**",
+  "../syncdb/**",
 ]
 coverageThreshold = { line = 95, function = 95 }

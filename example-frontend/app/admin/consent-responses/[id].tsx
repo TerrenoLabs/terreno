@@ -1,18 +1,24 @@
-import {ConsentResponseViewer} from "@terreno/admin-frontend";
+import {ConsentResponseViewer, useAdminModelApi} from "@terreno/admin-frontend";
 import {Box, Button} from "@terreno/ui";
 import {type Href, useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
 import {useCallback} from "react";
-import {useGetAdminConsentResponsesByIdQuery} from "@/store/openApiSdk";
-import {terrenoApi} from "@/store/sdk";
 
 const ADMIN_BASE_URL = "/admin";
+
+interface ConsentResponseUser {
+  _id?: string;
+}
 
 const ConsentResponseScreen: React.FC = () => {
   const {id} = useLocalSearchParams<{id: string}>();
   const router = useRouter();
-  const {data: response} = useGetAdminConsentResponsesByIdQuery(id, {skip: !id});
-  const responseUser = response?.userId as {_id?: string} | string | undefined;
+  // The same read the viewer makes: it unwraps the admin `{data}` envelope.
+  const {useReadQuery} = useAdminModelApi(`${ADMIN_BASE_URL}/consent-responses`, "ConsentResponse");
+  const {data: response} = useReadQuery<{userId?: ConsentResponseUser | string}>(id, {
+    skip: !id,
+  });
+  const responseUser = response?.userId;
   const userId = typeof responseUser === "object" ? responseUser?._id : responseUser;
 
   const handleOpenSigner = useCallback((): void => {
@@ -35,7 +41,7 @@ const ConsentResponseScreen: React.FC = () => {
           />
         </Box>
       )}
-      <ConsentResponseViewer api={terrenoApi} baseUrl={ADMIN_BASE_URL} id={id} />
+      <ConsentResponseViewer baseUrl={ADMIN_BASE_URL} id={id} />
     </Box>
   );
 };

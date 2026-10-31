@@ -37,7 +37,6 @@ describe("AdminFilterDrawer", () => {
     const onApply = mock(() => {});
     const {getByLabelText, getByTestId, getByText} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: undefined}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -71,7 +70,6 @@ describe("AdminFilterDrawer", () => {
     const onApply = mock(() => {});
     const {getByTestId, rerender} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -93,7 +91,6 @@ describe("AdminFilterDrawer", () => {
 
     rerender(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -113,7 +110,6 @@ describe("AdminFilterDrawer", () => {
     const onApply = mock(() => {});
     const {UNSAFE_root, getByTestId} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true, status: "open"}}
         fields={{
           active: {required: false, type: "boolean"},
@@ -190,7 +186,6 @@ describe("AdminFilterDrawer", () => {
     const onApply = mock(() => {});
     const {getByTestId, UNSAFE_root} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{owner: {ref: "User", required: false, type: "string"}}}
         filters={[
@@ -245,7 +240,6 @@ describe("AdminFilterDrawer", () => {
     const onApply = mock(() => {});
     const {getByLabelText, getByText, UNSAFE_root} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean"}]}
@@ -284,7 +278,6 @@ describe("AdminFilterDrawer", () => {
     });
     const {UNSAFE_root, getByTestId} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{query: {required: false, type: "string"}}}
         filters={[{field: "query", kind: "text", label: "Query"}]}

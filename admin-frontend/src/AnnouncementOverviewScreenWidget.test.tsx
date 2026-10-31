@@ -1,11 +1,10 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
+// noExplicitAny: test mocks use type-erased admin model API doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, it, mock} from "bun:test";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import type {AnnouncementOverviewProps} from "./AnnouncementOverview";
-import type {AdminApi} from "./types";
 
 const pushMock = mock((_path: string) => {});
 
@@ -38,9 +37,7 @@ describe("AnnouncementOverviewScreenWidget", () => {
   });
 
   it("routes create, edit, and analytics table actions through expo-router", () => {
-    renderWithTheme(
-      <AnnouncementOverviewScreenWidget api={{} as unknown as AdminApi} routeBase="/admin" />
-    );
+    renderWithTheme(<AnnouncementOverviewScreenWidget routeBase="/admin" />);
 
     assert.strictEqual(capturedOverviewProps?.routeBase, "/admin");
     assert.isFunction(capturedOverviewProps?.onCreate);

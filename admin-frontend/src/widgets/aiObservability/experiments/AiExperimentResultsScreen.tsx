@@ -8,11 +8,11 @@ import {gatesForVersion, parsePromoteBlockedTitle, unwrapExperimentRecord} from 
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useDetailQuery, usePromoteMutation} = useAiObservabilityExperimentsApi(api);
+  const {useDetailQuery, usePromoteMutation} = useAiObservabilityExperimentsApi();
   const {data, isError, isLoading, refetch} = useDetailQuery(id ?? "", {skip: !id});
   const [promote, promoteState] = usePromoteMutation();
   const experiment = useMemo(() => unwrapExperimentRecord(data), [data]);
@@ -45,7 +45,7 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
       return;
     }
     const timer = setInterval(() => {
-      refetch();
+      void refetch();
     }, 3000);
     return () => {
       clearInterval(timer);
@@ -68,7 +68,7 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
       try {
         await promote({id, version}).unwrap();
         setPromoteConfirmOpen(false);
-        refetch();
+        void refetch();
       } catch (error) {
         setPromoteError(parsePromoteBlockedTitle(error) ?? "Promote failed.");
       }

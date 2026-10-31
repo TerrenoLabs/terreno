@@ -242,7 +242,7 @@ export const Skeleton: FC<SkeletonProps> = ({
           }),
         }
       : {}),
-  } as Animated.WithAnimatedObject<ViewStyle>;
+  } as Animated.WithAnimatedValue<ViewStyle>;
 
   return (
     <Animated.View {...HIDDEN_FROM_ACCESSIBILITY} style={style} {...toTestProps(testID)}>

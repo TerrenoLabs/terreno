@@ -554,7 +554,7 @@ org-admins manage only the current org. Invites and billing are design-only plac
 - **Implementation plan:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/org-management-ui.md)
 - **Tasks:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/org-management-ui.md)
 - **RTK flag:** Partial — custom non-synced routes use the generated SDK;
-  ObjectId admin compatibility may use `useAdminApi` in Terreno 57, while
+  ObjectId admin CRUD uses the admin fetch client (`useAdminModelApi`), while
   eligible String-`_id` CRUD uses windowed syncdb
 - **Depends on:** rbac-permissions
 
@@ -871,9 +871,10 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1186
 **Labels:** `area:api`, `type:feature`
 **Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`rate-limiting`, Status=`Shipped`
 
-Adds opt-in HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
+Adds HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
 auth/OTP buckets (including login), memory Redis or Mongo stores, and 429 rate-limit
-headers. Default is off until Terreno 58. Sync mutation nacks stay a separate limiter.
+headers. Opt-in in 57.x; on by default from Terreno 58 (`rateLimit: false` turns it off).
+Sync mutation nacks stay a separate limiter.
 
 Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1187.
 

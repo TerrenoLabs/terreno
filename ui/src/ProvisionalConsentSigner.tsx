@@ -11,6 +11,7 @@ import {Heading} from "./Heading";
 import {MarkdownView} from "./MarkdownView";
 import {Modal} from "./Modal";
 import {buildConsentPdfHtml, printConsentHtml} from "./pdfHtmlTemplate";
+import type {TerrenoRequestClient} from "./requestClient";
 import {Spinner} from "./Spinner";
 import {Text} from "./Text";
 import {TextField} from "./TextField";
@@ -23,9 +24,9 @@ import {
 } from "./useProvisionalConsent";
 
 export interface ProvisionalConsentSignerProps {
-  /** The consumer's RTK Query api, as passed to `ConsentNavigator`. */
-  api: unknown;
   baseUrl?: string;
+  /** The app's request client, as passed to `ConsentNavigator`. */
+  client: TerrenoRequestClient;
   /** The user whose consent forms are listed and signed on their behalf. */
   userId: string;
   /** Called with the stored response after a provisional signature succeeds. */
@@ -141,8 +142,8 @@ const rowFormId = (row: ProvisionalConsentStatusRow): string => row.form.id ?? r
  * behalf. Requires `consentResponse:signOnBehalf` (or `user.admin` without RBAC) on the server.
  */
 export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> = ({
-  api,
   baseUrl,
+  client,
   userId,
   onSigned,
   onError,
@@ -150,8 +151,8 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
 }) => {
   const {error, isLoading, isSigning, isVoiding, refetch, sign, statuses, voidSignature} =
     useProvisionalConsent({
-      api,
       baseUrl,
+      client,
       userId,
     });
   const [openFormId, setOpenFormId] = useState<string | null>(null);

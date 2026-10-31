@@ -28,7 +28,7 @@ const foodRouter = modelRouter("/food", FoodModel, {
   },
 });
 
-const buildApp = (rateLimit?: RateLimitOptions): Application => {
+const buildApp = (rateLimit?: RateLimitOptions | false): Application => {
   return new TerrenoApp({
     configureApp: (app) => {
       app.get("/health", (_req, res) => {
@@ -44,13 +44,22 @@ const buildApp = (rateLimit?: RateLimitOptions): Application => {
     .start();
 };
 
+const loginUpToAuthMax = async (app: Application): Promise<void> => {
+  for (let i = 0; i < DEFAULT_AUTH_MAX; i++) {
+    const res = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"});
+    assert.equal(res.status, 200, `login ${i} should be under the auth cap`);
+  }
+};
+
 describe("HTTP rate limiting", () => {
   beforeEach(async () => {
     await setupTestData();
   });
 
-  it("does not 429 burst logins when rateLimit is omitted", async () => {
-    const app = buildApp();
+  it("does not 429 burst logins when rateLimit is false", async () => {
+    const app = buildApp(false);
     for (let i = 0; i < 25; i++) {
       const res = await supertest(app)
         .post("/auth/login")
@@ -59,14 +68,20 @@ describe("HTTP rate limiting", () => {
     }
   }, 30_000);
 
-  it("returns 429 on the 21st POST /auth/login with default auth max", async () => {
+  it("limits by default: 429 on the 21st POST /auth/login when rateLimit is omitted", async () => {
+    const app = buildApp();
+    await loginUpToAuthMax(app);
+    const limited = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"});
+    assert.equal(limited.status, 429);
+    assert.equal(limited.body.code, "rate-limit-exceeded");
+    assert.include(limited.headers.ratelimit, `limit=${DEFAULT_AUTH_MAX}`);
+  }, 30_000);
+
+  it("returns 429 on the 21st POST /auth/login with rateLimit {}", async () => {
     const app = buildApp({});
-    for (let i = 0; i < DEFAULT_AUTH_MAX; i++) {
-      const res = await supertest(app)
-        .post("/auth/login")
-        .send({email: "notAdmin@example.com", password: "password"});
-      assert.equal(res.status, 200, `login ${i} should be under the auth cap`);
-    }
+    await loginUpToAuthMax(app);
     const limited = await supertest(app)
       .post("/auth/login")
       .send({email: "notAdmin@example.com", password: "password"});

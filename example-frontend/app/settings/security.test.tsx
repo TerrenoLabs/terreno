@@ -1,5 +1,5 @@
 import {afterEach, describe, it, mock} from "bun:test";
-import {TerrenoAccountSecurityScreen} from "@terreno/rtk";
+import {TerrenoAccountSecurityScreen} from "@terreno/syncdb/auth";
 import {assert} from "chai";
 import React from "react";
 import TestRenderer, {act, type ReactTestRenderer} from "react-test-renderer";

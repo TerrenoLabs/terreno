@@ -3,10 +3,7 @@ import React, {useCallback} from "react";
 import {AnnouncementOverview} from "./AnnouncementOverview";
 import type {AdminScreenWidgetProps, ScreenWidgetComponent} from "./types";
 
-export const AnnouncementOverviewScreenWidget: React.FC<AdminScreenWidgetProps> = ({
-  api,
-  routeBase,
-}) => {
+export const AnnouncementOverviewScreenWidget: React.FC<AdminScreenWidgetProps> = ({routeBase}) => {
   const router = useRouter();
   const announcementsBase = `${routeBase}/announcements`;
 
@@ -35,7 +32,6 @@ export const AnnouncementOverviewScreenWidget: React.FC<AdminScreenWidgetProps> 
 
   return (
     <AnnouncementOverview
-      api={api}
       onCreate={handleCreate}
       onEdit={handleEdit}
       onOpenAcknowledgements={handleOpenAcknowledgements}

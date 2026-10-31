@@ -1,6 +1,6 @@
 import type {FC} from "react";
 import {useCallback, useRef, useState} from "react";
-import type {TextInput} from "react-native";
+import type {TextInputInstance} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
@@ -94,7 +94,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
   const isSubmitDisabled = loading || !requiredFieldsFilled || !allRequirementsMet;
 
   const formRef = useRef<FormContainerHandle>(null);
-  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  const inputRefs = useRef<Record<string, TextInputInstance | null>>({});
   // Blocks a second submission (Enter plus a press, or a double Enter) before `loading` lands.
   const isSubmittingRef = useRef(false);
 

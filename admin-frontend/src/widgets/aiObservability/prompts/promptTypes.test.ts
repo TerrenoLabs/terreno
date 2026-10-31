@@ -58,7 +58,7 @@ const detail: PromptDetail = {
 };
 
 describe("promptTypes helpers", () => {
-  it("unwraps list payloads whether RTK already unwrapped them", () => {
+  it("unwraps list payloads whether or not they arrive in a {data} envelope", () => {
     expect(unwrapPromptList(sample)).toEqual(sample);
     expect(unwrapPromptList({data: sample})).toEqual(sample);
     expect(unwrapPromptList(undefined)).toEqual([]);

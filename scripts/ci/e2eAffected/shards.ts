@@ -78,7 +78,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/ai.tsx`,
       `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
-      `${APP}/settings/security.tsx`,
+      `${APP}/settings/**`,
       `${APP}/todo-windows/**`,
       `${APP}/todo-browser/**`,
     ],
@@ -91,6 +91,8 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "ai-chat",
       "pdf",
       "notifications",
+      "socket-flags",
+      "mcp-tokens",
     ],
   },
   {

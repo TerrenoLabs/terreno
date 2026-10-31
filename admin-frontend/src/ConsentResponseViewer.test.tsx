@@ -1,12 +1,14 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic mock returns
+// noExplicitAny: test mocks use type-erased admin model API doubles and dynamic mock returns
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {afterAll, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import * as terrenoUi from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
 
 interface ReadState {
   data: unknown;
@@ -37,8 +39,8 @@ import {ConsentResponseViewer} from "./ConsentResponseViewer";
 
 describe("ConsentResponseViewer", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useReadQuery: (_id: string, opts: {skip?: boolean}) => {
         if (opts?.skip) {
           return {data: undefined, isLoading: false};
@@ -56,9 +58,7 @@ describe("ConsentResponseViewer", () => {
 
   it("renders loading state", () => {
     readState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-    );
+    const {toJSON} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -69,20 +69,18 @@ describe("ConsentResponseViewer", () => {
   it("survives the loading → loaded transition without a hook-order error", async () => {
     readState.isLoading = true;
     const {rerender, getByText} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
+      <ConsentResponseViewer baseUrl="/admin" id="r1" />
     );
     await act(async () => {
       readState.isLoading = false;
       readState.data = {agreed: true, consentFormId: "raw-id", userId: "u1"};
-      rerender(<ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />);
+      rerender(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
     });
     expect(getByText("Download PDF")).toBeDefined();
   });
 
   it("shows not-found state when there is no id / data", () => {
-    const {getByText} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="" />
-    );
+    const {getByText} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="missing" />);
     expect(getByText(/Response not found\./)).toBeDefined();
   });
 
@@ -100,9 +98,7 @@ describe("ConsentResponseViewer", () => {
       userAgent: "jest",
       userId: {_id: "u1", email: "user@example.com", name: "Test User"},
     };
-    const {getByText} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-    );
+    const {getByText} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
     expect(getByText("User Information")).toBeDefined();
     expect(getByText("Test User")).toBeDefined();
     expect(getByText("user@example.com")).toBeDefined();
@@ -119,9 +115,7 @@ describe("ConsentResponseViewer", () => {
       consentFormId: "raw-id",
       userId: "u2",
     };
-    const {toJSON} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r2" />
-    );
+    const {toJSON} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r2" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -130,9 +124,7 @@ describe("ConsentResponseViewer", () => {
     pdfImpl = async () => {
       throw new Error("broken");
     };
-    const {getByText} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-    );
+    const {getByText} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
     await act(async () => {
       fireEvent.press(getByText("Download PDF"));
       await new Promise((r) => setTimeout(r, 100));
@@ -142,9 +134,7 @@ describe("ConsentResponseViewer", () => {
 
   it("formats invalid dates gracefully", () => {
     readState.data = {agreed: true, agreedAt: "not-a-date"};
-    const {toJSON} = renderWithTheme(
-      <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-    );
+    const {toJSON} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
     expect(toJSON()).toBeDefined();
   });
   describe("provisional signatures", () => {
@@ -163,7 +153,7 @@ describe("ConsentResponseViewer", () => {
     it("shows the provisional badge, signer, date, and note", () => {
       readState.data = provisionalResponse;
       const {getByTestId, getByText, queryByTestId} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+        <ConsentResponseViewer baseUrl="/admin" id="response-7" />
       );
       expect(getByTestId("consent-response-provisional")).toBeDefined();
       expect(getByText("Provisional")).toBeDefined();
@@ -181,7 +171,7 @@ describe("ConsentResponseViewer", () => {
         voidReason: "Wrong member",
       };
       const {getByTestId, getByText} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+        <ConsentResponseViewer baseUrl="/admin" id="response-7" />
       );
       expect(getByTestId("consent-response-provisional-voided")).toBeDefined();
       expect(getByText("Wrong member")).toBeDefined();
@@ -189,16 +179,14 @@ describe("ConsentResponseViewer", () => {
 
     it("shows no provisional section for the user's own response", () => {
       readState.data = {agreed: true, consentFormId: {title: "Terms"}, userId: "u1"};
-      const {queryByTestId} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-      );
+      const {queryByTestId} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
       expect(queryByTestId("consent-response-provisional")).toBeNull();
     });
 
     it("prints HTML that includes the provisional block with the note", async () => {
       readState.data = provisionalResponse;
       const {getByTestId} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+        <ConsentResponseViewer baseUrl="/admin" id="response-7" />
       );
       await act(async () => {
         fireEvent.press(getByTestId("consent-response-print-button"));
@@ -215,9 +203,7 @@ describe("ConsentResponseViewer", () => {
 
     it("prints a non-provisional response without the provisional block", async () => {
       readState.data = {agreed: true, consentFormId: {title: "Terms"}, userId: "u1"};
-      const {getByTestId} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="r1" />
-      );
+      const {getByTestId} = renderWithTheme(<ConsentResponseViewer baseUrl="/admin" id="r1" />);
       await act(async () => {
         fireEvent.press(getByTestId("consent-response-print-button"));
         await new Promise((r) => setTimeout(r, 100));
@@ -232,7 +218,7 @@ describe("ConsentResponseViewer", () => {
         throw new Error("printer offline");
       };
       const {getByTestId} = renderWithTheme(
-        <ConsentResponseViewer api={{} as unknown as AdminApi} baseUrl="/admin" id="response-7" />
+        <ConsentResponseViewer baseUrl="/admin" id="response-7" />
       );
       await act(async () => {
         fireEvent.press(getByTestId("consent-response-print-button"));

@@ -44,7 +44,9 @@ const callbackOverridePlugin = {
           }
         }),
         matcher: (context: {path?: string}): boolean =>
-          Boolean(context.path?.startsWith("/callback/")),
+          Boolean(
+            context.path?.startsWith("/callback/") || context.path?.startsWith("/oauth2/callback/")
+          ),
       },
     ],
   },
@@ -335,8 +337,12 @@ describe("oauthHandoff on a listed web origin", () => {
       .get(`/api/auth/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
       .set("cookie", cookie);
 
+    // better-auth 1.6 sends a generic-OAuth provider error to its own error page before it reads
+    // errorCallbackURL from state (1.7 honors it); either way the redirect carries no token.
     expect(callback.status).toBe(302);
-    expect(callback.headers.location).toStartWith(`${WEB_ORIGIN}/error?error=access_denied`);
+    expect(callback.headers.location).toContain(
+      "https://web.example.com/error?error=access_denied"
+    );
     expect(callback.headers.location).not.toContain("ott=");
   });
 
@@ -610,7 +616,7 @@ describe("GET /oauth-handoff/start", () => {
     expect(verified.headers["set-auth-token"]).toBeTruthy();
   });
 
-  it("sends a failed sign-in to a listed errorCallbackURL without a token", async () => {
+  it("sends a failed generic-OAuth sign-in to an error page without a token", async () => {
     const {app} = buildApp();
     const started = await start(app, {
       callbackURL: `${WEB_ORIGIN}/after`,
@@ -623,9 +629,11 @@ describe("GET /oauth-handoff/start", () => {
       .get(`/api/auth/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
       .set("cookie", cookieHeaderFrom(started));
 
+    // better-auth 1.7 honors errorCallbackURL for a generic-OAuth provider error; the redirect
+    // still carries no token.
     expect(returned.status).toBe(302);
-    expect(returned.headers.location).toStartWith(
-      `${WEB_ORIGIN}/sign-in-error?error=access_denied`
+    expect(returned.headers.location).toContain(
+      "https://web.example.com/sign-in-error?error=access_denied"
     );
     expect(returned.headers.location).not.toContain("ott=");
   });

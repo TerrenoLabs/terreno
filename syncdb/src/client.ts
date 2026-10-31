@@ -28,7 +28,12 @@ import {
 } from "./sync/httpChannel";
 import {createReplayCoordinator, type ReplayCoordinator} from "./sync/replayCoordinator";
 import {createSocketTransport} from "./sync/socketTransport";
-import type {SendMutationBatchResult, SendMutationResult, SyncTransport} from "./sync/transport";
+import type {
+  SendMutationBatchResult,
+  SendMutationResult,
+  SocketEventHandler,
+  SyncTransport,
+} from "./sync/transport";
 import {type HydrateWindowEntitiesResult, hydrateWindowEntities} from "./sync/windowHydrate";
 import type {
   AuthProvider,
@@ -340,6 +345,15 @@ export interface SyncDb {
    */
   onStatusChange: (callback: () => void) => () => void;
   /**
+   * Listen for an app-level server event on the sync socket (for example the
+   * feature-flags `featureFlagsChanged` push). One socket serves sync and app
+   * events. Listeners survive stop/start and reconnects; they fire only while the
+   * socket is connected. Names starting with `sync:` and Socket.io lifecycle
+   * events are reserved and throw. Returns an unsubscribe function; a transport
+   * without event support returns a no-op.
+   */
+  onSocketEvent: (event: string, handler: SocketEventHandler) => () => void;
+  /**
    * In-memory debug event log when `config.debug` is enabled; otherwise
    * undefined. Its `snapshot()` is a plain serializable object suitable for
    * returning directly over MCP.
@@ -508,6 +522,12 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
   let unbindDeltaHandler: (() => void) | undefined;
   /** True once a start() has completed without a matching stop() (E1 double-start guard). */
   let isStarted = false;
+  // Bumped synchronously by every stop()/signOut() CALL, before it queues on the
+  // lifecycle mutex. `generation` only changes once the stop runs, which is after
+  // any start() ahead of it in the queue has finished, so this is how a start()
+  // already running (or still queued) learns the host app logged out and stops
+  // before opening persistence or connecting the transport without a session.
+  let stopRequests = 0;
 
   /**
    * Queue `op` onto the lifecycle mutex; resolves/rejects with `op`'s own
@@ -1470,7 +1490,10 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    */
   let persistenceMode: "durable" | "memory" | "error" = "durable";
 
-  const createAndStartPersister = async (userId: string): Promise<void> => {
+  const createAndStartPersister = async (
+    userId: string,
+    {isSuperseded}: {isSuperseded?: () => boolean} = {}
+  ): Promise<void> => {
     // Reset per-call: a fresh persister/load attempt starts optimistic even
     // if a PRIOR persister instance (e.g. before a wipe-and-rebuild) had
     // flagged a load failure.
@@ -1534,11 +1557,26 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     // app supplying its own storage backend can still opt into E3 SyncStatus
     // surfacing; the default factory already received the same callbacks
     // above (at creation time) and ignores this second copy.
-    persister = factory({
+    const created = factory({
       databaseName: config.name,
       hooks: {onDecryptFailure, onLoadFailure, onSaveFailure},
       store: store.raw,
     });
+    persister = created;
+    // Resolve the encryption key now, while the session that start() resolved is
+    // still valid. Otherwise the first fetch happens on the first (debounced) save,
+    // and a logout in that window leaves every save, including stop()'s flush of
+    // pending outbox writes, failing with a 401 from /sync/key. A failure here
+    // (offline cold start) is not fatal: saves retry the key and report through
+    // onSaveFailure.
+    await created.prepare?.().catch((): void => {});
+    if (isSuperseded?.()) {
+      // A stop() arrived while the key was resolving. Nothing has loaded into this
+      // persister, so drop it without saving rather than let stop() flush it.
+      persister = undefined;
+      await created.destroy();
+      return;
+    }
     await persister.startAutoLoad();
     // Read through a function call: `onLoadFailure` (invoked synchronously
     // from inside `startAutoLoad()`, not after it returns) mutates
@@ -1898,9 +1936,16 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    * `await` — belt-and-suspenders against any future call site that manages
    * to bypass the mutex (e.g. a direct call from a test), and cheap enough to
    * always do.
+   *
+   * A stop()/signOut() call also cancels a start() that is running or queued
+   * ahead of it (see `stopRequests`): the start() returns at its next check, so
+   * a logout mid-start never opens persistence or connects the transport after
+   * the session is gone. Pending local writes still reach storage through
+   * stop()'s flush, which uses the key start() resolved up front.
    */
-  const start = async (): Promise<void> =>
-    withLifecycle(async (): Promise<void> => {
+  const start = async (): Promise<void> => {
+    const stopRequestsAtCall = stopRequests;
+    return withLifecycle(async (): Promise<void> => {
       if (isStarted) {
         // E1: double-start() is a no-op rather than a second full
         // initialization — calling start() again would double-register the
@@ -1908,8 +1953,17 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         // A caller that wants a hard restart should stop() first.
         return;
       }
+      if (stopRequests !== stopRequestsAtCall) {
+        // A stop() was called after this start() but before it ran: the host app
+        // already logged out, so there is nothing to start.
+        return;
+      }
       generation += 1;
       const myGeneration = generation;
+      // Superseded by a later lifecycle op, or cancelled by a stop()/signOut() call
+      // that is still queued behind this start().
+      const isCancelled = (): boolean =>
+        generation !== myGeneration || stopRequests !== stopRequestsAtCall;
       const authRetryAttempts = Math.max(
         1,
         config.startAuthRetryAttempts ?? DEFAULT_START_AUTH_RETRY_ATTEMPTS
@@ -1922,31 +1976,33 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
           break;
         }
         await sleep(authRetryDelayMs);
-        if (generation !== myGeneration) {
+        if (isCancelled()) {
           // A stop() (or another start()) ran while we were retrying auth
           // resolution — abandon this attempt, see the generation check below.
           return;
         }
       }
-      if (!userId) {
-        throw new Error("createSyncDb.start() requires an authenticated user");
-      }
-      if (generation !== myGeneration) {
+      if (isCancelled()) {
         // A stop() (or another start()) ran while awaiting the auth
         // provider — that operation now owns the lifecycle; abandon this one
         // rather than initializing state a newer generation doesn't expect.
+        // Checked before the no-user error: a logout that cancels this start()
+        // is expected, not a failure.
         return;
+      }
+      if (!userId) {
+        throw new Error("createSyncDb.start() requires an authenticated user");
       }
       simulatedOffline = false;
       setAuthPaused(false);
       // Re-open the cross-window debug bridge a previous stop()/signOut() closed.
       attachDebugBridge();
-      await createAndStartPersister(userId);
-      if (generation !== myGeneration) {
+      await createAndStartPersister(userId, {isSuperseded: isCancelled});
+      if (isCancelled()) {
         return;
       }
       const {userChanged} = await runUserCheck(userId);
-      if (generation !== myGeneration) {
+      if (isCancelled()) {
         return;
       }
       if (userChanged) {
@@ -2004,7 +2060,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         // up syncing when connectivity returns.
         warn("transport connect failed; starting offline")(error);
       }
-      if (generation !== myGeneration) {
+      if (isCancelled()) {
         return;
       }
       subscribeConfiguredCollections();
@@ -2018,9 +2074,11 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       isStarted = true;
       void replayOutbox().catch(warn("startup replay failed"));
     });
+  };
 
-  const stop = async (): Promise<void> =>
-    withLifecycle(async (): Promise<void> => {
+  const stop = async (): Promise<void> => {
+    stopRequests += 1;
+    return withLifecycle(async (): Promise<void> => {
       generation += 1;
       isStarted = false;
       closeDebugBridge();
@@ -2051,6 +2109,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         await persisterToStop.destroy();
       }
     });
+  };
 
   const goOffline = (): void => {
     if (simulatedOffline) {
@@ -2330,8 +2389,9 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
    * reconcile/replay from the signed-out session sees itself superseded and
    * stands down instead of writing into a store that no longer has an owner.
    */
-  const signOut = async (): Promise<void> =>
-    withLifecycle(async (): Promise<void> => {
+  const signOut = async (): Promise<void> => {
+    stopRequests += 1;
+    return withLifecycle(async (): Promise<void> => {
       generation += 1;
       isStarted = false;
       closeDebugBridge();
@@ -2376,6 +2436,14 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
         await persisterToStop.destroy();
       }
     });
+  };
+
+  const onSocketEvent = (event: string, handler: SocketEventHandler): (() => void) => {
+    if (!transport.onEvent) {
+      return () => {};
+    }
+    return transport.onEvent(event, handler);
+  };
 
   const client: SyncDb = {
     debug: debugLog,
@@ -2385,6 +2453,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     goOnline,
     hydrateWindow,
     mutate,
+    onSocketEvent,
     onStatusChange,
     outbox,
     queryWindows,

@@ -22,10 +22,9 @@ mock.module("../LocaleContentEditor", () => ({
 }));
 
 import {AdminFieldRenderer} from "../AdminFieldRenderer";
-import type {AdminApi, AdminFieldConfig} from "../types";
+import type {AdminFieldConfig} from "../types";
 
-const api = {} as unknown as AdminApi;
-const base = {api, baseUrl: "/admin", onChange: () => {}};
+const base = {baseUrl: "/admin", onChange: () => {}};
 
 describe("AdminFieldRenderer", () => {
   it.each([

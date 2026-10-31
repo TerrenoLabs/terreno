@@ -22,7 +22,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Run tests locally](run-tests-locally.md) — Map every CircleCI test job to a Cursor Cloud / laptop command
 - [GitHub Actions CI](github-actions-ci.md) — Cut PR runtime: docs previews, compile-once e2e, pinned Bun
 - [Add feature flags](add-feature-flags.md) — Add feature flags, A/B testing, and OpenFeature migration
-- [Rate limiting](rate-limiting.md) — Opt-in HTTP limiter on `TerrenoApp` (memory or Redis)
+- [Rate limiting](rate-limiting.md) — Default-on HTTP limiter on `TerrenoApp` (memory, Redis, or Mongo; `rateLimit: false` turns it off)
 - [Receive inbound webhooks](inbound-webhooks.md) — HMAC, Stripe, Twilio, and SendGrid signatures on `WebhooksApp`
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
@@ -57,9 +57,10 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
-- [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer
+- [Upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](migrate-rtk-to-syncdb.md) — Remove `@terreno/rtk` and Redux; every removed export mapped to its replacement
 - [Use syncdb correctly](use-syncdb-correctly.md) — Serial snapshot startup, outbox-halting 403s, phantom creates, conflicts, and other library behavior apps must handle
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
+- [Generate the client SDK](generate-the-client-sdk.md) — `terreno-syncdb-codegen` writes collection hooks and typed request hooks from OpenAPI
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`

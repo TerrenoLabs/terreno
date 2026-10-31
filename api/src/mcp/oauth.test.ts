@@ -177,7 +177,7 @@ describe("MCP OAuth authorization server", () => {
       McpOAuthAuthorization.deleteMany({}),
       McpOAuthClient.deleteMany({}),
       McpOAuthToken.deleteMany({}),
-      McpServiceToken.deleteMany({}),
+      McpServiceToken.collection.deleteMany({}),
     ]);
     clearMCPRegistry();
     app = buildApp();
@@ -849,7 +849,7 @@ describe("MCP OAuth authorization server", () => {
     });
 
     it("keeps accepting JWT and mcp_ service tokens", async () => {
-      const created = await agent.post("/mcp/service-tokens").send({name: "Agent"});
+      const created = await agent.post("/mcp/service-tokens/create").send({name: "Agent"});
 
       const jwtCall = await agent
         .post("/mcp")
@@ -872,8 +872,8 @@ describe("MCP OAuth authorization server", () => {
     };
 
     it("ends service tokens, access tokens, and refresh tokens issued before a password reset", async () => {
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-        .token as string;
+      const serviceToken = (await agent.post("/mcp/service-tokens/create").send({name: "Agent"}))
+        .body.data.token as string;
       const flow = await approvedCode(app, agent);
       const oauth = (await exchangeCode(app, flow)).body;
       expect((await callMcp(app, serviceToken)).status).toBe(200);
@@ -891,7 +891,7 @@ describe("MCP OAuth authorization server", () => {
     });
 
     it("lists service tokens from before a password reset as revoked", async () => {
-      await agent.post("/mcp/service-tokens").send({name: "Before reset"});
+      await agent.post("/mcp/service-tokens/create").send({name: "Before reset"});
 
       await resetPassword();
 
@@ -911,8 +911,8 @@ describe("MCP OAuth authorization server", () => {
     });
 
     it("ends MCP credentials on any tokenEpoch bump, such as a Better Auth session revocation", async () => {
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-        .token as string;
+      const serviceToken = (await agent.post("/mcp/service-tokens/create").send({name: "Agent"}))
+        .body.data.token as string;
       const flow = await approvedCode(app, agent);
       const oauth = (await exchangeCode(app, flow)).body;
 
@@ -928,8 +928,8 @@ describe("MCP OAuth authorization server", () => {
     it("accepts MCP credentials issued after a password reset", async () => {
       await resetPassword();
 
-      const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "After"})).body.data
-        .token as string;
+      const serviceToken = (await agent.post("/mcp/service-tokens/create").send({name: "After"}))
+        .body.data.token as string;
       const flow = await approvedCode(app, agent);
       const oauth = (await exchangeCode(app, flow)).body;
       const refreshed = await refresh(app, flow.clientId, oauth.refresh_token);
@@ -1313,7 +1313,7 @@ describe("MCP OAuth granted scopes", () => {
       McpOAuthAuthorization.deleteMany({}),
       McpOAuthClient.deleteMany({}),
       McpOAuthToken.deleteMany({}),
-      McpServiceToken.deleteMany({}),
+      McpServiceToken.collection.deleteMany({}),
     ]);
     clearMCPRegistry();
     app = new TerrenoApp({
@@ -1347,8 +1347,8 @@ describe("MCP OAuth granted scopes", () => {
   });
 
   it("does not apply OAuth scopes to the user's own JWT or service token", async () => {
-    const serviceToken = (await agent.post("/mcp/service-tokens").send({name: "Agent"})).body.data
-      .token as string;
+    const serviceToken = (await agent.post("/mcp/service-tokens/create").send({name: "Agent"})).body
+      .data.token as string;
 
     const viaServiceToken = rpcResult((await callTool(serviceToken, "scoped_write")).text);
     const viaScopes = rpcResult((await callTool(serviceToken, "scoped_scopes")).text);

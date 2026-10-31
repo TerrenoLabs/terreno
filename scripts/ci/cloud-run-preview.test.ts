@@ -20,7 +20,6 @@ const continueConfig = readFileSync(join(repoRoot, ".circleci/continue-config.ym
 const FRONTEND_PREVIEW_PATHS = [
   "example-frontend/.*",
   "ui/.*",
-  "rtk/.*",
   "admin-frontend/.*",
   "ai/.*",
   "blocks/.*",

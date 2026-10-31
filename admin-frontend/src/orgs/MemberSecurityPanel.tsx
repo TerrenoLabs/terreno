@@ -1,7 +1,7 @@
 import {Badge, Box, Button, Card, Heading, Modal, Spinner, Text, Unifier} from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useRef, useState} from "react";
-import {AccessibilityInfo, findNodeHandle, Platform, View} from "react-native";
+import {AccessibilityInfo, findNodeHandle, Platform, View, type ViewInstance} from "react-native";
 import {
   type MemberSecurityAction,
   type MemberSecurityActionResult,
@@ -171,7 +171,7 @@ export const MemberSecurityPanel: React.FC<MemberSecurityPanelProps> = ({
   testID = "member-security-panel",
   userId,
 }) => {
-  const headingRef = useRef<View>(null);
+  const headingRef = useRef<ViewInstance>(null);
   const {error, isLoading, isRunning, refetch, runAction, summary} = useMemberSecurityApi({
     baseURL,
     orgId,

@@ -3,12 +3,7 @@ import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback} from "react";
 import {useDeprecatedCustomScreensProp} from "./AdminProvider";
-import {
-  type AdminApi,
-  type AdminCustomScreen,
-  type AdminModelConfig,
-  resolveAdminBases,
-} from "./types";
+import {type AdminCustomScreen, type AdminModelConfig, resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 
 interface AdminModelListProps {
@@ -18,7 +13,6 @@ interface AdminModelListProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   /** Path to navigate to for the configuration screen. When provided, a Configuration card is shown. */
   configurationPath?: string;
   /** Additional custom screens to display as cards. Merged with any custom screens from the backend config.
@@ -116,16 +110,14 @@ const CustomScreenCard: React.FC<{screen: AdminCustomScreen; onPress: () => void
  *
  * @param props - Component props
  * @param props.baseUrl - Base URL for admin routes (e.g., "/admin")
- * @param props.api - RTK Query API instance for making authenticated requests
  * @param props.customScreens - Additional custom screens to display as cards
  *
  * @example
  * ```typescript
  * import {AdminModelList} from "@terreno/admin-frontend";
- * import {api} from "@/store/openApiSdk";
  *
  * function AdminIndexScreen() {
- *   return <AdminModelList baseUrl="/admin" api={api} />;
+ *   return <AdminModelList baseUrl="/admin" />;
  * }
  * ```
  *
@@ -136,7 +128,6 @@ export const AdminModelList: React.FC<AdminModelListProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   configurationPath,
   customScreens: propCustomScreens,
   embedded = false,
@@ -147,7 +138,7 @@ export const AdminModelList: React.FC<AdminModelListProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, isLoading, error} = useAdminConfig(api, resolvedApiBase);
+  const {config, isLoading, error} = useAdminConfig(resolvedApiBase);
   useDeprecatedCustomScreensProp(propCustomScreens);
 
   const handlePress = useCallback(

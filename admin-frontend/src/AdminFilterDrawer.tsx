@@ -21,10 +21,9 @@ import {
   adminFilterStateHasValues,
   areAdminFilterStatesEqual,
 } from "./adminModelListQueryParams";
-import type {AdminApi, AdminFieldConfig, AdminModelConfig} from "./types";
+import type {AdminFieldConfig, AdminModelConfig} from "./types";
 
 interface AdminFilterDrawerProps {
-  api: AdminApi;
   appliedFilterState: AdminListFilterState;
   fields: Record<string, AdminFieldConfig>;
   filters: NonNullable<AdminModelConfig["filters"]>;
@@ -43,7 +42,6 @@ const getRefRoutePath = (
 };
 
 interface FilterFieldsProps {
-  api: AdminApi;
   draftState: AdminListFilterState;
   fields: Record<string, AdminFieldConfig>;
   filters: NonNullable<AdminModelConfig["filters"]>;
@@ -52,7 +50,6 @@ interface FilterFieldsProps {
 }
 
 const FilterFields: React.FC<FilterFieldsProps> = ({
-  api,
   draftState,
   fields,
   filters,
@@ -150,7 +147,6 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
           return (
             <Box key={f.field} width="100%">
               <AdminRefField
-                api={api}
                 autocomplete
                 onChange={(next: string) => {
                   setField(f.field, next);
@@ -186,7 +182,6 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
  * Uses draft/apply so list queries update only when the user clicks Apply.
  */
 export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
-  api,
   appliedFilterState,
   fields,
   filters,
@@ -239,7 +234,6 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
   const filterContent = useMemo(
     () => (
       <FilterFields
-        api={api}
         draftState={draftState}
         fields={fields}
         filters={filters}
@@ -247,7 +241,7 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
         onDraftChange={setDraftState}
       />
     ),
-    [api, draftState, fields, filters, modelConfigs]
+    [draftState, fields, filters, modelConfigs]
   );
 
   const hasDraftChanges = !areAdminFilterStatesEqual(draftState, appliedFilterState);

@@ -8,7 +8,11 @@ import {Server} from "socket.io";
 
 import {betterAuthAdapter} from "./auth/betterAuthAdapter";
 import {createSyncDb, type SyncDbConfig} from "./client";
-import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
+import {
+  createLocalKeyProvider,
+  createServerKeyProvider,
+  DEFAULT_KEY_CACHE_DB_NAME,
+} from "./crypto/keyProviders";
 import {getConflict} from "./mutations/conflicts";
 import {createDefaultPersisterFactory as createWebPersisterFactory} from "./persisters/defaultPersisterFactory.web";
 import {memoryPersisterFactory} from "./persisters/memoryPersister";
@@ -2954,6 +2958,74 @@ describe("createSyncDb", () => {
       // still armed post-stop it would fire another send here.
       await new Promise((resolve) => setTimeout(resolve, 60));
       expect(harness.transport.sentMutations.length).toBe(sentBeforeWait);
+    });
+  });
+
+  describe("logout while start() is running", () => {
+    const keyMaterial = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+
+    it("persists without a post-logout /sync/key fetch and never connects after stop()", async () => {
+      const session = {active: true};
+      const keyFetches: Array<"ok" | "401"> = [];
+      const keyProvider = createServerKeyProvider({
+        appName: "logout-race",
+        cacheDbName: uniqueName(),
+        fetchKeyMaterial: async (): Promise<string> => {
+          if (!session.active) {
+            keyFetches.push("401");
+            throw new Error("401 from /sync/key");
+          }
+          keyFetches.push("ok");
+          return keyMaterial;
+        },
+      });
+      const webFactory = createWebPersisterFactory({keyProvider, saveDebounceMs: 20});
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      let stopPromise: Promise<void> | undefined;
+      // The user logs out while start() is still opening persistence: the session
+      // ends, and the host app's logout effect calls stop().
+      const persisterFactory: PersisterFactory = (args) => {
+        const persister = webFactory(args);
+        return {
+          ...persister,
+          startAutoSave: async (): Promise<typeof persister> => {
+            if (!stopPromise) {
+              session.active = false;
+              harness.auth.setUserId(null);
+              stopPromise = client.stop();
+            }
+            return persister.startAutoSave();
+          },
+        };
+      };
+      const client = createSyncDb({
+        ...harness.config,
+        persisterFactory,
+        transport: observable.transport,
+      });
+
+      await client.start();
+      await stopPromise;
+
+      expect(keyFetches).toEqual(["ok"]);
+      expect(client.getSyncStatus().persistence).toBe("durable");
+      expect(observable.events).not.toContain("connect");
+    });
+
+    it("stop() called before a queued start() runs cancels that start()", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+
+      const startPromise = client.start();
+      const stopPromise = client.stop();
+      await Promise.all([startPromise, stopPromise]);
+
+      expect(observable.events).not.toContain("connect");
+      expect((): unknown =>
+        client.mutate({collection: "todos", data: {title: "x"}, operation: "create"})
+      ).toThrow("requires start()");
     });
   });
 

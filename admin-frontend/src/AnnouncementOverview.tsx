@@ -15,8 +15,7 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {CommsStatCard} from "./comms/CommsStatCard";
-import {asDynamicHookApi} from "./dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "./types";
+import {unwrapAdminEnvelope, useAdminRpc, useAdminRpcQuery} from "./useAdminRpc";
 
 export interface AnnouncementOverviewMetrics {
   impressions: number;
@@ -58,7 +57,6 @@ export interface AnnouncementOverviewProps {
   baseUrl?: string;
   apiBase?: string;
   routeBase?: string;
-  api: AdminApi;
   onCreate?: () => void;
   onEdit?: (id: string) => void;
   onOpenAcknowledgements?: () => void;
@@ -92,31 +90,7 @@ const DATA_COLUMN_KEYS = [
   "clicks",
 ] as const;
 
-const enhancedApiCache = new WeakMap<AdminApi, unknown>();
-
-const getEnhancedApi = (api: AdminApi): unknown => {
-  const cached = enhancedApiCache.get(api);
-  if (cached) {
-    return cached;
-  }
-  const apiWithTags = api.enhanceEndpoints({
-    addTagTypes: ["AnnouncementOverview", "admin_Announcement"],
-  });
-  const enhanced = apiWithTags.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      announcementOverview: build.query({
-        providesTags: ["AnnouncementOverview", "admin_Announcement"],
-        query: ({limit, page}: {limit: number; page: number}) => ({
-          method: "GET",
-          url: `${ANNOUNCEMENT_OVERVIEW_ROUTE}?page=${page}&limit=${limit}`,
-        }),
-      }),
-    }),
-    overrideExisting: false,
-  });
-  enhancedApiCache.set(api, enhanced);
-  return enhanced;
-};
+const OVERVIEW_TAGS = ["AnnouncementOverview", "admin_Announcement"] as const;
 
 const formatCount = (value: number): string => {
   return Number.isFinite(value) ? String(value) : "0";
@@ -126,7 +100,6 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
   baseUrl: _baseUrl,
   apiBase: _apiBase,
   routeBase: _routeBase,
-  api,
   onCreate,
   onEdit,
   onOpenAcknowledgements,
@@ -135,14 +108,18 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
 }) => {
   const [page, setPage] = useState(1);
 
-  const enhanced = asDynamicHookApi(getEnhancedApi(api));
+  const rpc = useAdminRpc();
   const {
     data: overview,
     error,
     isLoading,
-  } = enhanced.useAnnouncementOverviewQuery({
-    limit: DEFAULT_LIMIT,
-    page,
+  } = useAdminRpcQuery<AnnouncementOverviewResponse>({
+    // Paging keeps the table up while the next page loads.
+    keepPreviousData: true,
+    providesTags: OVERVIEW_TAGS,
+    rpc,
+    transformResponse: unwrapAdminEnvelope,
+    url: `${ANNOUNCEMENT_OVERVIEW_ROUTE}?page=${page}&limit=${DEFAULT_LIMIT}`,
   });
 
   const ActionsCell: React.FC<{column: DataTableColumn; cellData: DataTableCellData}> = useCallback(

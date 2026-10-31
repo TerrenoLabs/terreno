@@ -14,14 +14,13 @@ import mongoose, {type Model, model, Schema} from "mongoose";
 import type {Server} from "socket.io";
 
 import type {ModelRouterOptions} from "../api";
+import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
 import {
   emitSyncDeltaForChange,
   startChangeStreamWatcher,
   stopChangeStreamWatcher,
 } from "../realtime/changeStreamWatcher";
-import {addQuerySubscription, clearQueryStore, computeQueryId} from "../realtime/queryStore";
-import {clearRealtimeRegistry, registerRealtime} from "../realtime/registry";
 import {setupDb} from "../tests";
 import {defaultResponseHandler} from "../transformers";
 import {registerAdminBroadcastScope} from "./adminBroadcastScope";
@@ -71,6 +70,29 @@ sockStuffSchema.plugin(isDeletedPlugin);
 sockStuffSchema.plugin(createdUpdatedPlugin);
 sockStuffSchema.plugin(syncPlugin);
 const SockStuffModel = model<SockStuff>("SockStuff", sockStuffSchema);
+
+/** Owned through `userId`, with an `ownerId` virtual alias for `Permissions.IsOwner` (as GptHistory). */
+interface SockNote extends IsDeleted {
+  _id: string;
+  text: string;
+  userId: string;
+  _syncSeq?: number;
+}
+
+const sockNoteSchema = new Schema<SockNote>(
+  {
+    text: {description: "The note text", required: true, type: String},
+    userId: {description: "The user who owns this note", type: String},
+  },
+  {toJSON: {virtuals: true}, toObject: {virtuals: true}}
+);
+sockNoteSchema.virtual("ownerId").get(function (this: SockNote) {
+  return this.userId;
+});
+sockNoteSchema.plugin(isDeletedPlugin);
+sockNoteSchema.plugin(createdUpdatedPlugin);
+sockNoteSchema.plugin(syncPlugin);
+const SockNoteModel = model<SockNote>("SockNote", sockNoteSchema);
 
 interface SockProject extends IsDeleted {
   _id: string;
@@ -1126,6 +1148,50 @@ describe("emitSyncDeltaForChange", () => {
     expect((delta.data as Record<string, unknown>).id).toBe("doc-1");
   });
 
+  it("checks read permissions against the model document, so virtual owner fields resolve", async () => {
+    clearSyncRegistry();
+    registerSync({
+      config: {scope: {field: "userId", type: "owner"}},
+      model: SockNoteModel as unknown as Model<unknown>,
+      options: {
+        permissions: {
+          create: [Permissions.IsOwner],
+          delete: [Permissions.IsOwner],
+          list: [Permissions.IsAuthenticated],
+          read: [Permissions.IsOwner],
+          update: [Permissions.IsOwner],
+        },
+      } as unknown as ModelRouterOptions<unknown>,
+      routePath: "/sock/notes",
+    });
+    const entry = findSyncEntryByCollectionTag("sock/notes") as SyncRegistryEntry;
+    const io = makeTrackedIo();
+    io.addSocketToRoom(syncRoomForStream("sock/notes|owner:user1"), {admin: false, id: "user1"});
+    io.addSocketToRoom(syncRoomForStream("sock/notes|owner:user1"), {admin: false, id: "user2"});
+
+    await emitSyncDeltaForChange({
+      change: makeChange({
+        fullDocument: {_id: "note-1", _syncSeq: 3, text: "hi", userId: "user1"},
+        ns: {coll: "socknotes"},
+        operationType: "insert",
+      }),
+      docId: "note-1",
+      entry,
+      io,
+      logDebug: () => {},
+    });
+
+    const deltas = io.emissions.filter((e) => e.event === "sync:delta");
+    expect(deltas.map((e) => e.socketId)).toHaveLength(1);
+    const delta = deltas[0]?.payload as SyncDelta;
+    expect(delta).toMatchObject({
+      collection: "sock/notes",
+      seq: 3,
+      stream: "sock/notes|owner:user1",
+    });
+    expect((delta.data as Record<string, unknown>).text).toBe("hi");
+  });
+
   it("adminBroadcast true: create also emits to {collection}|admin", async () => {
     clearSyncRegistry();
     registerSync({
@@ -1555,7 +1621,7 @@ describe("sync:delta — change stream integration", () => {
   });
 
   beforeEach(async () => {
-    clearRealtimeRegistry();
+    clearSyncRegistry();
     registerAll();
     await Promise.all([
       SockStuffModel.collection.deleteMany({}),
@@ -1566,7 +1632,6 @@ describe("sync:delta — change stream integration", () => {
 
   afterEach(async () => {
     await stopChangeStreamWatcher();
-    clearRealtimeRegistry();
     clearSyncRegistry();
   });
 
@@ -1673,42 +1738,33 @@ describe("sync:delta — change stream integration", () => {
     expect((create.data as Record<string, unknown>).orgId).toBe("org2");
   });
 
-  it("a model with both realtime and sync configs emits both event types", async () => {
+  it("never emits the legacy RTK sync event, even to legacy realtime rooms", async () => {
     if (!replicaSetAvailable) {
       return;
     }
-    registerRealtime({
-      collectionName: SockStuffModel.collection.collectionName,
-      config: {methods: ["create", "update", "delete"], roomStrategy: "model"},
-      modelName: "SockStuff",
-      options: permissiveOptions,
-      routePath: "/sockStuff",
-    });
-
     const io = makeTrackedIo();
     io.addSocketToRoom("model:sockStuff", {admin: true, id: "admin"});
-    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:both-user"), {
+    io.addSocketToRoom("authenticated", {admin: true, id: "admin"});
+    io.addSocketToRoom("user:legacy-user", {admin: false, id: "legacy-user"});
+    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:legacy-user"), {
       admin: false,
-      id: "both-user",
+      id: "legacy-user",
     });
     await startWatcherAndSettle(io);
 
-    const doc = await SockStuffModel.create({name: "both", ownerId: "both-user"});
+    const doc = await SockStuffModel.create({name: "legacy", ownerId: "legacy-user"});
     const docId = String(doc._id);
     await waitForDelta(io, (d) => d.id === docId);
 
-    const legacy = io.emissions.filter(
-      (e) => e.event === "sync" && e.payload?.id === docId && e.payload?.method === "create"
-    );
     const deltas = io.emissions.filter(
       (e) => e.event === "sync:delta" && (e.payload as SyncDelta).id === docId
     );
-    expect(legacy.length).toBeGreaterThanOrEqual(1);
     expect(deltas).toHaveLength(1);
     expect((deltas[0].payload as SyncDelta).seq).toBe(1);
+    expect(io.emissions.filter((e) => e.event === "sync")).toHaveLength(0);
   });
 
-  it("a sync-only model emits deltas even without a realtime registry entry", async () => {
+  it("a sync model emits deltas through its sync stream room", async () => {
     if (!replicaSetAvailable) {
       return;
     }
@@ -1725,96 +1781,5 @@ describe("sync:delta — change stream integration", () => {
     const deltas = io.emissions.filter((e) => e.event === "sync:delta");
     expect(deltas).toHaveLength(1);
     expect(io.emissions.filter((e) => e.event === "sync")).toHaveLength(0);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// change handler — realtime query fan-out failures stay isolated
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe("change handler isolation", () => {
-  let originalDb: typeof mongoose.connection.db;
-
-  beforeAll(async () => {
-    await setupDb();
-  });
-
-  beforeEach(() => {
-    originalDb = mongoose.connection.db;
-    clearRealtimeRegistry();
-    clearQueryStore();
-    clearSyncRegistry();
-  });
-
-  afterEach(async () => {
-    await stopChangeStreamWatcher();
-    (mongoose.connection as unknown as {db: unknown}).db = originalDb;
-    clearRealtimeRegistry();
-    clearQueryStore();
-    clearSyncRegistry();
-  });
-
-  it("an unevaluable query predicate does not block sync:delta or later query rooms", async () => {
-    const listeners = new Map<string, (...args: unknown[]) => unknown>();
-    const mockStream = {
-      close: async (): Promise<void> => {},
-      on(event: string, handler: (...args: unknown[]) => unknown) {
-        listeners.set(event, handler);
-        return this;
-      },
-    };
-    (mongoose.connection as unknown as {db: unknown}).db = {watch: () => mockStream};
-    // One registration carries both surfaces, as modelRouter does for realtime + sync.
-    registerSync({
-      config: {scope: {type: "owner"}},
-      model: SockStuffModel as unknown as Model<unknown>,
-      options: {
-        ...permissiveOptions,
-        realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
-      },
-      routePath: "/sockStuff",
-    });
-    const poisoned = [{$and: [null]}, {name: {$eq: {toString: 1}}}] as Record<string, unknown>[];
-    for (const [index, query] of poisoned.entries()) {
-      addQuerySubscription(`attacker-${index}`, "sockStuff", query, `poisoned-${index}`);
-    }
-    const healthyQueryId = computeQueryId("sockStuff", {name: "poison-check"});
-    addQuerySubscription("victim", "sockStuff", {name: "poison-check"}, healthyQueryId);
-
-    const io = makeTrackedIo();
-    io.addSocketToRoom(`query:${healthyQueryId}`, {admin: true, id: "admin"});
-    io.addSocketToRoom(syncRoomForStream("sockStuff|owner:victim-user"), {
-      admin: false,
-      id: "victim-user",
-    });
-    startChangeStreamWatcher(io, {}, true);
-    const changeHandler = listeners.get("change");
-    if (!changeHandler) {
-      throw new Error("expected change handler");
-    }
-
-    await changeHandler(
-      makeChange({
-        documentKey: {_id: "poison-doc"},
-        fullDocument: {
-          _id: "poison-doc",
-          _syncSeq: 3,
-          name: "poison-check",
-          ownerId: "victim-user",
-        },
-        ns: {coll: SockStuffModel.collection.collectionName},
-        operationType: "insert",
-      })
-    );
-    await waitForDelta(io, (d) => d.id === "poison-doc", 2000);
-
-    const deltas = io.emissions.filter(
-      (e) => e.event === "sync:delta" && (e.payload as SyncDelta).id === "poison-doc"
-    );
-    expect(deltas).toHaveLength(1);
-    const healthy = io.emissions.filter(
-      (e) => e.event === "sync" && e.room === `query:${healthyQueryId}`
-    );
-    expect(healthy).toHaveLength(1);
   });
 });

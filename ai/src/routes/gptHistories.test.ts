@@ -97,12 +97,12 @@ describe("/gpt/histories headless turns", () => {
   beforeAll(async () => {
     await ensureTestUsers();
     await ensureTestUsers([OTHER_USER]);
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("POST /gpt/histories/:id/turn", () => {

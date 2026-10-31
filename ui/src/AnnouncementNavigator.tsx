@@ -11,6 +11,7 @@ import {
 } from "./announcementFrequency";
 import {Box} from "./Box";
 import {Button} from "./Button";
+import type {TerrenoRequestClient} from "./requestClient";
 import {Spinner} from "./Spinner";
 import {Text} from "./Text";
 import {useAcknowledgeAnnouncement} from "./useAcknowledgeAnnouncement";
@@ -19,7 +20,12 @@ import {useAnnouncements} from "./useAnnouncements";
 export type {AnnouncementFrequencyConfig} from "./announcementFrequency";
 
 interface AnnouncementNavigatorProps {
-  api: unknown;
+  /**
+   * Request client for the announcement routes, usually the app's `@terreno/syncdb/api`
+   * client (`createApiClient(...)`). Any object with a matching `request` method works.
+   */
+  client: TerrenoRequestClient;
+  /** Path prefixed to the announcement routes (for example `/api`); defaults to none. */
   baseUrl?: string;
   children: React.ReactNode;
   frequency?: AnnouncementFrequencyConfig;
@@ -27,18 +33,15 @@ interface AnnouncementNavigatorProps {
 }
 
 export const AnnouncementNavigator: React.FC<AnnouncementNavigatorProps> = ({
-  api,
+  client,
   baseUrl,
   children,
   frequency,
   onError,
 }) => {
-  const {pending, isLoading, error, refetch} = useAnnouncements(
-    api as Parameters<typeof useAnnouncements>[0],
-    baseUrl
-  );
+  const {pending, isLoading, error, refetch} = useAnnouncements(client, baseUrl);
   const {acknowledge, recordClick, recordImpression, isSubmitting} = useAcknowledgeAnnouncement(
-    api as Parameters<typeof useAcknowledgeAnnouncement>[0],
+    client,
     baseUrl
   );
 
@@ -67,8 +70,14 @@ export const AnnouncementNavigator: React.FC<AnnouncementNavigatorProps> = ({
       ? `${currentAnnouncementId}:${currentAnnouncementVersion}`
       : null;
 
-  const [isFrequencySuppressed, setIsFrequencySuppressed] = useState(false);
-  const [isFrequencyChecked, setIsFrequencyChecked] = useState(false);
+  // Frequency result for one impression key. A result for an older key (or none yet) means
+  // the current announcement has not been checked, so it stays hidden until it is.
+  const [frequencyResult, setFrequencyResult] = useState<{
+    key: string;
+    suppressed: boolean;
+  } | null>(null);
+  const isFrequencyChecked = impressionKey !== null && frequencyResult?.key === impressionKey;
+  const isFrequencySuppressed = frequencyResult?.suppressed ?? false;
 
   const visibleCurrent = current && isFrequencyChecked && !isFrequencySuppressed ? current : null;
   const displayMode = visibleCurrent?.displayMode ?? "modal";
@@ -77,31 +86,27 @@ export const AnnouncementNavigator: React.FC<AnnouncementNavigatorProps> = ({
 
   const isShowingAnnouncement = !isLoading && !error && Boolean(visibleCurrent);
 
-  // Apply client-side frequency caps before showing an interrupt surface.
+  // Apply client-side frequency caps before showing an interrupt surface. Keyed on the
+  // announcement version so a refetch returning the same announcement is not re-checked.
   useEffect(() => {
-    if (!current || !impressionKey) {
-      setIsFrequencySuppressed(false);
-      setIsFrequencyChecked(true);
+    if (!impressionKey) {
       return;
     }
 
     let cancelled = false;
-    setIsFrequencyChecked(false);
 
     const evaluateFrequency = async (): Promise<void> => {
       try {
-        const suppress = await shouldSuppressInterrupt(frequencyConfig, impressionKey);
+        const suppressed = await shouldSuppressInterrupt(frequencyConfig, impressionKey);
         if (!cancelled) {
-          setIsFrequencySuppressed(suppress);
-          setIsFrequencyChecked(true);
+          setFrequencyResult({key: impressionKey, suppressed});
         }
       } catch (frequencyError) {
         console.warn("[AnnouncementNavigator] Frequency check failed; allowing interrupt", {
           frequencyError,
         });
         if (!cancelled) {
-          setIsFrequencySuppressed(false);
-          setIsFrequencyChecked(true);
+          setFrequencyResult({key: impressionKey, suppressed: false});
         }
       }
     };
@@ -111,7 +116,7 @@ export const AnnouncementNavigator: React.FC<AnnouncementNavigatorProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [current, frequencyConfig, impressionKey]);
+  }, [frequencyConfig, impressionKey]);
 
   // Record session/cooldown state once per announcement version when the interrupt is visible.
   useEffect(() => {

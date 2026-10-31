@@ -3,13 +3,13 @@
  *
  * A bearer-mode social sign-in returns to /login with `?handoff=<nonce>` and `#ott=<token>`.
  * Expo Router copies the URL, fragment included, the moment it is first imported, and writes
- * that copy back into the address bar once it routes. `@terreno/rtk` imports it (through
- * `@terreno/ui`), so importing rtk to exchange the token would already be too late.
+ * that copy back into the address bar once it routes. `@terreno/ui` imports it, so
+ * importing `@terreno/syncdb/auth` after it to exchange the token would already be too late.
  *
  * index.js imports this module first. It has no imports, so it runs before Expo Router loads:
  * it holds the URL and replaces it with one without `handoff` and `ott`. lib/oauthHandoff.ts
  * puts the held URL back and calls `completeBetterAuthOAuthHandoff` in the same synchronous
- * step, so rtk checks the nonce and strips the URL itself, and nothing runs in between.
+ * step, so syncdb checks the nonce and strips the URL itself, and nothing runs in between.
  */
 
 const HELD_QUERY_KEYS = ["handoff", "ott"];
@@ -75,7 +75,7 @@ export const holdHandoffUrl = (): void => {
     window.history.replaceState(window.history.state, "", cleanPath);
     heldHref = href;
   } catch {
-    // The URL stays as it was; rtk's own strip still removes the token.
+    // The URL stays as it was; syncdb's own strip still removes the token.
   }
 };
 

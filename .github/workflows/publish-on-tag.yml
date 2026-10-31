@@ -408,163 +408,6 @@ jobs:
       - name: Summary
         run: echo "Published @terreno/ui@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
-  publish-rtk:
-    needs: [check-changes, publish-ui]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: rtk
-    steps:
-      - uses: actions/checkout@v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      - name: Validate required secrets
-        run: |
-          missing=()
-          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then missing+=("NPM_TOKEN"); fi
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Missing required secrets: ${missing[*]}"
-            exit 1
-          fi
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Update version
-        run: |
-          VERSION="${{ needs.check-changes.outputs.version }}"
-          node -e "const fs = require('fs'); const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8')); pkg.version = '$VERSION'; fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');"
-
-      - name: Get latest @terreno/ui version
-        id: ui_version
-        run: |
-          # `npm view @terreno/ui version` resolves the `latest` dist-tag, which for a
-          # prerelease is the previous stable line. Pinning to it would ship a beta that
-          # depends on stable UI. Every consumer of this step needs publish-ui, so the
-          # matching prerelease UI is already on npm by the time this runs.
-          if [ "${{ needs.check-changes.outputs.isPrerelease }}" == "true" ]; then
-            UI_VERSION="${{ needs.check-changes.outputs.version }}"
-            echo "Prerelease: pinning @terreno/ui to this release's version"
-          else
-            UI_VERSION=$(npm view @terreno/ui version 2>/dev/null || echo "")
-          fi
-          if [ -z "$UI_VERSION" ]; then
-            echo "Warning: Could not fetch @terreno/ui version from npm, using current release version"
-            UI_VERSION="${{ needs.check-changes.outputs.version }}"
-          fi
-          echo "ui_version=$UI_VERSION" >> $GITHUB_OUTPUT
-          echo "Using @terreno/ui version: $UI_VERSION"
-
-      - name: Replace catalog references
-        run: |
-          VERSION="${{ needs.check-changes.outputs.version }}"
-          UI_VERSION="${{ steps.ui_version.outputs.ui_version }}"
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
-
-          // Read root catalog
-          const rootPkg = JSON.parse(fs.readFileSync('../package.json', 'utf8'));
-          const catalog = rootPkg.catalog || {};
-
-          // Read current package.json
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const version = process.env.VERSION;
-          const uiVersion = process.env.UI_VERSION;
-
-          // Replace catalog: in dependencies
-          if (pkg.dependencies) {
-            for (const [key, value] of Object.entries(pkg.dependencies)) {
-              if (value === 'catalog:') {
-                if (catalog[key]) {
-                  pkg.dependencies[key] = catalog[key];
-                } else {
-                  throw new Error(\`Catalog entry not found for \${key}\`);
-                }
-              } else if (value === 'workspace:*' && key === '@terreno/ui') {
-                // Use latest published version of @terreno/ui
-                pkg.dependencies[key] = uiVersion;
-              } else if (value === 'workspace:*' && key.startsWith('@terreno/')) {
-                // Replace workspace:* with current release version for other @terreno packages
-                pkg.dependencies[key] = version;
-              }
-            }
-          }
-
-          // Replace catalog: in devDependencies
-          if (pkg.devDependencies) {
-            for (const [key, value] of Object.entries(pkg.devDependencies)) {
-              if (value === 'catalog:') {
-                if (catalog[key]) {
-                  pkg.devDependencies[key] = catalog[key];
-                } else {
-                  throw new Error(\`Catalog entry not found for \${key}\`);
-                }
-              } else if (value === 'workspace:*' && key === '@terreno/ui') {
-                // Use latest published version of @terreno/ui
-                pkg.devDependencies[key] = uiVersion;
-              } else if (value === 'workspace:*' && key.startsWith('@terreno/')) {
-                // Replace workspace:* with current release version for other @terreno packages
-                pkg.devDependencies[key] = version;
-              }
-            }
-          }
-
-          // Replace catalog: in peerDependencies
-          if (pkg.peerDependencies) {
-            for (const [key, value] of Object.entries(pkg.peerDependencies)) {
-              if (value === 'catalog:') {
-                if (catalog[key]) {
-                  pkg.peerDependencies[key] = catalog[key];
-                } else {
-                  throw new Error(\`Catalog entry not found for \${key}\`);
-                }
-              } else if (value === 'workspace:*' && key === '@terreno/ui') {
-                // Use latest published version of @terreno/ui
-                pkg.peerDependencies[key] = uiVersion;
-              } else if (value === 'workspace:*' && key.startsWith('@terreno/')) {
-                // Replace workspace:* with current release version for other @terreno packages
-                pkg.peerDependencies[key] = version;
-              }
-            }
-          }
-
-          // Write updated package.json
-          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
-        env:
-          VERSION: ${{ needs.check-changes.outputs.version }}
-          UI_VERSION: ${{ steps.ui_version.outputs.ui_version }}
-
-      - name: Install dependencies after replacement
-        run: bun install
-
-      - name: Compile workspace dependencies
-        run: node ../.github/scripts/compile-workspace-deps.js
-
-      - name: Compile
-        run: bun run compile
-
-      - name: Publish to npm
-        run: npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Summary
-        run: echo "Published @terreno/rtk@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-
   publish-admin-backend:
     needs: [check-changes, publish-api, publish-test]
     runs-on: ubuntu-latest
@@ -750,7 +593,7 @@ jobs:
         run: echo "Published @terreno/admin-frontend@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   publish-admin-spa:
-    needs: [check-changes, publish-ui, publish-rtk, publish-admin-frontend]
+    needs: [check-changes, publish-ui, publish-admin-frontend]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1773,12 +1616,12 @@ jobs:
         run: echo "Published @terreno/cli@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   update-version-on-master:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     # Run if any package was published and this is not a prerelease tag
     if: |
       always() &&
       needs.check-changes.outputs.isPrerelease != 'true' &&
-      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-rtk.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
+      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1825,7 +1668,6 @@ jobs:
           update_version api "${{ needs.publish-api.result }}"
           update_version test "${{ needs.publish-test.result }}"
           update_version ui "${{ needs.publish-ui.result }}"
-          update_version rtk "${{ needs.publish-rtk.result }}"
           update_version admin-backend "${{ needs.publish-admin-backend.result }}"
           update_version admin-frontend "${{ needs.publish-admin-frontend.result }}"
           update_version admin-spa "${{ needs.publish-admin-spa.result }}"
@@ -1988,7 +1830,7 @@ jobs:
   # Releases start as drafts so the docs archive can be attached before
   # immutable releases lock the assets. This publishes the draft last.
   publish-github-release:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli, update-version-on-master]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli, update-version-on-master]
     # Stable X.Y.0 releases publish in cut-docs-version after the archive is
     # attached. Everything else publishes here once npm publishing succeeded;
     # a skipped version bump only counts for prereleases, which never bump.
@@ -2022,7 +1864,7 @@ jobs:
         run: scripts/ci/github-release.sh publish "${{ needs.check-changes.outputs.version }}"
 
   notify:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -2060,7 +1902,6 @@ jobs:
           add_status "@terreno/api" "${{ needs.publish-api.result }}"
           add_status "@terreno/test" "${{ needs.publish-test.result }}"
           add_status "@terreno/ui" "${{ needs.publish-ui.result }}"
-          add_status "@terreno/rtk" "${{ needs.publish-rtk.result }}"
           add_status "@terreno/admin-backend" "${{ needs.publish-admin-backend.result }}"
           add_status "@terreno/admin-frontend" "${{ needs.publish-admin-frontend.result }}"
           add_status "@terreno/admin-spa" "${{ needs.publish-admin-spa.result }}"
@@ -2130,7 +1971,7 @@ jobs:
 
   slack-notify-result:
     name: Slack - release result
-    needs: [breaking-change-documentation, check-changes, publish-api, publish-test, publish-ui, publish-rtk, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-feature-flags, publish-mcp, update-version-on-master, trigger-demo-deploy, cut-docs-version, notify]
+    needs: [breaking-change-documentation, check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-ai, publish-api-health, publish-feature-flags, publish-mcp, update-version-on-master, trigger-demo-deploy, cut-docs-version, notify]
     # Run regardless of upstream results so failures are reported too
     if: always()
     runs-on: ubuntu-latest

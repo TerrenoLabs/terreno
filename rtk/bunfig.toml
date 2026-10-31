@@ -1,9 +1,0 @@
-[test]
-preload = ["./test-preload.ts"]
-root = "./src"
-coverageSkipTestFiles = true
-coveragePathIgnorePatterns = ["**/dist/**", "**/*.test.ts", "**/*.isolated.ts", "**/isolated/**", "**/test-preload.ts", "**/node_modules/**"]
-# Enforced by scripts/check-coverage.ts; Bun parses this key but does not
-# fail the run when coverage is below threshold. See
-# https://github.com/oven-sh/bun/issues/7367 and https://github.com/oven-sh/bun/pull/27933.
-coverageThreshold = { line = 95, function = 95 }

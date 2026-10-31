@@ -32,14 +32,21 @@ Call hosted MCP `terreno_get_upgrade_guide` with `fromVersion` and `toVersion`. 
 
 ## Syncdb / RTK platform migration
 
-If `fromVersion` is before `56.0.0-beta.2` and `toVersion` is `56.0.0-beta.2` or later, **stop**. This range crosses `@terreno/syncdb` and the RTK collection-CRUD deprecation. It is a platform migration, not a routine bump.
+If `toVersion` is `58.0.0` or later and the app still imports `@terreno/rtk`, `@reduxjs/toolkit`,
+`react-redux`, `redux-persist`, or `@rtk-query/codegen-openapi`, **stop**. Terreno 58 deletes
+`@terreno/rtk` and Redux; this is a platform migration, not a routine bump.
 
 Offer exactly two options; do not automate the data-layer migration inside this flow:
 
-1. Routine lockstep bump only (stay on RTK collection hooks for now).
-2. Separate follow-up: `docs/how-to/migrate-rtk-to-syncdb.md`.
+1. Bump to the last 57.x release only (stays on `@terreno/rtk`).
+2. Migrate first with `docs/how-to/migrate-rtk-to-syncdb.md` (every removed export → its
+   replacement) and the 58.0.0 upgrade note, then return to this flow.
 
 Wait for the user to pick.
+
+If `fromVersion` is before `56.0.0-beta.2` and `toVersion` is below 58, the range crosses the
+syncdb introduction; offer the same two options (routine bump, or migrate collection CRUD to
+syncdb with the same guide).
 
 ## Plan and confirm (no mutations yet)
 
@@ -66,8 +73,8 @@ Compile means a **typecheck** (`tsc --noEmit` or `bun run compile` when that scr
 4. Bump **backend** packages: `@terreno/api`, `@terreno/test`, `@terreno/admin-backend`, `@terreno/blocks` (when the app lists it; `ai` and `ui` depend on it), `@terreno/ai`, `@terreno/api-health`, `@terreno/comms`, `@terreno/feature-flags`, `@terreno/mcp`. `bun install`.
 5. Backend `bun run compile` and backend tests. Gate: both pass.
 6. Expo SDK — invoke **`upgrading-expo`**. Skip only when Terreno majors do not require a new Expo (same Expo line). Gate: `npx expo-doctor` / install --fix as that skill requires; native rebuild if peers moved.
-7. Bump **frontend** packages: `@terreno/ui`, `@terreno/rtk`, `@terreno/syncdb`, `@terreno/admin-frontend`, `@terreno/admin-spa`. `bun install`.
-8. Start the **upgraded** backend. Regenerate the typed client (`bun run sdk` in the frontend).
+7. Bump **frontend** packages: `@terreno/ui`, `@terreno/syncdb`, `@terreno/admin-frontend`, `@terreno/admin-spa`. `bun install`. (`@terreno/rtk` stops at 57.x; on 58+ remove it.)
+8. Start the **upgraded** backend. Regenerate the typed client (`bun run sdk`, and `bun run sync-sdk` when the app has synced collections).
 9. `bun run compile`, `bun run lint`, and the app tests. Gate: all pass.
 10. Run the app, log in, exercise changed screens.
 
@@ -83,4 +90,4 @@ On a **multi-version** jump failure: retry **version by version** (`from` → ne
 
 ## Final report
 
-Print `fromVersion` → `toVersion`, notes applied, packages bumped, gates that passed, and remaining human follow-ups (native store binaries, RTK migration if deferred).
+Print `fromVersion` → `toVersion`, notes applied, packages bumped, gates that passed, and remaining human follow-ups (native store binaries, the 58 RTK-to-syncdb migration if deferred).

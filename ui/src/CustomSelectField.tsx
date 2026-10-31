@@ -1,5 +1,5 @@
 import {type FC, useEffect, useMemo, useRef, useState} from "react";
-import {type TextInput, View} from "react-native";
+import {type TextInputInstance, View} from "react-native";
 
 import type {CustomSelectFieldProps} from "./Common";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
@@ -22,7 +22,7 @@ export const CustomSelectField: FC<CustomSelectFieldProps> = ({
 }) => {
   const [currentValue, setCurrentValue] = useState(value);
   const [showCustomInput, setShowCustomInput] = useState(false);
-  const textInputRef = useRef<TextInput | null>(null);
+  const textInputRef = useRef<TextInputInstance | null>(null);
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
 
   // Boolean that checks if currentValue is a value from the
@@ -109,7 +109,7 @@ export const CustomSelectField: FC<CustomSelectFieldProps> = ({
           <TextField
             disabled={disabled}
             id="customOptions"
-            inputRef={(ref: TextInput | null) => {
+            inputRef={(ref: TextInputInstance | null) => {
               textInputRef.current = ref;
             }}
             onChange={onChange}

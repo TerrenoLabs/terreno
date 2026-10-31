@@ -1,6 +1,6 @@
 ---
 description: "Mandatory frontend feature verification — launch app, login, exercise feature, capture evidence, attach to PR"
-globs: ["ui/**", "demo/**", "example-frontend/**", "admin-frontend/**", "admin-spa/**", "rtk/**"]
+globs: ["ui/**", "demo/**", "example-frontend/**", "admin-frontend/**", "admin-spa/**", "syncdb/src/react/**", "syncdb/src/auth/**"]
 targets: ["cursor", "copilot", "claudecode", "devin"]
 ---
 
@@ -8,7 +8,7 @@ targets: ["cursor", "copilot", "claudecode", "devin"]
 
 Any feature, fix, or PR that touches the frontend MUST be verified in a running app before the PR is opened or updated.
 
-This applies to work in `ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, and frontend-integrated changes in `rtk/`, including full-stack features where only part of the diff is backend.
+This applies to work in `ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, and frontend-integrated changes in `syncdb/` (React hooks, auth session, request client), including full-stack features where only part of the diff is backend.
 
 ## Required workflow
 

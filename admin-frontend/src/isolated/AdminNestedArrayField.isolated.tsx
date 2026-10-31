@@ -5,7 +5,7 @@ import {fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminFieldConfig} from "../types";
+import type {AdminFieldConfig} from "../types";
 
 mock.module("../AdminFieldRendererCore", () => ({
   AdminFieldRendererCore: ({
@@ -80,7 +80,6 @@ describe("AdminNestedArrayField", () => {
   it("renders empty state when no items", () => {
     const {toJSON, getByText} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         helperText="help"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
@@ -96,7 +95,6 @@ describe("AdminNestedArrayField", () => {
   it("renders items with error text", () => {
     const {toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         errorText="oops"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
@@ -114,7 +112,6 @@ describe("AdminNestedArrayField", () => {
   it("handles non-array incoming value gracefully", () => {
     const {toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -129,7 +126,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -151,7 +147,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={
           {description: {required: false, type: "string"}} as unknown as Record<
@@ -177,7 +172,6 @@ describe("AdminNestedArrayField", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={items as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -197,7 +191,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -220,7 +213,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -243,7 +235,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -265,7 +256,6 @@ describe("AdminNestedArrayField", () => {
     const onChange = mock(() => {});
     const {rerender, toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -275,7 +265,6 @@ describe("AdminNestedArrayField", () => {
     );
     rerender(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -292,7 +281,6 @@ describe("AdminNestedArrayField", () => {
   it("supports re-render with shorter value array (shrinks itemIds)", () => {
     const {rerender, toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -305,7 +293,6 @@ describe("AdminNestedArrayField", () => {
     );
     rerender(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -336,7 +323,6 @@ describe("AdminNestedArrayField", () => {
     it("sizes editable rows to fit nested object groups", () => {
       const {getByTestId} = renderWithTheme(
         <AdminNestedArrayField
-          api={{} as unknown as AdminApi}
           fieldKey="servers"
           items={
             {media: mediaConfig, name: {required: false, type: "string"}} as unknown as Record<
@@ -356,7 +342,6 @@ describe("AdminNestedArrayField", () => {
     it("gives nested groups per-item test IDs in editable rows", () => {
       const {getByTestId} = renderWithTheme(
         <AdminNestedArrayField
-          api={{} as unknown as AdminApi}
           fieldKey="servers"
           items={{media: mediaConfig} as unknown as Record<string, AdminFieldConfig>}
           onChange={() => {}}
@@ -372,7 +357,6 @@ describe("AdminNestedArrayField", () => {
       const onChange = mock((_: unknown) => {});
       const {getByTestId} = renderWithTheme(
         <AdminNestedArrayField
-          api={{} as unknown as AdminApi}
           fieldKey="servers"
           items={{media: mediaConfig} as unknown as Record<string, AdminFieldConfig>}
           onChange={onChange}
@@ -388,7 +372,6 @@ describe("AdminNestedArrayField", () => {
       const onChange = mock((_: unknown) => {});
       const {getByTestId} = renderWithTheme(
         <AdminNestedArrayField
-          api={{} as unknown as AdminApi}
           items={
             {
               _id: {required: false, type: "objectid"},

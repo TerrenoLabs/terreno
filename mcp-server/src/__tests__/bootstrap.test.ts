@@ -178,7 +178,7 @@ describe("bootstrap", () => {
       const filtered = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "No Admin BE",
         appName: "no-admin-be",
-        packages: ["api", "ui", "rtk"],
+        packages: ["api", "ui", "syncdb"],
       });
       const filteredText = filtered.content[0].text;
       expect(filteredText).not.toContain("## Admin panel backend");
@@ -195,7 +195,7 @@ describe("bootstrap", () => {
       const filtered = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
         appDisplayName: "No Admin FE",
         appName: "no-admin-fe",
-        packages: ["api", "ui", "rtk"],
+        packages: ["api", "ui", "syncdb"],
       });
       const filteredText = filtered.content[0].text;
       expect(filteredText).not.toContain("## Admin panel frontend");
@@ -206,6 +206,20 @@ describe("bootstrap", () => {
       });
       const fullText = full.content[0].text;
       expect(fullText).toContain("## Admin panel frontend");
+    });
+
+    test("frontend rules describe syncdb session, request client, and apiSdk without Redux", () => {
+      const result = handleBootstrapToolCall("terreno_bootstrap_ai_rules", {
+        appDisplayName: "No Redux",
+        appName: "no-redux",
+      });
+      const text = result.content[0].text;
+      expect(text).toContain("@/store/apiSdk");
+      expect(text).toContain("SessionProvider");
+      expect(text).toContain("@terreno/syncdb/api");
+      expect(text).not.toContain("@terreno/rtk");
+      expect(text).not.toContain("generateBetterAuthSlice");
+      expect(text).not.toContain("registerTerrenoDevStore");
     });
 
     test("admin-only packages leave the root package reference without guidelines", () => {
@@ -275,9 +289,10 @@ describe("bootstrap", () => {
         "- Use `modelRouter` for CRUD endpoints",
         "- Use `APIError` for error responses",
         "## Frontend Conventions",
-        "- Use generated SDK hooks from `@/store/openApiSdk` for non-synced routes only",
-        "- Never modify `openApiSdk.ts` manually - regenerate with `bun run sdk`",
-        "Use Redux Toolkit for state management",
+        "- Use `@terreno/syncdb/react` hooks (`useQuery`, `useMutate`) for synced collection CRUD",
+        "- Use generated hooks from `@/store/apiSdk` (`useGetAuthMeQuery`, `usePatchAuthMeMutation`, ...) for non-synced routes only",
+        "- Never modify `apiSdk.ts` manually - regenerate with `bun run sdk`",
+        "- Session: `SessionProvider` / `useSession()` from `@terreno/syncdb/auth` (no Redux)",
         "## AI Assistance",
         "- Use Luxon",
         "- Use functional components with `React.FC` type",

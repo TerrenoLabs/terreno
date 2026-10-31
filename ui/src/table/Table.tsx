@@ -1,6 +1,5 @@
 import React, {Children, type ReactElement, useEffect} from "react";
-import {ScrollView} from "react-native";
-import type {DimensionValue} from "react-native/Libraries/StyleSheet/StyleSheetTypes";
+import {type DimensionValue, ScrollView} from "react-native";
 
 import {Box} from "../Box";
 import type {ColumnSortInterface, TableProps, TableRowProps} from "../Common";

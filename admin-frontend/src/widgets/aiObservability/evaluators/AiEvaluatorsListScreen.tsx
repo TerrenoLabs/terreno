@@ -10,9 +10,9 @@ import {unwrapEvaluatorList} from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
 export const AiEvaluatorsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useListQuery} = useAiObservabilityEvaluatorsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useListQuery} = useAiObservabilityEvaluatorsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading, refetch} = useListQuery();
   const statusQuery = useStatusQuery();
   const canCreate = observabilityActionAllowed({

@@ -26,7 +26,7 @@ jobs:
         id: check
         run: |
           FILES=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          CHANGES=$(echo "$FILES" | grep -cE '^(docs/|website/|api/src/|rtk/src/|demo/demoConfig\.tsx|demo/story-config/|ui/src/|netlify\.toml)' || true)
+          CHANGES=$(echo "$FILES" | grep -cE '^(docs/|website/|api/src/|demo/demoConfig\.tsx|demo/story-config/|ui/src/|netlify\.toml)' || true)
           echo "has_changes=$( [ "$CHANGES" -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: docs/reference/generated
-          key: docs-api-ref-${{ hashFiles('api/src/**', 'rtk/src/**', 'website/scripts/generate-api-reference.ts') }}
+          key: docs-api-ref-${{ hashFiles('api/src/**', 'website/scripts/generate-api-reference.ts') }}
 
       - name: Cache generated UI component docs
         id: ui-docs-cache

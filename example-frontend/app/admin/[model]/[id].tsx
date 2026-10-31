@@ -2,7 +2,7 @@ import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
 import {Box, Button, Card, FormContainer, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {terrenoApi, useGetMeQuery, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {useAdminUsersPasswordMutation, useGetAuthMeQuery} from "@/store/apiSdk";
 import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
 const ADMIN_BASE_URL = "/admin";
@@ -16,7 +16,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
   const toast = useToast();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [setPasswordForUser, {isLoading}] = useSetAdminUserPasswordMutation();
+  const [setPasswordForUser, {isLoading}] = useAdminUsersPasswordMutation();
 
   const handleSetPassword = useCallback(async (): Promise<void> => {
     if (!userId) {
@@ -33,7 +33,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
     }
 
     try {
-      await setPasswordForUser({id: userId, password}).unwrap();
+      await setPasswordForUser({body: {password}, id: userId}).unwrap();
       setPassword("");
       setConfirmPassword("");
       toast.success("Password updated");
@@ -85,7 +85,7 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
 
 const AdminEditScreen: React.FC = () => {
   const {model, id} = useLocalSearchParams<{model: string; id: string}>();
-  const {data: profile} = useGetMeQuery();
+  const {data: profile} = useGetAuthMeQuery();
   // Recovery routes refuse self-targeting (D9); staff manage their own account from their own
   // security screen.
   const isOwnRecord = Boolean(id) && (profile?._id === id || profile?.id === id);
@@ -109,7 +109,6 @@ const AdminEditScreen: React.FC = () => {
 
   return (
     <AdminModelForm
-      api={terrenoApi}
       baseUrl={ADMIN_BASE_URL}
       footerContent={footerContent}
       itemId={id}

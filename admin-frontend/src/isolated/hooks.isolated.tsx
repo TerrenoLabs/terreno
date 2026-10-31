@@ -1,480 +1,270 @@
-// noExplicitAny: RTK Query API proxy uses dynamic property access and type-erased endpoint builders
-// biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 /**
- * Tests for admin-frontend hooks: useAdminApi, useAdminConfig,
- * useAdminScripts, useConfigurationApi, useDocumentStorageApi.
- *
- * These hooks all inject RTK Query endpoints into a provided Api instance,
- * and expose generated RTK hooks by name. We assert:
- *  - the right endpoint keys are injected with expected method/url shapes
- *  - the returned hook functions correspond to the generated hook names
+ * Tests for `useAdminModelApi`, the admin model CRUD hook over the host-bound
+ * fetch client. Runs with `ADMIN_USE_REAL_API=1` so the preload double in
+ * `src/testing/useAdminModelApiDouble.ts` does not replace the real module.
  */
-import {describe, expect, it, mock} from "bun:test";
-import {configureStore} from "@reduxjs/toolkit";
-import {createApi} from "@reduxjs/toolkit/query/react";
+import {afterEach, describe, expect, it} from "bun:test";
 import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
-import {Provider} from "react-redux";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import {adminOrgScopedArg} from "../orgs/adminModelEndpoints";
+import {AdminProvider} from "../AdminProvider";
 import {OrgContextProvider, useOrgContext} from "../orgs/useOrgContext";
-import {useAdminApi} from "../useAdminApi";
-import {useAdminBackgroundTaskMutation} from "../useAdminBackgroundTask";
-import {useAdminConfig} from "../useAdminConfig";
-import {normalizeRoles, normalizeStatements, useAdminRoles} from "../useAdminRoles";
-import {useAdminScripts} from "../useAdminScripts";
-import {useConfigurationApi} from "../useConfigurationApi";
-import {useDocumentStorageApi} from "../useDocumentStorageApi";
+import {type AdminModelApi, useAdminModelApi} from "../useAdminModelApi";
+import {normalizeRoles, normalizeStatements} from "../useAdminRoles";
 
-interface BuildSpec {
-  query?: (arg?: unknown) => unknown;
-  mutation?: (arg?: unknown) => unknown;
-  providesTags?: unknown;
-  invalidatesTags?: unknown;
-  extraOptions?: unknown;
+interface CapturedRequest {
+  body?: unknown;
+  headers: Headers;
+  method: string;
+  url: string;
 }
 
-interface CapturedEndpoints {
-  [key: string]: BuildSpec;
-}
+const originalFetch = globalThis.fetch;
 
-const makeMockApi = () => {
-  const injected: CapturedEndpoints = {};
-  const enhancedTagTypes: string[] = [];
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}, status});
 
-  const fakeHooks: Record<string, unknown> = {};
-
-  const addHookFor = (key: string, type: "query" | "mutation") => {
-    const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-    const hookName = type === "query" ? `use${cap(key)}Query` : `use${cap(key)}Mutation`;
-    const lazyHookName = `useLazy${cap(key)}Query`;
-    fakeHooks[hookName] = mock(() =>
-      type === "query"
-        ? {data: undefined, error: null, isLoading: false}
-        : [mock(() => ({unwrap: async () => ({})})), {isLoading: false}]
-    );
-    if (type === "query") {
-      fakeHooks[lazyHookName] = mock(() => [
-        mock(() => ({unwrap: async () => ({})})),
-        {data: undefined, isLoading: false},
-      ]);
-    }
-  };
-
-  const base: Record<string, unknown> = {};
-  Object.defineProperty(base, "__fakeHooks", {value: fakeHooks});
-  Object.defineProperty(base, "__injected", {value: injected});
-  Object.defineProperty(base, "__tagTypes", {value: enhancedTagTypes});
-
-  const apiProxy: Record<string, unknown> = new Proxy(base, {
-    get(target, prop: string) {
-      if (prop === "enhanceEndpoints") {
-        return ({addTagTypes}: {addTagTypes: string[]}) => {
-          enhancedTagTypes.push(...addTagTypes);
-          return apiProxy;
-        };
-      }
-      if (prop === "injectEndpoints") {
-        return ({endpoints}: {endpoints: (build: unknown) => Record<string, BuildSpec>}) => {
-          const build = {
-            mutation: (spec: BuildSpec) => ({...spec, __kind: "mutation"}),
-            query: (spec: BuildSpec) => ({...spec, __kind: "query"}),
-          };
-          const defs = endpoints(build);
-          for (const [key, def] of Object.entries(defs)) {
-            injected[key] = def;
-            const kind =
-              (def as Record<string, unknown>).__kind === "mutation" ? "mutation" : "query";
-            addHookFor(key, kind);
-          }
-          return apiProxy;
-        };
-      }
-      if (prop in target) {
-        return target[prop];
-      }
-      if (prop in fakeHooks) {
-        return fakeHooks[prop];
-      }
-      return undefined;
-    },
-  });
-
-  return apiProxy;
+const listEnvelope = {
+  data: [{_id: "u1", email: "ada@example.com"}],
+  limit: 20,
+  more: false,
+  page: 1,
+  total: 1,
 };
 
-const runHook = <T,>(fn: () => T): T => {
-  let captured: T | undefined;
-  const Probe = () => {
-    captured = fn();
+const stubFetch = (captured: CapturedRequest[]): void => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    captured.push({
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      headers: new Headers(init?.headers),
+      method,
+      url: String(url),
+    });
+    const path = String(url);
+    if (method === "GET" && path.includes("?")) {
+      return jsonResponse(listEnvelope);
+    }
+    if (method === "GET" && path === "/admin/users") {
+      return jsonResponse(listEnvelope);
+    }
+    if (method === "DELETE") {
+      return new Response(null, {status: 204});
+    }
+    if (path.endsWith("/bulk-patch")) {
+      return jsonResponse({updated: 2});
+    }
+    return jsonResponse({data: {_id: "u1", email: "ada@example.com", method}});
+  }) as typeof fetch;
+};
+
+interface HarnessState {
+  api?: AdminModelApi;
+  list?: ReturnType<AdminModelApi["useListQuery"]>;
+  read?: ReturnType<AdminModelApi["useReadQuery"]>;
+  mutations?: {
+    bulkPatch: ReturnType<AdminModelApi["useBulkPatchMutation"]>[0];
+    create: ReturnType<AdminModelApi["useCreateMutation"]>[0];
+    remove: ReturnType<AdminModelApi["useDeleteMutation"]>[0];
+    update: ReturnType<AdminModelApi["useUpdateMutation"]>[0];
+  };
+}
+
+const renderModelApi = ({
+  listParams,
+  organizationId,
+  readId = "u1",
+  routePath = "/admin/users",
+  skipList = false,
+}: {
+  listParams?: Record<string, unknown>;
+  organizationId?: string;
+  readId?: string;
+  routePath?: string;
+  skipList?: boolean;
+}): HarnessState => {
+  const state: HarnessState = {};
+  const Harness: React.FC = () => {
+    const api = useAdminModelApi(routePath, "User");
+    state.api = api;
+    state.list = api.useListQuery(listParams, {skip: skipList});
+    state.read = api.useReadQuery(readId);
+    const [create] = api.useCreateMutation();
+    const [update] = api.useUpdateMutation();
+    const [remove] = api.useDeleteMutation();
+    const [bulkPatch] = api.useBulkPatchMutation();
+    state.mutations = {bulkPatch, create, remove, update};
     return null;
   };
-  renderWithTheme(<Probe />);
-  return captured as T;
+  const tree = organizationId ? (
+    <OrgContextProvider initialOrganization={{_id: organizationId, name: "Org"}}>
+      <Harness />
+    </OrgContextProvider>
+  ) : (
+    <Harness />
+  );
+  renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      {tree}
+    </AdminProvider>
+  );
+  return state;
 };
 
-describe("useAdminApi", () => {
-  it("injects list/read/create/update/delete endpoints with admin tag", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminApi(api, "/admin/users", "User"));
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+};
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.adminList_User).toBeDefined();
-    expect(injected.adminRead_User).toBeDefined();
-    expect(injected.adminCreate_User).toBeDefined();
-    expect(injected.adminUpdate_User).toBeDefined();
-    expect(injected.adminDelete_User).toBeDefined();
+describe("useAdminModelApi", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
 
-    // tag types include the admin_<model>
-    expect((api as Record<string, unknown>).__tagTypes).toContain("admin_User");
-
-    // Each endpoint's query fn produces expected URL/method
-    const listDef = injected.adminList_User;
-    expect(listDef.query({limit: 1})).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/users?limit=1",
+  it("lists with qs-serialized params and keeps the list envelope", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({
+      listParams: {email: {$in: ["a@example.com"]}, limit: 20, page: 2, sort: "-created"},
     });
-    expect(listDef.query(undefined)).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/users",
-    });
+    await flush();
+    const listRequest = captured.find((request) => request.url.startsWith("/admin/users?"));
+    expect(listRequest?.method).toBe("GET");
+    expect(decodeURIComponent(listRequest?.url ?? "")).toBe(
+      "/admin/users?email[$in][0]=a@example.com&limit=20&page=2&sort=-created"
+    );
+    expect(state.list?.data).toEqual(listEnvelope);
+  });
 
-    const readDef = injected.adminRead_User;
-    expect(readDef.query("abc")).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/users/abc",
-    });
-    expect(readDef.providesTags(null, null, "abc")).toEqual([{id: "abc", type: "admin_User"}]);
-
-    const createDef = injected.adminCreate_User;
-    expect(createDef.query({name: "x"})).toEqual({
-      body: {name: "x"},
-      headers: undefined,
-      method: "POST",
-      url: "/admin/users",
-    });
-    expect(createDef.invalidatesTags).toEqual(["admin_User"]);
-
-    const updateDef = injected.adminUpdate_User;
-    expect(updateDef.query({body: {x: 1}, id: "123"})).toEqual({
-      body: {x: 1},
-      headers: undefined,
-      method: "PATCH",
-      url: "/admin/users/123",
-    });
-    expect(updateDef.invalidatesTags(null, null, {id: "123"})).toEqual([
-      {id: "123", type: "admin_User"},
-      "admin_User",
+  it("reads one document and unwraps the data envelope", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({skipList: true});
+    await flush();
+    expect(captured.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "GET /admin/users/u1",
     ]);
-
-    const deleteDef = injected.adminDelete_User;
-    expect(deleteDef.query("123")).toEqual({
-      headers: undefined,
-      method: "DELETE",
-      url: "/admin/users/123",
-    });
-
-    const bulkPatchDef = injected.adminBulkPatch_User;
-    expect(bulkPatchDef.query({ids: ["123"], patch: {name: "Patched"}})).toEqual({
-      body: {ids: ["123"], patch: {name: "Patched"}},
-      headers: undefined,
-      method: "POST",
-      url: "/admin/users/bulk-patch",
-    });
-
-    // Returned hooks should be functions (generated by our mock)
-    expect(typeof result.useListQuery).toBe("function");
-    expect(typeof result.useReadQuery).toBe("function");
-    expect(typeof result.useCreateMutation).toBe("function");
-    expect(typeof result.useUpdateMutation).toBe("function");
-    expect(typeof result.useDeleteMutation).toBe("function");
-    expect(typeof result.useBulkPatchMutation).toBe("function");
+    expect(state.read?.data).toEqual({_id: "u1", email: "ada@example.com", method: "GET"});
   });
 
-  it("pins list/read/create/update/delete/bulk-patch URLs for String-_id routePath", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminApi(api, "/admin/todos", "Todo"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+  it("creates, updates, deletes, and bulk-patches against the model routes", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({skipList: true});
+    await flush();
+    captured.length = 0;
 
-    expect(
-      injected.adminList_Todo.query({limit: 20, page: 1, q: "Alpha", sort: "-created"})
-    ).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/todos?limit=20&page=1&q=Alpha&sort=-created",
+    let created: unknown;
+    let updated: unknown;
+    let removed: unknown;
+    let patched: unknown;
+    await act(async () => {
+      created = await state.mutations?.create({email: "new@example.com"}).unwrap();
+      updated = await state.mutations
+        ?.update({body: {email: "ada@new.example.com"}, id: "u1"})
+        .unwrap();
+      removed = await state.mutations?.remove("u1").unwrap();
+      patched = await state.mutations
+        ?.bulkPatch({ids: ["u1", "u2"], patch: {admin: true}})
+        .unwrap();
     });
-    expect(injected.adminRead_Todo.query("todo-alpha")).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/todos/todo-alpha",
-    });
-    expect(injected.adminCreate_Todo.query({title: "New"})).toEqual({
-      body: {title: "New"},
-      headers: undefined,
-      method: "POST",
-      url: "/admin/todos",
-    });
-    expect(injected.adminUpdate_Todo.query({body: {completed: true}, id: "todo-alpha"})).toEqual({
-      body: {completed: true},
-      headers: undefined,
-      method: "PATCH",
-      url: "/admin/todos/todo-alpha",
-    });
-    expect(injected.adminDelete_Todo.query("todo-alpha")).toEqual({
-      headers: undefined,
-      method: "DELETE",
-      url: "/admin/todos/todo-alpha",
-    });
-    expect(
-      injected.adminBulkPatch_Todo.query({ids: ["todo-alpha"], patch: {completed: true}})
-    ).toEqual({
-      body: {ids: ["todo-alpha"], patch: {completed: true}},
-      headers: undefined,
-      method: "POST",
-      url: "/admin/todos/bulk-patch",
-    });
-    expect(typeof result.useBulkPatchMutation).toBe("function");
-  });
-});
 
-describe("useAdminApi organization switches", () => {
-  // A real RTK Query store whose server answers with the organization header it was sent.
-  const buildStore = () => {
-    const requests: {orgId?: string; url: string}[] = [];
-    const api = createApi({
-      baseQuery: async (args: {headers?: Record<string, string>; url: string}) => {
-        const orgId = args.headers?.["X-Organization-Id"];
-        requests.push({orgId, url: args.url});
-        return {data: {_id: "user-1", org: orgId ?? "none"}};
+    const writes = captured.filter((request) => request.method !== "GET");
+    expect(writes.map(({body, method, url}) => ({body, method, url}))).toEqual([
+      {body: {email: "new@example.com"}, method: "POST", url: "/admin/users"},
+      {body: {email: "ada@new.example.com"}, method: "PATCH", url: "/admin/users/u1"},
+      {body: undefined, method: "DELETE", url: "/admin/users/u1"},
+      {
+        body: {ids: ["u1", "u2"], patch: {admin: true}},
+        method: "POST",
+        url: "/admin/users/bulk-patch",
       },
-      endpoints: () => ({}),
-      reducerPath: "terreno-rtk",
+    ]);
+    expect(writes[0]?.headers.get("Content-Type")).toBe("application/json");
+    expect(created).toEqual({_id: "u1", email: "ada@example.com", method: "POST"});
+    expect(updated).toEqual({_id: "u1", email: "ada@example.com", method: "PATCH"});
+    expect(removed).toBeUndefined();
+    expect(patched).toEqual({updated: 2});
+  });
+
+  it("refetches mounted model queries after a write", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({listParams: {limit: 20, page: 1}});
+    await flush();
+    const readsBefore = captured.filter((request) => request.method === "GET").length;
+    expect(readsBefore).toBe(2);
+
+    await act(async () => {
+      await state.mutations?.create({email: "new@example.com"}).unwrap();
     });
-    const store = configureStore({
-      middleware: (getDefault) => getDefault({serializableCheck: false}).concat(api.middleware),
-      reducer: {[api.reducerPath]: api.reducer},
+    await flush();
+    const readsAfter = captured.filter((request) => request.method === "GET").length;
+    expect(readsAfter).toBe(4);
+  });
+
+  it("sends X-Organization-Id for organization-scoped admin", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({organizationId: "org-1", skipList: true});
+    await flush();
+    await act(async () => {
+      await state.mutations?.update({body: {name: "x"}, id: "u1"}).unwrap();
     });
-    return {api, requests, store};
-  };
+    expect(captured.length).toBeGreaterThanOrEqual(2);
+    for (const request of captured) {
+      expect(request.headers.get("X-Organization-Id")).toBe("org-1");
+    }
+  });
 
   it("reads the record again for the organization chosen after the first read started", async () => {
-    const {api, requests, store} = buildStore();
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
     let selectOrganization: (organization: {_id: string; name: string}) => void = () => {};
-    let latest: {data?: {org?: string}; isLoading?: boolean} = {};
+    let latest: ReturnType<AdminModelApi["useReadQuery"]> | undefined;
     const Probe: React.FC = () => {
       selectOrganization = useOrgContext().selectOrganization;
-      const {useReadQuery} = useAdminApi(api as never, "/admin/users", "User");
-      latest = useReadQuery("user-1");
+      latest = useAdminModelApi("/admin/users", "User").useReadQuery("u1");
       return null;
     };
     renderWithTheme(
-      <Provider store={store}>
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
         <OrgContextProvider>
           <Probe />
         </OrgContextProvider>
-      </Provider>
+      </AdminProvider>
     );
-    await waitFor(() => expect(latest.data?.org).toBe("none"));
+    await flush();
 
     // The org switcher settles on a default organization after the screen's first read.
     act(() => {
       selectOrganization({_id: "org-a", name: "Alpha"});
     });
 
-    await waitFor(() => expect(latest.data?.org).toBe("org-a"));
-    expect(latest.isLoading).toBe(false);
-    expect(requests).toEqual([
-      {orgId: undefined, url: "/admin/users/user-1"},
-      {orgId: "org-a", url: "/admin/users/user-1"},
-    ]);
+    await waitFor(() => {
+      expect(captured.map((request) => request.headers.get("X-Organization-Id"))).toEqual([
+        null,
+        "org-a",
+      ]);
+    });
+    expect(latest?.isLoading).toBe(false);
   });
 
-  it("keys list and read entries by the organization carried in the argument", () => {
-    const api = makeMockApi();
-    runHook(() => useAdminApi(api, "/admin/users", "User"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints & {
-      [key: string]: {
-        serializeQueryArgs: (args: {endpointName: string; queryArgs: unknown}) => string;
-      };
-    };
-    const read = injected.adminRead_User;
-    const list = injected.adminList_User;
-
-    expect(read.query(adminOrgScopedArg("abc", "org-b"))).toEqual({
-      headers: {"X-Organization-Id": "org-b"},
-      method: "GET",
-      url: "/admin/users/abc",
-    });
-    expect(read.providesTags(null, null, adminOrgScopedArg("abc", "org-b"))).toEqual([
-      {id: "abc", type: "admin_User"},
-    ]);
-    expect(
-      read.serializeQueryArgs({
-        endpointName: "adminRead_User",
-        queryArgs: adminOrgScopedArg("abc", "org-b"),
-      })
-    ).toBe("adminRead_User:org-b:abc");
-    expect(list.query(adminOrgScopedArg({limit: 1}, undefined))).toEqual({
-      headers: undefined,
-      method: "GET",
-      url: "/admin/users?limit=1",
-    });
-    expect(
-      list.serializeQueryArgs({
-        endpointName: "adminList_User",
-        queryArgs: adminOrgScopedArg({limit: 1}, "org-b"),
-      })
-    ).toBe('adminList_User:org-b:{"limit":1}');
+  it("skips requests without a route path or read id", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const state = renderModelApi({readId: "", routePath: ""});
+    await flush();
+    expect(captured).toEqual([]);
+    expect(state.list?.isLoading).toBe(false);
+    expect(state.read?.isLoading).toBe(false);
   });
 });
 
-describe("useAdminConfig", () => {
-  it("injects adminConfig query and exposes config hook data", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminConfig(api, "/admin"));
-
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.adminConfig).toBeDefined();
-    const def = injected.adminConfig;
-    expect(def.query()).toEqual({method: "GET", url: "/admin/config"});
-
-    expect(result).toMatchObject({
-      config: undefined,
-      error: null,
-      isLoading: false,
-    });
-  });
-});
-
-describe("useAdminScripts", () => {
-  it("injects run/get/cancel task endpoints", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminScripts(api, "/admin"));
-
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.adminRunScript).toBeDefined();
-    expect(injected.adminGetScriptTask).toBeDefined();
-    expect(injected.adminCancelScriptTask).toBeDefined();
-    expect(injected.adminListScriptRuns).toBeDefined();
-
-    const runDef = injected.adminRunScript;
-    expect(runDef.query({name: "migrate", wetRun: false})).toEqual({
-      method: "POST",
-      url: "/admin/scripts/migrate/run?wetRun=false",
-    });
-
-    const getDef = injected.adminGetScriptTask;
-    expect(getDef.query("task-1")).toEqual({
-      method: "GET",
-      url: "/admin/scripts/tasks/task-1",
-    });
-    expect(getDef.providesTags).toEqual(["admin_scriptTask"]);
-
-    const cancelDef = injected.adminCancelScriptTask;
-    expect(cancelDef.query("task-1")).toEqual({
-      method: "DELETE",
-      url: "/admin/scripts/tasks/task-1",
-    });
-    expect(cancelDef.invalidatesTags).toEqual(["admin_scriptTask", "admin_scriptRuns"]);
-
-    const listDef = injected.adminListScriptRuns;
-    expect(listDef.query()).toEqual({
-      method: "GET",
-      url: "/admin/scripts/runs?page=1&limit=25",
-    });
-    expect(listDef.query({limit: 10, name: "migrate", page: 2})).toEqual({
-      method: "GET",
-      url: "/admin/scripts/runs?page=2&limit=10&name=migrate",
-    });
-    expect(listDef.providesTags).toEqual(["admin_scriptRuns"]);
-    expect(typeof result.useRunScriptMutation).toBe("function");
-    expect(typeof result.useGetScriptTaskQuery).toBe("function");
-    expect(typeof result.useCancelScriptTaskMutation).toBe("function");
-    expect(typeof result.useListScriptRunsQuery).toBe("function");
-  });
-
-  it("returns safe script hooks when endpoint injection is unavailable", async () => {
-    const result = runHook(() => useAdminScripts({} as never, "/admin"));
-
-    expect(await result.useCancelScriptTaskMutation()[0]("task-1").unwrap()).toEqual({});
-    expect(result.useGetScriptTaskQuery("task-1")).toEqual({
-      data: undefined,
-      error: null,
-      isLoading: false,
-    });
-    expect(result.useListScriptRunsQuery()).toEqual({
-      data: undefined,
-      error: null,
-      isFetching: false,
-      isLoading: false,
-    });
-    expect(
-      await result.useRunScriptMutation()[0]({name: "migrate", wetRun: false}).unwrap()
-    ).toEqual({taskId: ""});
-  });
-});
-
-describe("useAdminRoles", () => {
-  it("injects RBAC endpoints outside the admin base", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminRoles(api, "/admin"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-
-    expect(
-      injected.adminCreateRbacRole.query({
-        displayName: "Operators",
-        name: "operator",
-        permissions: {todos: ["read"]},
-      })
-    ).toEqual({
-      body: {
-        displayName: "Operators",
-        name: "operator",
-        permissions: {todos: ["read"]},
-      },
-      method: "POST",
-      url: "/rbac/roles",
-    });
-    expect(injected.adminListRbacRoles.query()).toEqual({method: "GET", url: "/rbac/roles"});
-    expect(injected.adminListRbacStatements.query()).toEqual({
-      method: "GET",
-      url: "/rbac/statements",
-    });
-    expect(
-      injected.adminUpdateRbacRole.query({
-        changes: {displayName: "Operators", permissions: {}},
-        roleName: "operator/admin",
-      })
-    ).toEqual({
-      body: {displayName: "Operators", permissions: {}},
-      method: "PATCH",
-      url: "/rbac/roles/operator%2Fadmin",
-    });
-    expect(typeof result.useCreateRoleMutation).toBe("function");
-    expect(typeof result.useListRolesQuery).toBe("function");
-    expect(typeof result.useListStatementsQuery).toBe("function");
-    expect(typeof result.useUpdateRoleMutation).toBe("function");
-  });
-
-  it("uses safe empty hooks when RTK injection is unavailable", async () => {
-    const result = runHook(() => useAdminRoles({} as never, "/admin"));
-
-    expect(result.useListRolesQuery()).toMatchObject({data: undefined, isLoading: false});
-    expect(result.useListStatementsQuery()).toMatchObject({data: undefined, isLoading: false});
-    await expect(
-      result.useCreateRoleMutation()[0]({displayName: "x", name: "x", permissions: {}}).unwrap()
-    ).rejects.toThrow("Role management API is unavailable");
-    await expect(
-      result
-        .useUpdateRoleMutation()[0]({
-          changes: {displayName: "x", permissions: {}},
-          roleName: "x",
-        })
-        .unwrap()
-    ).rejects.toThrow("Role management API is unavailable");
+describe("role normalizers", () => {
+  it("accept bare arrays and data envelopes", () => {
     expect(normalizeRoles([{displayName: "x", name: "x"}])).toHaveLength(1);
     expect(normalizeRoles({data: [{displayName: "x", name: "x"}]})).toHaveLength(1);
     expect(normalizeRoles(undefined)).toEqual([]);
@@ -482,255 +272,5 @@ describe("useAdminRoles", () => {
       todos: ["read"],
     });
     expect(normalizeStatements(undefined)).toEqual({});
-  });
-});
-
-describe("useAdminBackgroundTaskMutation", () => {
-  it("injects a background-task request at a normalized admin root", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminBackgroundTaskMutation(api, "/admin/"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-
-    expect(
-      injected.adminPostBackgroundTask.query({
-        ids: ["todo-1"],
-        kind: "bulk-patch",
-        resourceRoute: "todos",
-      })
-    ).toEqual({
-      body: {
-        ids: ["todo-1"],
-        kind: "bulk-patch",
-        resourceRoute: "todos",
-      },
-      method: "POST",
-      url: "/admin/background-tasks",
-    });
-    expect(injected.adminPostBackgroundTask.invalidatesTags).toEqual([]);
-    expect(typeof result[0]).toBe("function");
-    expect(result[1]).toEqual({isLoading: false});
-  });
-});
-
-describe("useConfigurationApi", () => {
-  it("injects meta/values/update/refresh-secrets endpoints", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useConfigurationApi({api, basePath: "/admin/configuration"}));
-
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.configMeta).toBeDefined();
-    expect(injected.configValues).toBeDefined();
-    expect(injected.configUpdate).toBeDefined();
-    expect(injected.configRefreshSecrets).toBeDefined();
-    expect((api as Record<string, unknown>).__tagTypes).toContain("configuration");
-
-    expect((injected.configMeta as BuildSpec & Record<string, unknown>).query()).toEqual({
-      method: "GET",
-      url: "/admin/configuration/meta",
-    });
-    expect((injected.configValues as BuildSpec & Record<string, unknown>).query()).toEqual({
-      method: "GET",
-      url: "/admin/configuration",
-    });
-    expect((injected.configValues as BuildSpec & Record<string, unknown>).providesTags).toEqual([
-      "configuration",
-    ]);
-    expect((injected.configUpdate as BuildSpec & Record<string, unknown>).query({a: 1})).toEqual({
-      body: {a: 1},
-      method: "PATCH",
-      url: "/admin/configuration",
-    });
-    expect((injected.configUpdate as BuildSpec & Record<string, unknown>).invalidatesTags).toEqual([
-      "configuration",
-    ]);
-    expect((injected.configRefreshSecrets as BuildSpec & Record<string, unknown>).query()).toEqual({
-      method: "POST",
-      url: "/admin/configuration/refresh-secrets",
-    });
-
-    expect(typeof result.useMetaQuery).toBe("function");
-    expect(typeof result.useValuesQuery).toBe("function");
-    expect(typeof result.useUpdateMutation).toBe("function");
-    expect(typeof result.useRefreshSecretsMutation).toBe("function");
-  });
-});
-
-describe("useDocumentStorageApi", () => {
-  it("injects list/upload/download/delete/folder endpoints", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useDocumentStorageApi(api, "/documents"));
-
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.documentStorageList).toBeDefined();
-    expect(injected.documentStorageUpload).toBeDefined();
-    expect(injected.documentStorageDownload).toBeDefined();
-    expect(injected.documentStorageDelete).toBeDefined();
-    expect(injected.documentStorageDeleteFolder).toBeDefined();
-    expect(injected.documentStorageCreateFolder).toBeDefined();
-
-    const listDef = injected.documentStorageList;
-    expect(listDef.query()).toEqual({
-      method: "GET",
-      params: {},
-      url: "/documents/",
-    });
-    expect(listDef.query("my/folder")).toEqual({
-      method: "GET",
-      params: {prefix: "my/folder"},
-      url: "/documents/",
-    });
-    expect(listDef.providesTags).toEqual(["documentStorage"]);
-
-    // Upload appends prefix to formData when provided
-    const uploadDef = injected.documentStorageUpload;
-    const fd: {append: (k: string, v: string) => void; entries: string[]} = {
-      append(k: string, v: string) {
-        this.entries.push(`${k}=${v}`);
-      },
-      entries: [],
-    };
-    const uploadWithPrefix = uploadDef.query({
-      formData: fd as unknown as FormData,
-      prefix: "sub/",
-    });
-    expect(uploadWithPrefix).toMatchObject({
-      method: "POST",
-      url: "/documents/",
-    });
-    expect(fd.entries).toContain("prefix=sub/");
-
-    const fd2: {append: (k: string, v: string) => void; entries: string[]} = {
-      append(k: string, v: string) {
-        this.entries.push(`${k}=${v}`);
-      },
-      entries: [],
-    };
-    uploadDef.query({formData: fd2 as unknown as FormData});
-    expect(fd2.entries.length).toBe(0);
-
-    // Download returns a URL with encoded path and a responseHandler
-    const downloadDef = injected.documentStorageDownload;
-    const dlSpec = downloadDef.query("my folder/file.pdf");
-    expect(dlSpec.url).toBe("/documents/download/my%20folder%2Ffile.pdf");
-    expect(dlSpec.method).toBe("GET");
-    expect(typeof dlSpec.responseHandler).toBe("function");
-
-    // responseHandler returns the blob on ok
-    const okBlob = {size: 5, type: "text/plain"};
-    const okResp = {
-      blob: async () => okBlob,
-      headers: {get: () => "text/plain"},
-      ok: true,
-      status: 200,
-      statusText: "OK",
-    };
-    return dlSpec.responseHandler(okResp).then(async (blob: unknown) => {
-      expect(blob).toBe(okBlob);
-
-      // non-ok JSON response
-      const errJson = '{"detail":"Bad","status":400}';
-      const jsonResp = {
-        headers: {get: () => "application/json"},
-        ok: false,
-        status: 400,
-        statusText: "Bad Request",
-        text: async () => errJson,
-      };
-      const parsed = await dlSpec.responseHandler(jsonResp);
-      expect(parsed).toEqual({detail: "Bad", status: 400});
-
-      // non-ok non-JSON response (fallback)
-      const textResp = {
-        headers: {get: () => "text/plain"},
-        ok: false,
-        status: 500,
-        statusText: "err",
-        text: async () => "boom",
-      };
-      const textParsed = await dlSpec.responseHandler(textResp);
-      expect(textParsed).toEqual({detail: "boom", status: 500});
-
-      // Delete endpoints
-      const deleteDef = injected.documentStorageDelete;
-      expect(deleteDef.query("a b.pdf")).toEqual({
-        method: "DELETE",
-        url: "/documents/a%20b.pdf",
-      });
-      const deleteFolderDef = injected.documentStorageDeleteFolder;
-      expect(deleteFolderDef.query("subdir/")).toEqual({
-        method: "DELETE",
-        url: "/documents/folder/subdir%2F",
-      });
-
-      const createDef = injected.documentStorageCreateFolder;
-      expect(createDef.query({folderName: "new", prefix: "a/"})).toEqual({
-        body: {folderName: "new", prefix: "a/"},
-        method: "POST",
-        url: "/documents/folder",
-      });
-
-      // Hooks exposed
-      expect(typeof result.useListQuery).toBe("function");
-      expect(typeof result.useUploadMutation).toBe("function");
-      expect(typeof result.useLazyDownloadQuery).toBe("function");
-      expect(typeof result.useDeleteMutation).toBe("function");
-      expect(typeof result.useDeleteFolderMutation).toBe("function");
-      expect(typeof result.useCreateFolderMutation).toBe("function");
-    });
-  });
-});
-
-describe("useAdminBackgroundTaskMutation", () => {
-  it("posts to the background-tasks collection under the admin root", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminBackgroundTaskMutation(api as never, "/admin/"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.adminPostBackgroundTask.query({ids: ["a"], kind: "reindex"})).toEqual({
-      body: {ids: ["a"], kind: "reindex"},
-      method: "POST",
-      url: "/admin/background-tasks",
-    });
-    expect(Array.isArray(result)).toBe(true);
-  });
-});
-
-describe("useAdminRoles", () => {
-  it("falls back to no-op hooks when injectEndpoints is missing", async () => {
-    const result = runHook(() => useAdminRoles({} as never, "/admin"));
-    await expect(
-      result.useCreateRoleMutation()[0]({displayName: "A", name: "a", permissions: {}}).unwrap()
-    ).rejects.toThrow(/unavailable/);
-    expect(result.useListRolesQuery()).toMatchObject({data: undefined, isLoading: false});
-    expect(result.useListStatementsQuery()).toMatchObject({data: undefined, isLoading: false});
-  });
-
-  it("injects rbac list and mutation endpoints at the API root", () => {
-    const api = makeMockApi();
-    const result = runHook(() => useAdminRoles(api as never, "/v1/admin"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
-    expect(injected.adminListRbacRoles.query()).toEqual({method: "GET", url: "/v1/rbac/roles"});
-    expect(injected.adminListRbacStatements.query()).toEqual({
-      method: "GET",
-      url: "/v1/rbac/statements",
-    });
-    expect(
-      injected.adminCreateRbacRole.query({displayName: "A", name: "a", permissions: {}})
-    ).toEqual({
-      body: {displayName: "A", name: "a", permissions: {}},
-      method: "POST",
-      url: "/v1/rbac/roles",
-    });
-    expect(
-      injected.adminUpdateRbacRole.query({
-        changes: {displayName: "B", permissions: {}},
-        roleName: "a b",
-      })
-    ).toEqual({
-      body: {displayName: "B", permissions: {}},
-      method: "PATCH",
-      url: "/v1/rbac/roles/a%20b",
-    });
-    expect(typeof result.useListRolesQuery).toBe("function");
-    expect(typeof result.useUpdateRoleMutation).toBe("function");
   });
 });

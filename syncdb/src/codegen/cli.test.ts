@@ -58,4 +58,70 @@ describe("terreno-syncdb-codegen CLI", () => {
       await rm(dir, {force: true, recursive: true});
     }
   });
+
+  it("writes the API SDK with --api-out alone", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-cli-"));
+    const apiOut = join(dir, "apiSdk.ts");
+    const apiFixture = join(import.meta.dir, "fixtures", "openapi.api.json");
+    try {
+      const proc = Bun.spawn(
+        ["bun", cliPath, "--schema", apiFixture, "--api-out", apiOut, "--no-format"],
+        {stderr: "pipe", stdout: "pipe"}
+      );
+      expect(await proc.exited).toBe(0);
+      const source = await readFile(apiOut, "utf8");
+      expect(source).toContain("export const useGetAuthMeQuery");
+      expect(source).not.toContain("useGetTodosQuery");
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
+
+  it("drops --config excludePaths from the API SDK", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-cli-"));
+    const apiOut = join(dir, "apiSdk.ts");
+    const configPath = join(dir, "config.json");
+    const apiFixture = join(import.meta.dir, "fixtures", "openapi.api.json");
+    try {
+      await writeFile(configPath, JSON.stringify({excludePaths: ["/auth/", "^/files/upload$"]}));
+      const proc = Bun.spawn(
+        [
+          "bun",
+          cliPath,
+          "--schema",
+          apiFixture,
+          "--api-out",
+          apiOut,
+          "--config",
+          configPath,
+          "--no-format",
+        ],
+        {stderr: "pipe", stdout: "pipe"}
+      );
+      expect(await proc.exited).toBe(0);
+      const source = await readFile(apiOut, "utf8");
+      expect(source).not.toContain("export const useGetAuthMeQuery");
+      expect(source).not.toContain("export const usePostFilesUploadMutation");
+      expect(source).toContain("export const useGetFilesByGcsKeyQuery");
+      expect(source).toContain("export const useGetVersionCheckQuery");
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
+
+  it("exits 1 with the error message when the spec has clashing operation names", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "syncdb-cli-"));
+    const spec = join(dir, "clash.json");
+    try {
+      await writeFile(spec, JSON.stringify({paths: {"/a_b": {get: {}}, "/a-b": {get: {}}}}));
+      const proc = Bun.spawn(
+        ["bun", cliPath, "--schema", spec, "--api-out", join(dir, "x.ts"), "--no-format"],
+        {stderr: "pipe", stdout: "pipe"}
+      );
+      expect(await proc.exited).toBe(1);
+      expect(await new Response(proc.stderr).text()).toContain('both generate "getAB"');
+    } finally {
+      await rm(dir, {force: true, recursive: true});
+    }
+  });
 });

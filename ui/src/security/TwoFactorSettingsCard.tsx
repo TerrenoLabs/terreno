@@ -1,6 +1,13 @@
 import * as Clipboard from "expo-clipboard";
 import {type FC, type ReactElement, useCallback, useEffect, useRef, useState} from "react";
-import {AccessibilityInfo, Platform, Share, type TextInput, View} from "react-native";
+import {
+  AccessibilityInfo,
+  Platform,
+  Share,
+  type TextInputInstance,
+  View,
+  type ViewInstance,
+} from "react-native";
 import QRCode from "react-native-qrcode-svg";
 
 import {Box} from "../Box";
@@ -223,8 +230,8 @@ export const TwoFactorSettingsCard: FC<TwoFactorSettingsCardProps> = ({
   const [pendingAction, setPendingAction] = useState<PendingAction | undefined>(undefined);
   const [actionError, setActionError] = useState<string | undefined>(undefined);
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | undefined>(undefined);
-  const passwordInputRef = useRef<TextInput | null>(null);
-  const stepHeadingRef = useRef<View | null>(null);
+  const passwordInputRef = useRef<TextInputInstance | null>(null);
+  const stepHeadingRef = useRef<ViewInstance | null>(null);
   const isFirstRenderRef = useRef(true);
 
   const isBusy = disabled || pendingAction !== undefined;

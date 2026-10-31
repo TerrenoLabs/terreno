@@ -38,5 +38,5 @@ relocates those two into Platform.
 ## Auth gate
 
 `admin:access` opens the page (`GET /admin/config` 403 without it). Hosts call
-`canOpenAdminPage({admin, permissions})` from `@terreno/rtk` and hide product
+`canOpenAdminPage({admin, permissions})` from `@terreno/syncdb/app` and hide product
 nav to admin with the same check.

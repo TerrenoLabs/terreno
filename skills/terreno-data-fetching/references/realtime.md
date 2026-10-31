@@ -1,45 +1,50 @@
 # Realtime — Terreno
 
-## Realtime sockets
+The syncdb client owns the app's only socket. Do not open a second one.
+
+## Server push events
 
 ```tsx
-import {useSocketConnection, getAuthToken} from "@terreno/rtk";
+import {useSocketEvent} from "@terreno/syncdb/react";
 
-const {socket, isSocketConnected} = useSocketConnection({
-  baseUrl: "ws://localhost:4000",
-  shouldConnect: !!userId,
-  getAuthToken: () => getAuthToken(),
+useSocketEvent("announcementPublished", (payload) => {
+  console.info("announcement", payload);
 });
 ```
 
-Sockets auto-reconnect and refresh auth on token rotation.
+Inside `SyncDbProvider` the hook uses that client; above it, pass `{client: syncDb}`, or
+`{client: null}` to listen to nothing. Outside React: `syncDb.onSocketEvent(event, handler)`
+returns an unsubscribe.
 
 ## Feature flags
 
 ```tsx
-import {useTerrenoFeatureFlags} from "@terreno/rtk";
+import {OpenFeatureProvider} from "@openfeature/react-sdk";
+import {useTerrenoFeatureFlags} from "@terreno/syncdb/flags";
 
-useTerrenoFeatureFlags(terrenoApi, {
-  skip: !userId,
-  socket,
-  userId,
-});
+const {userId} = useSession();
+useTerrenoFeatureFlags({client: apiClient, skip: !userId, socket: syncDb, userId});
+return <OpenFeatureProvider domain="feature-flags">{children}</OpenFeatureProvider>;
 ```
 
-Wrap children in `OpenFeatureProvider` (see `example-frontend/app/_layout.tsx`).
+Flags load through the request client and refetch when the server pushes
+`featureFlagsChanged` on the sync socket. Screens can read flat accessors with
+`useFeatureFlags({skip, socket, userId})`. See `example-frontend/app/_layout.tsx` and
+`docs/reference/feature-flags.md`.
 
-## Server status
+## Sync status
 
 ```tsx
-import {useServerStatus} from "@terreno/rtk";
+import {useSyncStatus} from "@terreno/syncdb/react";
 
-const {isServerReachable} = useServerStatus();
+const {isOnline, queuedCount, conflictCount, failedCount, paused} = useSyncStatus();
 ```
 
-Use to show degraded UI when the backend is unreachable.
+Render `SyncStatusBanner` / `OfflineBanner` from `@terreno/ui` with these values.
 
 ## Realtime model updates
 
-`modelRouter` `realtime` (RTK cache-patching via `realtimeList` / `realtimeDocument`) is **deprecated** and **will be removed in Terreno 58**. Use `sync` on `modelRouter` with `@terreno/syncdb`. `RealtimeApp` stays as the socket host.
-
-Do not add new `realtimeList` / `realtimeDocument` wiring. After adding `sync` to a backend model, use syncdb hooks on the client.
+Live collection updates come from `sync` on the backend `modelRouter`; read them with
+`useQuery` / `useEntity`. `RealtimeApp` hosts the socket for `sync:delta` and app events.
+Terreno 58 removed `modelRouter` `realtime` and every `@terreno/rtk` socket helper
+(`useSocketConnection`, `realtimeList`, `realtimeDocument`, `useRealtimeDebug`).

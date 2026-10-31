@@ -55,7 +55,7 @@ jobs:
           changed=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" || echo "")
           ef=false
           dm=false
-          if echo "$changed" | grep -qE "^(example-frontend/|ui/|rtk/|package\.json$|bun\.lock$)"; then
+          if echo "$changed" | grep -qE "^(example-frontend/|ui/|syncdb/|package\.json$|bun\.lock$)"; then
             ef=true
           fi
           if echo "$changed" | grep -qE "^(demo/|ui/|package\.json$|bun\.lock$)"; then

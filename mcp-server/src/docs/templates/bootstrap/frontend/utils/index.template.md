@@ -5,7 +5,3 @@ export const captureException = (error: unknown): void => {
 export const captureMessage = (message: string): void => {
   console.warn("Captured message:", message);
 };
-
-export const createSentryReduxEnhancer = (): unknown => {
-  return undefined;
-};

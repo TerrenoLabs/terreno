@@ -95,8 +95,6 @@ workflows:
             blocks/.* run-blocks true
             blocks/.* run-ai true
             blocks/.* run-ui true
-            rtk/.* run-rtk true
-            syncdb/src/.* run-rtk true
             ui/.* run-ui true
             demo/.* run-ui true
             demo/.* run-ui-demo true
@@ -118,7 +116,6 @@ workflows:
             ui/src/.* run-mcp-server true
             create-terreno-app/.* run-create-terreno-app true
             scripts/check-coverage\.ts run-api true
-            scripts/check-coverage\.ts run-rtk true
             scripts/check-coverage\.ts run-admin-backend true
             scripts/check-coverage\.ts run-admin-frontend true
             scripts/check-coverage\.ts run-mcp-server true
@@ -169,8 +166,7 @@ workflows:
             feature-flags/.* run-example-backend-script true
             feature-flags/.* run-e2e true
             feature-flags/.* run-admin-spa-integration true
-            rtk/.* run-admin-spa true
-            rtk/.* run-e2e true
+            syncdb/.* run-admin-spa true
             ui/.* run-admin-spa true
             ui/.* run-e2e true
             bun\.lock run-ai true
@@ -196,7 +192,6 @@ workflows:
             ai/src/.* run-new-file-coverage true
             blocks/src/.* run-new-file-coverage true
             ui/src/.* run-new-file-coverage true
-            rtk/src/.* run-new-file-coverage true
             syncdb/src/.* run-new-file-coverage true
             comms/src/.* run-new-file-coverage true
             admin-backend/src/.* run-new-file-coverage true
@@ -269,7 +264,7 @@ workflows:
             example-frontend/utils/.* run-maestro true
             example-frontend/components/.* run-maestro true
             example-backend/src/.* run-maestro true
-            rtk/.* run-maestro true
+            syncdb/.* run-maestro true
             \.maestro/.* run-maestro true
             \.maestro/flows/demo/.* run-maestro-demo true
             example-backend/src/.* run-admin-spa-integration true
@@ -282,8 +277,7 @@ workflows:
             admin-frontend/src/.* run-e2e true
             admin-frontend/src/.* run-admin-spa-integration true
             admin-spa/.* run-admin-spa-integration true
-            rtk/src/.* run-e2e true
-            rtk/src/.* run-admin-spa-integration true
+            syncdb/src/.* run-admin-spa-integration true
             ui/src/.* run-e2e true
             ui/src/.* run-admin-spa-integration true
             api-health/src/.* run-e2e true
@@ -298,7 +292,6 @@ workflows:
             blocks/.* run-deploy-demo true
             example-frontend/.* run-deploy-frontend true
             ui/.* run-deploy-frontend true
-            rtk/.* run-deploy-frontend true
             admin-frontend/.* run-deploy-frontend true
             bun\.lock run-deploy-frontend true
             ai/.* run-deploy-frontend true
@@ -307,7 +300,6 @@ workflows:
             docs/.* run-deploy-docs true
             website/.* run-deploy-docs true
             api/src/.* run-deploy-docs true
-            rtk/src/.* run-deploy-docs true
             demo/demoConfig\.tsx run-deploy-docs true
             demo/story-config/.* run-deploy-docs true
             ui/src/.* run-deploy-docs true
@@ -327,7 +319,6 @@ workflows:
             admin-spa/.* run-cd-backend true
             admin-frontend/.* run-cd-backend true
             ui/.* run-cd-backend true
-            rtk/.* run-cd-backend true
             syncdb/.* run-cd-backend true
             bun\.lock run-cd-backend true
             example-frontend/.* run-cd-backend true

@@ -4,9 +4,9 @@ All published `@terreno/*` packages share one version. Upgrade them together. Mi
 
 ## Lockstep
 
-A git tag `X.Y.Z` (no `v` prefix) is the version for every package that `.github/workflows/publish-on-tag.yml` publishes: `api`, `test`, `ui`, `rtk`, `admin-backend`, `admin-frontend`, `admin-spa`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`, `syncdb`. Publish jobs read that tag; they do not pick per-package versions.
+A git tag `X.Y.Z` (no `v` prefix) is the version for every package that `.github/workflows/publish-on-tag.yml` publishes: `api`, `test`, `ui`, `admin-backend`, `admin-frontend`, `admin-spa`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`, `syncdb`. Publish jobs read that tag; they do not pick per-package versions.
 
-Inside the monorepo, packages depend on each other with `workspace:*` (for example `@terreno/rtk` → `@terreno/ui`). On npm they are released at the same number. `@terreno/ui` also pins Expo-line peers (`react-native` `~0.86.0` on the 57 line). Installing `@terreno/ui@57` next to Expo 54 is outside support, same as mixing `@terreno/api@57` with `@terreno/ui@0.31`.
+Inside the monorepo, packages depend on each other with `workspace:*` (for example `@terreno/admin-frontend` → `@terreno/ui`). On npm they are released at the same number. `@terreno/ui` also pins Expo-line peers (`react-native` `0.88.0` on the 58 line). Installing `@terreno/ui@58` next to Expo 57 is outside support, same as mixing `@terreno/api@58` with `@terreno/ui@57`.
 
 ## Pre-1.0 (and Expo-aligned majors)
 
@@ -18,7 +18,7 @@ From 56 onward the **major** tracks the Expo SDK major (`56.x`, `57.x`). That is
 
 A public API marked deprecated stays available for **at least three minor releases** on the current major (example: deprecated in `57.1.0` → still present in `57.2.0` and `57.3.0`). Removal happens in a later minor or the next major, always with an upgrade note.
 
-Worked example: `@terreno/rtk` collection CRUD was deprecated in `56.0.0` (restated in `57.1.0`). The package still publishes on 57.x for the OpenAPI SDK, Better Auth Redux, feature flags, and sockets. It will not ship in the **next major**. Migrate collection screens with [migrate-rtk-to-syncdb.md](../how-to/migrate-rtk-to-syncdb.md) as a separate operation from a routine version bump.
+Worked example: `@terreno/rtk` collection CRUD was deprecated in `56.0.0` (restated in `57.1.0`). The package published through 57.x and was removed in `58.0.0`, with `@terreno/syncdb` taking over its request client, session, flags, and app utilities. Upgrading across 58 follows [migrate-rtk-to-syncdb.md](../how-to/migrate-rtk-to-syncdb.md).
 
 ## Where to read changes
 

@@ -1,24 +1,4 @@
-import type {
-  Api,
-  BaseQueryFn,
-  EndpointBuilder as RtkEndpointBuilder,
-} from "@reduxjs/toolkit/query/react";
 import type React from "react";
-
-/**
- * Type alias for an RTK Query API instance with type-erased generic parameters.
- *
- * The admin panel dynamically injects endpoints into the consumer's RTK Query API at
- * runtime via `api.injectEndpoints()`. The consumer's API is built from a generated
- * OpenAPI SDK with thousands of distinct endpoint types — there is no shared base
- * type we can constrain to, so the generic parameters are erased.
- */
-export type AdminApi = Api<
-  BaseQueryFn<unknown, unknown, unknown>,
-  Record<string, never>,
-  string,
-  string
->;
 
 /**
  * Generic field/document value used throughout the admin panel.
@@ -33,19 +13,6 @@ export interface AdminRecordCapabilities {
   delete: boolean;
   update: boolean;
 }
-
-/**
- * RTK Query's `build` argument from `api.injectEndpoints({ endpoints: (build) => ... })`.
- *
- * The build helper is generic over the full endpoint set; since the admin panel injects
- * endpoints dynamically into a consumer-supplied API, the endpoint shapes are not
- * statically expressible here.
- */
-export type EndpointBuilder = RtkEndpointBuilder<
-  BaseQueryFn<unknown, unknown, unknown>,
-  string,
-  string
->;
 
 export interface AdminFieldConfig {
   type: string;
@@ -86,7 +53,7 @@ export interface AdminModelConfig {
   /**
    * From `GET /admin/config`: true when the app collection registered
    * `sync.adminBroadcast`. Windowed TinyBase lists require this plus
-   * {@link AdminProviderValue.syncDb} and a fetch client.
+   * {@link AdminProviderValue.syncDb}.
    */
   adminBroadcast?: boolean;
   /**
@@ -196,7 +163,6 @@ export interface AdminConfigResponse {
 
 /** Props passed to home dashboard widgets resolved from `home.slots`. */
 export interface AdminHomeWidgetProps {
-  api: AdminApi;
   apiBase: string;
   routeBase: string;
   config: AdminConfigResponse;
@@ -280,8 +246,8 @@ export interface AdminSyncDb {
 }
 
 export interface AdminProviderValue {
-  adminRpc?: AdminRpc;
-  api: AdminApi;
+  /** Host-bound fetch client for every admin request (model CRUD and RPC). */
+  adminRpc: AdminRpc;
   apiBase: string;
   /** API origin for cross-origin embedded RPC (`http://localhost:4000`). */
   apiOrigin?: string;
@@ -356,11 +322,6 @@ export interface AdminScreenProps {
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
   /**
-   * @deprecated Terreno 57 compatibility for ObjectId/API-only CRUD. Do not add
-   * new admin `injectEndpoints`; Terreno 58 removes the required `api` prop.
-   */
-  api: AdminApi;
-  /**
    * Fetch credentials mode for {@link adminRequest}. SPA cookie sessions use
    * `"same-origin"`; omit when the host only sends Bearer headers.
    */
@@ -403,7 +364,6 @@ export const resolveAdminBases = ({
  * `routeBase` is the base path for in-app navigation to the referenced item.
  */
 export interface RefFieldRendererProps {
-  api: AdminApi;
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
   baseUrl?: string;
   /** Base path where JSON/API requests are sent. Falls back to `baseUrl`. */
@@ -452,7 +412,6 @@ export interface DocumentListResponse {
 }
 
 export interface DocumentStorageBrowserProps {
-  api: AdminApi;
   basePath: string;
   /** Route opened by the standard admin screen back arrow. */
   backHref?: string;

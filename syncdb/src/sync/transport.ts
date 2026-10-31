@@ -10,6 +10,22 @@ import type {
 /** Default time to wait for a mutation ack/nack before rejecting. */
 export const DEFAULT_MUTATION_TIMEOUT_MS = 15_000;
 
+/**
+ * Events the sync protocol and Socket.io own. App listeners cannot bind them, so a
+ * stray handler can never interfere with ack correlation or connection state.
+ */
+const RESERVED_EVENT_NAMES = new Set([
+  "connect",
+  "connect_error",
+  "disconnect",
+  "disconnecting",
+  "newListener",
+  "removeListener",
+]);
+
+export const isReservedSocketEvent = (event: string): boolean =>
+  RESERVED_EVENT_NAMES.has(event) || event.startsWith("sync:");
+
 /** Default max mutations per batch send (server also enforces this cap). */
 export const DEFAULT_BATCH_SIZE = 50;
 
@@ -86,4 +102,13 @@ export interface SyncTransport {
   onDeltaBatch?: (callback: (deltas: SyncDelta[]) => void) => () => void;
   /** Subscribe to connection status changes. Returns an unsubscribe function. */
   onStatusChange: (callback: (status: TransportStatus) => void) => () => void;
+  /**
+   * Listen for an app-level server event on the same connection (for example
+   * `featureFlagsChanged`). Listeners survive reconnects. Returns an unsubscribe
+   * function. Optional so HTTP-only doubles satisfy the contract.
+   */
+  onEvent?: (event: string, handler: SocketEventHandler) => () => void;
 }
+
+/** Handler for an app-level server socket event; receives the event's arguments. */
+export type SocketEventHandler = (...args: unknown[]) => void;

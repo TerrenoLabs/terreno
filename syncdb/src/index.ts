@@ -4,7 +4,7 @@
  * The on-device store (TinyBase MergeableStore) is the UI's source of truth:
  * reads come from the local store, writes apply optimistically to local state and a
  * durable outbox, and the server is asynchronous reconciliation over a websocket
- * delta protocol with HTTP snapshot catch-up. Supersedes @terreno/rtk for
+ * delta protocol with HTTP snapshot catch-up. Replaces the pre-58 rtk package for
  * data-synchronization concerns. See docs/implementationPlans/syncdb-local-first.md.
  *
  * This module is the package's public API: everything re-exported here is
@@ -164,6 +164,7 @@ export {
   DEFAULT_MUTATION_TIMEOUT_MS,
   type SendMutationBatchResult,
   type SendMutationResult,
+  type SocketEventHandler,
   type SyncTransport,
   type TransportStatus,
 } from "./sync/transport";

@@ -140,6 +140,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "expo-deployment",
       "expo-dev-client",
       "store-assets",
+      "test-expo-release-locally",
       "track-upstream-expo",
       "upgrading-expo",
       "use-dom",

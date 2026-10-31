@@ -2,12 +2,12 @@
 name: building-terreno-apps
 description: >-
   Complete guide for building Terreno full-stack Expo apps with @terreno/ui,
-  Expo Router, and @terreno/rtk. Covers layout, forms, navigation, theming,
+  Expo Router, and @terreno/syncdb. Covers layout, forms, navigation, theming,
   screen patterns, and when to use Expo Go vs custom builds.
 ---
 # Building Terreno Apps
 
-Use this skill when building or refactoring screens in a Terreno Expo app (`example-frontend`, `admin-spa`, or a consumer app using `@terreno/ui` + `@terreno/rtk`).
+Use this skill when building or refactoring screens in a Terreno Expo app (`example-frontend`, `admin-spa`, or a consumer app using `@terreno/ui` + `@terreno/syncdb`). Terreno 58 apps have no Redux and no `@terreno/rtk`; upgrade old apps with `docs/how-to/migrate-rtk-to-syncdb.md`.
 
 **Related skills:** `terreno-ui` (component selection), `terreno-data-fetching` (API hooks), `verify-ui-changes` (mandatory UI verification), `generate-sdk` (after backend changes), `building-admin-interfaces` (admin shell, custom screens, sidebar).
 
@@ -42,29 +42,43 @@ Admin CRUD, sidebar, custom screens, and `apiBase`/`routeBase`: use skill
 
 ## Provider Stack
 
-Every Terreno app root layout should wrap children in this order (outer → inner):
+Every Terreno app root layout wraps children in this order (outer → inner). There is no
+Redux store.
 
 ```tsx
-import {Provider} from "react-redux";
-import {PersistGate} from "redux-persist/integration/react";
+import {SessionProvider} from "@terreno/syncdb/auth";
+import {ApiClientProvider, SyncDbProvider} from "@terreno/syncdb/react";
 import {TerrenoProvider} from "@terreno/ui";
-// Import from your app's store bootstrap module (see example-frontend/store/index.ts)
-import store, {persistor} from "../store/index.ts";
+import {betterAuthClient} from "@/lib/betterAuth";
+import {apiClient} from "@/store/apiClient";
+import {syncDb} from "@/store/syncdb";
 
 const RootLayout: React.FC = () => {
   return (
-    <Provider store={store}>
-      <PersistGate loading={null} persistor={persistor}>
+    <SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+      <ApiClientProvider client={apiClient}>
         <TerrenoProvider>
-          <Stack />
+          <SyncDbProvider client={syncDb}>
+            <Stack />
+          </SyncDbProvider>
         </TerrenoProvider>
-      </PersistGate>
-    </Provider>
+      </ApiClientProvider>
+    </SessionProvider>
   );
 };
 ```
 
-See `example-frontend/app/_layout.tsx` for the full pattern including auth routing, sockets, and feature flags.
+| File | Holds |
+|------|-------|
+| `lib/betterAuth.ts` | `createBetterAuthClient` (`@terreno/syncdb/auth`) |
+| `store/syncdb.ts` | Shared `authProvider` + `createSyncDb` client |
+| `store/apiClient.ts` | `createApiClient` (`@terreno/syncdb/api`) for non-synced routes |
+| `store/apiSdk.ts` | Generated request hooks — never edit |
+| `store/syncDbSdk.ts` | Generated `SYNC_COLLECTIONS` + collection hooks — never edit |
+
+See `example-frontend/app/_layout.tsx` for the full pattern including auth routing,
+`syncDb.start()` on login, feature flags, consents, and announcements. App-wide UI state
+uses React context or `useStoredState` from `@terreno/ui`.
 
 ## Code Style
 
@@ -119,20 +133,23 @@ Use the spacing scale via props (`padding={4}` → 16px). Prefer `gap` over marg
 
 ## Data on Screens
 
-Never call `fetch` or `axios` in screen components. Use generated RTK Query hooks:
+Never call `fetch` or `axios` in screen components. Synced collections use syncdb hooks;
+every other route uses the generated hooks in `store/apiSdk.ts`:
 
 ```tsx
-import {useGetTodosQuery, usePostTodosMutation} from "@/store/sdk";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 
-const {data, isLoading, error, refetch} = useGetTodosQuery({});
-const [createTodo, {isLoading: isCreating}] = usePostTodosMutation();
+const todos = useQuery<Todo>("todos", {sort: "-created"});
+const {create, update, remove} = useMutate("todos");
+const {data: me, isLoading, error, refetch} = useGetAuthMeQuery();
 ```
 
 See `terreno-data-fetching` for auth, caching, and error handling.
 
 ## Forms
 
-Use `@terreno/ui` form fields with local state and RTK mutations:
+Use `@terreno/ui` form fields with local state. Synced writes apply locally and never throw:
 
 ```tsx
 import {Button, TextField} from "@terreno/ui";
@@ -145,13 +162,9 @@ const handleSubmit = useCallback(async (): Promise<void> => {
     setTitleError("Title is required");
     return;
   }
-  try {
-    await createTodo({title: title.trim(), completed: false}).unwrap();
-    setTitle("");
-  } catch (err) {
-    console.error("Failed to create todo", err);
-  }
-}, [createTodo, title]);
+  create({data: {_id: generateMutationId(), title: title.trim(), completed: false}});
+  setTitle("");
+}, [create, title]);
 
 <TextField
   title="Title"
@@ -159,7 +172,7 @@ const handleSubmit = useCallback(async (): Promise<void> => {
   onChange={setTitle}
   errorText={titleError}
 />
-<Button text="Create" onClick={handleSubmit} loading={isCreating} />
+<Button text="Create" onClick={handleSubmit} />
 ```
 
 ## Navigation
@@ -173,7 +186,8 @@ See `./references/navigation.md` and `./references/route-structure.md`.
 
 ## Loading, Error, and Empty States
 
-Every data-driven screen must handle all three:
+Every screen that loads data over the request client must handle all three (synced
+collections are local after bootstrap, so they need only the empty state):
 
 ```tsx
 if (isLoading) {
@@ -187,7 +201,7 @@ if (error) {
     </Page>
   );
 }
-if (!data?.data?.length) {
+if (!data?.length) {
   return (
     <Page title="Todos">
       <Text>No todos yet</Text>
@@ -216,10 +230,10 @@ Building or changing a screen?
   |   \-- Page for full screens, Box for sections, Card for grouped content
   |
   |-- Need data from API?
-  |   \-- terreno-data-fetching (RTK Query hooks, never raw fetch)
+  |   \-- terreno-data-fetching (syncdb + generated apiSdk hooks, never raw fetch)
   |
   |-- Need a form?
-  |   \-- @terreno/ui TextField/SelectField/DateTimeField + local state + mutation
+  |   \-- @terreno/ui TextField/SelectField/DateTimeField + local state + useMutate / generated mutation
   |
   |-- Need navigation?
   |   \-- references/navigation.md (Expo Router + auth gating)
@@ -261,16 +275,16 @@ useEffect(() => {
 }, []);
 ```
 
-**Right: Generated RTK Query hook**
+**Right: syncdb hook for a synced collection**
 
 ```tsx
-const {data} = useGetTodosQuery({});
+const todos = useQuery<Todo>("todos");
 ```
 
-**Wrong: Editing openApiSdk.ts by hand**
+**Wrong: Editing store/apiSdk.ts by hand**
 
 ```tsx
-// Manually adding a hook to store/openApiSdk.ts
+// Manually adding a hook to store/apiSdk.ts
 ```
 
 **Right: Regenerate SDK after backend changes**

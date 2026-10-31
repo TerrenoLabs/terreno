@@ -10,14 +10,25 @@ and [Build admin screens](../how-to/build-admin-screens.md).
 Home is `AdminHome` inside `AdminProvider` + `AdminShellLayout`. Generic models use
 `AdminScreenRouter` on `[model]/index`. See the how-to for `apiBase` vs `routeBase`.
 
-Pass fetch auth on `AdminProvider`:
+`AdminProvider` is required. It binds host auth onto one fetch client, and every
+admin request goes through it: model CRUD, `/admin/config`, scripts, roles,
+configuration, documents, comms, jobs, organizations, consent, announcements,
+version-config, background-tasks, migrations, AI observability, and the object
+picker. Admin components take no `api` prop (the RTK `api` prop was removed in Terreno 58).
 
 | Host | Props |
 | --- | --- |
-| Standalone SPA | `credentials="same-origin"` and `getAuthHeaders` that return `{}` (cookie session). Omit `apiOrigin`. |
-| Embedded app | `getAuthHeaders` that return `Authorization: Bearer …`, plus `apiOrigin` set to the API origin (`@terreno/rtk` `baseUrl`) |
+| Standalone SPA | `credentials="same-origin"` (cookie session). Omit `apiOrigin` and `getAuthHeaders`. |
+| Embedded app | `getAuthHeaders` that return `Authorization: Bearer …`, plus `apiOrigin` set to the API origin (`baseUrl` from `@terreno/syncdb/config`) |
 
-RPC that has left RTK uses `bindAdminRequest({credentials, getAuthHeaders, origin})` then `adminRequest`. Relative URLs such as `/admin/config` are prefixed with `origin` when it is set. When `AdminProvider` has `credentials` or `getAuthHeaders`, RPC hooks (`useAdminConfig`, scripts, roles, configuration, documents, comms, consent, version-config, background-tasks, AI explorer, object picker) use that client. Successful comms, scripts, and configuration mutations invalidate mounted fetch queries through the same tag contracts as RTK; those background refetches keep cached data with `isLoading: false` and report `isFetching: true`. Passing only `api` keeps `injectEndpoints`. Do not add axios.
+`AdminProvider` calls `bindAdminRequest({credentials, getAuthHeaders, origin: apiOrigin})`
+and exposes the result through `useAdminRpc()`. Relative URLs such as `/admin/config` are
+prefixed with `origin` when it is set. Successful mutations invalidate mounted queries
+through tags; those background refetches keep cached data with `isLoading: false` and
+report `isFetching: true`. An admin screen rendered outside `AdminProvider` falls back to
+an unauthenticated same-origin `fetch` and warns once in development. Product screens that
+reuse admin components (for example `DocumentStorageBrowser` or `ConsentHistory`) wrap
+them in `AdminProvider` with the same auth binding. Do not add axios.
 
 Optional `syncDb` on `AdminProvider` enables windowed changelists for models whose
 config includes `adminBroadcast: true` and `syncCollection`. When product screens
@@ -29,11 +40,10 @@ admin-frontend.
 ``````typescript
 // app/admin/index.tsx
 import {AdminHome} from "@terreno/admin-frontend";
-import {api} from "@/store/openApiSdk";
 
-export default function AdminScreen() {
-  return <AdminHome api={api} apiBase="/admin" routeBase="/admin" />;
-}
+// Rendered inside the AdminProvider in app/admin/_layout.tsx.
+const AdminScreen: React.FC = () => <AdminHome apiBase="/admin" routeBase="/admin" />;
+export default AdminScreen;
 ``````
 
 ## Components
@@ -50,7 +60,6 @@ callback only navigates.
 const {selectOrganization} = useOrgContext();
 
 <OrgDirectoryScreen
-  api={api}
   isOperator={currentUser.roles?.includes("operator") ?? false}
   onEnterOrganization={(organization) => {
     selectOrganization(organization);
@@ -65,7 +74,6 @@ navigation. Org-admins do not receive this link:
 
 ``````typescript
 <AdminShellLayout
-  api={api}
   apiBase="/admin"
   isOrganizationOperator={isOperator}
   organizationDirectoryPath="/orgs"
@@ -80,12 +88,8 @@ navigation. Org-admins do not receive this link:
 Wrap organization-aware admin routes with `OrgContextProvider` and render
 `OrgSwitcher` through the shell's `organizationSwitcher` slot. Selecting an
 organization navigates to `{routeBase}/orgs/:orgId` and adds
-`X-Organization-Id` to subsequent `useAdminApi` requests. Query cache keys also
-include the organization id, preventing rows cached for one org from appearing
-in another. `useAdminApi`'s `useListQuery` and `useReadQuery` carry the organization
-in the query argument, so a switch after a request started (such as the switcher
-settling on a default organization) fetches the new organization's rows instead of
-leaving the screen loading. Derive `initialOrganization` from the current pathname so context
+`X-Organization-Id` to subsequent `useAdminModelApi` requests. Queries re-run when
+the organization changes, so rows loaded for one org do not appear in another. Derive `initialOrganization` from the current pathname so context
 follows URL changes after mount without overriding a switcher selection while
 navigation is in progress.
 
@@ -98,9 +102,8 @@ const routeOrganization = useMemo(
 
 <OrgContextProvider initialOrganization={routeOrganization}>
   <AdminShellLayout
-    api={api}
     apiBase="/admin"
-    organizationSwitcher={<OrgSwitcher api={api} routeBase="/admin" />}
+    organizationSwitcher={<OrgSwitcher routeBase="/admin" />}
     routeBase="/admin"
   >
     {children}
@@ -320,10 +323,7 @@ to `[model]`.
 Entry screen showing all available models as cards.
 
 ``````typescript
-<AdminModelList
-  baseUrl="/admin"
-  api={api}
-/>
+<AdminModelList baseUrl="/admin" />
 ``````
 
 Fetches config from `{baseUrl}/config` and displays clickable model cards.
@@ -333,11 +333,7 @@ Fetches config from `{baseUrl}/config` and displays clickable model cards.
 Table view for a specific model with pagination, sorting, and actions.
 
 ``````typescript
-<AdminModelTable
-  baseUrl="/admin"
-  api={api}
-  modelName="User"
-/>
+<AdminModelTable baseUrl="/admin" modelName="User" />
 ``````
 
 Features:
@@ -346,13 +342,12 @@ Features:
 - Declared `filters` map to DataTable column filters (`text` contains, `choice`
   multi `$in`, `boolean`, `dateRange`, `ref` via `AdminRefField` in `renderFilter`)
 - Optional choice fields include **Empty**, which matches missing and null values.
-  Admin list requests serialize nested operators with bracket notation independently
-  of the host application's RTK base-query configuration.
+  Admin list requests serialize nested operators with bracket notation (`qs`).
 - Click row to edit
 - "Create New" button
 - Pagination controls
 - Reference fields render as clickable links
-- Windowed TinyBase path when `AdminProvider` has `syncDb` plus a fetch client (`credentials` or `getAuthHeaders`) and `GET /admin/config` reports `adminBroadcast` + `syncCollection` on a String `_id` model: REST list is membership only, rows overlay TinyBase, and a TinyBase table listener rerenders known rows as `{collection}|admin` deltas arrive. **Refresh** (`testID="admin-table-refresh"`) re-queries REST and calls `hydrateWindow`. **Create** (`testID="admin-create-button"`) is in the table chrome, not the navigator header, because admin stacks use `headerShown: false`. **Save** / **Delete** (`testID="admin-save-button"` / `admin-delete-button`) are in the form chrome for the same reason. Page select-all and bulk actions use the rendered rows, so a row a live tombstone removed leaves the selection. RTK `refetch` error envelopes (`error` / `isError`) toast and skip hydrate; an in-flight Refresh is discarded when page, search, or sort changes. A windowed create or delete never touches the cached REST list, so the form flags the collection through `markAdminWindowMembershipStale` and the changelist refetches membership automatically — whether it stayed mounted behind the form or remounts when the form pops. A create also passes the new id as `awaitId`, because `mutate` only enqueues on the outbox and the first refetch can beat the server; the changelist retries up to three times, 700 ms apart — including after transient list failures — then leaves **Refresh** as the fallback. Passing only `api` keeps the RTK list.
+- Windowed TinyBase path when `AdminProvider` has `syncDb` and `GET /admin/config` reports `adminBroadcast` + `syncCollection` on a String `_id` model: REST list is membership only, rows overlay TinyBase, and a TinyBase table listener rerenders known rows as `{collection}|admin` deltas arrive. **Refresh** (`testID="admin-table-refresh"`) re-queries REST and calls `hydrateWindow`. **Create** (`testID="admin-create-button"`) is in the table chrome, not the navigator header, because admin stacks use `headerShown: false`. **Save** / **Delete** (`testID="admin-save-button"` / `admin-delete-button`) are in the form chrome for the same reason. Page select-all and bulk actions use the rendered rows, so a row a live tombstone removed leaves the selection. Membership `refetch` errors (`error` / `isError`) toast and skip hydrate; an in-flight Refresh is discarded when page, search, or sort changes. A windowed create or delete never touches the cached REST list, so the form flags the collection through `markAdminWindowMembershipStale` and the changelist refetches membership automatically — whether it stayed mounted behind the form or remounts when the form pops. A create also passes the new id as `awaitId`, because `mutate` only enqueues on the outbox and the first refetch can beat the server; the changelist retries up to three times, 700 ms apart — including after transient list failures — then leaves **Refresh** as the fallback. Other models use the REST list from `useAdminModelApi`.
 - Organization-scoped models report `organizationScoped: true` and
   `adminBroadcast: false`. They use REST list and mutation paths until the sync
   window protocol carries selected-organization context. Home widgets delay
@@ -369,7 +364,6 @@ Create or edit form for a model instance.
 ``````typescript
 <AdminModelForm
   baseUrl="/admin"
-  api={api}
   modelName="User"
   id="507f1f77bcf86cd799439011"  // Optional for edit mode
 />
@@ -398,12 +392,12 @@ items follow the same default rules.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 
-When `AdminProvider` has `syncDb` plus a fetch client and the model config reports
+When `AdminProvider` has `syncDb` and the model config reports
 `adminBroadcast`, `syncCollection`, and a String `_id`, create/update/delete use the
 syncdb mutation outbox. Edit update/delete first hydrate the REST-loaded record so a
 deep-linked form can mutate locally. ObjectId models and hosts without the full
-windowed configuration keep the REST/RTK mutation path. Organization-scoped
-models always use REST/RTK regardless of String `_id`.
+windowed configuration use REST fetch CRUD (`useAdminModelApi`). Organization-scoped
+models always use REST regardless of String `_id`.
 
 Pass the host's `useConflicts()` result as `syncConflicts` on `AdminProvider`.
 Windowed form mutations set their own pending state before any asynchronous work, so
@@ -415,14 +409,15 @@ resolver. Only the most recently mounted sheet per collection renders, so a form
 stacked over its changelist shows one sheet instead of two.
 This adapter keeps `@terreno/syncdb` optional for admin-frontend.
 Bulk actions remain server operations: windowed models call the host fetch
-client at `{routePath}/bulk-patch`, while API-only/ObjectId hosts retain RTK.
+client at `{routePath}/bulk-patch` for every model.
 
 ```tsx
 const syncConflicts = useConflicts();
 
 <AdminProvider
-  api={api}
   apiBase="/admin"
+  apiOrigin={baseUrl}
+  getAuthHeaders={getAdminAuthHeaders}
   syncConflicts={syncConflicts}
   syncDb={syncDb}
 >
@@ -523,22 +518,20 @@ Provisional display:
 Fetches admin configuration from backend.
 
 ``````typescript
-const {config, isLoading, error} = useAdminConfig(api, baseUrl);
+const {config, isLoading, error} = useAdminConfig("/admin");
 ``````
 
 Returns model metadata from `{baseUrl}/config`.
 
-### useAdminApi
+### useAdminModelApi
 
-> Deprecated in Terreno 57: do not add new admin `injectEndpoints`. Terreno 58
-> removes `useAdminApi` and the required `api` prop. During the compatibility
-> window, continue passing `api` for ObjectId model CRUD and API-only hosts.
-
-Generates compatibility RTK Query hooks for list/read/create/update/delete plus
-`POST {routePath}/bulk-patch`.
-Pass the model's `routePath` from config (for example `/admin/users` or `/admin/todos`), not the admin `baseUrl`.
-
-Admin RPC that is leaving RTK uses native `adminRequest` (`AbortController` timeout, JSON or `FormData`, `credentials` forwarded). Bind host auth with `bindAdminRequest`. Do not add axios.
+Fetch CRUD hooks for one admin model over the `AdminProvider` client: list, read,
+create, update, delete, plus `POST {routePath}/bulk-patch`. Pass the model's
+`routePath` from config (for example `/admin/users` or `/admin/todos`), not the admin
+`baseUrl`. List resolves to the `{data, more, page, limit, total}` envelope; read,
+create, and update resolve to the document. Writes refetch mounted list and read
+queries for the same model, and organization-scoped admin sends `X-Organization-Id`.
+Replaces the Terreno 57 `useAdminApi(api, routePath, modelName)` RTK hook.
 
 ``````typescript
 const {
@@ -548,68 +541,90 @@ const {
   useUpdateMutation,
   useDeleteMutation,
   useBulkPatchMutation,
-} = useAdminApi(api, "/admin/users", "User");
+} = useAdminModelApi("/admin/users", "User");
 
-const {data, isLoading} = useListQuery({limit: 20, page: 1, q: "Ada", sort: "-created"});
+const {data, isLoading, refetch} = useListQuery({limit: 20, page: 1, q: "Ada", sort: "-created"});
 const [create] = useCreateMutation();
 await create({email: "user@example.com"}).unwrap();
 const [bulkPatch] = useBulkPatchMutation();
 await bulkPatch({ids: ["abc"], patch: {name: "Ada"}}).unwrap();
 ``````
 
+### useAdminRpc, useAdminRpcQuery, useAdminRpcMutation
+
+`useAdminRpc()` returns the `AdminProvider` fetch client. `useAdminRpcQuery({rpc, url,
+providesTags, headers, skip, pollingInterval, transformResponse})` runs a GET and
+returns `{data, error, isError, isLoading, isFetching, refetch}`;
+`useAdminRpcMutation(rpc, {invalidatesTags})` returns `[trigger, {isLoading}]` where
+`trigger(args).unwrap()` sends the request. Use these for custom admin RPC. The
+client is `adminRequest`, built on `apiFetch` from `@terreno/syncdb/api` (timeout, JSON or
+`FormData`, `credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the
+same way the syncdb request client does.
+
 ## Expo Router Setup
 
 ``````typescript
 // app/admin/_layout.tsx
+import {AdminProvider} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
+import {getAdminAuthHeaders} from "@/store/syncdb"; // () => ({Authorization: "Bearer …"})
 
 export default function AdminLayout() {
-  return <Stack screenOptions={{headerShown: false}} />;
+  return (
+    <AdminProvider apiBase="/admin" apiOrigin={baseUrl} getAuthHeaders={getAdminAuthHeaders} routeBase="/admin">
+      <Stack screenOptions={{headerShown: false}} />
+    </AdminProvider>
+  );
 }
 
 // app/admin/index.tsx - Model list
 import {AdminModelList} from "@terreno/admin-frontend";
-export default () => <AdminModelList baseUrl="/admin" api={api} />;
+export default () => <AdminModelList baseUrl="/admin" />;
 
 // app/admin/[modelName]/index.tsx - Model table
 import {AdminModelTable} from "@terreno/admin-frontend";
 export default () => {
   const {modelName} = useLocalSearchParams();
-  return <AdminModelTable baseUrl="/admin" api={api} modelName={modelName} />;
+  return <AdminModelTable baseUrl="/admin" modelName={modelName} />;
 };
 
 // app/admin/[modelName]/new.tsx - Create form
 import {AdminModelForm} from "@terreno/admin-frontend";
 export default () => {
   const {modelName} = useLocalSearchParams();
-  return <AdminModelForm baseUrl="/admin" api={api} modelName={modelName} />;
+  return <AdminModelForm baseUrl="/admin" modelName={modelName} />;
 };
 
 // app/admin/[modelName]/[id].tsx - Edit form
 import {AdminModelForm} from "@terreno/admin-frontend";
 export default () => {
   const {modelName, id} = useLocalSearchParams();
-  return <AdminModelForm baseUrl="/admin" api={api} modelName={modelName} id={id} />;
+  return <AdminModelForm baseUrl="/admin" modelName={modelName} id={id} />;
 };
 ``````
 
 ## Protecting Admin Routes
 
 ``````typescript
-// app/_layout.tsx
-import {useSelectCurrentUser} from "@/store/openApiSdk";
+// app/admin/_layout.tsx
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
 import {Redirect} from "expo-router";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 
-function RootLayout() {
-  const user = useSelectCurrentUser();
-  const pathname = usePathname();
-  
-  if (!user?.admin && pathname.startsWith("/admin")) {
+const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
+  const {userId} = useSession();
+  const {data: me, isLoading} = useGetAuthMeQuery(undefined, {skip: !userId});
+
+  if (isLoading) {
+    return null;
+  }
+  if (!canOpenAdminPage({admin: me?.admin, permissions: me?.permissions})) {
     return <Redirect href="/" />;
   }
-  
-  return <Stack />;
-}
+  return <>{children}</>;
+};
 ``````
 
 ## Custom Field Renderers
@@ -664,10 +679,10 @@ handled as a generic model form:
 import {CommsDashboardScreenWidget, CommsMessageDetail} from "@terreno/admin-frontend";
 
 // list: /admin/comms
-<CommsDashboardScreenWidget api={api} config={config} routeBase="/admin" screenName="comms" />
+<CommsDashboardScreenWidget config={config} routeBase="/admin" screenName="comms" />
 
 // detail: /admin/comms/[id]
-<CommsMessageDetail api={api} messageId={id} routeBase="/admin" />
+<CommsMessageDetail messageId={id} routeBase="/admin" />
 ```
 
 The list screen persists filters in the URL (`channel`, `provider`, `status`, `errorClass`, `q`,
@@ -703,7 +718,7 @@ prompt** on `aiPrompt:create`, **Create evaluator** on `aiEvaluator:create`, and
 Dataset detail hides **Add item** without `aiDataset:update` and **Run experiment** without
 `aiExperiment:create`; dataset lists hide **Import** without
 `aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
-when production is unset. Widgets do not couple to host Redux.
+when production is unset. Widgets do not couple to host app state.
 
 `ai-prompts` lists prompts with a folder rail, search, type badge, latest vs production columns
 (tooltips), 7-day usage, and **Create prompt** when `aiPrompt:create` is allowed. The create modal
@@ -844,7 +859,7 @@ markdown renders as markdown), plus a **Reason** field and
 | In flight | Both buttons and the reason field are disabled until the decision returns, so it is sent once. |
 
 Requests use the host-bound admin request client (`AdminProvider` `getAuthHeaders` / `apiOrigin`),
-never RTK `injectEndpoints`. Test ids: `harness-approvals` (root), `harness-approvals-list`,
+never a second request client. Test ids: `harness-approvals` (root), `harness-approvals-list`,
 `harness-approvals-empty`, `harness-approvals-error`, `harness-approvals-loading`,
 `harness-approvals-refresh`, `harness-approvals-notice`, `harness-approval-row-<id>-clickable`,
 `harness-approval-detail`, `harness-approval-payload`, `harness-approval-reason`,
@@ -858,7 +873,7 @@ never RTK `injectEndpoints`. Test ids: `harness-approvals` (root), `harness-appr
 
 ```typescript
 import {bindAdminRequest, HarnessApprovalInbox} from "@terreno/admin-frontend";
-import {baseUrl} from "@terreno/rtk";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Page} from "@terreno/ui";
 
 // getAuthHeaders: the host's `() => ({Authorization: "Bearer …"})`, as passed to AdminProvider.

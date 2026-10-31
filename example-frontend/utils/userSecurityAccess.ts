@@ -1,4 +1,4 @@
-import {hasPermission, type PermissionRequest, type PermissionSet} from "@terreno/rtk";
+import {hasPermission, type PermissionRequest, type PermissionSet} from "@terreno/syncdb/app";
 
 /** The RBAC statement that opens the platform `/users/:id/security` routes (AccountSecurityApp). */
 const MANAGE_USER_SECURITY_PERMISSION: PermissionRequest = {user: ["manageSecurity"]};

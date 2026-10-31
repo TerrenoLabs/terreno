@@ -78,7 +78,7 @@ describe("GPT prompt streaming edge cases", () => {
 
   beforeAll(async () => {
     await ensureTestUsers();
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
     const aiService = new AIService({
       model: createMockModel() as unknown as LanguageModel,
     });
@@ -92,7 +92,7 @@ describe("GPT prompt streaming edge cases", () => {
   });
 
   afterAll(async () => {
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("emits an inline image and flushes buffered text with no finish-step", async () => {

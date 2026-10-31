@@ -4,6 +4,7 @@ import {
   Platform,
   type StyleProp,
   TextInput,
+  type TextInputInstance,
   type TextInputKeyPressEvent,
   type TextInputProps,
   View,
@@ -158,7 +159,7 @@ export const OtpField: FC<OtpFieldProps> = ({
   const activeIndex = Math.min(code.length, length - 1);
 
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   const focusCell = useCallback((index: number): void => {
     inputRefs.current[index]?.focus();

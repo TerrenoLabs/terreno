@@ -15,10 +15,14 @@ import {
   useToast,
 } from "@terreno/ui";
 import React, {useCallback, useEffect, useMemo, useState} from "react";
-import {asDynamicHookApi} from "./dynamicHookApi";
-import {type AdminApi, type EndpointBuilder, resolveAdminBases} from "./types";
-import {useAdminApi} from "./useAdminApi";
+import {resolveAdminBases} from "./types";
+import {useAdminModelApi} from "./useAdminModelApi";
 import {useAdminRpc, useAdminRpcMutation} from "./useAdminRpc";
+
+/** `POST /consents/forms/generate|translate` respond with `{data: {content}}`. */
+interface GeneratedContentResponse {
+  data?: {content?: string};
+}
 
 interface CheckboxConfig {
   label: string;
@@ -53,7 +57,6 @@ interface ConsentFormEditorProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   id?: string;
   supportedLocales?: string[];
   hasAiSupport?: boolean;
@@ -80,54 +83,10 @@ const slugify = (text: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
-/**
- * Cache the enhanced api per api object. `injectEndpoints` is a side-effecting
- * operation against the global RTK Query slice — calling it on every render of
- * every editor instance is wasteful, and with `overrideExisting: false` would
- * log a re-injection warning. WeakMap-by-api lets the GC reclaim entries when
- * the api is unreachable.
- */
-const enhancedApiCache = new WeakMap<AdminApi, unknown>();
-
-const getEnhancedApi = (api: AdminApi): unknown => {
-  const cached = enhancedApiCache.get(api);
-  if (cached) {
-    return cached;
-  }
-  const enhanced = api.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      generateConsentContent: build.mutation({
-        query: (body: {type: string; description: string; locale: string}) => ({
-          body,
-          method: "POST",
-          url: `${CONSENT_FORM_ROUTE}/generate`,
-        }),
-      }),
-      publishConsentForm: build.mutation({
-        query: (formId: string) => ({
-          method: "POST",
-          url: `${CONSENT_FORM_ROUTE}/${formId}/publish`,
-        }),
-      }),
-      translateConsentContent: build.mutation({
-        query: (body: {content: string; fromLocale: string; toLocale: string}) => ({
-          body,
-          method: "POST",
-          url: `${CONSENT_FORM_ROUTE}/translate`,
-        }),
-      }),
-    }),
-    overrideExisting: false,
-  });
-  enhancedApiCache.set(api, enhanced);
-  return enhanced;
-};
-
 export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   id,
   supportedLocales = ["en"],
   hasAiSupport = false,
@@ -179,8 +138,7 @@ export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
 
   const routePath = `${resolvedApiBase}${CONSENT_FORM_ROUTE}`;
 
-  const {useReadQuery, useCreateMutation, useUpdateMutation} = useAdminApi(
-    api,
+  const {useReadQuery, useCreateMutation, useUpdateMutation} = useAdminModelApi(
     routePath,
     "ConsentForm"
   );
@@ -190,31 +148,26 @@ export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
   const [generateRpc, generateRpcState] = useAdminRpcMutation(rpc);
   const [translateRpc, translateRpcState] = useAdminRpcMutation(rpc);
 
-  const enhanced = asDynamicHookApi(getEnhancedApi(api));
-  const [publishConsentFormRtk, {isLoading: isPublishingRtk}] =
-    enhanced.usePublishConsentFormMutation();
-  const [generateContentRtk, {isLoading: isGeneratingRtk}] =
-    enhanced.useGenerateConsentContentMutation();
-  const [translateContentRtk, {isLoading: isTranslatingRtk}] =
-    enhanced.useTranslateConsentContentMutation();
+  const publishConsentForm = useCallback(
+    (formId: string) =>
+      publishRpc({method: "POST", url: `${CONSENT_FORM_ROUTE}/${formId}/publish`}),
+    [publishRpc]
+  );
+  const generateContent = useCallback(
+    (body: {type: string; description: string; locale: string}) =>
+      generateRpc({body, method: "POST", url: `${CONSENT_FORM_ROUTE}/generate`}),
+    [generateRpc]
+  );
+  const translateContent = useCallback(
+    (body: {content: string; fromLocale: string; toLocale: string}) =>
+      translateRpc({body, method: "POST", url: `${CONSENT_FORM_ROUTE}/translate`}),
+    [translateRpc]
+  );
+  const isPublishing = publishRpcState.isLoading;
+  const isGenerating = generateRpcState.isLoading;
+  const isTranslating = translateRpcState.isLoading;
 
-  const publishConsentForm = rpc
-    ? (formId: string) =>
-        publishRpc({method: "POST", url: `${CONSENT_FORM_ROUTE}/${formId}/publish`})
-    : publishConsentFormRtk;
-  const generateContent = rpc
-    ? (body: {type: string; description: string; locale: string}) =>
-        generateRpc({body, method: "POST", url: `${CONSENT_FORM_ROUTE}/generate`})
-    : generateContentRtk;
-  const translateContent = rpc
-    ? (body: {content: string; fromLocale: string; toLocale: string}) =>
-        translateRpc({body, method: "POST", url: `${CONSENT_FORM_ROUTE}/translate`})
-    : translateContentRtk;
-  const isPublishing = rpc ? publishRpcState.isLoading : isPublishingRtk;
-  const isGenerating = rpc ? generateRpcState.isLoading : isGeneratingRtk;
-  const isTranslating = rpc ? translateRpcState.isLoading : isTranslatingRtk;
-
-  const {data: formData, isLoading: isFormLoading} = useReadQuery(id ?? "", {
+  const {data: formData, isLoading: isFormLoading} = useReadQuery<ConsentFormDocument>(id ?? "", {
     skip: !isEditMode || !id,
   });
 
@@ -379,11 +332,11 @@ export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
   const handleGenerate = useCallback(async () => {
     const activeLocale = supportedLocales[activeLocaleIndex] ?? "en";
     try {
-      const result = await generateContent({
+      const result = (await generateContent({
         description: generateDescription,
         locale: activeLocale,
         type: generateType,
-      }).unwrap();
+      }).unwrap()) as GeneratedContentResponse | undefined;
       const generatedText = result?.data?.content ?? "";
       handleLocaleContentChange(activeLocale, generatedText);
       setIsGenerateModalVisible(false);
@@ -411,11 +364,11 @@ export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
       }
 
       try {
-        const result = await translateContent({
+        const result = (await translateContent({
           content: sourceContent,
           fromLocale: defaultLocale,
           toLocale: targetLocale,
-        }).unwrap();
+        }).unwrap()) as GeneratedContentResponse | undefined;
         const translatedText = result?.data?.content ?? "";
         handleLocaleContentChange(targetLocale, translatedText);
         toast.success(`Content translated to ${targetLocale}`);

@@ -1,5 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import {type FC, useCallback} from "react";
+import {type ComponentProps, type FC, useCallback} from "react";
 import {Pressable} from "react-native";
 
 import {Box} from "./Box";
@@ -25,7 +25,7 @@ const TAP_TARGET_SIZE = 32;
  * activation key for a checkbox). Not typed by react-native, so it is spread in separately.
  */
 interface WebKeyDownEvent {
-  key: string;
+  key?: string;
   preventDefault: () => void;
   repeat?: boolean;
 }
@@ -86,7 +86,7 @@ export const ThumbsUpDownFeedback: FC<ThumbsUpDownFeedbackProps> = ({
 
     return (
       <Pressable
-        {...webKeyDownProps}
+        {...(webKeyDownProps as Pick<ComponentProps<typeof Pressable>, "onKeyDown">)}
         accessibilityLabel={isPositive ? positiveAccessibilityLabel : negativeAccessibilityLabel}
         accessibilityRole="checkbox"
         accessibilityState={{checked: isSelected, disabled, selected: isSelected}}

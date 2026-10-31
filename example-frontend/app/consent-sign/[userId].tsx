@@ -1,7 +1,7 @@
 import {Page, ProvisionalConsentSigner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import type React from "react";
-import {terrenoApi} from "@/store/sdk";
+import {apiClient} from "@/store/apiClient";
 
 /**
  * Staff screen for recording consent on a user's behalf. It sits outside /admin so staff with
@@ -13,7 +13,7 @@ const ConsentSignScreen: React.FC = () => {
   return (
     <Page backButton maxWidth={800} scroll title="Sign consent on behalf">
       {targetUserId ? (
-        <ProvisionalConsentSigner api={terrenoApi} userId={targetUserId} />
+        <ProvisionalConsentSigner client={apiClient} userId={targetUserId} />
       ) : (
         <Text color="error" testID="consent-sign-missing-user">
           No user selected.

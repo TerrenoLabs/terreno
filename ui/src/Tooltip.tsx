@@ -6,6 +6,7 @@ import {
   Platform,
   Pressable,
   View,
+  type ViewInstance,
   type ViewStyle,
 } from "react-native";
 
@@ -220,7 +221,7 @@ export const Tooltip: FC<TooltipProps> = ({text, children, idealPosition, includ
 
   const showTooltipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const hideTooltipTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const childrenWrapperRef = useRef<View>(null);
+  const childrenWrapperRef = useRef<ViewInstance>(null);
   const touched = useRef(false);
   // Bumped on every hide so async measure callbacks from an earlier show are ignored.
   const showGeneration = useRef(0);

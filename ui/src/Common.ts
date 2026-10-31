@@ -4,16 +4,16 @@ import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
 import type {ComponentProps, FC, ReactElement, ReactNode} from "react";
 import type {
+  DimensionValue,
   ImageStyle,
   ListRenderItemInfo,
-  Text as NativeText,
-  ScrollView,
+  ScrollViewInstance,
   StyleProp,
-  TextInput,
+  TextInputInstance,
+  TextInstance,
   TextStyle,
   ViewStyle,
 } from "react-native";
-import type {DimensionValue} from "react-native/Libraries/StyleSheet/StyleSheetTypes";
 import type {Styles} from "react-native-google-places-autocomplete";
 import type {SvgProps} from "react-native-svg";
 
@@ -579,11 +579,6 @@ export interface DropdownPanelProps extends WithTestID {
   maxPanelHeight?: number;
 }
 
-/**
- * @deprecated Renamed to {@link DropdownPanelProps}. Removed in Terreno 58.
- */
-export type FilterProps = DropdownPanelProps;
-
 export type AlignContent = "start" | "end" | "center" | "between" | "around" | "stretch";
 export type AlignSelf = "auto" | "start" | "end" | "center" | "baseline" | "stretch";
 export type AlignItems = "start" | "end" | "center" | "baseline" | "stretch";
@@ -916,7 +911,8 @@ export interface BoxPropsBase extends WithTestID, LoadingProps {
 
   avoidKeyboard?: boolean;
   keyboardOffset?: number;
-  scrollRef?: React.RefObject<ScrollView | null>;
+  /** Native ScrollView instance (RN 0.87 `ScrollViewInstance`). */
+  scrollRef?: React.RefObject<ScrollViewInstance | null>;
   onScroll?: (offsetY: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }
@@ -1170,7 +1166,8 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   multiline?: boolean;
   rows?: number;
 
-  inputRef?: (ref: TextInput | null) => void;
+  /** Native TextInput instance (RN 0.87 `TextInputInstance`). */
+  inputRef?: (ref: TextInputInstance | null) => void;
   trimOnBlur?: boolean;
   /** Renders the value in a monospace face with tracking, for codes such as backup codes. */
   mono?: boolean;
@@ -3216,7 +3213,11 @@ export interface DataTableQueryParams {
 export interface DataTableColumn {
   title: string;
   columnType: "text" | "number" | "date" | "boolean" | string;
-  width: number;
+  /**
+   * Fixed column width in pixels. Omit it to size the column from its title and a sample of its
+   * content; auto-sized columns then grow to fill the table's container.
+   */
+  width?: number;
   highlight?: SurfaceColor;
   sortable?: boolean;
   infoModalText?: string;
@@ -3391,7 +3392,7 @@ export interface TextProps extends WithTestID {
    * The native text, for example to move screen reader focus to it with
    * `AccessibilityInfo.setAccessibilityFocus`.
    */
-  ref?: React.Ref<NativeText>;
+  ref?: React.Ref<TextInstance>;
   skipLinking?: boolean;
 }
 
@@ -3875,8 +3876,8 @@ export interface SelectFieldPropsBase extends WithTestID {
   /**
    * Web only. When true, the dropdown menu renders in a fixed portal on
    * `document.body` (zIndex 9999) instead of a React Native `Modal`. Use this
-   * when the select lives inside another portaled/high-zIndex overlay (e.g. the
-   * `Filter` panel) where a `Modal` would stack behind the overlay and be
+   * when the select lives inside another portaled/high-zIndex overlay (e.g. a
+   * `DropdownPanel`) where a `Modal` would stack behind the overlay and be
    * invisible and unclickable.
    * @default false
    */
@@ -4192,6 +4193,9 @@ export interface SidebarNavigationProps {
   onNavigate?: (route: string) => void;
   /**
    * The route to show when the navigator first renders.
+   *
+   * Expo Router 58 ignores this on `Navigator`. Set
+   * `unstable_settings.initialRouteName` on the layout file instead.
    */
   initialRouteName?: string;
   /**

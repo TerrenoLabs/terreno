@@ -469,7 +469,7 @@ const SidebarNavigationBase: FC<SidebarNavigationProps> = ({
   topItems,
   bottomItems,
   onNavigate,
-  initialRouteName,
+  initialRouteName: _initialRouteName,
   screenOptions,
   panelStyle,
   itemStyle,
@@ -478,7 +478,7 @@ const SidebarNavigationBase: FC<SidebarNavigationProps> = ({
   const [isSheetOpen, setIsSheetOpen] = useState(false);
 
   return (
-    <Navigator initialRouteName={initialRouteName} router={TabRouter} screenOptions={screenOptions}>
+    <Navigator router={TabRouter} screenOptions={screenOptions}>
       <View style={{flex: 1}}>
         <SidebarHeader onOpen={() => setIsSheetOpen(true)} />
         <SidebarNavigatorContent

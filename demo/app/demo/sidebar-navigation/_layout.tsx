@@ -2,6 +2,10 @@ import {SidebarNavigation, type SidebarNavigationItem} from "@terreno/ui";
 import {router} from "expo-router";
 import {Pressable, StyleSheet, Text} from "react-native";
 
+export const unstable_settings = {
+  initialRouteName: "index",
+};
+
 const topItems: SidebarNavigationItem[] = [
   {iconName: "house", label: "Home", route: "index"},
   {iconName: "chart-line", label: "Dashboard", route: "dashboard"},

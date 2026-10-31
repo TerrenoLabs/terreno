@@ -10,6 +10,7 @@ const SKIP_EXACT = new Set([
   "@sentry/react-native",
   "@shopify/flash-list",
   "@shopify/react-native-skia",
+  "@stripe/stripe-react-native",
   "expo",
   "react-native",
 ]);

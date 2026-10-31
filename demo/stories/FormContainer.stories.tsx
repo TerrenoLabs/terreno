@@ -1,7 +1,7 @@
 import type {FormContainerHandle} from "@terreno/ui";
 import {Button, FormContainer, Text, TextField} from "@terreno/ui";
 import {type ReactElement, useCallback, useRef, useState} from "react";
-import type {TextInput} from "react-native";
+import type {TextInputInstance} from "react-native";
 
 /**
  * A sign-in form: Enter in Email moves to Password, Enter in Password submits through the form,
@@ -9,7 +9,7 @@ import type {TextInput} from "react-native";
  */
 export const FormContainerSignIn: React.FC = (): ReactElement => {
   const formRef = useRef<FormContainerHandle>(null);
-  const passwordRef = useRef<TextInput | null>(null);
+  const passwordRef = useRef<TextInputInstance | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitCount, setSubmitCount] = useState(0);

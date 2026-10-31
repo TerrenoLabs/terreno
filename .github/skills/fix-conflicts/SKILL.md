@@ -4,6 +4,7 @@ description: >-
   Integrate the latest base, resolve Terreno conflicts without dropping either
   side, and run affected validation. Lifecycle composition: Brew for PR-update
   conflicts; Taste for current-PR conflicts.
+disable-model-invocation: true
 ---
 # Fix Conflicts
 

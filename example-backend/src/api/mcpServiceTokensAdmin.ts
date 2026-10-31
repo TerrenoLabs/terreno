@@ -11,7 +11,8 @@ export const mcpServiceTokenAdminModel: AdminModelConfig = {
   group: "Platform",
   hiddenFields: ["tokenHash"],
   listFields: ["name", "tokenPrefix", "userId", "lastUsedAt", "expiresAt", "revokedAt", "created"],
-  model: McpServiceToken,
+  // String `_id` (synced) models do not fit admin-backend's ObjectId-keyed Model type.
+  model: McpServiceToken as unknown as AdminModelConfig["model"],
   permissions: {create: false, delete: true, update: false},
   routePath: "/mcp-service-tokens",
   searchFields: ["name", "tokenPrefix"],

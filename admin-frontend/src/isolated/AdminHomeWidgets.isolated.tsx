@@ -2,15 +2,15 @@ import {describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse, AdminModelConfig} from "../types";
+import type {AdminConfigResponse, AdminModelConfig} from "../types";
 
 const pushes: string[] = [];
 mock.module("expo-router", () => ({
   router: {push: (href: string) => pushes.push(href)},
 }));
 
-mock.module("../useAdminApi", () => ({
-  useAdminApi: () => ({
+mock.module("../useAdminModelApi", () => ({
+  useAdminModelApi: () => ({
     useListQuery: () => ({data: {total: 3}, isLoading: false}),
   }),
 }));
@@ -27,7 +27,6 @@ const model: AdminModelConfig = {
 };
 const config: AdminConfigResponse = {customScreens: [], models: [model], scripts: []};
 const baseProps = {
-  api: {} as AdminApi,
   apiBase: "/admin",
   config,
   models: [model],

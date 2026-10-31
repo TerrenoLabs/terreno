@@ -13,11 +13,3 @@ export const captureException = (error: unknown | Error): void => {
     console.error("Sentry not initialized, captured exception", error);
   }
 };
-
-export const createSentryReduxEnhancer = (): unknown => {
-  if (IsWeb && typeof Sentry.createReduxEnhancer === "function") {
-    return Sentry.createReduxEnhancer();
-  }
-
-  return (next: unknown) => next;
-};

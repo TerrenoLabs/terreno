@@ -1,7 +1,6 @@
 import {AdminShellLayout, JobsDashboardScreenWidget} from "@terreno/admin-frontend";
 import React from "react";
 import {useAppConfig} from "../../components/AppConfigGate";
-import {terrenoApi} from "../../store/sdk";
 
 const JobsAdminRoute: React.FC = () => {
   const {appConfig} = useAppConfig();
@@ -9,7 +8,6 @@ const JobsAdminRoute: React.FC = () => {
 
   return (
     <AdminShellLayout
-      api={terrenoApi}
       apiBase={apiBase}
       breadcrumbs={[{href: "/", label: "Admin"}, {label: "Jobs"}]}
       configurationPath="/configuration"
@@ -17,7 +15,6 @@ const JobsAdminRoute: React.FC = () => {
       routeBase=""
     >
       <JobsDashboardScreenWidget
-        api={terrenoApi}
         config={{customScreens: [], models: [], scripts: []}}
         routeBase=""
         screenName="jobs"

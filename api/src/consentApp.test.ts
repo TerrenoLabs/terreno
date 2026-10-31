@@ -14,6 +14,7 @@ import {createAccess} from "./rbac/access";
 import {terrenoStatements} from "./rbac/statements";
 import {TerrenoApp} from "./terrenoApp";
 import {authAsUser, setupDb, type User, UserModel} from "./tests";
+import {expectDocumentedResponse} from "./tests/openApiResponseSchema";
 import type {ConsentFormDocument} from "./types/consentForm";
 
 const buildApp = (consentAppOptions: ConsentAppOptions = {}): express.Application =>
@@ -979,6 +980,103 @@ describe("ConsentApp", () => {
       await noAuditAdmin.get(`/consents/audit/${notAdmin._id}`).expect(404);
     });
   });
+
+  describe("OpenAPI", () => {
+    interface SchemaNode {
+      items?: SchemaNode;
+      properties?: Record<string, SchemaNode>;
+      required?: string[];
+      type?: string;
+    }
+
+    const responseSchema = (
+      paths: Record<string, Record<string, {responses: Record<string, unknown>}>>,
+      path: string,
+      method: string
+    ): SchemaNode | undefined => {
+      const response = paths[path]?.[method]?.responses["200"] as
+        | {content?: Record<string, {schema: SchemaNode}>}
+        | undefined;
+      return response?.content?.["application/json"]?.schema;
+    };
+
+    it("documents GET /consents/pending and POST /consents/respond", async () => {
+      const res = await supertest(buildApp()).get("/openapi.json").expect(200);
+      const paths = res.body.paths;
+
+      const pending = responseSchema(paths, "/consents/pending", "get");
+      expect(pending?.required).toEqual(["data"]);
+      expect(pending?.properties?.data?.type).toBe("array");
+      const formItem = pending?.properties?.data?.items;
+      expect(formItem?.properties?.slug?.type).toBe("string");
+      expect(formItem?.properties?.version?.type).toBe("number");
+      expect(formItem?.properties?.id?.type).toBe("string");
+
+      const respond = paths["/consents/respond"]?.post;
+      const body = respond?.requestBody?.content?.["application/json"]?.schema;
+      expect(body?.required).toEqual(["agreed", "consentFormId", "locale"]);
+      expect(body?.properties?.agreed?.type).toBe("boolean");
+      expect(body?.properties?.checkboxValues?.additionalProperties).toEqual({type: "boolean"});
+      expect(body?.properties?.signature?.type).toBe("string");
+      const respondData = responseSchema(paths, "/consents/respond", "post")?.properties?.data;
+      expect(respondData?.properties?.agreed?.type).toBe("boolean");
+      expect(respondData?.properties?.consentFormId).toBeDefined();
+    });
+
+    it("documents every field the consent routes return", async () => {
+      const app = buildApp({auditTrail: true});
+      const docRes = await supertest(app).get("/openapi.json").expect(200);
+      const paths = docRes.body.paths;
+      const form = await ConsentForm.create({
+        active: true,
+        captureSignature: true,
+        content: new Map([["en", "# Terms"]]),
+        order: 1,
+        slug: "openapi-terms",
+        title: "Terms",
+        type: "terms",
+        version: 1,
+      });
+      const agent = await authAsUser(app, "notAdmin");
+
+      const pendingRes = await agent.get("/consents/pending").expect(200);
+      expectDocumentedResponse({
+        method: "get",
+        path: "/consents/pending",
+        response: pendingRes,
+        spec: docRes.body,
+      });
+      const pendingDocumented = Object.keys(
+        responseSchema(paths, "/consents/pending", "get")?.properties?.data?.items?.properties ?? {}
+      );
+      expect(pendingDocumented).toEqual(
+        expect.arrayContaining(Object.keys(pendingRes.body.data[0]).filter((key) => key !== "__v"))
+      );
+
+      const respondRes = await agent
+        .post("/consents/respond")
+        .send({
+          agreed: true,
+          consentFormId: form._id,
+          locale: "en",
+          signature: "data:image/png;base64,AA",
+        })
+        .expect(200);
+      expectDocumentedResponse({
+        method: "post",
+        path: "/consents/respond",
+        response: respondRes,
+        spec: docRes.body,
+      });
+      const respondDocumented = Object.keys(
+        responseSchema(paths, "/consents/respond", "post")?.properties?.data?.properties ?? {}
+      );
+      expect(respondDocumented).toEqual(
+        expect.arrayContaining(Object.keys(respondRes.body.data).filter((key) => key !== "__v"))
+      );
+    });
+  });
+
   describe("POST /consent-responses/provisional", () => {
     const createActiveForm = async (
       overrides: Partial<Record<string, unknown>> = {}

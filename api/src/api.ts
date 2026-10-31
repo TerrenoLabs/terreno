@@ -56,8 +56,6 @@ import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
-import {warnRealtimeDeprecated} from "./realtime/deprecation";
-import type {RealtimeConfig} from "./realtime/types";
 import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
   type ExecutorConcurrencyCheck,
@@ -405,18 +403,6 @@ export interface ModelRouterOptions<T> {
    */
   mcp?: MCPConfig;
   /**
-   * Enable real-time sync for this model via WebSocket events.
-   * When configured, CRUD operations will emit events to connected clients
-   * through the RealtimeApp plugin's change stream watcher.
-   *
-   * Requires the RealtimeApp plugin to be registered with TerrenoApp.
-   *
-   * @deprecated Removed in Terreno 58. Use `sync` with
-   * `@terreno/syncdb` instead. `RealtimeApp` remains required for sync sockets.
-   * See docs/how-to/migrate-rtk-to-syncdb.md.
-   */
-  realtime?: RealtimeConfig;
-  /**
    * Enable local-first sync (@terreno/syncdb) for this model. Documents are scoped
    * into streams (owner/tenant/broadcast/custom) with monotonic per-stream cursors.
    * Set `sync.adminBroadcast: true` to also emit `sync:delta` to `{collection}|admin`
@@ -746,9 +732,6 @@ export function modelRouter<T>(
   const shouldDeferBuild = path !== undefined && Boolean(options.access) && !options.accessControl;
 
   if (path !== undefined) {
-    if (options.realtime) {
-      warnRealtimeDeprecated(model.modelName, path);
-    }
     registerCollection({model, options, routePath: path});
   }
 
@@ -777,13 +760,6 @@ export function modelRouter<T>(
     };
   }
 
-  if (options.realtime) {
-    warnRealtimeDeprecated(model.modelName);
-    logger.warn(
-      `modelRouter for ${model.modelName} has realtime config but was called without a path. ` +
-        "Realtime sync only works with the three-argument form: modelRouter('/path', Model, options)"
-    );
-  }
   if (options.sync) {
     logger.warn(
       `modelRouter for ${model.modelName} has sync config but was called without a path. ` +

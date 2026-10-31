@@ -136,9 +136,11 @@ const setWindowWidth = (width: number): (() => void) => {
   windowDimensions.mockImplementation(
     (): ScaledSize => ({fontScale: 1, height: 924, scale: 1, width})
   );
+  // Back to bunSetup's phone-sized default (375x812), so later suites in the process do not
+  // inherit a desktop width.
   return (): void => {
     windowDimensions.mockImplementation?.(
-      (): ScaledSize => ({fontScale: 1, height: 924, scale: 1, width: 1024})
+      (): ScaledSize => ({fontScale: 1, height: 812, scale: 2, width: 375})
     );
   };
 };

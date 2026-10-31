@@ -4,7 +4,7 @@ import type {Router} from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
-import {type ModelRouterOptions, modelRouter} from "./api";
+import {type ModelRouterOptions, modelRouter, type OpenApiMiddleware} from "./api";
 import type {UserModel as AuthUserModel} from "./auth";
 import {createOpenApiBuilder, OpenApiMiddlewareBuilder} from "./openApiBuilder";
 import {Permissions} from "./permissions";
@@ -436,6 +436,39 @@ describe("OpenApiMiddlewareBuilder configuration", () => {
     );
 
     expect(builder).toBeInstanceOf(OpenApiMiddlewareBuilder);
+  });
+
+  it("lists top-level required response fields only when given", () => {
+    const captured: Record<string, unknown>[] = [];
+    const openApi = {
+      path: (schema: Record<string, unknown> = {}): express.RequestHandler => {
+        captured.push(schema);
+        return (_req, _res, next) => next();
+      },
+    } as unknown as OpenApiMiddleware;
+
+    createOpenApiBuilder({openApi})
+      .withResponse(200, {data: {nullable: true, type: "object"}}, {required: ["data"]})
+      .withValidation({enabled: false})
+      .build();
+    createOpenApiBuilder({openApi})
+      .withResponse(200, {ok: {type: "boolean"}})
+      .withValidation({enabled: false})
+      .build();
+
+    interface CapturedOperation {
+      responses: Record<number, {content: Record<string, {schema: Record<string, unknown>}>}>;
+    }
+    const schemaOf = (index: number): Record<string, unknown> | undefined =>
+      (captured[index] as unknown as CapturedOperation | undefined)?.responses[200]?.content[
+        "application/json"
+      ]?.schema;
+    expect(schemaOf(0)).toEqual({
+      properties: {data: {nullable: true, type: "object"}},
+      required: ["data"],
+      type: "object",
+    });
+    expect(schemaOf(1)).toEqual({properties: {ok: {type: "boolean"}}, type: "object"});
   });
 
   it("supports optional request body", () => {

@@ -1,7 +1,7 @@
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {DateTime} from "luxon";
 import React, {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {Pressable, TextInput, View} from "react-native";
+import {Pressable, TextInput, type TextInputInstance, View} from "react-native";
 
 import type {ActionSheet} from "./ActionSheet";
 import {Box} from "./Box";
@@ -47,7 +47,7 @@ interface DateTimeSegmentProps {
   getFieldValue: (index: number) => string;
   handleFieldChange: (index: number, text: string, config: FieldConfig) => void;
   onBlur: (override?: {amPm?: "am" | "pm"; timezone?: string}) => void;
-  onRef: (ref: TextInput | null, index: number) => void;
+  onRef: (ref: TextInputInstance | null, index: number) => void;
   index: number;
   error?: string;
 }
@@ -495,7 +495,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
   // Use provided timezone if available, otherwise use local
   const timezone = providedTimezone ?? localTimezone;
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   let borderColor = theme.border.dark;
   if (disabled) {
@@ -993,7 +993,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     getFieldValue,
     handleFieldChange,
     onBlur,
-    onRef: (el: TextInput | null, i: number) => (inputRefs.current[i] = el),
+    onRef: (el: TextInputInstance | null, i: number) => (inputRefs.current[i] = el),
   };
 
   const isMobile = isNarrowViewport();

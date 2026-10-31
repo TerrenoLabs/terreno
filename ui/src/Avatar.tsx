@@ -3,14 +3,7 @@ import {launchImageLibraryAsync} from "expo-image-picker";
 import {LinearGradient} from "expo-linear-gradient";
 import type React from "react";
 import {type FC, useState} from "react";
-import {
-  Image,
-  type ImageErrorEventData,
-  type NativeSyntheticEvent,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import {Image, type ImageErrorEvent, Pressable, Text, View} from "react-native";
 
 import type {AvatarProps, CustomSvgProps} from "./Common";
 import {Icon} from "./Icon";
@@ -98,7 +91,7 @@ export const Avatar: FC<AvatarProps> = ({
     console.warn("Avatars with the status of 'imagePicker' should also have an onChange property.");
   }
 
-  const handleImageError = (event: NativeSyntheticEvent<ImageErrorEventData>) => {
+  const handleImageError = (event: ImageErrorEvent) => {
     setIsImageLoaded(false);
     console.warn("Image load error: ", event);
   };

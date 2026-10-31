@@ -1,27 +1,28 @@
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Heading, SocialLoginButton, Text, TextField} from "@terreno/ui";
 import {useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
-import {useDispatch} from "react-redux";
 import {useAppConfig} from "../components/AppConfigGate";
-import {useAuth} from "../components/StoreProvider";
+import {useAuthClient} from "../components/StoreProvider";
 
 type SocialProvider = "google" | "github" | "apple";
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useDispatch();
   const {appConfig} = useAppConfig();
-  const {authClient, syncSession} = useAuth();
+  const authClient = useAuthClient();
+  const {refresh} = useSession();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Resolve the new session now rather than waiting for Better Auth's session signal.
   const onSuccess = useCallback(async (): Promise<void> => {
-    await syncSession(dispatch);
+    await refresh();
     router.replace("/");
-  }, [dispatch, router, syncSession]);
+  }, [refresh, router]);
 
   const handleEmailLogin = useCallback(async (): Promise<void> => {
     setError(undefined);

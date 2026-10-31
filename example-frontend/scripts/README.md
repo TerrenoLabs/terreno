@@ -1,34 +1,15 @@
 # Frontend Scripts
 
-## generate-sdk.ts
+SDK generation no longer lives here. Both SDKs come from the `@terreno/syncdb` codegen CLI
+(`../syncdb/src/codegen/cli.ts`) run against the backend's OpenAPI spec:
 
-Generates the RTK Query SDK from the OpenAPI specification.
+- `bun run sdk` (alias of `bun run api-sdk`) writes `store/apiSdk.ts`: typed request hooks for
+  every non-synced route.
+- `bun run sync-sdk` writes `store/syncDbSdk.ts`: collection hooks for the synced collections.
 
-This is a TypeScript script executed directly by Bun.
+Start the backend on port 4000 first, or set `OPENAPI_URL`.
 
-### What it does:
+## fingerprintConfig.test.ts
 
-1. Runs the `@rtk-query/codegen-openapi` CLI using `tsx` (TypeScript executor)
-2. Uses a custom TypeScript configuration (`tsconfig.codegen.json`) that's compatible with `ts-node`
-3. Removes empty export statements that the codegen creates when there are no endpoints
-4. Formats the generated file with Biome
-
-### Usage:
-
-```bash
-bun run sdk
-```
-
-### Configuration:
-
-- **Config file**: `openapi-config.ts` - Controls SDK generation settings
-- **Output file**: `store/openApiSdk.ts` - Generated SDK file
-- **OpenAPI source**: Configured in `openapi-config.ts` (defaults to `http://localhost:3000/openapi.json`)
-
-### Troubleshooting:
-
-If the script fails, ensure:
-1. The backend is running (if using a local OpenAPI URL)
-2. `tsx` is installed in devDependencies
-3. `tsconfig.codegen.json` exists in the frontend root
-
+Checks that `fingerprint.config.js` in `demo` and `example-frontend` skips JavaScript-only
+sources, so JS changes do not change the Expo native fingerprint.

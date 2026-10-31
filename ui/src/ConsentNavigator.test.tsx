@@ -1,10 +1,11 @@
 import {describe, expect, it, mock} from "bun:test";
-import React from "react";
+import {act, fireEvent, waitFor} from "@testing-library/react-native";
+import type React from "react";
 import {Pressable} from "react-native";
 import {Box} from "./Box";
 import {ConsentNavigator} from "./ConsentNavigator";
 import {Text} from "./Text";
-import {renderWithTheme} from "./test-utils";
+import {createFakeRequestClient, fakeHttpError, renderWithTheme} from "./test-utils";
 import type {ConsentFormPublic} from "./useConsentForms";
 
 const makeForm = (overrides: Partial<ConsentFormPublic> = {}): ConsentFormPublic => ({
@@ -27,50 +28,38 @@ const makeForm = (overrides: Partial<ConsentFormPublic> = {}): ConsentFormPublic
   ...overrides,
 });
 
-const createMockApi = (forms: ConsentFormPublic[]) => {
-  const mockSubmitMutation = mock(() => Promise.resolve({data: {agreed: true, id: "response-1"}}));
-  const mockUnwrap = mock(() => Promise.resolve({agreed: true, id: "response-1"}));
-  mockSubmitMutation.mockReturnValue({unwrap: mockUnwrap});
-
-  const innerApi = {
-    injectEndpoints: mock((_config: unknown) => ({
-      useGetPendingConsentsQuery: mock(() => ({
-        data: {data: forms},
-        error: undefined,
-        isLoading: false,
-        refetch: mock(() => Promise.resolve()),
-      })),
-      useSubmitConsentResponseMutation: mock(() => [
-        mockSubmitMutation,
-        {error: undefined, isLoading: false},
-      ]),
-    })),
-  };
-
-  return {
-    enhanceEndpoints: mock((_config: unknown) => innerApi),
-  };
+/** Fake client serving `forms` from GET /consents/pending; submissions remove the form. */
+const createConsentClient = (
+  initialForms: ConsentFormPublic[],
+  {
+    pending,
+    respond,
+  }: {
+    pending?: () => unknown;
+    respond?: (body: Record<string, unknown>) => unknown;
+  } = {}
+): ReturnType<typeof createFakeRequestClient> & {forms: () => ConsentFormPublic[]} => {
+  let forms = [...initialForms];
+  const fake = createFakeRequestClient({
+    "GET /consents/pending": () => (pending ? pending() : {data: forms}),
+    "POST /consents/respond": (args) => {
+      const body = (args.body ?? {}) as Record<string, unknown>;
+      if (respond) {
+        return respond(body);
+      }
+      forms = forms.filter((form) => form.id !== body.consentFormId);
+      return {agreed: body.agreed, id: "response-1"};
+    },
+  });
+  return {...fake, forms: () => forms};
 };
 
-const createLoadingMockApi = () => {
-  const innerApi = {
-    injectEndpoints: mock((_config: unknown) => ({
-      useGetPendingConsentsQuery: mock(() => ({
-        data: undefined,
-        error: undefined,
-        isLoading: true,
-        refetch: mock(() => Promise.resolve()),
-      })),
-      useSubmitConsentResponseMutation: mock(() => [
-        mock(() => ({unwrap: mock(() => Promise.resolve({}))})),
-        {error: undefined, isLoading: false},
-      ]),
-    })),
-  };
-
-  return {
-    enhanceEndpoints: mock((_config: unknown) => innerApi),
-  };
+const renderNavigator = async (
+  element: React.ReactElement
+): Promise<ReturnType<typeof renderWithTheme>> => {
+  const result = renderWithTheme(element);
+  await waitFor(() => expect(result.queryByTestId("consent-navigator-loading")).toBeNull());
+  return result;
 };
 
 const ExtraScreen: React.FC<{onNext?: () => void}> = ({onNext}) => (
@@ -84,9 +73,9 @@ const ExtraScreen: React.FC<{onNext?: () => void}> = ({onNext}) => (
 
 describe("ConsentNavigator", () => {
   it("renders children when there are no pending consent forms", async () => {
-    const api = createMockApi([]);
-    const {getByText} = renderWithTheme(
-      <ConsentNavigator api={api}>
+    const {client} = createConsentClient([]);
+    const {getByText} = await renderNavigator(
+      <ConsentNavigator client={client}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -95,11 +84,10 @@ describe("ConsentNavigator", () => {
   });
 
   it("shows ConsentFormScreen when there are pending forms", async () => {
-    const form = makeForm();
-    const api = createMockApi([form]);
+    const {client} = createConsentClient([makeForm()]);
 
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api}>
+    const {getByTestId} = await renderNavigator(
+      <ConsentNavigator client={client}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -108,11 +96,24 @@ describe("ConsentNavigator", () => {
     expect(getByTestId("consent-form-agree-button")).toBeTruthy();
   });
 
-  it("shows loading spinner while fetching consent forms", async () => {
-    const api = createLoadingMockApi();
+  it("requests pending consents under baseUrl", async () => {
+    const {client, calls} = createFakeRequestClient({
+      "GET /api/consents/pending": () => [],
+    });
+    const {getByText} = await renderNavigator(
+      <ConsentNavigator baseUrl="/api" client={client}>
+        <Text>App Content</Text>
+      </ConsentNavigator>
+    );
+    expect(getByText("App Content")).toBeTruthy();
+    expect(calls[0]?.url).toBe("/api/consents/pending");
+  });
+
+  it("shows loading spinner while fetching consent forms", () => {
+    const {client} = createConsentClient([], {pending: () => new Promise(() => {})});
 
     const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api}>
+      <ConsentNavigator client={client}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -121,10 +122,10 @@ describe("ConsentNavigator", () => {
   });
 
   it("shows extra screens after consent forms are completed", async () => {
-    const api = createMockApi([]);
+    const {client} = createConsentClient([]);
 
-    const {getByTestId, queryByText} = renderWithTheme(
-      <ConsentNavigator api={api} extraScreens={[<ExtraScreen key="extra" />]}>
+    const {getByTestId, queryByText} = await renderNavigator(
+      <ConsentNavigator client={client} extraScreens={[<ExtraScreen key="extra" />]}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -134,11 +135,10 @@ describe("ConsentNavigator", () => {
   });
 
   it("shows children after all extra screens are dismissed", async () => {
-    const api = createMockApi([]);
-    const {act, fireEvent, waitFor} = await import("@testing-library/react-native");
+    const {client} = createConsentClient([]);
 
-    const {getByTestId, getByText} = renderWithTheme(
-      <ConsentNavigator api={api} extraScreens={[<ExtraScreen key="extra" />]}>
+    const {getByTestId, getByText} = await renderNavigator(
+      <ConsentNavigator client={client} extraScreens={[<ExtraScreen key="extra" />]}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -153,10 +153,10 @@ describe("ConsentNavigator", () => {
   });
 
   it("injects onNext prop into extra screen elements", async () => {
-    const api = createMockApi([]);
+    const {client} = createConsentClient([]);
 
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api} extraScreens={[<ExtraScreen key="extra" />]}>
+    const {getByTestId} = await renderNavigator(
+      <ConsentNavigator client={client} extraScreens={[<ExtraScreen key="extra" />]}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -165,124 +165,72 @@ describe("ConsentNavigator", () => {
     expect(getByTestId("extra-screen-next")).toBeTruthy();
   });
 
-  it("renders children when error is auth (401)", () => {
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: undefined,
-            error: {status: 401},
-            isLoading: false,
-            refetch: mock(() => {}),
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            mock(() => ({unwrap: mock(() => Promise.resolve({}))})),
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
-
-    const {getByText} = renderWithTheme(
-      <ConsentNavigator api={api}>
-        <Text>App Content</Text>
-      </ConsentNavigator>
-    );
-    expect(getByText("App Content")).toBeTruthy();
-  });
-
-  it("renders children when error is auth (403)", () => {
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: undefined,
-            error: {originalStatus: 403},
-            isLoading: false,
-            refetch: mock(() => {}),
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            mock(() => ({unwrap: mock(() => Promise.resolve({}))})),
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
-
-    const {getByText} = renderWithTheme(
-      <ConsentNavigator api={api}>
-        <Text>App Content</Text>
-      </ConsentNavigator>
-    );
-    expect(getByText("App Content")).toBeTruthy();
-  });
-
-  it("renders error screen with retry button for non-auth errors", () => {
+  it("renders children when error is auth (401)", async () => {
     const onError = mock(() => {});
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: undefined,
-            error: {message: "Server error", status: 500},
-            isLoading: false,
-            refetch: mock(() => {}),
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            mock(() => ({unwrap: mock(() => Promise.resolve({}))})),
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
+    const {client} = createConsentClient([], {
+      pending: () => {
+        throw fakeHttpError(401);
+      },
+    });
 
-    const {getByTestId, getByText} = renderWithTheme(
-      <ConsentNavigator api={api} onError={onError}>
+    const {getByText} = await renderNavigator(
+      <ConsentNavigator client={client} onError={onError}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
-    expect(getByTestId("consent-navigator-error")).toBeTruthy();
+    await waitFor(() => expect(getByText("App Content")).toBeTruthy());
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("renders children when error is auth (403 originalStatus)", async () => {
+    const {client} = createConsentClient([], {
+      pending: () => {
+        throw Object.assign(new Error("Forbidden"), {originalStatus: 403});
+      },
+    });
+
+    const {getByText} = await renderNavigator(
+      <ConsentNavigator client={client}>
+        <Text>App Content</Text>
+      </ConsentNavigator>
+    );
+    await waitFor(() => expect(getByText("App Content")).toBeTruthy());
+  });
+
+  it("renders error screen with retry button for non-auth errors", async () => {
+    const onError = mock(() => {});
+    let shouldFail = true;
+    const {client, callsTo} = createConsentClient([], {
+      pending: () => {
+        if (shouldFail) {
+          throw fakeHttpError(500, "Server error");
+        }
+        return [];
+      },
+    });
+
+    const {getByTestId, getByText} = await renderNavigator(
+      <ConsentNavigator client={client} onError={onError}>
+        <Text>App Content</Text>
+      </ConsentNavigator>
+    );
+    await waitFor(() => expect(getByTestId("consent-navigator-error")).toBeTruthy());
     expect(getByText("Failed to load consent forms")).toBeTruthy();
     expect(onError).toHaveBeenCalled();
+
+    shouldFail = false;
+    await act(async () => {
+      fireEvent.press(getByText("Retry"));
+    });
+    await waitFor(() => expect(getByText("App Content")).toBeTruthy());
+    expect(callsTo("GET /consents/pending")).toHaveLength(2);
   });
 
-  it("renders without error when no extra screens provided", () => {
-    const api = createMockApi([]);
+  it("submits and shows the app once the last form is agreed to", async () => {
+    const {client, callsTo} = createConsentClient([makeForm()]);
 
-    const {getByText} = renderWithTheme(
-      <ConsentNavigator api={api}>
-        <Text>App Content</Text>
-      </ConsentNavigator>
-    );
-
-    expect(getByText("App Content")).toBeTruthy();
-  });
-
-  it("calls submit and refetch when user agrees to a consent form", async () => {
-    const {act, fireEvent} = await import("@testing-library/react-native");
-    const form = makeForm();
-    const unwrap = mock(() => Promise.resolve({agreed: true, id: "r-1"}));
-    const submitMutation = mock(() => ({unwrap}));
-    const refetch = mock(() => Promise.resolve());
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: {data: [form]},
-            error: undefined,
-            isLoading: false,
-            refetch,
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            submitMutation,
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
-
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api}>
+    const {getByTestId, getByText} = await renderNavigator(
+      <ConsentNavigator client={client}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -291,35 +239,44 @@ describe("ConsentNavigator", () => {
       fireEvent.press(getByTestId("consent-form-agree-button"));
     });
 
-    expect(submitMutation).toHaveBeenCalled();
+    await waitFor(() => expect(getByText("App Content")).toBeTruthy());
+    const [submission] = callsTo("POST /consents/respond");
+    expect(submission?.body).toMatchObject({agreed: true, consentFormId: "form-1"});
+    // One initial load plus one refetch: the post-submit invalidation and the explicit
+    // refetch share a request.
+    expect(callsTo("GET /consents/pending")).toHaveLength(2);
+  });
+
+  it("advances to the next pending form after agreeing", async () => {
+    const {client} = createConsentClient([
+      makeForm(),
+      makeForm({id: "form-2", slug: "privacy", title: "Privacy Policy"}),
+    ]);
+
+    const {getByTestId, findByText} = await renderNavigator(
+      <ConsentNavigator client={client}>
+        <Text>App Content</Text>
+      </ConsentNavigator>
+    );
+
+    await act(async () => {
+      fireEvent.press(getByTestId("consent-form-agree-button"));
+    });
+
+    expect(await findByText("Privacy Policy")).toBeTruthy();
   });
 
   it("invokes onError when consent submission fails on agree", async () => {
-    const {act, fireEvent} = await import("@testing-library/react-native");
-    const form = makeForm();
     const onError = mock(() => {});
-    const unwrap = mock(() => Promise.reject(new Error("submit failed")));
-    const submitMutation = mock(() => ({unwrap}));
-    const refetch = mock(() => Promise.resolve());
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: {data: [form]},
-            error: undefined,
-            isLoading: false,
-            refetch,
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            submitMutation,
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
+    const submitError = fakeHttpError(500, "submit failed");
+    const {client, callsTo} = createConsentClient([makeForm()], {
+      respond: () => {
+        throw submitError;
+      },
+    });
 
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api} onError={onError}>
+    const {getByTestId} = await renderNavigator(
+      <ConsentNavigator client={client} onError={onError}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -328,76 +285,17 @@ describe("ConsentNavigator", () => {
       fireEvent.press(getByTestId("consent-form-agree-button"));
     });
 
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
-    });
-
-    expect(onError).toHaveBeenCalled();
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(submitError));
+    expect(callsTo("GET /consents/pending")).toHaveLength(1);
   });
 
   it("calls submit with agreed=false when user declines an optional consent form", async () => {
-    const {act, fireEvent} = await import("@testing-library/react-native");
-    const form = makeForm({allowDecline: true, required: false});
-    const unwrap = mock(() => Promise.resolve({agreed: false, id: "r-2"}));
-    const submitMutation = mock(() => ({unwrap}));
-    const refetch = mock(() => Promise.resolve());
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: {data: [form]},
-            error: undefined,
-            isLoading: false,
-            refetch,
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            submitMutation,
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
+    const {client, callsTo} = createConsentClient([
+      makeForm({allowDecline: true, required: false}),
+    ]);
 
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api}>
-        <Text>App Content</Text>
-      </ConsentNavigator>
-    );
-
-    const declineBtn = getByTestId("consent-form-decline-button");
-    await act(async () => {
-      fireEvent.press(declineBtn);
-    });
-    expect(submitMutation).toHaveBeenCalled();
-  });
-
-  it("invokes onError when consent submission fails on decline", async () => {
-    const {act, fireEvent} = await import("@testing-library/react-native");
-    const form = makeForm({allowDecline: true, required: false});
-    const onError = mock(() => {});
-    const declineError = new Error("decline failed");
-    const unwrap = mock(() => Promise.reject(declineError));
-    const submitMutation = mock(() => ({unwrap}));
-    const refetch = mock(() => Promise.resolve());
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock(() => ({
-          useGetPendingConsentsQuery: mock(() => ({
-            data: {data: [form]},
-            error: undefined,
-            isLoading: false,
-            refetch,
-          })),
-          useSubmitConsentResponseMutation: mock(() => [
-            submitMutation,
-            {error: undefined, isLoading: false},
-          ]),
-        })),
-      })),
-    };
-
-    const {getByTestId} = renderWithTheme(
-      <ConsentNavigator api={api} onError={onError}>
+    const {getByTestId, getByText} = await renderNavigator(
+      <ConsentNavigator client={client}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );
@@ -405,19 +303,44 @@ describe("ConsentNavigator", () => {
     await act(async () => {
       fireEvent.press(getByTestId("consent-form-decline-button"));
     });
+    await waitFor(() => expect(getByText("App Content")).toBeTruthy());
+    expect(callsTo("POST /consents/respond")[0]?.body).toMatchObject({
+      agreed: false,
+      consentFormId: "form-1",
+    });
+  });
+
+  it("invokes onError when consent submission fails on decline", async () => {
+    const onError = mock(() => {});
+    const declineError = fakeHttpError(500, "decline failed");
+    const {client, callsTo} = createConsentClient(
+      [makeForm({allowDecline: true, required: false})],
+      {
+        respond: () => {
+          throw declineError;
+        },
+      }
+    );
+
+    const {getByTestId} = await renderNavigator(
+      <ConsentNavigator client={client} onError={onError}>
+        <Text>App Content</Text>
+      </ConsentNavigator>
+    );
+
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 0));
+      fireEvent.press(getByTestId("consent-form-decline-button"));
     });
 
-    expect(onError).toHaveBeenCalledWith(declineError);
-    expect(refetch).not.toHaveBeenCalled();
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(declineError));
+    expect(callsTo("GET /consents/pending")).toHaveLength(1);
   });
 
   it("renders non-element extra screens as-is without injecting onNext", async () => {
-    const api = createMockApi([]);
+    const {client} = createConsentClient([]);
 
-    const {queryByText, toJSON} = renderWithTheme(
-      <ConsentNavigator api={api} extraScreens={[null]}>
+    const {queryByText, toJSON} = await renderNavigator(
+      <ConsentNavigator client={client} extraScreens={[null]}>
         <Text>App Content</Text>
       </ConsentNavigator>
     );

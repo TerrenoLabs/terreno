@@ -1,5 +1,11 @@
-// Re-export React Native style types for use in consumer projects
-export type {StyleProp, ViewStyle} from "react-native";
+// Re-export React Native style and host-instance types for consumer projects.
+export type {
+  ScrollViewInstance,
+  StyleProp,
+  TextInputInstance,
+  ViewInstance,
+  ViewStyle,
+} from "react-native";
 export * from "./Accordion";
 export * from "./ActionSheet";
 export * from "./AddressField";
@@ -138,6 +144,7 @@ export type * from "./ProvisionalConsentSigner";
 export * from "./pdfHtmlTemplate";
 export * from "./Radio";
 export * from "./RadioField";
+export type {TerrenoRequestArgs, TerrenoRequestClient} from "./requestClient";
 export type * from "./Scorecard";
 export * from "./ScrollView";
 export * from "./SectionDivider";

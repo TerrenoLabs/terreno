@@ -1,5 +1,5 @@
 import {type FC, useCallback, useEffect, useRef, useState} from "react";
-import {type TextInput, View} from "react-native";
+import {type TextInputInstance, View} from "react-native";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
@@ -98,16 +98,18 @@ export const PasswordCard: FC<PasswordCardProps> = ({
   const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
   const isSubmittingRef = useRef(false);
   const previousModeRef = useRef(mode);
-  const inputRefs = useRef<Partial<Record<keyof PasswordFieldErrors, TextInput | null>>>({});
+  const inputRefs = useRef<Partial<Record<keyof PasswordFieldErrors, TextInputInstance | null>>>(
+    {}
+  );
   const formRef = useRef<FormContainerHandle>(null);
 
-  const setCurrentInputRef = useCallback((ref: TextInput | null): void => {
+  const setCurrentInputRef = useCallback((ref: TextInputInstance | null): void => {
     inputRefs.current.currentPassword = ref;
   }, []);
-  const setNewInputRef = useCallback((ref: TextInput | null): void => {
+  const setNewInputRef = useCallback((ref: TextInputInstance | null): void => {
     inputRefs.current.newPassword = ref;
   }, []);
-  const setConfirmInputRef = useCallback((ref: TextInput | null): void => {
+  const setConfirmInputRef = useCallback((ref: TextInputInstance | null): void => {
     inputRefs.current.confirmPassword = ref;
   }, []);
 

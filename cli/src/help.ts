@@ -9,7 +9,7 @@ Commands:
   docs upgrade --from --to        Print lockstep upgrade notes
 
   generate syncdb                 Generate typed syncdb hooks from OpenAPI
-  generate sdk                    Run an RTK OpenAPI codegen config
+  generate sdk                    Generate typed request hooks (apiSdk.ts) from OpenAPI
   generate rest-cli               Scaffold an app CLI from OpenAPI
   generate model                  Generate a Mongoose model
   generate route                  Generate a modelRouter module
@@ -28,7 +28,7 @@ Commands:
 
   info                            Print local @terreno/* versions
   logs                            Merge backend, browser, Metro, and app logs
-  state                           Inspect client state (RTK Query and SyncDB)
+  state                           Inspect the live SyncDB client (entities, outbox, conflicts)
   eval                            Evaluate JavaScript through Metro CDP
   navigate                        Navigate the Expo app through Metro CDP
   web [url]                       Drive the web app with Bun.WebView
@@ -48,6 +48,7 @@ REST auth:
 Examples:
   terreno docs search modelRouter --packages api
   terreno generate syncdb --schema http://localhost:4000/openapi.json --out store/syncDbSdk.ts
+  terreno generate sdk --schema http://localhost:4000/openapi.json --out store/apiSdk.ts
   terreno api list --schema http://localhost:4000/openapi.json
   terreno api call todo_list --schema ./openapi.json --param limit=10
   terreno generate rest-cli --schema ./openapi.json --out ./tools/app-cli --name myapp
@@ -101,7 +102,7 @@ Requires TERRENO_MCP_EVAL=1. Evaluates JavaScript in the app runtime through Met
     generate: `Usage: terreno generate <target> [options]
 
   syncdb --schema <url|path> --out <file> [--collections a,b] [--config <json>] [--no-format]
-  sdk --config <openapi-config.ts>
+  sdk --schema <url|path> --out <file> [--config <json>] [--no-format]
   rest-cli --schema <url|path> --out <dir> --name <bin> [--base-url <url>]
   model --name Todo --field title:String:required [--owner] [--soft-delete] [--out file]
   route --model-name Todo --route-path /todos [--owner-filtered] [--sort -created] [--out file]
@@ -117,11 +118,12 @@ Requires TERRENO_MCP_EVAL=1. Evaluates JavaScript in the app runtime through Met
 
 Requires TERRENO_MCP_EVAL=1. Navigates an Expo Router app through Metro CDP.
 `,
-    state: `Usage: terreno state [--slice auth|betterAuth|rtk|<name>] [--query <substring>]
+    state: `Usage: terreno state [--collection <name>] [--entity-id <id>] [--limit <n>] [--name <client>] [--no-events]
 
-Reads client state through the registered dev stores or Metro CDP. The result names the layer it
-found (rtk, syncdb, syncdb+rtk, or none). For RTK, the auth alias prefers the Better Auth slice
-and falls back to legacy JWT auth.
+Reads a live SyncDB client created with createSyncDb({debug: true}) through the local MCP
+get_syncdb_state tool (in-process registry or Metro CDP): status, entities, outbox, conflicts,
+cursors, streams, and debug events. Sensitive fields are redacted. Snapshots and actions live in
+the terreno-mcp-local tools syncdb_snapshot and syncdb_action.
 `,
     validate: `Usage: terreno validate schema --file <path>
 `,

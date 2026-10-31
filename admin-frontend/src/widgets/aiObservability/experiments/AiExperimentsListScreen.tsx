@@ -10,9 +10,9 @@ import {unwrapExperimentList} from "./experimentTypes";
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useListQuery} = useAiObservabilityExperimentsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useListQuery} = useAiObservabilityExperimentsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading, refetch} = useListQuery();
   const statusQuery = useStatusQuery();
   const canCreate = observabilityActionAllowed({

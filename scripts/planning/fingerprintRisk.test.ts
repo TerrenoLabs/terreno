@@ -30,6 +30,9 @@ describe("isFingerprintSkip", (): void => {
     assert.isTrue(isFingerprintSkip("@sentry/react-native"));
     assert.isTrue(isFingerprintSkip("@shopify/flash-list"));
     assert.isTrue(isFingerprintSkip("@shopify/react-native-skia"));
+    assert.isTrue(isFingerprintSkip("@stripe/stripe-react-native"));
+    assert.isTrue(isFingerprintSkip("react-native-purchases"));
+    assert.isTrue(isFingerprintSkip("react-native-purchases-ui"));
     assert.isTrue(isFingerprintSkip("@react-native-async-storage/async-storage"));
     assert.isTrue(isFingerprintSkip("@react-native-community/datetimepicker"));
     assert.isTrue(isFingerprintSkip("@react-native-picker/picker"));

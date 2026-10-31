@@ -1,113 +1,119 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import type {AdminApi, EndpointBuilder} from "../types";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
+import React from "react";
+import {AdminProvider} from "../AdminProvider";
 import {commsMessageId, unwrapCommsMessage} from "./commsMessagePayload";
 import {useCommsDashboardApi} from "./useCommsDashboardApi";
 
-interface CapturedQuery {
-  body?: Record<string, unknown>;
+interface CapturedRequest {
+  body: unknown;
   method: string;
-  params?: Record<string, unknown>;
   url: string;
 }
 
-interface CapturedEndpoint {
-  invalidatesTags?: string[];
-  providesTags?: unknown;
-  query: (arg: never) => CapturedQuery;
-}
+const requests: CapturedRequest[] = [];
+const originalFetch = globalThis.fetch;
 
-/**
- * Stands in for the host RTK Query API. `injectEndpoints` is invoked eagerly so the
- * endpoint definitions can be asserted, then hook names are returned the way RTK Query
- * generates them from endpoint keys.
- */
-const createApiDouble = (): {
-  addTagTypes: string[][];
-  api: AdminApi;
-  endpoints: Record<string, CapturedEndpoint>;
-} => {
-  const endpoints: Record<string, CapturedEndpoint> = {};
-  const addTagTypes: string[][] = [];
-  const api = {
-    enhanceEndpoints: ({addTagTypes: tags}: {addTagTypes: string[]}) => {
-      addTagTypes.push(tags);
-      return api;
-    },
-    injectEndpoints: ({
-      endpoints: build,
-    }: {
-      endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-    }) => {
-      const builder = {
-        mutation: (spec: CapturedEndpoint) => spec,
-        query: (spec: CapturedEndpoint) => spec,
-      } as unknown as EndpointBuilder;
-      Object.assign(endpoints, build(builder));
-      return {
-        useCommsDashboardDetailQuery: mock(() => ({isLoading: false})),
-        useCommsDashboardListQuery: mock(() => ({isLoading: false})),
-        useCommsDashboardRetryManyMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useCommsDashboardRetryMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useCommsDashboardStatsQuery: mock(() => ({isLoading: false})),
-      };
-    },
-  } as unknown as AdminApi & {injectEndpoints: unknown};
-  return {addTagTypes, api: api as AdminApi, endpoints};
+const wrapper: React.FC<{children: React.ReactNode}> = ({children}) => (
+  <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+    {children}
+  </AdminProvider>
+);
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  });
 };
 
 describe("useCommsDashboardApi", () => {
-  it("injects every dashboard endpoint against the comms base path", () => {
-    const {addTagTypes, api, endpoints} = createApiDouble();
-    const {result} = renderHook(() => useCommsDashboardApi(api));
+  beforeEach(() => {
+    requests.length = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      requests.push({
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+        method: init?.method ?? "GET",
+        url,
+      });
+      const body =
+        url.split("?")[0] === "/comms/messages"
+          ? {data: [], more: false, page: 1, total: 0}
+          : {data: {_id: "m1"}};
+      return new Response(JSON.stringify(body), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+  });
 
-    expect(addTagTypes[0]).toEqual(["commsMessages"]);
-    expect(endpoints.commsDashboardList.query({} as never)).toEqual({
-      method: "GET",
-      params: {},
-      url: "/comms/messages",
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("reads the list, detail, and stats routes with query params", async () => {
+    const {result} = renderHook(
+      () => {
+        const api = useCommsDashboardApi();
+        return {
+          detail: api.useDetailQuery("m1"),
+          list: api.useListQuery({channel: "mail", limit: 25, page: 2}),
+          stats: api.useStatsQuery({status: "failed"}),
+        };
+      },
+      {wrapper}
+    );
+    await flush();
+
+    const urls = requests.map((request) => `${request.method} ${request.url}`);
+    expect(urls).toContain("GET /comms/messages/m1");
+    expect(urls).toContain("GET /comms/messages?channel=mail&limit=25&page=2");
+    expect(urls).toContain("GET /comms/stats?status=failed");
+    expect(result.current.list.data?.total).toBe(0);
+    // Comms keeps the raw `{data}` envelope; screens unwrap it with `unwrapCommsMessage`.
+    expect(unwrapCommsMessage(result.current.detail.data)?._id).toBe("m1");
+  });
+
+  it("posts retries and refetches the collection afterwards", async () => {
+    const {result} = renderHook(
+      () => {
+        const api = useCommsDashboardApi();
+        return {
+          list: api.useListQuery({}),
+          retry: api.useRetryMutation(),
+          retryMany: api.useRetryManyMutation(),
+        };
+      },
+      {wrapper}
+    );
+    await flush();
+    const isListRead = (r: CapturedRequest): boolean =>
+      r.method === "GET" && r.url === "/comms/messages";
+    const listCallsBefore = requests.filter(isListRead).length;
+    expect(listCallsBefore).toBe(1);
+
+    await act(async () => {
+      await result.current.retry[0]("m1").unwrap();
     });
-    expect(endpoints.commsDashboardDetail.query("m1" as never)).toEqual({
-      method: "GET",
-      url: "/comms/messages/m1",
+    await act(async () => {
+      await result.current.retryMany[0]({limit: 5}).unwrap();
     });
-    expect(endpoints.commsDashboardRetry.query("m1" as never)).toEqual({
+    await flush();
+
+    expect(requests).toContainEqual({
+      body: undefined,
       method: "POST",
       url: "/comms/messages/m1/retry",
     });
-    expect(endpoints.commsDashboardRetryMany.query({limit: 5} as never)).toEqual({
+    expect(requests).toContainEqual({
       body: {limit: 5},
       method: "POST",
       url: "/comms/messages/retryMany",
     });
-    expect(endpoints.commsDashboardStats.query({} as never)).toEqual({
-      method: "GET",
-      params: {},
-      url: "/comms/stats",
-    });
-
-    expect(typeof result.current.useListQuery).toBe("function");
-    expect(typeof result.current.useDetailQuery).toBe("function");
-    expect(typeof result.current.useStatsQuery).toBe("function");
-    expect(typeof result.current.useRetryMutation).toBe("function");
-    expect(typeof result.current.useRetryManyMutation).toBe("function");
-  });
-
-  it("invalidates the collection on both retry mutations and tags detail reads by id", () => {
-    const {api, endpoints} = createApiDouble();
-    renderHook(() => useCommsDashboardApi(api));
-
-    expect(endpoints.commsDashboardRetry.invalidatesTags).toEqual(["commsMessages"]);
-    expect(endpoints.commsDashboardRetryMany.invalidatesTags).toEqual(["commsMessages"]);
-    expect(endpoints.commsDashboardList.providesTags).toEqual(["commsMessages"]);
-    expect(endpoints.commsDashboardStats.providesTags).toEqual(["commsMessages"]);
-
-    const providesTags = endpoints.commsDashboardDetail.providesTags as (
-      result: unknown,
-      error: unknown,
-      id: string
-    ) => unknown;
-    expect(providesTags(undefined, undefined, "m1")).toEqual([{id: "m1", type: "commsMessages"}]);
+    const listCallsAfter = requests.filter(isListRead).length;
+    expect(listCallsAfter).toBeGreaterThan(listCallsBefore);
   });
 });
 

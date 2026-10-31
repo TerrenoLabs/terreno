@@ -5,19 +5,18 @@ import React, {useCallback} from "react";
 import {shouldSkipOrgScopedAdminQuery} from "../orgs/shouldSkipOrgScopedAdminQuery";
 import {useOptionalOrgContext} from "../orgs/useOrgContext";
 import type {AdminHomeWidgetProps, AdminModelConfig} from "../types";
-import {useAdminApi} from "../useAdminApi";
+import {useAdminModelApi} from "../useAdminModelApi";
 
 const ModelGridCard: React.FC<{
-  api: AdminHomeWidgetProps["api"];
   model: AdminModelConfig;
   routeBase: string;
-}> = ({api, model, routeBase}) => {
+}> = ({model, routeBase}) => {
   const organizationId = useOptionalOrgContext()?.organizationId;
   const skipOrgScopedQuery = shouldSkipOrgScopedAdminQuery({
     organizationId,
     organizationScoped: model.organizationScoped,
   });
-  const {useListQuery} = useAdminApi(api, model.routePath, model.name);
+  const {useListQuery} = useAdminModelApi(model.routePath, model.name);
   const {data, isLoading} = useListQuery(
     {limit: 1, page: 1},
     {skip: !model.routePath || skipOrgScopedQuery}
@@ -90,13 +89,13 @@ const ModelGridCard: React.FC<{
   );
 };
 
-export const ModelsGridWidget: React.FC<AdminHomeWidgetProps> = ({api, models, routeBase}) => {
+export const ModelsGridWidget: React.FC<AdminHomeWidgetProps> = ({models, routeBase}) => {
   return (
     <Card padding={4} testID="admin-home-widget-modelsGrid">
       <Heading size="sm">Models</Heading>
       <Box direction="row" gap={3} marginTop={2} wrap>
         {models.map((m) => (
-          <ModelGridCard api={api} key={m.name} model={m} routeBase={routeBase} />
+          <ModelGridCard key={m.name} model={m} routeBase={routeBase} />
         ))}
       </Box>
     </Card>

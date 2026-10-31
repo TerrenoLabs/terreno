@@ -6,34 +6,40 @@ Terreno-specific navigation patterns.
 
 ## Auth flow
 
-1. Root `_layout.tsx` checks `useSelectCurrentUserId()` from `@terreno/rtk`.
+1. Root `_layout.tsx` reads `useSession()` from `@terreno/syncdb/auth`.
 2. Unauthenticated users redirect to `/login`.
-3. Login screen calls `useEmailLoginMutation()` (from generated SDK via `generateAuthSlice`).
-4. On success, tokens are stored automatically and `setUserId` is dispatched.
-5. Root layout redirects to `/(tabs)` or the intended deep link.
+3. Login calls `betterAuthClient.signIn.email`, then `useSession().refresh()`.
+4. Once `userId` is set, the root layout starts syncdb and redirects to `/(tabs)` or the
+   intended deep link.
 
 ```tsx
-import {useEmailLoginMutation} from "@/store/sdk";
-import {Button, TextField, Page, Box} from "@terreno/ui";
+import {useSession} from "@terreno/syncdb/auth";
+import {Box, Button, Page, TextField} from "@terreno/ui";
+import {betterAuthClient} from "@/lib/betterAuth";
 
 const LoginScreen: React.FC = () => {
+  const {refresh} = useSession();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
-  const [login, {isLoading, error}] = useEmailLoginMutation();
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | undefined>();
 
   const handleLogin = useCallback(async (): Promise<void> => {
-    try {
-      await login({email, password}).unwrap();
-    } catch (err) {
-      console.error("Login failed", err);
+    setIsLoading(true);
+    const result = await betterAuthClient.signIn.email({email, password});
+    setIsLoading(false);
+    if (result.error) {
+      setError(result.error.message ?? "Login failed");
+      return;
     }
-  }, [email, login, password]);
+    await refresh();
+  }, [email, password, refresh]);
 
   return (
     <Page title="Login" scroll>
       <Box gap={3} padding={4}>
         <TextField title="Email" value={email} onChange={setEmail} type="email" />
-        <TextField title="Password" value={password} onChange={setPassword} type="password" />
+        <TextField title="Password" value={password} onChange={setPassword} type="password" errorText={error} />
         <Button text="Sign in" onClick={handleLogin} loading={isLoading} fullWidth />
       </Box>
     </Page>
@@ -87,7 +93,7 @@ For confirmation dialogs and action sheets, prefer `@terreno/ui` `Modal` or `Act
 
 ## Deep linking
 
-Configure `scheme` in `app.json`. Terreno RTK resolves API base URLs from `EXPO_PUBLIC_API_URL` or `expo.extra.BASE_URL` — keep deep link schemes separate from API URLs.
+Configure `scheme` in `app.json`. `@terreno/syncdb/config` resolves API base URLs from `expo.extra.BASE_URL` or `EXPO_PUBLIC_API_URL` — keep deep link schemes separate from API URLs.
 
 ## Programmatic navigation
 

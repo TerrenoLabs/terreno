@@ -41,14 +41,16 @@ new TerrenoApp({userModel: User})
 
 ### Frontend
 
-Use the `useFeatureFlags` hook from `@terreno/rtk` to evaluate flags for the current user:
+Use `useFeatureFlags` from `@terreno/syncdb/flags` to read flags for the current user. It
+loads `GET {basePath}/flagConfiguration` with the syncdb request client (the one from
+`ApiClientProvider`) and refetches when the server pushes `featureFlagsChanged` on the
+syncdb socket:
 
 ```typescript
-import {useFeatureFlags} from "@terreno/rtk";
-import {terrenoApi} from "@/store/sdk";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 
-const MyComponent = () => {
-  const {getFlag, getVariant, isLoading} = useFeatureFlags(terrenoApi);
+const MyComponent: React.FC<{userId?: string}> = ({userId}) => {
+  const {getFlag, getVariant, isLoading} = useFeatureFlags({skip: !userId, userId});
 
   if (isLoading) return <Spinner />;
 
@@ -59,11 +61,41 @@ const MyComponent = () => {
 };
 ```
 
-New code can also use OpenFeature React hooks (`useBooleanFlagValue`, `useStringFlagValue`, `FeatureFlag`, …) after wiring `useTerrenoFeatureFlags` and `<OpenFeatureProvider domain="feature-flags">` — see `@terreno/rtk` and [how-to: add feature flags](../how-to/add-feature-flags.md).
+New code can also use OpenFeature React hooks (`useBooleanFlagValue`, `useStringFlagValue`, `FeatureFlag`, …) after wiring `useTerrenoFeatureFlags` and `<OpenFeatureProvider domain="feature-flags">` — see [how-to: add feature flags](../how-to/add-feature-flags.md).
+
+#### `@terreno/syncdb/flags`
+
+| Export | Description |
+|--------|-------------|
+| `useTerrenoFeatureFlags(options?)` | Loads `/flagConfiguration` into OpenFeature's `TypedInMemoryProvider` for `domain`; returns `{client, flags, isLoading, error, refetch}` |
+| `useFeatureFlags(options?)` | Flat accessors over `useTerrenoFeatureFlags`: `{flags, getFlag, getVariant, isLoading, error, refetch}` |
+| `TerrenoFlagConfiguration`, `TerrenoFlagDefinition` | Wire shape of `/flagConfiguration` |
+| `DEFAULT_FEATURE_FLAGS_BASE_PATH`, `DEFAULT_FEATURE_FLAGS_DOMAIN`, `DEFAULT_FEATURE_FLAGS_EVENT` | `"/feature-flags"`, `"feature-flags"`, `"featureFlagsChanged"` |
+
+Options (both hooks):
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `userId` | `null` | Current user. A change refetches and sets the OpenFeature `targetingKey` |
+| `skip` | `false` | Do not fetch or listen (for example while signed out) |
+| `client` | `ApiClientProvider` client | Request client from `@terreno/syncdb/api` |
+| `socket` | `SyncDbProvider` client | Anything with `onSocketEvent` (a `SyncDb`). Pass your `syncDb` when the hook sits above `SyncDbProvider`; `null` turns live refresh off |
+| `socketEventName` | `"featureFlagsChanged"` | Push event that triggers a refetch |
+| `basePath` | `"/feature-flags"` | `FeatureFlagsApp` `basePath` |
+| `domain` | `"feature-flags"` | OpenFeature domain; must match `<OpenFeatureProvider domain>` |
+
+`isLoading` is `true` until the first response is installed in OpenFeature and again while a
+refetch is in flight; it is `false` when skipped or after an error. Every hook reading the same
+`basePath` shares one cache entry, so a single instance that listens to the socket (usually the
+root `OpenFeatureProvider` bridge) is enough; other screens can pass `socket: null`. The last
+unmounted `useTerrenoFeatureFlags` for a domain restores OpenFeature's NOOP provider.
+
+`@openfeature/web-sdk` (and `@openfeature/react-sdk` for the React hooks) are optional peer
+dependencies of `@terreno/syncdb`; add them to apps that import `@terreno/syncdb/flags`.
 
 ## OpenFeature integration
 
-`FeatureFlagsApp` registers an OpenFeature **server** provider (`MongoFeatureFlagProvider`) on a dedicated domain (default `"feature-flags"`) so the global default provider is unchanged. The authenticated bulk endpoint **`GET {basePath}/flagConfiguration`** returns a `FlagConfiguration`-compatible map (suitable for `TypedInMemoryProvider` on the client). Disabled **boolean** flags are included and resolve to `off`, so a client can tell a turned-off flag from one that was never created. Disabled variant flags and archived flags are omitted. The legacy **`GET {basePath}/evaluate`** response shape is unchanged but is **deprecated**: responses include `Deprecation: true` and a `Sunset` HTTP-date header (~90 days). Prefer `useTerrenoFeatureFlags` / `useFeatureFlags` from `@terreno/rtk`, or migrate direct HTTP callers to `/flagConfiguration`.
+`FeatureFlagsApp` registers an OpenFeature **server** provider (`MongoFeatureFlagProvider`) on a dedicated domain (default `"feature-flags"`) so the global default provider is unchanged. The authenticated bulk endpoint **`GET {basePath}/flagConfiguration`** returns a `FlagConfiguration`-compatible map (suitable for `TypedInMemoryProvider` on the client). Disabled **boolean** flags are included and resolve to `off`, so a client can tell a turned-off flag from one that was never created. Disabled variant flags and archived flags are omitted. The legacy **`GET {basePath}/evaluate`** response shape is unchanged but is **deprecated**: responses include `Deprecation: true` and a `Sunset` HTTP-date header (~90 days). Prefer `useTerrenoFeatureFlags` / `useFeatureFlags` from `@terreno/syncdb/flags`, or migrate direct HTTP callers to `/flagConfiguration`. The server logs this advice once per process on the first `/evaluate` call.
 
 ### `defaultVariant` on `FeatureFlag`
 
@@ -80,6 +112,15 @@ Consumers may augment `@openfeature/core` with `BooleanFlagKey` / `StringFlagKey
 ### Live updates (optional)
 
 Pass `liveUpdates: { socketIoServer: io | () => io }` to broadcast on Mongoose change streams. **Requires MongoDB as a replica set** (single-node replset is fine). Emits a socket event (default `featureFlagsChanged`, payload `{ key }`) and `PROVIDER_CONFIGURATION_CHANGED` on the server provider. All authenticated subscribers receive the same event name; payload is only the flag key (same keys are already exposed per user via `/flagConfiguration`).
+
+Emit on the Socket.io server that hosts the syncdb socket — `RealtimeApp.getIo()` — so clients
+receive the push on the one socket they already hold:
+
+```typescript
+const realtimeApp = new RealtimeApp({/* ... */});
+app.register(realtimeApp);
+app.register(new FeatureFlagsApp({liveUpdates: {socketIoServer: () => realtimeApp.getIo()}}));
+```
 
 ## Exports
 

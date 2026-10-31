@@ -1,165 +1,259 @@
-import {describe, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
-import type {AdminApi, EndpointBuilder} from "../types";
-import {useOrganizationsApi} from "./useOrganizationsApi";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {act, waitFor} from "@testing-library/react-native";
+import React from "react";
+import {renderWithTheme} from "../../../ui/src/test-utils";
+import {AdminProvider} from "../AdminProvider";
+import {adminOrganizationHeaders} from "./organizationHeaders";
+import {type OrganizationsApi, useOrganizationsApi} from "./useOrganizationsApi";
 
-interface CapturedQuery {
-  body?: Record<string, unknown>;
-  headers?: Record<string, string>;
+interface FetchCall {
+  body?: unknown;
+  headers: Record<string, string>;
   method: string;
   url: string;
 }
 
-interface CapturedEndpoint {
-  invalidatesTags?: string[] | unknown;
-  providesTags?: unknown;
-  query: (arg: never) => CapturedQuery;
+interface StubResponse {
+  body?: unknown;
+  pending?: boolean;
+  status?: number;
 }
 
-/**
- * Stands in for the host RTK Query API. `injectEndpoints` is invoked eagerly so the
- * endpoint definitions can be asserted, then hook names are returned the way RTK Query
- * generates them from endpoint keys.
- */
-const createApiDouble = (): {
-  addTagTypes: string[][];
-  api: AdminApi;
-  endpoints: Record<string, CapturedEndpoint>;
-} => {
-  const endpoints: Record<string, CapturedEndpoint> = {};
-  const addTagTypes: string[][] = [];
-  const api = {
-    enhanceEndpoints: ({addTagTypes: tags}: {addTagTypes: string[]}) => {
-      addTagTypes.push(tags);
-      return api;
-    },
-    injectEndpoints: ({
-      endpoints: build,
-    }: {
-      endpoints: (builder: EndpointBuilder) => Record<string, CapturedEndpoint>;
-    }) => {
-      const builder = {
-        mutation: (spec: CapturedEndpoint) => spec,
-        query: (spec: CapturedEndpoint) => spec,
-      } as unknown as EndpointBuilder;
-      Object.assign(endpoints, build(builder));
-      return {
-        useOrgCreateMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useOrgDeleteMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useOrgListQuery: mock(() => ({isLoading: false})),
-        useOrgMemberAttachMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useOrgMemberRemoveMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useOrgMembersQuery: mock(() => ({isLoading: false})),
-        useOrgMemberUpdateMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-        useOrgMineQuery: mock(() => ({isLoading: false})),
-        useOrgReadQuery: mock(() => ({isLoading: false})),
-        useOrgUpdateMutation: mock(() => [mock(() => ({})), {isLoading: false}]),
-      };
-    },
-  } as unknown as AdminApi;
-  return {addTagTypes, api, endpoints};
+const calls: FetchCall[] = [];
+const pendingResolvers: Array<() => void> = [];
+/** Responses keyed by `"METHOD url"`; unmatched requests answer `{data: {}}`. */
+const routes = new Map<string, StubResponse>();
+const originalFetch = globalThis.fetch;
+
+/** Routes the real `useOrganizationsApi` fetch client through `routes`. */
+const installFetch = (): void => {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const headers: Record<string, string> = {};
+    new Headers(init?.headers).forEach((value, key) => {
+      headers[key] = value;
+    });
+    const call: FetchCall = {
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+      headers,
+      method: init?.method ?? "GET",
+      url: String(input),
+    };
+    calls.push(call);
+    const {
+      body,
+      pending,
+      status = 200,
+    } = routes.get(`${call.method} ${call.url}`) ?? {
+      body: {data: {}},
+    };
+    if (pending) {
+      await new Promise<void>((resolve) => {
+        pendingResolvers.push(resolve);
+      });
+    }
+    if (status === 204) {
+      return new Response(null, {status});
+    }
+    return new Response(JSON.stringify(body ?? {}), {
+      headers: {"Content-Type": "application/json"},
+      status,
+    });
+  }) as typeof fetch;
 };
 
+type HookResults = {
+  list: ReturnType<OrganizationsApi["useListQuery"]>;
+  members: ReturnType<OrganizationsApi["useMembersQuery"]>;
+  mine: ReturnType<OrganizationsApi["useMineQuery"]>;
+  read: ReturnType<OrganizationsApi["useReadQuery"]>;
+  create: ReturnType<OrganizationsApi["useCreateMutation"]>;
+  remove: ReturnType<OrganizationsApi["useDeleteMutation"]>;
+  update: ReturnType<OrganizationsApi["useUpdateMutation"]>;
+  attach: ReturnType<OrganizationsApi["useMemberAttachMutation"]>;
+  removeMember: ReturnType<OrganizationsApi["useMemberRemoveMutation"]>;
+  updateMember: ReturnType<OrganizationsApi["useMemberUpdateMutation"]>;
+};
+
+const renderOrganizationsApi = ({
+  basePath,
+  skip = false,
+}: {
+  basePath?: string;
+  skip?: boolean;
+}): {current: () => HookResults} => {
+  let latest: HookResults | undefined;
+  const Probe: React.FC = () => {
+    const api = useOrganizationsApi(basePath);
+    latest = {
+      attach: api.useMemberAttachMutation(),
+      create: api.useCreateMutation(),
+      list: api.useListQuery(undefined, {skip}),
+      members: api.useMembersQuery("org-1", {skip}),
+      mine: api.useMineQuery(undefined, {skip}),
+      read: api.useReadQuery("org-1", {skip}),
+      remove: api.useDeleteMutation(),
+      removeMember: api.useMemberRemoveMutation(),
+      update: api.useUpdateMutation(),
+      updateMember: api.useMemberUpdateMutation(),
+    };
+    return null;
+  };
+  renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      <Probe />
+    </AdminProvider>
+  );
+  return {
+    current: (): HookResults => {
+      if (!latest) {
+        throw new Error("Probe did not render");
+      }
+      return latest;
+    },
+  };
+};
+
+const findCall = (method: string, url: string): FetchCall | undefined =>
+  calls.find((call) => call.method === method && call.url === url);
+
+const countCalls = (method: string, url: string): number =>
+  calls.filter((call) => call.method === method && call.url === url).length;
+
 describe("useOrganizationsApi", () => {
-  it("injects every organization endpoint against the base path", () => {
-    const {addTagTypes, api, endpoints} = createApiDouble();
-    const {result} = renderHook(() => useOrganizationsApi(api, "/custom-orgs", "org-ctx"));
-
-    assert.deepEqual(addTagTypes[0], ["organizations", "organization-members"]);
-    assert.deepEqual(endpoints.orgCreate.query({name: "Acme"} as never), {
-      body: {name: "Acme"},
-      method: "POST",
-      url: "/custom-orgs",
-    });
-    assert.deepEqual(endpoints.orgDelete.query("org-1" as never), {
-      method: "DELETE",
-      url: "/custom-orgs/org-1",
-    });
-    assert.deepEqual(endpoints.orgList.query(undefined as never), {
-      method: "GET",
-      url: "/custom-orgs",
-    });
-    assert.deepEqual(endpoints.orgMine.query(undefined as never), {
-      method: "GET",
-      url: "/custom-orgs/mine",
-    });
-    assert.deepEqual(endpoints.orgRead.query("org-1" as never), {
-      headers: {"X-Organization-Id": "org-1"},
-      method: "GET",
-      url: "/custom-orgs/org-1",
-    });
-    assert.deepEqual(endpoints.orgUpdate.query({body: {name: "Acme"}, id: "org-1"} as never), {
-      body: {name: "Acme"},
-      headers: {"X-Organization-Id": "org-1"},
-      method: "PATCH",
-      url: "/custom-orgs/org-1",
-    });
-    assert.deepEqual(
-      endpoints.orgMemberAttach.query({body: {email: "a@b.com"}, id: "org-1"} as never),
-      {
-        body: {email: "a@b.com"},
-        headers: {"X-Organization-Id": "org-1"},
-        method: "POST",
-        url: "/custom-orgs/org-1/members",
-      }
-    );
-    assert.deepEqual(endpoints.orgMembers.query("org-1" as never), {
-      headers: {"X-Organization-Id": "org-1"},
-      method: "GET",
-      url: "/custom-orgs/org-1/members",
-    });
-    assert.deepEqual(
-      endpoints.orgMemberUpdate.query({
-        body: {roleName: "member"},
-        id: "org-1",
-        memberId: "membership-1",
-      } as never),
-      {
-        body: {roleName: "member"},
-        headers: {"X-Organization-Id": "org-1"},
-        method: "PATCH",
-        url: "/custom-orgs/org-1/members/membership-1",
-      }
-    );
-    assert.deepEqual(
-      endpoints.orgMemberRemove.query({
-        body: {},
-        id: "org-1",
-        memberId: "membership-1",
-      } as never),
-      {
-        headers: {"X-Organization-Id": "org-1"},
-        method: "DELETE",
-        url: "/custom-orgs/org-1/members/membership-1",
-      }
-    );
-
-    assert.exists(result.current.useCreateMutation);
-    assert.exists(result.current.useDeleteMutation);
-    assert.exists(result.current.useListQuery);
-    assert.exists(result.current.useMemberAttachMutation);
-    assert.exists(result.current.useMemberRemoveMutation);
-    assert.exists(result.current.useMembersQuery);
-    assert.exists(result.current.useMemberUpdateMutation);
-    assert.exists(result.current.useMineQuery);
-    assert.exists(result.current.useReadQuery);
-    assert.exists(result.current.useUpdateMutation);
+  beforeEach(() => {
+    calls.length = 0;
+    routes.clear();
+    installFetch();
   });
 
-  it("tags collection and membership endpoints for cache invalidation", () => {
-    const {api, endpoints} = createApiDouble();
-    renderHook(() => useOrganizationsApi(api));
+  afterEach(() => {
+    for (const resolve of pendingResolvers.splice(0)) {
+      resolve();
+    }
+    globalThis.fetch = originalFetch;
+  });
 
-    assert.deepEqual(endpoints.orgCreate.invalidatesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgDelete.invalidatesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgUpdate.invalidatesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgList.providesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgMine.providesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgRead.providesTags, ["organizations"]);
-    assert.deepEqual(endpoints.orgMemberAttach.invalidatesTags, ["organization-members"]);
-    assert.deepEqual(endpoints.orgMemberRemove.invalidatesTags, ["organization-members"]);
-    assert.deepEqual(endpoints.orgMemberUpdate.invalidatesTags, ["organization-members"]);
-    assert.deepEqual(endpoints.orgMembers.providesTags, ["organization-members"]);
+  it("loads list, mine, read, and members with organization headers", async () => {
+    routes.set("GET /custom-orgs", {body: {data: [{_id: "org-1"}], limit: 1, more: false}});
+    routes.set("GET /custom-orgs/mine", {body: {data: [{_id: "org-1"}]}});
+    routes.set("GET /custom-orgs/org-1", {body: {data: {_id: "org-1", name: "Acme"}}});
+    routes.set("GET /custom-orgs/org-1/members", {body: {data: [{_id: "membership-1"}]}});
+    const hooks = renderOrganizationsApi({basePath: "/custom-orgs"});
+
+    await waitFor(() => {
+      expect(hooks.current().members.isLoading).toBe(false);
+      expect(hooks.current().read.isLoading).toBe(false);
+    });
+    expect(hooks.current().list.data).toEqual({data: [{_id: "org-1"}], limit: 1, more: false});
+    expect(hooks.current().mine.data).toEqual([{_id: "org-1"}]);
+    expect(hooks.current().read.data).toEqual({_id: "org-1", name: "Acme"});
+    expect(hooks.current().members.data).toEqual([{_id: "membership-1"}]);
+    expect(findCall("GET", "/custom-orgs")?.headers["x-organization-id"]).toBeUndefined();
+    expect(findCall("GET", "/custom-orgs/mine")?.headers["x-organization-id"]).toBeUndefined();
+    expect(findCall("GET", "/custom-orgs/org-1")?.headers["x-organization-id"]).toBe("org-1");
+    expect(findCall("GET", "/custom-orgs/org-1/members")?.headers["x-organization-id"]).toBe(
+      "org-1"
+    );
+  });
+
+  it("omits the organization header when no organization id is given", () => {
+    expect(adminOrganizationHeaders(undefined)).toBeUndefined();
+    expect(adminOrganizationHeaders("org-1")).toEqual({"X-Organization-Id": "org-1"});
+  });
+
+  it("skips queries when asked and defaults the base path to /orgs", async () => {
+    const hooks = renderOrganizationsApi({skip: true});
+    await act(async () => {});
+
+    expect(calls).toHaveLength(0);
+    expect(hooks.current().list.isLoading).toBe(false);
+  });
+
+  it("sends organization mutations and refetches organization queries", async () => {
+    const hooks = renderOrganizationsApi({});
+    await waitFor(() => {
+      expect(hooks.current().list.isLoading).toBe(false);
+    });
+    const listCallsBefore = countCalls("GET", "/orgs");
+
+    await act(async () => {
+      await hooks.current().create[0]({name: "Acme"}).unwrap();
+    });
+    expect(findCall("POST", "/orgs")?.body).toEqual({name: "Acme"});
+
+    await act(async () => {
+      await hooks
+        .current()
+        .update[0]({body: {name: "Acme 2"}, id: "org-1"})
+        .unwrap();
+    });
+    expect(findCall("PATCH", "/orgs/org-1")).toMatchObject({
+      body: {name: "Acme 2"},
+      headers: {"x-organization-id": "org-1"},
+    });
+
+    await act(async () => {
+      await hooks.current().remove[0]("org-1").unwrap();
+    });
+    expect(findCall("DELETE", "/orgs/org-1")).toBeDefined();
+
+    await waitFor(() => {
+      expect(countCalls("GET", "/orgs")).toBeGreaterThan(listCallsBefore);
+    });
+  });
+
+  it("sends membership mutations with the organization header and refetches members", async () => {
+    const hooks = renderOrganizationsApi({});
+    await waitFor(() => {
+      expect(hooks.current().members.isLoading).toBe(false);
+    });
+    const memberCallsBefore = countCalls("GET", "/orgs/org-1/members");
+
+    await act(async () => {
+      await hooks
+        .current()
+        .attach[0]({body: {email: "a@b.com"}, id: "org-1"})
+        .unwrap();
+    });
+    expect(findCall("POST", "/orgs/org-1/members")).toMatchObject({
+      body: {email: "a@b.com"},
+      headers: {"x-organization-id": "org-1"},
+    });
+
+    await act(async () => {
+      await hooks
+        .current()
+        .updateMember[0]({body: {roleName: "member"}, id: "org-1", memberId: "membership-1"})
+        .unwrap();
+    });
+    expect(findCall("PATCH", "/orgs/org-1/members/membership-1")).toMatchObject({
+      body: {roleName: "member"},
+      headers: {"x-organization-id": "org-1"},
+    });
+
+    await act(async () => {
+      await hooks
+        .current()
+        .removeMember[0]({body: {}, id: "org-1", memberId: "membership-1"})
+        .unwrap();
+    });
+    const removeCall = findCall("DELETE", "/orgs/org-1/members/membership-1");
+    expect(removeCall?.headers["x-organization-id"]).toBe("org-1");
+    expect(removeCall?.body).toBeUndefined();
+
+    await waitFor(() => {
+      expect(countCalls("GET", "/orgs/org-1/members")).toBeGreaterThan(memberCallsBefore);
+    });
+  });
+
+  it("unwraps single-document mutation responses", async () => {
+    routes.set("POST /orgs", {body: {data: {_id: "org-9", name: "Nine"}}});
+    const hooks = renderOrganizationsApi({skip: true});
+    let created: unknown;
+
+    await act(async () => {
+      created = await hooks.current().create[0]({name: "Nine"}).unwrap();
+    });
+    expect(created).toEqual({_id: "org-9", name: "Nine"});
   });
 });

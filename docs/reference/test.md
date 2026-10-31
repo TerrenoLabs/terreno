@@ -282,6 +282,28 @@ per-file, per-rule counts so CI fails only on new violations. Suppress one line 
 `test-hygiene-disable-next-line <rule>[, <rule>]` comment. Exit codes: 0 clean, 1 new
 violations, 2 usage error.
 
+### Documented-response checks (`@terreno/api/testing`)
+
+`expectDocumentedResponse({spec, path, method, response})` validates a real response body
+against the schema `/openapi.json` documents for that path, method, and status (AJV, with
+`#/components/...` refs and `nullable` resolved). It throws listing every violation, or when
+the route, status, or media type is not documented. `validateDocumentedResponse` returns
+`{valid, errors}` instead of throwing. `path` is the OpenAPI template
+(`/announcements/{id}/click`); pass the supertest response as `response`.
+
+`@terreno/api/testing` also registers api's own test models (including `User`). A package
+that defines its own `User` model imports the same two functions from the side-effect-free
+`@terreno/api/testing/openApi` entry instead, so one test process never compiles `User` twice.
+
+```typescript
+import {authAsUser, expectDocumentedResponse} from "@terreno/api/testing";
+
+const spec = (await supertest(app).get("/openapi.json")).body;
+const agent = await authAsUser(app, "notAdmin");
+const res = await agent.get("/auth/me").expect(200);
+expectDocumentedResponse({method: "get", path: "/auth/me", response: res, spec});
+```
+
 ## Conventions
 
 - Preload once per package via `bunfig.toml`; do not start Mongo in individual test files.
@@ -299,7 +321,7 @@ exits 0 on a 2-vCPU worker before it prints the `All files` row. When that
 row is still missing after one retry, the script uses `coverage/lcov.info`
 only if it lists every non-test source file under `src/`. Dedicated CircleCI
 jobs (`api-ci`, `ai-ci`, `blocks-ci`,
-`rtk-ci`, `ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
+`ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
 that script. Published packages without a dedicated workflow
 (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `@terreno/test`)
 run the same lint, compile, and coverage commands via the parameterized
@@ -309,7 +331,7 @@ including `.github/workflows/packages-ci.yml`. Those twins run
 pass `secrets.CODECOV_TOKEN` into `upload-codecov`.
 
 Each of those jobs then uploads `coverage/lcov.info` to Codecov with a distinct
-flag (`api`, `ui`, `rtk`, …) via `scripts/upload-codecov.sh`. The script
+flag (`api`, `ui`, `syncdb`, …) via `scripts/upload-codecov.sh`. The script
 downloads the linux uploader over HTTPS and refuses to run it unless the
 SHA-256 digest matches the pin in the script (`CODECOV_UPLOADER_SHA256`).
 `codecov.yml` sets per-package flags, `target: auto` with a 1% threshold so
@@ -346,7 +368,10 @@ registered `DemoConfig` demo and story through `renderWithTheme` from
 Pull requests also run the `New file coverage` workflow. Every newly added workspace
 `.ts` or `.tsx` implementation file must have at least 90% function coverage and 90%
 line coverage. Test, spec, story, generated OpenAPI SDK, `dist`, isolated-test,
-`src/types` type modules, demo `story-config/*.config.tsx`, and Expo Router route
+`src/types` type modules, modules whose only exports are `interface` and `type`
+aliases (comments and string literals do not count; TypeScript erases them, so
+Bun writes no LCOV record), demo
+`story-config/*.config.tsx`, and Expo Router route
 files (`index`, `_layout`, `+not-found`, `[param]`, plus example recovery screens
 `forgotPassword` / `resetPassword` / `verifyEmail`) are excluded. A new implementation
 file that is absent from LCOV is treated as 0% covered, except files listed in

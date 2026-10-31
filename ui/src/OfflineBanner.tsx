@@ -19,8 +19,9 @@ export interface OfflineBannerProps {
  *
  * @example
  * ```typescript
- * const {isOnline, queueLength, isSyncing} = useServerStatus();
- * <OfflineBanner isOnline={isOnline} queueLength={queueLength} isSyncing={isSyncing} />
+ * // useSyncStatus from @terreno/syncdb/react
+ * const {isOnline, isSyncing, queuedCount} = useSyncStatus();
+ * <OfflineBanner isOnline={isOnline} queueLength={queuedCount} isSyncing={isSyncing} />
  * ```
  */
 export const OfflineBanner: React.FC<OfflineBannerProps> = ({

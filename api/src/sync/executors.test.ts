@@ -465,6 +465,34 @@ describe("executeUpdate", () => {
     expect(error.status).toBe(404);
   });
 
+  it("gives preUpdate the document id as req.params.id when no request is passed", async () => {
+    const doc = await createDoc();
+    const seenIds: unknown[] = [];
+    const options = baseOptions({
+      preUpdate: (body, req) => {
+        seenIds.push(req.params.id);
+        return body;
+      },
+    });
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      user: owner,
+    });
+    // A socket sync mutation passes a `{user}` request that has no params.
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed again"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      req: {user: owner} as unknown as express.Request,
+      user: owner,
+    });
+    expect(seenIds).toEqual([doc._id.toString(), doc._id.toString()]);
+  });
+
   it("returns 403 when preUpdate returns null", async () => {
     const doc = await createDoc();
     const options = baseOptions({preUpdate: () => null});

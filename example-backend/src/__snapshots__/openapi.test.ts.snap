@@ -8247,12 +8247,25 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "items": {
                         "properties": {
                           "_id": {
+                            "description": "The MCP service token id (String so the synced collection can address it)",
                             "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
                           },
                           "created": {
                             "description": "When this document was created",
                             "format": "date-time",
                             "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
                           },
                           "expiresAt": {
                             "description": "When this MCP service token expires; unset when it does not expire",
@@ -8559,12 +8572,25 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The MCP service token id (String so the synced collection can address it)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
                       "format": "date-time",
                       "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
                     },
                     "expiresAt": {
                       "description": "When this MCP service token expires; unset when it does not expire",
@@ -14927,6 +14953,194 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/announcements/feed": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Client platform. Defaults from the User-Agent, then web.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ios",
+                "android",
+                "web",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number, compared with each announcement's minimum.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+          {
+            "description": "Page size, 1 to 100 (default 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+          {
+            "description": "Page number, from 1",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "body": {
+                            "description": "Markdown body",
+                            "type": "string",
+                          },
+                          "displayMode": {
+                            "enum": [
+                              "modal",
+                              "banner",
+                              "feed",
+                            ],
+                            "type": "string",
+                          },
+                          "id": {
+                            "type": "string",
+                          },
+                          "primaryAction": {
+                            "properties": {
+                              "label": {
+                                "type": "string",
+                              },
+                              "url": {
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "label",
+                              "url",
+                            ],
+                            "type": "object",
+                          },
+                          "priority": {
+                            "type": "number",
+                          },
+                          "publishedAt": {
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "requiresAcknowledgement": {
+                            "type": "boolean",
+                          },
+                          "title": {
+                            "type": "string",
+                          },
+                          "version": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "body",
+                          "displayMode",
+                          "id",
+                          "priority",
+                          "requiresAcknowledgement",
+                          "title",
+                          "version",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "more": {
+                      "description": "Whether a later page has more announcements",
+                      "type": "boolean",
+                    },
+                    "page": {
+                      "type": "number",
+                    },
+                    "total": {
+                      "description": "Visible announcements across all pages",
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "data",
+                    "more",
+                    "page",
+                    "total",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List announcements visible to the current user",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
     "/announcements/import-release": {
       "post": {
         "description": "Idempotently create or update a release pack. Defaults to drafts; set publish=true to publish.",
@@ -15375,6 +15589,173 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
         },
         "summary": "Admin overview of announcements with aggregate metrics",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
+    "/announcements/pending": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Client platform. Defaults from the User-Agent, then web.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ios",
+                "android",
+                "web",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number, compared with each announcement's minimum.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "current": {
+                          "nullable": true,
+                          "properties": {
+                            "body": {
+                              "description": "Markdown body",
+                              "type": "string",
+                            },
+                            "displayMode": {
+                              "enum": [
+                                "modal",
+                                "banner",
+                                "feed",
+                              ],
+                              "type": "string",
+                            },
+                            "id": {
+                              "type": "string",
+                            },
+                            "primaryAction": {
+                              "properties": {
+                                "label": {
+                                  "type": "string",
+                                },
+                                "url": {
+                                  "type": "string",
+                                },
+                              },
+                              "required": [
+                                "label",
+                                "url",
+                              ],
+                              "type": "object",
+                            },
+                            "priority": {
+                              "type": "number",
+                            },
+                            "publishedAt": {
+                              "format": "date-time",
+                              "type": "string",
+                            },
+                            "requiresAcknowledgement": {
+                              "type": "boolean",
+                            },
+                            "title": {
+                              "type": "string",
+                            },
+                            "version": {
+                              "type": "number",
+                            },
+                          },
+                          "required": [
+                            "body",
+                            "displayMode",
+                            "id",
+                            "priority",
+                            "requiresAcknowledgement",
+                            "title",
+                            "version",
+                          ],
+                          "type": "object",
+                        },
+                        "remainingCount": {
+                          "description": "Pending announcements after the current one",
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "current",
+                        "remainingCount",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get the next announcement the current user should see",
         "tags": [
           "announcements",
         ],
@@ -16049,6 +16430,1120 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         },
         "tags": [
           "announcements",
+        ],
+      },
+    },
+    "/announcements/{id}/acknowledge": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Announcement id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client platform. Defaults from the User-Agent, then web.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ios",
+                "android",
+                "web",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number, compared with each announcement's minimum.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "acknowledged": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "acknowledged",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Acknowledge an announcement for the current user",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
+    "/announcements/{id}/click": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Announcement id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Used when the body has no platform. Defaults from the User-Agent.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ios",
+                "android",
+                "web",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number, compared with each announcement's minimum.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "action": {
+                    "enum": [
+                      "primaryAction",
+                    ],
+                    "required": true,
+                    "type": "string",
+                  },
+                  "platform": {
+                    "enum": [
+                      "ios",
+                      "android",
+                      "web",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "action",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "recorded": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "recorded",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Record that the current user clicked an announcement's primary action",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
+    "/announcements/{id}/impression": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Announcement id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Used when the body has no platform. Defaults from the User-Agent.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ios",
+                "android",
+                "web",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number, compared with each announcement's minimum.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "platform": {
+                    "enum": [
+                      "ios",
+                      "android",
+                      "web",
+                    ],
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": false,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "recorded": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "recorded",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Record that the current user saw an announcement",
+        "tags": [
+          "announcements",
+        ],
+      },
+    },
+    "/auth/forgotPassword": {
+      "post": {
+        "description": "Always returns 202, whether or not an account exists for the email, so accounts cannot be probed.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "description": "The account's email address",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Accepted",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Request a password reset email",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/me": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "admin": {
+                          "description": "Whether the user has admin privileges",
+                          "type": "boolean",
+                        },
+                        "betterAuthId": {
+                          "description": "Identifier linking to the Better Auth session provider",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When this document was created",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "deleted": {
+                          "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                          "type": "boolean",
+                        },
+                        "disabled": {
+                          "description": "When a user is set to disable, all requests will return a 401",
+                          "type": "boolean",
+                        },
+                        "email": {
+                          "description": "The user's email address, used for authentication",
+                          "type": "string",
+                        },
+                        "emailVerified": {
+                          "description": "Whether the user has verified their email address",
+                          "type": "boolean",
+                        },
+                        "id": {
+                          "description": "The user's id, the same value as _id",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                        "oauthProvider": {
+                          "description": "OAuth provider used for authentication",
+                          "enum": [
+                            "google",
+                            "github",
+                            "apple",
+                            null,
+                          ],
+                          "type": "string",
+                        },
+                        "permissions": {
+                          "additionalProperties": {
+                            "items": {
+                              "type": "string",
+                            },
+                            "type": "array",
+                          },
+                          "description": "RBAC permissions resolved for the user, keyed by resource",
+                          "type": "object",
+                        },
+                        "roles": {
+                          "description": "RBAC role names assigned to the user",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "tokenEpoch": {
+                          "description": "Incremented on password reset to invalidate outstanding refresh tokens",
+                          "type": "number",
+                        },
+                        "updated": {
+                          "description": "When this document was last updated",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "email",
+                        "name",
+                        "_id",
+                        "id",
+                        "permissions",
+                        "roles",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get the current user",
+        "tags": [
+          "auth",
+        ],
+      },
+      "patch": {
+        "description": "Partial update of the current user. Privileged fields (admin, roles, organizationIds, emailVerified, tokenEpoch) are ignored.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "betterAuthId": {
+                    "description": "Identifier linking to the Better Auth session provider",
+                    "type": "string",
+                  },
+                  "currentPassword": {
+                    "description": "The current password; required to change the email. It is never stored.",
+                    "type": "string",
+                  },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
+                  "email": {
+                    "description": "The user's email address, used for authentication",
+                    "type": "string",
+                  },
+                  "name": {
+                    "description": "The user's display name",
+                    "type": "string",
+                  },
+                  "oauthProvider": {
+                    "description": "OAuth provider used for authentication",
+                    "enum": [
+                      "google",
+                      "github",
+                      "apple",
+                      null,
+                    ],
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "admin": {
+                          "description": "Whether the user has admin privileges",
+                          "type": "boolean",
+                        },
+                        "betterAuthId": {
+                          "description": "Identifier linking to the Better Auth session provider",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When this document was created",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "deleted": {
+                          "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                          "type": "boolean",
+                        },
+                        "disabled": {
+                          "description": "When a user is set to disable, all requests will return a 401",
+                          "type": "boolean",
+                        },
+                        "email": {
+                          "description": "The user's email address, used for authentication",
+                          "type": "string",
+                        },
+                        "emailVerified": {
+                          "description": "Whether the user has verified their email address",
+                          "type": "boolean",
+                        },
+                        "id": {
+                          "description": "The user's id, the same value as _id",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                        "oauthProvider": {
+                          "description": "OAuth provider used for authentication",
+                          "enum": [
+                            "google",
+                            "github",
+                            "apple",
+                            null,
+                          ],
+                          "type": "string",
+                        },
+                        "roles": {
+                          "description": "RBAC role names assigned to this user",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "tokenEpoch": {
+                          "description": "Incremented on password reset to invalidate outstanding refresh tokens",
+                          "type": "number",
+                        },
+                        "updated": {
+                          "description": "When this document was last updated",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "email",
+                        "name",
+                        "_id",
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Update the current user",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/resetPassword": {
+      "post": {
+        "description": "Send \`token\` and either \`password\` or \`newPassword\`. Returns fresh tokens for the user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "newPassword": {
+                    "description": "Alias for password",
+                    "type": "string",
+                  },
+                  "password": {
+                    "description": "The new password",
+                    "type": "string",
+                  },
+                  "token": {
+                    "description": "One-time reset token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "refreshToken": {
+                          "type": "string",
+                        },
+                        "token": {
+                          "type": "string",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "refreshToken",
+                        "token",
+                        "userId",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset password with a one-time token",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/sendVerification": {
+      "post": {
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Accepted",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Send or resend an email verification link",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/verifyEmail": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "description": "One-time verification token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Verify email with a one-time token",
+        "tags": [
+          "auth",
         ],
       },
     },
@@ -18371,6 +19866,546 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/consents/pending": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                          },
+                          "active": {
+                            "description": "Whether this consent form is currently active and available to users",
+                            "type": "boolean",
+                          },
+                          "agreeButtonText": {
+                            "description": "Label text for the agreement button",
+                            "type": "string",
+                          },
+                          "allowDecline": {
+                            "description": "Whether users are allowed to decline the consent form",
+                            "type": "boolean",
+                          },
+                          "captureSignature": {
+                            "description": "Whether to require a drawn or typed signature when the user agrees",
+                            "type": "boolean",
+                          },
+                          "checkboxes": {
+                            "description": "List of checkboxes the user must interact with before agreeing",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "confirmationPrompt": {
+                                  "description": "Optional prompt shown when the user checks this checkbox",
+                                  "type": "string",
+                                },
+                                "label": {
+                                  "description": "Display label for the checkbox",
+                                  "type": "string",
+                                },
+                                "required": {
+                                  "description": "Whether this checkbox must be checked before the user can agree",
+                                  "type": "boolean",
+                                },
+                              },
+                              "required": [
+                                "label",
+                              ],
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
+                          "content": {
+                            "additionalProperties": {
+                              "type": "string",
+                            },
+                            "description": "Locale-keyed map of Markdown content for this form (e.g. {"en": "# Terms\\n..."})",
+                            "type": "object",
+                          },
+                          "created": {
+                            "description": "When this document was created",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "declineButtonText": {
+                            "description": "Label text for the decline button (only shown when allowDecline is true)",
+                            "type": "string",
+                          },
+                          "defaultLocale": {
+                            "description": "Default locale to use when the requested locale is not available",
+                            "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
+                          },
+                          "id": {
+                            "description": "The document id, the same value as _id",
+                            "type": "string",
+                          },
+                          "order": {
+                            "description": "Display order relative to other consent forms (lower numbers appear first)",
+                            "type": "number",
+                          },
+                          "requireScrollToBottom": {
+                            "description": "Whether users must scroll to the bottom of the form content before agreeing",
+                            "type": "boolean",
+                          },
+                          "required": {
+                            "description": "Whether users must complete this form before accessing the application",
+                            "type": "boolean",
+                          },
+                          "slug": {
+                            "description": "URL-safe identifier for this form, combined with version to uniquely identify a form",
+                            "type": "string",
+                          },
+                          "title": {
+                            "description": "Human-readable title of the consent form",
+                            "type": "string",
+                          },
+                          "type": {
+                            "description": "Category of consent form",
+                            "enum": [
+                              "agreement",
+                              "privacy",
+                              "hipaa",
+                              "research",
+                              "terms",
+                              "custom",
+                            ],
+                            "type": "string",
+                          },
+                          "updated": {
+                            "description": "When this document was last updated",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "version": {
+                            "description": "Version number of this form. Incrementing the version requires users to re-consent",
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "content",
+                          "order",
+                          "slug",
+                          "title",
+                          "type",
+                          "version",
+                          "_id",
+                          "id",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "List active consent forms the current user still has to answer",
+        "tags": [
+          "consents",
+        ],
+      },
+    },
+    "/consents/respond": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "agreed": {
+                    "description": "Whether the user agreed",
+                    "required": true,
+                    "type": "boolean",
+                  },
+                  "checkboxValues": {
+                    "additionalProperties": {
+                      "type": "boolean",
+                    },
+                    "description": "Checkbox index (as a string) to whether it was checked",
+                    "type": "object",
+                  },
+                  "consentFormId": {
+                    "description": "The consent form being answered",
+                    "required": true,
+                    "type": "string",
+                  },
+                  "locale": {
+                    "description": "Locale the form was shown in",
+                    "required": true,
+                    "type": "string",
+                  },
+                  "signature": {
+                    "description": "Signature image data, required when the form captures a signature",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "agreed",
+                  "consentFormId",
+                  "locale",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "agreed": {
+                          "description": "Whether the user agreed (true) or declined (false) the consent form",
+                          "type": "boolean",
+                        },
+                        "agreedAt": {
+                          "description": "Timestamp when the user submitted their agreement or declination",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "checkboxValues": {
+                          "additionalProperties": {
+                            "type": "boolean",
+                          },
+                          "description": "Map of checkbox index to boolean indicating whether each checkbox was checked",
+                          "type": "object",
+                        },
+                        "consentFormId": {
+                          "description": "Reference to the ConsentForm that was responded to",
+                          "format": "objectid",
+                          "type": "string",
+                        },
+                        "contentSnapshot": {
+                          "description": "Snapshot of the form content in the user's locale at the time of response",
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "When this document was created",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "deleted": {
+                          "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                          "type": "boolean",
+                        },
+                        "formVersionSnapshot": {
+                          "description": "Version number of the form at the time the user responded",
+                          "type": "number",
+                        },
+                        "id": {
+                          "description": "The document id, the same value as _id",
+                          "type": "string",
+                        },
+                        "ipAddress": {
+                          "description": "IP address of the user at the time of response, captured for audit purposes",
+                          "type": "string",
+                        },
+                        "locale": {
+                          "description": "Locale code of the content version the user viewed when responding",
+                          "type": "string",
+                        },
+                        "provisional": {
+                          "description": "Whether another user recorded this agreement on the user's behalf. The user still sees the form and signs it themselves",
+                          "type": "boolean",
+                        },
+                        "provisionalNote": {
+                          "description": "Required note from the provisional signer explaining how consent was obtained",
+                          "type": "string",
+                        },
+                        "provisionalSignedBy": {
+                          "description": "The user who recorded this provisional signature",
+                          "format": "objectid",
+                          "type": "string",
+                        },
+                        "provisionalSignerIp": {
+                          "description": "IP address of the provisional signer, captured for audit purposes",
+                          "type": "string",
+                        },
+                        "provisionalSignerUserAgent": {
+                          "description": "User-agent string of the provisional signer's browser or app",
+                          "type": "string",
+                        },
+                        "signature": {
+                          "description": "Base64-encoded signature image or typed signature text, if captured",
+                          "type": "string",
+                        },
+                        "signedAt": {
+                          "description": "Timestamp when the user provided their signature",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "updated": {
+                          "description": "When this document was last updated",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "userAgent": {
+                          "description": "User-agent string of the browser or app used to submit the response",
+                          "type": "string",
+                        },
+                        "userId": {
+                          "description": "Reference to the User who submitted this response",
+                          "format": "objectid",
+                          "type": "string",
+                        },
+                        "voidReason": {
+                          "description": "Why the provisional signature was voided",
+                          "type": "string",
+                        },
+                        "voidedAt": {
+                          "description": "When a provisional signature was voided. Voided signatures no longer count as consent",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "voidedBy": {
+                          "description": "The user who voided this provisional signature",
+                          "format": "objectid",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "agreed",
+                        "agreedAt",
+                        "consentFormId",
+                        "locale",
+                        "userId",
+                        "_id",
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Submit the current user's response to a consent form",
+        "tags": [
+          "consents",
+        ],
+      },
+    },
+    "/feature-flags/flagConfiguration": {
+      "get": {
+        "description": "Keyed by flag key. Disabled boolean flags are included with disabled: true; disabled variant flags are omitted.",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "additionalProperties": {
+                        "properties": {
+                          "defaultVariant": {
+                            "description": "The variant to use for the current user",
+                            "type": "string",
+                          },
+                          "disabled": {
+                            "type": "boolean",
+                          },
+                          "variants": {
+                            "additionalProperties": {
+                              "oneOf": [
+                                {
+                                  "type": "boolean",
+                                },
+                                {
+                                  "type": "string",
+                                },
+                              ],
+                            },
+                            "description": "Variant name to its value",
+                            "type": "object",
+                          },
+                        },
+                        "required": [
+                          "defaultVariant",
+                          "disabled",
+                          "variants",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get every flag's configuration resolved for the current user",
+        "tags": [
+          "feature-flags",
+        ],
+      },
+    },
     "/feature-flags/flags/": {
       "get": {
         "parameters": [
@@ -19530,6 +21565,306 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/files/*gcsKey": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gcsKey",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "success",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Delete a file",
+        "tags": [
+          "files",
+        ],
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gcsKey",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "url": {
+                          "description": "Signed URL for the file",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "url",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get file URL",
+        "tags": [
+          "files",
+        ],
+      },
+    },
+    "/files/upload": {
+      "post": {
+        "description": "Send the file as multipart/form-data in the \`file\` field. Allowed types: image/jpeg, image/png, image/gif, image/webp, application/pdf, text/plain, text/csv, application/json. Maximum size: 10485760 bytes.",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "required": true,
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "file",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "filename": {
+                          "type": "string",
+                        },
+                        "gcsKey": {
+                          "description": "Storage key; GET or DELETE /files/<gcsKey> reads or removes the file",
+                          "type": "string",
+                        },
+                        "id": {
+                          "description": "The FileAttachment id",
+                          "type": "string",
+                        },
+                        "mimeType": {
+                          "type": "string",
+                        },
+                        "size": {
+                          "description": "Size in bytes",
+                          "type": "number",
+                        },
+                        "url": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "filename",
+                        "gcsKey",
+                        "id",
+                        "mimeType",
+                        "size",
+                        "url",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Upload a file",
+        "tags": [
+          "files",
+        ],
+      },
+    },
     "/gpt/actions": {
       "post": {
         "requestBody": {
@@ -19856,7 +22191,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                       "items": {
                         "properties": {
                           "_id": {
+                            "description": "The conversation id (a String so offline sync clients can mint ids)",
                             "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
                           },
                           "created": {
                             "description": "When this document was created",
@@ -20165,6 +22509,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "tags": [
           "gpthistories",
         ],
+        "x-terreno-sync": {
+          "collection": "gpt/histories",
+          "scope": "owner",
+        },
       },
       "post": {
         "requestBody": {
@@ -20173,7 +22521,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "_id": {
+                    "description": "The conversation id (a String so offline sync clients can mint ids)",
                     "type": "string",
+                  },
+                  "_syncPrevStream": {
+                    "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                    "type": "string",
+                  },
+                  "_syncSeq": {
+                    "description": "Monotonic per-stream sequence stamped on every synced write",
+                    "type": "number",
                   },
                   "created": {
                     "description": "When this document was created",
@@ -20419,7 +22776,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -21045,7 +23411,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -21355,7 +23730,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "schema": {
                 "properties": {
                   "_id": {
+                    "description": "The conversation id (a String so offline sync clients can mint ids)",
                     "type": "string",
+                  },
+                  "_syncPrevStream": {
+                    "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                    "type": "string",
+                  },
+                  "_syncSeq": {
+                    "description": "Monotonic per-stream sequence stamped on every synced write",
+                    "type": "number",
                   },
                   "created": {
                     "description": "When this document was created",
@@ -21601,7 +23985,16 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "_id": {
+                      "description": "The conversation id (a String so offline sync clients can mint ids)",
                       "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
                     },
                     "created": {
                       "description": "When this document was created",
@@ -23600,23 +25993,41 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
-    "/mcp/service-tokens": {
+    "/mcp/service-tokens/": {
       "get": {
-        "description": "Lists MCP service tokens owned by the signed-in user. Never includes plaintext or tokenHash.",
-        "operationId": "listMcpServiceTokens",
         "parameters": [
           {
             "in": "query",
+            "name": "_id",
+            "schema": {
+              "properties": {
+                "$in": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+              },
+              "type": "object",
+            },
+          },
+          {
+            "in": "query",
             "name": "page",
-            "required": false,
             "schema": {
               "type": "number",
             },
           },
           {
             "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
             "name": "limit",
-            "required": false,
             "schema": {
               "type": "number",
             },
@@ -23629,6 +26040,82 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "items": {
+                        "properties": {
+                          "_id": {
+                            "description": "The MCP service token id (String so the synced collection can address it)",
+                            "type": "string",
+                          },
+                          "_syncPrevStream": {
+                            "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                            "type": "string",
+                          },
+                          "_syncSeq": {
+                            "description": "Monotonic per-stream sequence stamped on every synced write",
+                            "type": "number",
+                          },
+                          "created": {
+                            "description": "When this document was created",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
+                          },
+                          "expiresAt": {
+                            "description": "When this MCP service token expires; unset when it does not expire",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "lastUsedAt": {
+                            "description": "When this MCP service token most recently authenticated an MCP request",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "name": {
+                            "description": "User-provided label identifying the MCP service token",
+                            "type": "string",
+                          },
+                          "revokedAt": {
+                            "description": "When this MCP service token was revoked; unset while it remains active",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "tokenEpoch": {
+                            "description": "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+                            "type": "number",
+                          },
+                          "tokenHash": {
+                            "description": "SHA-256 hash of the full MCP service token plaintext",
+                            "type": "string",
+                          },
+                          "tokenPrefix": {
+                            "description": "First eight characters after mcp_ used to identify the token safely",
+                            "type": "string",
+                          },
+                          "updated": {
+                            "description": "When this document was last updated",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "userId": {
+                            "description": "The user this MCP service token acts as",
+                            "format": "objectid",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "name",
+                          "tokenHash",
+                          "tokenPrefix",
+                          "userId",
+                          "_id",
+                          "created",
+                          "updated",
+                        ],
+                        "type": "object",
+                      },
                       "type": "array",
                     },
                     "limit": {
@@ -23648,7 +26135,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful list",
           },
           "400": {
             "content": {
@@ -23694,14 +26181,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
-        "summary": "List MCP service tokens",
         "tags": [
-          "mcp",
+          "mcpservicetokens",
         ],
+        "x-terreno-sync": {
+          "collection": "mcp/service-tokens",
+          "scope": "owner",
+        },
       },
+    },
+    "/mcp/service-tokens/create": {
       "post": {
         "description": "Mints a personal MCP service token that acts as the signed-in user on POST /mcp. The plaintext token is returned once.",
-        "operationId": "createMcpServiceToken",
+        "operationId": "mcpServiceTokens_create",
+        "parameters": [],
         "requestBody": {
           "content": {
             "application/json": {
@@ -23709,11 +26202,11 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "properties": {
                   "expiresAt": {
                     "description": "Optional ISO-8601 expiry; omit for a token that does not expire",
+                    "nullable": true,
                     "type": "string",
                   },
                   "name": {
                     "description": "User-visible label for this token",
-                    "required": true,
                     "type": "string",
                   },
                 },
@@ -23738,6 +26231,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                         "expiresAt": {
+                          "nullable": true,
                           "type": "string",
                         },
                         "id": {
@@ -23750,20 +26244,33 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "type": "string",
                         },
                         "token": {
+                          "description": "The plaintext mcp_ token. Returned only by this response.",
                           "type": "string",
                         },
                         "tokenPrefix": {
                           "type": "string",
                         },
                       },
+                      "required": [
+                        "created",
+                        "expiresAt",
+                        "id",
+                        "mcpUrl",
+                        "name",
+                        "token",
+                        "tokenPrefix",
+                      ],
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "data",
+                  ],
                   "type": "object",
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful response",
           },
           "400": {
             "content": {
@@ -23811,14 +26318,159 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         },
         "summary": "Create an MCP service token",
         "tags": [
-          "mcp",
+          "mcpServiceTokens",
         ],
       },
     },
     "/mcp/service-tokens/{id}": {
-      "delete": {
-        "description": "Sets revokedAt on a token owned by the signed-in user.",
-        "operationId": "revokeMcpServiceToken",
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "description": "The MCP service token id (String so the synced collection can address it)",
+                      "type": "string",
+                    },
+                    "_syncPrevStream": {
+                      "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                      "type": "string",
+                    },
+                    "_syncSeq": {
+                      "description": "Monotonic per-stream sequence stamped on every synced write",
+                      "type": "number",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "expiresAt": {
+                      "description": "When this MCP service token expires; unset when it does not expire",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "lastUsedAt": {
+                      "description": "When this MCP service token most recently authenticated an MCP request",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "User-provided label identifying the MCP service token",
+                      "type": "string",
+                    },
+                    "revokedAt": {
+                      "description": "When this MCP service token was revoked; unset while it remains active",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "tokenEpoch": {
+                      "description": "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+                      "type": "number",
+                    },
+                    "tokenHash": {
+                      "description": "SHA-256 hash of the full MCP service token plaintext",
+                      "type": "string",
+                    },
+                    "tokenPrefix": {
+                      "description": "First eight characters after mcp_ used to identify the token safely",
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "description": "The user this MCP service token acts as",
+                      "format": "objectid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "name",
+                    "tokenHash",
+                    "tokenPrefix",
+                    "userId",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful read",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "mcpservicetokens",
+        ],
+      },
+    },
+    "/mcp/service-tokens/{id}/revoke": {
+      "post": {
+        "description": "Sets revokedAt on a token owned by the signed-in user. Unknown, foreign, and already revoked tokens are 404.",
+        "operationId": "mcpServiceTokens_revoke",
         "parameters": [
           {
             "in": "path",
@@ -23836,14 +26488,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                        },
-                        "revokedAt": {
-                          "type": "string",
-                        },
-                      },
                       "type": "object",
                     },
                   },
@@ -23851,7 +26495,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 },
               },
             },
-            "description": "Success",
+            "description": "Successful response",
           },
           "400": {
             "content": {
@@ -23899,7 +26543,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         },
         "summary": "Revoke an MCP service token",
         "tags": [
-          "mcp",
+          "mcpServiceTokens",
         ],
       },
     },
@@ -27868,6 +30512,118 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/resetPassword": {
+      "post": {
+        "description": "Send \`token\` and either \`password\` or \`newPassword\`. Returns fresh tokens for the user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "newPassword": {
+                    "description": "Alias for password",
+                    "type": "string",
+                  },
+                  "password": {
+                    "description": "The new password",
+                    "type": "string",
+                  },
+                  "token": {
+                    "description": "One-time reset token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "refreshToken": {
+                          "type": "string",
+                        },
+                        "token": {
+                          "type": "string",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "refreshToken",
+                        "token",
+                        "userId",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset password with a one-time token",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
     "/settings/clearGcs": {
       "post": {
         "operationId": "settings_clearGcs",
@@ -31103,6 +33859,126 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "summary": "Send password reset",
         "tags": [
           "account-security",
+        ],
+      },
+    },
+    "/version-check": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Client platform. Any other value is treated as web.",
+            "in": "query",
+            "name": "platform",
+            "required": false,
+            "schema": {
+              "enum": [
+                "web",
+                "mobile",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "description": "Client build number. When missing or not a number, the status is ok.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "type": "integer",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "description": "Message to show when status is warning or required",
+                      "type": "string",
+                    },
+                    "pollingIntervalMs": {
+                      "description": "How often the client should poll for updates, in milliseconds",
+                      "type": "number",
+                    },
+                    "requiredVersion": {
+                      "description": "Minimum supported build number",
+                      "type": "number",
+                    },
+                    "status": {
+                      "enum": [
+                        "ok",
+                        "warning",
+                        "required",
+                      ],
+                      "type": "string",
+                    },
+                    "updateUrl": {
+                      "description": "Where the user can get the update",
+                      "type": "string",
+                    },
+                    "warningVersion": {
+                      "description": "Builds below this number get a warning",
+                      "type": "number",
+                    },
+                  },
+                  "required": [
+                    "status",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Check whether the client build must or should update",
+        "tags": [
+          "version",
         ],
       },
     },

@@ -1,15 +1,17 @@
 /**
  * @terreno/syncdb client for the example app.
  *
- * Authenticates with the Better Auth session from @terreno/rtk's Expo client.
+ * Authenticates with the Better Auth session from `lib/betterAuth.ts`. The same `authProvider`
+ * feeds the request client (store/apiClient.ts), so sync and request traffic share one session.
  */
-import {baseUrl} from "@terreno/rtk";
 import {
   betterAuthAdapter,
   bridgeBetterAuthReactClient,
   createSyncDb,
   type SyncDb,
 } from "@terreno/syncdb";
+import {baseUrl} from "@terreno/syncdb/config";
+import {bearerAuthHeaders} from "@/lib/authHeaders";
 import {betterAuthClient, getStoredBearerToken} from "@/lib/betterAuth";
 import {socketTransports} from "@/store/socketTransports";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
@@ -18,9 +20,25 @@ export const SYNC_DB_NAME = "terreno-example";
 /** Admin window rows live in their own store so they never leak into the product UI. */
 const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 
+/** Collection tags for the AI screen's chat list and the MCP settings token list. */
+export const GPT_HISTORIES_COLLECTION = "gpt/histories";
+export const MCP_SERVICE_TOKENS_COLLECTION = "mcp/service-tokens";
+
 /**
- * The app's one token source: syncdb authenticates with it, and store/index.ts registers it
- * with @terreno/rtk so the RTK base query, sockets, and MCP tools read the same token.
+ * Owner-only collections with no `adminBroadcast`: the admin window store never opens them,
+ * and the server has no admin window stream for them.
+ */
+const PRODUCT_ONLY_COLLECTIONS: ReadonlySet<string> = new Set([
+  GPT_HISTORIES_COLLECTION,
+  MCP_SERVICE_TOKENS_COLLECTION,
+]);
+const ADMIN_COLLECTIONS = SYNC_COLLECTIONS.filter(
+  (collection) => !PRODUCT_ONLY_COLLECTIONS.has(collection)
+);
+
+/**
+ * The app's one token source, shared by the sync client and the API client
+ * (store/apiClient.ts) so both send the same Better Auth session token.
  *
  * `getBearerToken` reads the web bearer token locally, so `getToken()` makes no `get-session`
  * call per read; it returns null in cookie mode and on native, where the adapter reads the
@@ -31,6 +49,13 @@ export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(better
   getBearerToken: getStoredBearerToken,
   pollIntervalMs: 60_000,
 });
+
+/**
+ * `Authorization` header for code that calls the backend outside the request client
+ * (`AdminProvider`'s fetch client on the admin and documents screens).
+ */
+export const getAdminAuthHeaders = (): Promise<Record<string, string>> =>
+  bearerAuthHeaders(authProvider.getToken);
 
 /**
  * Singleton local-first client. Started/stopped by the root layout when the user is
@@ -62,6 +87,9 @@ export const syncDb: SyncDb = createSyncDb({
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
   queryCollections: [{collection: "todos", fullSync: true}],
   socketTransports,
+  // An explicit logout (useSession().logout) signs this client out; wipe the signed-out user's
+  // local rows and queued writes so they never reach the next account on this device.
+  wipeOnSignOut: true,
 });
 
 let adminOrganizationId: string | undefined;
@@ -78,11 +106,12 @@ export const setAdminSyncOrganizationId = (organizationId?: string): void => {
 export const adminSyncDb: SyncDb = createSyncDb({
   authProvider,
   baseUrl,
-  collections: [...SYNC_COLLECTIONS],
+  collections: [...ADMIN_COLLECTIONS],
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
   socketTransports,
-  windowCollections: [...SYNC_COLLECTIONS],
+  windowCollections: [...ADMIN_COLLECTIONS],
+  wipeOnSignOut: true,
 });
 
 /**

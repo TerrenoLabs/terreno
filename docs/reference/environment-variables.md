@@ -85,10 +85,10 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
-| `EXPO_PUBLIC_API_URL` | `@terreno/rtk` | ✅ prod web | dev auto-detect | No | **client** |
-| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/rtk` | ❌ | `4000` | No | **client** |
-| `EXPO_PUBLIC_BUILD_NUMBER` | example-frontend | ❌ | — | No | **client** |
-| `OPENAPI_URL` | example-frontend `sdk` script | ❌ | `http://localhost:4000/openapi.json` | No | tooling |
+| `EXPO_PUBLIC_API_URL` | `@terreno/syncdb/config` | ✅ prod web | dev auto-detect | No | **client** |
+| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/syncdb/config` | ❌ | `4000` | No | **client** |
+| `EXPO_PUBLIC_BUILD_NUMBER` | `@terreno/syncdb/buildNumber` (`app.config.ts`) | ❌ | git commit count | No | **client** |
+| `OPENAPI_URL` | example-frontend `sdk` / `sync-sdk` scripts | ❌ | `http://localhost:4000/openapi.json` | No | tooling |
 
 ### `app.json` `extra` (not `process.env`)
 
@@ -96,18 +96,17 @@ Configured in `expo.extra` and read via `expo-constants`:
 
 | Key | Read by | Notes |
 |-----|---------|-------|
-| `BASE_URL` | `@terreno/rtk` | Production fallback when `EXPO_PUBLIC_API_URL` unset; use `__SAME_ORIGIN__` for same-origin admin SPA |
-| `DEV_API_PORT` | `@terreno/rtk` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
-| `AUTH_DEBUG` | `@terreno/rtk` | `"true"` enables auth debug logs |
-| `WEBSOCKETS_DEBUG` | `@terreno/rtk` | `"true"` enables socket debug logs |
-| `SOCKET_TRANSPORTS` | example-frontend (`store/socketTransports.ts`) | Comma-separated Socket.IO transports passed to `useSocketConnection({transports})` and `createSyncDb({socketTransports})`. Unset keeps `polling,websocket`; the Vercel build sets `websocket` |
-| `APP_ENV` | `@terreno/rtk` | Logged at startup |
+| `BASE_URL` | `@terreno/syncdb/config` | Production fallback when `EXPO_PUBLIC_API_URL` unset; use `__SAME_ORIGIN__` for same-origin admin SPA |
+| `DEV_API_PORT` | `@terreno/syncdb/config` | Override dev API port (mirrors `EXPO_PUBLIC_DEV_API_PORT`) |
+| `buildNumber` | `@terreno/syncdb/app` `useUpgradeCheck` | Sent to `GET /version-check`; set it with `resolveBuildNumber` |
+| `SOCKET_TRANSPORTS` | example-frontend (`store/socketTransports.ts`) | Comma-separated Socket.IO transports passed to `createSyncDb({socketTransports})`. Unset keeps `polling,websocket`; the Vercel build sets `websocket` |
 
-Resolution order for API base URL (`rtk/src/constants.ts`):
+Resolution order for API base URL (`syncdb/src/config/resolveBaseUrls.ts`):
 
-1. `EXPO_PUBLIC_API_URL` (production and dev)
-2. `extra.BASE_URL` (production only, when env unset)
-3. Dev fallbacks: `hostUri`, experience URL, `localhost`
+1. `extra.BASE_URL` = `__SAME_ORIGIN__` → the page origin (web)
+2. `EXPO_PUBLIC_API_URL` (production and dev)
+3. `extra.BASE_URL` (production only, when env unset)
+4. Dev fallbacks: `hostUri`, experience URL, `localhost` on the dev API port
 
 `EXPO_PUBLIC_API_URL` is inlined only into app source. Code under `node_modules`, including `@terreno/rtk`, does not see the inlined value in a production export and falls back to `extra.BASE_URL`, so set both for production web builds. `example-frontend/scripts/vercelBuild.ts` writes `extra.BASE_URL` from `EXPO_PUBLIC_API_URL` before `expo export`.
 
@@ -232,7 +231,7 @@ for authenticated test sends.
 | `VALKEY_URL` | `@terreno/api` realtime adapter **and** `rateLimit.store: "redis"` | ❌ | — | Yes | server |
 | `REDIS_URL` | `@terreno/api` fallback after `VALKEY_URL` (realtime + Redis rate-limit store) | ❌ | — | Yes | server |
 
-There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. Apps that want an env toggle pass `rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined` themselves. See [Rate limiting](../how-to/rate-limiting.md).
+There is **no** `RATE_LIMIT_ENABLED` (or similar) read by `@terreno/api`. The limiter is on by default. Apps that want an env toggle pass `rateLimit: process.env.RATE_LIMIT_DISABLED === "true" ? false : {trustProxy: 1}` themselves. See [Rate limiting](../how-to/rate-limiting.md).
 
 ## Webhooks & notifications
 

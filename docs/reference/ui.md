@@ -570,9 +570,9 @@ pickers, sort menus).
 </DropdownPanel>
 ``````
 
-> `Filter` is the former name and stays exported as a deprecated alias (with `FilterProps`)
-> until Terreno 58. The `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` /
-> `FilterChangesBadge` controls keep their names.
+> `Filter` and `FilterProps`, the former names, were removed in Terreno 58. The
+> `FilterSelectMenu` / `FilterBoolean` / `FilterAccordion` / `FilterChangesBadge` controls
+> keep their names.
 
 #### Positioning
 
@@ -1224,18 +1224,87 @@ On web, that container is portaled to `document.body` (`position: fixed`, `z-ind
 
 Only the visible toast takes clicks. Every full-width layer around it (the container, its safe area, and the `Toast` layout wrapper) uses `pointerEvents: "box-none"`, so a button at the same height as an open toast stays clickable. Declare that style through `StyleSheet.create`; react-native-web drops `pointerEvents` from inline styles.
 
-## Consent components
+## Consent and announcement navigators
 
-Client side of `ConsentApp` ([API reference](api.md#consent-forms-consentapp),
-[concepts](../explanation/consent-forms.md)). Lazily exported from the package root.
+`ConsentNavigator` and `AnnouncementNavigator` gate authenticated app content on the
+consent (`@terreno/api` consents) and announcement (`@terreno/announcements`) routes.
+Both take a request `client` instead of an RTK Query api (the `api` prop was removed in
+Terreno 58). Pass the app's `@terreno/syncdb/api` client:
 
-### ConsentNavigator and ConsentFormScreen
+```tsx
+import {AnnouncementNavigator, ConsentNavigator} from "@terreno/ui";
+import {apiClient} from "@/store/apiClient"; // createApiClient({authProvider, baseUrl, ...})
 
-`ConsentNavigator` wraps app content, fetches `GET /consents/pending` through
-`useConsentForms(api, baseUrl)`, and renders `ConsentFormScreen` for each pending form until
-the list is empty. `ConsentFormScreen` shows the form's markdown (with `{{variable}}`
-substitution), required checkboxes, an optional signature, the scroll-to-bottom gate, and the
-agree and decline buttons.
+<ConsentNavigator client={apiClient}>
+  <AnnouncementNavigator client={apiClient} frequency={{userId}}>
+    <AppTabs />
+  </AnnouncementNavigator>
+</ConsentNavigator>
+```
+
+### `TerrenoRequestClient`
+
+`client` is any object with a `request` method of this shape. A syncdb `ApiClient` satisfies
+it structurally; `@terreno/ui` does not depend on `@terreno/syncdb`.
+
+```typescript
+interface TerrenoRequestArgs {
+  url: string;                       // relative paths resolve against the client's base URL
+  method?: string;                   // default "GET"
+  params?: Record<string, unknown>;  // query string; undefined values are omitted
+  body?: Record<string, unknown> | null;
+  headers?: Record<string, string>;
+  unwrap?: boolean;                  // unwrap {data} envelopes (default true)
+}
+
+interface TerrenoRequestClient {
+  request: <T = unknown>(args: TerrenoRequestArgs) => Promise<T>;
+}
+```
+
+A failed request must reject with an error carrying the HTTP `status` (syncdb's `ApiError`
+does). On `401` / `403` both navigators render `children` so the app's auth handling runs;
+any other error shows a **Retry** screen and calls `onError`.
+
+### `ConsentNavigator` props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `client` | `TerrenoRequestClient` | Required. Sends `GET /consents/pending` and `POST /consents/respond`. |
+| `baseUrl` | `string` | Optional path prefix for the consent routes. |
+| `children` | `ReactNode` | Rendered once no consent forms are pending. |
+| `extraScreens` | `ReactNode[]` | Shown in order after the forms; each element receives an `onNext` prop. |
+| `onError` | `(error: unknown) => void` | Called for non-auth load errors and failed submissions. |
+| `variables` | `Record<string, string>` | Substituted into consent form markdown. |
+
+### `AnnouncementNavigator` props
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `client` | `TerrenoRequestClient` | Required. Sends `GET /announcements/pending`, `GET /announcements/feed`, and the acknowledge / impression / click events. |
+| `baseUrl` | `string` | Optional path prefix for the announcement routes. |
+| `children` | `ReactNode` | App content; hidden behind a modal announcement, kept mounted under a banner. |
+| `frequency` | `AnnouncementFrequencyConfig` | Client-side interrupt caps (`maxInterruptionsPerSession`, `cooldownHours`, `skipFirstLaunch`, `userId`). |
+| `onError` | `(error: unknown) => void` | Called for non-auth load errors and failed acknowledgements. |
+
+### Hooks
+
+The navigators are built on hooks you can call directly. Each takes `(client, baseUrl?)` and
+keeps loading, error, and data in React state.
+
+| Hook | Returns |
+|------|---------|
+| `useConsentForms(client, baseUrl?)` | `{forms, isLoading, error, refetch}` |
+| `useSubmitConsent(client, baseUrl?)` | `{submit, isSubmitting, error}` |
+| `useAnnouncements(client, baseUrl?, {page, limit}?)` | `{pending, feed, isLoading, error, refetch, isFeedLoading, feedError, refetchFeed}` |
+| `useAcknowledgeAnnouncement(client, baseUrl?)` | `{acknowledge, recordImpression, recordClick, isSubmitting, error, ...}` |
+
+Queries fetch on mount and when `client`, `baseUrl`, or feed paging change. `refetch()` joins
+a request already in flight. A successful `submit` refetches every mounted `useConsentForms`
+on the same client, and a successful `acknowledge` refetches every mounted pending
+announcement on the same client.
+
+### Provisional signatures on consent forms
 
 When staff signed the form provisionally, the pending form carries
 `provisionalSignature: {signedAt, signedByName}` (`ConsentFormPublic`), and the screen shows
@@ -1257,12 +1326,12 @@ For staff who record consent on a user's behalf. The server must grant the viewe
 ```tsx
 import {ProvisionalConsentSigner} from "@terreno/ui";
 
-<ProvisionalConsentSigner api={terrenoApi} userId={memberId} />
+<ProvisionalConsentSigner client={apiClient} userId={memberId} />
 ```
 
 | Prop | Type | Description |
 | --- | --- | --- |
-| `api` | RTK Query api | The consumer api, as passed to `ConsentNavigator` |
+| `client` | `TerrenoRequestClient` | The app's request client, as passed to `ConsentNavigator` |
 | `baseUrl` | `string` | Optional prefix for consent routes |
 | `userId` | `string` | The user being signed for |
 | `onSigned` | `(response) => void` | Called with the stored `ConsentResponse` after a provisional signature |
@@ -1291,14 +1360,14 @@ the signer, date, and note. Provisional rows also have "Void". It opens a dialog
 a required reason, sends it to `POST /consent-responses/:id/void`, and refetches, so the row
 returns to "Pending". A void error shows in the dialog and calls `onError`.
 
-`useProvisionalConsent({api, baseUrl?, userId})` returns `{statuses, isLoading, error,
+`useProvisionalConsent({client, baseUrl?, userId})` returns `{statuses, isLoading, error,
 refetch, sign, isSigning, voidSignature, isVoiding}`. `statuses` are `ProvisionalConsentStatusRow`s
 (`{form, status, isConsented, respondedAt?, provisional?}`). `sign({consentFormId, note,
 locale?})` signs for the hook's `userId` and resolves to the `ConsentResponse`, or rejects
-with the RTK error. `voidSignature({responseId, reason})` voids a provisional signature the
-same way. The hook injects `getConsentStatus`, `signConsentProvisionally`, and
-`voidProvisionalConsent` once per `(api, baseUrl)`. Signing and voiding invalidate the
-`ConsentStatus` and `PendingConsents` tags.
+with the request error. `voidSignature({responseId, reason})` voids a provisional signature the
+same way. The hook requests `GET /consent-responses/status`, `POST /consent-responses/provisional`,
+and `POST /consent-responses/:id/void` on the client. Signing and voiding refetch every mounted
+`useProvisionalConsent` and `useConsentForms` on the same client.
 
 testIDs: `provisional-consent-signer`, `provisional-consent-loading`,
 `provisional-consent-error`, `provisional-consent-retry-button`, `provisional-consent-empty`,
@@ -2364,6 +2433,21 @@ describe("MyComponent", () => {
 
 **Why:** Most @terreno/ui components require ThemeProvider context to access theme values.
 
+### createFakeRequestClient
+
+In-repo test helper (`ui/src/test-utils.tsx`) for components that take a
+`TerrenoRequestClient`. Routes are `"METHOD /path/:param"` keys; unmatched requests reject
+with a 404-shaped error. `fakeHttpError(status)` builds an error carrying `status`.
+
+``````typescript
+const {client, callsTo} = createFakeRequestClient({
+  "GET /consents/pending": () => ({data: [form]}),
+  "POST /consents/respond": () => ({agreed: true}),
+});
+renderWithTheme(<ConsentNavigator client={client}>{children}</ConsentNavigator>);
+expect(callsTo("POST /consents/respond")).toHaveLength(1);
+``````
+
 ### TapToEdit testIDs
 
 Pass `testID` on `TapToEdit`. The Field input uses that id. Action controls suffix it:
@@ -2795,6 +2879,35 @@ for that type:
 
 A value that is already formatted, such as "Oct 8, 2026, 3:00 PM", is not ISO, so a `date`
 column shows it unchanged.
+
+## DataTable column widths
+
+`width` on a `DataTableColumn` is optional. A column with a `width` is always that many
+pixels. A column without one is sized automatically:
+
+1. Its natural width is the wider of its header (title plus the sort, info, and filter icons)
+   and its content, plus cell padding, clamped to 80–360px. Content is read from at most 50
+   rows, spread evenly across `data`. Dates are measured as formatted; boolean cells are a
+   fixed icon width; custom cells whose value is not a string or number count as 120px.
+2. When the table body is wider than the sum of all columns, auto-sized columns grow to fill
+   it, in proportion to their natural widths. When the columns are wider than the body, they
+   keep their natural widths and the table scrolls horizontally.
+
+Text is measured with one shared canvas on web and estimated from font size on native, so
+sizing never renders or lays out extra cells. Measurement reruns only when `columns`, `data`,
+`defaultTextSize`, or `customColumnComponentMap` change; a container resize only reruns the
+fill step. Keep `columns` and `data` referentially stable between renders.
+
+```typescript
+const columns: DataTableColumn[] = [
+  {columnType: "text", title: "Name"},            // auto
+  {columnType: "text", title: "Email"},           // auto
+  {columnType: "number", title: "Visits"},        // auto
+  {columnType: "custom", title: "", width: 60},   // fixed
+];
+```
+
+Custom cell components receive the column with its resolved `width`.
 
 ## DataTable server-side filtering
 

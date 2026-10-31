@@ -1,12 +1,8 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {
-  canOpenAdminPage,
-  SIGN_OUT_FAILED_MESSAGE,
-  selectBetterAuthError,
-  selectBetterAuthIsSigningOut,
-  selectBetterAuthUserId,
-  useFeatureFlags,
-} from "@terreno/rtk";
+import type {ApiError} from "@terreno/syncdb/api";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {SIGN_OUT_FAILED_MESSAGE, useSession} from "@terreno/syncdb/auth";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 import {
   Badge,
   Banner,
@@ -26,31 +22,39 @@ import {
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
 import {useThemePreference} from "@/contexts/ThemePreferenceContext";
-import {logout, useAppDispatch} from "@/store/index";
-import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {
-  terrenoApi,
+  useCommsTestPushMutation,
   useDeleteCommsPushTokensByIdMutation,
-  useGetMeQuery,
-  usePatchMeMutation,
+  useGetAuthMeQuery,
+  usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
-  usePostCommsDevTestPushMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
+import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
+
+/** What POST /comms/dev/testPush reports for the caller's registered devices. */
+interface TestPushResult {
+  accepted?: number;
+  tokenCount?: number;
+}
 
 const ProfileScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const userId = useSelector(selectBetterAuthUserId);
-  // Set when a sign-out could not reach the server and the session stayed.
-  const isSignOutFailed = useSelector(selectBetterAuthError) === SIGN_OUT_FAILED_MESSAGE;
-  const isSigningOut = useSelector(selectBetterAuthIsSigningOut);
-  const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
-  const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
+  // `error` is SIGN_OUT_FAILED_MESSAGE when a sign-out could not reach the server and the
+  // session stayed.
+  const {error: sessionError, isSigningOut, logout, userId} = useSession();
+  const isSignOutFailed = sessionError === SIGN_OUT_FAILED_MESSAGE;
+  const {
+    data: profileResponse,
+    isLoading,
+    refetch,
+  } = useGetAuthMeQuery(undefined, {
+    skip: !userId,
+  });
+  const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
-  const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
+  const [sendTestPush, {isLoading: isSendingTestPush}] = useCommsTestPushMutation();
   const [deletePushToken] = useDeleteCommsPushTokensByIdMutation();
   const {
     colorSchemeSetting,
@@ -62,7 +66,12 @@ const ProfileScreen: React.FC = () => {
     flags,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
-  } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  } = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
@@ -129,9 +138,7 @@ const ProfileScreen: React.FC = () => {
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating name:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update name"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update name");
       }
     },
     [showSaveSuccess, updateProfile]
@@ -155,21 +162,19 @@ const ProfileScreen: React.FC = () => {
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update email");
       }
     },
     [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
+  // useSession().logout signs out the auth server, then both sync clients (wiping local rows).
   const handleLogout = useCallback(async (): Promise<void> => {
-    // Release this device's push token while the session can still authenticate the request.
     await releaseExpoPushTokenSafely({
       deleteToken: async (id) => deletePushToken(id).unwrap(),
     });
-    dispatch(logout());
-  }, [deletePushToken, dispatch]);
+    await logout();
+  }, [deletePushToken, logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
@@ -217,10 +222,10 @@ const ProfileScreen: React.FC = () => {
     setTestPushError(null);
     setTestPushMessage(null);
     try {
-      const result = await sendTestPush({
+      const result = (await sendTestPush({
         body: "Sent from the example app profile screen.",
         title: "Terreno test push",
-      }).unwrap();
+      }).unwrap()) as TestPushResult;
       if (result.tokenCount === 0) {
         setTestPushMessage("No registered push tokens for this account.");
         return;
@@ -446,7 +451,7 @@ const ProfileScreen: React.FC = () => {
               {String(darkModeFlagDetails.reason ?? "")})
             </Text>
             {isFeatureFlagsLoading && <Text color="secondaryLight">Loading feature flags...</Text>}
-            {!isFeatureFlagsLoading && featureFlagsError && (
+            {!isFeatureFlagsLoading && Boolean(featureFlagsError) && (
               <Text color="error">Failed to load feature flags</Text>
             )}
             {!isFeatureFlagsLoading && !featureFlagsError && featureFlagEntries.length === 0 && (
@@ -461,9 +466,15 @@ const ProfileScreen: React.FC = () => {
                   justifyContent="between"
                   key={flagEntry.key}
                   paddingY={1}
+                  testID={`profile-feature-flag-${flagEntry.key}`}
                 >
                   <Text>{flagEntry.key}</Text>
-                  <Text color="secondaryLight">{String(flagEntry.value)}</Text>
+                  <Text
+                    color="secondaryLight"
+                    testID={`profile-feature-flag-${flagEntry.key}-value`}
+                  >
+                    {String(flagEntry.value)}
+                  </Text>
                 </Box>
               ))}
           </Box>

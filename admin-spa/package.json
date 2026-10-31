@@ -4,11 +4,10 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@better-auth/expo": "^1.6.25",
     "@expo/vector-icons": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
     "@terreno/admin-frontend": "workspace:*",
-    "@terreno/rtk": "workspace:*",
     "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "better-auth": "catalog:",
@@ -16,11 +15,13 @@
     "expo-constants": "catalog:",
     "expo-font": "catalog:",
     "expo-linking": "catalog:",
+    "expo-network": "catalog:",
     "expo-router": "catalog:",
+    "expo-secure-store": "catalog:",
     "expo-splash-screen": "catalog:",
     "expo-status-bar": "catalog:",
     "express": "catalog:",
-    "http-proxy-middleware": "^3.0.3",
+    "http-proxy-middleware": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-native": "catalog:",
@@ -29,9 +30,7 @@
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
     "react-native-web": "catalog:",
-    "react-native-worklets": "catalog:",
-    "react-redux": "catalog:",
-    "redux-persist": "catalog:"
+    "react-native-worklets": "catalog:"
   },
   "description": "Standalone admin SPA (Expo Router web) plus Express serve plugin — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {

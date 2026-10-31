@@ -1,6 +1,6 @@
 # @terreno/syncdb
 
-Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on device is the UI source of truth: reads come from the local store, writes apply optimistically into a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Supersedes `@terreno/rtk` for data-synchronization concerns.
+Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on device is the UI source of truth: reads come from the local store, writes apply optimistically into a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. It is also the frontend's request client, session, feature-flag, and app-utility layer; Terreno 58 removed `@terreno/rtk` and Redux ([upgrade guide](../how-to/migrate-rtk-to-syncdb.md)).
 
 ## Table of Contents
 
@@ -11,6 +11,11 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - [SyncDb client methods](#syncdb-client-methods)
 - [React hooks](#react-hooks)
 - [Query windows](#query-windows)
+- [API client](#api-client)
+- [Config](#config)
+- [Auth](#auth)
+- [App utilities](#app-utilities)
+- [Feature flags](#feature-flags)
 - [Codegen](#codegen)
 - [Conflict API](#conflict-api)
 - [Sync status API](#sync-status-api)
@@ -27,7 +32,13 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - `betterAuthAdapter`, `bridgeBetterAuthReactClient`, `AuthProvider`
 - `listConflicts`, `wipeLocalData`, `generateMutationId`
 - Queries: `QueryFieldNotAllowedError`, `ListRequestError`, `WhereFilter`, `SortSpec`, `WindowQuery`, `QueryWindowState`, `QueryWindows`, `compileWhere`, `DEFAULT_WINDOW_PAGE_SIZE`
-- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
+- React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`, `ApiClientProvider`, `useApiClient`, `useApiQuery`, `useLazyApiQuery`, `useApiMutation`, `useSocketEvent`
+- API client (`@terreno/syncdb/api`): `createApiClient`, `ApiClient`, `ApiError`, `isApiError`, `apiFetch`, `unwrapEnvelope`, `serializeParams`
+- Config (`@terreno/syncdb/config`): `baseUrl`, `baseWebsocketsUrl`, `baseTasksUrl`, `appHeaders`, `isWeb`, `resolveBaseUrls`, `resolveDevApiPort`, `SAME_ORIGIN_SENTINEL`
+- Auth (`@terreno/syncdb/auth`): `createBetterAuthClient`, `createStorageAdapter`, `repairCookieJar`, `withCookieJarRepair`, `SessionProvider`, `useSession`, `useSessionStore`, `createSessionStore`, `betterAuthSessionSource`, `betterAuthAdapter`, `bridgeBetterAuthReactClient`, Better Auth types; JWT (legacy): `jwtAuthAdapter`, `useJwtAuth`, `getTokenExpirationTimes`, `shouldShowStillThereModal`, `createJwtTokenStorage`, `readJwtTokens`, `decodeJwtClaims`
+- App (`@terreno/syncdb/app`): `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `ADMIN_PAGE_PERMISSION`, `installDevConsoleLogger`, `useMCPTools`
+- Flags (`@terreno/syncdb/flags`): `useFeatureFlags`, `useTerrenoFeatureFlags`, `TerrenoFlagConfiguration`
+- Build number (`@terreno/syncdb/buildNumber`, node-only): `resolveBuildNumber`, `coerceBuildNumber`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
 - Testing (`@terreno/syncdb/testing`): `createFakeTransport`
 - Dev console logger: `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb`, also
@@ -139,7 +150,7 @@ new TerrenoApp({userModel: User})
 ```
 
 - **`SyncApp`** — HTTP sync routes (`/sync/snapshot`, `/sync/mutate`, `/sync/mutate/batch`, `/sync/key`, `/sync/streams`, `/sync/entities`).
-- **`RealtimeApp`** — Socket.io server with change-stream-driven `sync:delta` emission. Requires a **MongoDB replica set** (change streams). `modelRouter` `realtime` (RTK `sync` events) is deprecated and removed in Terreno 58; do not add it to new models.
+- **`RealtimeApp`** — Socket.io server with change-stream-driven `sync:delta` emission. Requires a **MongoDB replica set** (change streams). `modelRouter` `realtime` and its RTK `sync` events were removed in Terreno 58; `sync:delta` is the only collection event.
 - **`ensureSyncIndexes`** — `TerrenoApp.start()` binds the HTTP port first (or attaches to `httpServer` if the process already listened), then awaits index builds for snapshot queries and sync bookkeeping (`SyncMutation.mutationId` unique, `SyncCounter.stream` unique, etc.). Registration queues this work without contacting MongoDB, so models can load before the database connects. Hosts that build Express without `TerrenoApp.start()` should await `ensureSyncIndexes()` after connecting.
 
 Socket auth requires at least one configured authentication method. It enables legacy JWT
@@ -190,12 +201,12 @@ be passed to `betterAuthAdapter` directly.
 | `setIntervalFn` / `clearIntervalFn` | test hooks | global timers | Inject timers for deterministic tests |
 
 For a web app in Better Auth bearer mode (`createBetterAuthClient({webAuth: "bearer"})`), pass
-rtk's `getBetterAuthBearerToken` so every sync request reads the stored token without a
-`get-session` round trip. syncdb does not import rtk; the app wires the two together:
+`getBetterAuthBearerToken` from `@terreno/syncdb/auth` so every sync and request-client call
+reads the stored token without a `get-session` round trip:
 
 ```typescript
-import {getBetterAuthBearerToken} from "@terreno/rtk";
 import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
+import {getBetterAuthBearerToken} from "@terreno/syncdb/auth";
 
 const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient), {
   getBearerToken: () => getBetterAuthBearerToken({storagePrefix: "myapp"}),
@@ -261,7 +272,7 @@ before anything else has confirmed one.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, stop persistence, clear timers and listeners. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). A stream discovery (`GET /sync/streams`) that was still reading the token when `stop()` ran is not sent, so it never reaches the server with a session the app is signing out of. |
+| `stop()` | Disconnect, flush and stop persistence, clear timers and listeners. Cancels a `start()` that is still running or queued ahead of it, so the transport never connects after logout. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). A stream discovery (`GET /sync/streams`) that was still reading the token when `stop()` ran is not sent, so it never reaches the server with a session the app is signing out of. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
@@ -272,9 +283,10 @@ before anything else has confirmed one.
 | `replayOutbox()` | Drain queued mutations for the current user now. |
 | `resolveConflict({mutationId, strategy})` | Apply `"useServer"` or `"keepMine"` to a recorded conflict. |
 | `retryFailed({entityId})` | Re-enable an entity's queued successors after a terminal validation failure. |
-| `signOut()` | Explicit teardown like `stop()`; wipes local data only when `wipeOnSignOut: true`. |
+| `signOut()` | Explicit teardown like `stop()` (including cancelling an in-flight `start()`); wipes local data only when `wipeOnSignOut: true`. |
 | `getSyncStatus()` | Snapshot of aggregate sync state (see [Sync status API](#sync-status-api)). |
 | `onStatusChange(callback)` | Subscribe to connectivity/syncing changes; returns unsubscribe. |
+| `onSocketEvent(event, handler)` | Listen for an app-level server event (for example `featureFlagsChanged`) on the sync socket; returns unsubscribe. Listeners survive `stop()`/`start()` and reconnects. `sync:*` and Socket.io lifecycle names throw. A transport without `onEvent` returns a no-op. |
 | `store` | Read surface over the local MergeableStore (`SyncStore`). |
 | `outbox` | Durable mutation outbox (`Outbox`). |
 | `debug` | `SyncDebugLog` when `debug` is enabled; otherwise `undefined`. |
@@ -442,6 +454,20 @@ Available when the client was created with `debug: true`. `log?.snapshot()` retu
 
 Returns the `SyncDb` instance from context (escape hatch for imperative calls like `forceResync()`).
 
+### `useSocketEvent(event, handler, options?)`
+
+Binds `handler` to a server socket event while mounted, through `onSocketEvent` on the
+`SyncDbProvider` client. The latest handler always runs; the listener is rebound only when
+`event`, `client`, or `enabled` changes. Options: `client` (a `SyncDb`, or `null` to listen to
+nothing; required outside a provider) and `enabled` (default `true`). See
+[WebSocket integration](../how-to/websocket-integration.md).
+
+```typescript
+useSocketEvent("announcementPublished", () => {
+  void refetch();
+});
+```
+
 ### `createCollectionHooks`
 
 Factory used by `terreno-syncdb-codegen` and by hand-written custom collections. Returns six operation hooks (`useListQuery`, `useWindowQuery`, `useReadQuery`, `useCreateMutation`, `useUpdateMutation`, `useDeleteMutation`). Generated SDKs rename them to friendly names (`useTodos`, `useTodosWindow`, `useTodo`, `useCreateTodo`, …). `useWindowQuery` works only for collections listed in `queryCollections`. Mutation hooks return `[trigger]`; triggers apply locally and return `{mutationId, id}` synchronously. Optional `retries` maps to `maxAttempts` (`false` → 1, a number → that many, omitted → engine default).
@@ -452,6 +478,331 @@ export const {useListQuery: useNotes, useCreateMutation: useCreateNote} =
     collection: "notes",
   });
 ```
+
+## API client
+
+Synced collections read and write through the local store. Every other route —
+`/auth/me`, modelRouter actions, AI, consents, announcements, version check — goes
+through the request client in `@terreno/syncdb/api`. It uses the same `AuthProvider` as
+`createSyncDb`, so both send the same token and refresh it the same way.
+
+```typescript
+import {createApiClient} from "@terreno/syncdb/api";
+import {appHeaders, baseUrl} from "@terreno/syncdb/config";
+
+export const apiClient = createApiClient({
+  authProvider,            // the provider passed to createSyncDb
+  baseUrl,
+  credentials: "include",  // "same-origin" for cookie SPAs
+  headers: appHeaders,     // App-Version + App-Platform
+});
+```
+
+Wrap the app in `<ApiClientProvider client={apiClient}>`, then:
+
+```typescript
+import {useApiMutation, useApiQuery} from "@terreno/syncdb/react";
+
+const {data: me, isLoading, refetch} = useApiQuery<Profile>(
+  {url: "/auth/me"},
+  {providesTags: ["profile"], skip: !userId}
+);
+const [updateMe, {isLoading: isSaving}] = useApiMutation<UpdateProfile, Profile>(
+  (body) => ({body, method: "PATCH", url: "/auth/me"}),
+  {invalidatesTags: ["profile"]}
+);
+await updateMe({name: "Ada"}).unwrap();
+```
+
+| `createApiClient` option | Description |
+|--------------------------|-------------|
+| `baseUrl` | API origin; relative request URLs are prefixed with it |
+| `authProvider` | `getToken` adds `Authorization: Bearer`; on a 401, `refresh` runs once and the request retries |
+| `credentials` | Fetch credentials mode for cookie sessions |
+| `headers` | Object or (async) function merged into every request |
+| `timeoutMs` | Per-request timeout (default 30 000) |
+| `onError` | Called with every `ApiError` after any retry (report to Sentry here) |
+| `keepUnusedDataMs` | How long an unsubscribed cache entry survives (default 60 000) |
+
+| Request arg | Description |
+|-------------|-------------|
+| `url`, `method` | Path (or absolute URL) and HTTP method (default `GET`) |
+| `params` | Query params; arrays become repeated keys, nested objects bracket keys (`updated[$gte]`) |
+| `body` | Plain objects are JSON-encoded; `FormData`, `Blob`, and strings pass through |
+| `headers` | Per-request headers (part of the cache key) |
+| `unwrap` | Unwrap `{data}` single-document envelopes (default `true`); list envelopes with `more` stay whole |
+| `parseAs`, `timeoutMs`, `signal` | Response parsing, timeout, and cancellation |
+
+| Client method | Description |
+|---------------|-------------|
+| `request(args)` | One uncached request |
+| `fetchQuery(args, {providesTags, force})` | Cached request; identical in-flight calls share one fetch |
+| `getQueryState(args)` / `subscribeQuery(args, listener)` | Read and watch one cache entry |
+| `invalidateTags(tags)` | Refetch mounted queries with those tags; drop unmounted ones |
+| `reset()` | Clear the cache; call when the signed-in user changes |
+
+| Hook | Returns |
+|------|---------|
+| `useApiQuery(args \| null, {skip, providesTags, pollingInterval, transformResponse, client})` | `{data, error, isLoading, isFetching, isSuccess, isError, isUninitialized, refetch}` |
+| `useLazyApiQuery({providesTags, client})` | `[trigger(args), state]`; each trigger fetches fresh data |
+| `useApiMutation(toRequest, {invalidatesTags, client})` | `[trigger(arg), {data, error, isLoading, isSuccess, isError, reset}]` |
+
+Triggers resolve `{data}` or `{error}`; `.unwrap()` resolves the data or throws.
+Failures are `ApiError` (`status`, `data.title`, `data.detail`, `data.code`, `data.fields`,
+`data.meta`); timeouts and network failures have `status: 0`. `data.disableExternalErrorTracking`
+is `true` when the server marks the error as expected, so an `onError` reporter should skip
+Sentry for it.
+
+## Config
+
+`@terreno/syncdb/config` resolves the app's API origin once at import (needs
+`expo-constants`):
+
+1. `extra.BASE_URL` set to `__SAME_ORIGIN__` resolves to the page origin (same-origin web SPAs).
+2. `EXPO_PUBLIC_API_URL`, in any build.
+3. `extra.BASE_URL` in `app.json` (production/staging builds only).
+4. Expo `hostUri` plus the dev API port (simulator/device).
+5. `http://localhost:<dev API port>`.
+
+The dev API port is `4000` unless `EXPO_PUBLIC_DEV_API_PORT` or `extra.DEV_API_PORT` sets
+it. `appHeaders()` returns `App-Version` (Expo config version) and `App-Platform`
+(`web` or `mobile`).
+
+## Auth
+
+`@terreno/syncdb/auth` holds the Better Auth client and the session state that replace
+`@terreno/rtk`'s `createBetterAuthClient` and Better Auth Redux slice. It needs the
+optional peers `better-auth`, `@better-auth/expo`, `expo-secure-store`,
+`@react-native-async-storage/async-storage`, and `react`.
+
+```tsx
+import {createBetterAuthClient, SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+
+export const betterAuthClient = createBetterAuthClient({
+  baseURL: baseUrl,
+  scheme: "myapp",
+  storagePrefix: "myapp",
+});
+
+<SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+  <App />
+</SessionProvider>;
+
+const {userId, user, isLoading, isAuthenticated, isSigningOut, error, logout, refresh} =
+  useSession();
+```
+
+`createBetterAuthClient({baseURL, scheme, storagePrefix?})` returns the Better Auth React
+client with the Expo plugin. Storage is `expo-secure-store` (synchronous API) on native and
+AsyncStorage on web. Reads of the plugin's cookie jar (`<storagePrefix>_cookie`) go through
+`repairCookieJar`, which drops entries the plugin cannot read, so one malformed entry never
+blocks every native request. `storagePrefix` defaults to `"terreno"`.
+
+`SessionProvider` props (read once on mount):
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `authClient` | Better Auth client | Wrapped with `betterAuthSessionSource`. Use this or `source`. |
+| `source` | `SessionSource` | Any session source (`getSession`, `signOut`, optional `subscribe`). |
+| `store` | `SessionStore` | A store from `createSessionStore`, instead of the props above. Share it with non-React code. |
+| `syncDbs` | `{signOut}[]` | syncdb clients signed out on `logout`, after the auth server confirms the sign-out and while the session still names the user. Create them with `wipeOnSignOut: true` to wipe local data. |
+| `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the auth and syncdb sign-outs. |
+| `signOutTimeoutMs` | `number` | How long `logout` waits for the server's sign-out, and for the session check after a failed one. Default `10000`. |
+| `pollIntervalMs` | `number` | Poll cadence when the source cannot push changes. Default `60000`; `0` turns polling off. |
+
+When the session syncs:
+
+- **Start:** the provider reads the session on mount. `isLoading` is `true` until it settles.
+- **Sign-in, sign-out, user switch:** Better Auth's session atom (`$store.atoms.session`)
+  pushes the change. Only settled emissions apply: while a read is in flight (`isPending` or
+  `isRefetching`) the atom still carries the previous user, so a sign-out never briefly
+  restores them. Call `refresh()` after a sign-in to resolve the user immediately.
+- **Polling:** only when the client has no session atom.
+- **Logout:** `logout()` signs out of the auth server while the session stays in the state
+  (`isSigningOut` is `true`, `isLoading` is untouched), then signs out each `syncDbs` client,
+  runs `onLogout`, and clears the session. The session stays until the server answers so a
+  login screen that opens at once never finds the live session and signs straight back in, and
+  so the sync clients still know the current user for their `wipeOnSignOut` wipe. A sign-out
+  that fails or outlasts `signOutTimeoutMs` triggers a session check: when the session is
+  still live (or the server cannot be asked and the client may still hold one), `logout()`
+  keeps the session, wipes nothing, and sets `error` to `SIGN_OUT_FAILED_MESSAGE`; a session
+  that is already gone clears normally. Session pushes during a logout are held, and a
+  different user who signed in meanwhile wins when it ends. Concurrent `logout()` calls share
+  one run. A failing `syncDbs` or `onLogout` step is logged and the rest still run.
+
+A failed startup or `refresh()` read sets `error` to `"Failed to sync session"` and clears the
+session. A failed background read (atom error, poll) keeps the current session, so a network
+blip is never a logout. `useSession()` throws outside a `SessionProvider`.
+
+`betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient))` turns the same client into
+the `AuthProvider` for `createSyncDb` and `createApiClient`. Both are also exported from the
+package root.
+
+### Social login, account linking, and account security
+
+`@terreno/syncdb/auth` also exports the pieces behind the example app's login and security
+screens. They take a client from `createBetterAuthClient` (pass `features` to turn on the
+`twoFactor`, `passkey`, `multiSession`, `lastLoginMethod` and `oneTimeToken` client plugins) and
+need no store: session state comes from `useSession()`. Setup: [Configure Better
+Auth](../how-to/configure-better-auth.md) and [Account security](account-security.md).
+
+- `BetterAuthClient` — The client type without `features` (also `ReturnType<typeof createBetterAuthClient>`). `BetterAuthClientWithFeatures<Features>` — the client type with them. `BetterAuthClientFor<Features>` — which of the two `createBetterAuthClient` returns. `BetterAuthHandoffClient` — what the OAuth handoff helpers accept: any client from `createBetterAuthClient`
+- `BetterAuthOAuthProvider` — `"google" | "github" | "apple"` or any generic OAuth provider id, such as `"mock-oidc"`
+- `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
+- `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
+- `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
+- `linkSocialWithHandoff({client, provider, callbackURL, errorCallbackURL?}): Promise<{error}>` — Links a provider to the signed-in user. On web in bearer mode it posts the intent to `{basePath}/oauth-handoff/link-intent` with the bearer, then submits the returned single-use token in a hidden POST form to `startURL`, which redirects to the provider; the page comes back to `callbackURL` with no `#ott`. Both URLs may be any page on a web origin (`callbackPaths` do not apply); `errorCallbackURL` defaults to `callbackURL`. In cookie mode and on native it calls `client.linkSocial`. Resolves `{error: null}` once the browser is on its way, or `{error: {status, code?, message?}}` (such as 403 `LINKING_DISABLED`) without submitting anything. `BetterAuthLinkClient` is its client type ([how-to](../how-to/configure-better-auth.md#linking-a-provider-in-bearer-mode))
+- `useAuthMethods(authClient, {skip?}): {methods, isLoading, error, refetch}` — Loads the server's enabled sign-in methods (`BetterAuthMethods`: `providers`, `emailPassword`, `signUp`, `accountLinking`, and feature flags) once per client from `{basePath}/terreno/methods` through the client's `$fetch`, so bearer and cookie modes both work. `methods` is `undefined` while loading and after an error; render no provider buttons until it arrives. `refetch()` requests them again (for Try again); `skip: true` makes no request ([response](api.md#better-auth-authentication))
+- `createRememberedAccountsStore({rememberIdentity, storageKey?, max?, storage?})` — On-device store of accounts that signed in here, for the login screen. Returns `{record(entry), forget(userId), clear(), list(), lastUsedMethod(), isHydrated(), ready, getSnapshot(), subscribe(listener), dispose()}`. Each change re-reads storage first, and on web the store follows `storage` events for its key until `dispose()`, so a stale tab cannot bring back a forgotten account. A failed change rejects to its caller without blocking later changes. Persists `{userId, method, lastUsedAt}` (newest first, at most `max`, default 5, and at most 2048 bytes) under `storageKey` (default `terreno_remembered_accounts`) in SecureStore on native (`WHEN_UNLOCKED_THIS_DEVICE_ONLY` on iOS) or localStorage on web. `rememberIdentity` is required: pass `false` to keep only the method. `name` (in clear), a masked `email`, and an `https://` `image` are kept only with `rememberIdentity: true`. Unreadable or oversized stored data resets to an empty list ([how-to](../how-to/configure-better-auth.md#4-remember-accounts-on-this-device))
+- `useRememberedAccounts(store): {accounts, lastUsedMethod, isHydrated, forget, clear}` — Subscribes a component to the store. `isHydrated` is `false` until native storage has loaded
+- `toLoginAccountOptions(accounts)` — Maps `RememberedAccount[]` to `@terreno/ui` `LoginAccountOption[]` (`id` is the `userId`) for `LoginScreen`'s `rememberedAccounts`
+- `maskEmail(email)` — `josh@mail.flourish.health` → `j***@m***.health`: first character of the local part and domain, subdomains hidden, top-level domain kept; `undefined` for non-emails
+- `getBetterAuthClientWebAuth(client): {webAuth, bearerToken}` — Whether a client from `createBetterAuthClient` is in web bearer mode, and the token it holds; `{webAuth: "cookie", bearerToken: null}` on native, in cookie mode, and for other clients. No request
+- `useLoginController({client, rememberedAccounts, onSignedIn, onTwoFactorRequired?, rememberIdentity?, callbackURL?, errorCallbackURL?, error?, onSignUpPress?, onForgotPasswordPress?, providerLabels?, passkeyAutofill?, skipWhenSignedIn?, webAuth?, getBearerToken?, initialEmail?})` — Drives a login screen from a Better Auth client. Returns `{step, methods, isEmailPasswordEnabled, screenProps, twoFactor, signInEmail, signInSocial, signInPasskey, continueAs, forget}`: `step` is `"checking"`, `"login"`, `"twoFactor"` or `"signedIn"`; `isEmailPasswordEnabled` is `false` when the server has email and password off (render `LoginScreen` with `fields={[]}`); `screenProps` spreads into `@terreno/ui` `LoginScreen`; `twoFactor` feeds `TwoFactorChallengeScreen`. A live session calls `onSignedIn` without showing the screen (in bearer mode it first finishes a pending OAuth handoff; with no stored token it asks the server nothing). If `onSignedIn` throws, `step` returns to `"login"` with an error. The passkey button and autofill are web-only. Device sessions (`multiSession.listDeviceSessions`, never in bearer mode) become session cards and hide remembered entries for the same user. Social sign-in uses `signInSocialWithHandoff` in bearer mode and `signIn.social` otherwise. Every finished sign-in is recorded in the store. Server refusals become notices through `getLoginFeedback` ([how-to](../how-to/configure-better-auth.md#5-drop-in-login-screen))
+- `TerrenoLoginScreen` — `LoginScreen` connected through `useLoginController`; takes its options plus `fields?` (default `DEFAULT_LOGIN_FIELDS`), `title?`, `logo?`, `trustDeviceDays?`, `initialTrustDevice?` (pass `false` to start "Trust this device" unchecked), `onStepChange?` (called with each new step: `checking`, `login`, `twoFactor`, `signedIn`), `testID?` (default `login-screen`; spinner `${testID}-checking`). Renders the inline two-factor challenge unless `onTwoFactorRequired` is set
+- `useAccountSecurity({client, callbackURL, methods?, errorCallbackURL?, linkError?, providerLabels?, passkeySupported?, minPasswordLength?})` — Drives an account security screen from a Better Auth client. Returns `{screenProps, methods, user, refetch}`; `screenProps` (`linkedAccounts`, `password`, `passkeys`, `twoFactor`, `sessions`, `isLoading`, `error`, `onRetry`) spreads into `@terreno/ui` `AccountSecurityScreen`. A card's props are `undefined` when the server's methods (or the client's features) leave it off; passkeys are web-only. Loads `listAccounts`, `passkey.listUserPasskeys`, `getSession({query: {disableCookieCache: true}})` and `listSessions`; each Better Auth `{error}` becomes a thrown `Error` for the card, and after each change only the affected section reloads. Never calls `unlinkAccount` for the only account, or `deletePasskey` for the only sign-in method (`LAST_SIGN_IN_METHOD_MESSAGE`). Links through `linkSocialWithHandoff`; "Set a password" posts `{basePath}/terreno/set-password`. `SESSION_NOT_FRESH` becomes `SIGN_IN_AGAIN_MESSAGE`; a change refused with `CREDENTIAL_ACCOUNT_NOT_FOUND` switches the password card to set mode (`NO_PASSWORD_YET_MESSAGE`). `getLinkErrorMessage(code)` maps a link's `?error=` to safe text ([how-to](../how-to/configure-better-auth.md#6-drop-in-security-screen))
+- `TerrenoAccountSecurityScreen` — `AccountSecurityScreen` connected through `useAccountSecurity`; takes its options plus `title?`, `description?`, `header?`, `children?`, `withPage?`, `maxWidth?`, `testID?`
+- `recordRememberedSignIn({store, user, method, rememberIdentity?})` — Records a sign-in the controller did not finish, such as one completed on the app's own two-factor screen
+- `getLoginFeedback({failure, mode?, originalMethod?}): {notice?, error?, isSignUpClosed}` — Maps `{code?, message?, source: "response" | "url"}` to login screen feedback: `account_not_linked` / `OAUTH_LINK_ERROR` / "account not linked" to guidance for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` to "verify your email", `signup_disabled` / `EMAIL_PASSWORD_SIGN_UP_DISABLED` to "ask your administrator" (and `isSignUpClosed`), `LINKING_DISABLED`, `provider_not_found`; a response's own message otherwise, and never text from a URL
+
+### JWT auth (legacy)
+
+For backends on `@terreno/api`'s JWT routes (`/auth/login`, `/auth/refresh_token`). Ported
+from `@terreno/rtk`'s `generateAuthSlice` and `emptyApi` base query; no Redux.
+
+```tsx
+import {jwtAuthAdapter, SessionProvider, useJwtAuth, useSession} from "@terreno/syncdb/auth";
+import {createApiClient} from "@terreno/syncdb/api";
+import {appHeaders, baseUrl} from "@terreno/syncdb/config";
+
+export const jwtAuth = jwtAuthAdapter({baseUrl, headers: appHeaders});
+export const apiClient = createApiClient({authProvider: jwtAuth, baseUrl, headers: appHeaders});
+export const syncDb = createSyncDb({authProvider: jwtAuth, baseUrl, /* … */});
+
+<SessionProvider source={jwtAuth} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+  <App />
+</SessionProvider>;
+
+// In a screen:
+const {login, signup, googleLogin, resetPassword, logout, isAuthenticating, error} =
+  useJwtAuth({adapter: jwtAuth});
+await login({email, password});
+const {userId, isAuthenticated} = useSession();
+```
+
+`jwtAuthAdapter(options)` options:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `baseUrl` | `string` | API origin. Required. |
+| `storage` | `JwtTokenStorage` | Token storage. Default: `expo-secure-store` on native, AsyncStorage on web (keys `AUTH_TOKEN`, `REFRESH_TOKEN`; nothing is stored during SSR). |
+| `paths` | `Partial<JwtAuthPaths>` | Route overrides. Defaults: `login` `/auth/login`, `signup` `/auth/signup`, `refreshToken` `/auth/refresh_token`, `googleLogin` `/auth/google`, `resetPassword` `/resetPassword`. |
+| `headers` | object or function | Extra headers on auth requests (e.g. `appHeaders`). |
+| `refreshBeforeExpirySecs` | `number` | Refresh when the access token has fewer seconds left. Default `130`. |
+| `fetchImpl` | `FetchLike` | Custom `fetch`. |
+| `timeoutMs` | `number` | Auth request timeout. Default `30000`. |
+
+The adapter is an `AuthProvider` and a `SessionSource`:
+
+| Member | Behaviour |
+|--------|-----------|
+| `getToken()` | Stored access token. Under `refreshBeforeExpirySecs` left (or expired), refreshes first. Both tokens expired: signs out and returns `null`. |
+| `refresh()` | `POST /auth/refresh_token` with `{refreshToken}`; stores the new pair and resolves `true`. Concurrent calls share one request. `createApiClient` calls it on a 401 and retries once; `createSyncDb` calls it on an auth pause. |
+| `getUserId()` / `getSession()` | The stored token's `id` claim; `getSession()` returns `{userId, user: {id}}` or `null`. |
+| `onAuthChange(cb)` / `subscribe(listener)` | Fire on login, logout, and token rotation. |
+| `login(body)` | `POST /auth/login` with `{email \| username, password}`; stores the tokens and signs in. |
+| `signup(body)` | `POST /auth/signup` with `{email, password, ...extra}`; stores the tokens and signs in. |
+| `googleLogin({idToken})` | `POST /auth/google`; stores the tokens and signs in. |
+| `resetPassword(body)` | `POST /resetPassword` (`{token, password}`); returns `{token, refreshToken, userId}` without signing in. |
+| `setTokens({token, refreshToken?})` | Store a pair from a custom route and sign in. |
+| `logout()` / `signOut()` | Clear both tokens and notify listeners. JWTs are stateless, so no server call. |
+
+Failed requests reject with `ApiError`. Its `message` is the server's `title`, or the
+`message` the JWT routes send on a 401 (for example `"Password or username is incorrect"`).
+Status `0` means the request never got a response (`data.code` `network-error` or
+`request-timeout`).
+
+When a refresh fails:
+
+- The server rejects it (401, missing tokens in the response, any other HTTP error), or no
+  refresh token is stored: both tokens are cleared and the session signs out. syncdb clients
+  pause (they never wipe on a sign-out they did not request).
+- Network error or timeout: the session and current token stay; the next request retries.
+
+`useJwtAuth({adapter})` must render inside the `SessionProvider` whose `source` is `adapter`.
+`login`, `signup`, `googleLogin`, and `resetPassword` set `isAuthenticating` while pending,
+store the failure message in `error` (cleared when the next request starts), and reject with
+the error. `logout` is the `SessionProvider` logout.
+
+Token helpers (all take an optional `{storage, now}`):
+
+| Function | Returns |
+|----------|---------|
+| `getTokenExpirationTimes()` | `{authRemainingSecs, refreshRemainingSecs}`; both `undefined` unless both tokens are stored. |
+| `shouldShowStillThereModal()` | `true` when the refresh token has 65 seconds or less left. |
+| `readJwtTokens(storage?)` | `{token, refreshToken}` from storage. |
+| `decodeJwtClaims(token)` | The token's claims (unverified), or `null`. |
+
+## App utilities
+
+`@terreno/syncdb/app` holds app-shell helpers that replace their `@terreno/rtk`
+versions. It needs `react`, `react-native`, and `expo-constants`; `useMCPTools` also
+needs `@modelcontextprotocol/client`. All are optional peer dependencies.
+
+```typescript
+import {
+  canOpenAdminPage,
+  installDevConsoleLogger,
+  useMCPTools,
+  useUpgradeCheck,
+} from "@terreno/syncdb/app";
+
+installDevConsoleLogger(); // module scope; no-op outside __DEV__
+
+const {isRequired, isWarning, onUpdate} = useUpgradeCheck({recheckOnForeground: true});
+const isAdmin = canOpenAdminPage({admin: me?.admin, permissions: me?.permissions});
+const {tools} = useMCPTools({authProvider}); // the provider passed to createSyncDb
+```
+
+| Export | Description |
+|--------|-------------|
+| `useUpgradeCheck({pollingIntervalMs, recheckOnForeground, client})` | Calls `GET /version-check` through the request client (`ApiClientProvider` or `client`) with `extra.buildNumber`. Returns `{isRequired, isWarning, requiredMessage, warningMessage, warningCheckCount, canUpdate, onUpdate}`. Skips the check when there is no build number. The server's `pollingIntervalMs` replaces the local fallback after the first response. |
+| `hasPermission(permissions, request)` | True when the `/auth/me` `permissions` map grants every requested action |
+| `canOpenAdminPage({admin, permissions})` | With RBAC, only `admin:access` opens the admin UI; without it, falls back to `user.admin` |
+| `installDevConsoleLogger({baseUrl})` | In `__DEV__`, batches `console.error` / `console.warn` and global errors to `POST /__terreno/browser-logs`. Safe to call more than once. |
+| `useMCPTools({authProvider, baseURL})` | Lists the backend's `/mcp` tools with the official MCP client. The token comes from `authProvider.getToken()` on each fetch, so Better Auth and JWT sessions both work. Returns `{tools, isLoading, error, refetch}`. |
+
+`@terreno/syncdb/buildNumber` is node-only (it runs `git`). Import it from
+`app.config.ts`, never from app code:
+
+```typescript
+import {resolveBuildNumber} from "@terreno/syncdb/buildNumber";
+
+extra: {buildNumber: resolveBuildNumber({configValue: config.extra?.buildNumber})}
+```
+
+`resolveBuildNumber` order: `override`, `configValue`, `EXPO_PUBLIC_BUILD_NUMBER` (or
+`envVar`), `git rev-list --count HEAD`, then `undefined` (the check is skipped).
+
+## Feature flags
+
+`@terreno/syncdb/flags` reads `@terreno/feature-flags` flags with the request client and
+refreshes them when the server emits `featureFlagsChanged` on the sync socket — no second
+socket. Requires the optional peers `@openfeature/web-sdk` (and `@openfeature/react-sdk` for
+OpenFeature React hooks).
+
+```typescript
+import {useFeatureFlags, useTerrenoFeatureFlags} from "@terreno/syncdb/flags";
+
+// Root, above SyncDbProvider: install flags into OpenFeature and listen for pushes.
+useTerrenoFeatureFlags({skip: !userId, socket: syncDb, userId});
+
+// Screens: flat accessors over the same cached query.
+const {getFlag, getVariant, isLoading} = useFeatureFlags({skip: !userId, socket: null, userId});
+```
+
+Options and results: [feature flags reference](./feature-flags.md#terrenosyncdbflags).
 
 ## Query windows
 
@@ -566,6 +917,56 @@ terreno-syncdb-codegen \
 ```
 
 Do not edit the generated file. `--collections` filters when extensions exist. When they do not, it reads list/create/patch schemas from `GET /{name}` (or `/{name}/`). A missing path, a list response without `data.items`, a spec with no extensions and no `--collections` all exit non-zero.
+
+A collection name is the route path without its leading slash, so a nested route keeps its
+`/`: `modelRouter("/gpt/histories", …)` syncs as `gpt/histories`, and
+`useQuery("gpt/histories")` reads it. Names are letters, digits, `_`, and `-` in
+`/`-separated segments. Hooks drop the separators and singularize the last segment when the
+list item schema has no `$ref` name: `gpt/histories` → `GptHistory`, `useGptHistories`.
+
+### API SDK (`--api-out`)
+
+`--api-out <file>` writes typed request hooks for every operation that is **not** synced
+collection CRUD: auth (`/auth/me`), modelRouter actions, AI, consents, announcements,
+version check, and plain REST routes. It replaces `@rtk-query/codegen-openapi`. Pass
+`--out`, `--api-out`, or both in one run.
+
+```bash
+terreno-syncdb-codegen \
+  --schema http://localhost:4000/openapi.json \
+  --out ./store/syncDbSdk.ts \
+  --api-out ./store/apiSdk.ts \
+  --config ./syncdb-codegen.json
+```
+
+| Generated per operation | Example (`GET /gpt/datasets/{id}?historyId=`) |
+|-------------------------|-----------------------------------------------|
+| `<Name>Args` | `{id: string; historyId: string}` |
+| `<Name>Res` | Response after envelope unwrapping (`{data: X}` → `X`; lists keep `more`) |
+| `<name>Request(arg)` | `ApiRequestArgs` for `apiClient.request(...)` |
+| `use<Name>Query` / `useLazy<Name>Query` | GET operations; `providesTags` from the operation's OpenAPI tags |
+| `use<Name>Mutation` | Other methods; `invalidatesTags` from the operation's OpenAPI tags |
+
+Names follow the RTK codegen rule, so migrated screens keep their hook names: the
+camelCased `operationId`, otherwise method + path with `{param}` read as `By<Param>`
+(`PATCH /gpt/histories/{id}/rating` → `usePatchGptHistoriesByIdRatingMutation`). Arguments flatten
+the same way: one path param, query param, or body is the argument itself; otherwise an
+object of path params, query params, and `body`. A `multipart/form-data` body is
+`FormData`. Two operations that would share a name exit non-zero; give one an
+`operationId`. `excludePaths` in the config file (path prefixes, or regexes starting
+with `^`) leaves routes out.
+
+A paginated custom route must return `more` with its `data` (as `GET /announcements/feed`
+does: `{data, more, page, total}`). Without `more`, the client unwraps the envelope to the
+`data` array and drops `page` and `total`.
+
+```typescript
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
+
+const {data: me} = useGetAuthMeQuery(undefined, {skip: !userId});
+const [updateMe] = usePatchAuthMeMutation();
+await updateMe({name: "Ada"}).unwrap();
+```
 
 ## Conflict API
 
@@ -702,6 +1103,7 @@ Conflict responses on mutate: **409** with `{nack}` body (`code: "conflict"`).
 | `sync:nack` | server → client | `{mutationId, code, serverDoc?, serverSeq?, serverDeleted?, message?, retryAfterMs?}` |
 | `sync:mutateBatch` | client → server | `{mutations: SyncMutateRequest[], batchId?}` |
 | `sync:auth-expired` | server → client | `{reason: "expired" \| "disabled"}` — session re-validation sweep; client enters auth-pause |
+| any other name | server → client | App events (for example `featureFlagsChanged` `{key}`), delivered to `onSocketEvent` / `useSocketEvent` listeners |
 
 Limits: 50 collection subscriptions per socket; 100 mutations/second per socket (each batch mutation counts); batches capped at 100.
 
@@ -729,6 +1131,12 @@ const syncDb = createSyncDb({
   keyProvider: createLocalKeyProvider(),
 });
 ```
+
+`start()` resolves the key before it loads the store, while the session is still valid.
+The derived key is cached in IndexedDB, so the flush in `stop()` never fetches
+`/sync/key`. Logging out while `start()` is still running keeps pending outbox writes.
+If the key fetch fails (an offline cold start), `start()` still resolves and the next
+save retries the fetch.
 
 Saves are debounced (500 ms). The store is serialized once per write, not once per
 transaction: autosave compares TinyBase's content hashes (O(1)) to skip saves the last
@@ -758,15 +1166,16 @@ transport.respondWithAck();
 transport.deliverDelta({...});
 ```
 
-`createFakeTransport` records sent mutations, simulates connectivity, delivers deltas, and queues ack/nack responders.
+`createFakeTransport` records sent mutations, simulates connectivity, delivers deltas, and queues ack/nack responders. `transport.emitEvent(name, ...args)` delivers an app event to `onSocketEvent` listeners; `eventListenerCount(name)` reports how many are bound.
 
 ## Environment variables
 
-Syncdb reads no environment variables directly. Host apps typically set:
+`@terreno/syncdb/config` reads these at import; the core client reads none. Host apps typically set:
 
 | Variable | Used by | Description |
 |----------|---------|-------------|
-| `EXPO_PUBLIC_API_URL` | `@terreno/rtk` `baseUrl` | Backend origin passed to `createSyncDb({baseUrl})` |
+| `EXPO_PUBLIC_API_URL` | `@terreno/syncdb/config` `baseUrl` | Backend origin passed to `createSyncDb({baseUrl})` and `createApiClient({baseUrl})` |
+| `EXPO_PUBLIC_DEV_API_PORT` | `@terreno/syncdb/config` | Local dev API port (default `4000`) |
 
 Backend sync requires a MongoDB replica set (`MONGO_URI` with `replicaSet=`) for `RealtimeApp` change streams.
 
@@ -778,8 +1187,9 @@ Backend sync requires a MongoDB replica set (`MONGO_URI` with `replicaSet=`) for
 - **No `bulkWrite` / `updateMany` / `deleteMany`** on synced models — use per-document loops.
 - **Do not write reserved tables** (`_outbox`, `_cursors`, `_conflicts`) directly — use `client.mutate`, hooks, and `resolveConflict`.
 - **User switch wipes local data** — confirmed different-user login clears the previous user's store; bare logout/401 does not (INV-2).
-- **Keep `@terreno/rtk` for non-synced routes** — generated OpenAPI hooks remain
-  the right tool for custom REST endpoints, auth, feature flags, and ObjectId
-  admin compatibility CRUD. Eligible admin String-`_id` collection CRUD uses
-  windowed syncdb; framework admin RPC uses its host-bound fetch client. See
-  [How to migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md).
+- **Non-synced routes use the request client** — `/auth/me`, modelRouter actions, AI,
+  and other request/response routes go through generated `store/apiSdk.ts` hooks
+  (`terreno-syncdb-codegen --api-out`) or `useApiQuery` / `useApiMutation`. Eligible
+  admin String-`_id` collection CRUD uses windowed syncdb; other admin requests use
+  admin-frontend's host-bound fetch client. See
+  [How to upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md).

@@ -62,6 +62,7 @@ import {MarkdownViewConfiguration} from "@story-config/MarkdownView.config";
 import {MobileAddressAutocompleteConfiguration} from "@story-config/MobileAddressAutocomplete.config";
 import {ModalConfiguration} from "@story-config/Modal.config";
 import {MultiselectFieldConfiguration} from "@story-config/MultiselectField.config";
+import {NativeModulesConfiguration} from "@story-config/NativeModules.config";
 import {NumberFieldConfiguration} from "@story-config/NumberField.config";
 import {NumberPickerActionSheetConfiguration} from "@story-config/NumberPickerActionSheet.config";
 import {OAuthButtonsConfiguration} from "@story-config/OAuthButtons.config";
@@ -172,6 +173,8 @@ interface DemoConfigurationBase {
   // noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   // biome-ignore lint/suspicious/noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   demo: (props: any) => React.ReactElement;
+  // Hidden configs stay routable (deep links, dev mode) but are left out of catalog lists.
+  hidden?: boolean;
   demoOptions: {
     // On large screens, "md" will either generate a smaller box with controls to the right
     // or just a small box. On small screens, it will be full width with controls below.
@@ -361,6 +364,7 @@ const Config: DemoConfigurationBase[] = [
   ModalConfiguration,
   MobileAddressAutocompleteConfiguration,
   MultiselectFieldConfiguration,
+  NativeModulesConfiguration,
   NumberFieldConfiguration,
   NumberPickerActionSheetConfiguration,
   OAuthButtonsConfiguration,
@@ -433,6 +437,9 @@ export const DemoConfig: DemoConfiguration[] = Config.map((c) => ({
     .flatMap((mod) => mod.children ?? [])
     .find((json) => json.name === c.interfaceName),
 })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** Configs shown in the demo and dev catalog lists (hidden diagnostics pages excluded). */
+export const ListedDemoConfig: DemoConfiguration[] = DemoConfig.filter((c) => !c.hidden);
 
 const normalizeComponentName = (name: string): string =>
   name.trim().toLowerCase().replace(/\s+/g, " ");

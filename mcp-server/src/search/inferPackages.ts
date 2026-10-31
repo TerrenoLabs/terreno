@@ -1,6 +1,6 @@
 /**
  * Map a docs-relative path to Terreno package tags used by `terreno_search_docs` filters.
- * Tags are lowercase short names: api, ui, rtk, admin-backend, admin-frontend, mcp-server, docs.
+ * Tags are lowercase short names: api, ui, syncdb, admin-backend, admin-frontend, mcp-server, docs.
  */
 export const inferPackageTags = (relativePath: string): string[] => {
   const norm = relativePath.replace(/\\/g, "/").toLowerCase();
@@ -14,8 +14,8 @@ export const inferPackageTags = (relativePath: string): string[] => {
   if (base === "ui.md" || norm.includes("/resources/ui.md")) {
     tags.add("ui");
   }
-  if (base === "rtk.md" || norm.includes("/resources/rtk.md")) {
-    tags.add("rtk");
+  if (base === "syncdb.md" || norm.includes("/resources/syncdb.md")) {
+    tags.add("syncdb");
   }
 
   if (norm.includes("admin-backend")) {
@@ -41,8 +41,8 @@ export const inferPackageTags = (relativePath: string): string[] => {
   if (norm.includes("/ui/") && !norm.includes("admin-frontend")) {
     tags.add("ui");
   }
-  if (norm.includes("/rtk/")) {
-    tags.add("rtk");
+  if (norm.includes("/syncdb/")) {
+    tags.add("syncdb");
   }
 
   if (norm.includes("ui-types") || norm.includes("component")) {

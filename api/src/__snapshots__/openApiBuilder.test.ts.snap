@@ -72,6 +72,730 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
   },
   "openapi": "3.0.0",
   "paths": {
+    "/auth/forgotPassword": {
+      "post": {
+        "description": "Always returns 202, whether or not an account exists for the email, so accounts cannot be probed.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "email": {
+                    "description": "The account's email address",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Accepted",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Request a password reset email",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/me": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "__t": {
+                          "type": "string",
+                        },
+                        "_id": {
+                          "type": "string",
+                        },
+                        "admin": {
+                          "description": "Whether the user has admin privileges",
+                          "type": "boolean",
+                        },
+                        "age": {
+                          "description": "The user's age",
+                          "type": "number",
+                        },
+                        "attempts": {
+                          "type": "number",
+                        },
+                        "created": {
+                          "description": "When this document was created",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "disabled": {
+                          "description": "When a user is set to disable, all requests will return a 401",
+                          "type": "boolean",
+                        },
+                        "email": {
+                          "type": "string",
+                        },
+                        "emailVerified": {
+                          "description": "Whether the user has verified their email address",
+                          "type": "boolean",
+                        },
+                        "id": {
+                          "description": "The user's id, the same value as _id",
+                          "type": "string",
+                        },
+                        "last": {
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                        "organizationIds": {
+                          "description": "Organization memberships",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "roles": {
+                          "description": "RBAC role names assigned to this user",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "tokenEpoch": {
+                          "description": "Incremented on password reset to invalidate outstanding refresh tokens",
+                          "type": "number",
+                        },
+                        "updated": {
+                          "description": "When this document was last updated",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "username": {
+                          "description": "The user's username",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "_id",
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Get the current user",
+        "tags": [
+          "auth",
+        ],
+      },
+      "patch": {
+        "description": "Partial update of the current user. Privileged fields (admin, roles, organizationIds, emailVerified, tokenEpoch) are ignored.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "__t": {
+                    "type": "string",
+                  },
+                  "age": {
+                    "description": "The user's age",
+                    "type": "number",
+                  },
+                  "attempts": {
+                    "type": "number",
+                  },
+                  "currentPassword": {
+                    "description": "The current password; required to change the email. It is never stored.",
+                    "type": "string",
+                  },
+                  "disabled": {
+                    "description": "When a user is set to disable, all requests will return a 401",
+                    "type": "boolean",
+                  },
+                  "email": {
+                    "type": "string",
+                  },
+                  "last": {
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "name": {
+                    "description": "The user's display name",
+                    "type": "string",
+                  },
+                  "username": {
+                    "description": "The user's username",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "__t": {
+                          "type": "string",
+                        },
+                        "_id": {
+                          "type": "string",
+                        },
+                        "admin": {
+                          "description": "Whether the user has admin privileges",
+                          "type": "boolean",
+                        },
+                        "age": {
+                          "description": "The user's age",
+                          "type": "number",
+                        },
+                        "attempts": {
+                          "type": "number",
+                        },
+                        "created": {
+                          "description": "When this document was created",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "disabled": {
+                          "description": "When a user is set to disable, all requests will return a 401",
+                          "type": "boolean",
+                        },
+                        "email": {
+                          "type": "string",
+                        },
+                        "emailVerified": {
+                          "description": "Whether the user has verified their email address",
+                          "type": "boolean",
+                        },
+                        "id": {
+                          "description": "The user's id, the same value as _id",
+                          "type": "string",
+                        },
+                        "last": {
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "name": {
+                          "description": "The user's display name",
+                          "type": "string",
+                        },
+                        "organizationIds": {
+                          "description": "Organization memberships",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "roles": {
+                          "description": "RBAC role names assigned to this user",
+                          "items": {
+                            "type": "string",
+                          },
+                          "type": "array",
+                        },
+                        "tokenEpoch": {
+                          "description": "Incremented on password reset to invalidate outstanding refresh tokens",
+                          "type": "number",
+                        },
+                        "updated": {
+                          "description": "When this document was last updated",
+                          "format": "date-time",
+                          "type": "string",
+                        },
+                        "username": {
+                          "description": "The user's username",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "_id",
+                        "id",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Update the current user",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/resetPassword": {
+      "post": {
+        "description": "Send \`token\` and either \`password\` or \`newPassword\`. Returns fresh tokens for the user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "newPassword": {
+                    "description": "Alias for password",
+                    "type": "string",
+                  },
+                  "password": {
+                    "description": "The new password",
+                    "type": "string",
+                  },
+                  "token": {
+                    "description": "One-time reset token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "refreshToken": {
+                          "type": "string",
+                        },
+                        "token": {
+                          "type": "string",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "refreshToken",
+                        "token",
+                        "userId",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset password with a one-time token",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/sendVerification": {
+      "post": {
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Accepted",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Send or resend an email verification link",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
+    "/auth/verifyEmail": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "description": "One-time verification token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "ok": {
+                          "type": "boolean",
+                        },
+                      },
+                      "required": [
+                        "ok",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Verify email with a one-time token",
+        "tags": [
+          "auth",
+        ],
+      },
+    },
     "/food/": {
       "get": {
         "parameters": [
@@ -1682,6 +2406,118 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
         },
         "tags": [
           "foods",
+        ],
+      },
+    },
+    "/resetPassword": {
+      "post": {
+        "description": "Send \`token\` and either \`password\` or \`newPassword\`. Returns fresh tokens for the user.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "newPassword": {
+                    "description": "Alias for password",
+                    "type": "string",
+                  },
+                  "password": {
+                    "description": "The new password",
+                    "type": "string",
+                  },
+                  "token": {
+                    "description": "One-time reset token from the emailed link",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "refreshToken": {
+                          "type": "string",
+                        },
+                        "token": {
+                          "type": "string",
+                        },
+                        "userId": {
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "refreshToken",
+                        "token",
+                        "userId",
+                      ],
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Reset password with a one-time token",
+        "tags": [
+          "auth",
         ],
       },
     },

@@ -65,7 +65,7 @@ Read the IP and its task list. Extract:
 | Status | `Planned` until work starts |
 | Dependencies | The IP's "Depends on" line |
 
-If the IP declares an RTK deprecation flag of **Blocked**, the item still gets `Status=Planned` — the Project Status field has no `Blocked` option. Carry the gating with the `status:blocked` label and say what it is waiting on.
+If the IP declares a gating flag of **Blocked**, the item still gets `Status=Planned` — the Project Status field has no `Blocked` option. Carry the gating with the `status:blocked` label and say what it is waiting on.
 
 For a wayfinder slice, also extract the map URL and blocking slice titles. Keep the full design and task graph in the linked IP/task files; the roadmap item states only the delivered outcome and native blocking edges.
 

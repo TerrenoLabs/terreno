@@ -71,10 +71,21 @@ import {getMCPTools} from "@terreno/ai";
 const tools = getMCPTools(req.user);
 ```
 
-`useMCPTools()` from `@terreno/rtk` uses the official MCP v2 client with automatic
-version negotiation. It no longer constructs JSON-RPC or parses SSE responses by
-hand; the SDK supplies the `2026-07-28` `_meta` envelope and required
-`Mcp-Method` / `Mcp-Name` routing headers.
+To list the signed-in user's tools in an app, use `useMCPTools` from
+`@terreno/syncdb/app` with the same auth provider you pass to `createSyncDb`:
+
+```typescript
+import {useMCPTools} from "@terreno/syncdb/app";
+import {authProvider} from "@/store/syncdb";
+
+const {tools, isLoading, error, refetch} = useMCPTools({authProvider});
+```
+
+The hook reads the token from `authProvider.getToken()` on every fetch, so Better Auth
+sessions work as well as JWT. It uses the official MCP v2 client with automatic version
+negotiation; the SDK supplies the `2026-07-28` `_meta` envelope and the required
+`Mcp-Method` / `Mcp-Name` routing headers. Install `@modelcontextprotocol/client` in the app (optional peer of
+`@terreno/syncdb`).
 
 ## Naming tools
 

@@ -4,9 +4,7 @@ import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminFieldRenderer} from "./AdminFieldRenderer";
 import {buildNestedObjectDefault, isNestedObjectField} from "./AdminNestedObjectField";
-import type {AdminApi, AdminFieldConfig, AdminFieldValue} from "./types";
-
-const api = {} as unknown as AdminApi;
+import type {AdminFieldConfig, AdminFieldValue} from "./types";
 
 const TASKS_CONFIG: AdminFieldConfig = {
   description: "Project task settings",
@@ -49,7 +47,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
   it("renders each leaf with its own control instead of a JSON box", () => {
     const {getByTestId, getByText, queryByText} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={TASKS_CONFIG}
         fieldKey="tasks"
         onChange={() => {}}
@@ -71,7 +68,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
   it("shows subfield defaults when the stored object is missing a leaf", () => {
     const {getByTestId} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={TASKS_CONFIG}
         fieldKey="tasks"
         onChange={() => {}}
@@ -85,7 +81,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     const onChange = mock((_: AdminFieldValue) => {});
     const {getByTestId} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={TASKS_CONFIG}
         fieldKey="tasks"
         onChange={onChange}
@@ -100,7 +95,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     const onChange = mock((_: AdminFieldValue) => {});
     const {getByTestId} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={MCP_MEDIA_CONFIG}
         fieldKey="mcpMedia"
         onChange={onChange}
@@ -119,7 +113,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     const onChange = mock((_: AdminFieldValue) => {});
     const {getByTestId} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={MCP_MEDIA_CONFIG}
         fieldKey="mcpMedia"
         onChange={onChange}
@@ -133,7 +126,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
   it("groups nested objects inside array-of-subdocument items", () => {
     const {getByTestId, queryByText} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={{items: {media: MCP_MEDIA_CONFIG}, required: false, type: "array"}}
         fieldKey="servers"
         onChange={() => {}}
@@ -154,7 +146,6 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     const onChange = mock((_: AdminFieldValue) => {});
     const {getByTestId} = renderWithTheme(
       <AdminFieldRenderer
-        api={api}
         fieldConfig={{
           items: {note: {required: false, type: "string"}},
           required: false,
@@ -175,21 +166,18 @@ describe("AdminNestedObjectField via AdminFieldRenderer", () => {
     const {getAllByText} = renderWithTheme(
       <>
         <AdminFieldRenderer
-          api={api}
           fieldConfig={{required: false, type: "object"}}
           fieldKey="selectors"
           onChange={() => {}}
           value={{a: 1}}
         />
         <AdminFieldRenderer
-          api={api}
           fieldConfig={{items: {}, required: false, type: "object"}}
           fieldKey="emptyItems"
           onChange={() => {}}
           value={{}}
         />
         <AdminFieldRenderer
-          api={api}
           fieldConfig={{required: false, type: "mixed"}}
           fieldKey="data"
           onChange={() => {}}

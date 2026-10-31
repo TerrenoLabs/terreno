@@ -8,7 +8,7 @@ import {
 import {type BlocksDocument, validateBlocks} from "@terreno/blocks";
 import type express from "express";
 import {DateTime} from "luxon";
-import mongoose from "mongoose";
+import type mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
@@ -158,9 +158,6 @@ export const addGptActionRoutes = (router: express.Router, options: GptRouteOpti
         });
       }
 
-      if (!mongoose.Types.ObjectId.isValid(historyId)) {
-        throw new APIError({status: 400, title: "historyId is not valid"});
-      }
       const userId = requestUserId(req);
       const history = await GptHistory.findOneOrNone({_id: historyId, deleted: false});
       if (!history) {

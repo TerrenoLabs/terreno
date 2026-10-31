@@ -47,15 +47,14 @@ import {ADMIN_SEARCH_DEBOUNCE_MS} from "./Constants";
 import {shouldSkipOrgScopedAdminQuery} from "./orgs/shouldSkipOrgScopedAdminQuery";
 import {useOptionalOrgContext} from "./orgs/useOrgContext";
 import {
-  type AdminApi,
   type AdminFieldConfig,
   type AdminFieldValue,
   type AdminModelConfig,
   resolveAdminBases,
 } from "./types";
-import {useAdminApi} from "./useAdminApi";
 import {useAdminBackgroundTaskMutation} from "./useAdminBackgroundTask";
 import {useAdminConfig} from "./useAdminConfig";
+import {useAdminModelApi} from "./useAdminModelApi";
 
 interface AdminModelTableProps {
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
@@ -64,7 +63,6 @@ interface AdminModelTableProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   modelName: string;
   columns?: string[];
   /**
@@ -99,7 +97,6 @@ const getRefRoutePath = (
 
 const toColumnFilter = (
   filter: NonNullable<AdminModelConfig["filters"]>[number],
-  api: AdminApi,
   fields: Record<string, AdminFieldConfig>,
   modelConfigs: Array<{name: string; routePath: string}>
 ): DataTableColumnFilter | undefined => {
@@ -132,7 +129,6 @@ const toColumnFilter = (
       label,
       renderFilter: ({onChange, value}) => (
         <AdminRefField
-          api={api}
           autocomplete
           onChange={(next: string) => onChange(next)}
           refModelName={refModelName ?? "Unknown"}
@@ -341,7 +337,6 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   modelName,
   columns: columnsProp,
   columnWidths,
@@ -352,7 +347,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     routeBase,
   });
   const adminContext = useAdminContext();
-  const {config, isLoading: isConfigLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, isLoading: isConfigLoading} = useAdminConfig(resolvedApiBase);
   const toast = useToast();
   const toastRef = useRef(toast);
   toastRef.current = toast;
@@ -374,7 +369,6 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     organizationScoped: modelConfig?.organizationScoped,
   });
   const isWindowed = isWindowedAdminTable({
-    hasFetchClient: Boolean(adminContext?.adminRpc),
     modelConfig,
     syncDb: adminContext?.syncDb,
   });
@@ -469,11 +463,8 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     });
   }, [debouncedSearch, filterState, modelConfig, page, pageLimit, sortString]);
 
-  const {useListQuery, useDeleteMutation, useUpdateMutation, useBulkPatchMutation} = useAdminApi(
-    api,
-    modelConfig?.routePath ?? "",
-    modelName
-  );
+  const {useListQuery, useDeleteMutation, useUpdateMutation, useBulkPatchMutation} =
+    useAdminModelApi(modelConfig?.routePath ?? "", modelName);
   const {
     data: listData,
     isLoading: isListLoading,
@@ -493,7 +484,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
   }, [listParams]);
   const [patchItem] = useUpdateMutation();
   const [bulkPatch] = useBulkPatchMutation();
-  const [enqueueBackground] = useAdminBackgroundTaskMutation(api, resolvedApiBase);
+  const [enqueueBackground] = useAdminBackgroundTaskMutation(resolvedApiBase);
 
   const membershipRows = useMemo((): Array<Record<string, AdminFieldValue>> => {
     const envelope = listData as AdminListEnvelope | undefined;
@@ -806,15 +797,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
         for (const k of action.patchKeys) {
           patch[k] = true;
         }
-        const result = (
-          isWindowed && adminContext?.adminRpc
-            ? await adminContext.adminRpc({
-                body: {ids, patch},
-                method: "POST",
-                url: `${modelConfig.routePath}/bulk-patch`,
-              })
-            : await bulkPatch({ids, patch}).unwrap()
-        ) as {
+        const result = (await bulkPatch({ids, patch}).unwrap()) as {
           failures?: {id: string; title: string}[];
           updated?: number;
         };
@@ -828,16 +811,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
       }
       setSelectedIds(new Set());
     },
-    [
-      adminContext?.adminRpc,
-      bulkPatch,
-      enqueueBackground,
-      isWindowed,
-      modelConfig,
-      selectedIds,
-      toast,
-      visibleActions,
-    ]
+    [bulkPatch, enqueueBackground, modelConfig, selectedIds, toast, visibleActions]
   );
 
   const handleInlineBooleanToggle = useCallback(
@@ -872,9 +846,9 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     const adminFilters = modelConfig?.filters ?? [];
     return adminFilters
       .filter((filter) => !displayFields.includes(filter.field))
-      .map((filter) => toColumnFilter(filter, api, modelConfig?.fields ?? {}, modelConfigs))
+      .map((filter) => toColumnFilter(filter, modelConfig?.fields ?? {}, modelConfigs))
       .filter((filter): filter is DataTableColumnFilter => Boolean(filter));
-  }, [api, displayFields, modelConfig, modelConfigs]);
+  }, [displayFields, modelConfig, modelConfigs]);
 
   if (isConfigLoading || !modelConfig) {
     return (
@@ -896,7 +870,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
       fieldConfig?.type === "boolean" && modelConfig.permissions?.update !== false;
     const declaredFilter = adminFilters.find((filter) => filter.field === fieldKey);
     const filter = declaredFilter
-      ? toColumnFilter(declaredFilter, api, modelConfig.fields, modelConfigs)
+      ? toColumnFilter(declaredFilter, modelConfig.fields, modelConfigs)
       : undefined;
     return {
       columnType: isInlineBool ? INLINE_BOOL_COLUMN_TYPE : isLink ? LINK_COLUMN_TYPE : columnType,

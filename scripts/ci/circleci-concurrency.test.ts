@@ -39,6 +39,8 @@ const E2E_SHARDS: Record<string, string[]> = {
     "ai-chat",
     "pdf",
     "notifications",
+    "socket-flags",
+    "mcp-tokens",
   ],
   auth: [
     "login",
@@ -146,14 +148,14 @@ describe("CircleCI concurrency", () => {
     assert.deepEqual([...listed].sort(), [...prSpecs].sort());
   });
 
-  it("does not start example-backend CI for ui or rtk-only changes", () => {
+  it("does not start example-backend CI for ui or syncdb-only changes", () => {
     const mappings = readMappings({repoRoot});
     assert.equal(
       mappingMatches({mappings, parameter: "run-example-backend", path: "ui/src/Box.tsx"}),
       false
     );
     assert.equal(
-      mappingMatches({mappings, parameter: "run-example-backend", path: "rtk/src/index.ts"}),
+      mappingMatches({mappings, parameter: "run-example-backend", path: "syncdb/src/index.ts"}),
       false
     );
     assert.equal(

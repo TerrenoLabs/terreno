@@ -1,11 +1,13 @@
 import {afterEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {DateTime} from "luxon";
+import type React from "react";
 import {ProvisionalConsentSigner} from "./ProvisionalConsentSigner";
 import * as pdfHtmlTemplate from "./pdfHtmlTemplate";
-import {renderWithTheme} from "./test-utils";
+import type {TerrenoRequestClient} from "./requestClient";
+import {createFakeRequestClient, renderWithTheme} from "./test-utils";
 import type {ConsentFormPublic} from "./useConsentForms";
-import type {ProvisionalConsentApi, ProvisionalConsentStatusRow} from "./useProvisionalConsent";
+import type {ProvisionalConsentStatusRow} from "./useProvisionalConsent";
 
 interface QueryState {
   data?: unknown;
@@ -65,13 +67,17 @@ const rows: ProvisionalConsentStatusRow[] = [
   },
 ];
 
-/** A fake of the consumer's RTK api: the status query returns `initial`, signing runs `signResult`. */
+/**
+ * A fake request client: the status route answers `initial` (hangs while `isLoading`, rejects
+ * with `error`), signing runs `signResult`, voiding runs `voidResult`. `refetch` is called for
+ * every status request after the first.
+ */
 const buildApi = (
   initial: QueryState,
   signResult: () => Promise<unknown> = () => Promise.resolve({}),
   voidResult: () => Promise<unknown> = () => Promise.resolve({})
 ): {
-  api: ProvisionalConsentApi;
+  client: TerrenoRequestClient;
   refetch: ReturnType<typeof mock>;
   signedBodies: unknown[];
   userIds: string[];
@@ -81,53 +87,58 @@ const buildApi = (
   const userIds: string[] = [];
   const signedBodies: unknown[] = [];
   const voidedArgs: unknown[] = [];
-  const api = {
-    enhanceEndpoints: () => ({
-      injectEndpoints: () => ({
-        useGetConsentStatusQuery: (userId: string) => {
-          userIds.push(userId);
-          return {
-            data: initial.data,
-            error: initial.error,
-            isLoading: initial.isLoading ?? false,
-            refetch,
-          };
-        },
-        useSignConsentProvisionallyMutation: () => [
-          (body: unknown) => {
-            signedBodies.push(body);
-            return {unwrap: signResult};
-          },
-          {isLoading: false},
-        ],
-        useVoidProvisionalConsentMutation: () => [
-          (args: unknown) => {
-            voidedArgs.push(args);
-            return {unwrap: voidResult};
-          },
-          {isLoading: false},
-        ],
-      }),
-    }),
-  } as unknown as ProvisionalConsentApi;
-  return {api, refetch, signedBodies, userIds, voidedArgs};
+  const fake = createFakeRequestClient({
+    "GET /consent-responses/status": async (args) => {
+      if (userIds.length > 0) {
+        refetch();
+      }
+      userIds.push(String(args.params?.userId));
+      if (initial.isLoading) {
+        return new Promise(() => {});
+      }
+      if (initial.error) {
+        throw initial.error;
+      }
+      return initial.data;
+    },
+    "POST /consent-responses/:id/void": async (args, params) => {
+      voidedArgs.push({reason: (args.body as {reason: string}).reason, responseId: params.id});
+      return voidResult();
+    },
+    "POST /consent-responses/provisional": async (args) => {
+      signedBodies.push(args.body);
+      return signResult();
+    },
+  });
+  return {client: fake.client, refetch, signedBodies, userIds, voidedArgs};
+};
+
+/** Renders the component and waits for the status request to settle. */
+const renderLoaded = async (
+  element: React.ReactElement
+): Promise<ReturnType<typeof renderWithTheme>> => {
+  const result = renderWithTheme(element);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  return result;
 };
 
 describe("ProvisionalConsentSigner", () => {
-  it("shows a spinner while statuses load", () => {
-    const {api} = buildApi({isLoading: true});
-    const {getByTestId, queryByTestId} = renderWithTheme(
-      <ProvisionalConsentSigner api={api} userId="member-1" />
+  it("shows a spinner while statuses load", async () => {
+    const {client} = buildApi({isLoading: true});
+    const {getByTestId, queryByTestId} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
     );
     expect(getByTestId("provisional-consent-signer")).toBeTruthy();
     expect(getByTestId("provisional-consent-loading")).toBeTruthy();
     expect(queryByTestId("provisional-consent-row-form-pending")).toBeNull();
   });
 
-  it("lists each form with its status for the target user", () => {
-    const {api, userIds} = buildApi({data: {data: rows}});
-    const {getByTestId, getByText} = renderWithTheme(
-      <ProvisionalConsentSigner api={api} userId="member-1" />
+  it("lists each form with its status for the target user", async () => {
+    const {client, userIds} = buildApi({data: {data: rows}});
+    const {getByTestId, getByText} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
     );
 
     expect(userIds).toContain("member-1");
@@ -142,7 +153,7 @@ describe("ProvisionalConsentSigner", () => {
     expect(getByTestId("provisional-consent-status-form-provisional")).toBeTruthy();
   });
 
-  it("falls back to the signer's email, then to staff", () => {
+  it("falls back to the signer's email, then to staff", async () => {
     const byEmail: ProvisionalConsentStatusRow = {
       ...rows[1],
       provisional: {responseId: "r", signedAt, signedBy: {email: "dana@example.com", id: "s"}},
@@ -152,28 +163,32 @@ describe("ProvisionalConsentSigner", () => {
       form: makeForm("form-other", "Other"),
       provisional: {responseId: "r2", signedAt, signedBy: null},
     };
-    const {api} = buildApi({data: [byEmail, deletedSigner]});
-    const {getByText} = renderWithTheme(<ProvisionalConsentSigner api={api} userId="member-1" />);
+    const {client} = buildApi({data: [byEmail, deletedSigner]});
+    const {getByText} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
+    );
     expect(
       getByText(`Signed provisionally by dana@example.com on ${formatted(signedAt)}`)
     ).toBeTruthy();
     expect(getByText(`Signed provisionally by Staff on ${formatted(signedAt)}`)).toBeTruthy();
   });
 
-  it("uses the form _id when the row has no id", () => {
+  it("uses the form _id when the row has no id", async () => {
     const {id: _omitted, ...formWithoutId} = makeForm("ignored", "Mongo id form");
     const row = {
       form: {...formWithoutId, _id: "mongo-id"},
       isConsented: false,
       status: "pending",
     } as unknown as ProvisionalConsentStatusRow;
-    const {api} = buildApi({data: [row]});
-    const {getByTestId} = renderWithTheme(<ProvisionalConsentSigner api={api} userId="member-1" />);
+    const {client} = buildApi({data: [row]});
+    const {getByTestId} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
+    );
     expect(getByTestId("provisional-consent-row-mongo-id")).toBeTruthy();
   });
 
-  it("leaves the date off when it is missing or invalid", () => {
-    const {api} = buildApi({
+  it("leaves the date off when it is missing or invalid", async () => {
+    const {client} = buildApi({
       data: [
         {form: makeForm("no-date", "No date"), isConsented: true, status: "signed"},
         {
@@ -184,21 +199,25 @@ describe("ProvisionalConsentSigner", () => {
         },
       ],
     });
-    const {getByText} = renderWithTheme(<ProvisionalConsentSigner api={api} userId="member-1" />);
+    const {getByText} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
+    );
     expect(getByText("Signed by user")).toBeTruthy();
     expect(getByText("Declined by user")).toBeTruthy();
   });
 
-  it("says so when no forms apply", () => {
-    const {api} = buildApi({data: {data: []}});
-    const {getByTestId} = renderWithTheme(<ProvisionalConsentSigner api={api} userId="member-1" />);
+  it("says so when no forms apply", async () => {
+    const {client} = buildApi({data: {data: []}});
+    const {getByTestId} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
+    );
     expect(getByTestId("provisional-consent-empty")).toBeTruthy();
   });
 
   it("shows the server error with a Retry button that refetches", async () => {
-    const {api, refetch} = buildApi({error: {data: {title: "Access denied"}, status: 405}});
-    const {getByTestId, getByText} = renderWithTheme(
-      <ProvisionalConsentSigner api={api} userId="member-1" />
+    const {client, refetch} = buildApi({error: {data: {title: "Access denied"}, status: 405}});
+    const {getByTestId, getByText} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
     );
     expect(getByTestId("provisional-consent-error")).toBeTruthy();
     expect(getByText("Access denied")).toBeTruthy();
@@ -211,9 +230,11 @@ describe("ProvisionalConsentSigner", () => {
     });
   });
 
-  it("shows a generic message when the error has no title", () => {
-    const {api} = buildApi({error: {status: "FETCH_ERROR"}});
-    const {getByText} = renderWithTheme(<ProvisionalConsentSigner api={api} userId="member-1" />);
+  it("shows a generic message when the error has no title", async () => {
+    const {client} = buildApi({error: {status: "FETCH_ERROR"}});
+    const {getByText} = await renderLoaded(
+      <ProvisionalConsentSigner client={client} userId="member-1" />
+    );
     expect(getByText("Could not load consent forms.")).toBeTruthy();
   });
   describe("signing on the user's behalf", () => {
@@ -237,10 +258,10 @@ describe("ProvisionalConsentSigner", () => {
       form: {...row.form, content: {en: content}},
     });
 
-    it("offers signing only for pending forms", () => {
-      const {api} = buildApi({data: rows});
-      const {getByTestId, queryByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+    it("offers signing only for pending forms", async () => {
+      const {client} = buildApi({data: rows});
+      const {getByTestId, queryByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       expect(getByTestId("provisional-consent-open-form-pending")).toBeTruthy();
       expect(queryByTestId("provisional-consent-open-form-declined")).toBeNull();
@@ -249,9 +270,15 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("shows the form content with variables and keeps submit disabled until a note is entered", async () => {
-      const {api} = buildApi({data: [withContent(rows[0], "Hello {{memberName}}, please agree.")]});
-      const {getByTestId, getByText} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" variables={{memberName: "Sam"}} />
+      const {client} = buildApi({
+        data: [withContent(rows[0], "Hello {{memberName}}, please agree.")],
+      });
+      const {getByTestId, getByText} = await renderLoaded(
+        <ProvisionalConsentSigner
+          client={client}
+          userId="member-1"
+          variables={{memberName: "Sam"}}
+        />
       );
 
       await openForm(getByTestId, "form-pending");
@@ -284,11 +311,11 @@ describe("ProvisionalConsentSigner", () => {
         userId: "member-1",
       };
       const onSigned = mock(() => {});
-      const {api, signedBodies} = buildApi({data: [rows[0]]}, () =>
+      const {client, signedBodies} = buildApi({data: [rows[0]]}, () =>
         Promise.resolve({data: response})
       );
-      const {getByTestId, getByText, queryByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} onSigned={onSigned} userId="member-1" />
+      const {getByTestId, getByText, queryByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} onSigned={onSigned} userId="member-1" />
       );
 
       await openForm(getByTestId, "form-pending");
@@ -323,9 +350,9 @@ describe("ProvisionalConsentSigner", () => {
     it("shows a server error inline and calls onError", async () => {
       const serverError = {data: {title: "Consent form is not active"}, status: 400};
       const onError = mock(() => {});
-      const {api} = buildApi({data: [rows[0]]}, () => Promise.reject(serverError));
-      const {getByTestId, getByText, queryByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} onError={onError} userId="member-1" />
+      const {client} = buildApi({data: [rows[0]]}, () => Promise.reject(serverError));
+      const {getByTestId, getByText, queryByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} onError={onError} userId="member-1" />
       );
 
       await openForm(getByTestId, "form-pending");
@@ -346,9 +373,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("shows a generic error when the server gives no title", async () => {
-      const {api} = buildApi({data: [rows[0]]}, () => Promise.reject({status: "FETCH_ERROR"}));
-      const {getByTestId, getByText} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client} = buildApi({data: [rows[0]]}, () => Promise.reject({status: "FETCH_ERROR"}));
+      const {getByTestId, getByText} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       await openForm(getByTestId, "form-pending");
       act(() => {
@@ -363,9 +390,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("returns to the list on cancel without signing", async () => {
-      const {api, signedBodies} = buildApi({data: [rows[0]]});
-      const {getByTestId, queryByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client, signedBodies} = buildApi({data: [rows[0]]});
+      const {getByTestId, queryByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       await openForm(getByTestId, "form-pending");
       act(() => {
@@ -379,11 +406,11 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("names the signer as staff when the response is not populated", async () => {
-      const {api} = buildApi({data: [rows[0]]}, () =>
+      const {client} = buildApi({data: [rows[0]]}, () =>
         Promise.resolve({_id: "r", agreedAt: signedAt, provisionalSignedBy: "staff-1"})
       );
-      const {getByTestId, getByText} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {getByTestId, getByText} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       await openForm(getByTestId, "form-pending");
       act(() => {
@@ -425,10 +452,10 @@ describe("ProvisionalConsentSigner", () => {
       });
     };
 
-    it("offers print on provisional, signed, and declined rows, and void on provisional only", () => {
-      const {api} = buildApi({data: rows});
-      const {getByTestId, queryByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+    it("offers print on provisional, signed, and declined rows, and void on provisional only", async () => {
+      const {client} = buildApi({data: rows});
+      const {getByTestId, queryByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       expect(queryByTestId("provisional-consent-print-form-pending")).toBeNull();
       expect(getByTestId("provisional-consent-print-form-provisional")).toBeTruthy();
@@ -441,9 +468,9 @@ describe("ProvisionalConsentSigner", () => {
 
     it("prints a provisional row with the form content and the provisional block with the note", async () => {
       spyOnPrint();
-      const {api} = buildApi({data: rows});
-      const {getByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client} = buildApi({data: rows});
+      const {getByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-print-form-provisional");
@@ -457,9 +484,9 @@ describe("ProvisionalConsentSigner", () => {
 
     it("prints a signed row without a provisional block", async () => {
       spyOnPrint();
-      const {api} = buildApi({data: rows});
-      const {getByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client} = buildApi({data: rows});
+      const {getByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-print-form-signed");
@@ -472,9 +499,9 @@ describe("ProvisionalConsentSigner", () => {
 
     it("keeps working when printing fails", async () => {
       spyOnPrint(() => Promise.reject(new Error("printer offline")));
-      const {api} = buildApi({data: rows});
-      const {getByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client} = buildApi({data: rows});
+      const {getByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       await press(getByTestId, "provisional-consent-print-form-declined");
       expect(printed).toHaveLength(1);
@@ -489,9 +516,9 @@ describe("ProvisionalConsentSigner", () => {
         provisionalNote: "Guardian agreed by phone",
         provisionalSignedBy: {_id: "staff-1", name: "Dana Rivera"},
       };
-      const {api} = buildApi({data: [rows[0]]}, () => Promise.resolve({data: response}));
-      const {getByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client} = buildApi({data: [rows[0]]}, () => Promise.resolve({data: response}));
+      const {getByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
       await press(getByTestId, "provisional-consent-open-form-pending");
       act(() => {
@@ -515,9 +542,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("voids with a required reason and refetches", async () => {
-      const {api, refetch, voidedArgs} = buildApi({data: rows});
-      const {getByTestId} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client, refetch, voidedArgs} = buildApi({data: rows});
+      const {getByTestId} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-void-form-provisional");
@@ -546,9 +573,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("closes the void dialog on cancel without voiding", async () => {
-      const {api, refetch, voidedArgs} = buildApi({data: rows});
-      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client, refetch, voidedArgs} = buildApi({data: rows});
+      const {getByTestId, UNSAFE_getByProps} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-void-form-provisional");
@@ -565,9 +592,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("does not void without a reason even if the confirm handler runs", async () => {
-      const {api, voidedArgs} = buildApi({data: rows});
-      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client, voidedArgs} = buildApi({data: rows});
+      const {getByTestId, UNSAFE_getByProps} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-void-form-provisional");
@@ -581,9 +608,9 @@ describe("ProvisionalConsentSigner", () => {
     });
 
     it("does not sign without a note even if the submit handler runs", async () => {
-      const {api, signedBodies} = buildApi({data: [rows[0]]});
-      const {getByTestId, UNSAFE_getByProps} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} userId="member-1" />
+      const {client, signedBodies} = buildApi({data: [rows[0]]});
+      const {getByTestId, UNSAFE_getByProps} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-open-form-pending");
@@ -601,9 +628,9 @@ describe("ProvisionalConsentSigner", () => {
     it("shows a void error in the dialog and calls onError", async () => {
       const failure = {data: {title: "Provisional signature is already voided"}, status: 400};
       const onError = mock(() => {});
-      const {api, refetch} = buildApi({data: rows}, undefined, () => Promise.reject(failure));
-      const {getByTestId, getByText} = renderWithTheme(
-        <ProvisionalConsentSigner api={api} onError={onError} userId="member-1" />
+      const {client, refetch} = buildApi({data: rows}, undefined, () => Promise.reject(failure));
+      const {getByTestId, getByText} = await renderLoaded(
+        <ProvisionalConsentSigner client={client} onError={onError} userId="member-1" />
       );
 
       await press(getByTestId, "provisional-consent-void-form-provisional");

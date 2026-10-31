@@ -9,11 +9,7 @@ import {handleLocalToolCall, localMcpTools} from "./localTools";
 import {resolveTerrenoLogDirs} from "./logPaths";
 import {resolveMetroHttpBase} from "./metro/metroDevSession";
 import {lastError, readLogs} from "./tools/readLogs";
-import {evaluate, getClientState, navigate} from "./tools/runtime";
-
-const readRtk = async (args: {query?: string; slice?: string}): Promise<unknown> => {
-  return (JSON.parse(await getClientState(args)) as {rtk?: unknown}).rtk;
-};
+import {evaluate, navigate} from "./tools/runtime";
 
 describe("local MCP runtime tools", () => {
   let projectRoot: string;
@@ -36,8 +32,6 @@ describe("local MCP runtime tools", () => {
 
   afterEach((): void => {
     rmSync(projectRoot, {force: true, recursive: true});
-    const devGlobal = globalThis as typeof globalThis & {__TERRENO_STORE__?: unknown};
-    Reflect.deleteProperty(devGlobal, "__TERRENO_STORE__");
     if (previousEval === undefined) {
       Reflect.deleteProperty(process.env, "TERRENO_MCP_EVAL");
     } else {
@@ -73,6 +67,7 @@ describe("local MCP runtime tools", () => {
     assert.isTrue(localMcpTools.some((tool) => tool.name === "get_syncdb_state"));
     assert.isTrue(localMcpTools.some((tool) => tool.name === "syncdb_action"));
     assert.isTrue(localMcpTools.some((tool) => tool.name === "syncdb_snapshot"));
+    assert.isFalse(localMcpTools.some((tool) => tool.name === "get_rtk_state"));
     const result = await handleLocalToolCall("browser", {action: "close"});
     assert.include(result.content[0]?.text ?? "", '"ok": true');
     try {
@@ -98,7 +93,7 @@ describe("local MCP runtime tools", () => {
     const query = await handleLocalToolCall("database_query", {operation: "invalid"});
     const logs = await handleLocalToolCall("read_logs", {sources: ["backend", 42]});
     const error = await handleLocalToolCall("last_error", {sources: ["browser", null]});
-    const state = await handleLocalToolCall("get_rtk_state", {slice: 42});
+    const removedRtkState = await handleLocalToolCall("get_rtk_state", {slice: "rtk"});
     const evaluation = await handleLocalToolCall("evaluate", {code: 42});
     const unknown = await handleLocalToolCall("unknown", {});
     const syncdbMissing = await handleLocalToolCall("get_syncdb_state", {
@@ -140,8 +135,7 @@ describe("local MCP runtime tools", () => {
     assert.include(query.content[0]?.text ?? "", "Unsupported operation");
     assert.include(logs.content[0]?.text ?? "", '"entries"');
     assert.include(error.content[0]?.text ?? "", "No recent error-level entries");
-    assert.include(state.content[0]?.text ?? "", "CDP:");
-    assert.include(state.content[0]?.text ?? "", "Metro events: not connected");
+    assert.equal(removedRtkState.content[0]?.text, "Unknown tool: get_rtk_state");
     assert.include(evaluation.content[0]?.text ?? "", "Refused");
     assert.equal(unknown.content[0]?.text, "Unknown tool: unknown");
     assert.include(syncdbMissing.content[0]?.text ?? "", "CDP:");
@@ -178,91 +172,13 @@ describe("local MCP runtime tools", () => {
     expect(latest.message).toBe("client failed");
   });
 
-  it("reads local RTK state and keeps evaluate opt-in", async (): Promise<void> => {
-    const devGlobal = globalThis as typeof globalThis & {
-      __TERRENO_STORE__?: {getState: () => Record<string, unknown>};
-    };
-    devGlobal.__TERRENO_STORE__ = {
-      getState: (): Record<string, unknown> => ({
-        auth: {userId: "user-1"},
-        "terreno-rtk": {
-          mutations: {
-            updateTodo: {
-              endpointName: "updateTodo",
-              originalArgs: {
-                id: "todo-1",
-                nested: {accessToken: "access-token", password: "plaintext-password"},
-              },
-              status: "pending",
-            },
-          },
-          queries: {
-            todos: {endpointName: "getTodos", originalArgs: {}, status: "fulfilled"},
-          },
-        },
-      }),
-    };
-
-    const state = (await readRtk({query: "todo", slice: "rtk"})) as {
-      queries: Array<{endpoint?: string}>;
-    };
-    expect(state.queries[0]?.endpoint).toBe("getTodos");
-    const mutationState = (await readRtk({slice: "rtk"})) as {
-      mutations: Array<{args?: {nested?: {accessToken?: string; password?: string}}}>;
-    };
-    expect(mutationState.mutations[0]?.args?.nested).toEqual({
-      accessToken: "[REDACTED]",
-      password: "[REDACTED]",
-    });
-    const noMatch = (await readRtk({query: "missing", slice: "rtk"})) as {
-      mutations: unknown[];
-      queries: unknown[];
-    };
-    expect(noMatch).toEqual({mutations: [], queries: []});
-    expect(await readRtk({slice: "auth"})).toEqual({
-      auth: {userId: "user-1"},
-    });
-    expect(await readRtk({slice: "custom"})).toEqual({});
-    expect(await readRtk({})).toMatchObject({
-      auth: {userId: "user-1"},
-    });
+  it("keeps evaluate and navigate opt-in", async (): Promise<void> => {
     expect(await evaluate({code: "1 + 1"})).toContain("Refused");
     expect(await navigate({path: "/profile"})).toContain("Refused");
 
     process.env.TERRENO_MCP_EVAL = "1";
     expect(await evaluate({code: "  "})).toBe("No code provided.");
     expect(await navigate({path: "  "})).toBe("No path provided.");
-
-    devGlobal.__TERRENO_STORE__ = {
-      getState: (): Record<string, unknown> => ({auth: {userId: "user-1"}}),
-    };
-    expect(await readRtk({slice: "rtk"})).toEqual({
-      note: "No terreno-rtk slice found on store.",
-    });
-
-    devGlobal.__TERRENO_STORE__ = {
-      getState: (): Record<string, unknown> => ({
-        betterAuth: {
-          createdAt: new Date("2026-09-21T00:00:00.000Z"),
-          sessionToken: "session-token",
-          user: {id: "better-auth-user"},
-        },
-      }),
-    };
-    expect(await readRtk({slice: "auth"})).toEqual({
-      auth: {
-        createdAt: "2026-09-21T00:00:00.000Z",
-        sessionToken: "[REDACTED]",
-        user: {id: "better-auth-user"},
-      },
-    });
-    expect(await readRtk({slice: "betterAuth"})).toEqual({
-      betterAuth: {
-        createdAt: "2026-09-21T00:00:00.000Z",
-        sessionToken: "[REDACTED]",
-        user: {id: "better-auth-user"},
-      },
-    });
   });
 
   it("filters durable logs by time and level and reports no error", async (): Promise<void> => {

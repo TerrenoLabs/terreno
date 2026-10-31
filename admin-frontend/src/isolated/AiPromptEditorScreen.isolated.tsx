@@ -3,14 +3,23 @@ import {act, fireEvent, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiPromptEditorScreenWidget} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiPromptEditorScreenWidget as AiPromptEditorScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
 import {AiPromptHubView} from "../widgets/aiObservability/prompts/AiPromptHubView";
 import type {
   PlaygroundRunResult,
   PromptDetail,
 } from "../widgets/aiObservability/prompts/promptTypes";
+import {
+  createObservabilityServer,
+  type FakeObservabilityRequest,
+  type FakeObservabilityServer,
+  flushObservabilityRequests,
+  withObservabilityServer,
+} from "./observabilityFakeApi.isolated";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
+
+const AiPromptEditorScreenWidget = withObservabilityServer(AiPromptEditorScreenWidgetBase);
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -110,15 +119,28 @@ describe("AiPromptEditorScreenWidget", () => {
     ],
   };
 
+  const DETAIL_ROUTE = "GET /ai/observability/prompts/:name";
+  const VERSIONS_ROUTE = "POST /ai/observability/prompts/:name/versions";
+  const LABELS_ROUTE = "POST /ai/observability/prompts/:name/labels";
+  const PLAYGROUND_ROUTE = "POST /ai/observability/prompts/:name/playground";
+
   const detailArgs: Array<{name: string; promptVersion?: number}> = [];
 
-  const detailState = {
-    data: detail as PromptDetail | undefined,
-    isError: false,
-    isFetching: false,
-    isLoading: false,
-    refetch: mock(() => {}),
+  /** Holds detail requests open until the test releases them. */
+  const heldRequests: Array<() => void> = [];
+  const holdRequest = (): Promise<unknown> =>
+    new Promise((resolve) => {
+      heldRequests.push(() => resolve(detail));
+    });
+  const releaseHeldRequests = async (): Promise<void> => {
+    for (const release of heldRequests.splice(0)) {
+      release();
+    }
+    await flushObservabilityRequests();
   };
+
+  /** Answers GET prompt detail; tests swap it to hold or fail specific versions. */
+  let respondToDetail: (request: FakeObservabilityRequest) => unknown = () => detail;
 
   const playgroundResult: PlaygroundRunResult = {
     compiledMessages: [],
@@ -128,101 +150,72 @@ describe("AiPromptEditorScreenWidget", () => {
     tokens: {totalTokens: 9},
   };
 
-  const playgroundMutationState = {
-    data: undefined as PlaygroundRunResult | undefined,
-    error: undefined as unknown,
-    isError: false,
-    isLoading: false,
-  };
-
-  const runPlayground = mock(() => ({
-    unwrap: async () => {
-      playgroundMutationState.data = playgroundResult;
-      return playgroundResult;
-    },
-  }));
-
-  const saveMutation = mock(() => ({
-    unwrap: async () => {
-      if (createVersionShouldFail) {
-        throw new Error("save failed");
-      }
-      return {name: "summarize", version: 3};
-    },
-  }));
-
-  const setLabel = mock(() => ({
-    unwrap: async () => {
-      if (labelShouldFail) {
-        throw new Error("label failed");
-      }
-      return {label: "production", version: 2};
-    },
-  }));
-
   let createVersionShouldFail = false;
   let labelShouldFail = false;
+  let playgroundShouldFail = false;
 
   let statusOverrides: Parameters<typeof operatorObservabilityStatus>[0] = {
     playgroundAi: {source: "server"},
   };
 
-  const api: AdminApi = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => ({
-      useAiObservabilityPromptQuery: (arg: {name: string; promptVersion?: number}) => {
-        detailArgs.push(arg);
-        return {
-          data: detailState.data,
-          isError: detailState.isError,
-          isFetching: detailState.isFetching,
-          isLoading: detailState.isLoading,
-          refetch: detailState.refetch,
-        };
+  let server: FakeObservabilityServer;
+
+  const createServer = (): FakeObservabilityServer =>
+    createObservabilityServer({
+      [DETAIL_ROUTE]: (request) => {
+        const promptVersion = request.query.promptVersion;
+        detailArgs.push(
+          promptVersion === undefined
+            ? {name: request.params.name ?? ""}
+            : {name: request.params.name ?? "", promptVersion: Number(promptVersion)}
+        );
+        return respondToDetail(request);
       },
-      useAiObservabilityStatusQuery: () => ({
-        data: operatorObservabilityStatus(statusOverrides),
-        isError: false,
-        isLoading: false,
-      }),
-      useCreateAiObservabilityPromptVersionMutation: () => [
-        saveMutation,
-        {isError: createVersionShouldFail, isLoading: false},
-      ],
-      useMoveAiObservabilityPromptLabelMutation: () => [
-        setLabel,
-        {isError: labelShouldFail, isLoading: false},
-      ],
-      useRunAiObservabilityPlaygroundMutation: () => [runPlayground, playgroundMutationState],
-    }),
-  } as unknown as AdminApi;
+      [LABELS_ROUTE]: () => {
+        if (labelShouldFail) {
+          throw {data: {title: "label failed"}};
+        }
+        return {label: "production", version: 2};
+      },
+      [PLAYGROUND_ROUTE]: () => {
+        if (playgroundShouldFail) {
+          throw {data: {title: "Provide an AI API key."}};
+        }
+        return playgroundResult;
+      },
+      [VERSIONS_ROUTE]: () => {
+        if (createVersionShouldFail) {
+          throw {data: {title: "save failed"}};
+        }
+        return {name: "summarize", version: 3};
+      },
+      "GET /ai/observability/status": () => operatorObservabilityStatus(statusOverrides),
+    });
 
   const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
-  const widgetProps = {
-    api,
+  const widgetProps = (): {
+    config: AdminConfigResponse;
+    routeBase: string;
+    screenName: string;
+    server: FakeObservabilityServer;
+  } => ({
     config,
     routeBase: "/admin",
     screenName: "ai-prompt-editor",
-  };
+    server,
+  });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    await releaseHeldRequests();
     detailArgs.length = 0;
     statusOverrides = {playgroundAi: {source: "server"}};
     createVersionShouldFail = false;
     labelShouldFail = false;
-    playgroundMutationState.data = undefined;
-    playgroundMutationState.error = undefined;
-    playgroundMutationState.isError = false;
-    detailState.data = detail;
-    detailState.isError = false;
-    detailState.isFetching = false;
-    detailState.isLoading = false;
-    detailState.refetch.mockClear();
-    runPlayground.mockClear();
-    saveMutation.mockClear();
-    setLabel.mockClear();
+    playgroundShouldFail = false;
+    respondToDetail = () => detail;
     routerPush.mockClear();
     readExpoSearchParams.current = () => ({name: "summarize"});
+    server = createServer();
   });
 
   const waitForDetailArg = async (expected: {
@@ -232,33 +225,33 @@ describe("AiPromptEditorScreenWidget", () => {
     await waitFor(() => {
       expect(detailArgs.some((arg) => JSON.stringify(arg) === JSON.stringify(expected))).toBe(true);
     });
+    await flushObservabilityRequests();
   };
 
   it("requests prompt detail with latest promptVersion after bootstrap", async () => {
-    renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize"});
     await waitForDetailArg({name: "summarize", promptVersion: 2});
   });
 
-  it("keeps the hub mounted when a version pin drops the detail cache", async () => {
-    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+  it("keeps the hub mounted while a version pin reloads detail", async () => {
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});
     fireEvent.press(view.getByText("Versions"));
     expect(view.getByTestId("ai-prompt-version-1")).toBeTruthy();
 
-    detailState.data = undefined;
-    detailState.isLoading = true;
-    detailState.isFetching = true;
+    respondToDetail = (): Promise<unknown> => holdRequest();
     fireEvent.press(view.getByTestId("ai-prompt-version-1"));
+    await waitForDetailArg({name: "summarize", promptVersion: 1});
 
     expect(view.queryByTestId("ai-prompt-editor-loading")).toBeNull();
     expect(view.getByTestId("ai-prompt-hub")).toBeTruthy();
     expect(view.getByTestId("ai-prompt-version-1")).toBeTruthy();
-    await waitForDetailArg({name: "summarize", promptVersion: 1});
+    await releaseHeldRequests();
   });
 
   it("refetches detail with the selected promptVersion when another version is chosen", async () => {
-    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});
 
     fireEvent.press(view.getByText("Versions"));
@@ -268,7 +261,7 @@ describe("AiPromptEditorScreenWidget", () => {
   });
 
   it("pins detail queries to the new version after save as next", async () => {
-    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});
 
     fireEvent.press(view.getByText("Versions"));
@@ -277,71 +270,101 @@ describe("AiPromptEditorScreenWidget", () => {
       fireEvent.press(view.getByTestId("ai-prompt-save-next"));
       await Promise.resolve();
     });
+    await flushObservabilityRequests();
 
-    assert.isAtLeast(saveMutation.mock.calls.length, 1);
+    const [saved] = server.callsTo(VERSIONS_ROUTE);
+    assert.equal(saved?.params.name, "summarize");
+    assert.equal(
+      (saved?.body as {template?: string} | undefined)?.template,
+      "Summarize {{text}} v3 draft"
+    );
     await waitForDetailArg({name: "summarize", promptVersion: 3});
   });
 
   it("shows missing name, loading, and fatal load error with retry", async () => {
     readExpoSearchParams.current = () => ({});
-    const missing = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    const missing = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
+    await flushObservabilityRequests();
     expect(missing.getByText(/Missing prompt name/)).toBeTruthy();
+    assert.equal(server.callsTo(DETAIL_ROUTE).length, 0);
     missing.unmount();
 
     readExpoSearchParams.current = () => ({name: "summarize"});
-    detailState.isLoading = true;
-    detailState.data = undefined;
-    const loading = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    respondToDetail = (): Promise<unknown> => holdRequest();
+    const loading = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
+    await flushObservabilityRequests();
     expect(loading.getByTestId("ai-prompt-editor-loading")).toBeTruthy();
     loading.unmount();
+    await releaseHeldRequests();
 
-    detailState.isLoading = false;
-    detailState.data = undefined;
-    detailState.isError = true;
-    const errored = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    respondToDetail = (): never => {
+      throw {data: {title: "Server error"}, status: 500};
+    };
+    const erroredServer = createServer();
+    const errored = renderWithTheme(
+      <AiPromptEditorScreenWidget {...widgetProps()} server={erroredServer} />
+    );
+    await flushObservabilityRequests();
     expect(errored.getByText(/Could not load summarize/)).toBeTruthy();
     await act(async () => {
       fireEvent.press(errored.getByText("Retry"));
       await Promise.resolve();
     });
-    assert.isAtLeast(detailState.refetch.mock.calls.length, 1);
+    await flushObservabilityRequests();
+    assert.equal(erroredServer.callsTo(DETAIL_ROUTE).length, 2);
   });
 
   it("runs playground and surfaces mutation errors for save, production, and playground", async () => {
     createVersionShouldFail = true;
     labelShouldFail = true;
-    playgroundMutationState.error = {data: {title: "Provide an AI API key."}};
-    playgroundMutationState.isError = true;
+    playgroundShouldFail = true;
 
     const view = renderWithTheme(
-      <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
+      <AiPromptEditorScreenWidget {...widgetProps()} apiKey="saved-key" />
     );
     await waitForDetailArg({name: "summarize", promptVersion: 2});
 
     fireEvent.press(view.getByText("Versions"));
+    await act(async () => {
+      await capturedHubActions
+        .onSaveVersion?.({template: "Hi", type: "chat"})
+        .catch(() => undefined);
+      await capturedHubActions.onSetProduction?.(1).catch(() => undefined);
+    });
+    await flushObservabilityRequests();
     expect(view.getByText("Could not save a new version.")).toBeTruthy();
     expect(view.getByText("Could not set production.")).toBeTruthy();
+    assert.equal(server.callsTo(LABELS_ROUTE)[0]?.params.name, "summarize");
+    assert.deepEqual(server.callsTo(LABELS_ROUTE)[0]?.body, {label: "production", version: 1});
 
     fireEvent.press(within(view.getByTestId("ai-prompt-editor")).getByText("Playground"));
+    fireEvent.changeText(view.getByTestId("ai-prompt-var-text"), "hello");
+    // The run button does not catch a rejected run, so drive the failing run directly.
+    await act(async () => {
+      await capturedHubActions.onRunPlayground?.({text: "hello"}).catch(() => undefined);
+    });
+    await flushObservabilityRequests();
     expect(view.getByText("Provide an AI API key.")).toBeTruthy();
 
-    playgroundMutationState.isError = false;
-    playgroundMutationState.error = undefined;
-    fireEvent.changeText(view.getByTestId("ai-prompt-var-text"), "hello");
+    playgroundShouldFail = false;
     await act(async () => {
       fireEvent.press(view.getByTestId("ai-prompt-run-once"));
       await Promise.resolve();
     });
-    assert.isAtLeast(runPlayground.mock.calls.length, 1);
+    await flushObservabilityRequests();
+    const runs = server.callsTo(PLAYGROUND_ROUTE);
+    assert.equal(runs.length, 2);
+    assert.equal(runs[1]?.headers["x-ai-api-key"], "saved-key");
+    assert.deepInclude(runs[1]?.body as Record<string, unknown>, {variables: {text: "hello"}});
+    expect(view.queryByText("Provide an AI API key.")).toBeNull();
   });
 
   it("blocks playground until a request key is available and accepts array route params", async () => {
     readExpoSearchParams.current = () => ({name: ["summarize"]});
     statusOverrides = {playgroundAi: {source: "request-key"}};
-    runPlayground.mockClear();
     const blocked = renderWithTheme(
       <AiPromptEditorScreenWidget
-        {...widgetProps}
+        {...widgetProps()}
         playgroundApiKeyHint="Save a Gemini API key on Profile."
       />
     );
@@ -352,11 +375,12 @@ describe("AiPromptEditorScreenWidget", () => {
       "Save a Gemini API key on Profile."
     );
     fireEvent.press(blocked.getByTestId("ai-prompt-run-once"));
-    assert.equal(runPlayground.mock.calls.length, 0);
+    await flushObservabilityRequests();
+    assert.equal(server.callsTo(PLAYGROUND_ROUTE).length, 0);
   });
 
   it("navigates to trace and experiment detail from relationship tables", async () => {
-    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    const view = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});
 
     fireEvent.press(view.getByText("Traces"));
@@ -379,7 +403,7 @@ describe("AiPromptEditorScreenWidget", () => {
 
   it("does not save, promote, or run playground after the prompt name disappears", async () => {
     const view = renderWithTheme(
-      <AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />
+      <AiPromptEditorScreenWidget {...widgetProps()} apiKey="saved-key" />
     );
     await waitForDetailArg({name: "summarize", promptVersion: 2});
     assert.isFunction(capturedHubActions.onSaveVersion);
@@ -387,7 +411,7 @@ describe("AiPromptEditorScreenWidget", () => {
     assert.isFunction(capturedHubActions.onRunPlayground);
 
     readExpoSearchParams.current = () => ({});
-    view.rerender(<AiPromptEditorScreenWidget {...widgetProps} apiKey="saved-key" />);
+    view.rerender(<AiPromptEditorScreenWidget {...widgetProps()} apiKey="saved-key" />);
     expect(view.getByText(/Missing prompt name/)).toBeTruthy();
 
     await act(async () => {
@@ -395,22 +419,33 @@ describe("AiPromptEditorScreenWidget", () => {
       await capturedHubActions.onSetProduction?.(2);
       await capturedHubActions.onRunPlayground?.({text: "hello"});
     });
+    await flushObservabilityRequests();
     expect(view.getByText(/Missing prompt name/)).toBeTruthy();
     expect(view.queryByTestId("ai-prompt-hub")).toBeNull();
   });
 
   it("shows relationship refresh loading and error states while keeping version history", async () => {
-    detailState.isFetching = true;
-    const loadingRelations = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    // The unpinned bootstrap request loads; the pinned refresh stays in flight.
+    respondToDetail = (request): unknown =>
+      request.query.promptVersion === undefined ? detail : holdRequest();
+    const loadingRelations = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps()} />);
     await waitForDetailArg({name: "summarize", promptVersion: 2});
     fireEvent.press(loadingRelations.getByText("Traces"));
     expect(loadingRelations.getByTestId("ai-prompt-traces-loading")).toBeTruthy();
     loadingRelations.unmount();
+    await releaseHeldRequests();
 
-    detailState.isFetching = false;
-    detailState.isError = true;
-    detailState.data = detail;
-    const erroredRelations = renderWithTheme(<AiPromptEditorScreenWidget {...widgetProps} />);
+    // The pinned refresh fails after the bootstrap request loaded the prompt.
+    respondToDetail = (request): unknown => {
+      if (request.query.promptVersion === undefined) {
+        return detail;
+      }
+      throw {data: {title: "Server error"}, status: 500};
+    };
+    detailArgs.length = 0;
+    const erroredRelations = renderWithTheme(
+      <AiPromptEditorScreenWidget {...widgetProps()} server={createServer()} />
+    );
     await waitForDetailArg({name: "summarize", promptVersion: 2});
     fireEvent.press(erroredRelations.getByText("Traces"));
     expect(erroredRelations.getByTestId("ai-prompt-traces-error")).toBeTruthy();

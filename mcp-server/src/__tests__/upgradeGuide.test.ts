@@ -4,6 +4,7 @@ import {join} from "node:path";
 
 import {askUpdateHelp, getUpdateNote, searchUpdateNotes} from "../help/updateNotes.js";
 import {getUpgradeGuideMarkdown} from "../upgradeGuide.js";
+import {fakeFetch} from "./fakeFetch.js";
 
 describe("getUpgradeGuideMarkdown", () => {
   test("returns bundled notes for a semver range when upgrade files exist", () => {
@@ -149,7 +150,7 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_TOKEN = "test-token";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = fakeFetch(async (input, init) => {
       const url = String(input);
       expect(url).toContain("q=billing");
       expect(url).toContain("q=webhooks");
@@ -170,7 +171,7 @@ describe("updateNotes help", () => {
         }),
         {status: 200}
       );
-    };
+    });
 
     const {hits, sources} = await searchUpdateNotes({
       queries: ["billing", "webhooks"],
@@ -193,15 +194,17 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_URL = "http://localhost:4000";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          data: [
-            {excerpt: "Product note", id: "live1", status: "published", title: "Billing update"},
-          ],
-        }),
-        {status: 200}
-      );
+    globalThis.fetch = fakeFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {excerpt: "Product note", id: "live1", status: "published", title: "Billing update"},
+            ],
+          }),
+          {status: 200}
+        )
+    );
 
     const {hits} = await searchUpdateNotes({limit: 5, queries: ["billing"], source: "auto"});
     globalThis.fetch = originalFetch;
@@ -214,7 +217,7 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_URL = "http://localhost:4000";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = fakeFetch(async (input) => {
       expect(String(input)).toContain("/announcements/help/abc123");
       return new Response(
         JSON.stringify({
@@ -227,7 +230,7 @@ describe("updateNotes help", () => {
         }),
         {status: 200}
       );
-    };
+    });
 
     const detail = await getUpdateNote({id: "announcement:abc123"});
     globalThis.fetch = originalFetch;
@@ -254,10 +257,10 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_URL = "http://localhost:4000/";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = fakeFetch(async (input) => {
       expect(String(input)).toStartWith("http://localhost:4000/announcements/help/search?");
       return new Response("help api unavailable", {status: 503});
-    };
+    });
     try {
       const {hits, sources} = await searchUpdateNotes({queries: ["billing"], source: "auto"});
       expect(sources).toEqual([
@@ -275,7 +278,7 @@ describe("updateNotes help", () => {
 
     const originalFetch = globalThis.fetch;
     const requested: string[] = [];
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = fakeFetch(async (input) => {
       const url = String(input);
       requested.push(url);
       if (url.includes("/announcements/help/search")) {
@@ -299,7 +302,7 @@ describe("updateNotes help", () => {
         }),
         {status: 200}
       );
-    };
+    });
     try {
       const {hits, sources} = await searchUpdateNotes({
         includeArchived: true,

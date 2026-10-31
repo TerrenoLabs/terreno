@@ -1,10 +1,10 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {Client, InMemoryTransport} from "@modelcontextprotocol/client";
 import {assert} from "chai";
-
-import {createLocalMcpServer} from "./localServer";
-import {resetMetroDevSessionForTests} from "./metro/metroDevSession";
-import {BrowserSession} from "./tools/browser";
+import {fakeFetch} from "../__tests__/fakeFetch.js";
+import {createLocalMcpServer} from "./localServer.js";
+import {resetMetroDevSessionForTests} from "./metro/metroDevSession.js";
+import {BrowserSession} from "./tools/browser.js";
 
 interface FakeMessageEvent {
   data: string;
@@ -121,15 +121,17 @@ describe("local MCP server end-to-end", () => {
     process.env.TERRENO_MCP_EVAL = "1";
     process.env.TERRENO_METRO_URL = "http://localhost:8082";
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-    globalThis.fetch = (async (): Promise<Response> =>
-      new Response(
-        JSON.stringify([
-          {
-            title: "Terreno app",
-            webSocketDebuggerUrl: "ws://localhost:8082/cdp",
-          },
-        ])
-      )) as typeof fetch;
+    globalThis.fetch = fakeFetch(
+      async (): Promise<Response> =>
+        new Response(
+          JSON.stringify([
+            {
+              title: "Terreno app",
+              webSocketDebuggerUrl: "ws://localhost:8082/cdp",
+            },
+          ])
+        )
+    );
   });
 
   afterEach((): void => {

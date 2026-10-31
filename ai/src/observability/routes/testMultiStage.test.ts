@@ -3,7 +3,7 @@ import {TerrenoApp} from "@terreno/api";
 import {assert} from "chai";
 import type express from "express";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsSpan} from "../local/models/obsSpan";
 import {registerObsTrace} from "../local/models/obsTrace";
@@ -86,7 +86,7 @@ describe("observability test-multi-stage route", () => {
     await registerObsSpan().deleteMany({});
     const plugin = createLocalObservabilityPlugin();
     fakeAiService = createFakeAiService();
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({aiService: fakeAiService, plugins: [plugin]}))
       .build();
   });
@@ -125,7 +125,7 @@ describe("observability test-multi-stage route", () => {
 
   it("returns 503 when no server or request AI service is available", async () => {
     const plugin = createLocalObservabilityPlugin();
-    const noAiApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const noAiApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [plugin]}))
       .build();
     const agent = await authAsUser(noAiApp, "admin");
@@ -141,7 +141,7 @@ describe("observability test-multi-stage route", () => {
       return apiKey === "request-key" ? createFakeAiService() : undefined;
     });
     const plugin = createLocalObservabilityPlugin();
-    const requestKeyApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const requestKeyApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [plugin], requestAiServiceFactory}))
       .build();
     const agent = await authAsUser(requestKeyApp, "admin");
@@ -159,7 +159,7 @@ describe("observability test-multi-stage route", () => {
   it("exports an error trace and rethrows when a child LLM stage fails", async () => {
     const failingService = createFakeAiService({failOn: OBS_TEST_MULTI_STAGE_CALL_2_SCHEMA_NAME});
     const plugin = createLocalObservabilityPlugin();
-    const failingApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const failingApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({aiService: failingService, plugins: [plugin]}))
       .build();
     const agent = await authAsUser(failingApp, "admin");
@@ -186,7 +186,7 @@ describe("observability test-multi-stage route", () => {
   it("exports the completed child stages when final synthesis fails", async () => {
     const failingService = createFakeAiService({failOn: OBS_TEST_MULTI_STAGE_FINAL_SCHEMA_NAME});
     const plugin = createLocalObservabilityPlugin();
-    const failingApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const failingApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({aiService: failingService, plugins: [plugin]}))
       .build();
     const agent = await authAsUser(failingApp, "admin");

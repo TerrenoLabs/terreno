@@ -1,8 +1,8 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
-
-import {resetMetroDevSessionForTests} from "../metro/metroDevSession";
-import {getSyncDbState, syncDbAction} from "./syncDb";
+import {fakeFetch} from "../../__tests__/fakeFetch.js";
+import {resetMetroDevSessionForTests} from "../metro/metroDevSession.js";
+import {getSyncDbState, syncDbAction} from "./syncDb.js";
 
 interface FakeMessageEvent {
   data: string;
@@ -74,16 +74,18 @@ describe("SyncDB local MCP CDP fallback", () => {
       result: {status: {queuedCount: 2}},
     };
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-    globalThis.fetch = (async (): Promise<Response> =>
-      new Response(
-        JSON.stringify([
-          {
-            title: "Hermes app",
-            webSocketDebuggerUrl: "ws://localhost:8082/cdp",
-          },
-        ]),
-        {status: 200}
-      )) as typeof fetch;
+    globalThis.fetch = fakeFetch(
+      async (): Promise<Response> =>
+        new Response(
+          JSON.stringify([
+            {
+              title: "Hermes app",
+              webSocketDebuggerUrl: "ws://localhost:8082/cdp",
+            },
+          ]),
+          {status: 200}
+        )
+    );
   });
 
   afterEach((): void => {
@@ -100,8 +102,9 @@ describe("SyncDB local MCP CDP fallback", () => {
   });
 
   it("surfaces CDP evaluation errors", async (): Promise<void> => {
-    globalThis.fetch = (async (): Promise<Response> =>
-      new Response("unavailable", {status: 503})) as typeof fetch;
+    globalThis.fetch = fakeFetch(
+      async (): Promise<Response> => new Response("unavailable", {status: 503})
+    );
     const message = await getSyncDbState({});
     assert.include(message, "503");
     assert.include(message, "CDP:");

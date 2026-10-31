@@ -1,8 +1,8 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {handleLocalToolCall, localMcpTools} from "../localTools";
-import {getClientState} from "./runtime";
+import {handleLocalToolCall, localMcpTools} from "../localTools.js";
+import {getClientState} from "./runtime.js";
 
 interface ClientStateResult {
   layer: string;

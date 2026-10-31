@@ -4,7 +4,7 @@ import type {LanguageModel} from "ai";
 import type express from "express";
 
 import {AIService} from "../../service/aiService";
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import type {ObservabilityPlugin} from "../types";
@@ -33,7 +33,7 @@ describe("observability status routes", () => {
   });
 
   beforeEach(() => {
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           plugins: [createLocalObservabilityPlugin(), createLangfusePlugin()],
@@ -89,7 +89,7 @@ describe("observability status routes", () => {
       specificationVersion: "v2" as const,
       supportedUrls: {},
     };
-    const serverApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const serverApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           aiService: new AIService({model: model as unknown as LanguageModel}),
@@ -101,7 +101,7 @@ describe("observability status routes", () => {
     const serverStatus = await serverAgent.get("/ai/observability/status");
     expect(serverStatus.body.data.playgroundAi).toEqual({source: "server"});
 
-    const requestKeyApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const requestKeyApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           plugins: [createLocalObservabilityPlugin()],

@@ -2,7 +2,7 @@ import {afterEach, describe, it} from "bun:test";
 import {assert} from "chai";
 import mongoose from "mongoose";
 
-import {withLocalMongoDb} from "./localMongo";
+import {withLocalMongoDb} from "./localMongo.js";
 
 describe("withLocalMongoDb", () => {
   const originalCreateConnection = mongoose.createConnection;

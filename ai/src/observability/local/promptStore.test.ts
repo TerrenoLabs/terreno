@@ -10,7 +10,7 @@ import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
-import {LocalPromptStore} from "./promptStore";
+import {type CreatePromptInput, LocalPromptStore} from "./promptStore";
 
 describe("LocalPromptStore", () => {
   let store: LocalPromptStore;
@@ -253,7 +253,7 @@ describe("LocalPromptStore", () => {
 
   it("validates create/moveLabel inputs and resolves versions by label or number", async () => {
     try {
-      await store.create({folder: "", name: "bad"});
+      await store.create({folder: "", name: "bad"} as CreatePromptInput);
       expect.unreachable();
     } catch (error) {
       expect(String(error)).toMatch(/folder and name/);
@@ -334,9 +334,10 @@ describe("LocalPromptStore", () => {
     const latest = await store.runPlayground({
       generator: {
         generate: async () => {
-          return {output: "latest"};
+          return {latencyMs: 0, output: "latest"};
         },
       },
+      modelId: "mock-model",
       name: "playground",
       variables: {name: "Grace"},
     });

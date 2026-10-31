@@ -21,10 +21,11 @@ import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {withGenerateStreaming} from "../tests/generateStream";
 import {harnessErrorMatching} from "../tests/harnessErrors";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel, UserModel} from "../tests/helpers";
 import type {
   HarnessApprovalDocument,
   HarnessApprovalResult,
+  HarnessTaskDefinition,
   HarnessTaskDocument,
   HarnessTestHooks,
 } from "../types/harness";
@@ -32,7 +33,6 @@ import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {HarnessModels} from "./commit";
 import {
   AGENT_TOOL_TASK_NAME,
-  type AnyHarnessTaskDefinition,
   approvalGate,
   approvalTaskInput,
   defineAgent,
@@ -54,6 +54,9 @@ import {registerHarnessMessage} from "./models/harnessMessage";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {HarnessWaitRaceError, sendEventRecords} from "./waits";
+
+/** A task definition whose input is not checked, so tests can create it with any input. */
+type TestTaskDefinition = HarnessTaskDefinition<unknown, unknown, unknown>;
 
 // Whole tasks and turns on a real replica set; the first test also pays for index creation.
 setDefaultTimeout(30_000);
@@ -107,8 +110,7 @@ const statusIs = (id: unknown, status: string) => async (): Promise<boolean> =>
 const approvalOf = (taskId: unknown): Promise<HarnessApprovalDocument> =>
   ApprovalModel.findExactlyOne({taskId});
 
-const asAny = (definition: unknown): AnyHarnessTaskDefinition =>
-  definition as AnyHarnessTaskDefinition;
+const asAny = (definition: unknown): TestTaskDefinition => definition as TestTaskDefinition;
 
 const openHarness = async (
   registry: ReadonlyArray<HarnessRegistryEntry>,
@@ -138,7 +140,7 @@ const openHarness = async (
 };
 
 const buildApp = (harness: Harness): express.Application =>
-  new TerrenoApp({skipListen: true, userModel: UserModel})
+  new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
     .register(new HarnessApp({harness}))
     .build();
 
@@ -176,7 +178,7 @@ const asksApproval = ({
   retry?: {maxAttempts: number};
   runs?: {count: number};
   timeout?: {hours: number};
-}): AnyHarnessTaskDefinition =>
+}): TestTaskDefinition =>
   asAny(
     defineTask<{patientId: string}, unknown, HarnessApprovalResult>({
       approvals,
@@ -563,7 +565,7 @@ describe("Harness approvals", () => {
 
   describe("races and forged events", () => {
     /** Past the approval's timeout with the runner stopped, so the next owner resolves it. */
-    const parkThenPassTimeout = async (definition: AnyHarnessTaskDefinition) => {
+    const parkThenPassTimeout = async (definition: TestTaskDefinition) => {
       const start = DateTime.now();
       Settings.now = () => start.toMillis();
       const first = await openHarness([definition]);
@@ -762,7 +764,7 @@ describe("Harness approvals", () => {
     });
 
     it("fails the task on rt.approval misuse and rejects invalid approval policies", async () => {
-      const misuse = (options: unknown, key = "k"): AnyHarnessTaskDefinition =>
+      const misuse = (options: unknown, key = "k"): TestTaskDefinition =>
         asAny(
           defineTask<unknown, unknown, unknown>({
             initial: () => ({phase: "ask"}),
@@ -778,7 +780,7 @@ describe("Harness approvals", () => {
             version: 1,
           })
         );
-      const cases: Array<[AnyHarnessTaskDefinition, string]> = [
+      const cases: Array<[TestTaskDefinition, string]> = [
         [misuse({title: "t"}, " "), "rt.approval requires a key"],
         [misuse({}), 'rt.approval("k") requires a title'],
         [misuse({summary: 3, title: "t"}), 'rt.approval("k") summary must be a string'],

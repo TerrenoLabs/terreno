@@ -4,7 +4,7 @@ import {assert} from "chai";
 import type express from "express";
 import {DateTime} from "luxon";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {LocalEvaluatorStore} from "../local/evaluatorStore";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsEvaluator} from "../local/models/obsEvaluator";
@@ -28,7 +28,7 @@ describe("observability review routes", () => {
     await registerObsReviewItem().deleteMany({});
     await registerObsEvaluator().deleteMany({});
     await registerObsTrace().deleteMany({});
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [createLocalObservabilityPlugin()]}))
       .build();
   });

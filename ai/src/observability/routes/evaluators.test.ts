@@ -2,7 +2,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import type express from "express";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsEvaluator} from "../local/models/obsEvaluator";
 import {registerObsPrompt} from "../local/models/obsPrompt";
@@ -40,7 +40,7 @@ describe("observability evaluator routes", () => {
       type: "text",
     });
     await promptStore.moveLabel("eval-judge-correctness", {label: "production", version: 1});
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [createLocalObservabilityPlugin()]}))
       .build();
   });

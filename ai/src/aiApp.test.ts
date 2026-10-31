@@ -10,7 +10,12 @@ import {GptHistory} from "./models/gptHistory";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
 import {createScriptedModel, modelCall, textStep, toolCallStep} from "./tests/chatHarness";
-import {authAsUserWithCredentials, ensureTestUsers, UserModel} from "./tests/helpers";
+import {
+  authAsUserWithCredentials,
+  ensureTestUsers,
+  terrenoUserModel,
+  UserModel,
+} from "./tests/helpers";
 
 const AI_APP_TEST_USER = {
   admin: false,
@@ -61,13 +66,13 @@ describe("AiApp", () => {
   };
 
   it("registers gpt and project routes by default", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const aiService = new AIService({model: createMockModel() as unknown as LanguageModel});
     const plugin = new AiApp({aiService});
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
 
     const agent = await authAsUser(app);
@@ -80,13 +85,13 @@ describe("AiApp", () => {
   });
 
   it("skips the project routes with projects: false", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const aiService = new AIService({model: createMockModel() as unknown as LanguageModel});
     const plugin = new AiApp({aiService, projects: false});
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
 
     const agent = await authAsUser(app);
@@ -95,14 +100,14 @@ describe("AiApp", () => {
   });
 
   it("passes asks to the gpt routes, so the model is offered the ask tools", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const model = createMockModel();
     const aiService = new AIService({model: model as unknown as LanguageModel});
     const plugin = new AiApp({aiService, asks: true});
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     const agent = await authAsUser(app);
 
@@ -120,7 +125,7 @@ describe("AiApp", () => {
   });
 
   it("adds the documented headless turn actions to the history routes", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const model = createMockModel();
     const aiService = new AIService({model: model as unknown as LanguageModel});
     const app = new TerrenoApp({
@@ -129,7 +134,7 @@ describe("AiApp", () => {
           router as unknown as express.Application
         ),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     const agent = await authAsUser(app);
 
@@ -159,7 +164,7 @@ describe("AiApp", () => {
   });
 
   it("adds the headless actions only with asks on, so hosts without asks get no new endpoints", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const historyRoutes = async (asks?: boolean) => {
       const model = createMockModel();
       const aiService = new AIService({model: model as unknown as LanguageModel});
@@ -169,7 +174,7 @@ describe("AiApp", () => {
             router as unknown as express.Application
           ),
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app);
       const openApi = await agent.get("/openapi.json");
@@ -226,7 +231,7 @@ describe("AiApp", () => {
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     // Unauthenticated access to upload route: ensure it exists (returns 401, not 404).
     const upload = await supertest(app).post("/files/upload");
@@ -234,8 +239,8 @@ describe("AiApp", () => {
   });
 
   it("caps uploads at asks.maxFileSizeBytes and loads a files answer's uploads from storage", async () => {
-    const {AIService} = await import("./service/aiService");
-    const {FileAttachment} = await import("./models/fileAttachment");
+    const {AIService} = await import("./service/aiService.js");
+    const {FileAttachment} = await import("./models/fileAttachment.js");
     const text = Buffer.from("Coffee, 4.50\n");
     const upload = mock(async () => {
       const [user] = await UserModel.find({email: AI_APP_TEST_USER.email});
@@ -278,7 +283,7 @@ describe("AiApp", () => {
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     const agent = await authAsUser(app);
 
@@ -329,7 +334,7 @@ describe("AiApp", () => {
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     const upload = await supertest(app).post("/files/upload");
     expect(upload.status).toBe(404);
@@ -345,7 +350,7 @@ describe("AiApp", () => {
     const app = new TerrenoApp({
       configureApp: (router) => plugin.register(router as unknown as express.Application),
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
     const agent = await authAsUser(app);
     const servers = await agent.get("/mcp/servers");

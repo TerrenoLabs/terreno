@@ -279,7 +279,7 @@ describe("/gpt/prompt files asks", () => {
         },
       ]);
 
-      const output = receiptResultOf(model, 1) as {value: {text?: string}[]};
+      const output = receiptResultOf(model, 1) as {value: {text?: string; type?: string}[]};
       expect(output.value.slice(1)).toEqual([
         {text: "File 1 of 1: ledger.csv (text/csv, 100051 bytes)", type: "text"},
         {text: "a".repeat(99_999), type: "text"},

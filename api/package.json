@@ -7,7 +7,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
     "@better-auth/expo": "^1.6.25",
     "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/node": "catalog:",

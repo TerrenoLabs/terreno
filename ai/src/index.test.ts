@@ -99,6 +99,20 @@ describe("@terreno/ai public exports", () => {
     expect(exported[name]).toBeDefined();
   });
 
+  it.each([
+    "addSkillRoutes",
+    "aiConfigurationSchema",
+    "configurationPromptGetter",
+    "createGenerateImageTool",
+    "parseSkillPackage",
+  ])("exports the skills and image generation API %s", (name) => {
+    expect(exported[name]).toBeDefined();
+  });
+
+  it("exports the GptSkill model", () => {
+    expect(typeof terrenoAi.GptSkill.find).toBe("function");
+  });
+
   it("re-exports the default AI request types", () => {
     expect(terrenoAi.DEFAULT_AI_REQUEST_TYPES).toContain("general");
     expect(terrenoAi.DEFAULT_AI_REQUEST_TYPES).toContain("translation");

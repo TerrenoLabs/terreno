@@ -39,6 +39,16 @@ describe("MarkdownEditor", () => {
     expect(getByText("Preview")).toBeTruthy();
   });
 
+  it("hides the preview pane when showPreview is false", () => {
+    const {getByTestId, queryByTestId, queryByText} = renderWithTheme(
+      <MarkdownEditor onChange={(): void => {}} showPreview={false} testID="editor" value="# Hi" />
+    );
+
+    expect(getByTestId("editor-input")).toBeTruthy();
+    expect(queryByTestId("editor-preview")).toBeNull();
+    expect(queryByText("Preview")).toBeNull();
+  });
+
   it("renders the title only when provided", () => {
     const {getByText, queryByText, rerender} = renderWithTheme(
       <MarkdownEditor onChange={(): void => {}} title="Notes" value="" />

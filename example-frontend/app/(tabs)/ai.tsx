@@ -4,6 +4,7 @@ import {
   type AskSubmission,
   type BlockChatEvent,
   Box,
+  Button,
   GPTChat,
   type GPTChatHistory,
   type GPTChatMessage,
@@ -14,6 +15,7 @@ import {
   type SelectedFile,
   Spinner,
   selectedFileMimeType,
+  type ToolLabelInput,
   useStoredState,
 } from "@terreno/ui";
 import type {Href} from "expo-router";
@@ -71,6 +73,25 @@ const componentCaption = (text: string): string | undefined => {
   }
   const count = value.blocks.length;
   return count === 1 ? "1 component" : `${count} components`;
+};
+
+/** Row text for built-in AI tools; other tools keep GPTChat's default label. */
+const toolLabel = ({args, result, toolName}: ToolLabelInput): string | undefined => {
+  if (toolName === "load_skill") {
+    return typeof args.name === "string" ? `Used skill ${args.name}` : "Used skill";
+  }
+  if (toolName !== "generate_image") {
+    return undefined;
+  }
+  if (result === undefined) {
+    return "Generating image…";
+  }
+  const hasError =
+    typeof result === "object" &&
+    result !== null &&
+    "error" in result &&
+    typeof result.error === "string";
+  return hasError ? "Image not generated" : "Generated image";
 };
 
 interface TurnRequest {
@@ -242,9 +263,10 @@ const GPT_MASCOT_IMAGES: ImageSourcePropType[] = [
 const AiScreen: React.FC = () => {
   const [currentHistoryId, setCurrentHistoryId] = useState<string | undefined>(undefined);
   // Remember the open chat so a reload can reopen it and re-attach to an in-flight reply
+  // `null` marks "no open chat": storage cannot round-trip `undefined` as JSON
   const [storedHistoryId, setStoredHistoryId, isStoredHistoryIdLoading] = useStoredState<
-    string | undefined
-  >("gptCurrentHistoryId", undefined);
+    string | null
+  >("gptCurrentHistoryId", null);
   const hasRestoredHistoryRef = useRef(false);
   const resumeAbortRef = useRef<AbortController | null>(null);
   const [currentMessages, setCurrentMessages] = useState<GPTChatMessage[]>([]);
@@ -546,7 +568,7 @@ const AiScreen: React.FC = () => {
     if (!userId || !hasRestoredHistoryRef.current) {
       return;
     }
-    void setStoredHistoryId(currentHistoryId);
+    void setStoredHistoryId(currentHistoryId ?? null);
   }, [currentHistoryId, setStoredHistoryId, userId]);
 
   // Stop following a resumed reply when leaving the screen
@@ -1073,6 +1095,10 @@ const AiScreen: React.FC = () => {
     [fetchDataset]
   );
 
+  const handleOpenSkills = useCallback((): void => {
+    router.push("/settings/skills");
+  }, []);
+
   if (isLoading) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center">
@@ -1082,49 +1108,61 @@ const AiScreen: React.FC = () => {
   }
 
   return (
-    <GPTChat
-      allowHtml
-      askErrors={askErrors}
-      attachments={fileUploadsEnabled ? attachments : []}
-      availableModels={availableModels}
-      currentHistoryId={currentHistoryId}
-      currentMessages={currentMessages}
-      geminiApiKey={geminiApiKey}
-      histories={histories}
-      hostActions={["exportDataset", "export_csv", "scaleStepper", "toggleChecklist"]}
-      isStreaming={isStreaming}
-      mascot={mascot}
-      mcpTools={mcpTools}
-      onAskSubmit={handleAskSubmit}
-      onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
-      onBlockAction={handleBlockAction}
-      onBlockCallback={handleBlockCallback}
-      onCreateHistory={handleCreateHistory}
-      onDeleteHistory={handleDeleteHistory}
-      onGeminiApiKeyChange={setGeminiApiKey}
-      onModelChange={setSelectedModel}
-      onRateFeedback={handleRateFeedback}
-      onRemoveAttachment={handleRemoveAttachment}
-      onSelectHistory={handleSelectHistory}
-      onSubmit={handleSubmit}
-      onUpdateTitle={handleUpdateTitle}
-      resolveAskFiles={resolveAskFiles}
-      resolveDataset={resolveDataset}
-      resolveImage={resolveImage}
-      selectedModel={selectedModel}
-      suggestedPrompts={[
-        "Tell me a dad joke about TypeScript",
-        "Make a pun about React hooks",
-        "Tell me a witty joke about MongoDB",
-        "Help me pick a plan",
-        "Archive old chats",
-        "Draft an announcement",
-        "Fill in the invoice details",
-        "Upload a receipt",
-      ]}
-      testID="chat"
-      uiBlocks
-    />
+    <Box flex="grow">
+      <Box direction="row" justifyContent="end" paddingX={3} paddingY={1}>
+        <Button
+          iconName="wand-magic-sparkles"
+          onClick={handleOpenSkills}
+          testID="ai-skills-button"
+          text="Skills"
+          variant="muted"
+        />
+      </Box>
+      <GPTChat
+        allowHtml
+        askErrors={askErrors}
+        attachments={fileUploadsEnabled ? attachments : []}
+        availableModels={availableModels}
+        currentHistoryId={currentHistoryId}
+        currentMessages={currentMessages}
+        geminiApiKey={geminiApiKey}
+        histories={histories}
+        hostActions={["exportDataset", "export_csv", "scaleStepper", "toggleChecklist"]}
+        isStreaming={isStreaming}
+        mascot={mascot}
+        mcpTools={mcpTools}
+        onAskSubmit={handleAskSubmit}
+        onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
+        onBlockAction={handleBlockAction}
+        onBlockCallback={handleBlockCallback}
+        onCreateHistory={handleCreateHistory}
+        onDeleteHistory={handleDeleteHistory}
+        onGeminiApiKeyChange={setGeminiApiKey}
+        onModelChange={setSelectedModel}
+        onRateFeedback={handleRateFeedback}
+        onRemoveAttachment={handleRemoveAttachment}
+        onSelectHistory={handleSelectHistory}
+        onSubmit={handleSubmit}
+        onUpdateTitle={handleUpdateTitle}
+        resolveAskFiles={resolveAskFiles}
+        resolveDataset={resolveDataset}
+        resolveImage={resolveImage}
+        selectedModel={selectedModel}
+        suggestedPrompts={[
+          "Tell me a dad joke about TypeScript",
+          "Make a pun about React hooks",
+          "Tell me a witty joke about MongoDB",
+          "Help me pick a plan",
+          "Archive old chats",
+          "Draft an announcement",
+          "Fill in the invoice details",
+          "Upload a receipt",
+        ]}
+        testID="chat"
+        toolLabel={toolLabel}
+        uiBlocks
+      />
+    </Box>
   );
 };
 

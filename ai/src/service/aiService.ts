@@ -1003,8 +1003,14 @@ export class AIService {
           }
         }
         messages.push({content: parts, role: "user"} as ModelMessage);
+      } else if (role === "assistant" && prompt.content?.some((part) => part.type === "image")) {
+        // The model sees a placeholder per generated image, never its bytes; providers also
+        // reject empty assistant turns, so an image-only reply still has content.
+        const placeholders = prompt.content
+          .filter((part) => part.type === "image")
+          .map(() => "[Generated image]");
+        messages.push({content: [prompt.text, ...placeholders].filter(Boolean).join("\n\n"), role});
       } else if (!prompt.text && prompt.content?.length) {
-        // Providers reject empty assistant turns; stand in for an image-only response
         messages.push({content: "[Generated image]", role});
       } else {
         messages.push({content: prompt.text, role});

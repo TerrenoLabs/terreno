@@ -17,6 +17,7 @@ import type {ObservabilityPlugin} from "../observability/types";
 import {AIService} from "../service/aiService";
 import type {FileStorageService} from "../service/fileStorage";
 import type {MCPService} from "../service/mcpService";
+import {createImageOnlyModel} from "../tests/chatHarness";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
 import {addAiRequestsExplorerRoutes} from "./aiRequestsExplorer";
 import {addGptHistoryRoutes} from "./gptHistories";
@@ -87,36 +88,6 @@ const createImageModel = () => ({
         controller.enqueue({id: "t1", type: "text-start" as const});
         controller.enqueue({delta: "here is an image", id: "t1", type: "text-delta" as const});
         controller.enqueue({id: "t1", type: "text-end" as const});
-        controller.enqueue({
-          data: "aGVsbG8=",
-          mediaType: "image/png",
-          type: "file" as const,
-        });
-        controller.enqueue({
-          finishReason: "stop" as const,
-          type: "finish" as const,
-          usage: {inputTokens: 2, outputTokens: 2},
-        });
-        controller.close();
-      },
-    }),
-  })),
-  modelId: "gemini-3-pro-image",
-  provider: "mock-provider",
-  specificationVersion: "v2" as const,
-  supportedUrls: {},
-});
-
-// Mock model that emits one generated image and no text
-const createImageOnlyModel = () => ({
-  doGenerate: mock(async () => ({
-    content: [],
-    finishReason: "stop" as const,
-    usage: {inputTokens: 2, outputTokens: 2},
-  })),
-  doStream: mock(async () => ({
-    stream: new ReadableStream({
-      start(controller) {
         controller.enqueue({
           data: "aGVsbG8=",
           mediaType: "image/png",

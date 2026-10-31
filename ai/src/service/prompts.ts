@@ -199,3 +199,32 @@ export const OBS_TEST_MULTI_STAGE_FINAL_SYSTEM =
   "Return a JSON object that matches the output schema " +
   '{"sentence": string, "phrase": string, "keywords": string[], "metrics": object}. ' +
   "Echo phrase, keywords, and metrics from the prompt. No markdown fences and no extra keys.";
+
+/**
+ * Opens the chat's `## Skills` catalog. The catalog lines (`- <name>: <description>`) follow it,
+ * so this text must not contain lines that start with "- ".
+ */
+export const SKILLS_CATALOG_SYSTEM_PROMPT =
+  "## Skills\n" +
+  "Skills are saved instructions for particular tasks. When the user's request matches a skill " +
+  "below, call load_skill with its name before you answer, then follow the instructions it " +
+  "returns. Load only the skills the request needs. A skill's files are listed by ref; do not " +
+  "show refs to the user.";
+
+export const LOAD_SKILL_TOOL_DESCRIPTION =
+  "Load a skill by name. Returns the skill's full instructions and its reference files " +
+  "({ref, filename, mimeType}), or {error} when no skill has that name. Call it when the user's " +
+  "request matches a skill in the Skills section, then follow the instructions.";
+
+/** Heading of a skill the user named with a leading `/name`; its instructions follow it. */
+export const activeSkillHeading = (name: string): string =>
+  `## Active skill: ${name}\nThe user asked for this skill. Follow these instructions for this reply.`;
+
+/** Lists an active skill's reference files by ref, so the model can pass them to other tools. */
+export const activeSkillFilesLine = (refs: string[]): string => `Files: ${refs.join(", ")}`;
+
+export const GENERATE_IMAGE_TOOL_DESCRIPTION =
+  "Generate one image from a text prompt. The user sees the image in the chat as soon as it is " +
+  "made, so do not describe or link it. Pass references (at most 4) to steer the style or " +
+  "content: skill file refs such as skill:<name>/<filename>, or attachment:<key> for an image " +
+  "the user uploaded. Returns {images: [{id, mimeType}]}, or {error}.";

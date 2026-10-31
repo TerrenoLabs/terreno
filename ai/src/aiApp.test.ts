@@ -7,9 +7,16 @@ import supertest from "supertest";
 import {AiApp} from "./aiApp";
 import {AIRequest} from "./models/aiRequest";
 import {GptHistory} from "./models/gptHistory";
+import {GptSkill} from "./models/gptSkill";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
-import {createScriptedModel, modelCall, textStep, toolCallStep} from "./tests/chatHarness";
+import {
+  createScriptedModel,
+  modelCall,
+  systemPromptOf,
+  textStep,
+  toolCallStep,
+} from "./tests/chatHarness";
 import {authAsUserWithCredentials, ensureTestUsers, UserModel} from "./tests/helpers";
 
 const AI_APP_TEST_USER = {
@@ -117,6 +124,98 @@ describe("AiApp", () => {
       "ask_form",
       "ask_files",
     ]);
+  });
+
+  it("passes defaultSystemPrompt to the gpt routes, so it leads the system prompt", async () => {
+    const {AIService} = await import("./service/aiService");
+    const model = createScriptedModel({steps: [textStep("ok")]});
+    const aiService = new AIService({model: model as unknown as LanguageModel});
+    const plugin = new AiApp({aiService, defaultSystemPrompt: "Answer in French."});
+    const app = new TerrenoApp({
+      configureApp: (router) => plugin.register(router as unknown as express.Application),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    const agent = await authAsUser(app);
+
+    const res = await agent.post("/gpt/prompt").send({prompt: "Hi", systemPrompt: "Req"});
+
+    expect(res.status).toBe(200);
+    expect(systemPromptOf(modelCall(model, 0))).toBe("Answer in French.\n\nReq");
+  });
+
+  const buildSkillsApp = async (options: Record<string, unknown>, model = createMockModel()) => {
+    const {AIService} = await import("./service/aiService");
+    const aiService = new AIService({model: model as unknown as LanguageModel});
+    const plugin = new AiApp({aiService, ...options} as never);
+    const app = new TerrenoApp({
+      configureApp: (router) => plugin.register(router as unknown as express.Application),
+      skipListen: true,
+      userModel: UserModel,
+    }).build();
+    return {agent: await authAsUser(app), model};
+  };
+
+  it("mounts /gpt/skills with skills: true", async () => {
+    const {agent} = await buildSkillsApp({skills: true});
+
+    const res = await agent.get("/gpt/skills");
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not mount /gpt/skills when skills is unset", async () => {
+    const {agent} = await buildSkillsApp({});
+
+    const res = await agent.get("/gpt/skills");
+
+    expect(res.status).toBe(404);
+  });
+
+  it("passes skills to the gpt routes, so the model is offered load_skill", async () => {
+    // load_skill is offered only when the catalog has a visible skill
+    await GptSkill.deleteMany({});
+    await GptSkill.create({
+      description: "d",
+      instructions: "i",
+      name: "house-style",
+      scope: "global",
+    });
+    const model = createScriptedModel({steps: [textStep("ok")]});
+    const {agent} = await buildSkillsApp({skills: true}, model as never);
+
+    const res = await agent.post("/gpt/prompt").send({prompt: "Hi"});
+    await GptSkill.deleteMany({});
+
+    expect(res.status).toBe(200);
+    expect(modelCall(model, 0).tools?.map((tool) => tool.name)).toContain("load_skill");
+  });
+
+  it("passes imageGeneration to the gpt routes, so the model is offered generate_image", async () => {
+    const model = createScriptedModel({steps: [textStep("ok")]});
+    const {agent} = await buildSkillsApp(
+      {
+        imageGeneration: {model: () => createMockModel(), modelId: "image-model"},
+        skills: true,
+      },
+      model as never
+    );
+
+    const res = await agent.post("/gpt/prompt").send({prompt: "Hi"});
+
+    expect(res.status).toBe(200);
+    expect(modelCall(model, 0).tools?.map((tool) => tool.name)).toContain("generate_image");
+  });
+
+  it("offers neither skill nor image tools when both options are unset", async () => {
+    const model = createScriptedModel({steps: [textStep("ok")]});
+    const {agent} = await buildSkillsApp({}, model as never);
+
+    await agent.post("/gpt/prompt").send({prompt: "Hi"});
+
+    const names = (modelCall(model, 0).tools ?? []).map((tool) => tool.name);
+    expect(names).not.toContain("load_skill");
+    expect(names).not.toContain("generate_image");
   });
 
   it("adds the documented headless turn actions to the history routes", async () => {

@@ -476,3 +476,32 @@ export const pauseOnPlanAsk = async (agent: Agent): Promise<string> => {
   expect(events.map((event) => Object.keys(event)[0])).toEqual(["ask", "done"]);
   return onlyHistoryId();
 };
+
+/**
+ * A scripted image-output model. Both `doStream` and `doGenerate` return `imageCount` generated
+ * PNGs (base64 `aGVsbG8=`) and no text, and `doGenerate` records the options it was called with.
+ */
+export const createImageOnlyModel = ({imageCount = 1}: {imageCount?: number} = {}) => {
+  const files = Array.from({length: imageCount}, () => ({
+    data: "aGVsbG8=",
+    mediaType: "image/png",
+    type: "file" as const,
+  }));
+  return {
+    doGenerate: mock(async (_options: ModelCallOptions) => ({
+      content: files,
+      finishReason: "stop" as const,
+      usage: USAGE,
+      warnings: [],
+    })),
+    doStream: mock(async (_options: ModelCallOptions) => ({
+      stream: streamOf([...files, {finishReason: "stop", type: "finish", usage: USAGE}]),
+    })),
+    modelId: "gemini-3-pro-image",
+    provider: "mock-provider",
+    specificationVersion: "v2" as const,
+    supportedUrls: {},
+  };
+};
+
+export type ImageOnlyModel = ReturnType<typeof createImageOnlyModel>;

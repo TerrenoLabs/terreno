@@ -11,6 +11,7 @@ import {
   LocaleContentFieldWidget,
   LocaleDefaultFieldWidget,
   MarkdownFieldWidget,
+  PromptFieldWidget,
   TextareaFieldWidget,
 } from "./builtInFieldWidgets";
 
@@ -41,6 +42,26 @@ describe("builtInFieldWidgets", () => {
       />
     );
     assert.equal(textarea.getByTestId("admin-field-notes").props.value, "line one");
+  });
+
+  it("renders the prompt widget without a preview pane", async () => {
+    const prompt = renderWithTheme(
+      <PromptFieldWidget
+        fieldConfig={fieldConfig}
+        fieldKey="systemPrompt"
+        onChange={() => {}}
+        value=""
+      />
+    );
+    await waitFor(() => {
+      expect(prompt.getByTestId("admin-field-systemPrompt-input")).toBeTruthy();
+    });
+    expect(prompt.queryByText("Preview")).toBeNull();
+
+    const markdown = renderWithTheme(
+      <MarkdownFieldWidget fieldConfig={fieldConfig} fieldKey="body" onChange={() => {}} value="" />
+    );
+    expect(markdown.getByText("Preview")).toBeTruthy();
   });
 
   it("disables markdown and textarea widgets in read-only mode", async () => {

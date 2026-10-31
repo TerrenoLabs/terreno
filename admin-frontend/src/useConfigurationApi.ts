@@ -14,6 +14,20 @@ interface RtkQueryHookResult {
   isLoading: boolean;
 }
 
+/**
+ * `GET {basePath}` answers `{data: document, requestId}`. RTK's base query strips that envelope;
+ * admin RPC returns the body as-is, so the RPC path strips it here.
+ */
+const unwrapConfigurationValues = (body: unknown): unknown => {
+  if (body && typeof body === "object" && "data" in body) {
+    const inner = (body as {data?: unknown}).data;
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+      return inner;
+    }
+  }
+  return body;
+};
+
 type RtkMutationTrigger = (body: ConfigBody) => {unwrap: () => Promise<unknown>};
 
 interface UseConfigurationApiOptions {
@@ -95,8 +109,10 @@ export const useConfigurationApi = ({
           meta,
         ] as const;
       },
-      useValuesQuery: () =>
-        useAdminRpcQuery({providesTags: CONFIGURATION_TAGS, rpc, url: basePath}),
+      useValuesQuery: () => {
+        const state = useAdminRpcQuery({providesTags: CONFIGURATION_TAGS, rpc, url: basePath});
+        return {...state, data: unwrapConfigurationValues(state.data)};
+      },
     };
   }
   return {

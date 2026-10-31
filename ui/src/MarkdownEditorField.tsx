@@ -19,6 +19,8 @@ interface MarkdownEditorFieldProps extends HelperTextProps, ErrorTextProps {
   disabled?: boolean;
   testID?: string;
   maxHeight?: number;
+  /** Show the rendered preview pane beside the editor. Defaults to true. */
+  showPreview?: boolean;
 }
 
 interface ToolbarButton {
@@ -52,6 +54,7 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
   helperText,
   testID,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  showPreview = true,
 }) => {
   const {theme} = useTheme();
   const isWeb = Platform.OS === "web";
@@ -77,7 +80,7 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
       <Box
         alignItems="stretch"
         border={errorText ? "error" : "default"}
-        direction={isWeb ? "row" : "column"}
+        direction={isWeb && showPreview ? "row" : "column"}
         gap={0}
         overflow="hidden"
         rounding="md"
@@ -94,9 +97,9 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
               scrollEnabled
               style={{
                 backgroundColor: theme.surface.base,
-                borderBottomWidth: isWeb ? 0 : 1,
+                borderBottomWidth: isWeb || !showPreview ? 0 : 1,
                 borderColor: theme.border.default,
-                borderRightWidth: isWeb ? 1 : 0,
+                borderRightWidth: isWeb && showPreview ? 1 : 0,
                 color: theme.text.primary,
                 flex: 1,
                 fontFamily: monoFont,
@@ -160,19 +163,21 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
             </View>
           )}
         </View>
-        <View style={paneContainerStyle}>
-          <ScrollView style={{flex: 1, height: maxHeight, maxHeight}}>
-            <Box color="base" padding={3} style={{minHeight: MIN_PANE_HEIGHT}}>
-              {value ? (
-                <MarkdownView>{value}</MarkdownView>
-              ) : (
-                <Text color="secondaryDark" size="sm">
-                  Preview
-                </Text>
-              )}
-            </Box>
-          </ScrollView>
-        </View>
+        {showPreview && (
+          <View style={paneContainerStyle}>
+            <ScrollView style={{flex: 1, height: maxHeight, maxHeight}}>
+              <Box color="base" padding={3} style={{minHeight: MIN_PANE_HEIGHT}}>
+                {value ? (
+                  <MarkdownView>{value}</MarkdownView>
+                ) : (
+                  <Text color="secondaryDark" size="sm">
+                    Preview
+                  </Text>
+                )}
+              </Box>
+            </ScrollView>
+          </View>
+        )}
       </Box>
       {Boolean(errorText) && <FieldError text={errorText!} />}
       {Boolean(helperText) && <FieldHelperText text={helperText!} />}

@@ -64,6 +64,7 @@ import {
 } from "./asks";
 import {assertFileUploadsEnabled} from "./fileUploadsGate";
 import {fillMissingActionIds} from "./fillActionIds";
+import {createGenerateImageTool, GENERATE_IMAGE_TOOL_NAME} from "./generateImageTool";
 import {
   COMPACT_SURFACE_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
@@ -71,6 +72,7 @@ import {
   uiBlocksSystemPrompt,
 } from "./prompts";
 import {sanitizeBlocksText} from "./sanitizeHtml";
+import {resolveTurnSkills} from "./skills";
 
 export const DEMO_RESPONSE =
   "This is demo mode. To use AI features, paste your Gemini API key in Settings.";
@@ -170,6 +172,8 @@ interface GeneratedImageFile {
 }
 
 interface GeneratedImage {
+  /** Storage key of an image the `generate_image` tool stored. */
+  gcsKey?: string;
   mimeType: string;
   url: string;
 }
@@ -912,7 +916,7 @@ const ownedUploadKeys = async (
  * Only a key whose upload belongs to the conversation's owner is signed, as `GET /files/*gcsKey`
  * requires; any other part keeps its stored URL.
  */
-const resolveStoredAttachmentUrls = async (
+export const resolveStoredAttachmentUrls = async (
   prompts: GptHistoryPrompt[],
   ownerId: mongoose.Types.ObjectId | undefined,
   fileStorageService?: GptRouteOptions["fileStorageService"]
@@ -1140,17 +1144,52 @@ const startTurn = async ({
 const lastUserText = (prompts: GptHistoryPrompt[]): string =>
   prompts.findLast((prompt) => prompt.type === "user")?.text ?? "";
 
-/** The request's system prompt with project context and the Langfuse prompt prepended. */
+/**
+ * The app-wide default system prompt for this request, trimmed. A failing function must not
+ * break the turn, so it is logged and treated as unset.
+ */
+const resolveDefaultSystemPrompt = async ({
+  options,
+  req,
+}: {
+  options: GptRouteOptions;
+  req: express.Request;
+}): Promise<string | undefined> => {
+  const {defaultSystemPrompt} = options;
+  if (defaultSystemPrompt === undefined) {
+    return undefined;
+  }
+  try {
+    const value =
+      typeof defaultSystemPrompt === "function"
+        ? await defaultSystemPrompt({req})
+        : defaultSystemPrompt;
+    const trimmed = typeof value === "string" ? value.trim() : "";
+    return trimmed || undefined;
+  } catch (error) {
+    logger.warn("Default system prompt skipped: resolving it failed", {
+      error: (error as Error).message,
+    });
+    return undefined;
+  }
+};
+
+/**
+ * The request's system prompt with project context, the Langfuse prompt, and the app-wide
+ * default prepended, in that order, so the default comes first.
+ */
 const buildSystemPrompt = async ({
   history,
   options,
   projectId,
+  req,
   systemPrompt,
   userId,
 }: {
   history: GptHistoryDocument;
   options: GptRouteOptions;
   projectId: unknown;
+  req: express.Request;
   systemPrompt: unknown;
   userId: mongoose.Types.ObjectId | undefined;
 }): Promise<string | undefined> => {
@@ -1198,18 +1237,27 @@ const buildSystemPrompt = async ({
       logger.debug(`Langfuse system prompt skipped: ${(err as Error).message}`);
     }
   }
+
+  const defaultSystemPrompt = await resolveDefaultSystemPrompt({options, req});
+  if (defaultSystemPrompt) {
+    effectiveSystemPrompt = effectiveSystemPrompt
+      ? `${defaultSystemPrompt}\n\n${effectiveSystemPrompt}`
+      : defaultSystemPrompt;
+  }
   return effectiveSystemPrompt;
 };
 
-/** Route, per-request, and MCP tools, plus the ask tools when asks are offered. */
+/** Route, per-request, MCP, and built-in tools, plus the ask tools when asks are offered. */
 const collectTools = async ({
   askKinds,
+  builtInTools,
   options,
   req,
   supportsTools,
   surface,
 }: {
   askKinds: AskKind[];
+  builtInTools?: Record<string, Tool>;
   options: GptRouteOptions;
   req: express.Request;
   supportsTools: boolean;
@@ -1217,7 +1265,10 @@ const collectTools = async ({
 }): Promise<Record<string, Tool> | undefined> => {
   const {createRequestTools, mcpService, tools: routeTools} = options;
   const requestTools = createRequestTools ? createRequestTools(req) : undefined;
-  if (!supportsTools || (!routeTools && !requestTools && !mcpService && askKinds.length === 0)) {
+  if (
+    !supportsTools ||
+    (!routeTools && !requestTools && !mcpService && !builtInTools && askKinds.length === 0)
+  ) {
     return undefined;
   }
   const allTools: Record<string, Tool> = {...(routeTools ?? {}), ...(requestTools ?? {})};
@@ -1236,6 +1287,13 @@ const collectTools = async ({
     } catch {
       // MCP tool discovery failure should not block the request
     }
+  }
+  // Built-in tools are part of a feature's contract, so a host tool of the same name gives way.
+  for (const [name, builtInTool] of Object.entries(builtInTools ?? {})) {
+    if (Object.hasOwn(allTools, name)) {
+      logger.warn(`Replacing the host tool ${name} with the built-in ${name} tool`, {tool: name});
+    }
+    allTools[name] = builtInTool;
   }
   if (askKinds.length === 0) {
     return allTools;
@@ -1654,6 +1712,7 @@ const assistantRows = ({
     mimeType: img.mimeType,
     type: "image" as const,
     url: img.url,
+    ...(img.gcsKey ? {gcsKey: img.gcsKey} : {}),
   }));
   return [
     {
@@ -1774,6 +1833,17 @@ export const runChatTurn = async ({
     return;
   }
 
+  // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
+  const modelId = aiService.modelId;
+  const supportsTools = !modelId?.includes("image");
+  // Resolved before the turn starts so an unknown `/name` is a 400 that saves nothing.
+  const turnSkills = await resolveTurnSkills({
+    isEnabled: options.skills === true,
+    prompt: body.prompt,
+    supportsTools,
+    userId,
+  });
+
   const turn = await startTurn({aiService, askAnswer, body, options, req, userId});
   const {answer, isNewHistory, logPrompt, messages, replayedMessages, resolvedAsk, titlePrompt} =
     turn;
@@ -1782,9 +1852,15 @@ export const runChatTurn = async ({
     history,
     options,
     projectId,
+    req,
     systemPrompt,
     userId,
   });
+  if (turnSkills.systemPrompt) {
+    effectiveSystemPrompt = effectiveSystemPrompt
+      ? `${effectiveSystemPrompt}\n\n${turnSkills.systemPrompt}`
+      : turnSkills.systemPrompt;
+  }
   const observability = await aiService.resolveGenerateObservability({
     promptLabel,
     promptName,
@@ -1794,12 +1870,44 @@ export const runChatTurn = async ({
   });
   effectiveSystemPrompt = observability.systemPrompt;
 
-  // Some models (e.g. gemini-2.5-flash-image) don't support tool calling
-  const modelId = aiService.modelId;
-  const supportsTools = !modelId?.includes("image");
+  const record: TurnRecord = {
+    askCalls: [],
+    fullResponse: "",
+    generatedImages: [],
+    hasOutput: false,
+    rows: [...turn.rows],
+    streamingText: "",
+    textDelivered: false,
+  };
+  const outputSink: ChatTurnSink = {
+    emit: (event) => {
+      if (!("error" in event)) {
+        record.hasOutput = true;
+      }
+      sink.emit(event);
+    },
+    open: sink.open,
+  };
+  const generateImageTool = supportsTools
+    ? createGenerateImageTool({
+        fileStorageService: options.fileStorageService,
+        imageGeneration: options.imageGeneration,
+        onImage: ({displayUrl, ...image}) => {
+          record.generatedImages.push(image);
+          outputSink.emit({image: {mimeType: image.mimeType, url: displayUrl}});
+        },
+        req,
+        userId,
+      })
+    : undefined;
+  const builtInTools = generateImageTool
+    ? {...turnSkills.tools, [GENERATE_IMAGE_TOOL_NAME]: generateImageTool}
+    : turnSkills.tools;
+
   const offeredAskKinds = supportsTools ? askKindsForSurface({kinds: askKinds, surface}) : [];
   const allTools = await collectTools({
     askKinds: offeredAskKinds,
+    builtInTools,
     options,
     req,
     supportsTools,
@@ -1825,6 +1933,7 @@ export const runChatTurn = async ({
 
   // Rows saved after the answer mean the turn moved on, so a failure keeps the answer.
   let answeredRowCount = 0;
+  const startTime = DateTime.now().toMillis();
   if (answer) {
     const resolved = await resolvePendingAsk({history, ...answer});
     if (!resolved) {
@@ -1834,25 +1943,6 @@ export const runChatTurn = async ({
     answeredRowCount = resolved.prompts.length;
   }
 
-  const startTime = DateTime.now().toMillis();
-  const record: TurnRecord = {
-    askCalls: [],
-    fullResponse: "",
-    generatedImages: [],
-    hasOutput: false,
-    rows: [...turn.rows],
-    streamingText: "",
-    textDelivered: false,
-  };
-  const outputSink: ChatTurnSink = {
-    emit: (event) => {
-      if (!("error" in event)) {
-        record.hasOutput = true;
-      }
-      sink.emit(event);
-    },
-    open: sink.open,
-  };
   let isSaved = false;
   let historyIsNew = isNewHistory;
   const saveRows = async (rows: GptHistoryPrompt[]): Promise<number> => {
@@ -1990,13 +2080,20 @@ export const runChatTurn = async ({
     try {
       if (isSaved) {
         const partial = record.streamingText;
-        if (partial) {
+        // Images the tool already sent stay with the reply, as the client showed them.
+        const [imageRow] = assistantRows({
+          fullResponse: "",
+          generatedImages: record.generatedImages,
+          modelId: aiService.modelId,
+        });
+        if (partial || imageRow?.content) {
           await GptHistory.updateOne(
             {_id: history._id, "prompts.streamId": streamId},
             {
               $set: {
                 "prompts.$.status": "error",
                 "prompts.$.text": partial,
+                ...(imageRow?.content ? {"prompts.$.content": imageRow.content} : {}),
                 updated: DateTime.now().toJSDate(),
               },
             }

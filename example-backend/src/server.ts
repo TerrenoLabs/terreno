@@ -80,7 +80,7 @@ import {createExampleJobsApp} from "./jobs/createExampleJobsApp";
 import {shouldStartJobsWorkerInApiProcess} from "./jobs/jobsStartWorker";
 import {registerJobsWorkerShutdown} from "./jobs/shutdownJobsWorker";
 import {resolveExampleMigrationsDir} from "./migrationsDir";
-import {AppConfiguration} from "./models/appConfiguration";
+import {AppConfiguration, appConfigurationOptions} from "./models/appConfiguration";
 import {Configuration} from "./models/configuration";
 import {organizationSettingsSchema} from "./models/organizationSettings";
 import {User} from "./models/user";
@@ -225,7 +225,7 @@ export const start = async (
       rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
       skipListen,
       userModel: User as unknown as TerrenoAuthUserModel,
-    }).configure(AppConfiguration);
+    }).configure(AppConfiguration, appConfigurationOptions);
 
     registerUsersTodoStatusTool();
 

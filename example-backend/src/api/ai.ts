@@ -4,6 +4,8 @@ import {
   addGptHistoryRoutes,
   addGptRoutes,
   addMcpRoutes,
+  addSkillRoutes,
+  configurationPromptGetter,
   createVertexProvider,
   FileStorageService,
   GptHistory,
@@ -27,24 +29,22 @@ import {
   modelRouter,
   Permissions,
 } from "@terreno/api";
-import type {ImageModel, LanguageModel, Tool} from "ai";
-import {generateImage, tool, zodSchema} from "ai";
+import type {LanguageModel, Tool} from "ai";
+import {tool, zodSchema} from "ai";
 import type express from "express";
 import {DateTime} from "luxon";
 import {PDFDocument, rgb, StandardFonts} from "pdf-lib";
 import {z} from "zod";
 import {exampleUiBlocksOptions} from "../ai/hostActions";
 import {createFindPhotosTool, createTodoStatsTool} from "../ai/tools";
+import {AppConfiguration} from "../models/appConfiguration";
 import type {UserDocument} from "../types/models/userTypes";
 import {createDemoAgentService} from "./demoAgent";
 import {fileUploadsEnabledForRequest} from "./fileUploads";
 import {createTodoTools, todoToolApprovals} from "./todoTools";
 
-/** A provider that creates language models and image models from model IDs. */
-interface AIProvider {
-  (modelId: string): LanguageModel;
-  image: (modelId: string) => ImageModel;
-}
+/** A provider that creates language models from model IDs. */
+type AIProvider = (modelId: string) => LanguageModel;
 
 type GptRouteOptions = Parameters<typeof addGptRoutes>[1];
 
@@ -74,7 +74,7 @@ const getGoogleModule = (): GoogleModule | undefined => {
 };
 
 const DEFAULT_MODEL = "gemini-3.8-flash";
-const VERTEX_IMAGE_MODEL = "gemini-3-pro-image";
+const IMAGE_MODEL_ID = "gemini-3-pro-image";
 
 /**
  * Curated fallback chat models (Gemini 3 family), used only when the live Google model listing cannot be retrieved
@@ -140,6 +140,11 @@ const getVertexProvider = (): TerrenoVertexProvider | undefined => {
     project: process.env.GOOGLE_VERTEX_PROJECT,
   });
   return vertexProviderInstance;
+};
+
+/** Drops the cached Vertex provider so tests can change the Vertex env vars between cases. */
+export const resetVertexProviderForTests = (): void => {
+  vertexProviderInstance = undefined;
 };
 
 /** Pick a default model that respects the configured allow-list. */
@@ -541,71 +546,32 @@ const generatePdfBytes = async ({
   return pdfDoc.save();
 };
 
-const createImageModel = (apiKey?: string) => {
-  // Prefer Vertex AI / Gemini Enterprise Agent Platform for image generation, but only when the
-  // Imagen model is permitted by the allow-list. Otherwise fall back to the Gemini API key.
+/**
+ * The Nano Banana model for one chat turn: the request's `x-ai-api-key` (bring-your-own-key users
+ * keep image generation), else Vertex when the image model is allow-listed, else
+ * `GEMINI_API_KEY`. `undefined` leaves `generate_image` out of the turn.
+ */
+export const resolveImageModel = ({
+  modelId,
+  req,
+}: {
+  modelId: string;
+  req: express.Request;
+}): LanguageModel | undefined => {
+  const requestApiKey = req.header("x-ai-api-key");
+  if (requestApiKey) {
+    return createModelFromKey(requestApiKey, modelId);
+  }
   const vertexProvider = getVertexProvider();
-  if (vertexProvider && !apiKey && vertexProvider.isModelAllowed(VERTEX_IMAGE_MODEL)) {
-    return vertexProvider.imageModel(VERTEX_IMAGE_MODEL);
+  if (vertexProvider?.isModelAllowed(modelId)) {
+    return vertexProvider.languageModel(modelId);
   }
-
-  // Fall back to Gemini API with the provided key
-  const google = getGoogleModule();
-  if (!google) {
-    throw new APIError({status: 500, title: "Missing @ai-sdk/google dependency."});
-  }
-  const effectiveKey = apiKey ?? process.env.GEMINI_API_KEY;
-  if (!effectiveKey) {
-    throw new APIError({status: 500, title: "No API key available for image generation."});
-  }
-  const provider = google.createGoogleGenerativeAI({apiKey: effectiveKey});
-  return provider.image(VERTEX_IMAGE_MODEL);
+  const serverApiKey = process.env.GEMINI_API_KEY;
+  return serverApiKey ? createModelFromKey(serverApiKey, modelId) : undefined;
 };
-
-const GENERATE_IMAGE_DESCRIPTION =
-  "Generate an image from a text description. ONLY use this tool when the user explicitly asks to create, draw, or generate an image or picture. Do NOT use for regular text questions.";
 
 const GENERATE_PDF_DESCRIPTION =
   "Generate a PDF document. ONLY use this tool when the user explicitly asks to create or generate a PDF file. Do NOT use for regular text questions. Use markdown-style formatting in content: # for main headings, ## for subheadings, - for bullet points, and blank lines between paragraphs.";
-
-const createImageTool = (apiKey?: string): Tool => {
-  const imageTool = tool({
-    description: GENERATE_IMAGE_DESCRIPTION,
-    execute: async ({prompt}: {prompt: string}) => {
-      const imageModel = createImageModel(apiKey);
-      const result = await generateImage({
-        model: imageModel,
-        prompt,
-      });
-
-      const image = result.image;
-      if (!image) {
-        return {description: "No image was generated. Try a different prompt.", success: false};
-      }
-
-      const mediaType = image.mediaType ?? "image/png";
-      const dataUrl = `data:${mediaType};base64,${image.base64}`;
-      return {
-        description: `Generated image for: "${prompt}"`,
-        fileData: dataUrl,
-        filename: `image-${DateTime.now().toMillis()}.png`,
-        mimeType: mediaType,
-      };
-    },
-    inputSchema: zodSchema(
-      z.object({
-        prompt: z.string().describe("Detailed description of the image to generate"),
-      })
-    ),
-  });
-  // toModelOutput is an internal AI SDK property for tool output → model message conversion
-  (imageTool as Record<string, unknown>).toModelOutput = ({
-    output,
-  }: {
-    output: Record<string, unknown>;
-  }) => [{text: (output.description as string) ?? "Image generated.", type: "text"}];
-  return imageTool as Tool;
-};
 
 const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
   const user = req.user as UserDocument | undefined;
@@ -618,11 +584,6 @@ const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
     }),
     ...createFindPhotosTool(),
   };
-
-  const apiKey = req.headers["x-ai-api-key"] as string | undefined;
-  if (apiKey) {
-    tools.generate_image = createImageTool(apiKey);
-  }
 
   return tools;
 };
@@ -706,7 +667,7 @@ const jokeGeneratorTool = tool({
 
 // Sample tools for demo purposes
 const getDemoTools = (): Record<string, Tool> => {
-  const tools: Record<string, Tool> = {
+  return {
     generate_joke: jokeGeneratorTool,
     generate_pdf: pdfTool,
     get_current_time: tool({
@@ -728,15 +689,6 @@ const getDemoTools = (): Record<string, Tool> => {
       ),
     }),
   };
-
-  // Add server-side image generation when a permitted Vertex image model or a server API key is available
-  const vertexProvider = getVertexProvider();
-  const vertexImageAvailable = Boolean(vertexProvider?.isModelAllowed(VERTEX_IMAGE_MODEL));
-  if (vertexImageAvailable || process.env.GEMINI_API_KEY) {
-    tools.generate_image = createImageTool();
-  }
-
-  return tools;
 };
 
 export const addAiRoutes = (
@@ -813,19 +765,30 @@ export const addAiRoutes = (
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,
+    defaultSystemPrompt: configurationPromptGetter(AppConfiguration, "ai.systemPrompt"),
     ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
     fileUploadsEnabled: fileUploadsEnabledForRequest,
+    imageGeneration: {
+      model: resolveImageModel,
+      modelId: IMAGE_MODEL_ID,
+      stylePrompt: configurationPromptGetter(AppConfiguration, "ai.imageStylePrompt"),
+    },
     langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,
     openApiOptions: options,
+    skills: true,
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
     uiBlocks: exampleUiBlocksOptions,
   };
   addGptHistoryRoutes(router, {...options, chat});
   addGptRoutes(router, chat);
+  addSkillRoutes(router, {
+    ...(fileStorageService ? {fileStorageService} : {}),
+    openApiOptions: options,
+  });
   if (fileStorageService) {
     addFileRoutes(router, {
       fileStorageService,

@@ -1,4 +1,4 @@
-import type {GPTChatHistory, GPTChatMessage, SelectedFile} from "@terreno/ui";
+import type {GPTChatHistory, GPTChatMessage, GPTChatProps, SelectedFile} from "@terreno/ui";
 import {Box, GPTChat, Heading, Text} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useState} from "react";
@@ -201,6 +201,70 @@ export const GPTChatNoHistory: React.FC = (): React.ReactElement => {
           onSubmit={noop}
           showHistory={false}
           testID="demo-gpt-chat-no-history"
+        />
+      </GPTChatFrame>
+    </Box>
+  );
+};
+
+const TOOL_MESSAGES: GPTChatMessage[] = [
+  {content: "Draw a cat in our house style", role: "user"},
+  {
+    content: "",
+    role: "tool-call",
+    toolCall: {args: {name: "house-style"}, toolCallId: "call_1", toolName: "load_skill"},
+  },
+  {
+    content: "",
+    role: "tool-result",
+    toolResult: {result: {loaded: true}, toolCallId: "call_1", toolName: "load_skill"},
+  },
+  {
+    content: "",
+    role: "tool-call",
+    toolCall: {args: {prompt: "a cat"}, toolCallId: "call_2", toolName: "generate_image"},
+  },
+  {
+    content: "",
+    role: "tool-result",
+    toolResult: {
+      result: {error: "Image limit reached for this turn"},
+      toolCallId: "call_2",
+      toolName: "generate_image",
+    },
+  },
+];
+
+const demoToolLabel: GPTChatProps["toolLabel"] = ({args, result, toolName}) => {
+  if (toolName === "load_skill") {
+    return `Used skill ${String(args.name)}`;
+  }
+  if (toolName === "generate_image") {
+    return result === undefined ? "Generating image…" : "Generated image";
+  }
+  return undefined;
+};
+
+export const GPTChatToolRows: React.FC = (): React.ReactElement => {
+  return (
+    <Box gap={2} width="100%">
+      <Heading size="sm">Tool rows</Heading>
+      <Text>
+        `toolLabel` replaces "Tool: name" with readable text. A result with an `error` string shows
+        that error under the row.
+      </Text>
+      <GPTChatFrame>
+        <GPTChat
+          currentHistoryId="h1"
+          currentMessages={TOOL_MESSAGES}
+          histories={STATIC_HISTORIES}
+          onCreateHistory={noop}
+          onDeleteHistory={noop}
+          onSelectHistory={noop}
+          onSubmit={noop}
+          showHistory={false}
+          testID="demo-gpt-chat-tool-rows"
+          toolLabel={demoToolLabel}
         />
       </GPTChatFrame>
     </Box>

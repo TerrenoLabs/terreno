@@ -20,6 +20,7 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [AI observability](ai-observability.md) — Two planes (telemetry vs control), plugins vs LangfuseApp, SOP loop
 - [Durable agent harness](durable-agent-harness.md) — Phases, checkpoints, and why the audit span shares the checkpoint transaction
 - [AI-powered workflows](ai-workflows.md) — Autonomous documentation, testing, and maintenance workflows
+- [Skills, the default prompt, and image generation](ai-skills.md) — System prompt layers, the SKILL.md format, progressive loading, scopes, and the image tool flow
 - [Agent UI Asks](agent-ui-asks.md) — Why agent questions are client-side tool calls, the pause and resume round trip, why cards carry exact answers, the watch paths, asks vs blocks
 - [Agent UI blocks](agent-ui-blocks.md) — Why chat replies use a closed YAML catalog instead of free-form UI, why steppers and checklists call the server, and the rich-blocks rollout
 - [Authentication architecture](authentication.md) — Better Auth, JWT, and optional MCP service tokens

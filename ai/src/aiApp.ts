@@ -8,10 +8,11 @@ import {addGptRoutes} from "./routes/gpt";
 import {addGptHistoryRoutes} from "./routes/gptHistories";
 import {addMcpRoutes} from "./routes/mcp";
 import {addProjectRoutes} from "./routes/projects";
+import {addSkillRoutes} from "./routes/skills";
 import type {AIService} from "./service/aiService";
 import type {FileStorageService} from "./service/fileStorage";
 import type {MCPService} from "./service/mcpService";
-import type {AsksOptions} from "./types";
+import type {AsksOptions, DefaultSystemPrompt, ImageGenerationOptions} from "./types";
 
 export interface AiAppOptions {
   /** Pre-configured AIService instance. Optional when using per-request keys or demo mode. */
@@ -25,6 +26,11 @@ export interface AiAppOptions {
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
   /** Factory function to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Returns undefined if no provider is configured. */
   createServerModelFn?: (modelId?: string) => LanguageModel | undefined;
+  /**
+   * App-wide default system prompt, put first in every chat turn. Pass a string, or a function
+   * such as `configurationPromptGetter(AppConfig, "ai.systemPrompt")` to read it per turn.
+   */
+  defaultSystemPrompt?: DefaultSystemPrompt;
   /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   /** File storage service for handling file uploads to GCS. */
@@ -36,6 +42,11 @@ export interface AiAppOptions {
    * Omit or pass `true` to leave uploads enabled whenever storage is configured.
    */
   fileUploadsEnabled?: import("./service/fileUploadsGate").FileUploadsEnabled;
+  /**
+   * Adds the built-in `generate_image` tool to tool-capable chat turns. Passed through to
+   * `addGptRoutes`. Off by default.
+   */
+  imageGeneration?: ImageGenerationOptions;
   /** Maximum number of tool-calling steps per chat request. Defaults to 5 when tools are present. */
   maxSteps?: number;
   /** MCP service for connecting to external tool servers. */
@@ -47,6 +58,11 @@ export interface AiAppOptions {
    * pass `false` when the app owns a model named `Project`.
    */
   projects?: boolean;
+  /**
+   * Mount the `/gpt/skills` routes and offer the user's enabled skills in chat (a `## Skills`
+   * catalog, the `load_skill` tool, and `/name` activation). Off by default.
+   */
+  skills?: boolean;
   /** Tool choice strategy for chat requests. Defaults to "auto" when tools are present. */
   toolChoice?: "auto" | "none" | "required";
   /** Cheap model ID used for generating conversation titles (e.g. "gemini-3.5-flash-lite"). Falls back to the main model if not set. */
@@ -95,14 +111,17 @@ export class AiApp implements TerrenoPlugin {
       asks,
       createModelFn,
       createServerModelFn,
+      defaultSystemPrompt,
       demoMode,
       fileStorageService,
       fileUploadsEnabled,
       gcsBucket,
+      imageGeneration,
       maxSteps,
       mcpService,
       openApiOptions,
       projects,
+      skills,
       titleModelId,
       toolChoice,
       tools,
@@ -114,13 +133,16 @@ export class AiApp implements TerrenoPlugin {
       asks,
       createModelFn,
       createServerModelFn,
+      defaultSystemPrompt,
       demoMode,
       // Attachments are only uploaded when the file routes are mounted too
       fileStorageService: hasFileRoutes ? fileStorageService : undefined,
       fileUploadsEnabled,
+      imageGeneration,
       maxSteps,
       mcpService,
       openApiOptions,
+      skills,
       titleModelId,
       toolChoice,
       tools,
@@ -130,6 +152,12 @@ export class AiApp implements TerrenoPlugin {
     addAiRequestsExplorerRoutes(router, {openApiOptions});
     if (projects !== false) {
       addProjectRoutes(router, {openApiOptions});
+    }
+    if (skills) {
+      addSkillRoutes(router, {
+        fileStorageService: hasFileRoutes ? fileStorageService : undefined,
+        openApiOptions,
+      });
     }
 
     if (fileStorageService && gcsBucket) {

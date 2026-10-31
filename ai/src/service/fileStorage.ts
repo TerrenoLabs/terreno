@@ -1,4 +1,5 @@
 import {Storage, type StorageOptions} from "@google-cloud/storage";
+import {logger} from "@terreno/api";
 import {DateTime} from "luxon";
 
 import {FileAttachment} from "../models/fileAttachment";
@@ -6,6 +7,8 @@ import {FileAttachment} from "../models/fileAttachment";
 export interface UploadFileParams {
   buffer: Buffer;
   filename: string;
+  /** First segment(s) of the storage key; defaults to `uploads`. */
+  keyPrefix?: string;
   mimeType: string;
   userId: import("mongoose").Types.ObjectId;
 }
@@ -33,10 +36,16 @@ export class FileStorageService {
     return this.storage.bucket(this.bucketName);
   }
 
-  async upload({buffer, filename, mimeType, userId}: UploadFileParams): Promise<UploadFileResult> {
+  async upload({
+    buffer,
+    filename,
+    keyPrefix = "uploads",
+    mimeType,
+    userId,
+  }: UploadFileParams): Promise<UploadFileResult> {
     const timestamp = DateTime.now().toMillis();
     const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const gcsKey = `uploads/${userId.toString()}/${timestamp}-${sanitizedFilename}`;
+    const gcsKey = `${keyPrefix}/${userId.toString()}/${timestamp}-${sanitizedFilename}`;
 
     const file = this.bucket.file(gcsKey);
     await file.save(buffer, {
@@ -53,6 +62,15 @@ export class FileStorageService {
       size: buffer.length,
       url,
       userId,
+    }).catch(async (error: unknown) => {
+      // The caller never learns this key, so remove the object here or it is orphaned.
+      await file.delete({ignoreNotFound: true}).catch((deleteError: unknown) => {
+        logger.warn("Failed to delete stored object after attachment create failed", {
+          error: deleteError instanceof Error ? deleteError.message : String(deleteError),
+          gcsKey,
+        });
+      });
+      throw error;
     });
 
     return {filename, gcsKey, id: attachment._id.toString(), mimeType, size: buffer.length, url};

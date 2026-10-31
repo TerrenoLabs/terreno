@@ -14,6 +14,8 @@ export const appStatements = {
   ...terrenoStatements,
   adminAuditEvent: ["list", "read"],
   adminAuditLog: ["list", "read"],
+  // AIAdminApp's global skills; without it RBAC hides GptSkill from the admin panel.
+  adminGptSkill: ADMIN_MODEL_ACCESS,
   adminMcpServiceToken: ADMIN_MODEL_ACCESS,
   adminProject: ADMIN_MODEL_ACCESS,
   adminScreen: ["showcase", "syncLab"],

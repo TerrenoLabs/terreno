@@ -83,6 +83,13 @@ export interface ToolResultInfo {
   toolName: string;
 }
 
+/** What `toolLabel` receives. `result` is set once the call's `tool-result` message arrives. */
+export interface ToolLabelInput {
+  args: Record<string, unknown>;
+  result?: unknown;
+  toolName: string;
+}
+
 // ============================================================
 // Message Types
 // ============================================================
@@ -207,6 +214,11 @@ export interface GPTChatProps {
   allowHtml?: boolean;
   /** Hostnames allowed on https image sources. Empty rejects every https image. */
   imageHosts?: readonly string[];
+  /**
+   * Text for a tool call row, such as "Used skill house-style". Return `undefined` to keep the
+   * default "Tool: {toolName}".
+   */
+  toolLabel?: (toolCall: ToolLabelInput) => string | undefined;
 }
 
 // ============================================================
@@ -226,14 +238,38 @@ const ExpandableContent = ({
   return <>{children}</>;
 };
 
-const ToolCallCard = ({toolCall}: {toolCall: ToolCallInfo}): React.ReactElement => {
+/** The `error` string of a tool result, such as `{error: "Image limit reached"}`. */
+const getToolResultError = (result: unknown): string | undefined => {
+  if (!result || typeof result !== "object") {
+    return undefined;
+  }
+  const {error} = result as {error?: unknown};
+  return typeof error === "string" ? error : undefined;
+};
+
+const ToolCallCard = ({
+  hasResult,
+  result,
+  toolCall,
+  toolLabel,
+}: {
+  hasResult: boolean;
+  result?: unknown;
+  toolCall: ToolCallInfo;
+  toolLabel?: GPTChatProps["toolLabel"];
+}): React.ReactElement => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const labelInput: ToolLabelInput = hasResult
+    ? {args: toolCall.args, result, toolName: toolCall.toolName}
+    : {args: toolCall.args, toolName: toolCall.toolName};
+  const label = toolLabel?.(labelInput) || `Tool: ${toolCall.toolName}`;
+  const error = hasResult ? getToolResultError(result) : undefined;
 
   return (
-    <Box border="default" padding={2} rounding="md">
+    <Box border="default" padding={2} rounding="md" testID={`gpt-tool-call-${toolCall.toolName}`}>
       <Box
         accessibilityHint="Toggle tool call details"
-        accessibilityLabel={`Tool: ${toolCall.toolName}`}
+        accessibilityLabel={label}
         alignItems="center"
         direction="row"
         gap={1}
@@ -241,10 +277,17 @@ const ToolCallCard = ({toolCall}: {toolCall: ToolCallInfo}): React.ReactElement 
       >
         <Icon iconName="wrench" size="xs" />
         <Text bold size="sm">
-          Tool: {toolCall.toolName}
+          {label}
         </Text>
         <Icon iconName={isExpanded ? "chevron-up" : "chevron-down"} size="xs" />
       </Box>
+      {error ? (
+        <Box marginTop={1}>
+          <Text color="error" size="sm" testID={`gpt-tool-call-error-${toolCall.toolName}`}>
+            {error}
+          </Text>
+        </Box>
+      ) : null}
       <ExpandableContent isExpanded={isExpanded}>
         <Box marginTop={1} padding={1}>
           <Text color="secondaryDark" size="sm">
@@ -394,10 +437,16 @@ const ImageActions = ({part}: {part: ImageContentPart}): React.ReactElement => {
   );
 };
 
-const MessageContentParts = ({parts}: {parts: MessageContentPart[]}): React.ReactElement => {
+const MessageContentParts = ({
+  messageIndex,
+  parts,
+}: {
+  messageIndex: number;
+  parts: Array<{index: number; part: MessageContentPart}>;
+}): React.ReactElement => {
   return (
     <Box gap={2}>
-      {parts.map((part, index) => {
+      {parts.map(({index, part}) => {
         if (part.type === "image") {
           return (
             <Box gap={1} key={`content-${index}`}>
@@ -405,6 +454,7 @@ const MessageContentParts = ({parts}: {parts: MessageContentPart[]}): React.Reac
                 resizeMode="contain"
                 source={{uri: part.url}}
                 style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
+                testID={`gpt-message-image-${messageIndex}-${index}`}
               />
               <ImageActions part={part} />
             </Box>
@@ -724,18 +774,23 @@ const HistoryItemActions = ({
 
 const ContentPartsPreview = ({
   hasContent,
+  messageIndex,
   parts,
 }: {
   hasContent: boolean;
+  messageIndex: number;
   parts?: MessageContentPart[];
 }): React.ReactElement | null => {
-  const nonTextParts = parts?.filter((p) => p.type !== "text");
+  // Keep each part's index in the message so testIDs match `contentParts` positions.
+  const nonTextParts = parts
+    ?.map((part, index) => ({index, part}))
+    .filter(({part}) => part.type !== "text");
   if (!nonTextParts || nonTextParts.length === 0) {
     return null;
   }
   return (
     <Box marginBottom={hasContent ? 2 : 0}>
-      <MessageContentParts parts={nonTextParts} />
+      <MessageContentParts messageIndex={messageIndex} parts={nonTextParts} />
     </Box>
   );
 };
@@ -1104,6 +1159,7 @@ const MessageList = ({
   resolveAskFiles,
   resolveDataset,
   resolveImage,
+  toolLabel,
   uiBlocks,
 }: {
   allowHtml?: boolean;
@@ -1122,6 +1178,7 @@ const MessageList = ({
   resolveAskFiles?: AskFilesResolver;
   resolveDataset?: BlocksViewProps["resolveDataset"];
   resolveImage?: BlocksViewProps["resolveImage"];
+  toolLabel?: GPTChatProps["toolLabel"];
   uiBlocks: boolean;
 }): React.ReactElement => {
   const askToolCallIds = new Set<string>();
@@ -1189,7 +1246,12 @@ const MessageList = ({
         if (message.role === "tool-call" && message.toolCall) {
           return (
             <Box alignItems="start" key={`msg-${index}`} maxWidth="80%">
-              <ToolCallCard toolCall={message.toolCall} />
+              <ToolCallCard
+                hasResult={toolResults.has(message.toolCall.toolCallId)}
+                result={toolResults.get(message.toolCall.toolCallId)}
+                toolCall={message.toolCall}
+                toolLabel={toolLabel}
+              />
             </Box>
           );
         }
@@ -1213,6 +1275,7 @@ const MessageList = ({
             >
               <ContentPartsPreview
                 hasContent={Boolean(message.content)}
+                messageIndex={sourceIndex >= 0 ? sourceIndex : index}
                 parts={message.contentParts}
               />
               <MessageText
@@ -1449,6 +1512,7 @@ export const GPTChat = ({
   uiBlocks = false,
   allowHtml = false,
   imageHosts,
+  toolLabel,
 }: GPTChatProps): React.ReactElement => {
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
@@ -1812,6 +1876,7 @@ export const GPTChat = ({
                     resolveAskFiles={resolveAskFiles}
                     resolveDataset={resolveDataset}
                     resolveImage={resolveImage}
+                    toolLabel={toolLabel}
                     uiBlocks={uiBlocks}
                   />
                   <StreamingIndicator

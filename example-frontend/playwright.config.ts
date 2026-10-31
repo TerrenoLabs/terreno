@@ -217,8 +217,11 @@ export default defineConfig({
       // A web server already on 8082 was built for the same-site cookie run, so the cross-site
       // run never reuses one.
       reuseExistingServer: !process.env.CI && !isCrossSiteBearerRun,
-      // The cross-site run always cold-starts Metro, which can take longer than two minutes.
-      timeout: (isCrossSiteBearerRun ? 300 : 120) * 1000,
+      // Expo's own output (busy port, bundling errors) is the only clue when startup times out.
+      stdout: "pipe",
+      // A cold Metro start (fresh worktree, empty transform cache, or other Metro servers on the
+      // machine) can take longer than two minutes.
+      timeout: 300 * 1000,
       url: "http://localhost:8082",
     },
   ],

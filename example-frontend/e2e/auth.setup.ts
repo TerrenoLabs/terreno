@@ -3,6 +3,7 @@ import {ADMIN_USER, ALL_E2E_USERS, SYNCDB_LOADLAB_USER} from "./fixtures/testUse
 import {setBetterAuthEmailVerified, setUserAdmin} from "./helpers/adminAuth";
 import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
 import {acceptPendingConsentForms} from "./helpers/consentForms";
+import {loginAs} from "./helpers/login";
 
 setup("create test users", async ({request}) => {
   for (const user of ALL_E2E_USERS) {
@@ -16,6 +17,15 @@ setup("create test users", async ({request}) => {
     }
     await acceptPendingConsentForms(request, await signUpOrSignInBetterAuth(request, user));
   }
+});
+
+// Metro compiles the web bundle and the /ai route on first request. Paying that once here keeps
+// a cold start out of the first spec's 60s budget.
+setup("warm the web bundle", async ({page}) => {
+  setup.setTimeout(300_000);
+  await loginAs(page);
+  await page.goto("/ai", {timeout: 240_000});
+  await page.getByTestId("gpt-input").waitFor({state: "visible", timeout: 240_000});
 });
 
 const createUser = async (

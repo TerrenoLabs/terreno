@@ -97,11 +97,12 @@ const ConfigField: React.FC<{
     );
   }
 
-  if (fieldMeta.widget === "markdown") {
+  if (fieldMeta.widget === "markdown" || fieldMeta.widget === "prompt") {
     return (
       <MarkdownEditorField
         helperText={helperText}
         onChange={onChange}
+        showPreview={fieldMeta.widget !== "prompt"}
         testID={testID}
         title={label}
         value={typeof value === "string" ? value : ""}

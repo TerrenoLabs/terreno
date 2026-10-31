@@ -107,6 +107,68 @@ export const userRow = (text: string): HistoryRow => ({content: [], text, type: 
 
 export const assistantRow = (text: string): HistoryRow => ({content: [], text, type: "assistant"});
 
+/** A 1×1 PNG, as the `data:` URL the server sends when file storage is not configured. */
+export const PIXEL_PNG_DATA_URL =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+/** The `{toolCall}` and `{toolResult}` SSE events for one tool call, as the server streams them. */
+export const toolCallEvents = ({
+  args,
+  result,
+  toolCallId,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  result?: unknown;
+  toolCallId: string;
+  toolName: string;
+}): SseEvent[] => [
+  {toolCall: {args, toolCallId, toolName}},
+  ...(result === undefined ? [] : [{toolResult: {result, toolCallId, toolName}}]),
+];
+
+/** The tool-call row for a plain tool, as the server saves it. */
+export const toolCallRow = ({
+  args,
+  toolCallId,
+  toolName,
+}: {
+  args: Record<string, unknown>;
+  toolCallId: string;
+  toolName: string;
+}): HistoryRow => ({
+  args,
+  content: [],
+  text: `Tool call: ${toolName}`,
+  toolCallId,
+  toolName,
+  type: "tool-call",
+});
+
+/** The tool-result row for a plain tool, as the server saves it. */
+export const toolResultRow = ({
+  result,
+  toolCallId,
+  toolName,
+}: {
+  result: unknown;
+  toolCallId: string;
+  toolName: string;
+}): HistoryRow => ({
+  result,
+  text: `Tool result: ${toolName}`,
+  toolCallId,
+  toolName,
+  type: "tool-result",
+});
+
+/** An assistant row holding one generated image, as the server saves it. */
+export const assistantImageRow = (text: string, url: string): HistoryRow => ({
+  content: [{mimeType: "image/png", type: "image", url}],
+  text,
+  type: "assistant",
+});
+
 /** The tool-call row that holds an ask, as the server saves it. */
 export const askCallRow = (ask: MockAsk, status: AskStatus): HistoryRow => ({
   args: ask.input,

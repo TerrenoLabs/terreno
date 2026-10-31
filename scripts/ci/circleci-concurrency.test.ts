@@ -21,6 +21,7 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-title-update-depth",
     "org-admin-security",
     "admin-user-security",
+    "admin-ai-configuration",
   ],
   "admin-table": [
     "admin-table-search-filter",
@@ -37,6 +38,8 @@ const E2E_SHARDS: Record<string, string[]> = {
     "profile",
     "realtime",
     "ai-chat",
+    "ai-image-generation",
+    "gpt-skills",
     "pdf",
     "notifications",
   ],

@@ -209,6 +209,10 @@ const ProfileScreen: React.FC = () => {
     router.push("/settings/security");
   }, [router]);
 
+  const handleNavigateToSkills = useCallback((): void => {
+    router.push("/settings/skills");
+  }, [router]);
+
   const handleNavigateToNotificationSettings = useCallback((): void => {
     router.push("/settings/notifications");
   }, [router]);
@@ -522,6 +526,13 @@ const ProfileScreen: React.FC = () => {
               onClick={handleNavigateToNotificationSettings}
               testID="profile-notification-settings-button"
               text="Notification preferences"
+              variant="secondary"
+            />
+            <Button
+              iconName="wand-magic-sparkles"
+              onClick={handleNavigateToSkills}
+              testID="profile-skills-button"
+              text="Skills"
               variant="secondary"
             />
             <Button

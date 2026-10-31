@@ -81,6 +81,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/settings/security.tsx`,
       `${APP}/todo-windows/**`,
       `${APP}/todo-browser/**`,
+      `${APP}/settings/skills.tsx`,
     ],
     specs: [
       "todos",
@@ -89,6 +90,8 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "profile",
       "realtime",
       "ai-chat",
+      "ai-image-generation",
+      "gpt-skills",
       "pdf",
       "notifications",
     ],
@@ -96,7 +99,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
   {
     blocksPullRequest: true,
     name: "admin-core",
-    routes: [`${APP}/admin/**`, `${APP}/(tabs)/profile.tsx`],
+    routes: [`${APP}/admin/**`, `${APP}/(tabs)/profile.tsx`, `${APP}/settings/skills.tsx`],
     specs: [
       "admin",
       "admin-home",
@@ -105,6 +108,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "admin-title-update-depth",
       "org-admin-security",
       "admin-user-security",
+      "admin-ai-configuration",
     ],
   },
   {

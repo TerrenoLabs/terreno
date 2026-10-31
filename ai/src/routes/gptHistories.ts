@@ -22,8 +22,13 @@ import type mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
 import {assertNoReservedToolNames, resolveAskKinds} from "../service/asks";
-import {runBufferedChatTurn, staleAskError} from "../service/chatTurn";
-import type {GptHistoryDocument, GptHistoryRouteOptions, GptRouteOptions} from "../types";
+import {resolveStoredAttachmentUrls, runBufferedChatTurn, staleAskError} from "../service/chatTurn";
+import type {
+  GptHistoryDocument,
+  GptHistoryPrompt,
+  GptHistoryRouteOptions,
+  GptRouteOptions,
+} from "../types";
 
 type HistoryRouterOptions = Partial<ModelRouterOptions<GptHistoryDocument>>;
 
@@ -160,6 +165,33 @@ const withClientPendingAsk = (history: unknown): unknown => {
     return history;
   }
   return {...history, pendingAsk: withoutServerOnlyFields(history.pendingAsk)};
+};
+
+/**
+ * A read history with the owner's stored uploads re-signed, so images saved by an earlier turn
+ * (generated or attached) load after their first signed URL expires. Only the owner's own read
+ * signs, as `GET /files/*gcsKey` signs only the caller's uploads; an admin read keeps stored URLs.
+ */
+const withResignedUrls = async ({
+  chat,
+  history,
+  req,
+  serialized,
+}: {
+  chat: GptRouteOptions | undefined;
+  history: GptHistoryDocument;
+  req: express.Request;
+  serialized: unknown;
+}): Promise<unknown> => {
+  const prompts = (serialized as {prompts?: GptHistoryPrompt[]} | null)?.prompts;
+  const readerId = userIdOf(req);
+  if (!prompts || !chat?.fileStorageService || !readerId || !history.userId?.equals(readerId)) {
+    return serialized;
+  }
+  return {
+    ...(serialized as Record<string, unknown>),
+    prompts: await resolveStoredAttachmentUrls(prompts, history.userId, chat.fileStorageService),
+  };
 };
 
 /** The model's `pendingAsk` schema without the server-only fields, for the OpenAPI spec. */
@@ -377,11 +409,14 @@ export const addGptHistoryRoutes = (
           req,
           handlerOptions
         );
-        return (
-          Array.isArray(serialized)
-            ? serialized.map(withClientPendingAsk)
-            : withClientPendingAsk(serialized)
-        ) as JSONValue;
+        if (Array.isArray(serialized)) {
+          return serialized.map(withClientPendingAsk) as JSONValue;
+        }
+        const resigned =
+          method === "read"
+            ? await withResignedUrls({chat, history: value as GptHistoryDocument, req, serialized})
+            : serialized;
+        return withClientPendingAsk(resigned) as JSONValue;
       },
       sort: "-updated",
       validation: withCallerUserId(routerOptions.validation),

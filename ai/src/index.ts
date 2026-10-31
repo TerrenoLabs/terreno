@@ -12,6 +12,7 @@ export type {AIAdminAppOptions} from "./aiAdminApp";
 export {AIAdminApp} from "./aiAdminApp";
 export type {AiAppOptions} from "./aiApp";
 export {AiApp} from "./aiApp";
+export {aiConfigurationSchema, configurationPromptGetter} from "./configuration";
 export {LangfuseApp} from "./langfuseApp";
 export {getCached, invalidateCache, LangfuseCache, setCached} from "./langfuseCache";
 export {
@@ -40,6 +41,7 @@ export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
+export {GptSkill, setSkillFileStorage} from "./models/gptSkill";
 export {getProjectModel, Project} from "./models/project";
 export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
 export {LocalDatasetStore} from "./observability/local/datasetStore";
@@ -103,6 +105,7 @@ export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {addSkillRoutes} from "./routes/skills";
 export {findAgentBlock} from "./service/agentBlocks";
 export type {RegisteredDataset} from "./service/aiDatasets";
 export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
@@ -116,6 +119,7 @@ export {
   listGeminiApiModels,
   normalizeGeminiModelId,
 } from "./service/gemini";
+export {createGenerateImageTool, GENERATE_IMAGE_TOOL_NAME} from "./service/generateImageTool";
 export {getMCPTools} from "./service/getMCPTools";
 export {MCPService} from "./service/mcpService";
 export type {ParseFailure, ParseResult, ParseSuccess} from "./service/parseAiJson";
@@ -134,6 +138,8 @@ export {
   TRANSLATION_PROMPT,
 } from "./service/prompts";
 export {scaleStepperHostAction} from "./service/scaleStepper";
+export type {SkillPackage, SkillPackageFile} from "./service/skillPackage";
+export {parseSkillPackage} from "./service/skillPackage";
 export {toggleChecklistHostAction} from "./service/toggleChecklist";
 export type {
   CreateVertexProviderOptions,
@@ -154,3 +160,9 @@ export {
 } from "./service/vertex";
 export type {WebSearchProvider, WebSearchResult} from "./service/webSearchTool";
 export * from "./types";
+export type {
+  GptSkillDocument,
+  GptSkillFile,
+  GptSkillModel,
+  GptSkillScope,
+} from "./types/skills";

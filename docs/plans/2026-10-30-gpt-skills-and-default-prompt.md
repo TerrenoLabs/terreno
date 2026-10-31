@@ -524,7 +524,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-frontend-tests, verify-ui-changes
   - Docs: G2
 
-- [ ] **T11** — Prove admin default prompt and global skills end to end
+- [x] **T11** — Prove admin default prompt and global skills end to end
   - Depends on: T1, T8, T10
   - Why ordered: needs the T9 Skills screen; shares `docs/user-guide/README.md` with T9 and T10
   - Files: example-frontend/e2e/admin-ai-configuration.spec.ts, docs/user-guide/README.md, docs/user-guide/admin/ai-assistant-settings.md

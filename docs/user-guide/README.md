@@ -8,3 +8,4 @@ page format is in the planning plugin's user guide contract.
 | --- | --- | --- | --- |
 | ai | [skills.md](ai/skills.md) | user | Teach the AI assistant a skill |
 | ai | [generate-images.md](ai/generate-images.md) | user | Generate images in the AI chat |
+| admin | [ai-assistant-settings.md](admin/ai-assistant-settings.md) | admin | Set the AI assistant's default prompt and skills for everyone |

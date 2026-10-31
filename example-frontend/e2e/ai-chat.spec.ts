@@ -786,6 +786,14 @@ test.describe("AI chat history", () => {
   test("user renames a chat and the new title survives a reload", async ({page}) => {
     const historyId = first?.historyId ?? "";
     const renamed = `${firstTitle} (renamed)`;
+    // TEMP DIAGNOSTIC: print socket frames that carry a nack so CI shows why the rename fails.
+    page.on("websocket", (ws) => {
+      ws.on("framereceived", (frame) => {
+        if (String(frame.payload).includes("nack")) {
+          console.info(`TEMP-NACK ${String(frame.payload).slice(0, 600)}`);
+        }
+      });
+    });
 
     await page.getByTestId(`gpt-history-menu-${historyId}`).click();
     await page.getByTestId(`gpt-rename-history-${historyId}`).click();

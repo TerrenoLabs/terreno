@@ -119,6 +119,7 @@ export {
   listGeminiApiModels,
   normalizeGeminiModelId,
 } from "./service/gemini";
+export {createGenerateImageTool, GENERATE_IMAGE_TOOL_NAME} from "./service/generateImageTool";
 export {getMCPTools} from "./service/getMCPTools";
 export {MCPService} from "./service/mcpService";
 export type {ParseFailure, ParseResult, ParseSuccess} from "./service/parseAiJson";
@@ -137,6 +138,8 @@ export {
   TRANSLATION_PROMPT,
 } from "./service/prompts";
 export {scaleStepperHostAction} from "./service/scaleStepper";
+export type {SkillPackage, SkillPackageFile} from "./service/skillPackage";
+export {parseSkillPackage} from "./service/skillPackage";
 export {toggleChecklistHostAction} from "./service/toggleChecklist";
 export type {
   CreateVertexProviderOptions,

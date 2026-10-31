@@ -389,7 +389,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, ai-prompt-governance
   - Docs: T12
 
-- [ ] **T7** — Wire skills and image generation into AiApp, exports, and the admin panel
+- [x] **T7** — Wire skills and image generation into AiApp, exports, and the admin panel
   - Depends on: T6
   - Files: ai/src/aiApp.ts, ai/src/aiApp.test.ts, ai/src/aiAdminApp.ts, ai/src/index.ts
   - Criteria:

@@ -380,7 +380,7 @@ exports[`Text renders with secondary color 1`] = `
         "numberOfLines": 0,
         "selectable": undefined,
         "style": {
-          "color": undefined,
+          "color": "#092E3A",
           "fontFamily": "text-regular",
           "fontSize": 14,
           "textAlign": "left",

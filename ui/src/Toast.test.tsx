@@ -4,7 +4,7 @@ import {Text as RNText} from "react-native";
 
 import {Toast, useToast} from "./Toast";
 import {ToastProvider} from "./ToastNotifications";
-import {renderWithTheme} from "./test-utils";
+import {renderWithTheme, rootJSONNode} from "./test-utils";
 
 interface RafGlobal {
   requestAnimationFrame: (callback: FrameRequestCallback) => number;
@@ -16,16 +16,16 @@ beforeAll(() => {
   g.requestAnimationFrame = (callback: FrameRequestCallback) => {
     return setTimeout(() => callback(Date.now()), 0) as unknown as number;
   };
-  g.cancelAnimationFrame = (id: number) => {
-    clearTimeout(id);
+  g.cancelAnimationFrame = (id: number | null | undefined) => {
+    clearTimeout(id ?? undefined);
   };
 });
 
 describe("Toast", () => {
   it("lets clicks pass through the layout wrapper beside the toast", () => {
     const {toJSON} = renderWithTheme(<Toast title="Pass through" />);
-    const wrapper = toJSON() as {props: {style: unknown}};
-    const style = Object.assign({}, ...[wrapper.props.style].flat()) as {pointerEvents?: string};
+    const wrapper = rootJSONNode(toJSON());
+    const style = Object.assign({}, ...[wrapper?.props.style].flat()) as {pointerEvents?: string};
     expect(style.pointerEvents).toBe("box-none");
   });
 

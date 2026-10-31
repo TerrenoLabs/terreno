@@ -4,10 +4,13 @@ import {DateTime, Settings} from "luxon";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
-import type {HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
+import type {HarnessTaskDefinition, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {type AnyHarnessTaskDefinition, defineTask, Harness, InProcessRunner} from "./harness";
 import {registerHarnessTask} from "./models/harnessTask";
+
+/** A task definition whose input is not checked, so tests can create it with any input. */
+type TestTaskDefinition = HarnessTaskDefinition<unknown, unknown, unknown>;
 
 const TaskModel = registerHarnessTask();
 let SpanModel: ObsSpanModel;
@@ -62,7 +65,7 @@ const flakyTask = ({
   failures: number;
   name: string;
   retry: {backoffMs?: number; maxAttempts?: number; maxBackoffMs?: number};
-}): {attemptsSeen: number[]; definition: AnyHarnessTaskDefinition} => {
+}): {attemptsSeen: number[]; definition: TestTaskDefinition} => {
   const attemptsSeen: number[] = [];
   const definition = defineTask<unknown, unknown, {ok: boolean}>({
     initial: () => ({phase: "call"}),
@@ -81,7 +84,7 @@ const flakyTask = ({
     retry,
     version: 1,
   });
-  return {attemptsSeen, definition: definition as unknown as AnyHarnessTaskDefinition};
+  return {attemptsSeen, definition: definition as unknown as TestTaskDefinition};
 };
 
 describe("Harness phase retries", () => {

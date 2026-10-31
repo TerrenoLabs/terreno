@@ -123,6 +123,8 @@ export interface AdminModelConfig {
   fieldOrder?: string[];
   /** Fields to hide from admin forms/responses (e.g., password hash fields). */
   hiddenFields?: string[];
+  /** Fields stripped from admin create and update bodies. */
+  excludeFields?: string[];
   /** Optional sidebar / nav grouping label for schema v2 shells */
   group?: string;
   /** Changelist columns (defaults to listFields) */

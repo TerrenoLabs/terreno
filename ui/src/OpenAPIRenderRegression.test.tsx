@@ -164,7 +164,7 @@ describe("OpenAPI context rerender regression coverage", () => {
   });
 
   it("keeps stable OpenAPI action references across equivalent provider renders", async () => {
-    let capturedContext: ReturnType<typeof useOpenAPISpec> | null = null;
+    let capturedContext = null as ReturnType<typeof useOpenAPISpec> | null;
 
     const result = render(
       <OpenAPIProvider specUrl="https://api.example.com/openapi-v0.json">

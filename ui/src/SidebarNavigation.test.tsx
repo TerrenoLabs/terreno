@@ -103,7 +103,9 @@ describe("SidebarNavigationPanel", () => {
         bottomItems={bottomItems}
         onNavigate={onNavigate}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     for (const item of [...topItems, ...bottomItems]) {
@@ -134,7 +136,9 @@ describe("SidebarNavigationPanel", () => {
         bottomItems={bottomItems}
         onNavigate={onNavigate}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     fireEvent.press(getByLabelText("Settings"));
@@ -148,7 +152,9 @@ describe("SidebarNavigationPanel", () => {
         bottomItems={bottomItems}
         onNavigate={mock((_route: string) => {})}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     expect(queryByText("Home")).toBeNull();
@@ -175,7 +181,9 @@ describe("SidebarNavigationPanel", () => {
         bottomItems={bottomItems}
         onNavigate={mock((_route: string) => {})}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     const rail = UNSAFE_getAllByType(View).find((node) => node.props.onMouseEnter !== undefined);
@@ -203,7 +211,9 @@ describe("SidebarNavigationPanel", () => {
         bottomItems={bottomItems}
         onNavigate={mock((_route: string) => {})}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     const item = getByLabelText("Alerts");
@@ -229,7 +239,9 @@ describe("SidebarNavigationPanel", () => {
         onNavigate={mock((_route: string) => {})}
         panelStyle={{borderRightWidth: 4}}
         topItems={topItems}
-      />
+      >
+        {null}
+      </SidebarNavigationPanel>
     );
 
     const rail = UNSAFE_getAllByType(View).find((node) => node.props.onMouseEnter !== undefined);

@@ -1,6 +1,5 @@
 import {afterEach, describe, expect, it} from "bun:test";
 import {z} from "@terreno/api";
-import type mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
@@ -47,7 +46,7 @@ describe("POST /gpt/actions", () => {
 
   it("rejects an unknown name, a bad payload, and a non-owner", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -89,7 +88,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns the handler document and logs ui_action", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -135,7 +134,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns 504 and logs the timeout", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -166,7 +165,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns 500 when the handler's document is invalid", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -230,7 +229,7 @@ describe("POST /gpt/actions", () => {
 
   it("rejects a replace value the client does not understand", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -291,7 +290,7 @@ describe("POST /gpt/actions with scaleStepperHostAction", () => {
     assistantPrompts: string[]
   ): Promise<{agent: Awaited<ReturnType<typeof authAsUser>>; historyId: string}> => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [
         {text: "Plan a roast", type: "user"},
@@ -403,7 +402,7 @@ describe("POST /gpt/actions with toggleChecklistHostAction", () => {
     assistantPrompts: string[]
   ): Promise<{agent: Awaited<ReturnType<typeof authAsUser>>; historyId: string}> => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [
         {text: "Plan a roast", type: "user"},

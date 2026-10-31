@@ -10,10 +10,11 @@ mock.module("ioredis", () => {
   return {default: Redis};
 });
 
-const {createRedisRateLimitStore} = await import("./redisStore");
+let createRedisRateLimitStore: typeof import("./redisStore.js").createRedisRateLimitStore;
 
 describe("redis rate limit store ioredis loader", () => {
-  beforeAll(() => {
+  beforeAll(async () => {
+    ({createRedisRateLimitStore} = await import("./redisStore.js"));
     process.env.REDIS_URL = "redis://127.0.0.1:6379";
     Reflect.deleteProperty(process.env, "VALKEY_URL");
   });

@@ -22,7 +22,7 @@ mock.module("../LocaleContentEditor", () => ({
 }));
 
 import {AdminFieldRenderer} from "../AdminFieldRenderer";
-import type {AdminApi, AdminFieldConfig} from "../types";
+import type {AdminApi, AdminFieldConfig, RefFieldRendererProps} from "../types";
 
 const api = {} as unknown as AdminApi;
 const base = {api, baseUrl: "/admin", onChange: () => {}};
@@ -175,7 +175,12 @@ describe("AdminFieldRenderer", () => {
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
         {...base}
-        fieldConfig={{enum: [null, "a", "b"], required: false, type: "string"}}
+        // Nullable Mongoose enums arrive with a null entry, which `AdminFieldConfig.enum` does not model.
+        fieldConfig={{
+          enum: [null, "a", "b"] as unknown as string[],
+          required: false,
+          type: "string",
+        }}
         fieldKey="status"
         onChange={(v) => changes.push(v)}
         value=""
@@ -319,7 +324,7 @@ describe("AdminFieldRenderer", () => {
   });
 
   it("renders single-value user targeting with a custom renderer", () => {
-    const CustomRenderer: React.FC<Record<string, unknown>> = (props) =>
+    const CustomRenderer: React.FC<RefFieldRendererProps> = (props) =>
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
@@ -333,7 +338,7 @@ describe("AdminFieldRenderer", () => {
         value="user-1"
       />
     );
-    const custom = UNSAFE_root.findAll((node) => node.type === "CustomRenderer")[0];
+    const custom = UNSAFE_root.findAll((node) => String(node.type) === "CustomRenderer")[0];
     expect(custom.props.routePath).toBe("/admin/users");
     expect(custom.props.autocomplete).toBe(true);
   });
@@ -353,7 +358,7 @@ describe("AdminFieldRenderer", () => {
   });
 
   it("renders a configured reference with a custom renderer", () => {
-    const CustomRenderer: React.FC<Record<string, unknown>> = (props) =>
+    const CustomRenderer: React.FC<RefFieldRendererProps> = (props) =>
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
@@ -365,7 +370,7 @@ describe("AdminFieldRenderer", () => {
         value="org-1"
       />
     );
-    const custom = UNSAFE_root.findAll((node) => node.type === "CustomRenderer")[0];
+    const custom = UNSAFE_root.findAll((node) => String(node.type) === "CustomRenderer")[0];
     expect(custom.props.routePath).toBe("/admin/organizations");
     expect(custom.props.value).toBe("org-1");
   });

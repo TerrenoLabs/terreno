@@ -154,8 +154,12 @@ const {NotificationCenter, NotificationCenterBell} = await import("./Notificatio
 const {default: NotificationSettingsScreen} = await import("../app/settings/notifications");
 const {default: AllNotificationsScreen} = await import("../app/notifications");
 
+// Mocked components render as host elements named by string, which `findByType` does not type.
+const findAllHosts = (root: ReactTestInstance, type: string): ReactTestInstance[] =>
+  root.findAll((node) => String(node.type) === type);
+
 const findHost = (renderer: ReactTestRenderer, type: string): ReactTestInstance =>
-  renderer.root.findByType(type);
+  renderer.root.find((node) => String(node.type) === type);
 
 describe("NotificationCenter", () => {
   beforeEach(() => {
@@ -186,7 +190,8 @@ describe("NotificationCenter", () => {
   });
 
   it("opens the inbox and applies notification actions", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
         <NotificationCenter>
@@ -196,18 +201,18 @@ describe("NotificationCenter", () => {
     });
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[0]?.props.onPress();
+      findAllHosts(renderer.root, "NotificationBell")[0]?.props.onPress();
     });
     const drawer = findHost(renderer, "SideDrawer");
     assert.isTrue(drawer.props.isOpen);
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[1]?.props.onPress();
+      findAllHosts(renderer.root, "NotificationBell")[1]?.props.onPress();
     });
     assert.isFalse(findHost(renderer, "SideDrawer").props.isOpen);
 
     act(() => {
-      renderer.root.findAllByType("NotificationBell")[0]?.props.onPress();
+      findAllHosts(renderer.root, "NotificationBell")[0]?.props.onPress();
     });
     const inbox = findHost(renderer, "NotificationInbox");
     const item = inbox.props.items[0];
@@ -236,7 +241,8 @@ describe("NotificationCenter", () => {
   });
 
   it("sends a test notification and reconciles", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
         <NotificationCenter>
@@ -246,9 +252,9 @@ describe("NotificationCenter", () => {
     });
 
     await act(async () => {
-      const sendButton = renderer.root
-        .findAllByType("Button")
-        .find((button) => button.props.testID === "notification-send-test-button");
+      const sendButton = findAllHosts(renderer.root, "Button").find(
+        (button) => button.props.testID === "notification-send-test-button"
+      );
       await sendButton?.props.onClick();
     });
 
@@ -257,7 +263,8 @@ describe("NotificationCenter", () => {
   });
 
   it("opens the full notification history from the drawer", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
         <NotificationCenter>
@@ -267,9 +274,9 @@ describe("NotificationCenter", () => {
     });
 
     await act(async () => {
-      const viewAllButton = renderer.root
-        .findAllByType("Button")
-        .find((button) => button.props.testID === "notification-view-all-button");
+      const viewAllButton = findAllHosts(renderer.root, "Button").find(
+        (button) => button.props.testID === "notification-view-all-button"
+      );
       await viewAllButton?.props.onClick();
     });
 
@@ -304,12 +311,13 @@ describe("AllNotificationsScreen", () => {
   });
 
   it("shows active and archived notifications separately", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const inboxes = renderer.root.findAllByType("NotificationInbox");
+    const inboxes = findAllHosts(renderer.root, "NotificationInbox");
     assert.deepEqual(
       inboxes.map((inbox) => inbox.props.items.map((item: NotificationInboxItem) => item.id)),
       [["active-notification"], ["archived-notification"]]
@@ -320,14 +328,15 @@ describe("AllNotificationsScreen", () => {
   it("keeps archived inbox loading until syncdb is ready", async (): Promise<void> => {
     isSyncDbReady = false;
     notificationRows.splice(0, notificationRows.length);
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const archivedInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-archived");
+    const archivedInbox = findAllHosts(renderer.root, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-archived"
+    );
     assert.isOk(archivedInbox);
     assert.isTrue(archivedInbox?.props.isLoading);
     assert.equal(
@@ -340,14 +349,15 @@ describe("AllNotificationsScreen", () => {
     syncMutate.mockClear();
     routerBack.mockClear();
     routerPush.mockClear();
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
 
-    const activeInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-active");
+    const activeInbox = findAllHosts(renderer.root, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-active"
+    );
     const item = activeInbox?.props.items[0];
     act(() => {
       activeInbox?.props.onMarkRead(item);
@@ -372,13 +382,14 @@ describe("AllNotificationsScreen", () => {
   it("ignores history mutations until syncdb is ready", async (): Promise<void> => {
     isSyncDbReady = false;
     syncMutate.mockClear();
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<AllNotificationsScreen />);
     });
-    const activeInbox = renderer.root
-      .findAllByType("NotificationInbox")
-      .find((inbox) => inbox.props.testID === "all-notifications-active");
+    const activeInbox = findAllHosts(renderer.root, "NotificationInbox").find(
+      (inbox) => inbox.props.testID === "all-notifications-active"
+    );
     const item = activeInbox?.props.items[0];
     act(() => {
       activeInbox?.props.onMarkRead(item);
@@ -399,7 +410,8 @@ describe("NotificationSettingsScreen", () => {
   });
 
   it("creates defaults on the first preference change and navigates back", async (): Promise<void> => {
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<NotificationSettingsScreen />);
     });
@@ -424,7 +436,8 @@ describe("NotificationSettingsScreen", () => {
       push: true,
       sms: true,
     });
-    let renderer: ReactTestRenderer;
+    // Assigned inside act().
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<NotificationSettingsScreen />);
     });

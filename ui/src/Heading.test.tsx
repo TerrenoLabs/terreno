@@ -50,7 +50,7 @@ describe("Heading", () => {
   });
 
   it("applies secondary color", () => {
-    const {toJSON} = renderWithTheme(<Heading color="secondary">Secondary</Heading>);
+    const {toJSON} = renderWithTheme(<Heading color="secondaryDark">Secondary</Heading>);
     expect(toJSON()).toMatchSnapshot();
   });
 

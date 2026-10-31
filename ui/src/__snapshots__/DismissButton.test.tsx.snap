@@ -17,7 +17,7 @@ exports[`DismissButton renders correctly with default props 1`] = `
     },
   ],
   "props": {
-    "accessibilityHint": undefined,
+    "accessibilityHint": "Dismisses the message",
     "aria-label": "Dismiss",
     "aria-role": "button",
     "onPress": [Function],
@@ -49,7 +49,7 @@ exports[`DismissButton renders with primary color (default) 1`] = `
     },
   ],
   "props": {
-    "accessibilityHint": undefined,
+    "accessibilityHint": "Dismisses the message",
     "aria-label": "Dismiss",
     "aria-role": "button",
     "onPress": [Function],
@@ -81,7 +81,7 @@ exports[`DismissButton renders with inverted color 1`] = `
     },
   ],
   "props": {
-    "accessibilityHint": undefined,
+    "accessibilityHint": "Dismisses the message",
     "aria-label": "Dismiss",
     "aria-role": "button",
     "onPress": [Function],

@@ -7,7 +7,7 @@ import {blockPlainText} from "./plainText";
 import type {Block, BlocksDocument} from "./schema";
 import {validateBlocks} from "./validate";
 
-const goldenPath = join(import.meta.dir, "fixtures", "golden", "sunday-roast.yaml");
+const goldenPath = join(__dirname, "fixtures", "golden", "sunday-roast.yaml");
 
 // The roast reply needs these options: https images and both host callbacks.
 const goldenOptions = {

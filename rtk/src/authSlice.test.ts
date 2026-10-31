@@ -430,11 +430,7 @@ describe("logout cache reset", () => {
       overrideExisting: true,
     });
     const {logout, setUserId, store} = createTestStore();
-    const cachedQueries = (): string[] =>
-      Object.keys(
-        (store.getState() as Record<string, {queries: Record<string, unknown>}>)["terreno-rtk"]
-          .queries
-      );
+    const cachedQueries = (): string[] => Object.keys(store.getState()["terreno-rtk"].queries);
     const subscription = store.dispatch(withMe.endpoints.getCachedMe.initiate());
     await subscription;
     subscription.unsubscribe();

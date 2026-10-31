@@ -6,7 +6,9 @@ import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {
   AiEvaluatorDetailView,
+  type AiEvaluatorDetailViewProps,
   AiEvaluatorNewView,
+  type AiEvaluatorNewViewProps,
   defaultEvaluatorRunModes,
   initialNewEvaluatorDimensions,
 } from "./AiEvaluatorPanels";
@@ -24,6 +26,7 @@ describe("AiEvaluatorNewView schema mismatch", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "correct", required: true}]}
         instructions=""
         isCreating={false}
@@ -56,6 +59,7 @@ describe("AiEvaluatorNewView helper text", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath=""
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -101,6 +105,7 @@ describe("AiEvaluatorNewView helper text", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output.text"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -135,6 +140,7 @@ describe("AiEvaluatorNewView panels", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath=""
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions="Rate quality"
         isCreating={false}
@@ -164,6 +170,7 @@ describe("AiEvaluatorNewView panels", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output.text"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -189,17 +196,28 @@ describe("AiEvaluatorNewView panels", () => {
   });
 
   it("wires new-evaluator controls for dimensions, targets, and run modes", async () => {
-    const onTypeChange = mock(() => undefined);
-    const onAddDimension = mock(() => undefined);
-    const onRemoveDimension = mock(() => undefined);
-    const onLiveSampleRateChange = mock(() => undefined);
-    const onDescriptionChange = mock(() => undefined);
-    const onCreate = mock(() => undefined);
+    const onTypeChange = mock<NonNullable<AiEvaluatorNewViewProps["onTypeChange"]>>(
+      () => undefined
+    );
+    const onAddDimension = mock<NonNullable<AiEvaluatorNewViewProps["onAddDimension"]>>(
+      () => undefined
+    );
+    const onRemoveDimension = mock<NonNullable<AiEvaluatorNewViewProps["onRemoveDimension"]>>(
+      () => undefined
+    );
+    const onLiveSampleRateChange = mock<
+      NonNullable<AiEvaluatorNewViewProps["onLiveSampleRateChange"]>
+    >(() => undefined);
+    const onDescriptionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDescriptionChange"]>>(
+      () => undefined
+    );
+    const onCreate = mock<NonNullable<AiEvaluatorNewViewProps["onCreate"]>>(() => undefined);
     const {getByTestId, getAllByText, getByText} = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
         createError="Name taken"
+        description=""
         dimensions={[
           {dataType: "boolean", key: "pass", required: true},
           {dataType: "numeric", key: "score", range: "0-1", required: false},
@@ -245,10 +263,13 @@ describe("AiEvaluatorNewView panels", () => {
 
 describe("AiEvaluatorDetailView", () => {
   it("renders dimensions, llm-judge config, and 30-day usage table", () => {
-    const onOpenPrompt = mock(() => undefined);
+    const onOpenPrompt = mock<NonNullable<AiEvaluatorDetailViewProps["onOpenPrompt"]>>(
+      () => undefined
+    );
     const {getByTestId, getByText} = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "correct", required: true}],
           id: "eval-1",
           judgePromptName: "judge",
@@ -260,7 +281,9 @@ describe("AiEvaluatorDetailView", () => {
         judgeOutputSchema={{properties: {correct: {type: "boolean"}}}}
         onOpenPrompt={onOpenPrompt}
         routeBase="/admin"
-        usageRows={[{costUsd: 1.2, experimentName: "compare", runs: 3}]}
+        usageRows={[
+          {costUsd: 1.2, experimentId: "exp-compare", experimentName: "compare", runs: 3},
+        ]}
       />
     );
     expect(getByTestId("ai-evaluator-detail")).toBeTruthy();
@@ -285,6 +308,7 @@ describe("AiEvaluatorDetailView", () => {
     const human = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "pass", required: true}],
           id: "eval-2",
           instructions: "Rate quality",
@@ -307,8 +331,8 @@ describe("AiEvaluatorDetailView", () => {
     const jsonAssert = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
-          assertionConstraint: "exists",
-          assertionPath: "output.text",
+          assertion: {constraint: "exists", path: "output.text"},
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "pass", required: true}],
           id: "eval-3",
           name: "assert",
@@ -329,6 +353,7 @@ describe("AiEvaluatorDetailView", () => {
     const noPrompt = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "correct", required: true}],
           id: "eval-4",
           name: "quality",
@@ -347,6 +372,7 @@ describe("AiEvaluatorDetailView", () => {
     const withLink = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "correct", required: true}],
           id: "eval-5",
           judgePromptName: "judge",
@@ -363,10 +389,13 @@ describe("AiEvaluatorDetailView", () => {
   });
 
   it("opens judge prompt via onOpenPrompt and shows schema match", async () => {
-    const onOpenPrompt = mock(() => undefined);
+    const onOpenPrompt = mock<NonNullable<AiEvaluatorDetailViewProps["onOpenPrompt"]>>(
+      () => undefined
+    );
     const {getByText} = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "correct", required: true}],
           id: "eval-1",
           judgePromptName: "judge",
@@ -378,7 +407,9 @@ describe("AiEvaluatorDetailView", () => {
         judgeOutputSchema={{properties: {correct: {type: "boolean"}}}}
         onOpenPrompt={onOpenPrompt}
         routeBase="/admin"
-        usageRows={[{costUsd: undefined, experimentName: "compare", runs: 1}]}
+        usageRows={[
+          {costUsd: undefined, experimentId: "exp-compare", experimentName: "compare", runs: 1},
+        ]}
       />
     );
     await act(async () => {
@@ -393,6 +424,7 @@ describe("AiEvaluatorDetailView", () => {
     const mismatch = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "correct", required: true}],
           id: "eval-6",
           judgePromptName: "judge",
@@ -411,6 +443,7 @@ describe("AiEvaluatorDetailView", () => {
     const human = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0,
           dimensions: [{dataType: "boolean", key: "pass", required: true}],
           id: "eval-7",
           name: "human",
@@ -428,12 +461,17 @@ describe("AiEvaluatorDetailView", () => {
 
 describe("AiEvaluatorNewView dimension editing", () => {
   it("wires dimension key, type, range, and remove handlers", async () => {
-    const onDimensionChange = mock(() => undefined);
-    const onRemoveDimension = mock(() => undefined);
+    const onDimensionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDimensionChange"]>>(
+      () => undefined
+    );
+    const onRemoveDimension = mock<NonNullable<AiEvaluatorNewViewProps["onRemoveDimension"]>>(
+      () => undefined
+    );
     const {getAllByDisplayValue, getAllByText} = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[
           {dataType: "boolean", key: "pass", required: true},
           {dataType: "boolean", key: "extra", required: false},
@@ -471,15 +509,26 @@ describe("AiEvaluatorNewView dimension editing", () => {
   });
 
   it("wires assertion, instructions, judge prompt, and range fields", async () => {
-    const onAssertionPathChange = mock(() => undefined);
-    const onAssertionConstraintChange = mock(() => undefined);
-    const onInstructionsChange = mock(() => undefined);
-    const onJudgePromptNameChange = mock(() => undefined);
-    const onDimensionChange = mock(() => undefined);
+    const onAssertionPathChange = mock<
+      NonNullable<AiEvaluatorNewViewProps["onAssertionPathChange"]>
+    >(() => undefined);
+    const onAssertionConstraintChange = mock<
+      NonNullable<AiEvaluatorNewViewProps["onAssertionConstraintChange"]>
+    >(() => undefined);
+    const onInstructionsChange = mock<NonNullable<AiEvaluatorNewViewProps["onInstructionsChange"]>>(
+      () => undefined
+    );
+    const onJudgePromptNameChange = mock<
+      NonNullable<AiEvaluatorNewViewProps["onJudgePromptNameChange"]>
+    >(() => undefined);
+    const onDimensionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDimensionChange"]>>(
+      () => undefined
+    );
     const llmJudge = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "correct", required: false}]}
         instructions=""
         isCreating={false}
@@ -513,6 +562,7 @@ describe("AiEvaluatorNewView dimension editing", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions="Rate quality"
         isCreating={false}
@@ -541,6 +591,7 @@ describe("AiEvaluatorNewView dimension editing", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output.text"
+        description=""
         dimensions={[{dataType: "numeric", key: "score", range: "0-1", required: true}]}
         instructions=""
         isCreating={false}
@@ -573,13 +624,20 @@ describe("AiEvaluatorNewView dimension editing", () => {
 
 describe("AiEvaluatorNewView type and live sample controls", () => {
   it("selects each dimension data type and ignores invalid live sample input", async () => {
-    const onTypeChange = mock(() => undefined);
-    const onDimensionChange = mock(() => undefined);
-    const onLiveSampleRateChange = mock(() => undefined);
+    const onTypeChange = mock<NonNullable<AiEvaluatorNewViewProps["onTypeChange"]>>(
+      () => undefined
+    );
+    const onDimensionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDimensionChange"]>>(
+      () => undefined
+    );
+    const onLiveSampleRateChange = mock<
+      NonNullable<AiEvaluatorNewViewProps["onLiveSampleRateChange"]>
+    >(() => undefined);
     const {getAllByText, getByTestId} = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -623,6 +681,7 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -654,6 +713,7 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -681,6 +741,7 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output.text"
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}
@@ -710,11 +771,14 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
 
 describe("AiEvaluatorNewView score fields", () => {
   it("hides extra controls for boolean and edits numeric and categorical scores", async () => {
-    const onDimensionChange = mock(() => undefined);
+    const onDimensionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDimensionChange"]>>(
+      () => undefined
+    );
     const view = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[
           {dataType: "boolean", key: "pass", required: true},
           {dataType: "numeric", key: "score", range: "0-1", required: true},
@@ -761,6 +825,7 @@ describe("AiEvaluatorNewView score fields", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={dimensions}
         instructions=""
         isCreating={false}
@@ -789,6 +854,7 @@ describe("AiEvaluatorNewView score fields", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
+        description=""
         dimensions={[{dataType: "numeric", key: "score", range: "0-1", required: true}]}
         instructions=""
         isCreating={false}

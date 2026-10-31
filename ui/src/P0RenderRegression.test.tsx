@@ -1,3 +1,4 @@
+import {describe, it} from "bun:test";
 import {act, render, waitFor} from "@testing-library/react-native";
 import {assert} from "chai";
 import type React from "react";
@@ -88,7 +89,12 @@ describe("P0 component rerender regression coverage", () => {
     assert.exists(result.getByTestId("box"));
     result.rerender(
       <ThemeProvider>
-        <Box onClick={onClick} testID="box" />
+        <Box
+          accessibilityHint="Runs the box action"
+          accessibilityLabel="Box action"
+          onClick={onClick}
+          testID="box"
+        />
       </ThemeProvider>
     );
 

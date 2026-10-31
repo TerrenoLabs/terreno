@@ -4,7 +4,7 @@ import type {LanguageModel} from "ai";
 import type express from "express";
 
 import {AIService} from "../../service/aiService";
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsDataset} from "../local/models/obsDataset";
 import {registerObsDatasetItem} from "../local/models/obsDatasetItem";
@@ -70,7 +70,7 @@ describe("observability experiment routes", () => {
         },
       },
     });
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           aiService,

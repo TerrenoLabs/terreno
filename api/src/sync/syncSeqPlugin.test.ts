@@ -1,6 +1,5 @@
 import {beforeAll, beforeEach, describe, expect, it} from "bun:test";
 import {type Model, model, Schema} from "mongoose";
-import type {ModelRouterOptions} from "../api";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
 import {setupDb} from "../tests";
 import {SyncCounter, SyncScopeMove} from "./models";
@@ -85,7 +84,7 @@ const UnregisteredModel = model<SeqBroadcastThing>(
 
 const stubOptions = {
   permissions: {create: [], delete: [], list: [], read: [], update: []},
-} as unknown as ModelRouterOptions<SeqTenantThing>;
+};
 
 const TENANT_TAG = "seqPluginTenantThings";
 const CUSTOM_TAG = "seqPluginCustomThings";

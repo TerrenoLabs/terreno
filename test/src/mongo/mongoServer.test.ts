@@ -86,7 +86,7 @@ describe("startMongoServer", () => {
       }),
     });
     try {
-      const {waitForDatabaseReady} = await import("./mongoServer");
+      const {waitForDatabaseReady} = await import("./mongoServer.js");
       await waitForDatabaseReady(3, 1);
       expect(calls).toBe(2);
     } finally {

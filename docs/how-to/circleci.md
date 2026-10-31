@@ -112,7 +112,8 @@ which builds its own web bundle and backend (`playwright.config.ts` with
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
-Require `repo-policies` in branch protection. Require `e2e-auth` /
+The `typecheck` job runs in the same workflow: it compiles every package, then
+runs `bun run typecheck`. Require `repo-policies` and `typecheck` in branch protection. Require `e2e-auth` /
 `e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
 as the smoke shard and do not run the other four. Do not require the old
 `no-barrel-imports` / `e2e-login` names.
@@ -296,6 +297,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 |----------------------------|--------------|
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
+| (none) — every package's `typecheck` (src + tests) | `typecheck` (runs with `run-repo-policies`) |
 | `dco` | `dco` |
 | (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |

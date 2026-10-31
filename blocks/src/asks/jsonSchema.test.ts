@@ -2,12 +2,12 @@ import {describe, expect, it} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 import {z} from "zod";
-import {validAskFixtures} from "../tests/askFixtures";
+import {fixtureAsk, validAskFixtures} from "../tests/askFixtures";
 import {pendingAskListSchema, turnRequestSchema, turnResultSchema} from "./headless";
 import {askJsonSchemas} from "./jsonSchema";
 import {simpleCardSchema, toSimpleCard} from "./simpleCard";
 
-const SCHEMAS_DIR = join(import.meta.dir, "..", "..", "schemas");
+const SCHEMAS_DIR = join(__dirname, "..", "..", "schemas");
 
 const documents = askJsonSchemas();
 
@@ -21,7 +21,7 @@ const fromDocument = (fileName: string): z.ZodType => {
 };
 
 const CARDS = validAskFixtures().map((fixture) =>
-  toSimpleCard({input: fixture.input, kind: fixture.kind, toolCallId: "call_fixture"})
+  toSimpleCard({...fixtureAsk(fixture), toolCallId: "call_fixture"})
 );
 
 const [CARD] = CARDS;

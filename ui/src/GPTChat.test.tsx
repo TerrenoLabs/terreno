@@ -4,15 +4,22 @@ import {act, fireEvent, render, waitFor, within} from "@testing-library/react-na
 import {assert} from "chai";
 import {setImageAsync, setStringAsync} from "expo-clipboard";
 import React from "react";
-import {AccessibilityInfo, ActivityIndicator, Platform, Pressable, ScrollView} from "react-native";
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  type TextProps,
+} from "react-native";
 
-import type {AskSubmission, ChatAsk} from "./asks/askTypes";
+import type {AskSubmission, ChatAsk, ChatAskState} from "./asks/askTypes";
 import type {SelectedFile} from "./FilePickerButton";
 import type {GPTChatHistory, GPTChatMessage, GPTChatProps, MessageContentPart} from "./GPTChat";
 import {GPTChat} from "./GPTChat";
 import {Text} from "./Text";
 import {ThemeProvider} from "./Theme";
-import {renderWithTheme} from "./test-utils";
+import {elementProps, findAllByHostType, renderWithTheme} from "./test-utils";
 
 const mockedSetImageAsync = setImageAsync as unknown as ReturnType<typeof mock>;
 const mockedSetStringAsync = setStringAsync as unknown as ReturnType<typeof mock>;
@@ -588,7 +595,7 @@ describe("GPTChat", () => {
     const link = {click: () => clicked.push("click"), download: "", href: ""};
     const appended: unknown[] = [];
     const removed: unknown[] = [];
-    const domGlobals = globalThis as typeof globalThis & {
+    const domGlobals = globalThis as unknown as {
       document?: unknown;
       window?: unknown;
     };
@@ -626,7 +633,7 @@ describe("GPTChat", () => {
         role: "assistant",
       },
     ];
-    const domGlobals = globalThis as typeof globalThis & {window?: unknown};
+    const domGlobals = globalThis as unknown as {window?: unknown};
     const originalWindow = domGlobals.window;
     domGlobals.window = undefined;
 
@@ -1021,7 +1028,7 @@ describe("GPTChat asks", () => {
     title: "Choose a plan",
   };
 
-  const planAsk = (state: Partial<ChatAsk> = {}): ChatAsk => ({
+  const planAsk = (state: Partial<ChatAskState> & {input?: ChoiceAskInput} = {}): ChatAsk => ({
     input: PLAN_INPUT,
     kind: "choice",
     status: "pending",
@@ -1407,8 +1414,9 @@ describe("GPTChat asks", () => {
 
       rerender(chatWith({historyId: "h2", onAskSubmit, toolCallId: "call_second"}));
 
-      const spinners = getByTestId("gpt-ask-call_second-submit").findAll(
-        (node) => node.type === "ActivityIndicator"
+      const spinners = findAllByHostType(
+        getByTestId("gpt-ask-call_second-submit"),
+        "ActivityIndicator"
       );
       assert.lengthOf(spinners, 0);
       assert.isFalse(isDisabled(getByTestId("gpt-ask-call_second-button-skip")));
@@ -1429,8 +1437,8 @@ describe("GPTChat asks", () => {
       />,
       {
         createNodeMock: (element) =>
-          element.props.accessibilityRole === "header" &&
-          element.props.children === PLAN_INPUT.prompt
+          elementProps<TextProps>(element).accessibilityRole === "header" &&
+          elementProps<TextProps>(element).children === PLAN_INPUT.prompt
             ? 42
             : scrollable,
         wrapper: ThemeProvider,
@@ -1480,7 +1488,7 @@ describe("GPTChat asks", () => {
 
   it("leaves assistant markdown in place when uiBlocks is off", async () => {
     const {queryByTestId, toJSON} = renderChat({
-      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant" as const}],
     });
     assert.isNull(queryByTestId("gpt-blocks-m1"));
     await waitFor(() => {
@@ -1492,7 +1500,7 @@ describe("GPTChat asks", () => {
     const onSubmit = mock(() => {});
     const onBlockAction = mock(() => {});
     const {getByText} = renderChat({
-      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant" as const}],
       onBlockAction,
       onSubmit,
       uiBlocks: true,
@@ -1526,7 +1534,7 @@ describe("GPTChat asks", () => {
         })
     );
     const {getByTestId, getByText, queryByText} = renderChat({
-      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant" as const}],
       hostActions: ["export_csv"],
       onBlockCallback,
       uiBlocks: true,
@@ -1558,7 +1566,7 @@ describe("GPTChat asks", () => {
   it("appends an assistant message when a callback returns text", async () => {
     const onBlockCallback = mock(async () => ({text: "Export started"}));
     const {getByText} = renderChat({
-      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant" as const}],
       hostActions: ["export_csv"],
       onBlockCallback,
       uiBlocks: true,
@@ -1613,7 +1621,7 @@ describe("GPTChat asks", () => {
         })
     );
     const props = {
-      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant"}],
+      currentMessages: [{content: BLOCKS_REPLY, id: "m1", role: "assistant" as const}],
       histories,
       hostActions: ["export_csv"],
       onBlockCallback,

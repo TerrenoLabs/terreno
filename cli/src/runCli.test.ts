@@ -4,13 +4,18 @@ import {assert} from "chai";
 import type {CliIo} from "./io";
 import {runCli} from "./runCli";
 
+/** Bun's `typeof fetch` also carries `preconnect`; add a no-op so stubs satisfy it. */
+const stubFetch = (
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>
+): typeof fetch => Object.assign(handler, {preconnect: (): void => {}});
+
 const createIo = (): CliIo & {stderrLines: string[]; stdoutLines: string[]} => {
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   return {
     cwd: "/tmp",
     env: {},
-    fetch: (async () => new Response()) as typeof fetch,
+    fetch: stubFetch(async () => new Response()),
     stderr: (line: string) => {
       stderrLines.push(line);
     },

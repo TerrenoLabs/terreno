@@ -450,7 +450,9 @@
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "!scripts/**!"
+        "!scripts/**!",
+        // Test-only helpers (fakeFetch) are reached from tests, not production entries.
+        "!src/__tests__/**!"
       ]
     },
     "ui": {

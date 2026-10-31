@@ -13,14 +13,19 @@ describe("CustomSelectField", () => {
 
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(
-      <CustomSelectField onChange={() => {}} options={defaultOptions} />
+      <CustomSelectField onChange={() => {}} options={defaultOptions} value="" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders with title", () => {
     const {getByText, toJSON} = renderWithTheme(
-      <CustomSelectField onChange={() => {}} options={defaultOptions} title="Select Option" />
+      <CustomSelectField
+        onChange={() => {}}
+        options={defaultOptions}
+        title="Select Option"
+        value=""
+      />
     );
     expect(getByText("Select Option")).toBeTruthy();
     expect(toJSON()).toMatchSnapshot();
@@ -28,7 +33,12 @@ describe("CustomSelectField", () => {
 
   it("renders with placeholder", () => {
     const {toJSON} = renderWithTheme(
-      <CustomSelectField onChange={() => {}} options={defaultOptions} placeholder="Choose one..." />
+      <CustomSelectField
+        onChange={() => {}}
+        options={defaultOptions}
+        placeholder="Choose one..."
+        value=""
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -53,6 +63,7 @@ describe("CustomSelectField", () => {
         errorText="Please select an option"
         onChange={() => {}}
         options={defaultOptions}
+        value=""
       />
     );
     expect(getByText("Please select an option")).toBeTruthy();
@@ -64,6 +75,7 @@ describe("CustomSelectField", () => {
         helperText="Select or enter a custom value"
         onChange={() => {}}
         options={defaultOptions}
+        value=""
       />
     );
     expect(getByText("Select or enter a custom value")).toBeTruthy();
@@ -79,7 +91,7 @@ describe("CustomSelectField", () => {
   it("includes custom option in dropdown", () => {
     // The component automatically adds a "Custom" option to the options list
     const {toJSON} = renderWithTheme(
-      <CustomSelectField onChange={() => {}} options={defaultOptions} />
+      <CustomSelectField onChange={() => {}} options={defaultOptions} value="" />
     );
     expect(toJSON()).toMatchSnapshot();
   });

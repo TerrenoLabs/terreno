@@ -142,7 +142,7 @@ exports[`Card container variant (default) applies custom color 1`] = `
     "onPointerEnter": [Function: AsyncFunction],
     "onPointerLeave": [Function: AsyncFunction],
     "style": {
-      "backgroundColor": undefined,
+      "backgroundColor": "#2B6072",
       "borderBottomColor": "#CDCDCD",
       "borderBottomWidth": 1,
       "borderRadius": undefined,

@@ -8,8 +8,10 @@ import {CommsService} from "./commsService";
 import {CommsMessage} from "./models/commsMessage";
 import {PushToken} from "./models/pushToken";
 import type {
+  BeforeSendResult,
   CheckVerificationOptions,
   CommsHookContext,
+  DeliveryEvent,
   MailMessage,
   MailProvider,
   PushMessage,
@@ -18,6 +20,7 @@ import type {
   SmsProvider,
   StartVerificationOptions,
   VerificationProvider,
+  VerificationResult,
 } from "./types";
 
 const captureError = async (operation: () => Promise<unknown>): Promise<unknown> => {
@@ -71,7 +74,7 @@ describe("CommsService", () => {
         })),
     };
     const verification: VerificationProvider = {
-      checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+      checkVerification: async (): Promise<VerificationResult> => ({valid: true}),
       id: "memory-verification",
       startVerification: async (): Promise<SendResult> => ({
         accepted: true,
@@ -656,7 +659,7 @@ describe("CommsService", () => {
         sendSms: async (): Promise<SendResult> => ({accepted: true}),
       },
       verification: {
-        checkVerification: async (): Promise<{valid: boolean}> => ({error: "bad", valid: false}),
+        checkVerification: async (): Promise<VerificationResult> => ({error: "bad", valid: false}),
         id: "hook-verification",
         startVerification: async (): Promise<SendResult> => ({accepted: true}),
       },
@@ -1002,7 +1005,7 @@ describe("CommsService", () => {
     const errorSpy = spyOn(logger, "error");
     try {
       const service = new CommsService({
-        beforeSend: async (): Promise<void> => {
+        beforeSend: async (): Promise<BeforeSendResult | undefined> => {
           throw new Error("beforeSend boom for person@example.com key=sg.secret");
         },
         mail: {
@@ -1313,7 +1316,7 @@ describe("CommsService", () => {
         sendSms: async (): Promise<SendResult> => ({accepted: true}),
       },
       verification: {
-        checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+        checkVerification: async (): Promise<VerificationResult> => ({valid: true}),
         id: "shape-verification",
         startVerification: async (): Promise<SendResult> => ({accepted: true}),
       },
@@ -1436,7 +1439,7 @@ describe("CommsService", () => {
     let checkCalls = 0;
     const service = new CommsService({
       verification: {
-        checkVerification: async (): Promise<{valid: boolean}> => {
+        checkVerification: async (): Promise<VerificationResult> => {
           checkCalls += 1;
           return {error: "bad", valid: false};
         },
@@ -1489,7 +1492,7 @@ describe("CommsService", () => {
         },
       },
       verification: {
-        checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+        checkVerification: async (): Promise<VerificationResult> => ({valid: true}),
         id: "cancel-verification",
         startVerification: async (): Promise<SendResult> => {
           providerCalls += 1;
@@ -1548,7 +1551,7 @@ describe("CommsService", () => {
 
   it("reports each channel as configured only with a provider in production", (): void => {
     const verification: VerificationProvider = {
-      checkVerification: async (): Promise<{valid: boolean}> => ({valid: true}),
+      checkVerification: async (): Promise<VerificationResult> => ({valid: true}),
       id: "configured-verification",
       startVerification: async (): Promise<SendResult> => ({accepted: true}),
     };
@@ -1756,7 +1759,8 @@ describe("CommsService", () => {
       to: "person@example.com",
     });
 
-    await service.recordDeliveryEvent({channel: "mail", status: "delivered"});
+    // Providers can post events without a message id; the service must tolerate them.
+    await service.recordDeliveryEvent({channel: "mail", status: "delivered"} as DeliveryEvent);
 
     assert.deepEqual(events, ["delivered"]);
     const unchanged = await CommsMessage.findExactlyOne({_id: row._id});

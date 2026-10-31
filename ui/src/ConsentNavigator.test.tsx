@@ -28,9 +28,8 @@ const makeForm = (overrides: Partial<ConsentFormPublic> = {}): ConsentFormPublic
 });
 
 const createMockApi = (forms: ConsentFormPublic[]) => {
-  const mockSubmitMutation = mock(() => Promise.resolve({data: {agreed: true, id: "response-1"}}));
   const mockUnwrap = mock(() => Promise.resolve({agreed: true, id: "response-1"}));
-  mockSubmitMutation.mockReturnValue({unwrap: mockUnwrap});
+  const mockSubmitMutation = mock(() => ({unwrap: mockUnwrap}));
 
   const innerApi = {
     injectEndpoints: mock((_config: unknown) => ({

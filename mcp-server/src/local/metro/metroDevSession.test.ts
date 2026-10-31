@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
-import {lastError, readLogs} from "../tools/readLogs";
-import {getClientState, navigate} from "../tools/runtime";
+import {fakeFetch} from "../../__tests__/fakeFetch.js";
+import {lastError, readLogs} from "../tools/readLogs.js";
+import {getClientState, navigate} from "../tools/runtime.js";
 import {
   cdpRuntimeEvaluate,
   ensureCdpConnected,
@@ -10,7 +11,7 @@ import {
   resetMetroDevSessionForTests,
   snapshotCdpConsoleRing,
   snapshotMetroEventsRing,
-} from "./metroDevSession";
+} from "./metroDevSession.js";
 
 interface FakeMessageEvent {
   data: string;
@@ -90,16 +91,18 @@ describe("Metro development session", () => {
     FakeWebSocket.instances = [];
     process.env.TERRENO_METRO_URL = "http://localhost:8082";
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-    globalThis.fetch = (async (): Promise<Response> =>
-      new Response(
-        JSON.stringify([
-          {
-            title: "Hermes app",
-            webSocketDebuggerUrl: "ws://localhost:8082/cdp",
-          },
-        ]),
-        {status: 200}
-      )) as typeof fetch;
+    globalThis.fetch = fakeFetch(
+      async (): Promise<Response> =>
+        new Response(
+          JSON.stringify([
+            {
+              title: "Hermes app",
+              webSocketDebuggerUrl: "ws://localhost:8082/cdp",
+            },
+          ]),
+          {status: 200}
+        )
+    );
   });
 
   afterEach((): void => {
@@ -168,8 +171,9 @@ describe("Metro development session", () => {
   });
 
   it("reports an unreachable Metro target", async (): Promise<void> => {
-    globalThis.fetch = (async (): Promise<Response> =>
-      new Response("unavailable", {status: 503})) as typeof fetch;
+    globalThis.fetch = fakeFetch(
+      async (): Promise<Response> => new Response("unavailable", {status: 503})
+    );
     const result = await ensureCdpConnected();
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("503");

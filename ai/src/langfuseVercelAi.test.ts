@@ -3,16 +3,19 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {LangfuseCache} from "./langfuseCache";
 import {getLangfuseClient, initLangfuseClient} from "./langfuseClient";
 import {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+import type {FakeLangfusePrompt} from "./tests/fakeLangfusePrompt";
 
-const mockPromptGet = mock(async (_name: string, _options?: Record<string, unknown>) => ({
-  config: {temperature: 0.5},
-  labels: [],
-  name: "welcome",
-  prompt: "Hi {{name}}",
-  tags: [],
-  type: "text" as const,
-  version: 3,
-}));
+const mockPromptGet = mock(
+  async (_name: string, _options?: Record<string, unknown>): Promise<FakeLangfusePrompt> => ({
+    config: {temperature: 0.5},
+    labels: [],
+    name: "welcome",
+    prompt: "Hi {{name}}",
+    tags: [],
+    type: "text" as const,
+    version: 3,
+  })
+);
 
 describe("langfuseVercelAi", () => {
   beforeEach(async () => {

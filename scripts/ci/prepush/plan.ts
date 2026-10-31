@@ -167,8 +167,9 @@ export const planPrepush = ({
   const has = (parameter: string): boolean => parameters.includes(parameter);
 
   const steps: PrepushStep[] = [
-    {command: "bun run lint", name: "lint (all packages)"},
+    // Compile first: root lint runs typecheck, which reads workspace dist types.
     {command: "bun run compile", name: "compile (all packages)"},
+    {command: "bun run lint", name: "lint + typecheck (all packages)"},
   ];
 
   if (has("run-rulesync")) {

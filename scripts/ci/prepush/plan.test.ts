@@ -21,10 +21,10 @@ describe("affectedParameters", () => {
 });
 
 describe("planPrepush", () => {
-  it("always lints and compiles first", () => {
+  it("always compiles, then lints and typechecks first", () => {
     expect(stepNames(["README.md"]).slice(0, 2)).toEqual([
-      "lint (all packages)",
       "compile (all packages)",
+      "lint + typecheck (all packages)",
     ]);
   });
 

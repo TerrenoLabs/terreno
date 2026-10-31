@@ -100,7 +100,7 @@ describe("OpenAPIContext", () => {
     });
 
     it("fetches spec and resolves model fields", async () => {
-      let capturedContext: OpenAPIContextType | null = null;
+      let capturedContext = null as OpenAPIContextType | null;
       render(
         <OpenAPIProvider specUrl="https://api.example.com/openapi.json">
           <ContextReader
@@ -125,7 +125,7 @@ describe("OpenAPIContext", () => {
     });
 
     it("resolves nested model fields using dot notation", async () => {
-      let capturedContext: OpenAPIContextType | null = null;
+      let capturedContext = null as OpenAPIContextType | null;
       render(
         <OpenAPIProvider specUrl="https://api.example.com/openapi.json">
           <ContextReader
@@ -147,7 +147,7 @@ describe("OpenAPIContext", () => {
     });
 
     it("warns when model path is missing", async () => {
-      let capturedContext: OpenAPIContextType | null = null;
+      let capturedContext = null as OpenAPIContextType | null;
       render(
         <OpenAPIProvider specUrl="https://api.example.com/openapi.json">
           <ContextReader
@@ -167,7 +167,7 @@ describe("OpenAPIContext", () => {
     });
 
     it("warns when model field is missing", async () => {
-      let capturedContext: OpenAPIContextType | null = null;
+      let capturedContext = null as OpenAPIContextType | null;
       render(
         <OpenAPIProvider specUrl="https://api.example.com/openapi.json">
           <ContextReader

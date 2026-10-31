@@ -87,7 +87,7 @@ describe("NumberPickerActionSheet", () => {
     );
     // Replace the ref target with a mock after mount so the Button's onClick
     // invokes our spy instead of the real ActionSheet instance.
-    (actionSheetRef as {current: {setModalVisible: typeof setModalVisible}}).current = {
+    (actionSheetRef as unknown as {current: {setModalVisible: typeof setModalVisible}}).current = {
       setModalVisible,
     };
     const closeButtons = UNSAFE_getAllByProps({text: "Close"});

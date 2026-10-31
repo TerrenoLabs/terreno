@@ -76,6 +76,26 @@ import {generateConsentHistoryPdf} from "../generateConsentHistoryPdf";
 import {formatDate} from "../pdfUtils";
 import type {ConsentHistoryEntry} from "../useConsentHistory";
 
+type ConsentForm = NonNullable<ConsentHistoryEntry["form"]>;
+
+/** A history entry as older or partial server records store it: optional form fields and dates. */
+interface StoredConsentEntry
+  extends Omit<ConsentHistoryEntry, "agreedAt" | "checkboxValues" | "form"> {
+  agreedAt?: string;
+  checkboxValues?: Record<string, boolean> | null;
+  form?:
+    | (Partial<Omit<ConsentForm, "checkboxes">> & {
+        checkboxes?: Array<
+          Omit<ConsentForm["checkboxes"][number], "required"> & {required?: boolean}
+        >;
+      })
+    | null;
+}
+
+/** Feeds a partial stored record to the generator, which must tolerate the missing fields. */
+const generateFromStored = (entry: StoredConsentEntry): Promise<void> =>
+  generateConsentHistoryPdf(entry as unknown as ConsentHistoryEntry);
+
 const getRenderedText = (): string[] =>
   calls.filter((call) => call.method === "text").map((call) => String(call.args[0]));
 
@@ -104,7 +124,7 @@ describe("generateConsentHistoryPdf", () => {
   });
 
   it("renders a complete consent record with all optional fields", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "response-123",
       agreed: true,
       agreedAt: "2024-01-15T12:00:00Z",
@@ -144,7 +164,7 @@ describe("generateConsentHistoryPdf", () => {
 
   it("writes a populated web pdf with checkboxes, audit trail, signature, and snapshot", async () => {
     splitMode = "overflow";
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       ...baseEntry(),
       checkboxValues: {"0": true, "1": false},
       contentSnapshot: "snapshot",
@@ -168,7 +188,7 @@ describe("generateConsentHistoryPdf", () => {
   });
 
   it("handles missing form metadata and a declined response", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "response-456",
       agreed: false,
       checkboxValues: null,
@@ -186,7 +206,7 @@ describe("generateConsentHistoryPdf", () => {
 
   it("renders declined entries without a form and JPEG signature failures", async () => {
     imageMode = "throw";
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "x",
       agreed: false,
       agreedAt: "not-a-date",
@@ -203,7 +223,7 @@ describe("generateConsentHistoryPdf", () => {
 
   it("uses fallback labels and handles a failed signature image", async () => {
     imageMode = "throw";
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "response-789",
       agreed: true,
       checkboxValues: {"3": true},
@@ -219,7 +239,7 @@ describe("generateConsentHistoryPdf", () => {
 
   it("adds pages while rendering overflowing content", async () => {
     splitMode = "overflow";
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "response-overflow",
       agreed: true,
       checkboxValues: Object.fromEntries(
@@ -238,7 +258,7 @@ describe("generateConsentHistoryPdf", () => {
 
   it("shares HTML on native platforms", async () => {
     Platform.OS = "ios";
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       ...baseEntry(),
       checkboxValues: {"0": false},
       ipAddress: "10.0.0.1",
@@ -250,7 +270,7 @@ describe("generateConsentHistoryPdf", () => {
     expect(sharePdfFromHtml).toHaveBeenCalled();
   });
   it("draws the provisional signer and date for the user, without a note", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       ...baseEntry(),
       agreedAt: "2026-10-20T15:30:00Z",
       provisional: true,
@@ -266,7 +286,7 @@ describe("generateConsentHistoryPdf", () => {
   });
 
   it("marks a voided provisional signature", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       ...baseEntry(),
       provisional: true,
       provisionalSignedBy: null,
@@ -278,7 +298,7 @@ describe("generateConsentHistoryPdf", () => {
   });
 
   it("draws no provisional section for the user's own entry", async () => {
-    await generateConsentHistoryPdf({...baseEntry(), provisional: false});
+    await generateFromStored({...baseEntry(), provisional: false});
     expect(getRenderedText()).not.toContain("Provisional signature");
   });
 });

@@ -16,7 +16,7 @@ describe("registerExpoPushMock", () => {
   });
 
   it("serves Expo from require and import with a static token check", async (): Promise<void> => {
-    const {Expo} = createRequire(import.meta.url)("expo-server-sdk") as {Expo: ExpoClass};
+    const {Expo} = createRequire(__filename)("expo-server-sdk") as {Expo: ExpoClass};
     const esm = (await import("expo-server-sdk")) as unknown as {default: ExpoClass};
 
     expect(new Expo({accessToken: "t"})).toBe(expoPush.client);

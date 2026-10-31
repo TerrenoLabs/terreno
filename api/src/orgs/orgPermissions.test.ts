@@ -11,14 +11,14 @@ const platformUser = (roles: string[]): User =>
     admin: false,
     id: new mongoose.Types.ObjectId().toString(),
     roles,
-  }) as User;
+  }) as unknown as User;
 
 const memberUser = (): User =>
   ({
     admin: false,
     id: new mongoose.Types.ObjectId().toString(),
     roles: [],
-  }) as User;
+  }) as unknown as User;
 
 describe("OrgQueryFilter", () => {
   it("throws when organization context is missing", () => {

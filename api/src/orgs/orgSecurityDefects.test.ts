@@ -18,6 +18,7 @@ import {createAccess} from "../rbac/access";
 import {terrenoStatements} from "../rbac/statements";
 import {getBaseServer} from "../tests";
 import {type User, UserModel} from "../tests/models";
+import type {OrganizationDocument} from "../types/organization";
 import {Membership, Organization} from "./organizationModel";
 import {ORGANIZATION_DISABLED_TITLE, orgContextMiddleware, resolveOrgContext} from "./orgContext";
 import {isOrgMemberPermission, OrgQueryFilter} from "./orgPermissions";
@@ -96,7 +97,8 @@ describe("org security regressions", () => {
           update: [Permissions.IsAuthenticated, isOrgMemberPermission],
         },
         preCreate: async (body, req) => {
-          const organizationId = req.organization?._id;
+          // orgContextMiddleware sets req.organization; the Express typing leaves it unknown.
+          const organizationId = (req.organization as OrganizationDocument | undefined)?._id;
           if (!organizationId) {
             throw new Error("organization context required");
           }

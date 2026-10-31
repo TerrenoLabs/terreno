@@ -9,12 +9,12 @@ import {
 import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import {createRef} from "react";
-import type {Text as NativeText} from "react-native";
+import type {Text as NativeText, TextProps} from "react-native";
 import {ThemeProvider} from "../Theme";
 import {TimezonePicker} from "../TimezonePicker";
-import {renderWithTheme} from "../test-utils";
+import {elementProps, findAllByHostType, renderWithTheme} from "../test-utils";
 import {AskCard, type AskCardProps} from "./AskCard";
-import type {AskSubmission, ChatAsk} from "./askTypes";
+import type {AskSubmission, ChatAsk, ChatAskState} from "./askTypes";
 
 const PLAN_INPUT: ChoiceAskInput = {
   default: ["team"],
@@ -49,7 +49,7 @@ const COUNTRY_INPUT: ChoiceAskInput = {
   select: "one",
 };
 
-const pendingAsk = (input: ChoiceAskInput, state: Partial<ChatAsk> = {}): ChatAsk => ({
+const pendingAsk = (input: ChoiceAskInput, state: Partial<ChatAskState> = {}): ChatAsk => ({
   input,
   kind: "choice",
   status: "pending",
@@ -556,7 +556,7 @@ describe("AskCard", () => {
 
       await press(getByTestId("ask-card-button-approve"));
       assert.lengthOf(
-        getByTestId("ask-card-button-approve").findAll((node) => node.type === "ActivityIndicator"),
+        findAllByHostType(getByTestId("ask-card-button-approve"), "ActivityIndicator"),
         1
       );
       assert.isTrue(isDisabled(getByTestId("ask-card-button-deny")));
@@ -1010,11 +1010,12 @@ describe("AskCard", () => {
       assert.isNull(card.queryByText("Enter a complete time, or clear it."));
       assert.isNull(card.queryByText("Enter a complete date and time, or clear it."));
       await press(card.getByTestId("ask-card-submit"));
-      assert.deepInclude(
-        (onSubmit.mock.calls[0]?.[0]?.response as {content: {values: Record<string, unknown>}})
-          ?.content?.values ?? {},
-        {meeting: "2026-10-01T09:30:00Z", reminder: "10:30"}
-      );
+      const response = onSubmit.mock.calls[0]?.[0]?.response;
+      const values = response?.action === "accept" ? response.content.values : undefined;
+      assert.deepInclude((values ?? {}) as Record<string, unknown>, {
+        meeting: "2026-10-01T09:30:00Z",
+        reminder: "10:30",
+      });
     });
 
     it("keeps Submit disabled when the hour of an on-the-hour time is cleared, and keeps the time", async () => {
@@ -1244,8 +1245,9 @@ describe("AskCard", () => {
     const {getByTestId} = renderCard({ask: pendingAsk(PLAN_INPUT), onSubmit});
 
     await press(getByTestId("ask-card-button-option:team"));
-    const spinners = getByTestId("ask-card-button-option:team").findAll(
-      (node) => node.type === "ActivityIndicator"
+    const spinners = findAllByHostType(
+      getByTestId("ask-card-button-option:team"),
+      "ActivityIndicator"
     );
     assert.lengthOf(spinners, 1);
     assert.isTrue(isDisabled(getByTestId("ask-card-button-option:team")));
@@ -1306,7 +1308,8 @@ describe("AskCard", () => {
     const {getByRole} = render(
       <AskCard ask={pendingAsk(PLAN_INPUT)} onSubmit={async () => {}} promptRef={promptRef} />,
       {
-        createNodeMock: (element) => (element.props.accessibilityRole === "header" ? prompt : null),
+        createNodeMock: (element) =>
+          elementProps<TextProps>(element).accessibilityRole === "header" ? prompt : null,
         wrapper: ThemeProvider,
       }
     );

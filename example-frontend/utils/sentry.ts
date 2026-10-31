@@ -1,3 +1,4 @@
+import type {StoreEnhancer} from "@reduxjs/toolkit";
 import * as Sentry from "@sentry/react";
 import {Platform} from "react-native";
 
@@ -14,10 +15,11 @@ export const captureException = (error: unknown | Error): void => {
   }
 };
 
-export const createSentryReduxEnhancer = (): unknown => {
+export const createSentryReduxEnhancer = (): StoreEnhancer => {
   if (IsWeb && typeof Sentry.createReduxEnhancer === "function") {
     return Sentry.createReduxEnhancer();
   }
 
-  return (next: unknown) => next;
+  const passThrough: StoreEnhancer = (next) => next;
+  return passThrough;
 };

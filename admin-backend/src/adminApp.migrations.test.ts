@@ -11,6 +11,7 @@ import {
   createAccess,
   MIGRATION_LOCK_ID,
   MIGRATIONS_COLLECTION,
+  type MigrationStoreDoc,
   setupAuth,
   terrenoStatements,
   type UserModel as UserModelType,
@@ -22,7 +23,7 @@ import type TestAgent from "supertest/lib/agent";
 
 import {AdminApp} from "./adminApp";
 
-const fixturesDir = join(import.meta.dir, "../../api/src/migrations/fixtures/valid");
+const fixturesDir = join(__dirname, "../../api/src/migrations/fixtures/valid");
 
 const buildApp = ({
   accessControl,
@@ -52,7 +53,7 @@ const waitForTask = (): Promise<void> => {
 
 const appliedIds = async (): Promise<string[]> => {
   const docs = await mongoose.connection
-    .collection(MIGRATIONS_COLLECTION)
+    .collection<MigrationStoreDoc>(MIGRATIONS_COLLECTION)
     .find({_id: {$ne: MIGRATION_LOCK_ID}})
     .project({id: 1})
     .toArray();

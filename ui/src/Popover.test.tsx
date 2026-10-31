@@ -3,7 +3,7 @@ import {fireEvent, waitFor} from "@testing-library/react-native";
 
 import {Popover} from "./Popover";
 import {Text} from "./Text";
-import {renderWithTheme} from "./test-utils";
+import {findByHostType, renderWithTheme} from "./test-utils";
 
 describe("Popover", () => {
   it("renders the title, date and body when loaded", () => {
@@ -110,7 +110,7 @@ describe("Popover", () => {
     expect(scrollView.props.style).toEqual(
       expect.objectContaining({flexBasis: 0, flexGrow: 1, flexShrink: 1, minHeight: 0})
     );
-    const content = scrollView.findByType("View");
+    const content = findByHostType(scrollView, "View");
     expect(content.props.style?.height).toBeUndefined();
   });
 

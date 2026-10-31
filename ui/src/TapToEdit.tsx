@@ -27,7 +27,7 @@ const TapToEditTitle: FC<{
   );
 };
 
-export const formatAddress = (address: AddressInterface, asString = false): string => {
+export const formatAddress = (address: Partial<AddressInterface>, asString = false): string => {
   let city = "";
   if (address?.city) {
     city = address?.state || address.zipcode ? `${address.city}, ` : `${address.city}`;

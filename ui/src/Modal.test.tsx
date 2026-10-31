@@ -3,7 +3,12 @@ import {fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 // Import Platform the same way the source modules do (ESM named import) so the web blur effect
 // (which reads Platform.OS directly in Modal.tsx) observes the value the test sets.
-import {Platform as ImportedPlatform, type ScaledSize, useWindowDimensions} from "react-native";
+import {
+  Platform as ImportedPlatform,
+  Text as NativeText,
+  type ScaledSize,
+  useWindowDimensions,
+} from "react-native";
 import {Gesture} from "react-native-gesture-handler";
 
 import {Modal} from "./Modal";
@@ -599,7 +604,7 @@ describe("Modal web platform", () => {
     const handleAction = mock(() => {});
     const {UNSAFE_getAllByType, getByText} = renderWithTheme(
       <Modal onDismiss={handleDismiss} title="Title" visible>
-        <Text onPress={handleAction}>Mark read</Text>
+        <NativeText onPress={handleAction}>Mark read</NativeText>
       </Modal>
     );
     fireEvent.press(getByText("Mark read"));

@@ -37,7 +37,7 @@ describe("tableContext", () => {
     expect(ctx.hasDrawerContents).toBe(false);
     expect(typeof ctx.setSortColumn).toBe("function");
     // Invoke default setSortColumn to cover the no-op default
-    expect(() => ctx.setSortColumn({column: 0, direction: "asc"})).not.toThrow();
+    expect(() => ctx.setSortColumn!({column: 0, direction: "asc"})).not.toThrow();
   });
 
   it("passes provided values through the provider", () => {
@@ -46,7 +46,7 @@ describe("tableContext", () => {
     render(
       <TableContextProvider
         alternateRowBackground={false}
-        borderStyle="lg"
+        borderStyle="none"
         columns={[100, 200]}
         hasDrawerContents
         page={3}
@@ -62,9 +62,9 @@ describe("tableContext", () => {
     expect(ctx.hasDrawerContents).toBe(true);
     expect(ctx.stickyHeader).toBe(false);
     expect(ctx.alternateRowBackground).toBe(false);
-    expect(ctx.borderStyle).toBe("lg");
+    expect(ctx.borderStyle).toBe("none");
     expect(ctx.sortColumn).toEqual({column: 1, direction: "desc"});
-    ctx.setSortColumn({column: 0, direction: "asc"});
+    ctx.setSortColumn!({column: 0, direction: "asc"});
     expect(setSortColumn).toHaveBeenCalled();
   });
 
@@ -73,7 +73,7 @@ describe("tableContext", () => {
     const Consumer = () => {
       const {setSortColumn: setter} = useTableContext();
       useEffect(() => {
-        setter({column: 2, direction: "desc"});
+        setter!({column: 2, direction: "desc"});
       }, [setter]);
       return <Text>ok</Text>;
     };

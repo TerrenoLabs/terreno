@@ -20,6 +20,7 @@ const makeAnnouncement = (overrides: Partial<AnnouncementDocument> = {}): Announ
   audience: {},
   body: "Body",
   created: new Date(),
+  deleted: false,
   expiresAt: undefined,
   platforms: ["ios", "android", "web"],
   priority: 0,
@@ -165,7 +166,7 @@ describe("pending helpers", () => {
   it("matchAudienceByType honors staff, patient, and all", () => {
     const staffUser = {admin: true};
     const patientUser = {admin: false};
-    const isStaff = (user: {admin?: boolean}) => user.admin === true;
+    const isStaff = (user: unknown): boolean => (user as {admin?: boolean}).admin === true;
 
     assert.isTrue(
       matchAudienceByType({

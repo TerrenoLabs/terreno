@@ -13,7 +13,7 @@ import {AIService, TemperaturePresets} from "./aiService";
 // Create a mock LanguageModelV2
 const createMockModel = (responseText = "Mock response") => {
   return {
-    doGenerate: mock(async () => ({
+    doGenerate: mock(async (_options: unknown) => ({
       content: [{text: responseText, type: "text" as const}],
       finishReason: "stop" as const,
       usage: {inputTokens: 5, outputTokens: 10},

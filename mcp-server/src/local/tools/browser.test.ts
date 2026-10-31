@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {assert} from "chai";
 
-import {BrowserSession} from "./browser";
+import {BrowserSession} from "./browser.js";
 
 const BROWSER_TEST_TIMEOUT_MS = 30_000;
 

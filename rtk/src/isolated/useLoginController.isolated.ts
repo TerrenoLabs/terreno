@@ -12,6 +12,7 @@ import type {
   LoginClientResult,
   LoginControllerClient,
   LoginDeviceSession,
+  LoginSignedInEvent,
   LoginUser,
   UseLoginControllerOptions,
 } from "../auth/useLoginController";
@@ -203,7 +204,7 @@ const renderController = (
   onSignedIn: ReturnType<typeof mock>;
   store: RememberedAccountsStore;
 } => {
-  const onSignedIn = mock(() => {});
+  const onSignedIn = mock((_event: LoginSignedInEvent) => {});
   const store = options.rememberedAccounts ?? createStore();
   const rendered = renderHook(() =>
     useLoginController({onSignedIn, rememberedAccounts: store, webAuth: "cookie", ...options})
@@ -620,7 +621,7 @@ describe("useLoginController", () => {
 
   it("follows a new ?error= and never shows URL text for an unknown code", async () => {
     let error = "provider_not_found";
-    const onSignedIn = mock(() => {});
+    const onSignedIn = mock((_event: LoginSignedInEvent) => {});
     const store = createStore();
     const client = fakeClient();
     const {result, rerender} = renderHook(() =>
@@ -798,7 +799,7 @@ describe("useLoginController", () => {
         scheme: "terreno",
         webAuth: "bearer",
       });
-      const onSignedIn = mock(() => {});
+      const onSignedIn = mock((_event: LoginSignedInEvent) => {});
       const {result} = renderHook(() =>
         useLoginController({
           callbackURL: "/login",
@@ -1003,7 +1004,7 @@ describe("useLoginController", () => {
         webAuth: "bearer",
       });
       const store = createStore();
-      const onSignedIn = mock(() => {});
+      const onSignedIn = mock((_event: LoginSignedInEvent) => {});
       renderHook(() => useLoginController({client, onSignedIn, rememberedAccounts: store}));
 
       await waitFor(() => expect(onSignedIn).toHaveBeenCalledTimes(1));

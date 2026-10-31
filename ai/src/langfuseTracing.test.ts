@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 
 interface FakeSdkOptions {
   serviceName?: string;
@@ -28,7 +28,11 @@ class FakeLangfuseSpanProcessor {
 mock.module("@opentelemetry/sdk-node", () => ({NodeSDK: FakeNodeSDK}));
 mock.module("@langfuse/otel", () => ({LangfuseSpanProcessor: FakeLangfuseSpanProcessor}));
 
-const {initTracing, shutdownTracing} = await import("./langfuseTracing");
+let initTracing: typeof import("./langfuseTracing.js").initTracing;
+let shutdownTracing: typeof import("./langfuseTracing.js").shutdownTracing;
+beforeAll(async () => {
+  ({initTracing, shutdownTracing} = await import("./langfuseTracing.js"));
+});
 
 describe("langfuseTracing", () => {
   beforeEach(async () => {

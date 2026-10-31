@@ -337,7 +337,10 @@ const driveCapturedClient = (
 ): {client: ReturnType<typeof createRealAuthClient>; sent: SentRequest[]} => {
   const sent: SentRequest[] = [];
   const options = captured.auth as {baseURL: string; fetchOptions: Record<string, unknown>};
-  const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+  const customFetchImpl = async (
+    input: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> => {
     const {pathname} = new URL(input.toString());
     sent.push({
       authorization: new Headers(init?.headers).get("authorization"),
@@ -721,7 +724,10 @@ const createChallengeClient = (
 ): {client: ChallengeClient; sent: ChallengeRequest[]} => {
   const sent: ChallengeRequest[] = [];
   captured.build = (config: Record<string, unknown>): unknown => {
-    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    const customFetchImpl = async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ): Promise<Response> => {
       const {pathname} = new URL(input.toString());
       sent.push({challenge: new Headers(init?.headers).get(CHALLENGE_HEADER), pathname});
       return server(pathname);
@@ -923,7 +929,10 @@ describe("cookie-free challenges in web bearer mode", () => {
         baseURL: config.baseURL as string,
         fetchOptions: {
           ...(config.fetchOptions as Record<string, unknown>),
-          customFetchImpl: async (input: string | URL, init?: RequestInit): Promise<Response> => {
+          customFetchImpl: async (
+            input: string | URL | Request,
+            init?: RequestInit
+          ): Promise<Response> => {
             sent.push({
               challenge: new Headers(init?.headers).get(CHALLENGE_HEADER),
               pathname: new URL(input.toString()).pathname,
@@ -1021,7 +1030,10 @@ const useRealClient = (
 ): {sent: HandoffRequest[]} => {
   const sent: HandoffRequest[] = [];
   captured.build = (config: Record<string, unknown>): unknown => {
-    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    const customFetchImpl = async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ): Promise<Response> => {
       const {pathname} = new URL(input.toString());
       sent.push({
         authorization: new Headers(init?.headers).get("authorization"),
@@ -1586,7 +1598,7 @@ const installFormDocument = (): SubmittedForm[] => {
     return {name: "", style: {}, type: "", value: ""};
   };
   const formElements = new Map<object, SubmittedForm>();
-  (globalThis as {window: Record<string, unknown>}).window.document = {
+  (globalThis as unknown as {window: Record<string, unknown>}).window.document = {
     body: {
       appendChild: (element: object): void => {
         const form = formElements.get(element);
@@ -1841,7 +1853,10 @@ const useRealFeatureClient = (
   const sent: FeatureRequest[] = [];
   const auth: Array<Omit<SentRequest, "pathname">> = [];
   captured.build = (config: Record<string, unknown>): unknown => {
-    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    const customFetchImpl = async (
+      input: string | URL | Request,
+      init?: RequestInit
+    ): Promise<Response> => {
       sent.push({method: init?.method, pathname: new URL(input.toString()).pathname});
       auth.push({
         authorization: new Headers(init?.headers).get("authorization"),

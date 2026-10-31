@@ -39,7 +39,12 @@ describe("AnnouncementOverviewScreenWidget", () => {
 
   it("routes create, edit, and analytics table actions through expo-router", () => {
     renderWithTheme(
-      <AnnouncementOverviewScreenWidget api={{} as unknown as AdminApi} routeBase="/admin" />
+      <AnnouncementOverviewScreenWidget
+        api={{} as unknown as AdminApi}
+        config={{customScreens: [], models: [], scripts: []}}
+        routeBase="/admin"
+        screenName="announcements"
+      />
     );
 
     assert.strictEqual(capturedOverviewProps?.routeBase, "/admin");

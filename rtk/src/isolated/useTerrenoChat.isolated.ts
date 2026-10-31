@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
+import type {UIMessage, UseChatHelpers} from "@ai-sdk/react";
 import type {AuthProvider} from "@terreno/syncdb";
 
 interface TransportOptions {
@@ -25,7 +26,8 @@ class MockDefaultChatTransport {
   }
 }
 
-const chatResult = {messages: [], status: "ready"};
+// Test double: only the fields the hook passes through are populated.
+const chatResult = {messages: [], status: "ready"} as unknown as UseChatHelpers<UIMessage>;
 
 mock.module("@ai-sdk/react", () => ({
   useChat: (options: ChatOptions) => {

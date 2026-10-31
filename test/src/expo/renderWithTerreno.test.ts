@@ -4,15 +4,16 @@ import {registerExpoTestEnvironment} from "./registerExpoTestEnvironment";
 
 registerExpoTestEnvironment({setProcessEnv: false});
 
-// Everything below loads react-native, so it must come after the environment is registered.
-const {createElement} = await import("react");
-const {fireEvent, renderHook, waitFor} = await import("@testing-library/react-native");
-const {configureStore, createSlice} = await import("@reduxjs/toolkit");
-const {useSelector} = await import("react-redux");
-const {Box, Button, Text, useTheme} = await import("@terreno/ui");
-const {createTerrenoWrapper, loadReduxProvider, renderWithTerreno} = await import(
-  "./renderWithTerreno"
-);
+// Everything below loads react-native, so it is required after the environment is registered.
+const {createElement} = require("react") as typeof import("react");
+const {fireEvent, renderHook, waitFor} =
+  require("@testing-library/react-native") as typeof import("@testing-library/react-native");
+const {configureStore, createSlice} =
+  require("@reduxjs/toolkit") as typeof import("@reduxjs/toolkit");
+const {useSelector} = require("react-redux") as typeof import("react-redux");
+const {Box, Button, Text, useTheme} = require("@terreno/ui") as typeof import("@terreno/ui");
+const {createTerrenoWrapper, loadReduxProvider, renderWithTerreno} =
+  require("./renderWithTerreno") as typeof import("./renderWithTerreno");
 
 const createCounterStore = (): ReturnType<typeof configureStore<{counter: {count: number}}>> =>
   configureStore({
@@ -65,7 +66,9 @@ describe("renderWithTerreno", () => {
 
 describe("loadReduxProvider", () => {
   it("returns react-redux's Provider", () => {
-    expect(loadReduxProvider()).toBe((require("react-redux") as {Provider: unknown}).Provider);
+    expect<unknown>(loadReduxProvider()).toBe(
+      (require("react-redux") as {Provider: unknown}).Provider
+    );
   });
 
   it("explains that a store needs react-redux when the package is missing", () => {

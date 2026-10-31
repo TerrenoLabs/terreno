@@ -42,7 +42,10 @@ describe("expo-secure-store stand-in", () => {
 
 describe("AsyncStorage stand-in", () => {
   it("implements the single and multi-key APIs", async () => {
-    const {default: AsyncStorage} = await import("@react-native-async-storage/async-storage");
+    // Under CommonJS interop the typed default is the module namespace; the mock is the default.
+    const {default: AsyncStorage} = (await import(
+      "@react-native-async-storage/async-storage"
+    )) as unknown as {default: typeof asyncStorageMock};
     await AsyncStorage.setItem("a", "1");
     await AsyncStorage.multiSet([
       ["b", "2"],

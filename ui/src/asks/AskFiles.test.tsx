@@ -306,7 +306,11 @@ describe("AskCard files", () => {
     assert.isNull(rendered.queryByTestId("ask-card-errors"));
     assert.isFalse(isDisabled(rendered.getByTestId("ask-card-submit")));
 
-    const tooLarge = {...mismatch, code: "FILE_TOO_LARGE", message: "items.txt is too large."};
+    const tooLarge = {
+      ...mismatch,
+      code: "FILE_TOO_LARGE" as const,
+      message: "items.txt is too large.",
+    };
     rendered.rerender(<AskCard ask={ask} errors={[tooLarge]} onSubmit={onSubmit} />);
     assert.isOk(within(rendered.getByTestId("ask-card-errors")).getByText(tooLarge.message));
 

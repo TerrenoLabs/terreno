@@ -7,7 +7,7 @@ registerBackendPreload({
   connectMongoInBeforeAll: true,
   mongo: {baseDatabaseName: "terreno-ai-test", useReplSet: true},
   onBeforeEach: async () => {
-    const {shutdownLangfuseClient} = await import("../langfuseClient");
+    const {shutdownLangfuseClient} = await import("../langfuseClient.js");
     await shutdownLangfuseClient();
   },
   testEnv: {

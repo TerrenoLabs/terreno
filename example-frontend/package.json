@@ -77,6 +77,7 @@
     "test:ci": "bun test ./**/*.test.ts ./**/*.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "web": "NODE_OPTIONS=--max-old-space-size=8192 bun expo start --web --port 8082"
   },
   "version": "1.0.0"

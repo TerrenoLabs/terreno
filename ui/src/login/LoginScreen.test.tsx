@@ -4,7 +4,7 @@ import type {ReactElement} from "react";
 import {Platform} from "react-native";
 import {TextField} from "../TextField";
 import {ThemeProvider} from "../Theme";
-import {renderWithTheme} from "../test-utils";
+import {elementProps, renderWithTheme} from "../test-utils";
 import {LoginScreen} from "./LoginScreen";
 import type {LoginAccountOption} from "./loginTypes";
 
@@ -252,7 +252,7 @@ describe("LoginScreen", () => {
   });
 
   it("calls onSubmit with form values when submit button is pressed", async () => {
-    const onSubmit = mock(() => Promise.resolve());
+    const onSubmit = mock((_values: Record<string, string>) => Promise.resolve());
     const {getByTestId} = renderWithTheme(
       <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
     );
@@ -845,14 +845,14 @@ const renderWithHostMocks = (
 ): ReturnType<typeof render> & {focused: string[]} => {
   const focused: string[] = [];
   const result = render(ui, {
-    createNodeMock: (element: ReactElement<{testID?: string}>) => {
+    createNodeMock: (element: ReactElement) => {
       if (element.type === "form") {
         return requestSubmit ? {requestSubmit} : {};
       }
       return {
         blur: (): void => {},
         focus: (): void => {
-          focused.push(element.props.testID ?? "");
+          focused.push(elementProps<{testID?: string}>(element).testID ?? "");
         },
       };
     },
@@ -900,7 +900,7 @@ describe("LoginScreen keyboard and autofill", () => {
   });
 
   it("submits once on Enter in the password field", async () => {
-    const onSubmit = mock(() => Promise.resolve());
+    const onSubmit = mock((_values: Record<string, string>) => Promise.resolve());
     const {getByTestId} = renderWithTheme(
       <LoginScreen fields={defaultFields} onSubmit={onSubmit} />
     );
@@ -973,7 +973,7 @@ describe("LoginScreen keyboard and autofill", () => {
       Platform.OS = "web";
       try {
         const requestSubmit = mock(() => {});
-        const onSubmit = mock(() => Promise.resolve());
+        const onSubmit = mock((_values: Record<string, string>) => Promise.resolve());
         const {UNSAFE_getByType, getByTestId} = renderWithHostMocks(
           <LoginScreen fields={defaultFields} onSubmit={onSubmit} />,
           {requestSubmit}

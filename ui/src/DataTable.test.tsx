@@ -3,7 +3,7 @@ import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {type FC, useState} from "react";
 import {Platform, StyleSheet} from "react-native";
 
-import type {DataTableCustomComponentMap, DataTableProps} from "./Common";
+import type {DataTableCellData, DataTableCustomComponentMap, DataTableProps} from "./Common";
 import {DataTable} from "./DataTable";
 import {Text} from "./Text";
 import {renderWithTheme} from "./test-utils";
@@ -290,7 +290,7 @@ describe("DataTable", () => {
   });
 
   it("renders with cell highlight", () => {
-    const highlightData = [[{highlight: "primary", value: "Highlighted"}]];
+    const highlightData: DataTableCellData[][] = [[{highlight: "primary", value: "Highlighted"}]];
     const {toJSON} = renderWithTheme(
       <DataTable columns={[{columnType: "text", title: "Name", width: 150}]} data={highlightData} />
     );
@@ -303,7 +303,7 @@ describe("DataTable", () => {
       {columnType: "number", title: "Count", width: 100},
       {columnType: "date", title: "Due", width: 150},
     ];
-    const highlightData = [
+    const highlightData: DataTableCellData[][] = [
       [
         {highlight: "error", value: "Overdue"},
         {highlight: "error", value: 42},
@@ -495,7 +495,7 @@ describe("DataTable", () => {
   });
 
   it("renders with cell highlight color", () => {
-    const highlightData = [[{highlight: "primary", value: "Highlighted"}]];
+    const highlightData: DataTableCellData[][] = [[{highlight: "primary", value: "Highlighted"}]];
     const highlightColumns = [{columnType: "text", title: "Col", width: 150}];
     const {toJSON} = renderWithTheme(<DataTable columns={highlightColumns} data={highlightData} />);
     expect(toJSON()).toBeTruthy();

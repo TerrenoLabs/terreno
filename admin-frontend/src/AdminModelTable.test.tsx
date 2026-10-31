@@ -8,9 +8,9 @@ import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {ADMIN_SEARCH_DEBOUNCE_MS} from "./Constants";
 import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse} from "./types";
+import type {AdminApi, AdminConfigResponse, AdminModelConfig} from "./types";
 
-const routerPush = mock(() => {});
+const routerPush = mock((_href: unknown) => {});
 const setOptions = mock((_: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: routerPush},
@@ -41,15 +41,18 @@ const listState: {data: unknown; isLoading: boolean} = {
 };
 const listQueryArgs: unknown[] = [];
 const deleteFn = mock(() => ({unwrap: async () => ({})}));
-const patchFn = mock(() => ({unwrap: async () => ({})}));
-const bulkPatchFn = mock(() => ({unwrap: async () => ({updated: 0})}));
-const enqueueBackgroundFn = mock(() => ({unwrap: async () => ({taskId: "t1"})}));
+const patchFn = mock((_arg: unknown) => ({unwrap: async () => ({})}));
+const bulkPatchFn = mock((_arg: unknown) => ({unwrap: async () => ({updated: 0})}));
+const enqueueBackgroundFn = mock((_arg: unknown) => ({unwrap: async () => ({taskId: "t1"})}));
 
 mock.module("./useAdminBackgroundTask", () => ({
   useAdminBackgroundTaskMutation: () => [enqueueBackgroundFn, {isLoading: false}],
 }));
 
 import {AdminModelTable} from "./AdminModelTable";
+
+const withoutDefaultSort = (model: Omit<AdminModelConfig, "defaultSort">): AdminModelConfig =>
+  model as AdminModelConfig;
 
 const fullConfig = {
   customScreens: [],
@@ -237,10 +240,11 @@ describe("AdminModelTable", () => {
             ...fullConfig.models[0].fields,
             ownerId: {ref: "Group", required: false, type: "objectid"},
           },
-          filters: [{field: "ownerId", kind: "ref" as const, refModel: "Group"}],
+          filters: [{field: "ownerId", kind: "ref", refModel: "Group"}],
           listFields: ["email"],
         },
         {
+          defaultSort: "-created",
           displayName: "Groups",
           fields: {},
           listFields: ["name"],
@@ -253,7 +257,7 @@ describe("AdminModelTable", () => {
       <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="User" />
     );
     const [refFilter] = findDataTable(UNSAFE_root).props.additionalFilters;
-    const onChange = mock(() => {});
+    const onChange = mock((_value: unknown) => {});
     const rendered = refFilter.renderFilter({
       field: "ownerId",
       onChange,
@@ -329,8 +333,8 @@ describe("AdminModelTable", () => {
     configState.config = {
       customScreens: [],
       models: [
-        {
-          defaultSort: undefined,
+        // A model the server sends without a default sort.
+        withoutDefaultSort({
           displayName: "Plain",
           fields: {
             _id: {required: true, type: "string"},
@@ -343,7 +347,7 @@ describe("AdminModelTable", () => {
           listFields: ["_id", "name", "created", "updated"],
           name: "Plain",
           routePath: "/admin/plain",
-        },
+        }),
       ],
       scripts: [],
     };
@@ -799,7 +803,7 @@ describe("AdminModelTable", () => {
         | {disabled?: boolean; onToggle?: () => void; value?: boolean}
         | undefined;
       return (
-        value &&
+        !!value &&
         typeof value.onToggle === "function" &&
         typeof value.value === "boolean" &&
         typeof value.disabled === "boolean"
@@ -837,7 +841,7 @@ describe("AdminModelTable", () => {
 
     const linkCells = UNSAFE_root.findAll((n: ReactTestInstance) => {
       const value = n.props?.cellData?.value as {href?: string; text?: string} | undefined;
-      return value && typeof value.href === "string" && typeof value.text === "string";
+      return !!value && typeof value.href === "string" && typeof value.text === "string";
     });
     assert.isAtLeast(linkCells.length, 1);
     const linkCell = linkCells[0] as ReactTestInstance;

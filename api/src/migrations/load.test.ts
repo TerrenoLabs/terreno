@@ -10,7 +10,7 @@ import {APIError} from "../errors";
 import {checkMigrationFiles, loadMigrations, resolveMigrationDir} from "./load";
 
 const fixtures = (...parts: string[]): string => {
-  return join(import.meta.dir, "fixtures", ...parts);
+  return join(__dirname, "fixtures", ...parts);
 };
 
 describe("checkMigrationFiles", () => {

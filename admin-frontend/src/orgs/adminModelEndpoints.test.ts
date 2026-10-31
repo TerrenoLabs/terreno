@@ -143,7 +143,7 @@ describe("adminModelEndpoints", () => {
       "adminRead_Food:org-1:food-1"
     );
     assert.equal(
-      buildFoodEndpoints(undefined).adminList_Food.serializeQueryArgs?.({
+      (buildFoodEndpoints(undefined).adminList_Food as EndpointDefinition).serializeQueryArgs?.({
         endpointName: "adminList_Food",
         queryArgs: undefined,
       }),

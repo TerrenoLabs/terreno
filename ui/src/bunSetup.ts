@@ -158,7 +158,7 @@ const createSimpleFlatList = () => {
 const createVirtualizedFlatList = (): React.ForwardRefExoticComponent<
   MockFlatListProps & React.RefAttributes<unknown>
 > =>
-  React.forwardRef((props, ref) => {
+  React.forwardRef((props: MockFlatListProps, ref) => {
     const {
       data,
       renderItem,

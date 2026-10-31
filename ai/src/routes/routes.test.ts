@@ -17,7 +17,14 @@ import type {ObservabilityPlugin} from "../observability/types";
 import {AIService} from "../service/aiService";
 import type {FileStorageService} from "../service/fileStorage";
 import type {MCPService} from "../service/mcpService";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {
+  authAsUser,
+  ensureTestUsers,
+  historyRouterOptions,
+  terrenoUserModel,
+  UserModel,
+} from "../tests/helpers";
+import type {FileContentPart, ImageContentPart} from "../types/index";
 import {addAiRequestsExplorerRoutes} from "./aiRequestsExplorer";
 import {addGptHistoryRoutes} from "./gptHistories";
 
@@ -25,14 +32,15 @@ type SseResponse = supertest.Response & {body: string};
 
 // Mock langfuseVercelAi to avoid transitive langfuse SDK import in tests.
 // Spread the real module so later-loaded test files still see the real exports.
-const realLangfuseVercelAi = await import("../langfuseVercelAi");
+// The package compiles as CommonJS, so modules load with require instead of top-level await.
+const realLangfuseVercelAi: typeof import("../langfuseVercelAi.js") = require("../langfuseVercelAi");
 mock.module("../langfuseVercelAi", () => ({
   ...realLangfuseVercelAi,
   createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
   preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
 }));
 
-const realAi = await import("ai");
+const realAi: typeof import("ai") = require("ai");
 type StreamTextOptions = Parameters<typeof realAi.streamText>[0];
 type StreamTextResult = ReturnType<typeof realAi.streamText>;
 const realStreamText = realAi.streamText;
@@ -43,7 +51,7 @@ mock.module("ai", () => ({
     streamTextOverride ? streamTextOverride(options) : realStreamText(options),
 }));
 
-const {addGptRoutes} = await import("./gpt");
+const {addGptRoutes}: typeof import("./gpt.js") = require("./gpt");
 
 // Create mock AI model (LanguageModelV2)
 const createMockModel = (modelId = "mock-model") => ({
@@ -193,12 +201,12 @@ describe("AI Routes", () => {
 
     app = new TerrenoApp({
       configureApp: (router, options) => {
-        addGptHistoryRoutes(router, options);
+        addGptHistoryRoutes(router, historyRouterOptions(options));
         addGptRoutes(router, {aiService, openApiOptions: options});
         addAiRequestsExplorerRoutes(router, {openApiOptions: options});
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
   });
 
@@ -262,7 +270,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(demoApp, "notAdmin");
       const res = await agent.post("/gpt/remix").send({text: "Hello"});
@@ -397,7 +405,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(demoApp, "notAdmin");
       const res = await agent
@@ -419,7 +427,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {createModelFn, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -441,7 +449,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {createServerModelFn, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -454,13 +462,16 @@ describe("AI Routes", () => {
     });
 
     it("falls back to default aiService when createServerModelFn returns null", async () => {
-      const createServerModelFn = mock((_modelId?: string) => null);
+      // A JavaScript host may return null even though the option's type says undefined.
+      const createServerModelFn = mock(
+        (_modelId?: string) => null as unknown as LanguageModel | undefined
+      );
       const customApp = new TerrenoApp({
         configureApp: (router, options) => {
           addGptRoutes(router, {aiService, createServerModelFn, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -576,7 +587,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService: noFinishService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(noFinishApp, "notAdmin");
       const res = await agent
@@ -598,7 +609,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService: imageService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(imgApp, "notAdmin");
       const res = await agent
@@ -622,7 +633,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService: imageService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(imgApp, "notAdmin");
       const res = await agent
@@ -638,7 +649,9 @@ describe("AI Routes", () => {
       const assistant = history.prompts.find((p) => p.type === "assistant");
       expect(assistant?.text).toBe("");
       expect(assistant?.content).toHaveLength(1);
-      expect(assistant?.content?.[0]?.url).toBe("data:image/png;base64,aGVsbG8=");
+      expect((assistant?.content?.[0] as ImageContentPart | undefined)?.url).toBe(
+        "data:image/png;base64,aGVsbG8="
+      );
     });
 
     it("writes an SSE error event when the model stream throws", async () => {
@@ -650,7 +663,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService: errService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(errApp, "notAdmin");
       const res = await agent
@@ -674,7 +687,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, mcpService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -697,7 +710,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, mcpService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -727,7 +740,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -752,7 +765,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -785,7 +798,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(imgApp, "notAdmin");
       const res = await agent
@@ -806,7 +819,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -912,7 +925,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(toolApp, "notAdmin");
       const res = await agent
@@ -1018,7 +1031,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(fileToolApp, "notAdmin");
       const res = await agent
@@ -1074,7 +1087,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(errApp, "notAdmin");
       const res = await agent
@@ -1127,7 +1140,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -1199,7 +1212,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -1225,7 +1238,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent
@@ -1277,7 +1290,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(fileApp, "notAdmin");
       const res = await agent
@@ -1446,7 +1459,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, openApiOptions: options, ...extra});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
 
     it("rejects attachments when file uploads are disabled", async () => {
@@ -1684,7 +1697,10 @@ describe("AI Routes", () => {
         .patch(`/gpt/histories/${historyId}`)
         .send({prompts: stored.body.data.prompts});
       expect(roundTripped.status).toBe(200);
-      expect((await GptHistory.findById(historyId))?.prompts[0].content?.[1].gcsKey).toBe(ownKey);
+      const filePart = (await GptHistory.findById(historyId))?.prompts[0].content?.[1] as
+        | FileContentPart
+        | ImageContentPart;
+      expect(filePart.gcsKey).toBe(ownKey);
 
       const patched = await agent.patch(`/gpt/histories/${historyId}`).send({
         prompts: [{content: [{text: "f", type: "text"}, plantedPart], text: "f", type: "user"}],
@@ -1999,7 +2015,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(errApp, "notAdmin");
 
@@ -2047,7 +2063,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(errApp, "notAdmin");
 
@@ -2097,7 +2113,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(errApp, "notAdmin");
       const res = await agent
@@ -2150,7 +2166,7 @@ describe("AI Routes", () => {
             });
           },
           skipListen: true,
-          userModel: UserModel,
+          userModel: terrenoUserModel,
         }).build();
         const agent = await authAsUser(customApp, "notAdmin");
         const res = await agent
@@ -2214,7 +2230,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const originalLogRequest = AIRequest.logRequest;
       AIRequest.logRequest = mock(async () => {
@@ -2248,7 +2264,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent.get("/gpt/tools");
@@ -2265,7 +2281,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, createRequestTools, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent.get("/gpt/tools");
@@ -2282,7 +2298,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, mcpService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent.get("/gpt/tools");
@@ -2301,7 +2317,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, mcpService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "notAdmin");
       const res = await agent.get("/gpt/tools");
@@ -2556,7 +2572,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(fileApp, "notAdmin");
       const res = await agent

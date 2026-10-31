@@ -33,7 +33,7 @@ const setWindowWidth = (width: number): (() => void) => {
     useWindowDimensionsMock.mockImplementation(dimensionsImpl);
 
     return (): void => {
-      useWindowDimensionsMock.mockImplementation(getScaledSize(375));
+      useWindowDimensionsMock.mockImplementation?.(getScaledSize(375));
     };
   }
 
@@ -71,7 +71,7 @@ describe("Card", () => {
 
     it("applies custom color", () => {
       const {toJSON} = renderWithTheme(
-        <Card color="secondary">
+        <Card color="secondaryDark">
           <Text>Content</Text>
         </Card>
       );

@@ -1,6 +1,7 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import mongoose from "mongoose";
 
+import type {GptHistoryDocument, GptHistoryPendingAsk, GptHistoryPrompt} from "../types/index";
 import {GptHistory} from "./gptHistory";
 
 describe("GptHistory Model", () => {
@@ -217,9 +218,9 @@ describe("GptHistory Model", () => {
         {id: "team", label: "Team"},
       ],
       prompt: "Which plan should I set up?",
-      select: "one",
+      select: "one" as const,
     };
-    const pendingAsk = {
+    const pendingAsk: GptHistoryPendingAsk = {
       created: new Date("2026-09-27T12:00:00.000Z"),
       input: planAsk,
       kind: "choice",
@@ -256,7 +257,10 @@ describe("GptHistory Model", () => {
       },
       toolCallId: "call_plan",
     };
-    const askRow = {
+    /** Create from deliberately invalid input, so the schema rather than the compiler rejects it. */
+    const createUnchecked = (doc: Record<string, unknown>) =>
+      GptHistory.create(doc as Partial<GptHistoryDocument>);
+    const askRow: GptHistoryPrompt = {
       args: planAsk,
       ask: {kind: "choice", status: "pending"},
       text: "Tool call: ask_choice",
@@ -309,7 +313,7 @@ describe("GptHistory Model", () => {
       const userId = new mongoose.Types.ObjectId();
       const history = await GptHistory.create({prompts: [], userId});
 
-      history.pendingAsk = pendingAsk as unknown as NonNullable<typeof history.pendingAsk>;
+      history.pendingAsk = pendingAsk;
       await history.save();
 
       const stored = await GptHistory.collection.findOne({_id: history._id});
@@ -334,7 +338,7 @@ describe("GptHistory Model", () => {
       },
     ])("rejects an unknown key in $field", async ({expected, history}) => {
       await expect(
-        GptHistory.create({...history, userId: new mongoose.Types.ObjectId()})
+        createUnchecked({...history, userId: new mongoose.Types.ObjectId()})
       ).rejects.toThrow(expected);
     });
 
@@ -361,7 +365,7 @@ describe("GptHistory Model", () => {
       },
     ])("rejects $label", async ({expected, history}) => {
       await expect(
-        GptHistory.create({...history, userId: new mongoose.Types.ObjectId()})
+        createUnchecked({...history, userId: new mongoose.Types.ObjectId()})
       ).rejects.toThrow(expected);
     });
   });

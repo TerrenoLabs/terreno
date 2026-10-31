@@ -1,8 +1,8 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
-import {BackgroundTask} from "@terreno/api";
+import {BackgroundTask, type BackgroundTaskDocument, type FindExactlyOnePlugin} from "@terreno/api";
 import {assert} from "chai";
 import mongoose from "mongoose";
-
+import {judgeAnswering} from "../../tests/fakeJudge";
 import {ObservabilityApp, resetObservabilityApp} from "../observabilityApp";
 import {LocalDatasetStore} from "./datasetStore";
 import {LocalEvaluatorStore} from "./evaluatorStore";
@@ -37,9 +37,7 @@ const createTestRunner = (params: {
   });
   runner.configureAi({
     aiService: {
-      generateJsonObject: async () => {
-        return {correct: true};
-      },
+      generateJsonObject: judgeAnswering(() => ({correct: true})),
       generateText: params.generateText,
       modelId: "mock-model",
     },
@@ -340,9 +338,7 @@ describe("LocalExperimentRunner", () => {
     });
     defaultRunner.configureAi({
       aiService: {
-        generateJsonObject: async () => {
-          return {correct: true};
-        },
+        generateJsonObject: judgeAnswering(() => ({correct: true})),
         generateText: async () => {
           return JSON.stringify({answer: "ok"});
         },
@@ -399,9 +395,7 @@ describe("LocalExperimentRunner", () => {
     });
     failingRunner.configureAi({
       aiService: {
-        generateJsonObject: async () => {
-          return {correct: true};
-        },
+        generateJsonObject: judgeAnswering(() => ({correct: true})),
         generateText: async () => {
           throw new Error("generation failed");
         },
@@ -427,7 +421,10 @@ describe("LocalExperimentRunner", () => {
       });
       detail = await failingRunner.get(experiment.id);
     }
-    const task = await BackgroundTask.findExactlyOne({_id: detail.backgroundTaskId});
+    // @terreno/api applies findExactlyOne to BackgroundTask, but its model type does not declare it.
+    const tasks = BackgroundTask as typeof BackgroundTask &
+      FindExactlyOnePlugin<BackgroundTaskDocument>;
+    const task = await tasks.findExactlyOne({_id: detail.backgroundTaskId});
     assert.equal(task.status, "failed");
     assert.include(task.error ?? "", "generation failed");
   });

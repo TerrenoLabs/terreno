@@ -557,7 +557,7 @@ describe("openApiValidator", () => {
       const res = {} as Response;
       middleware(req, res, () => {});
 
-      expect(req.query.page).toBe(3);
+      expect<unknown>(req.query.page).toBe(3);
     });
 
     it("throws validation error when query does not match", () => {
@@ -665,7 +665,7 @@ describe("openApiValidator", () => {
       });
 
       expect(nextCalled).toBe(true);
-      expect(req.query.page).toBe(2);
+      expect<unknown>(req.query.page).toBe(2);
     });
 
     it("skips when neither body nor query schemas are provided", () => {
@@ -698,7 +698,7 @@ describe("openApiValidator", () => {
       });
 
       expect(nextCalled).toBe(true);
-      expect(req.query.page).toBe(5);
+      expect<unknown>(req.query.page).toBe(5);
     });
 
     it("runs only body validation when no query schema is provided", () => {

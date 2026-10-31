@@ -2,7 +2,7 @@ import {afterEach, beforeEach, describe, it} from "bun:test";
 import {authAsUser as loginWithPassword} from "@terreno/test";
 import {assert} from "chai";
 import type {Application} from "express";
-import mongoose from "mongoose";
+import mongoose, {type HydratedDocument} from "mongoose";
 import type {PassportLocalMongooseDocument} from "passport-local-mongoose";
 
 import {
@@ -16,6 +16,8 @@ import {createAccess} from "../rbac/access";
 import {terrenoStatements} from "../rbac/statements";
 import {getBaseServer} from "../tests";
 import {type User, UserModel} from "../tests/models";
+import type {MembershipDocument} from "../types/membership";
+import type {OrganizationDocument} from "../types/organization";
 import {Membership, Organization} from "./organizationModel";
 import {
   createOrganizationSettingsSchema,
@@ -287,9 +289,9 @@ describe("OrgsApp", () => {
   describe("permission cache", () => {
     const setUpOrgAdmins = async (): Promise<{
       operatorAgent: Awaited<ReturnType<typeof loginWithPassword>>;
-      org: Awaited<ReturnType<typeof Organization.create>>;
+      org: HydratedDocument<OrganizationDocument>;
       orgAdmins: AuthUser[];
-      removable: Awaited<ReturnType<typeof Membership.create>>;
+      removable: HydratedDocument<MembershipDocument>;
     }> => {
       const operator = await createUser({email: "operator@example.com", roles: ["operator"]});
       const first = await createUser({email: "first-org-admin@example.com"});

@@ -265,7 +265,7 @@ const McpSettingsScreen: React.FC = () => {
               variant="secondary"
             />
           </Box>
-        ) : null}
+        ) : undefined}
       </Modal>
     </Page>
   );

@@ -4,7 +4,7 @@ import type express from "express";
 import supertest from "supertest";
 
 import type {MCPService} from "../service/mcpService";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../tests/helpers";
 import {addMcpRoutes} from "./mcp";
 
 type MockMcpService = Pick<MCPService, "getServerStatus" | "getTools" | "reconnectServer">;
@@ -30,7 +30,7 @@ describe("MCP Routes", () => {
         addMcpRoutes(router, {mcpService: mcpService as MCPService, openApiOptions: options});
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
   });
 
@@ -89,7 +89,7 @@ describe("MCP Routes", () => {
           addMcpRoutes(router, {mcpService: mcpService as MCPService, openApiOptions: options});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(customApp, "admin");
       const res = await agent.post("/mcp/servers/unknown/reconnect");

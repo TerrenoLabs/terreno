@@ -7,7 +7,11 @@ import {renderWithTheme} from "./test-utils";
 describe("DismissButton", () => {
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(
-      <DismissButton accessibilityLabel="Dismiss" onClick={() => {}} />
+      <DismissButton
+        accessibilityHint="Dismisses the message"
+        accessibilityLabel="Dismiss"
+        onClick={() => {}}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -15,7 +19,11 @@ describe("DismissButton", () => {
   it("calls onClick when pressed", () => {
     const handleClick = mock(() => {});
     const {getByLabelText} = renderWithTheme(
-      <DismissButton accessibilityLabel="Dismiss" onClick={handleClick} />
+      <DismissButton
+        accessibilityHint="Dismisses the message"
+        accessibilityLabel="Dismiss"
+        onClick={handleClick}
+      />
     );
 
     fireEvent.press(getByLabelText("Dismiss"));
@@ -24,14 +32,24 @@ describe("DismissButton", () => {
 
   it("renders with primary color (default)", () => {
     const {toJSON} = renderWithTheme(
-      <DismissButton accessibilityLabel="Dismiss" color="primary" onClick={() => {}} />
+      <DismissButton
+        accessibilityHint="Dismisses the message"
+        accessibilityLabel="Dismiss"
+        color="primary"
+        onClick={() => {}}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders with inverted color", () => {
     const {toJSON} = renderWithTheme(
-      <DismissButton accessibilityLabel="Dismiss" color="inverted" onClick={() => {}} />
+      <DismissButton
+        accessibilityHint="Dismisses the message"
+        accessibilityLabel="Dismiss"
+        color="inverted"
+        onClick={() => {}}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });

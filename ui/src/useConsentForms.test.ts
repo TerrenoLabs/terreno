@@ -18,7 +18,7 @@ interface GlobalThisWithNavigator {
 interface MockQueryDef {
   onQueryStarted?: (
     _arg: unknown,
-    helpers: {queryFulfilled: Promise<{data: ConsentFormPublic[]}> | Promise<never>}
+    helpers: {queryFulfilled: Promise<{data: Partial<ConsentFormPublic>[]}> | Promise<never>}
   ) => Promise<void>;
   query: () => string;
 }

@@ -303,7 +303,8 @@ describe("MCP service token OpenAPI", () => {
   it("documents create, list, and revoke on /openapi.json", async () => {
     const app = new TerrenoApp({
       configureApp: (router, options) => {
-        addMcpServiceTokenRoutes(router, {
+        // The routes only call get/post/delete, which the configureApp router provides.
+        addMcpServiceTokenRoutes(router as unknown as express.Application, {
           openApi: options?.openApi,
           publicMcpUrl: PUBLIC_MCP_URL,
         });

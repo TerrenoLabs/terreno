@@ -24,7 +24,7 @@ describe("ThemePreferenceContext", () => {
       renderer = TestRenderer.create(React.createElement(PreferenceProbe));
     });
     assert.isDefined(renderer);
-    const probe = renderer.root.findByType("PreferenceProbe");
+    const probe = renderer.root.find((node) => String(node.type) === "PreferenceProbe");
     assert.equal(probe.props.colorSchemeSetting, "light");
     assert.isFalse(probe.props.isLoading);
     await act(async () => {
@@ -37,16 +37,15 @@ describe("ThemePreferenceContext", () => {
     let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(
-        React.createElement(
-          AppThemeProvider,
-          {openAPISpecUrl: "http://example.test/openapi.json"},
-          React.createElement(PreferenceProbe)
-        )
+        React.createElement(AppThemeProvider, {
+          children: React.createElement(PreferenceProbe),
+          openAPISpecUrl: "http://example.test/openapi.json",
+        })
       );
     });
     assert.isDefined(renderer);
     const provider = renderer.root.findByType(TerrenoProvider);
-    const probe = renderer.root.findByType("PreferenceProbe");
+    const probe = renderer.root.find((node) => String(node.type) === "PreferenceProbe");
     assert.equal(provider.props.openAPISpecUrl, "http://example.test/openapi.json");
     assert.equal(provider.props.colorScheme, probe.props.colorSchemeSetting);
     assert.isFalse(probe.props.isLoading);

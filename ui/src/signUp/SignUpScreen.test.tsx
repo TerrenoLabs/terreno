@@ -4,7 +4,7 @@ import type {ReactElement} from "react";
 import {Platform} from "react-native";
 import {TextField} from "../TextField";
 import {ThemeProvider} from "../Theme";
-import {renderWithTheme} from "../test-utils";
+import {elementProps, renderWithTheme} from "../test-utils";
 import {defaultPasswordRequirements} from "./passwordPresets";
 import {SignUpScreen} from "./SignUpScreen";
 
@@ -177,14 +177,14 @@ const renderWithHostMocks = (
 ): ReturnType<typeof render> & {focused: string[]} => {
   const focused: string[] = [];
   const result = render(ui, {
-    createNodeMock: (element: ReactElement<{testID?: string}>) => {
+    createNodeMock: (element: ReactElement) => {
       if (element.type === "form") {
         return requestSubmit ? {requestSubmit} : {};
       }
       return {
         blur: (): void => {},
         focus: (): void => {
-          focused.push(element.props.testID ?? "");
+          focused.push(elementProps<{testID?: string}>(element).testID ?? "");
         },
       };
     },
@@ -216,7 +216,7 @@ describe("SignUpScreen keyboard", () => {
   });
 
   it("submits once on Enter in the last field", async () => {
-    const onSubmit = mock(() => Promise.resolve());
+    const onSubmit = mock((_values: Record<string, string>) => Promise.resolve());
     const {getByTestId} = renderWithTheme(
       <SignUpScreen
         fields={defaultFields}

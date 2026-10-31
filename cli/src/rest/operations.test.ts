@@ -4,6 +4,11 @@ import {invokeRestOperation} from "./invoke";
 import {parseOpenApiDocument} from "./loadSpec";
 import {findRestOperation, listRestOperations} from "./operations";
 
+/** Bun's `typeof fetch` also carries `preconnect`; add a no-op so stubs satisfy it. */
+const stubFetch = (
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>
+): typeof fetch => Object.assign(handler, {preconnect: (): void => {}});
+
 const spec = parseOpenApiDocument(`{
   "openapi": "3.0.0",
   "info": {"title": "Todos", "version": "1"},
@@ -35,13 +40,13 @@ describe("OpenAPI operations", () => {
 
   it("invokes an operation with path and query params", async () => {
     const calls: Array<{init?: RequestInit; url: string}> = [];
-    const fetchImpl: typeof fetch = async (url, init) => {
+    const fetchImpl = stubFetch(async (url, init) => {
       calls.push({init, url: String(url)});
       return new Response(JSON.stringify({ok: true}), {
         headers: {"content-type": "application/json"},
         status: 200,
       });
-    };
+    });
     const operation = findRestOperation(listRestOperations(spec), {id: "todo_read"});
     if (!operation) {
       throw new Error("missing todo_read");

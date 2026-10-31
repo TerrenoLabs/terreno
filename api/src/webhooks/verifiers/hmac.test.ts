@@ -81,7 +81,7 @@ describe("hmacSignature", () => {
 
   it("rejects a missing raw body", () => {
     const verify = hmacSignature({header: "X-Webhook-Signature", secret: SECRET});
-    const req = {headers: {"x-webhook-signature": VALID_HEX}} as Request;
+    const req = {headers: {"x-webhook-signature": VALID_HEX}} as unknown as Request;
     assert.isFalse(verify(req));
   });
 

@@ -24,7 +24,12 @@ const AdminObjectPicker: React.FC<React.ComponentProps<typeof BaseAdminObjectPic
   props
 ): React.ReactElement => <BaseAdminObjectPicker {...props} autocomplete />;
 
-const querySpecs: unknown[] = [];
+interface QuerySpec {
+  params?: Record<string, unknown>;
+  url?: string;
+}
+
+const querySpecs: QuerySpec[] = [];
 const makeApi = () => ({
   injectEndpoints: ({endpoints}: {endpoints: (b: unknown) => Record<string, unknown>}) => {
     const build = {
@@ -89,16 +94,10 @@ describe("AdminObjectPicker", () => {
     expect(urls).toContain("/admin/users/search");
     expect(urls).toContain("/admin/users/some-id");
     expect(urls).toContain("/admin/users");
-    const listSpec = querySpecs.find(
-      (s: unknown) =>
-        (s as Record<string, unknown>).url === "/admin/users" &&
-        Boolean((s as {params?: {limit?: number}}).params?.limit)
-    ) as {params?: {limit?: number; page?: number}} | undefined;
+    const listSpec = querySpecs.find((s) => s.url === "/admin/users" && Boolean(s.params?.limit));
     expect(listSpec?.params).toEqual({limit: 100, page: 1});
-    const searchSpec = querySpecs.find(
-      (s: unknown) => (s as Record<string, unknown>).url === "/admin/users/search"
-    );
-    expect(searchSpec.params).toEqual({q: "some-id"});
+    const searchSpec = querySpecs.find((s) => s.url === "/admin/users/search");
+    expect(searchSpec?.params).toEqual({q: "some-id"});
   });
 
   it("falls back to _id when no known display field is present", () => {

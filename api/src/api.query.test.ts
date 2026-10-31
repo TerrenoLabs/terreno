@@ -471,7 +471,7 @@ describe("query and list methods", () => {
       .get(`/food?${qs.stringify({$or: [{name: "Carrots"}, {name: "Pizza"}]})}`)
       .expect(200);
     expect(res.body.data).toHaveLength(2);
-    const ids1 = res.body.data.map((d: Food) => d.id);
+    const ids1 = res.body.data.map((d: {id: string}) => d.id);
     expect(ids1).toEqual(expect.arrayContaining([carrots?._id.toString(), pizza?._id.toString()]));
     expect(ids1).toHaveLength(2);
   });
@@ -486,7 +486,7 @@ describe("query and list methods", () => {
       )
       .expect(200);
     expect(res.body.data).toHaveLength(2);
-    const ids2 = res.body.data.map((d: Food) => d.id);
+    const ids2 = res.body.data.map((d: {id: string}) => d.id);
     expect(ids2).toEqual(
       expect.arrayContaining([carrots?._id.toString(), spinach?._id.toString()])
     );

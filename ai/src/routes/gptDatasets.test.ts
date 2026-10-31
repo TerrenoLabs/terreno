@@ -39,7 +39,7 @@ describe("GET /gpt/datasets/:id", () => {
   it("buckets by week, downsamples with LTTB, and paginates tables", async () => {
     await ensureTestUsers();
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const rows = hourlyRows(12_480);
     const registered = await registerAiDataset({
       columns,

@@ -1348,7 +1348,7 @@ export interface MetaProps {
 
 export interface ImageProps {
   alt?: string;
-  color: BoxColor;
+  color?: BoxColor;
   naturalHeight?: number;
   naturalWidth?: number;
   maxWidth?: number;
@@ -1626,36 +1626,39 @@ export interface AddressAutocompleteProps extends WithTestID {
   googlePlacesMobileStyles?: Styles;
 }
 
+/** Imperative methods exposed by an ActionSheet ref. */
+export interface ActionSheetHandle {
+  /**
+   * Open or close the ActionSheet.
+   */
+  setModalVisible(visible?: boolean): void;
+
+  /**
+   * Open the Action Sheet.
+   */
+  show(): void;
+
+  /**
+   * Close the ActionSheet.
+   */
+  hide(): void;
+
+  /**
+   * Attach this to any child ScrollView Component's onScrollEndDrag,
+   * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
+   * closing and bouncing back properly.
+   */
+  handleChildScrollEnd(): void;
+
+  /**
+   * Snap ActionSheet to given offset
+   */
+  snapToOffset(offset: number): void;
+}
+
 export interface ActionSheetProps extends WithTestID {
   children?: React.ReactNode;
-  ref?: React.MutableRefObject<{
-    /**
-     * Open or close the ActionSheet.
-     */
-    setModalVisible(visible?: boolean): void;
-
-    /**
-     * Open the Action Sheet.
-     */
-    show(): void;
-
-    /**
-     * Close the ActionSheet.
-     */
-    hide(): void;
-
-    /**
-     * Attach this to any child ScrollView Component's onScrollEndDrag,
-     * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
-     * closing and bouncing back properly.
-     */
-    handleChildScrollEnd(): void;
-
-    /**
-     * Snap ActionSheet to given offset
-     */
-    snapToOffset(offset: number): void;
-  }>;
+  ref?: React.Ref<ActionSheetHandle>;
   /**
    * Animate the opening and closing of ActionSheet.
 
@@ -4010,7 +4013,7 @@ export interface TableNumberProps {
   /**
    * The number to display in the text field.
    */
-  value: string;
+  value: string | number;
   /**
    * Callback to save the text field value.
    */
@@ -4019,7 +4022,7 @@ export interface TableNumberProps {
    * Numbers generally should be right aligned for ease of scanability.
    * @default "right"
    */
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export interface SliderProps extends HelperTextProps, ErrorTextProps {

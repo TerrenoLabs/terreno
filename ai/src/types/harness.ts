@@ -625,9 +625,13 @@ export interface HarnessToolDefinition<Args = unknown, Result = unknown>
 
 /**
  * Any tool, whatever its argument and result types. `execute` arguments are contravariant, so
- * `never` accepts every tool in heterogeneous lists without an explicit `any`.
+ * `never` accepts every tool in heterogeneous lists without an explicit `any`. A Zod schema's
+ * output is covariant, so `parameters` widens to `unknown` instead.
  */
-export type AnyHarnessToolDefinition = HarnessToolDefinition<never, unknown>;
+export interface AnyHarnessToolDefinition
+  extends Omit<HarnessToolDefinition<never, unknown>, "parameters"> {
+  parameters: z.ZodType<unknown>;
+}
 
 export interface HarnessAgentDefinitionInput {
   /** Tried in order once the primary model's retryable failures exhaust `modelRetry`. */

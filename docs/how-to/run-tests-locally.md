@@ -11,7 +11,7 @@ section).
 ## Do now — prepush mirrors CI
 
 ```bash
-bun run prepush            # lint, compile, then every CI job this branch triggers
+bun run prepush            # compile, lint + typecheck, then every CI job this branch triggers
 bun run prepush --dry-run  # print the plan only
 bun run prepush --all      # every check, regardless of changed files
 ```
@@ -28,6 +28,20 @@ Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, D
 are listed at the end with the command to run by hand. A test in
 `scripts/ci/prepush/plan.test.ts` fails when the mapping gains a parameter that
 `prepush` neither runs nor lists.
+
+## Typecheck
+
+Every package has a `typecheck` script that runs `tsc` with its
+`tsconfig.typecheck.json`. That config extends the build `tsconfig.json`, emits
+nothing, and includes the test files the build excludes (`*.test.ts(x)`,
+`*.isolated.ts(x)`, `src/tests/**`). Root `bun run lint` ends with `bun run typecheck`.
+CircleCI runs it in the `typecheck` job beside `repo-policies`.
+
+```bash
+bun run compile                # typecheck reads workspace packages' dist types
+bun run typecheck              # every package
+cd ui && bun run typecheck     # one package
+```
 
 ## Package tests
 

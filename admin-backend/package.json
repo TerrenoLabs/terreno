@@ -52,7 +52,8 @@
     "test": "bun test --timeout=120000",
     "test:agent": "AGENT=1 bun test --only-failures --timeout=120000",
     "test:ci": "bun test --timeout=120000",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
   "version": "57.20.0"

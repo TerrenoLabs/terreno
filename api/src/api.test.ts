@@ -5,11 +5,12 @@ import mongoose, {type Model} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
-import {addPopulateToQuery, modelRouter} from "./api";
+import {addPopulateToQuery, type JSONValue, modelRouter} from "./api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "./auth";
 import {APIError} from "./errors";
 import {clearMCPRegistry, getMCPRegistry} from "./mcp/registry";
 import {Permissions} from "./permissions";
+import type {AnyTerrenoAccess} from "./rbac/types";
 import {
   authAsUser,
   type Food,
@@ -403,7 +404,7 @@ describe("@terreno/api", () => {
             read: [Permissions.IsAny],
             update: [Permissions.IsAny],
           },
-          responseHandler: async (_data, method) => {
+          responseHandler: async (_data, method): Promise<JSONValue> => {
             if (method === "list") {
               return {custom: "response"};
             }
@@ -1443,7 +1444,7 @@ describe("@terreno/api", () => {
 
     it("model.create validation error is handled", async () => {
       // Use a model that has required fields
-      const {RequiredModel} = await import("./tests");
+      const {RequiredModel} = await import("./tests.js");
 
       app.use(
         "/required",
@@ -2234,8 +2235,8 @@ describe("@terreno/api", () => {
         }),
         queryFilter: async (): Promise<Record<string, unknown>> => ({}),
         statements: {food: ["list", "read", "create", "update", "delete"]},
-      };
-      registration._buildWithContext({accessControl: accessControl as never});
+      } as unknown as AnyTerrenoAccess;
+      registration._buildWithContext({accessControl});
 
       const after = getMCPRegistry()[0];
       expect(after?.options.accessControl).toBe(accessControl);
@@ -2253,10 +2254,10 @@ describe("@terreno/api", () => {
         }),
         queryFilter: async (): Promise<Record<string, unknown>> => ({}),
         statements: {food: ["list", "read", "create", "update", "delete"]},
-      };
+      } as unknown as AnyTerrenoAccess;
       modelRouter(FoodModel, {
         access: {resource: "food"},
-        accessControl: accessControl as never,
+        accessControl,
         mcp: {methods: ["list"]},
         permissions: {
           create: [Permissions.IsAny],

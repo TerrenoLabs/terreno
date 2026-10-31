@@ -15,7 +15,7 @@ describe("registerTwilioMock", () => {
   });
 
   it("works as a CommonJS factory, ESM default, and Twilio class", async (): Promise<void> => {
-    const cjs = createRequire(import.meta.url)("twilio") as TwilioFactory;
+    const cjs = createRequire(__filename)("twilio") as TwilioFactory;
     const esm = (await import("twilio")) as unknown as {default: TwilioFactory};
 
     expect(cjs("AC1", "token")).toBe(twilio.client);

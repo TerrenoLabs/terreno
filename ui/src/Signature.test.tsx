@@ -1,9 +1,10 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {View} from "react-native";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {Signature} from "./Signature";
-import {renderWithTheme} from "./test-utils";
+import {findAllByHostType, findByHostType, renderWithTheme} from "./test-utils";
 
 const createMockContext = (): Record<string, ReturnType<typeof mock>> => ({
   beginPath: mock(() => {}),
@@ -14,14 +15,10 @@ const createMockContext = (): Record<string, ReturnType<typeof mock>> => ({
 });
 
 const patchCanvasRefs = (
-  container: {
-    findAll: (
-      predicate: (node: {type: string}) => boolean
-    ) => Array<{props: Record<string, unknown>}>;
-  },
+  container: ReactTestInstance,
   ctx: Record<string, ReturnType<typeof mock>>
 ): HTMLCanvasElement => {
-  const canvasNodes = container.findAll((node: {type: string}) => node.type === "canvas");
+  const canvasNodes = findAllByHostType(container, "canvas");
   const canvasNode = canvasNodes[0];
   const canvas = {
     getContext: mock(() => ctx),
@@ -65,8 +62,8 @@ describe("Signature", () => {
 
   it("scales the web canvas to the available container width", () => {
     const mockOnChange = mock(() => {});
-    const {UNSAFE_getByType} = renderWithTheme(<Signature onChange={mockOnChange} />);
-    const canvas = UNSAFE_getByType("canvas");
+    const {UNSAFE_root} = renderWithTheme(<Signature onChange={mockOnChange} />);
+    const canvas = findByHostType(UNSAFE_root, "canvas");
     expect(canvas.props.style).toMatchObject({maxWidth: "100%", width: "100%"});
   });
 
@@ -81,8 +78,8 @@ describe("Signature", () => {
     const mockOnChange = mock(() => {});
     const moveTo = mock(() => {});
     const lineTo = mock(() => {});
-    const {UNSAFE_getByType} = renderWithTheme(<Signature onChange={mockOnChange} />);
-    const canvas = UNSAFE_getByType("canvas");
+    const {UNSAFE_root} = renderWithTheme(<Signature onChange={mockOnChange} />);
+    const canvas = findByHostType(UNSAFE_root, "canvas");
     canvas.props.ref.current = {
       clientHeight: 180,
       clientWidth: 150,
@@ -131,7 +128,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     act(() => {
@@ -153,7 +150,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     act(() => {
@@ -181,7 +178,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     act(() => {
@@ -202,7 +199,7 @@ describe("Signature", () => {
 
     const canvas = patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     // Start drawing
@@ -243,7 +240,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     // pointerDown without any move (no drawing)
@@ -273,7 +270,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     act(() => {
@@ -295,7 +292,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     // Draw something
@@ -331,7 +328,7 @@ describe("Signature", () => {
 
     patchCanvasRefs(UNSAFE_root, ctx);
 
-    const canvasNodes = UNSAFE_root.findAll((node: {type: string}) => node.type === "canvas");
+    const canvasNodes = findAllByHostType(UNSAFE_root, "canvas");
     const canvasProps = canvasNodes[0].props as Record<string, (...args: unknown[]) => void>;
 
     // Draw
@@ -366,10 +363,10 @@ describe("Signature", () => {
   it("ignores pointer down when the canvas ref is missing", () => {
     const mockOnChange = mock(() => {});
     const mockOnStart = mock(() => {});
-    const {UNSAFE_getByType} = renderWithTheme(
+    const {UNSAFE_root} = renderWithTheme(
       <Signature onChange={mockOnChange} onStart={mockOnStart} />
     );
-    const canvas = UNSAFE_getByType("canvas");
+    const canvas = findByHostType(UNSAFE_root, "canvas");
     canvas.props.ref.current = null;
 
     act(() => {
@@ -385,8 +382,8 @@ describe("Signature", () => {
   it("falls back to raw offsets when the canvas has no measurable size", () => {
     const mockOnChange = mock(() => {});
     const moveTo = mock(() => {});
-    const {UNSAFE_getByType} = renderWithTheme(<Signature onChange={mockOnChange} />);
-    const canvas = UNSAFE_getByType("canvas");
+    const {UNSAFE_root} = renderWithTheme(<Signature onChange={mockOnChange} />);
+    const canvas = findByHostType(UNSAFE_root, "canvas");
     canvas.props.ref.current = {
       clientHeight: 0,
       clientWidth: 0,

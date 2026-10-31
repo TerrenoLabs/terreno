@@ -59,7 +59,7 @@ const setWindowWidth = (width: number): (() => void) => {
     useWindowDimensionsMock.mockImplementation(dimensionsImpl);
 
     return (): void => {
-      useWindowDimensionsMock.mockImplementation(getScaledSize(375));
+      useWindowDimensionsMock.mockImplementation?.(getScaledSize(375));
     };
   }
 

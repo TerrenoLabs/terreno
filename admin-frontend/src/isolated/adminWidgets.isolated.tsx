@@ -2,7 +2,7 @@ import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminModelConfig} from "../types";
+import type {AdminApi, AdminConfigResponse, AdminModelConfig} from "../types";
 
 const routerPush = mock(() => {});
 mock.module("expo-router", () => ({
@@ -48,6 +48,8 @@ import {FeatureFlagsOverridesWidget} from "../widgets/FeatureFlagsOverridesWidge
 import {ModelsGridWidget} from "../widgets/ModelsGridWidget";
 import {RecentActivityWidget} from "../widgets/RecentActivityWidget";
 
+const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+
 const model: AdminModelConfig = {
   defaultSort: "-created",
   displayName: "User",
@@ -92,7 +94,13 @@ describe("admin home and screen widgets", () => {
 
   it("shows the empty recent-activity copy when no audit model is configured", () => {
     const {getByText} = renderWithTheme(
-      <RecentActivityWidget api={makeExplorerApi()} models={[]} routeBase="/admin" />
+      <RecentActivityWidget
+        api={makeExplorerApi()}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[]}
+        routeBase="/admin"
+      />
     );
     expect(getByText(/Register AuditApp \(or an AdminAuditLog model\)/)).toBeDefined();
   });
@@ -101,7 +109,9 @@ describe("admin home and screen widgets", () => {
     const {getByText} = renderWithTheme(
       <RecentActivityWidget
         api={makeExplorerApi()}
+        apiBase="/admin"
         auditModel={model}
+        config={emptyConfig}
         models={[model]}
         routeBase="/admin"
       />
@@ -114,7 +124,9 @@ describe("admin home and screen widgets", () => {
     const loading = renderWithTheme(
       <RecentActivityWidget
         api={makeExplorerApi()}
+        apiBase="/admin"
         auditModel={model}
+        config={emptyConfig}
         models={[model]}
         routeBase="/admin"
       />
@@ -125,7 +137,9 @@ describe("admin home and screen widgets", () => {
     const errored = renderWithTheme(
       <RecentActivityWidget
         api={makeExplorerApi()}
+        apiBase="/admin"
         auditModel={model}
+        config={emptyConfig}
         models={[model]}
         routeBase="/admin"
       />
@@ -136,7 +150,9 @@ describe("admin home and screen widgets", () => {
     const empty = renderWithTheme(
       <RecentActivityWidget
         api={makeExplorerApi()}
+        apiBase="/admin"
         auditModel={model}
+        config={emptyConfig}
         models={[model]}
         routeBase="/admin"
       />
@@ -148,6 +164,8 @@ describe("admin home and screen widgets", () => {
     const {getByText} = renderWithTheme(
       <FeatureFlagsOverridesWidget
         api={makeExplorerApi()}
+        apiBase="/admin"
+        config={emptyConfig}
         featureFlagModel={model}
         models={[model]}
         routeBase="/admin/"
@@ -161,28 +179,50 @@ describe("admin home and screen widgets", () => {
 
   it("shows a missing feature-flag message", () => {
     const {getByText} = renderWithTheme(
-      <FeatureFlagsOverridesWidget api={makeExplorerApi()} models={[]} routeBase="/admin" />
+      <FeatureFlagsOverridesWidget
+        api={makeExplorerApi()}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[]}
+        routeBase="/admin"
+      />
     );
     expect(getByText(/No FeatureFlag model/)).toBeDefined();
   });
 
   it("renders the documents screen widget", () => {
     const {getByTestId} = renderWithTheme(
-      <DocumentsScreenWidget api={makeExplorerApi()} routeBase="/admin" />
+      <DocumentsScreenWidget
+        api={makeExplorerApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="documents"
+      />
     );
     expect(getByTestId("documents-browser")).toBeDefined();
   });
 
   it("renders the AI explorer", () => {
     const {toJSON} = renderWithTheme(
-      <AIRequestsScreenWidget api={makeExplorerApi()} routeBase="/admin" />
+      <AIRequestsScreenWidget
+        api={makeExplorerApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="aiRequests"
+      />
     );
     expect(toJSON()).toBeDefined();
   });
 
   it("navigates from the models grid", async () => {
     const {getByText, getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={makeExplorerApi()} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget
+        api={makeExplorerApi()}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[model]}
+        routeBase="/admin/"
+      />
     );
     expect(getByText("User")).toBeDefined();
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeDefined();

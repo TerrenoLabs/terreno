@@ -5,8 +5,10 @@ import {registerExpoTestEnvironment} from "./registerExpoTestEnvironment";
 
 registerExpoTestEnvironment({locale: "fr-CA", setProcessEnv: false, timeZone: "America/Toronto"});
 
-const {createElement} = await import("react");
-const {render} = await import("@testing-library/react-native");
+// Required, not imported, so react-native loads after the environment registers its mocks.
+const {createElement} = require("react") as typeof import("react");
+const {render} =
+  require("@testing-library/react-native") as typeof import("@testing-library/react-native");
 
 type AnyModule = Record<string, unknown> & {default?: unknown};
 

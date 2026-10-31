@@ -276,7 +276,7 @@ export const runMigrateCli = async ({
   }
 };
 
-if (import.meta.main) {
+if (Bun.main === __filename) {
   void runMigrateCli({argv: process.argv.slice(2)}).then((code) => {
     process.exit(code);
   });

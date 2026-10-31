@@ -3,6 +3,7 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {forwardRef, useImperativeHandle, useRef} from "react";
 import {Pressable, Text, View} from "react-native";
 
+import type {AddressInterface} from "./Common";
 import {MobileAddressAutocomplete} from "./MobileAddressAutoComplete";
 import {renderWithTheme} from "./test-utils";
 
@@ -119,7 +120,7 @@ describe("MobileAddressAutocomplete", () => {
   });
 
   it("invokes handleAutoCompleteChange with processed address components", () => {
-    const handleAutoCompleteChange = mock(() => {});
+    const handleAutoCompleteChange = mock((_address: AddressInterface) => {});
     const handleAddressChange = mock(() => {});
     setAddressTextSpy.mockClear();
     const {getByTestId} = renderWithTheme(

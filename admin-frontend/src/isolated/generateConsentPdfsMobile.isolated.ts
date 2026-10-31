@@ -23,6 +23,27 @@ Platform.OS = "ios";
 
 import {generateConsentHistoryPdf} from "../generateConsentHistoryPdf";
 import {generateConsentPdf} from "../generateConsentPdf";
+import type {ConsentHistoryEntry} from "../useConsentHistory";
+
+type ConsentForm = NonNullable<ConsentHistoryEntry["form"]>;
+
+/** A history entry as older or partial server records store it: optional form fields and dates. */
+interface StoredConsentEntry
+  extends Omit<ConsentHistoryEntry, "agreedAt" | "checkboxValues" | "form"> {
+  agreedAt?: string;
+  checkboxValues?: Record<string, boolean> | null;
+  form?:
+    | (Partial<Omit<ConsentForm, "checkboxes">> & {
+        checkboxes?: Array<
+          Omit<ConsentForm["checkboxes"][number], "required"> & {required?: boolean}
+        >;
+      })
+    | null;
+}
+
+/** Feeds a partial stored record to the generator, which must tolerate the missing fields. */
+const generateFromStored = (entry: StoredConsentEntry): Promise<void> =>
+  generateConsentHistoryPdf(entry as unknown as ConsentHistoryEntry);
 
 describe("mobile consent PDF generation", () => {
   beforeEach(() => {
@@ -78,7 +99,7 @@ describe("mobile consent PDF generation", () => {
   });
 
   it("builds and shares a complete history-entry template", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "history-1",
       agreed: true,
       agreedAt: "2026-09-01T10:00:00.000Z",
@@ -113,7 +134,7 @@ describe("mobile consent PDF generation", () => {
   });
 
   it("omits empty optional history sections", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "history-2",
       agreed: false,
     });
@@ -127,7 +148,7 @@ describe("mobile consent PDF generation", () => {
     expect(shareCalls[0].filename).toMatch(/^consent-response-\d{4}-\d{2}-\d{2}\.pdf$/);
   });
   it("passes the provisional signer and date, without the note, for a user's history entry", async () => {
-    await generateConsentHistoryPdf({
+    await generateFromStored({
       _id: "history-3",
       agreed: true,
       agreedAt: "2026-10-20T15:30:00.000Z",

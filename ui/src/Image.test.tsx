@@ -51,7 +51,7 @@ describe("Image", () => {
 
   it("renders with background color", () => {
     const {toJSON} = renderWithTheme(
-      <Image color="secondary" naturalWidth={200} src="https://example.com/image.jpg" />
+      <Image color="secondaryDark" naturalWidth={200} src="https://example.com/image.jpg" />
     );
     expect(toJSON()).toMatchSnapshot();
   });

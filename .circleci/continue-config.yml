@@ -454,8 +454,8 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
-              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat ai-image-generation gpt-skills pdf notifications" ;;
+              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security admin-ai-configuration" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;

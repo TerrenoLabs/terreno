@@ -1,0 +1,190 @@
+## Type Parameters
+
+### S
+
+`S` *extends* [`Statements`](../type-aliases/Statements.md)
+
+## Properties
+
+### ac
+
+> `readonly` **ac**: `object`
+
+***
+
+### can
+
+> **can**: (`args`) => `Promise`\<[`AccessResult`](AccessResult.md)\>
+
+#### Parameters
+
+##### args
+
+[`AccessCheckArgs`](AccessCheckArgs.md)\<`S`\>
+
+#### Returns
+
+`Promise`\<[`AccessResult`](AccessResult.md)\>
+
+***
+
+### fieldMask
+
+> **fieldMask**: (`args`) => `Promise`\<[`FieldMask`](FieldMask.md)\>
+
+#### Parameters
+
+##### args
+
+###### doc?
+
+`unknown`
+
+###### phase?
+
+`"read"` \| `"write"` \| `"create"`
+
+###### resource
+
+`string`
+
+###### user?
+
+[`User`](User.md)
+
+#### Returns
+
+`Promise`\<[`FieldMask`](FieldMask.md)\>
+
+***
+
+### getPermissions
+
+> **getPermissions**: (`args`) => `Promise`\<[`PermissionSet`](../type-aliases/PermissionSet.md)\>
+
+The user's effective permissions. With `requireComplete`, a permission source that failed and
+whose grants are unknown throws 503 instead of leaving its grants out; use it for a user whose
+missing permissions would loosen a check (the target of "may the actor act on this user?").
+
+#### Parameters
+
+##### args
+
+###### requireComplete?
+
+`boolean`
+
+###### user
+
+[`User`](User.md)
+
+#### Returns
+
+`Promise`\<[`PermissionSet`](../type-aliases/PermissionSet.md)\>
+
+***
+
+### invalidateCache
+
+> **invalidateCache**: (`args?`) => `void`
+
+#### Parameters
+
+##### args?
+
+###### userId?
+
+`string`
+
+#### Returns
+
+`void`
+
+***
+
+### middleware
+
+> **middleware**: (`permissions`, `options?`) => `RequestHandler`
+
+#### Parameters
+
+##### permissions
+
+[`PermissionRequest`](../type-aliases/PermissionRequest.md)\<`S`\>
+
+##### options?
+
+###### getDoc?
+
+(`req`) => `Promise`\<`unknown`\>
+
+#### Returns
+
+`RequestHandler`
+
+***
+
+### permission
+
+> **permission**: (`permissions`) => [`PermissionMethod`](../type-aliases/PermissionMethod.md)\<`unknown`\>
+
+#### Parameters
+
+##### permissions
+
+[`PermissionRequest`](../type-aliases/PermissionRequest.md)\<`S`\>
+
+#### Returns
+
+[`PermissionMethod`](../type-aliases/PermissionMethod.md)\<`unknown`\>
+
+***
+
+### queryFilter
+
+> **queryFilter**: (`args`) => `Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
+
+#### Parameters
+
+##### args
+
+###### action
+
+`string`
+
+###### context?
+
+`Record`\<`string`, `unknown`\>
+
+###### resource
+
+`string`
+
+###### user?
+
+[`User`](User.md)
+
+#### Returns
+
+`Promise`\<`Record`\<`string`, `unknown`\> \| `null`\>
+
+***
+
+### roles
+
+> **roles**: [`RoleManager`](RoleManager.md)
+
+***
+
+### statements
+
+> `readonly` **statements**: `S`
+
+***
+
+### userModel?
+
+> `readonly` `optional` **userModel?**: [`UserModel`](UserModel.md)
+
+The `userModel` passed to `createAccess`. Write paths use it to recognize the user model when
+it is compiled under a name other than `"User"`.

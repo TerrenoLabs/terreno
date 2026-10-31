@@ -1,5 +1,0 @@
----
-category: Fixed
----
-
-`terreno_bootstrap_ai_rules` now returns files that `rulesync generate` accepts with rulesync 9. `rulesync.jsonc` and the root rule target `cursor`, `claudecode`, `copilot`, and `agentsmd` (rulesync 9 has no `windsurf` target; Windsurf reads `AGENTS.md`). The single `.rulesync/rules/00-root.md` root rule now covers Claude Code, so the tool no longer returns the `01-claudecode-root.md` `localRoot` rule that rulesync rejected; delete it if an earlier bootstrap left it behind. The instructions run `bunx rulesync@9 generate` instead of the removed `rulesync sync`. The root rule now includes everything `create-terreno-app` writes to `CLAUDE.md` and `.cursorrules` (including the "Adding Features" steps), and the instructions say to delete the superseded `.cursorrules` and to move hand edits to `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.cursor/rules/`, and `.github/instructions/` into `.rulesync/rules/10-project.md` before generating, because `rulesync generate` overwrites or deletes them.

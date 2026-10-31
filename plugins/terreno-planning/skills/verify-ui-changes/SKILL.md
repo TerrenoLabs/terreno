@@ -1,10 +1,14 @@
 ---
 name: verify-ui-changes
 description: >-
-  Mandatory when any feature touches the frontend. Launch the app, log in, exercise
-  the feature, save screenshots/videos, and post evidence to the PR. Lifecycle
-  composition: Pick for implementation runtime checks, Roast for independent proof,
-  and Taste after a UI-affecting review/CI fix.
+  Mandatory when any feature touches the frontend. Bring up a stack you own, log in,
+  drive the change under the required checks (right page, not blank, no error overlay,
+  console clean, DOM assertion, interaction proof, screenshot), run the repository's
+  Maestro flows on the simulator for mobile-focused work (direct simulator commands when
+  the app has no Maestro), and post screenshots and
+  video to the PR or a secret gist in the report format. Lifecycle composition: Pick
+  for implementation runtime checks, Roast for independent proof, and Taste after a
+  UI-affecting review/CI fix.
 claudecode:
   model: haiku
 ---
@@ -12,6 +16,15 @@ claudecode:
 # Verify UI Changes
 
 Use this skill automatically whenever a task changes UI behavior, UI layout, visual styling, component stories, navigation screens, user-visible copy, or any full-stack feature with a frontend surface.
+
+If you made a user-facing change, you must run it, check that it actually works, and
+show evidence. No evidence, no completion claim. A passing build, type check, or unit
+test is necessary, not sufficient. **User-facing** is anything a user could notice:
+components, screens, routes, navigation, styles, layout, responsive behavior, theming,
+forms, validation, error / empty / loading states, copy, translations, API changes whose
+output a client renders, emails, push, SMS, exported files. Pure refactors, internal
+tooling, and backend-only changes with no rendered consumer are exempt, but say so:
+"No user-facing change: <reason>".
 
 ## Trigger Files
 
@@ -29,58 +42,138 @@ Load this skill before validating changes to:
 - Theme, layout, navigation, or component configuration that changes rendered UI
 - Full-stack PRs that include any of the above, even when backend files dominate the diff
 
-## Mandatory Workflow (every frontend-touching feature)
+## The loop (every frontend-touching feature)
 
-Do not open or update a PR for frontend work until this workflow is complete.
+Do not open or update a PR for frontend work until this loop is complete.
 
-1. **Launch the correct app** for the package that changed (see package-specific sections below).
-2. **Log in** when the app requires authentication — use the seeded test accounts documented below.
-3. **Attempt to use the changed feature** — navigate to the affected screen and exercise the primary user flow end to end, not just confirm the app or page loads.
-4. **Save evidence** under `/opt/cursor/artifacts/`:
-   - Screenshots for static visual states → e.g. `/opt/cursor/artifacts/screenshots/<feature>-<state>.png`
-   - Screen recordings for interaction flows → e.g. `/opt/cursor/artifacts/<feature>-demo.mp4`
-   - Use `RecordScreen` in Cursor Cloud for video walkthroughs.
-5. **Post evidence to the PR** before finishing:
-   - Match [`.github/PULL_REQUEST_TEMPLATE.md`](../../../../.github/PULL_REQUEST_TEMPLATE.md):
-     add one concise `Verification` table row for the exercised flow.
-   - Reference artifacts with HTML tags and absolute paths, e.g. `<img alt="Todos list after filter" src="/opt/cursor/artifacts/screenshots/todos-filter.png" />` or `<video src="/opt/cursor/artifacts/todos-create.mp4" controls></video>`.
-   - Use the PR management tool to create or update the PR body after artifacts exist.
-   - Without a PR management tool that uploads files, or when `/opt/cursor/artifacts/` is
-     missing or read-only (save to your scratchpad instead), upload with the
-     `attach-pr-media` skill and use the URLs it returns.
-   - Name the flow and UI state proved. Never include credentials.
+1. **State the flow in one sentence** before testing:
+   `<entry point> -> <user action or state> -> <expected visible result>`. For a general
+   smoke: app loads -> first meaningful screen renders -> primary controls respond
+   without errors.
+2. **Get the app running on a stack you own** (package-specific sections below). If the
+   backend or an app port is already taken by something you did not start, **stop and
+   say which ports are taken**. Do not test through them and do not kill them: on a
+   developer machine they are usually the simulators' Metros and a backend pointed at
+   staging, and the checks could change staging data. When the repository ships a
+   `verify-ui` stack script, use it; it refuses foreign ports for you.
+3. **Write adversarial instructions, not happy-path ones.** Bad: "check that the form
+   renders". Good: "submit empty, with an invalid email, with a wrong password, with
+   valid credentials; assert each error message, the redirect, and the console". Cover
+   the error, empty, disabled, and loading states the change touches. Drive the UI
+   through `testID`s; if an element has none, add one to the component first
+   (`{screen}-{element}-{qualifier}`), never a class or structural selector. As Roast's
+   independent verifier, do not add it: report the missing `testID` (see "Who edits").
+4. **Log in and exercise the changed feature** with the seeded accounts documented
+   below: navigate to the affected screen and run the flow end to end, not just confirm
+   the app or page loads. Visual or layout work gets a desktop and a phone viewport.
+5. **Run the required checks** on every app × viewport run:
 
-If environment setup blocks verification, add one `⚠️ Not tested` row naming the
-blocked behavior and exact reviewer action. Put only decisive error detail in an optional
-`<details>` block. Do not present compile-only or app-start-only checks as complete
-verification.
+   | Check | Passing looks like |
+   |---|---|
+   | Right page | Final pathname is the expected one and is not the login page |
+   | Not blank | ≥ 40 characters of visible text, not an empty shell or a stuck spinner |
+   | No error overlay | No framework red box or compile-error text in the document |
+   | Console clean | Zero console or page errors; warnings are listed for you to explain |
+   | DOM assertion | ≥ 1 assertion on a visible element, text, or URL, all passed |
+   | Interaction proof | ≥ 1 tap / type / key press, followed by an assertion of the new state |
+   | Screenshot | ≥ 1 screenshot; take one of the failure state when a step fails |
 
-## Verification Requirements
+   For visual or layout work also look at the phone run for clipping, overlap,
+   unreadable text, bad wrapping, layout shift, missing assets, and z-index problems.
+6. **Look at every screenshot.** Check the changed state actually rendered: not a
+   spinner, not an empty state caused by seed data, not the login page. DOM assertions
+   are primary; screenshots support visual claims, they do not replace them. A console
+   error in the changed code path is a failure even when the shot looks right: explain
+   it or fix it (see "Baselining console warnings" for the demo app).
+7. **Mobile-focused change? Verify it on the simulator** (section below): the matching
+   Maestro flow when the app has Maestro configured, direct simulator commands when it
+   does not. Web alone is not enough.
+8. **If anything fails: fix it and re-verify immediately.** Do not stop to report a
+   half-working state. Retry a failing tool or UI action once before calling it a
+   blocker. Repeat until zero failures. As Roast's independent verifier, do not fix:
+   report FAIL with the evidence (see "Who edits").
+9. **Publish and report** in the report format below: to the PR `Verification` table
+   (see "GitHub Reviewer Evidence"), or to a secret gist when the repository's
+   `verify-ui` publish script exists or there is no PR yet. Give the user the link plus
+   the Result line.
 
-1. Define the visible success state.
-   - State what a skeptical reviewer should see on screen.
-   - Include loading, empty, disabled, error, and responsive states when the change affects them.
+## Simulator leg (mobile-focused changes)
 
-2. Run targeted automated checks when available.
-   - Prefer package-specific lint, compile, and component tests.
-   - If the change only affects generated docs or static skill/rule text, use rulesync/static checks instead.
+Required when the change is native screens, gestures, navigation stacks, keyboard
+behavior, safe areas, push, camera / permissions, auth storage, `*.ios.tsx`,
+`*.android.tsx`, `*.native.tsx`, `Platform.OS` branches, or the ticket says "mobile" or
+"app".
 
-3. Perform mandatory manual UI verification.
-   - Start the exact app listed below for the package that changed.
-   - Use the browser or simulator to navigate to the changed UI.
-   - Log in with seeded credentials when the app requires auth.
-   - Exercise the changed interaction and the path that reaches it.
-   - Capture a screenshot for static visual changes.
-   - Capture a short video for interaction flows.
+**Maestro configured** (the app has a `<app>/maestro/` directory with flows): verify with
+those **Maestro** flows on the app's dedicated simulator, not with an ad-hoc tap script.
+Run the flow that matches the change. No matching flow? Add one next to the existing
+flows, reusing their launch and login subflows, with `testID` selectors and
+`extendedWaitUntil` instead of sleeps; it is part of the change and stays in the
+repository. Maestro configured but the CLI or Java missing: install them with the
+repository's documented command, or report UNVERIFIED.
 
-4. Critically review the evidence.
-   - Check spacing, alignment, truncation, disabled/loading states, and error states.
-   - Confirm the changed code path actually ran.
-   - If the evidence is inconclusive, adjust the test and verify again.
+**Maestro not configured** (no `<app>/maestro/`): do not set Maestro up as part of the
+change. Drive the simulator with direct commands instead, from a temporary script kept
+outside the tree:
 
-5. Document limitations honestly.
-   - If manual UI testing is blocked by environment setup, explain the exact blocker and list the commands or setup steps attempted.
-   - Do not present compile-only or app-start-only checks as complete UI verification.
+| Step | iOS simulator | Android emulator |
+|---|---|---|
+| Boot and install | `xcrun simctl boot <device>`, `xcrun simctl install booted <app>` | `emulator -avd <avd>`, `adb install <apk>` |
+| Open the screen | `xcrun simctl openurl booted <scheme>://<path>` | `adb shell am start -a android.intent.action.VIEW -d <scheme>://<path>` |
+| Tap and type | `idb ui tap <x> <y>`, `idb ui text "<text>"` | `adb shell input tap <x> <y>`, `adb shell input text "<text>"` |
+| Assert | `idb ui describe-all` (find the `testID` and expected text) | `adb exec-out uiautomator dump /dev/tty` (find the `resource-id` and expected text) |
+| Evidence | `xcrun simctl io booted screenshot <file>`, `xcrun simctl io booted recordVideo <file>` | `adb exec-out screencap -p > <file>`, `adb shell screenrecord <file>` |
+
+Take tap coordinates from the accessibility tree, not from guesses. Assert on the tree
+after each interaction; a screenshot alone is not an assertion. The same required checks
+and outcomes apply. Without `idb`, iOS can only open screens and capture evidence, so an
+iOS flow that needs taps is UNVERIFIED (`idb` missing) unless you install it.
+
+A missing or stale dev client
+(`Cannot find native module`) is rebuilt with the repository's documented command, then
+the flow reruns. The flow deep-links the dev client to Metro, so Metro and the backend
+must be the stack you started: "started by you" means the process you recorded is still
+alive and holds the port, not that a pid file exists. A stack that crashed and was
+followed by a developer's Metro or a backend on staging is not yours. If the simulator
+or dev client is unavailable, the report says **UNVERIFIED (simulator)**; a passing web
+check never stands in for the mobile one. Keep the three outcomes apart: a flow that ran
+and failed is FAIL, a flow that never ran (stack not yours, no simulator or dev client,
+simulator would not boot, Maestro, Java, or `idb` missing, no report written) is UNVERIFIED
+with the blocker, and neither is ever reported as the other. A repository runner should
+encode that in its exit codes (for example 2 for failed, 3 for UNVERIFIED). Also check
+what web cannot: the keyboard does not cover inputs, safe areas, and the tablet vs
+phone layout fork.
+
+## Who edits
+
+Only the implementer (Pick, or a Taste fix) changes the tree: adds `testID`s, adds
+Maestro flows, and fixes failures. Roast's independent verifier (the `ui-verifier`
+agent) runs the same loop report-only. A missing `testID` or Maestro flow, or a failing
+check, is FAIL with the evidence; a check it could not run is UNVERIFIED with the
+blocker. It never edits the tree to make a run pass.
+
+## Evidence rules
+
+- Seed or QA data only. Never screenshot, log, or paste real user data or PHI into
+  evidence. Secret gists are unlisted, not private. If the only way to verify is against
+  real data, stop and ask.
+- Store screenshots, recordings, and temporary test scripts outside the committed source
+  tree (`/opt/cursor/artifacts/` in Cursor Cloud, your scratchpad otherwise) unless the
+  project specifies an evidence directory or the user asks for committed artifacts.
+  Playwright scenarios and Maestro flows that document a feature may stay in the
+  repository.
+- If credentials are missing, ask for them. Never guess.
+
+## When you can't verify
+
+No browser tooling, app won't start, missing credentials, ports taken by a stack that is
+not yours, needs a device: do not claim it works. Mark it **UNVERIFIED** with the exact
+blocker and the commands or setup steps attempted, say what you did verify (build,
+types, unit tests), give the reviewer the exact steps to verify themselves, and ask for
+missing credentials rather than guessing. In the PR, that is one `⚠️ Not tested` row
+naming the blocked behavior and the reviewer action, with decisive error detail in an
+optional `<details>` block. Do not present compile-only or app-start-only checks as
+complete verification.
 
 ## Package-Specific Manual Verification
 
@@ -426,18 +519,50 @@ Test `admin-frontend` changes in the example full-stack app.
 - Demo-only story changes: use the demo app `/dev` route and the story being changed.
 - Generated SDK or API-surface-only frontend changes: combine targeted automated checks with an example app login + feature smoke test when a rendered UI path is affected.
 
+## Report format
+
+Findings first when anything broke (what the user sees, repro, evidence, fix made or
+open). Then **Result** (PASS / FAIL / UNVERIFIED, one line), **Flow under test**,
+**Environment** (URLs, viewports, tool, database, commit), **Remaining risk**, and per
+app × viewport: the checks table, the interaction steps, the DOM assertions, every
+screenshot labelled, the recording, and the console log; then per simulator flow:
+result, device, failure text, final screen, recording, log tail. Concise, but concrete
+enough that a PR reviewer trusts it without re-running. **Result** is the worst outcome
+across every required leg: any FAIL makes it FAIL, otherwise any UNVERIFIED leg makes it
+UNVERIFIED. A required leg that did not run, such as the simulator for a mobile-focused
+change, is UNVERIFIED with its blocker, never remaining risk. Only platforms the change
+does not require go under remaining risk.
+
 ## GitHub Reviewer Evidence
 
 Post UI verification evidence to GitHub through the PR body so reviewers can see it without local setup.
 
-- Follow [`.github/PULL_REQUEST_TEMPLATE.md`](../../../../.github/PULL_REQUEST_TEMPLATE.md).
-- Save screenshots and videos under `/opt/cursor/artifacts`.
-- Reference only decisive artifacts in the `Verification` table with HTML tags, e.g.
+- Follow [`.github/PULL_REQUEST_TEMPLATE.md`](../../../../.github/PULL_REQUEST_TEMPLATE.md):
+  one concise `Verification` row per exercised flow, naming the tested URL, the flow and
+  state proved, and the Result line. Never include credentials.
+- Save screenshots and videos under `/opt/cursor/artifacts` (or your scratchpad) and
+  reference only decisive artifacts with HTML tags, e.g.
   `<video src="/opt/cursor/artifacts/admin_model_list_demo.mp4" controls></video>`.
-- Name the tested URL, changed flow/state, and what the artifact proves. Never include
-  credentials.
-- Use the PR management tool to create or update the PR body after artifacts are available.
+  Use `RecordScreen` in Cursor Cloud for video walkthroughs.
+- Use the PR management tool to create or update the PR body after artifacts exist.
+  Without a tool that uploads files, or when `/opt/cursor/artifacts/` is missing or
+  read-only, upload with the `attach-pr-media` skill and use the URLs it returns, or
+  link the secret gist the repository's publish script created.
 - Keep evidence minimal: one short video is preferred for interaction flows, plus one screenshot when it shows a static visual state more clearly.
+
+## Rationalizations to reject
+
+- "The build passes, so it works." Render it.
+- "It's a one-line CSS change." Screenshot it, at phone width too.
+- "I checked the happy path." Check error, empty, and loading states.
+- "The screenshot looks right." Assert on the DOM as well.
+- "There's a console error but it's probably unrelated." Explain it or fix it.
+- "I'll mention it might need testing." Verify it or mark it UNVERIFIED.
+- "It works on web, and it's React Native, so it works on the phone." Not for
+  mobile-focused features. Run the Maestro flow, or direct simulator commands when the
+  app has no Maestro, on the simulator.
+- "Something is already on the port, I'll just use it." It may be staging. Stop and say
+  the ports are taken.
 
 ## Cursor Cloud Notes
 
@@ -448,10 +573,12 @@ Post UI verification evidence to GitHub through the PR body so reviewers can see
 
 ## Final Response Checklist
 
-- Include the relevant screenshot or video artifact for UI changes.
+- Lead with the Result line and the evidence link; include the decisive screenshot or
+  video for UI changes.
 - Prefix every command in the testing section with pass, warning, or fail status.
-- Explain why each test or check was run.
-- Mention any environment limitation only when it prevented expected UI verification.
+- Explain why each test or check was run, and which required checks each run passed.
+- Mention any environment limitation only when it prevented expected UI verification,
+  and then mark the affected flow UNVERIFIED with the blocker.
 - Confirm PR evidence was posted or will be posted before the PR is opened/updated.
 
 ## Pixel Measurement: Derive the Screenshot Scale Empirically

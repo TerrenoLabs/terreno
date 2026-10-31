@@ -1,0 +1,36 @@
+---
+title: "ListDetailLayout"
+description: "List/detail layout: stacked on phones, two panes on tablets."
+sidebar_label: "ListDetailLayout"
+slug: /reference/components/listdetaillayout
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# ListDetailLayout
+
+Route-driven list/detail layout for a route group's _layout.tsx, like a mail inbox. On a phone the list pushes the detail route. On a tablet or wide browser the list stays in a left pane and the detail opens beside it. The open item lives in the URL, so deep links and back work, and it stays open across rotation and resize.
+
+**Package:** `@terreno/ui`  
+**Categories:** Pattern  
+**Props interface:** `ListDetailLayoutProps`  
+**Story source:** [`demo/stories/ListDetailLayout.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/ListDetailLayout.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="ListDetailLayout" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `detailHref` | `reflection` | Yes | Where selecting an item navigates, e.g.  |
+| `indexHref` | `string` | Yes | The group's own path, e.g.  |
+| `list` | `ReactElement` | Yes | The list. Rendered in the left pane when split, and by  |
+| `children` | `ReactNode` |  | Optional  |
+| `detailRoute` | `string` |  | The child route name that holds the detail. Defaults to  |
+| `emptyDetail` | `ReactElement` |  | Shown in the detail pane when split and no item is open. |
+| `listWidth` | `number` |  | Width in pixels of the list pane when split. Defaults to 360. |
+| `paramName` | `string` |  | The route param that holds the item id. Defaults to  |
+| `screenOptions` | `union` |  | Screen options passed through to the underlying expo-router Stack. |
+| `splitAtWidth` | `number` |  | Split into list and detail panes when the layout's measured width is at least this many pixels. Defaults to 768. |

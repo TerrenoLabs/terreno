@@ -1,0 +1,1 @@
+> **VerificationStoreIdentifier** = [`VerificationStorageOption`](VerificationStorageOption.md) \| \{ `default`: [`VerificationStorageOption`](VerificationStorageOption.md); `overrides?`: `Record`\<`string`, [`VerificationStorageOption`](VerificationStorageOption.md)\>; \}

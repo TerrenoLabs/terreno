@@ -1,0 +1,43 @@
+---
+title: "BarChart"
+description: "Single-series bar chart drawn with owned SVG. Press or hover a bar for `{label}: {value}`. Zero and negative values stay pressable and grow from the zero baseline."
+sidebar_label: "BarChart"
+slug: /reference/components/barchart
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# BarChart
+
+Single-series bar chart drawn with owned SVG. Press or hover a bar for `\{label\}: \{value\}`. Zero and negative values stay pressable and grow from the zero baseline.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `BarChartProps`  
+**Story source:** [`demo/stories/BarChart.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/BarChart.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="BarChart" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data` | `array` | Yes | Single series of labeled numeric points. |
+| `accessibilityLabel` | `string` |  | Summary announced for the whole chart. |
+| `comparisonData` | `array` |  | Optional previous-period values drawn as a dotted overlay. |
+| `emptyText` | `string` |  | Copy shown when  |
+| `formatValue` | `reflection` |  | Formats the numeric value in tooltips. |
+| `height` | `number` |  | Plot height in pixels. |
+| `legendLabel` | `string` |  | Series name shown under the plot. |
+| `loading` | `boolean` |  | When true, shows  |
+| `loadingAnimation` | `SkeletonAnimation` |  | Animation for skeletons inside  |
+| `loadingComponent` | `ReactNode` |  | Placeholder rendered while  |
+| `loadingLabel` | `string` |  | Screen reader label announced while loading. |
+| `onPeriodPress` | `reflection` |  | Makes  |
+| `periodLabel` | `string` |  | Relative or absolute reporting period shown with  |
+| `series` | `array` |  | Named series. When non-empty, these replace the single  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `title` | `string` |  | Optional chart-card title shortcut. |
+| `xTickPolicy` | `union` |  | X-label collision policy.  |

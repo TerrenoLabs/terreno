@@ -122,6 +122,22 @@ describe("createApiClient.request", () => {
     expect(headerOf(calls[1], "Content-Type")).toBeNull();
   });
 
+  it("uses the {message} of a legacy error body as the title", async () => {
+    const {fetchImpl} = scriptedFetch([
+      () => jsonResponse({message: "The current password is incorrect."}, 403),
+      () => jsonResponse({message: ""}, 403),
+    ]);
+    const client = createApiClient({baseUrl: "http://api.test", fetchImpl});
+
+    const withMessage = await failureOf(client.request({method: "PATCH", url: "/auth/me"}));
+    const withEmptyMessage = await failureOf(client.request({url: "/auth/me"}));
+
+    expect(withMessage.status).toBe(403);
+    expect(withMessage.message).toBe("The current password is incorrect.");
+    expect(withMessage.data).toEqual({title: "The current password is incorrect."});
+    expect(withEmptyMessage.data.title).toBe("Request failed (403)");
+  });
+
   it("unwraps {data} documents, keeps list envelopes, and returns null for 204", async () => {
     const list = {data: [{_id: "1"}], limit: 10, more: false, page: 1, total: 1};
     const {fetchImpl} = scriptedFetch([

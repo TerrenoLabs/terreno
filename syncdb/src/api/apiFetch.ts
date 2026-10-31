@@ -106,9 +106,19 @@ const readErrorData = async (response: Response): Promise<ApiErrorData> => {
   const contentType = response.headers.get("Content-Type") ?? "";
   if (contentType.includes("application/json")) {
     try {
-      const parsed = (await response.json()) as Partial<ApiErrorData> | null;
-      if (parsed && typeof parsed.title === "string" && parsed.title.length > 0) {
-        const data: ApiErrorData = {title: parsed.title};
+      const parsed = (await response.json()) as
+        | (Partial<ApiErrorData> & {message?: unknown})
+        | null;
+      // Routes that predate JSON:API errors (`PATCH /auth/me`) answer `{message}`; it is the
+      // reason the server gives, so it stands in for the missing `title`.
+      const title =
+        typeof parsed?.title === "string" && parsed.title.length > 0
+          ? parsed.title
+          : typeof parsed?.message === "string" && parsed.message.length > 0
+            ? parsed.message
+            : undefined;
+      if (parsed && title !== undefined) {
+        const data: ApiErrorData = {title};
         if (parsed.detail !== undefined) {
           data.detail = parsed.detail;
         }

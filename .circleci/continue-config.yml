@@ -815,6 +815,8 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - compile_packages:
+          packages: blocks ui
       - run:
           name: Lint / compile / test syncdb
           working_directory: ~/project/syncdb

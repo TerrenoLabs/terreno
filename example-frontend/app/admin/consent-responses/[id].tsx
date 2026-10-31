@@ -1,4 +1,4 @@
-import {ConsentResponseViewer, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
+import {ConsentResponseViewer, useAdminModelApi} from "@terreno/admin-frontend";
 import {Box, Button} from "@terreno/ui";
 import {type Href, useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
@@ -13,11 +13,10 @@ interface ConsentResponseUser {
 const ConsentResponseScreen: React.FC = () => {
   const {id} = useLocalSearchParams<{id: string}>();
   const router = useRouter();
-  const rpc = useAdminRpc();
-  const {data: response} = useAdminRpcQuery<{userId?: ConsentResponseUser | string}>({
-    rpc,
+  // The same read the viewer makes: it unwraps the admin `{data}` envelope.
+  const {useReadQuery} = useAdminModelApi(`${ADMIN_BASE_URL}/consent-responses`, "ConsentResponse");
+  const {data: response} = useReadQuery<{userId?: ConsentResponseUser | string}>(id, {
     skip: !id,
-    url: `${ADMIN_BASE_URL}/consent-responses/${id}`,
   });
   const responseUser = response?.userId;
   const userId = typeof responseUser === "object" ? responseUser?._id : responseUser;

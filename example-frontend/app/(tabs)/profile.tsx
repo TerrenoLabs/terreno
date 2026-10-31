@@ -1,4 +1,5 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
+import type {ApiError} from "@terreno/syncdb/api";
 import {canOpenAdminPage} from "@terreno/syncdb/app";
 import {SIGN_OUT_FAILED_MESSAGE, useSession} from "@terreno/syncdb/auth";
 import {useFeatureFlags} from "@terreno/syncdb/flags";
@@ -137,9 +138,7 @@ const ProfileScreen: React.FC = () => {
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating name:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update name"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update name");
       }
     },
     [showSaveSuccess, updateProfile]
@@ -163,9 +162,7 @@ const ProfileScreen: React.FC = () => {
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update email");
       }
     },
     [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]

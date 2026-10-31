@@ -357,7 +357,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, ai-prompt-governance
   - Docs: T12
 
-- [ ] **T6** — Generate images with a built-in generate_image tool
+- [x] **T6** — Generate images with a built-in generate_image tool
   - Depends on: T4, T5
   - Files: ai/src/service/generateImageTool.ts, ai/src/service/chatTurn.ts, ai/src/types/index.ts, ai/src/routes/generateImage.test.ts, ai/src/tests/chatHarness.ts, ai/src/routes/routes.test.ts
   - Criteria:

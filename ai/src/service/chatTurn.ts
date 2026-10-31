@@ -64,6 +64,7 @@ import {
 } from "./asks";
 import {assertFileUploadsEnabled} from "./fileUploadsGate";
 import {fillMissingActionIds} from "./fillActionIds";
+import {createGenerateImageTool, GENERATE_IMAGE_TOOL_NAME} from "./generateImageTool";
 import {
   COMPACT_SURFACE_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
@@ -171,6 +172,8 @@ interface GeneratedImageFile {
 }
 
 interface GeneratedImage {
+  /** Storage key of an image the `generate_image` tool stored. */
+  gcsKey?: string;
   mimeType: string;
   url: string;
 }
@@ -913,7 +916,7 @@ const ownedUploadKeys = async (
  * Only a key whose upload belongs to the conversation's owner is signed, as `GET /files/*gcsKey`
  * requires; any other part keeps its stored URL.
  */
-const resolveStoredAttachmentUrls = async (
+export const resolveStoredAttachmentUrls = async (
   prompts: GptHistoryPrompt[],
   ownerId: mongoose.Types.ObjectId | undefined,
   fileStorageService?: GptRouteOptions["fileStorageService"]
@@ -1709,6 +1712,7 @@ const assistantRows = ({
     mimeType: img.mimeType,
     type: "image" as const,
     url: img.url,
+    ...(img.gcsKey ? {gcsKey: img.gcsKey} : {}),
   }));
   return [
     {
@@ -1866,10 +1870,44 @@ export const runChatTurn = async ({
   });
   effectiveSystemPrompt = observability.systemPrompt;
 
+  const record: TurnRecord = {
+    askCalls: [],
+    fullResponse: "",
+    generatedImages: [],
+    hasOutput: false,
+    rows: [...turn.rows],
+    streamingText: "",
+    textDelivered: false,
+  };
+  const outputSink: ChatTurnSink = {
+    emit: (event) => {
+      if (!("error" in event)) {
+        record.hasOutput = true;
+      }
+      sink.emit(event);
+    },
+    open: sink.open,
+  };
+  const generateImageTool = supportsTools
+    ? createGenerateImageTool({
+        fileStorageService: options.fileStorageService,
+        imageGeneration: options.imageGeneration,
+        onImage: ({displayUrl, ...image}) => {
+          record.generatedImages.push(image);
+          outputSink.emit({image: {mimeType: image.mimeType, url: displayUrl}});
+        },
+        req,
+        userId,
+      })
+    : undefined;
+  const builtInTools = generateImageTool
+    ? {...turnSkills.tools, [GENERATE_IMAGE_TOOL_NAME]: generateImageTool}
+    : turnSkills.tools;
+
   const offeredAskKinds = supportsTools ? askKindsForSurface({kinds: askKinds, surface}) : [];
   const allTools = await collectTools({
     askKinds: offeredAskKinds,
-    builtInTools: turnSkills.tools,
+    builtInTools,
     options,
     req,
     supportsTools,
@@ -1895,6 +1933,7 @@ export const runChatTurn = async ({
 
   // Rows saved after the answer mean the turn moved on, so a failure keeps the answer.
   let answeredRowCount = 0;
+  const startTime = DateTime.now().toMillis();
   if (answer) {
     const resolved = await resolvePendingAsk({history, ...answer});
     if (!resolved) {
@@ -1904,25 +1943,6 @@ export const runChatTurn = async ({
     answeredRowCount = resolved.prompts.length;
   }
 
-  const startTime = DateTime.now().toMillis();
-  const record: TurnRecord = {
-    askCalls: [],
-    fullResponse: "",
-    generatedImages: [],
-    hasOutput: false,
-    rows: [...turn.rows],
-    streamingText: "",
-    textDelivered: false,
-  };
-  const outputSink: ChatTurnSink = {
-    emit: (event) => {
-      if (!("error" in event)) {
-        record.hasOutput = true;
-      }
-      sink.emit(event);
-    },
-    open: sink.open,
-  };
   let isSaved = false;
   let historyIsNew = isNewHistory;
   const saveRows = async (rows: GptHistoryPrompt[]): Promise<number> => {
@@ -2060,13 +2080,20 @@ export const runChatTurn = async ({
     try {
       if (isSaved) {
         const partial = record.streamingText;
-        if (partial) {
+        // Images the tool already sent stay with the reply, as the client showed them.
+        const [imageRow] = assistantRows({
+          fullResponse: "",
+          generatedImages: record.generatedImages,
+          modelId: aiService.modelId,
+        });
+        if (partial || imageRow?.content) {
           await GptHistory.updateOne(
             {_id: history._id, "prompts.streamId": streamId},
             {
               $set: {
                 "prompts.$.status": "error",
                 "prompts.$.text": partial,
+                ...(imageRow?.content ? {"prompts.$.content": imageRow.content} : {}),
                 updated: DateTime.now().toJSDate(),
               },
             }

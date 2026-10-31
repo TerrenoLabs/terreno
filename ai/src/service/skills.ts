@@ -72,7 +72,7 @@ const listCatalogSkills = async (userId: mongoose.Types.ObjectId): Promise<Skill
 };
 
 /** The visible skill with this name; a global skill wins over the caller's skill of the same name. */
-const findVisibleSkill = async ({
+export const findVisibleSkill = async ({
   name,
   userId,
 }: {

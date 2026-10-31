@@ -419,6 +419,32 @@ export type DefaultSystemPrompt =
   | string
   | ((args: {req: import("express").Request}) => string | undefined | Promise<string | undefined>);
 
+/** The style text added before every generated image prompt, or a function of the request. */
+export type ImageStylePrompt =
+  | string
+  | ((args: {req: import("express").Request}) => string | undefined | Promise<string | undefined>);
+
+/** Settings for the built-in `generate_image` chat tool. */
+export interface ImageGenerationOptions {
+  /**
+   * The image model for this request. Called once per tool-capable turn with the request and
+   * `modelId`; returning `undefined` leaves the tool out of that turn.
+   */
+  model: (args: {
+    modelId: string;
+    req: import("express").Request;
+  }) => import("ai").LanguageModel | undefined;
+  /** The image model's id, such as `gemini-3-pro-image`. */
+  modelId: string;
+  /**
+   * Put before the prompt with a blank line between them. Empty adds nothing. A function that
+   * throws is logged and the image is generated from the prompt alone.
+   */
+  stylePrompt?: ImageStylePrompt;
+  /** How many `generate_image` calls one turn may make, failed ones included. Defaults to 4. */
+  maxCallsPerTurn?: number;
+}
+
 export interface GptRouteOptions {
   /** Pre-configured AIService. Optional when using per-request keys or demo mode. */
   aiService?: import("../service/aiService").AIService;
@@ -468,6 +494,11 @@ export interface GptRouteOptions {
    * tokens that add `## Active skill: <name>` sections. Off by default.
    */
   skills?: boolean;
+  /**
+   * Adds the built-in `generate_image` tool to tool-capable chat turns. Each call makes one image,
+   * emits an SSE `{image}` event, and saves it on the assistant reply. Off by default.
+   */
+  imageGeneration?: ImageGenerationOptions;
   /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
    * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
   langfuseSystemPromptName?: string;

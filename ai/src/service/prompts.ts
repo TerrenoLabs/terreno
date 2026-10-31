@@ -222,3 +222,9 @@ export const activeSkillHeading = (name: string): string =>
 
 /** Lists an active skill's reference files by ref, so the model can pass them to other tools. */
 export const activeSkillFilesLine = (refs: string[]): string => `Files: ${refs.join(", ")}`;
+
+export const GENERATE_IMAGE_TOOL_DESCRIPTION =
+  "Generate one image from a text prompt. The user sees the image in the chat as soon as it is " +
+  "made, so do not describe or link it. Pass references (at most 4) to steer the style or " +
+  "content: skill file refs such as skill:<name>/<filename>, or attachment:<key> for an image " +
+  "the user uploaded. Returns {images: [{id, mimeType}]}, or {error}.";

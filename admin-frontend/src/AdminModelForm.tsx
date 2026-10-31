@@ -3,6 +3,7 @@ import {router, useNavigation} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {AdminConflictSheet} from "./AdminConflictSheet";
 import {AdminFieldRenderer} from "./AdminFieldRenderer";
+import {buildNestedObjectDefault, isNestedObjectField} from "./AdminNestedObjectField";
 import {useAdminContext} from "./adminContext";
 import {isWindowedAdminTable} from "./adminWindowedTable";
 import {markAdminWindowMembershipStale} from "./adminWindowRefresh";
@@ -106,6 +107,9 @@ const getVisibleFieldEntries = (
 const getFieldDefault = (fieldConfig: AdminFieldConfig): AdminFieldValue => {
   if (fieldConfig.default !== undefined) {
     return fieldConfig.default;
+  }
+  if (isNestedObjectField(fieldConfig) && fieldConfig.items) {
+    return buildNestedObjectDefault(fieldConfig.items);
   }
   if (fieldConfig.type === "boolean") {
     return false;

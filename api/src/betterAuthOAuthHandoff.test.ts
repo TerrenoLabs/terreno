@@ -1,7 +1,4 @@
 import {afterAll, beforeAll, beforeEach, describe, expect, it} from "bun:test";
-import {once} from "node:events";
-import type {Server} from "node:http";
-import type {AddressInfo} from "node:net";
 import type {BetterAuthPlugin} from "better-auth";
 import {createAuthMiddleware} from "better-auth/api";
 import {genericOAuth} from "better-auth/plugins";
@@ -16,77 +13,12 @@ import {
   getMongoClientFromMongoose,
   mountBetterAuthRoutes,
 } from "./betterAuthSetup";
+import {type MockOidcProvider, startMockOidcProvider} from "./tests/mockOidcProvider";
 
 const API_ORIGIN = "http://localhost:3000";
 const WEB_ORIGIN = "https://web.example.com";
 const PROVIDER_ID = "mock-oidc";
-const MOCK_CODE = "mock-authorization-code";
-const MOCK_ACCESS_TOKEN = "mock-access-token";
 const SECRET = "test-secret-at-least-32-characters-long";
-
-interface MockOidcUser {
-  email: string;
-  id: string;
-  name: string;
-}
-
-interface MockOidcProvider {
-  close: () => Promise<void>;
-  issuer: string;
-  /** The user the next sign-in authenticates as. */
-  setUser: (user: MockOidcUser) => void;
-}
-
-// A minimal OIDC provider: discovery, an authorize step that approves at once, a token
-// endpoint, and userinfo. Real enough for Better Auth's generic OAuth code flow with PKCE.
-const startMockOidcProvider = async (): Promise<MockOidcProvider> => {
-  let issuer = "";
-  let user: MockOidcUser = {email: "oidc@example.com", id: "oidc-user", name: "OIDC User"};
-  const app = express();
-  app.use(express.urlencoded({extended: false}));
-  app.get("/.well-known/openid-configuration", (_req, res) => {
-    res.json({
-      authorization_endpoint: `${issuer}/authorize`,
-      issuer,
-      response_types_supported: ["code"],
-      token_endpoint: `${issuer}/token`,
-      userinfo_endpoint: `${issuer}/userinfo`,
-    });
-  });
-  app.get("/authorize", (req, res) => {
-    const redirect = new URL(String(req.query.redirect_uri));
-    redirect.searchParams.set("code", MOCK_CODE);
-    redirect.searchParams.set("state", String(req.query.state));
-    res.redirect(redirect.toString());
-  });
-  app.post("/token", (req, res) => {
-    if (req.body.code !== MOCK_CODE) {
-      res.status(400).json({error: "invalid_grant"});
-      return;
-    }
-    res.json({access_token: MOCK_ACCESS_TOKEN, expires_in: 3600, token_type: "Bearer"});
-  });
-  app.get("/userinfo", (req, res) => {
-    if (req.headers.authorization !== `Bearer ${MOCK_ACCESS_TOKEN}`) {
-      res.status(401).json({error: "invalid_token"});
-      return;
-    }
-    res.json({...user, email_verified: true, sub: user.id});
-  });
-  const server: Server = app.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  issuer = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return {
-    close: async (): Promise<void> => {
-      server.close();
-      await once(server, "close");
-    },
-    issuer,
-    setUser: (next: MockOidcUser): void => {
-      user = next;
-    },
-  };
-};
 
 // Lets a case replace what Better Auth put on the callback response before the handoff hook
 // reads it, to probe the hook with redirects Better Auth's own origin check would refuse.
@@ -197,7 +129,7 @@ const startSignIn = async (
   const approval = await fetch(start.body.url, {redirect: "manual"});
   const callback = new URL(approval.headers.get("location") ?? "");
   expect(callback.origin).toBe(API_ORIGIN);
-  expect(callback.pathname).toBe(`/api/auth/oauth2/callback/${PROVIDER_ID}`);
+  expect(callback.pathname).toBe(`/api/auth/callback/${PROVIDER_ID}`);
   // The callback needs the OAuth state cookie the sign-in response set. Carrying it by hand
   // stands in for however the browser keeps it; how a cross-site app keeps it is T13/T14's call.
   return {callbackPath: `${callback.pathname}${callback.search}`, cookie: cookieHeaderFrom(start)};
@@ -402,13 +334,15 @@ describe("oauthHandoff on a listed web origin", () => {
     const state = new URL(callbackPath, API_ORIGIN).searchParams.get("state") ?? "";
 
     const callback = await supertest(app)
-      .get(`/api/auth/oauth2/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
+      .get(`/api/auth/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
       .set("cookie", cookie);
 
     // better-auth 1.6 sends a generic-OAuth provider error to its own error page before it reads
     // errorCallbackURL from state (1.7 honors it); either way the redirect carries no token.
     expect(callback.status).toBe(302);
-    expect(callback.headers.location).toContain("/api/auth/error?error=access_denied");
+    expect(callback.headers.location).toContain(
+      "https://web.example.com/error?error=access_denied"
+    );
     expect(callback.headers.location).not.toContain("ott=");
   });
 
@@ -692,13 +626,15 @@ describe("GET /oauth-handoff/start", () => {
     const state = new URL(started.headers.location as string).searchParams.get("state") ?? "";
 
     const returned = await supertest(app)
-      .get(`/api/auth/oauth2/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
+      .get(`/api/auth/callback/${PROVIDER_ID}?error=access_denied&state=${state}`)
       .set("cookie", cookieHeaderFrom(started));
 
-    // better-auth 1.6 ignores errorCallbackURL for a generic-OAuth provider error and uses its
-    // own error page (1.7 honors it); the redirect still carries no token.
+    // better-auth 1.7 honors errorCallbackURL for a generic-OAuth provider error; the redirect
+    // still carries no token.
     expect(returned.status).toBe(302);
-    expect(returned.headers.location).toContain("/api/auth/error?error=access_denied");
+    expect(returned.headers.location).toContain(
+      "https://web.example.com/sign-in-error?error=access_denied"
+    );
     expect(returned.headers.location).not.toContain("ott=");
   });
 
@@ -947,4 +883,485 @@ describe("oauthHandoff callbackPaths", () => {
       );
     });
   }
+});
+
+describe("linking a provider through the handoff", () => {
+  const LINK_TOKEN_ROWS = {identifier: {$regex: /^terreno-link-intent:/}};
+  const START_URL = `${API_ORIGIN}/api/auth/oauth-handoff/link-start`;
+
+  const betterAuthRows = (name: string): ReturnType<mongoose.mongo.Db["collection"]> => {
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error("The test database is not connected");
+    }
+    return db.collection(name);
+  };
+
+  interface SignedInUser {
+    bearer: string;
+    cookie: string;
+    email: string;
+    userId: string;
+  }
+
+  // Signs up with email and password; the provider then reports the same email, verified.
+  const signUpUser = async (app: express.Application): Promise<SignedInUser> => {
+    const email = `linker-${Math.random().toString(36).slice(2)}@example.com`;
+    provider.setUser({email, id: `oidc-${Math.random().toString(36).slice(2)}`, name: "Linker"});
+    const signUp = await supertest(app)
+      .post("/api/auth/sign-up/email")
+      .set("origin", WEB_ORIGIN)
+      .set("content-type", "application/json")
+      .send({email, name: "Linker", password: "password-123456"});
+    expect(signUp.status).toBe(200);
+    const bearer = signUp.headers["set-auth-token"] as string;
+    expect(bearer).toBeTruthy();
+    return {bearer, cookie: cookieHeaderFrom(signUp), email, userId: signUp.body.user.id};
+  };
+
+  // The web app's cross-site fetch, authenticated with its bearer.
+  const linkIntent = (
+    app: express.Application,
+    bearer: string,
+    body: Record<string, string>
+  ): supertest.Test =>
+    supertest(app)
+      .post("/api/auth/oauth-handoff/link-intent")
+      .set("origin", WEB_ORIGIN)
+      .set("sec-fetch-site", "cross-site")
+      .set("sec-fetch-mode", "cors")
+      .set("authorization", `Bearer ${bearer}`)
+      .set("content-type", "application/json")
+      .send(body);
+
+  // The hidden form's top-level POST navigation from the web app: no cookie, no bearer.
+  const linkStart = (app: express.Application, token: string): supertest.Test =>
+    supertest(app)
+      .post("/api/auth/oauth-handoff/link-start")
+      .set("origin", WEB_ORIGIN)
+      .set("sec-fetch-site", "cross-site")
+      .set("sec-fetch-mode", "navigate")
+      .set("sec-fetch-dest", "document")
+      .type("form")
+      .send({token});
+
+  const mintToken = async (
+    app: express.Application,
+    bearer: string,
+    body: Record<string, string> = {callbackURL: `${WEB_ORIGIN}/after`, provider: PROVIDER_ID}
+  ): Promise<string> => {
+    const intent = await linkIntent(app, bearer, body);
+    expect(intent.status).toBe(200);
+    return intent.body.token as string;
+  };
+
+  const setCookies = (res: supertest.Response): string[] =>
+    (res.headers["set-cookie"] as unknown as string[] | undefined) ?? [];
+
+  it("links the provider for a signed-in bearer user, with no new session and no ott", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const sessionsBefore = await betterAuthRows("session").countDocuments({});
+
+    const intent = await linkIntent(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/after?tab=security`,
+      errorCallbackURL: `${WEB_ORIGIN}/settings/security`,
+      provider: PROVIDER_ID,
+    });
+    expect(intent.status).toBe(200);
+    expect(intent.body.startURL).toBe(START_URL);
+    expect(intent.headers["cache-control"]).toBe("no-store");
+
+    const started = await linkStart(app, intent.body.token);
+    expect(started.status).toBe(302);
+    expect(started.headers.location).toStartWith(`${provider.issuer}/authorize?`);
+    const startCookies = setCookies(started);
+    expect(startCookies.some((cookie) => cookie.includes(".state="))).toBe(true);
+    // Reading the session must not sign the browser in with a cookie on the API's origin.
+    expect(startCookies.some((cookie) => cookie.includes("session_token="))).toBe(false);
+    expect(startCookies.some((cookie) => cookie.includes("session_data="))).toBe(false);
+    expect(started.headers["set-auth-token"]).toBeUndefined();
+
+    const approval = await fetch(started.headers.location as string, {redirect: "manual"});
+    const callback = new URL(approval.headers.get("location") ?? "");
+    expect(callback.origin).toBe(API_ORIGIN);
+    const returned = await supertest(app)
+      .get(`${callback.pathname}${callback.search}`)
+      .set("cookie", cookieHeaderFrom(started));
+
+    expect(returned.status).toBe(302);
+    // Linking creates no session, so the return carries no one-time token.
+    expect(returned.headers.location).toBe(`${WEB_ORIGIN}/after?tab=security`);
+    expect(await verificationRows().countDocuments(HANDOFF_TOKEN_ROWS)).toBe(0);
+    const accounts = await betterAuthRows("account")
+      .find({userId: new mongoose.Types.ObjectId(user.userId)})
+      .toArray();
+    expect(accounts.map((account) => account.providerId).sort()).toEqual([
+      "credential",
+      PROVIDER_ID,
+    ]);
+    expect(await betterAuthRows("session").countDocuments({})).toBe(sessionsBefore);
+    expect(setCookies(returned).some((cookie) => cookie.includes("session_token="))).toBe(false);
+  });
+
+  it("accepts a cookie-authenticated intent from a listed web origin", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+
+    const intent = await supertest(app)
+      .post("/api/auth/oauth-handoff/link-intent")
+      .set("origin", WEB_ORIGIN)
+      .set("cookie", user.cookie)
+      .set("content-type", "application/json")
+      .send({callbackURL: `${WEB_ORIGIN}/after`, provider: PROVIDER_ID});
+
+    expect(intent.status).toBe(200);
+    expect(intent.body.token).toBeTruthy();
+  });
+
+  it("stores the link token hashed under its own identifier, expiring in three minutes", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+
+    const token = await mintToken(app, user.bearer);
+
+    const rows = await verificationRows().find(LINK_TOKEN_ROWS).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].identifier).not.toContain(token);
+    expect(rows[0].value).not.toContain(token);
+    const minutes = DateTime.fromJSDate(rows[0].expiresAt).diffNow("minutes").minutes;
+    expect(minutes).toBeGreaterThan(2.5);
+    expect(minutes).toBeLessThanOrEqual(3);
+    // A link token is not a sign-in token.
+    expect((await verify(app, token)).status).toBe(400);
+  });
+
+  it("refuses a reused token with 400 and no redirect", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+    expect((await linkStart(app, token)).status).toBe(302);
+
+    const reused = await linkStart(app, token);
+
+    expect(reused.status).toBe(400);
+    expect(reused.headers.location).toBeUndefined();
+    expect(setCookies(reused)).toEqual([]);
+  });
+
+  it("refuses an expired token with 400 and no redirect", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+    await verificationRows().updateMany(LINK_TOKEN_ROWS, {
+      $set: {expiresAt: DateTime.now().minus({seconds: 1}).toJSDate()},
+    });
+
+    const expired = await linkStart(app, token);
+
+    expect(expired.status).toBe(400);
+    expect(expired.headers.location).toBeUndefined();
+  });
+
+  it("refuses an unknown or missing token with 400", async () => {
+    const {app} = buildApp();
+
+    const unknown = await linkStart(app, "not-a-real-token");
+    const missing = await supertest(app)
+      .post("/api/auth/oauth-handoff/link-start")
+      .set("origin", WEB_ORIGIN)
+      .type("form")
+      .send({});
+
+    expect(unknown.status).toBe(400);
+    expect(unknown.headers.location).toBeUndefined();
+    expect(missing.status).toBe(400);
+  });
+
+  it("lets only one of two concurrent starts use the token", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const results = await Promise.all([linkStart(app, token), linkStart(app, token)]);
+
+    expect(results.map((res) => res.status).sort()).toEqual([302, 400]);
+  });
+
+  // Better Auth's own origin check refuses an untrusted URL in a POST body first, with 403; the
+  // handoff refuses every other URL that is not absolute on a listed web origin with 400.
+  const refusedURLs: {body: Record<string, string>; name: string; status: number}[] = [
+    {
+      body: {callbackURL: "https://other.example.com/after"},
+      name: "a trusted but unlisted origin",
+      status: 400,
+    },
+    {body: {callbackURL: "/after"}, name: "a relative path", status: 400},
+    {body: {callbackURL: `${API_ORIGIN}/after`}, name: "the API's own origin", status: 400},
+    {body: {callbackURL: "exp://127.0.0.1:8081/--/home"}, name: "an app scheme", status: 400},
+    {
+      body: {callbackURL: `${WEB_ORIGIN}/after`, errorCallbackURL: "https://other.example.com/e"},
+      name: "a trusted but unlisted errorCallbackURL",
+      status: 400,
+    },
+    {body: {callbackURL: "https://evil.example/after"}, name: "an untrusted origin", status: 403},
+    {
+      body: {callbackURL: `${WEB_ORIGIN}/after`, errorCallbackURL: "https://evil.example/error"},
+      name: "an untrusted errorCallbackURL",
+      status: 403,
+    },
+  ];
+
+  for (const {body, name, status} of refusedURLs) {
+    it(`refuses an intent for ${name} with ${status} and mints nothing`, async () => {
+      const {app} = buildApp();
+      const user = await signUpUser(app);
+
+      const intent = await linkIntent(app, user.bearer, {provider: PROVIDER_ID, ...body});
+
+      expect(intent.status).toBe(status);
+      expect(intent.body.token).toBeUndefined();
+      expect(await verificationRows().countDocuments(LINK_TOKEN_ROWS)).toBe(0);
+    });
+  }
+
+  it("accepts any absolute path on a web origin as the link return, outside callbackPaths", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/settings/security`,
+      errorCallbackURL: `${WEB_ORIGIN}/settings/security?failed=1`,
+      provider: PROVIDER_ID,
+    });
+
+    const started = await linkStart(app, token);
+    const approval = await fetch(started.headers.location as string, {redirect: "manual"});
+    const callback = new URL(approval.headers.get("location") ?? "");
+    const returned = await supertest(app)
+      .get(`${callback.pathname}${callback.search}`)
+      .set("cookie", cookieHeaderFrom(started));
+
+    expect(started.status).toBe(302);
+    expect(returned.status).toBe(302);
+    expect(returned.headers.location).toBe(`${WEB_ORIGIN}/settings/security`);
+    expect(
+      await betterAuthRows("account").countDocuments({
+        providerId: PROVIDER_ID,
+        userId: new mongoose.Types.ObjectId(user.userId),
+      })
+    ).toBe(1);
+  });
+
+  it("links the token's user even when the browser sends another user's cookies", async () => {
+    const {app} = buildApp();
+    const other = await signUpUser(app);
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const started = await linkStart(app, token).set("cookie", other.cookie);
+    const approval = await fetch(started.headers.location as string, {redirect: "manual"});
+    const callback = new URL(approval.headers.get("location") ?? "");
+    const returned = await supertest(app)
+      .get(`${callback.pathname}${callback.search}`)
+      .set("cookie", `${other.cookie}; ${cookieHeaderFrom(started)}`);
+
+    expect(started.status).toBe(302);
+    const startCookies = setCookies(started);
+    expect(startCookies.some((cookie) => cookie.includes(".state="))).toBe(true);
+    for (const name of ["session_token=", "session_data=", "dont_remember="]) {
+      expect({name, set: startCookies.some((cookie) => cookie.includes(name))}).toEqual({
+        name,
+        set: false,
+      });
+    }
+    expect(returned.headers.location).toBe(`${WEB_ORIGIN}/after`);
+    const linkedTo = await betterAuthRows("account")
+      .find({providerId: PROVIDER_ID})
+      .map((account) => String(account.userId))
+      .toArray();
+    expect(linkedTo).toEqual([user.userId]);
+  });
+
+  it("limits link intents to three per ten seconds when Better Auth's limiter is on", async () => {
+    const {app} = buildApp({
+      options: {advanced: {disableOriginCheck: false}, rateLimit: {enabled: true}},
+    });
+    const user = await signUpUser(app);
+
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      statuses.push(
+        (
+          await linkIntent(app, user.bearer, {
+            callbackURL: `${WEB_ORIGIN}/after`,
+            provider: PROVIDER_ID,
+          }).set("x-forwarded-for", "203.0.113.11")
+        ).status
+      );
+    }
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
+  });
+
+  it("refuses an intent without a session with 401", async () => {
+    const {app} = buildApp();
+
+    const intent = await supertest(app)
+      .post("/api/auth/oauth-handoff/link-intent")
+      .set("origin", WEB_ORIGIN)
+      .set("content-type", "application/json")
+      .send({callbackURL: `${WEB_ORIGIN}/after`, provider: PROVIDER_ID});
+
+    expect(intent.status).toBe(401);
+    expect(await verificationRows().countDocuments(LINK_TOKEN_ROWS)).toBe(0);
+  });
+
+  it("refuses the intent with 403 when accountLinking.mode is never", async () => {
+    const {app} = buildApp({accountLinking: {mode: "never"}});
+    const user = await signUpUser(app);
+
+    const intent = await linkIntent(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/after`,
+      provider: PROVIDER_ID,
+    });
+
+    expect(intent.status).toBe(403);
+    expect(intent.body.code).toBe("LINKING_DISABLED");
+    expect(await verificationRows().countDocuments(LINK_TOKEN_ROWS)).toBe(0);
+  });
+
+  it("sends a session revoked after the intent back with error=session_expired", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/after`,
+      errorCallbackURL: `${WEB_ORIGIN}/settings/security`,
+      provider: PROVIDER_ID,
+    });
+    const signOut = await supertest(app)
+      .post("/api/auth/sign-out")
+      .set("origin", WEB_ORIGIN)
+      .set("authorization", `Bearer ${user.bearer}`)
+      .set("content-type", "application/json")
+      .send({});
+    expect(signOut.status).toBe(200);
+
+    const started = await linkStart(app, token);
+
+    expect(started.status).toBe(302);
+    expect(started.headers.location).toBe(`${WEB_ORIGIN}/settings/security?error=session_expired`);
+    expect(setCookies(started).some((cookie) => cookie.includes(".state="))).toBe(false);
+    expect(await verificationRows().countDocuments(LINK_TOKEN_ROWS)).toBe(0);
+    expect(
+      await betterAuthRows("account").countDocuments({
+        providerId: PROVIDER_ID,
+        userId: new mongoose.Types.ObjectId(user.userId),
+      })
+    ).toBe(0);
+  });
+
+  it("sends an unknown provider back to callbackURL with error=provider_not_found", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/after?tab=security`,
+      provider: "nope",
+    });
+
+    const started = await linkStart(app, token);
+
+    expect(started.status).toBe(302);
+    expect(started.headers.location).toBe(
+      `${WEB_ORIGIN}/after?tab=security&error=provider_not_found`
+    );
+  });
+
+  it("refuses a start that is not a page navigation and keeps the token", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const refused = await linkStart(app, token).set("sec-fetch-dest", "iframe");
+    const retried = await linkStart(app, token);
+
+    expect(refused.status).toBe(400);
+    expect(refused.headers.location).toBeUndefined();
+    expect(retried.status).toBe(302);
+  });
+
+  it("refuses a start posted from another origin and keeps the token", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const fromOther = await linkStart(app, token).set("origin", "https://other.example.com");
+    const fromNull = await linkStart(app, token).set("origin", "null");
+    const retried = await linkStart(app, token);
+
+    expect(fromOther.status).toBe(403);
+    expect(fromOther.headers.location).toBeUndefined();
+    expect(fromNull.status).toBe(403);
+    expect(retried.status).toBe(302);
+  });
+
+  it("refuses a start without an Origin header and keeps the token", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const withoutOrigin = await supertest(app)
+      .post("/api/auth/oauth-handoff/link-start")
+      .set("sec-fetch-dest", "document")
+      .type("form")
+      .send({token});
+    const retried = await linkStart(app, token);
+
+    expect(withoutOrigin.status).toBe(403);
+    expect(withoutOrigin.headers.location).toBeUndefined();
+    expect(retried.status).toBe(302);
+  });
+
+  it("refuses a JSON start, so the token only travels in a form body", async () => {
+    const {app} = buildApp();
+    const user = await signUpUser(app);
+    const token = await mintToken(app, user.bearer);
+
+    const json = await supertest(app)
+      .post("/api/auth/oauth-handoff/link-start")
+      .set("origin", WEB_ORIGIN)
+      .set("content-type", "application/json")
+      .send({token});
+
+    expect(json.status).toBe(415);
+    expect(await verificationRows().countDocuments(LINK_TOKEN_ROWS)).toBe(1);
+  });
+
+  it("limits link starts to three per ten seconds when Better Auth's limiter is on", async () => {
+    const {app} = buildApp({
+      options: {advanced: {disableOriginCheck: false}, rateLimit: {enabled: true}},
+    });
+
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      statuses.push(
+        (await linkStart(app, `token-${attempt}`).set("x-forwarded-for", "203.0.113.10")).status
+      );
+    }
+
+    expect(statuses).toEqual([400, 400, 400, 429]);
+  });
+
+  it("has no link routes when oauthHandoff is unset", async () => {
+    const {app} = buildApp({oauthHandoff: undefined});
+    const user = await signUpUser(app);
+
+    const intent = await linkIntent(app, user.bearer, {
+      callbackURL: `${WEB_ORIGIN}/after`,
+      provider: PROVIDER_ID,
+    });
+    const started = await linkStart(app, "anything");
+
+    expect(intent.status).toBe(404);
+    expect(started.status).toBe(404);
+  });
 });

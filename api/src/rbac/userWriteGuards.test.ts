@@ -108,6 +108,54 @@ describe("RBAC target-privilege check on user model writes", () => {
     expect(await UserModel.findById(superadmin.id)).toBeTruthy();
   });
 
+  it("refuses with 503 when the target's grants from a failed source are unknown", async () => {
+    let isDown = false;
+    const grantingAccess = createAccess({
+      connection: mongoose.connection,
+      sources: [
+        {
+          // Additive only, so an outage drops its grants instead of failing every request.
+          failClosedWhenDenyUnknown: false,
+          getGrants: async ({user}) => {
+            if (String(user.id) !== member.id) {
+              return null;
+            }
+            if (isDown) {
+              throw new Error("idp down");
+            }
+            return {permissions: {user: ["delete"]}};
+          },
+          name: "idp-grants",
+          ttlMs: 0,
+        },
+      ],
+      statements: terrenoStatements,
+      userModel: UserModel as unknown as UserMongooseModel,
+    }) as unknown as AnyTerrenoAccess;
+    const grantingOptions = {
+      accessControl: grantingAccess,
+      permissions: userPermissions,
+    } as unknown as Parameters<typeof executeUpdate>[0]["options"];
+    const update = (): Promise<unknown> =>
+      executeUpdate({
+        body: {name: "Renamed"},
+        id: member.id,
+        model: UserModel,
+        options: grantingOptions,
+        user: delegate,
+      });
+    await expect(update()).rejects.toMatchObject({status: 403});
+
+    isDown = true;
+    grantingAccess.invalidateCache({userId: member.id});
+
+    await expect(update()).rejects.toMatchObject({
+      status: 503,
+      title: "Permission source unavailable",
+    });
+    expect((await UserModel.findById(member.id).lean())?.name).toBe("Member");
+  });
+
   it("allows updates to users the actor covers, to the actor itself, and by legacy admins", async () => {
     await executeUpdate({
       body: {name: "Member renamed"},

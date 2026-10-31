@@ -73,7 +73,9 @@ export const assertCanWriteTargetUser = async ({
     return;
   }
   const getPermissions = (
-    accessControl as {getPermissions?: (args: {user: User}) => Promise<PermissionSet>}
+    accessControl as {
+      getPermissions?: (args: {user: User; requireComplete?: boolean}) => Promise<PermissionSet>;
+    }
   ).getPermissions;
   // Test doubles without a resolver have no permissions to compare.
   if (typeof getPermissions !== "function") {
@@ -85,7 +87,8 @@ export const assertCanWriteTargetUser = async ({
     return;
   }
   const actorPermissions = await getPermissions({user: actor});
-  const targetPermissions = await getPermissions({user: target as User});
+  // A target missing a failed source's grants would look less privileged than it is.
+  const targetPermissions = await getPermissions({requireComplete: true, user: target as User});
   if (isPermissionSubset(actorPermissions, targetPermissions)) {
     return;
   }

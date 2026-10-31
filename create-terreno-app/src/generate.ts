@@ -523,6 +523,8 @@ const generateBackendServer = (args: BootstrapArgs): string => {
   return `import {AdminApp} from "@terreno/admin-backend";
 import {HealthApp} from "@terreno/api-health";
 import {
+  AccountSecurityApp,
+  AuditApp,
   BetterAuthApp,
   checkModelsStrict,
   logger,
@@ -584,6 +586,10 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       })
     );
   }
+
+  // Account recovery for operators at /users/:id/security/*. Needs AuditApp: every recovery
+  // action writes a security AuditEvent.
+  terraApp.register(new AuditApp()).register(new AccountSecurityApp({accessControl: access}));
 
   return terraApp
     .register(userRouter)
@@ -735,8 +741,9 @@ const seedSteps: SeedStep[] = [
           title: "Seed users require Better Auth to be enabled",
         });
       }
+      // Sign-up stays open on the seed's own instance, so AUTH_SIGN_UP=closed still seeds users.
       const auth = createBetterAuth({
-        config,
+        config: {...config, signUp: undefined},
         mongoClient: getMongoClientFromMongoose(),
         userModel: User as unknown as TerrenoAuthUserModel,
       });
@@ -826,20 +833,59 @@ main().catch((error: unknown) => {
 };
 
 const generateBackendBetterAuthConfig = (args: BootstrapArgs): string => {
-  const {appName} = args;
-  return `import type {AuthProvider, BetterAuthConfig} from "@terreno/api";
+  const {appDisplayName, appName} = args;
+  return `import {
+  APIError,
+  type AuthProvider,
+  type BetterAuthAccountLinkingMode,
+  type BetterAuthConfig,
+  type BetterAuthPasskeyConfig,
+  logger,
+} from "@terreno/api";
 
 const DEFAULT_BETTER_AUTH_URL = "http://localhost:4000";
+const DEFAULT_FRONTEND_URL = "http://localhost:8082";
 const DEFAULT_WEB_ORIGINS = ["http://localhost:8082", "http://127.0.0.1:8082"];
 const APP_SCHEMES = ["${appName}://", "exp://"];
+
+/** Name authenticator apps and passkey prompts show for this app. */
+export const APP_NAME = ${JSON.stringify(appDisplayName)};
+
+const ACCOUNT_LINKING_MODES: readonly BetterAuthAccountLinkingMode[] = [
+  "verified-email",
+  "explicit",
+  "never",
+];
+const SIGN_UP_MODES: readonly ("open" | "closed")[] = ["open", "closed"];
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 
 export const getAuthProvider = (): AuthProvider => {
   const provider = process.env.AUTH_PROVIDER as AuthProvider | undefined;
   return provider ?? "better-auth";
 };
 
+/** The web app's public URL (\`FRONTEND_URL\`), used for auth mail links and passkeys. */
+export const getFrontendUrl = (): string => process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL;
+
+/** The \`FRONTEND_URL\` origin, or undefined when it is not a URL (passkey setup reports that). */
+const getFrontendOrigin = (): string | undefined => {
+  try {
+    return new URL(getFrontendUrl()).origin;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Web origins for CORS and \`trustedOrigins\`: the dev origins, the \`FRONTEND_URL\` origin, and
+ * each \`CORS_ORIGINS\` entry.
+ */
 export const getWebOrigins = (): string[] => {
   const origins = new Set<string>(DEFAULT_WEB_ORIGINS);
+  const frontendOrigin = getFrontendOrigin();
+  if (frontendOrigin) {
+    origins.add(frontendOrigin);
+  }
   const fromEnv = process.env.CORS_ORIGINS?.split(",")
     .map((value) => value.trim())
     .filter(Boolean);
@@ -847,6 +893,90 @@ export const getWebOrigins = (): string[] => {
     origins.add(origin);
   }
   return [...origins];
+};
+
+/** \`AUTH_ACCOUNT_LINKING\`: \`verified-email\` (default), \`explicit\`, or \`never\`. */
+const getAccountLinkingMode = (): BetterAuthAccountLinkingMode => {
+  const value = process.env.AUTH_ACCOUNT_LINKING || "verified-email";
+  const mode = ACCOUNT_LINKING_MODES.find((candidate) => candidate === value);
+  if (!mode) {
+    throw new APIError({
+      status: 500,
+      title: \`AUTH_ACCOUNT_LINKING must be one of \${ACCOUNT_LINKING_MODES.join(", ")}\`,
+    });
+  }
+  return mode;
+};
+
+/** \`AUTH_SIGN_UP\`: \`open\` (default) or \`closed\`. */
+const getSignUpMode = (): "open" | "closed" => {
+  const value = process.env.AUTH_SIGN_UP || "open";
+  const mode = SIGN_UP_MODES.find((candidate) => candidate === value);
+  if (!mode) {
+    throw new APIError({status: 500, title: "AUTH_SIGN_UP must be open or closed"});
+  }
+  return mode;
+};
+
+const isOnRpID = (hostname: string, rpID: string): boolean =>
+  hostname === rpID || hostname.endsWith(\`.\${rpID}\`);
+
+/**
+ * Passkeys are bound to \`PASSKEY_RP_ID\`, or to the \`FRONTEND_URL\` host when it is unset. The
+ * \`FRONTEND_URL\` origin always uses them; a CORS origin joins only when its host is the rpID or a
+ * subdomain of it, because a browser refuses a passkey anywhere else.
+ */
+const buildPasskeyConfig = (): BetterAuthPasskeyConfig => {
+  let frontend: URL;
+  try {
+    frontend = new URL(getFrontendUrl());
+  } catch {
+    throw new APIError({status: 500, title: "FRONTEND_URL must be an http(s) URL"});
+  }
+  if (frontend.protocol !== "http:" && frontend.protocol !== "https:") {
+    throw new APIError({status: 500, title: "FRONTEND_URL must be an http(s) URL"});
+  }
+  const rpID = process.env.PASSKEY_RP_ID || frontend.hostname;
+  if (!isOnRpID(frontend.hostname, rpID)) {
+    throw new APIError({
+      status: 500,
+      title: \`PASSKEY_RP_ID "\${rpID}" must be the FRONTEND_URL host or a parent domain of it\`,
+    });
+  }
+  const origins = new Set<string>([frontend.origin]);
+  for (const origin of getWebOrigins()) {
+    try {
+      const url = new URL(origin);
+      if (url.origin === origin && isOnRpID(url.hostname, rpID)) {
+        origins.add(origin);
+      }
+    } catch {
+      // A malformed CORS origin can never use a passkey.
+    }
+  }
+  return {origin: [...origins], rpID, rpName: APP_NAME};
+};
+
+let warnedPasskeysOnLoopback = false;
+
+/**
+ * The passkey config, or undefined in production while \`FRONTEND_URL\` is still a loopback URL:
+ * passkeys bound to \`localhost\` can never work for a deployed web app, so the login screen
+ * should not offer them.
+ */
+const buildDeployablePasskeyConfig = (): BetterAuthPasskeyConfig | undefined => {
+  const passkey = buildPasskeyConfig();
+  if (process.env.NODE_ENV !== "production") {
+    return passkey;
+  }
+  if (!LOOPBACK_HOSTS.has(new URL(passkey.origin[0]).hostname)) {
+    return passkey;
+  }
+  if (!warnedPasskeysOnLoopback) {
+    warnedPasskeysOnLoopback = true;
+    logger.warn("Passkeys are off: set FRONTEND_URL to the deployed web app's URL to turn them on");
+  }
+  return undefined;
 };
 
 export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
@@ -859,13 +989,26 @@ export const buildBetterAuthConfig = (): BetterAuthConfig | undefined => {
     throw new Error("BETTER_AUTH_SECRET is required when AUTH_PROVIDER=better-auth");
   }
 
-  return {
+  // The auth suite: env tunes the linking and sign-up policy; the rest is on.
+  const config: BetterAuthConfig = {
+    accountLinking: {mode: getAccountLinkingMode()},
     baseURL: process.env.BETTER_AUTH_URL ?? DEFAULT_BETTER_AUTH_URL,
     crossDomainCookies: process.env.CROSS_DOMAIN_AUTH_COOKIES === "true",
     enabled: true,
+    lastLoginMethod: true,
+    multiSession: {},
+    nativeApps: true,
+    publicAppUrl: getFrontendUrl(),
     secret,
+    signUp: {mode: getSignUpMode()},
     trustedOrigins: [...APP_SCHEMES, ...getWebOrigins()],
+    twoFactor: {issuer: APP_NAME, trustDeviceDays: 30},
   };
+  const passkey = buildDeployablePasskeyConfig();
+  if (passkey) {
+    config.passkey = passkey;
+  }
+  return config;
 };
 `;
 };
@@ -891,7 +1034,8 @@ export function addDefaultPlugins(schema: mongoose.Schema<any, any, any, any>): 
 };
 
 const generateBackendUserModel = (): string => {
-  return `import mongoose from "mongoose";
+  return `import {rbacUserPlugin} from "@terreno/api";
+import mongoose from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
 import type {UserDocument, UserModel} from "../types";
 import {addDefaultPlugins} from "./modelPlugins";
@@ -930,6 +1074,9 @@ const userSchema = new mongoose.Schema<UserDocument, UserModel>(
 userSchema.plugin(passportLocalMongoose, {
   usernameField: "email",
 });
+// \`roles\` holds the user's RBAC role names (access.ts). New users get Terreno's \`member\` role;
+// the seed adds \`operator\` to the admin, which grants the /users/:id/security recovery routes.
+userSchema.plugin(rbacUserPlugin, {defaultRoles: ["member"]});
 
 addDefaultPlugins(userSchema);
 
@@ -1125,6 +1272,8 @@ export type UserDocument = DefaultDoc &
     betterAuthId?: string;
     email: string;
     name: string;
+    /** RBAC role names, from rbacUserPlugin. */
+    roles: string[];
   };
 `;
 };
@@ -1586,6 +1735,7 @@ function RootLayoutNav(): React.ReactElement {
           </Stack.Protected>
           <Stack.Protected guard={Boolean(userId)}>
             <Stack.Screen name="(tabs)" options={{headerShown: false}} />
+            <Stack.Screen name="settings/security" options={{title: "Security"}} />
           </Stack.Protected>
         </Stack>
       </ThemeProvider>
@@ -1596,60 +1746,74 @@ function RootLayoutNav(): React.ReactElement {
 };
 
 const generateFrontendLogin = (): string => {
-  return `import {useSession} from "@terreno/syncdb/auth";
-import {baseUrl} from "@terreno/syncdb/config";
-import {LoginScreen} from "@terreno/ui";
-import {useRouter} from "expo-router";
+  return `import {TerrenoLoginScreen, useSession} from "@terreno/syncdb/auth";
+import {useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
-import {useCallback, useState} from "react";
-import {betterAuthClient} from "@/lib/betterAuth";
+import {useCallback} from "react";
+import {betterAuthClient, rememberedAccounts} from "@/lib/betterAuth";
 
+/**
+ * Renders only the sign-in methods the server's /terreno/methods turns on. A social sign-in
+ * returns here (callbackURL), and a failed one brings back ?error=, which the screen maps to
+ * guidance without showing the URL's text.
+ */
 const Login: React.FC = () => {
   const router = useRouter();
   const {refresh} = useSession();
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {error} = useLocalSearchParams<{error?: string}>();
 
-  const handleSubmit = useCallback(
-    async (values: Record<string, string>): Promise<void> => {
-      const {email, password} = values;
-      setErrorMessage(undefined);
-      setIsSubmitting(true);
-      try {
-        const result = await betterAuthClient.signIn.email({email, password});
-        if (result.error) {
-          setErrorMessage(result.error.message ?? "Sign in failed.");
-          return;
-        }
-        // Resolve the new session now instead of waiting for the next session push.
-        await refresh();
-        router.replace("/(tabs)");
-      } catch (error: unknown) {
-        console.error("[login] Sign in threw", {baseUrl, error});
-        setErrorMessage("Sign in failed. Please try again.");
-      } finally {
-        setIsSubmitting(false);
-      }
-    },
-    [refresh, router]
-  );
+  const handleSignedIn = useCallback(async (): Promise<void> => {
+    // Resolve the new session now instead of waiting for the next session push.
+    await refresh();
+    router.replace("/(tabs)");
+  }, [refresh, router]);
+
+  const handleSignUpPress = useCallback((): void => {
+    router.push("/signup");
+  }, [router]);
 
   return (
-    <LoginScreen
-      error={errorMessage}
-      fields={[
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
-        {label: "Password", name: "password", required: true, type: "password"},
-      ]}
-      loading={isSubmitting}
-      onSignUpPress={() => router.push("/signup")}
-      onSubmit={handleSubmit}
+    <TerrenoLoginScreen
+      callbackURL="/login"
+      client={betterAuthClient}
+      error={error}
+      onSignedIn={handleSignedIn}
+      onSignUpPress={handleSignUpPress}
+      rememberedAccounts={rememberedAccounts}
+      rememberIdentity={false}
       title="Welcome"
+      trustDeviceDays={30}
     />
   );
 };
 
 export default Login;
+`;
+};
+
+const generateFrontendSettingsSecurity = (): string => {
+  return `import {TerrenoAccountSecurityScreen} from "@terreno/syncdb/auth";
+import {useLocalSearchParams} from "expo-router";
+import type React from "react";
+import {betterAuthClient} from "@/lib/betterAuth";
+
+/**
+ * Linked accounts, password, passkeys, two-factor and sessions for the signed-in user. Each card
+ * shows only when the server turns its feature on.
+ */
+const SecurityScreen: React.FC = () => {
+  const {error} = useLocalSearchParams<{error?: string}>();
+  return (
+    <TerrenoAccountSecurityScreen
+      callbackURL="/settings/security"
+      client={betterAuthClient}
+      linkError={error}
+      testID="security-screen"
+    />
+  );
+};
+
+export default SecurityScreen;
 `;
 };
 
@@ -1695,7 +1859,7 @@ const SignUp: React.FC = () => {
       error={errorMessage}
       fields={[
         {label: "Name", name: "name", required: true, type: "text"},
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "email", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isSubmitting}
@@ -1796,17 +1960,18 @@ export default HomeScreen;
 const generateFrontendTabsProfile = (): string => {
   return `import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
+import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useGetAuthMeQuery, usePatchAuthMeMutation, type PatchAuthMeArgs} from "@/store/apiSdk";
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
 const ProfileScreen: React.FC = () => {
   const {logout} = useSession();
+  const router = useRouter();
   const {data: user, isLoading} = useGetAuthMeQuery();
   const [updateProfile] = usePatchAuthMeMutation();
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -1826,10 +1991,14 @@ const ProfileScreen: React.FC = () => {
     setEmail(user.email || "");
   }, [user?.email]);
 
-  // logout signs syncDb out, then Better Auth, and clears cached API responses.
+  // logout signs out Better Auth, then syncDb, and clears cached API responses.
   const handleLogout = useCallback(async (): Promise<void> => {
     await logout();
   }, [logout]);
+
+  const handleOpenSecurity = useCallback((): void => {
+    router.push("/settings/security");
+  }, [router]);
 
   const handleSaveName = useCallback(
     async (value: string): Promise<void> => {
@@ -1850,6 +2019,8 @@ const ProfileScreen: React.FC = () => {
     [email, user?.email]
   );
 
+  // Changes the app User's email only. Better Auth keeps signing in with the old email until
+  // self-service email change lands; passwords are changed on the Security screen.
   const handleSaveEmail = useCallback(
     async (value: string): Promise<void> => {
       setSaveError(null);
@@ -1865,24 +2036,6 @@ const ProfileScreen: React.FC = () => {
       }
     },
     [currentPassword, isEmailChanged, updateProfile]
-  );
-
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      try {
-        // PATCH /auth/me OpenAPI types omit password; keep the RTK-era request shape.
-        await updateProfile({password: value} as PatchAuthMeArgs).unwrap();
-        setPassword("");
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError("Failed to update password");
-      }
-    },
-    [updateProfile]
   );
 
   if (isLoading) {
@@ -1925,17 +2078,16 @@ const ProfileScreen: React.FC = () => {
                 value={currentPassword}
               />
             )}
-            <TapToEdit
-              helperText="Leave blank to keep your current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              title="New Password"
-              type="password"
-              value={password}
-            />
             {saveError && <Text color="error">{saveError}</Text>}
           </Box>
         </Card>
+        <Button
+          fullWidth
+          onClick={handleOpenSecurity}
+          testID="profile-security-button"
+          text="Security"
+          variant="secondary"
+        />
         <Box marginTop={4}>
           <Button fullWidth onClick={handleLogout} text="Logout" variant="outline" />
         </Box>
@@ -2157,6 +2309,15 @@ AUTH_PROVIDER=better-auth
 BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=https://api.example.com
 CORS_ORIGINS=https://app.example.com
+# The web app's URL: auth mail links, and the passkey origin and default rpID. Passkeys stay off
+# in production while it is a localhost URL.
+FRONTEND_URL=https://app.example.com
+# Optional: a parent domain so passkeys work on every subdomain (e.g. example.com).
+PASSKEY_RP_ID=
+# verified-email (default), explicit, or never.
+AUTH_ACCOUNT_LINKING=verified-email
+# open (default) or closed.
+AUTH_SIGN_UP=open
 TOKEN_SECRET=
 TOKEN_ISSUER=
 REFRESH_TOKEN_SECRET=
@@ -2181,6 +2342,7 @@ const generateBackendEnv = (args: BootstrapArgs): string => {
 AUTH_PROVIDER=better-auth
 BETTER_AUTH_SECRET=${appName}-better-auth-secret-dev-only-32chars
 BETTER_AUTH_URL=http://localhost:4000
+FRONTEND_URL=http://localhost:8082
 TOKEN_SECRET=dev-token-secret
 TOKEN_ISSUER=${appName}-dev
 REFRESH_TOKEN_SECRET=dev-refresh-secret
@@ -2193,7 +2355,7 @@ NODE_ENV=development
 
 const generateFrontendBetterAuthLib = (args: BootstrapArgs): string => {
   const {appName} = args;
-  return `import {createBetterAuthClient} from "@terreno/syncdb/auth";
+  return `import {createBetterAuthClient, createRememberedAccountsStore} from "@terreno/syncdb/auth";
 import {baseUrl} from "@terreno/syncdb/config";
 import Constants from "expo-constants";
 
@@ -2205,12 +2367,26 @@ const getAppScheme = (): string => {
 /**
  * Expo-ready Better Auth client (SecureStore on native, AsyncStorage on web). Feeds
  * \`SessionProvider\` (app/_layout.tsx) and the shared auth provider in store/syncdb.ts.
+ * The client features match the auth suite backend/src/utils/betterAuthConfig.ts turns on. The
+ * login screen shows the two-factor step itself, so twoFactor needs no redirect.
  */
 export const betterAuthClient = createBetterAuthClient({
   baseURL: baseUrl,
+  features: {
+    lastLoginMethod: true,
+    multiSession: true,
+    passkey: true,
+    twoFactor: true,
+  },
   scheme: getAppScheme(),
   storagePrefix: "${appName}",
 });
+
+/**
+ * Accounts signed in on this device, for the login screen's "Continue as" cards. Only the sign-in
+ * method is kept; pass \`rememberIdentity: true\` to also keep name, masked email and avatar.
+ */
+export const rememberedAccounts = createRememberedAccountsStore({rememberIdentity: false});
 `;
 };
 
@@ -2475,6 +2651,10 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateFrontendRootLayout(args), path: `${frontendDir}/app/_layout.tsx`},
     {content: generateFrontendLogin(), path: `${frontendDir}/app/login.tsx`},
     {content: generateFrontendSignup(), path: `${frontendDir}/app/signup.tsx`},
+    {
+      content: generateFrontendSettingsSecurity(),
+      path: `${frontendDir}/app/settings/security.tsx`,
+    },
     {content: generateFrontendNotFound(), path: `${frontendDir}/app/+not-found.tsx`},
     {content: generateFrontendTabsLayout(), path: `${frontendDir}/app/(tabs)/_layout.tsx`},
     {content: generateFrontendTabsIndex(args), path: `${frontendDir}/app/(tabs)/index.tsx`},

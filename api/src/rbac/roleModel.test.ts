@@ -39,7 +39,7 @@ describe("rbac role model", () => {
     expect(superadmin.permissions.user).toContain("delete");
     expect(superadmin.permissions.featureFlag).toContain("list");
     expect(superadmin.permissions.consentForm).toContain("list");
-    expect(superadmin.permissions.consentResponse).toEqual(["list", "read"]);
+    expect(superadmin.permissions.consentResponse).toEqual(["list", "read", "signOnBehalf"]);
     expect(superadmin.permissions.organization).toContain("list");
 
     expect(await RbacRole.findOne({name: "operator"})).toBeNull();
@@ -61,7 +61,127 @@ describe("rbac role model", () => {
     expect(operator.isLocked).toBe(true);
     expect(operator.permissions.organization).toEqual([...terrenoStatements.organization]);
     expect(operator.permissions.admin).toEqual(["access"]);
+    expect(operator.permissions.user).toEqual(["list", "read", "update", "manageSecurity"]);
+  });
+
+  it("adds manageSecurity to an operator seeded before it existed, keeping its other grants", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.create({
+      displayName: "Operator",
+      isLocked: true,
+      name: "operator",
+      permissions: {organization: ["list"], user: ["read"]},
+    });
+
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.user).toEqual(["read", "manageSecurity"]);
+    expect(operator.permissions.organization).toEqual(["list"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity"]);
+  });
+
+  it("keeps a revoked manageSecurity revoked across reseeds", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const seed = (): Promise<void> =>
+      RbacRole.seedDefaults({
+        extraRoles: [organizationOperatorRole],
+        statements: terrenoStatements,
+      });
+    // A row from before the grant existed gains it once.
+    await RbacRole.create({
+      displayName: "Operator",
+      isLocked: true,
+      name: "operator",
+      permissions: {user: ["read"]},
+    });
+    await seed();
+    await RbacRole.updateOne({name: "operator"}, {$set: {"permissions.user": ["read"]}});
+
+    await seed();
+    await seed();
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.user).toEqual(["read"]);
+  });
+
+  it("keeps a revoked manageSecurity revoked on an operator seeded with it", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const seed = (): Promise<void> =>
+      RbacRole.seedDefaults({
+        extraRoles: [organizationOperatorRole],
+        statements: terrenoStatements,
+      });
+    await seed();
+    await RbacRole.updateOne(
+      {name: "operator"},
+      {$set: {"permissions.user": ["list", "read", "update"]}}
+    );
+
+    await seed();
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
     expect(operator.permissions.user).toEqual(["list", "read", "update"]);
+  });
+
+  it("gives the operator admin read on users when the app declares adminUser", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: {...terrenoStatements, adminUser: ["read", "write", "writeOwned"]},
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toEqual(["read"]);
+    expect(operator.permissions.user).toEqual(["list", "read", "update", "manageSecurity"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity", "adminUser.read"]);
+  });
+
+  it("leaves adminUser off an operator in an app that does not declare it", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toBeUndefined();
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity"]);
+  });
+
+  it("adds adminUser read to an existing operator once the app declares adminUser", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const adminUserStatements = {...terrenoStatements, adminUser: ["read", "write", "writeOwned"]};
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: terrenoStatements,
+    });
+
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: adminUserStatements,
+    });
+    const operator = await RbacRole.findExactlyOne({name: "operator"});
+    expect(operator.permissions.adminUser).toEqual(["read"]);
+    expect(operator.appliedGrants).toEqual(["user.manageSecurity", "adminUser.read"]);
+
+    // A revoked grant stays revoked across reseeds.
+    await RbacRole.updateOne({name: "operator"}, {$unset: {"permissions.adminUser": ""}});
+    await RbacRole.seedDefaults({
+      extraRoles: [organizationOperatorRole],
+      statements: adminUserStatements,
+    });
+    const revoked = await RbacRole.findExactlyOne({name: "operator"});
+    expect(revoked.permissions.adminUser).toBeUndefined();
   });
 
   it("upserts default roles without duplicating", async () => {
@@ -126,6 +246,59 @@ describe("rbac role model", () => {
     expect(admin.permissions.aiDataset).toEqual([...terrenoStatements.aiDataset]);
     expect(admin.permissions.aiEvaluator).toEqual([...terrenoStatements.aiEvaluator]);
     expect(admin.permissions.aiExperiment).toEqual([...terrenoStatements.aiExperiment]);
+  });
+
+  it("seeds admin with consentResponse:signOnBehalf", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
+  });
+
+  it("adds consentResponse:signOnBehalf to an existing unsealed admin role on re-seed", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne({name: "admin"}, {$set: {permissions: {user: ["read"]}}});
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.user).toEqual(["read"]);
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
+  });
+
+  it("keeps existing consentResponse grants when merging signOnBehalf into admin", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.updateOne(
+      {name: "admin"},
+      {$set: {permissions: {consentResponse: ["list", "read"]}}}
+    );
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.consentResponse).toEqual(["list", "read", "signOnBehalf"]);
+  });
+
+  it("does not merge into a sealed admin role, which is refreshed from code instead", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.create({
+      displayName: "Admin",
+      isLocked: true,
+      isSealed: true,
+      name: "admin",
+      permissions: {customApp: ["deploy"], user: ["read"]},
+    });
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const admin = await RbacRole.findExactlyOne({name: "admin"});
+    expect(admin.permissions.customApp).toBeUndefined();
+    expect(admin.permissions.user).toEqual(["create", "list", "read", "update", "updateIdentity"]);
+    expect(admin.permissions.consentResponse).toEqual(["signOnBehalf"]);
   });
 
   it("seeds auditor with observability list and read grants", async () => {

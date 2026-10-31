@@ -105,7 +105,7 @@ export interface JwtAuthAdapterOptions {
 
 export interface JwtAuthAdapter
   extends Required<AuthProvider>,
-    Required<SessionSource<JwtSessionUser>> {
+    Required<Omit<SessionSource<JwtSessionUser>, "mayHoldSession">> {
   /** `POST /auth/login`; stores the tokens and signs the session in. */
   login: (body: EmailLoginRequest) => Promise<JwtAuthResponse>;
   /** `POST /auth/signup`; stores the tokens and signs the session in. */

@@ -93,6 +93,12 @@ export interface AdminRpcQueryState<T> {
 export interface AdminRpcQueryOptions {
   /** Extra request headers (for example `X-Organization-Id`). */
   headers?: Record<string, string>;
+  /**
+   * Keep the last body on screen, and `isLoading` false, while a new `url` loads. For paging
+   * inside one list, where the table should stay up. Leave it off when the url names another
+   * resource (a route change), so a body is never shown under the wrong url.
+   */
+  keepPreviousData?: boolean;
   pollingInterval?: number;
   providesTags?: readonly string[];
   rpc?: AdminRpc;
@@ -108,6 +114,7 @@ export interface AdminRpcQueryOptions {
  */
 export const useAdminRpcQuery = <T = unknown>({
   headers,
+  keepPreviousData = false,
   pollingInterval,
   providesTags = [],
   rpc,
@@ -120,12 +127,25 @@ export const useAdminRpcQuery = <T = unknown>({
   const [isLoading, setIsLoading] = useState(Boolean(rpc) && !skip);
   const [isFetching, setIsFetching] = useState(Boolean(rpc) && !skip);
   const [generation, setGeneration] = useState(0);
-  const hasLoadedRef = useRef(false);
+  const [requestUrl, setRequestUrl] = useState(url);
+  const loadedUrlRef = useRef<string | null>(null);
   const pendingRefetchesRef = useRef<Array<(result: AdminRpcRefetchResult<T>) => void>>([]);
   const transformRef = useRef(transformResponse);
   transformRef.current = transformResponse;
   const tagsKey = providesTags.join("\u0000");
   const headersKey = headers ? JSON.stringify(headers) : "";
+
+  // Drop the previous URL's body before paint so a route change cannot show it, unless the
+  // caller pages through one list and wants the rows to stay until the next page arrives.
+  if (url !== requestUrl) {
+    setRequestUrl(url);
+    if (!keepPreviousData) {
+      setData(undefined);
+      setError(null);
+      setIsLoading(Boolean(rpc) && !skip);
+    }
+    setIsFetching(Boolean(rpc) && !skip);
+  }
 
   const settleRefetches = useCallback((result: AdminRpcRefetchResult<T>): void => {
     const pending = pendingRefetchesRef.current;
@@ -151,8 +171,15 @@ export const useAdminRpcQuery = <T = unknown>({
       return;
     }
     let cancelled = false;
-    setIsLoading(!hasLoadedRef.current);
+    const isNewUrl = loadedUrlRef.current !== url;
+    // With keepPreviousData, only the first load of all shows as loading.
+    setIsLoading(keepPreviousData ? loadedUrlRef.current === null : isNewUrl);
     setIsFetching(true);
+    if (isNewUrl && !keepPreviousData) {
+      // The body on screen is gone, so returning to the old URL must load it again.
+      loadedUrlRef.current = null;
+      setData(undefined);
+    }
     setError(null);
     const requestHeaders = headersKey
       ? (JSON.parse(headersKey) as Record<string, string>)
@@ -163,7 +190,7 @@ export const useAdminRpcQuery = <T = unknown>({
           return;
         }
         const result = (transformRef.current ? transformRef.current(raw) : raw) as T;
-        hasLoadedRef.current = true;
+        loadedUrlRef.current = url;
         setData(result);
         setIsLoading(false);
         setIsFetching(false);
@@ -181,7 +208,7 @@ export const useAdminRpcQuery = <T = unknown>({
     return () => {
       cancelled = true;
     };
-  }, [generation, headersKey, rpc, settleRefetches, skip, url]);
+  }, [generation, headersKey, keepPreviousData, rpc, settleRefetches, skip, url]);
 
   // Refetch mounted queries when a successful RPC mutation invalidates their tags.
   useEffect(() => {

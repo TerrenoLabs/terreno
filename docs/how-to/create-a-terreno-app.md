@@ -156,10 +156,11 @@ docker run --rm -p 8080:8080 \
   -e MONGO_URI='mongodb+srv://...' \
   -e BETTER_AUTH_SECRET='...' \
   -e BETTER_AUTH_URL='https://api.example.com' \
+  -e FRONTEND_URL='https://app.example.com' \
   my-app-backend
 ```
 
-Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. `GET /users` list and read require an admin.
+Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. Set `FRONTEND_URL` to the web app's URL: until it is set, a production backend leaves passkeys off (see [Auth features in generated apps](configure-better-auth.md#auth-features-in-generated-apps)). `GET /users` list and read require an admin.
 
 **Frontend:** [Build for web](build-for-web.md) — set `EXPO_PUBLIC_API_URL` at export time.
 

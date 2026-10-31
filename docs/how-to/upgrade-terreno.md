@@ -80,3 +80,7 @@ bun install
 ```
 
 If you already committed, `git revert` the upgrade commit or reset the branch to the pre-upgrade SHA before it was pushed. Do not leave a half-upgraded lockfile on `master`.
+
+## 8. Automate it
+
+To have an agent open the upgrade pull request on a schedule, see [Automate Terreno upgrades](automate-terreno-upgrades.md).

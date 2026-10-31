@@ -38,7 +38,7 @@ export interface GptHistory {
     result?: unknown;
     status?: "streaming" | "complete" | "error";
     streamId?: string;
-    text: string;
+    text?: string;
     toolCallId?: string;
     toolName?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
@@ -86,7 +86,7 @@ export interface CreateGptHistoryBody {
     result?: unknown;
     status?: "streaming" | "complete" | "error";
     streamId?: string;
-    text: string;
+    text?: string;
     toolCallId?: string;
     toolName?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
@@ -134,7 +134,7 @@ export interface UpdateGptHistoryBody {
     result?: unknown;
     status?: "streaming" | "complete" | "error";
     streamId?: string;
-    text: string;
+    text?: string;
     toolCallId?: string;
     toolName?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
@@ -273,6 +273,7 @@ export interface McpServiceToken {
   lastUsedAt?: string;
   name: string;
   revokedAt?: string;
+  tokenEpoch?: number;
   tokenHash: string;
   tokenPrefix: string;
   userId: string;

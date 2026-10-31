@@ -64,6 +64,7 @@
       [
         "@stripe/stripe-react-native",
         {
+          "disableSPM": true,
           "enableGooglePay": true,
           "merchantIdentifier": "merchant.com.terreno.todo"
         }

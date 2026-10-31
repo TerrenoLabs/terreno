@@ -272,7 +272,7 @@ before anything else has confirmed one.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, flush and stop persistence, clear timers and listeners. Cancels a `start()` that is still running or queued ahead of it, so the transport never connects after logout. |
+| `stop()` | Disconnect, flush and stop persistence, clear timers and listeners. Cancels a `start()` that is still running or queued ahead of it, so the transport never connects after logout. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). A stream discovery (`GET /sync/streams`) that was still reading the token when `stop()` ran is not sent, so it never reaches the server with a session the app is signing out of. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |
@@ -589,7 +589,8 @@ export const betterAuthClient = createBetterAuthClient({
   <App />
 </SessionProvider>;
 
-const {userId, user, isLoading, isAuthenticated, error, logout, refresh} = useSession();
+const {userId, user, isLoading, isAuthenticated, isSigningOut, error, logout, refresh} =
+  useSession();
 ```
 
 `createBetterAuthClient({baseURL, scheme, storagePrefix?})` returns the Better Auth React
@@ -605,8 +606,9 @@ blocks every native request. `storagePrefix` defaults to `"terreno"`.
 | `authClient` | Better Auth client | Wrapped with `betterAuthSessionSource`. Use this or `source`. |
 | `source` | `SessionSource` | Any session source (`getSession`, `signOut`, optional `subscribe`). |
 | `store` | `SessionStore` | A store from `createSessionStore`, instead of the props above. Share it with non-React code. |
-| `syncDbs` | `{signOut}[]` | syncdb clients signed out on `logout`, before the auth server. Create them with `wipeOnSignOut: true` to wipe local data. |
-| `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the syncdb and auth sign-outs. |
+| `syncDbs` | `{signOut}[]` | syncdb clients signed out on `logout`, after the auth server confirms the sign-out and while the session still names the user. Create them with `wipeOnSignOut: true` to wipe local data. |
+| `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the auth and syncdb sign-outs. |
+| `signOutTimeoutMs` | `number` | How long `logout` waits for the server's sign-out, and for the session check after a failed one. Default `10000`. |
 | `pollIntervalMs` | `number` | Poll cadence when the source cannot push changes. Default `60000`; `0` turns polling off. |
 
 When the session syncs:
@@ -617,11 +619,17 @@ When the session syncs:
   `isRefetching`) the atom still carries the previous user, so a sign-out never briefly
   restores them. Call `refresh()` after a sign-in to resolve the user immediately.
 - **Polling:** only when the client has no session atom.
-- **Logout:** `logout()` calls `signOut()` on each `syncDbs` client first, then signs out of
-  the auth server, runs `onLogout`, and clears the session. The sync clients go first because
-  they need the current user to wipe local data (`wipeOnSignOut: true`). If they ran after the
-  auth sign-out, an app that stops syncdb when `userId` clears would skip the wipe. A failing
-  step is logged and the rest still run.
+- **Logout:** `logout()` signs out of the auth server while the session stays in the state
+  (`isSigningOut` is `true`, `isLoading` is untouched), then signs out each `syncDbs` client,
+  runs `onLogout`, and clears the session. The session stays until the server answers so a
+  login screen that opens at once never finds the live session and signs straight back in, and
+  so the sync clients still know the current user for their `wipeOnSignOut` wipe. A sign-out
+  that fails or outlasts `signOutTimeoutMs` triggers a session check: when the session is
+  still live (or the server cannot be asked and the client may still hold one), `logout()`
+  keeps the session, wipes nothing, and sets `error` to `SIGN_OUT_FAILED_MESSAGE`; a session
+  that is already gone clears normally. Session pushes during a logout are held, and a
+  different user who signed in meanwhile wins when it ends. Concurrent `logout()` calls share
+  one run. A failing `syncDbs` or `onLogout` step is logged and the rest still run.
 
 A failed startup or `refresh()` read sets `error` to `"Failed to sync session"` and clears the
 session. A failed background read (atom error, poll) keeps the current session, so a network
@@ -630,6 +638,33 @@ blip is never a logout. `useSession()` throws outside a `SessionProvider`.
 `betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient))` turns the same client into
 the `AuthProvider` for `createSyncDb` and `createApiClient`. Both are also exported from the
 package root.
+
+### Social login, account linking, and account security
+
+`@terreno/syncdb/auth` also exports the pieces behind the example app's login and security
+screens. They take a client from `createBetterAuthClient` (pass `features` to turn on the
+`twoFactor`, `passkey`, `multiSession`, `lastLoginMethod` and `oneTimeToken` client plugins) and
+need no store: session state comes from `useSession()`. Setup: [Configure Better
+Auth](../how-to/configure-better-auth.md) and [Account security](account-security.md).
+
+- `BetterAuthClient` — The client type without `features` (also `ReturnType<typeof createBetterAuthClient>`). `BetterAuthClientWithFeatures<Features>` — the client type with them. `BetterAuthClientFor<Features>` — which of the two `createBetterAuthClient` returns. `BetterAuthHandoffClient` — what the OAuth handoff helpers accept: any client from `createBetterAuthClient`
+- `BetterAuthOAuthProvider` — `"google" | "github" | "apple"` or any generic OAuth provider id, such as `"mock-oidc"`
+- `getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` — Reads the token bearer mode stored, or `null`
+- `signInSocialWithHandoff({client, provider, callbackURL?, errorCallbackURL?})` — Starts a social or generic OAuth sign-in for a web bearer client: stores a random nonce in `sessionStorage` and navigates the page to the server's `{basePath}/oauth-handoff/start` with `handoff=<nonce>` on the callback URLs. Throws on native and in cookie mode ([how-to](../how-to/configure-better-auth.md#social-sign-in-in-bearer-mode))
+- `completeBetterAuthOAuthHandoff({client}): Promise<boolean>` — On the return page, removes `#ott` and `handoff` from the URL first, then exchanges the token at `{basePath}/one-time-token/verify` only when `handoff` matches the stored nonce. Resolves `true` only when a bearer token was stored; never rejects. Await it at startup before session reads and Sentry
+- `linkSocialWithHandoff({client, provider, callbackURL, errorCallbackURL?}): Promise<{error}>` — Links a provider to the signed-in user. On web in bearer mode it posts the intent to `{basePath}/oauth-handoff/link-intent` with the bearer, then submits the returned single-use token in a hidden POST form to `startURL`, which redirects to the provider; the page comes back to `callbackURL` with no `#ott`. Both URLs may be any page on a web origin (`callbackPaths` do not apply); `errorCallbackURL` defaults to `callbackURL`. In cookie mode and on native it calls `client.linkSocial`. Resolves `{error: null}` once the browser is on its way, or `{error: {status, code?, message?}}` (such as 403 `LINKING_DISABLED`) without submitting anything. `BetterAuthLinkClient` is its client type ([how-to](../how-to/configure-better-auth.md#linking-a-provider-in-bearer-mode))
+- `useAuthMethods(authClient, {skip?}): {methods, isLoading, error, refetch}` — Loads the server's enabled sign-in methods (`BetterAuthMethods`: `providers`, `emailPassword`, `signUp`, `accountLinking`, and feature flags) once per client from `{basePath}/terreno/methods` through the client's `$fetch`, so bearer and cookie modes both work. `methods` is `undefined` while loading and after an error; render no provider buttons until it arrives. `refetch()` requests them again (for Try again); `skip: true` makes no request ([response](api.md#better-auth-authentication))
+- `createRememberedAccountsStore({rememberIdentity, storageKey?, max?, storage?})` — On-device store of accounts that signed in here, for the login screen. Returns `{record(entry), forget(userId), clear(), list(), lastUsedMethod(), isHydrated(), ready, getSnapshot(), subscribe(listener), dispose()}`. Each change re-reads storage first, and on web the store follows `storage` events for its key until `dispose()`, so a stale tab cannot bring back a forgotten account. A failed change rejects to its caller without blocking later changes. Persists `{userId, method, lastUsedAt}` (newest first, at most `max`, default 5, and at most 2048 bytes) under `storageKey` (default `terreno_remembered_accounts`) in SecureStore on native (`WHEN_UNLOCKED_THIS_DEVICE_ONLY` on iOS) or localStorage on web. `rememberIdentity` is required: pass `false` to keep only the method. `name` (in clear), a masked `email`, and an `https://` `image` are kept only with `rememberIdentity: true`. Unreadable or oversized stored data resets to an empty list ([how-to](../how-to/configure-better-auth.md#4-remember-accounts-on-this-device))
+- `useRememberedAccounts(store): {accounts, lastUsedMethod, isHydrated, forget, clear}` — Subscribes a component to the store. `isHydrated` is `false` until native storage has loaded
+- `toLoginAccountOptions(accounts)` — Maps `RememberedAccount[]` to `@terreno/ui` `LoginAccountOption[]` (`id` is the `userId`) for `LoginScreen`'s `rememberedAccounts`
+- `maskEmail(email)` — `josh@mail.flourish.health` → `j***@m***.health`: first character of the local part and domain, subdomains hidden, top-level domain kept; `undefined` for non-emails
+- `getBetterAuthClientWebAuth(client): {webAuth, bearerToken}` — Whether a client from `createBetterAuthClient` is in web bearer mode, and the token it holds; `{webAuth: "cookie", bearerToken: null}` on native, in cookie mode, and for other clients. No request
+- `useLoginController({client, rememberedAccounts, onSignedIn, onTwoFactorRequired?, rememberIdentity?, callbackURL?, errorCallbackURL?, error?, onSignUpPress?, onForgotPasswordPress?, providerLabels?, passkeyAutofill?, skipWhenSignedIn?, webAuth?, getBearerToken?, initialEmail?})` — Drives a login screen from a Better Auth client. Returns `{step, methods, isEmailPasswordEnabled, screenProps, twoFactor, signInEmail, signInSocial, signInPasskey, continueAs, forget}`: `step` is `"checking"`, `"login"`, `"twoFactor"` or `"signedIn"`; `isEmailPasswordEnabled` is `false` when the server has email and password off (render `LoginScreen` with `fields={[]}`); `screenProps` spreads into `@terreno/ui` `LoginScreen`; `twoFactor` feeds `TwoFactorChallengeScreen`. A live session calls `onSignedIn` without showing the screen (in bearer mode it first finishes a pending OAuth handoff; with no stored token it asks the server nothing). If `onSignedIn` throws, `step` returns to `"login"` with an error. The passkey button and autofill are web-only. Device sessions (`multiSession.listDeviceSessions`, never in bearer mode) become session cards and hide remembered entries for the same user. Social sign-in uses `signInSocialWithHandoff` in bearer mode and `signIn.social` otherwise. Every finished sign-in is recorded in the store. Server refusals become notices through `getLoginFeedback` ([how-to](../how-to/configure-better-auth.md#5-drop-in-login-screen))
+- `TerrenoLoginScreen` — `LoginScreen` connected through `useLoginController`; takes its options plus `fields?` (default `DEFAULT_LOGIN_FIELDS`), `title?`, `logo?`, `trustDeviceDays?`, `initialTrustDevice?` (pass `false` to start "Trust this device" unchecked), `onStepChange?` (called with each new step: `checking`, `login`, `twoFactor`, `signedIn`), `testID?` (default `login-screen`; spinner `${testID}-checking`). Renders the inline two-factor challenge unless `onTwoFactorRequired` is set
+- `useAccountSecurity({client, callbackURL, methods?, errorCallbackURL?, linkError?, providerLabels?, passkeySupported?, minPasswordLength?})` — Drives an account security screen from a Better Auth client. Returns `{screenProps, methods, user, refetch}`; `screenProps` (`linkedAccounts`, `password`, `passkeys`, `twoFactor`, `sessions`, `isLoading`, `error`, `onRetry`) spreads into `@terreno/ui` `AccountSecurityScreen`. A card's props are `undefined` when the server's methods (or the client's features) leave it off; passkeys are web-only. Loads `listAccounts`, `passkey.listUserPasskeys`, `getSession({query: {disableCookieCache: true}})` and `listSessions`; each Better Auth `{error}` becomes a thrown `Error` for the card, and after each change only the affected section reloads. Never calls `unlinkAccount` for the only account, or `deletePasskey` for the only sign-in method (`LAST_SIGN_IN_METHOD_MESSAGE`). Links through `linkSocialWithHandoff`; "Set a password" posts `{basePath}/terreno/set-password`. `SESSION_NOT_FRESH` becomes `SIGN_IN_AGAIN_MESSAGE`; a change refused with `CREDENTIAL_ACCOUNT_NOT_FOUND` switches the password card to set mode (`NO_PASSWORD_YET_MESSAGE`). `getLinkErrorMessage(code)` maps a link's `?error=` to safe text ([how-to](../how-to/configure-better-auth.md#6-drop-in-security-screen))
+- `TerrenoAccountSecurityScreen` — `AccountSecurityScreen` connected through `useAccountSecurity`; takes its options plus `title?`, `description?`, `header?`, `children?`, `withPage?`, `maxWidth?`, `testID?`
+- `recordRememberedSignIn({store, user, method, rememberIdentity?})` — Records a sign-in the controller did not finish, such as one completed on the app's own two-factor screen
+- `getLoginFeedback({failure, mode?, originalMethod?}): {notice?, error?, isSignUpClosed}` — Maps `{code?, message?, source: "response" | "url"}` to login screen feedback: `account_not_linked` / `OAUTH_LINK_ERROR` / "account not linked" to guidance for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` to "verify your email", `signup_disabled` / `EMAIL_PASSWORD_SIGN_UP_DISABLED` to "ask your administrator" (and `isSignUpClosed`), `LINKING_DISABLED`, `provider_not_found`; a response's own message otherwise, and never text from a URL
 
 ### JWT auth (legacy)
 

@@ -40,7 +40,7 @@ const Login: React.FC = () => {
     <LoginScreen
       error={errorMessage}
       fields={[
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "username", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isSubmitting}

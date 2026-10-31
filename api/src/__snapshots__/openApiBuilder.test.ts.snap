@@ -333,6 +333,10 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                   "attempts": {
                     "type": "number",
                   },
+                  "currentPassword": {
+                    "description": "The current password; required to change the email. It is never stored.",
+                    "type": "string",
+                  },
                   "disabled": {
                     "description": "When a user is set to disable, all requests will return a 401",
                     "type": "boolean",
@@ -855,6 +859,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                                 "_id": {
                                   "type": "string",
                                 },
+                                "addendums": {
+                                  "description": "Extra details about this food category",
+                                  "items": {
+                                    "properties": {
+                                      "_id": {
+                                        "type": "string",
+                                      },
+                                      "text": {
+                                        "description": "The additional category detail",
+                                        "type": "string",
+                                      },
+                                    },
+                                    "type": "object",
+                                  },
+                                  "type": "array",
+                                },
                                 "created": {
                                   "format": "date-time",
                                   "type": "string",
@@ -1060,6 +1080,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -1193,6 +1229,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",
@@ -1808,6 +1860,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                           "_id": {
                             "type": "string",
                           },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
                           "created": {
                             "format": "date-time",
                             "type": "string",
@@ -2006,6 +2074,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                         "_id": {
                           "type": "string",
                         },
+                        "addendums": {
+                          "description": "Extra details about this food category",
+                          "items": {
+                            "properties": {
+                              "_id": {
+                                "type": "string",
+                              },
+                              "text": {
+                                "description": "The additional category detail",
+                                "type": "string",
+                              },
+                            },
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
                         "created": {
                           "format": "date-time",
                           "type": "string",
@@ -2139,6 +2223,22 @@ exports[`OpenApiMiddlewareBuilder snapshot tests matches OpenAPI spec snapshot 1
                         "properties": {
                           "_id": {
                             "type": "string",
+                          },
+                          "addendums": {
+                            "description": "Extra details about this food category",
+                            "items": {
+                              "properties": {
+                                "_id": {
+                                  "type": "string",
+                                },
+                                "text": {
+                                  "description": "The additional category detail",
+                                  "type": "string",
+                                },
+                              },
+                              "type": "object",
+                            },
+                            "type": "array",
                           },
                           "created": {
                             "format": "date-time",

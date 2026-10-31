@@ -96,6 +96,21 @@ describe("audit record helpers", () => {
     assert.equal(events[0]?.source, "admin");
   });
 
+  it("maps the viewed verb to the read operation", async () => {
+    registerAuditApp();
+    const req = {user: {id: new mongoose.Types.ObjectId().toString()}} as express.Request;
+    await maybeRecordAdminAudit({
+      after: {_id: "food-1", name: "Soup"},
+      modelName: "Food",
+      req,
+      verb: "viewed",
+    });
+    const events = await mongoose.connection.collection("auditevents").find({}).toArray();
+    assert.equal(events.length, 1);
+    assert.equal(events[0]?.operation, "read");
+    assert.equal(events[0]?.verb, "viewed");
+  });
+
   it("omits hidden fields from admin diffs", async () => {
     registerAuditApp();
     await maybeRecordAdminAudit({

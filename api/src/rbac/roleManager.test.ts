@@ -339,6 +339,70 @@ describe("roleManager", () => {
     expect((await UserModel.findById(unprivileged.id))?.roles).toEqual(["member"]);
   });
 
+  it("refuses with 503 when the target's grants from a failed source are unknown", async () => {
+    await setupDb();
+    const UserModel = getRbacTestUserModel();
+    const target = await UserModel.create({email: "source-target@example.com", roles: []});
+    let isDown = false;
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Assigner",
+          name: "assigner",
+          permissions: {rbac: ["assignRoles"], todo: ["read"]},
+        },
+      ],
+      sources: [
+        {
+          // Additive only, so an outage drops its grants instead of failing every request.
+          failClosedWhenDenyUnknown: false,
+          getGrants: async ({user}) => {
+            if (String(user.id) !== target.id) {
+              return null;
+            }
+            if (isDown) {
+              throw new Error("idp down");
+            }
+            return {permissions: {user: ["delete"]}};
+          },
+          name: "idp-grants",
+          ttlMs: 0,
+        },
+      ],
+      statements: appStatements,
+      userModel: UserModel as unknown as UserModel,
+    });
+    await access.roles.seedDefaults();
+    const actor = createTestUser({roles: ["assigner"]});
+    const denied = {
+      status: 403,
+      title: "Cannot modify a user with permissions you do not hold",
+    };
+    await expect(
+      access.roles.assign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(denied);
+
+    isDown = true;
+    access.invalidateCache({userId: target.id});
+
+    // Without the source the target looks like it holds nothing the actor lacks.
+    const unavailable = {status: 503, title: "Permission source unavailable"};
+    await expect(
+      access.roles.assign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.unassign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.assertCanModifyUser({actor, userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.previewAssignment({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    expect((await UserModel.findById(target.id))?.roles).toEqual([]);
+  });
+
   it("assertCanModifyUser rejects when the actor lacks the target user's permissions", async () => {
     await setupDb();
     const UserModel = getRbacTestUserModel();

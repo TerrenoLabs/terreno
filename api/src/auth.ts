@@ -923,6 +923,10 @@ const buildMeOpenApi = ({
     }
     patchBody[key] = value;
   }
+  patchBody[CURRENT_PASSWORD_FIELD] = {
+    description: "The current password; required to change the email. It is never stored.",
+    type: "string",
+  };
 
   // Documentation only: request validation stays off so the handlers behave as before.
   return {

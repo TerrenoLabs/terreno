@@ -162,7 +162,7 @@ describe("useSession with a Better Auth client", () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it("logout signs out every syncdb client before the auth server, runs onLogout, and clears the session", async () => {
+  it("logout signs out the auth server, then every syncdb client while the session still names the user, runs onLogout, and clears the session", async () => {
     const server = fakeAuthServer({signedInAs: "ada"});
     const events: string[] = [];
     const isSignedOutOfServer = (): boolean => server.requests.includes("POST /api/auth/sign-out");
@@ -193,8 +193,8 @@ describe("useSession with a Better Auth client", () => {
 
     expect(server.requests).toContain("POST /api/auth/sign-out");
     expect(events).toEqual([
-      "syncDb.signOut serverSignedOut=false",
-      "adminSyncDb.signOut serverSignedOut=false",
+      "syncDb.signOut serverSignedOut=true",
+      "adminSyncDb.signOut serverSignedOut=true",
       "onLogout",
     ]);
     expect(result.current.isAuthenticated).toBe(false);

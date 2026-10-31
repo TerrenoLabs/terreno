@@ -142,6 +142,182 @@ email, changes member roles, and removes members. Backend errors such as
 disabled because invitation tokens and email belong to the later invitations
 feature. The members page uses the full available admin content width.
 
+Each active member row has a **Security** button (`org-members-security-{userId}`)
+that opens a [`MemberSecurityPanel`](#membersecuritypanel) for that member below
+the table. Suspended rows show **Reactivate** instead
+(`org-members-reactivate-{userId}`), which sends
+`PATCH /orgs/:orgId/members/:memberId` with `{status: "active"}`. After any
+security action the members list reloads, so a suspended membership shows up at
+once.
+
+### MemberSecurityPanel
+
+Shows one user's sign-in security and runs the recovery actions the server
+offers for them. It reads the summary from the
+[account security routes](./account-security.md) through the host-bound
+`adminRequest` (`AdminProvider` `credentials` or `getAuthHeaders`, plus
+`apiOrigin`), never through RTK Query. Without a fetch-capable `AdminProvider`
+it shows `Admin RPC client is unavailable`.
+
+```tsx
+import {MemberSecurityPanel} from "@terreno/admin-frontend";
+
+// Org-admin routes: /orgs/:orgId/members/:userId/security
+<MemberSecurityPanel memberLabel="Ada" orgId={orgId} userId={userId} />
+
+// Platform routes: /users/:id/security
+<MemberSecurityPanel userId={userId} />
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `userId` | `string` | App `User` id of the member |
+| `orgId` | `string` | Organization id. Set it for the org-admin routes; omit it for the platform routes |
+| `baseURL` | `string` | Route prefix. Defaults to `/orgs` with `orgId` and `/users` without |
+| `memberLabel` | `string` | Name or email shown in the heading (`Security: {memberLabel}`) |
+| `onActionComplete` | `(result) => void` | Called with the action's `{action, changed, ...}` after each success |
+| `onClose` | `() => void` | Shows a **Close** button when set |
+| `focusOnMount` | `boolean` | Move focus to the panel heading (`{testID}-heading`) when it mounts; on web it also scrolls it into view. Default `true` |
+| `testID` | `string` | Root test id. Default `member-security-panel` |
+
+What it shows:
+
+- Email verified and disabled badges, and the last sign-in method and time.
+- Sign-in methods: whether a password is set, and each linked provider with an
+  **Unlink provider** button.
+- Passkeys, each with a **Remove passkey** button.
+- Two-factor status and backup codes left, with **Reset two-factor**.
+- Active sessions, with **Sign out everywhere**.
+- An **Actions** row with every other action in the summary's `actions`
+  (`send-password-reset`, `suspend-membership`, `disable`, `enable`,
+  `issue-sign-in-link`, and any action added on the server later).
+
+Buttons render only for actions the summary lists, so the server decides what
+each caller may do. The panel does not hard-code the list: an action it has
+never seen still gets a button with the server's `label`, and it runs as
+`{method} {securityPath}{path}` from the summary entry. For servers older than
+the summary's `method` and `path`, it falls back to the built-in routes, then
+`POST {securityPath}/{id}`.
+
+Where a button goes depends on the action's path params:
+
+- `:passkeyId` only: one button per passkey, filled from `passkeys.items[].id`.
+- `:providerId` only: one button per linked provider, filled from
+  `providers[].providerId`.
+- No params: `reset-two-factor` and `revoke-sessions` sit in their sections;
+  every other action goes in the **Actions** row.
+- Any other param (such as `/devices/:deviceId`): no button, because the
+  summary has nothing to fill it with.
+
+Per-item buttons have accessible names that include the item, such as
+`Remove passkey Work laptop` and `Unlink GitHub`; an unknown per-item action is
+named `{label}: {item}`. The members screen's row buttons are named
+`Security for {member}` and `Reactivate {member}`.
+
+Destructive actions confirm in a `Modal` first (`{testID}-confirm`, buttons
+`{testID}-confirm.primary` and `{testID}-confirm.secondary`). Known actions have
+their own copy; for example, **Unlink provider** warns that sessions started with
+that provider are not ended and points to **Sign out everywhere**. Unknown
+actions get a generic confirmation.
+
+After an action the panel shows the result in a `role="status"` region
+(`{testID}-result`), such as
+`Password reset email sent` or `Signed out of 2 sessions`, and refetches the
+summary. `suspend-membership` puts the member out of the org routes' reach, so
+the panel shows the result without refetching. When the response carries a
+`url` (`issue-sign-in-link`), the panel shows it once with a **Copy link**
+button (`{testID}-link-copy`) and a warning that it works once. After copying,
+the button reads **Copied** and a status region (`{testID}-link-copied`) says
+`Link copied to the clipboard`. Server error
+titles, such as `Cannot remove the last sign-in method` or
+`publicAppUrl is required to send recovery mail`, appear inline in a
+`role="alert"` element (`{testID}-action-error`). A failed first load replaces the summary with
+`{testID}-error`; a failed refetch keeps the summary, the result, and any
+one-time link on screen and adds an inline alert (`{testID}-refresh-error`).
+
+`useMemberSecurityApi({baseURL, orgId, userId})` is the hook behind the panel.
+It returns `{summary, error, isLoading, isFetching, isRunning, refetch,
+runAction, securityPath}`; `runAction({action, params})` fills path params such
+as `{passkeyId}` and throws before sending when one is missing.
+`memberSecurityPath` and `resolveSecurityActionRequest` are exported for custom
+screens.
+
+### UserSecurityScreen
+
+The platform staff page for one user's sign-in security. It renders a header
+naming the user, then a [`MemberSecurityPanel`](#membersecuritypanel) against the
+platform routes (`/users/:id/security`). Only holders of `user:manageSecurity`
+reach those routes: `superadmin`, and the locked `operator` role, which is seeded
+only when the backend calls `createAccess({organizations: true})`. Without
+organizations, grant `user:manageSecurity` on a role of your own. The server
+also refuses acting on yourself and on a user holding any permission you lack,
+such as a superadmin. The panel then shows the refusal title inline
+(`{testID}-panel-error`) and the header still names the user.
+
+```tsx
+// app/admin/users/[id]/security.tsx
+import {UserSecurityScreen} from "@terreno/admin-frontend";
+import {useLocalSearchParams} from "expo-router";
+
+const AdminUserSecurityRoute: React.FC = () => {
+  const {id} = useLocalSearchParams<{id: string}>();
+  return <UserSecurityScreen userId={id} />;
+};
+
+export default AdminUserSecurityRoute;
+```
+
+| Prop | Type | Description |
+| --- | --- | --- |
+| `userId` | `string` | App `User` id |
+| `userModelName` | `string` | Admin model name of the user record. Default `User` |
+| `apiBase` | `string` | Admin JSON base for `{apiBase}/config`. Defaults to the `AdminProvider` `apiBase` |
+| `routeBase` | `string` | Admin route base. Defaults to the `AdminProvider` `routeBase` |
+| `securityBaseURL` | `string` | Prefix of the security routes. Default `/users` |
+| `backHref` | `string` | Where the back arrow goes. Default `{routeBase}/{userModelName}/{userId}`, the admin user record |
+| `testID` | `string` | Root test id. Default `user-security-screen`; the panel is `{testID}-panel` |
+
+The header reads `GET {apiBase}/config` to find `userModelName`'s `routePath`,
+then `GET {routePath}/{userId}`, both through the host-bound `adminRequest`. It
+shows the user's `name` (`{testID}-user-name`) and `email`
+(`{testID}-user-email`). Without a name it shows the email, and without a
+record it shows the id. While the record loads it shows a spinner
+(`{testID}-user-loading`). When the record fails to load, an inline alert
+(`{testID}-user-error`) says `Could not load the user record.`. The panel loads
+on its own either way, because the security routes do not depend on the admin
+record. If the user model is not registered in admin, the header shows the id
+and no record request is sent.
+
+#### Linking from the user record
+
+`UserSecurityLink` is a **Security** button (`admin-user-security-link`) that
+opens `userSecurityRoute({routeBase, userId})`, which is
+`{routeBase}/users/{userId}/security`. Mount `UserSecurityScreen` at that path,
+or pass `href` to the link. admin-frontend does not know which admin model is
+your user model, so the host adds the link to its user record. The usual place
+is `AdminModelForm`'s `footerContent`:
+
+```tsx
+// app/admin/[model]/[id].tsx
+import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
+
+const footerContent =
+  model === "User" && canManageUserSecurity ? <UserSecurityLink userId={id} /> : undefined;
+
+<AdminModelForm api={api} baseUrl="/admin" footerContent={footerContent} itemId={id} mode="edit" modelName={model} />
+```
+
+Show the link and the route only to staff holding `user:manageSecurity` (or
+`admin: true` without RBAC), and hide the link on the viewer's own record, since
+the routes refuse self-targeting; staff manage their own account from their own
+security screen. The example reads `permissions` from `/auth/me`
+(`example-frontend/utils/userSecurityAccess.ts`), shows the link on other users'
+`User` records, and shows everyone else an `AdminScreenPage`
+(`admin-user-security-forbidden`) with a forbidden message and a back arrow to
+the record. Add the
+route to the admin `Stack` (`<Stack.Screen name="users/[id]/security" />`) next
+to `[model]`.
+
 ### AdminModelList
 
 Entry screen showing all available models as cards.
@@ -200,6 +376,19 @@ Auto-generates fields from model schema:
 - `date` → DateTimeField
 - `objectid` (ref) → SelectField
 - `enum` → SelectField with options
+- `object` with `items` (a nested schema path such as `tasks: {enabled: Boolean, intakePollMs: Number}`)
+  → a titled group with one control per subfield, recursing to any depth
+- `object` without `items` (`Mixed`, `Map`) and `mixed` → JSON editor
+
+A nested object group uses the field's humanized key as its heading and its `description` as
+helper text. Each subfield shows its own description and its schema default when the stored
+object has no value for it. Subfield test IDs use the dotted path, for example
+`admin-field-tasks.enabled`; the group itself is `admin-field-group-tasks`. Editing a subfield
+merges it into the parent object, and Save sends the whole object for that field. In create mode
+the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
+default are left out. Nested objects inside an array of subdocuments render the same way; their
+test IDs add the array key and item index (`admin-field-servers.0.media.port`), and new array
+items follow the same default rules.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 
@@ -293,6 +482,34 @@ Renders reference fields as clickable links.
   baseUrl="/admin"
 />
 ``````
+
+### Consent records and PDFs
+
+`ConsentResponseViewer` (admin, one `ConsentResponse`) and `ConsentHistory` (the signed-in
+user's own `GET /consents/my` entries) download a consent record as a PDF:
+`generateConsentPdf(response)` and `generateConsentHistoryPdf(entry)`. Web builds the PDF with
+jsPDF; native renders `buildConsentPdfHtml` from `@terreno/ui` and shares it with
+`sharePdfFromHtml`.
+
+When the response is provisional (staff signed on the user's behalf), both PDFs add a
+"Provisional signature" section: the signer and date, and "Voided <date>" when it was voided.
+The admin PDF also includes the signer's note and IP address. The user's own PDF never
+includes the note.
+
+Both views can also print a record: `ConsentResponseViewer`'s "Print" button
+(`consent-response-print-button`) and each `ConsentHistory` entry's print icon
+(`consent-history-print-{entryId}`, in the expanded details) call `printConsentHtml` from
+`@terreno/ui` with `buildConsentPdfHtml` HTML, including the provisional block. The
+"Download PDF" buttons are unchanged.
+
+Provisional display:
+
+- `ConsentResponseViewer` adds a "Provisional Signature" card (`consent-response-provisional`)
+  with a "Provisional" badge, the signer, signing date, note, signer IP, and, once voided, a
+  "Voided" badge (`consent-response-provisional-voided`), void date, and reason.
+- `ConsentHistory` marks provisional entries with a "Provisional" badge and "Signed on your
+  behalf by <name>" (`consent-history-provisional-{entryId}`), plus "Voided" when voided. It
+  never shows the note.
 
 ## Hooks
 
@@ -435,6 +652,10 @@ When RBAC is enabled, `/admin/config` is filtered for the current user. `AdminSh
 `platformTools` flags to hide denied Scripts, Roles, Version, and Configuration links, and only
 renders model or custom-screen links returned by the server. The shell lifts Audit Log, Feature
 Flags, and Jobs into the Platform section (Jobs still comes from `customScreens`).
+
+A user record's `roles` field loads the role catalog (`GET /rbac/roles`, `rbac:read`) only when
+it is editable. A read-only record, such as an operator's view with `adminUser:read`, lists the
+assigned role names without requesting the catalog.
 
 ### Custom screen page chrome
 

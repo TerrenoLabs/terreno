@@ -82,6 +82,7 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "generate-release-announcements",
   "generate-sdk",
   "mongoose-schema-safety",
+  "set-up-social-login",
   "store-assets",
   "terreno-backend-api",
   "terreno-backend-tests",

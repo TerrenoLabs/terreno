@@ -10,7 +10,6 @@ const ProfileScreen: React.FC = () => {
   const [updateProfile] = usePatchAuthMeMutation();
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -71,23 +70,6 @@ const ProfileScreen: React.FC = () => {
     [currentPassword, isEmailChanged, updateProfile]
   );
 
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      try {
-        await updateProfile({password: value}).unwrap();
-        setPassword("");
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError("Failed to update password");
-      }
-    },
-    [updateProfile]
-  );
-
   if (isLoading) {
     return (
       <Page navigation={undefined} title="Profile">
@@ -128,14 +110,6 @@ const ProfileScreen: React.FC = () => {
                 value={currentPassword}
               />
             )}
-            <TapToEdit
-              helperText="Leave blank to keep your current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              title="New Password"
-              type="password"
-              value={password}
-            />
             {saveError && <Text color="error">{saveError}</Text>}
           </Box>
         </Card>

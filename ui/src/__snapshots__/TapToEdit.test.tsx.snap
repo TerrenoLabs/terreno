@@ -451,6 +451,8 @@ exports[`TapToEdit shows editing mode when isEditing is true 1`] = `
                         "accessibilityState": {
                           "disabled": undefined,
                         },
+                        "aria-describedby": undefined,
+                        "aria-invalid": false,
                         "aria-label": "Text input field",
                         "autoCapitalize": "sentences",
                         "autoCorrect": true,
@@ -477,6 +479,7 @@ exports[`TapToEdit shows editing mode when isEditing is true 1`] = `
                           "fontSize": 16,
                           "gap": 10,
                           "height": 24,
+                          "letterSpacing": undefined,
                           "paddingVertical": 0,
                           "width": "100%",
                         },

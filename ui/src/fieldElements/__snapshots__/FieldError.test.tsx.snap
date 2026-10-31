@@ -31,6 +31,7 @@ exports[`FieldError renders correctly 1`] = `
     },
   ],
   "props": {
+    "nativeID": undefined,
     "style": {
       "alignItems": "center",
       "flexDirection": "row",
@@ -73,6 +74,7 @@ exports[`FieldError renders with icon 1`] = `
     },
   ],
   "props": {
+    "nativeID": undefined,
     "style": {
       "alignItems": "center",
       "flexDirection": "row",

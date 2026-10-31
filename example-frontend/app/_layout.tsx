@@ -245,18 +245,21 @@ const RootLayoutNav = (): React.ReactElement => {
       return;
     }
 
-    const isLoginOrSignup = segments[0] === "login" || segments[0] === "signup";
+    const isLogin = segments[0] === "login";
     const isPublicAuthPage =
-      isLoginOrSignup ||
+      isLogin ||
+      segments[0] === "signup" ||
       segments[0] === "forgotPassword" ||
       segments[0] === "resetPassword" ||
       segments[0] === "verifyEmail";
 
     if (!userId && !isPublicAuthPage) {
       router.replace("/login");
-    } else if (userId && isLoginOrSignup) {
+    } else if (userId && segments[0] === "signup") {
       router.replace("/(tabs)");
     }
+    // A signed-in user on /login stays: TerrenoLoginScreen finds the session, records the
+    // sign-in method for this device (a social sign-in returns here), and navigates on itself.
   }, [userId, segments, router, isAuthLoading]);
 
   // Hold the navigator until the session (and, for signed-in users, the profile that
@@ -265,7 +268,9 @@ const RootLayoutNav = (): React.ReactElement => {
   // Stack — a remounted Stack resets to its anchor "(tabs)", silently discarding
   // a deep-linked route like /profile or /admin. Rendering only once the tree shape is
   // final means the Stack mounts exactly once per auth state and keeps the requested URL.
-  if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {
+  // Only a session load with no user yet holds it: a refresh or a sign-out while signed in
+  // (rtk's logout keeps the session until the server answers) leaves the current screen up.
+  if ((isAuthLoading && !userId) || (Boolean(userId) && isProfileLoading)) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center" testID="app-auth-loading">
         <ThemedStatusBar />
@@ -318,7 +323,9 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="consent-sign/[userId]" />
         <Stack.Screen name="todo-windows/index" />
+        <Stack.Screen name="todo-browser" />
       </Stack>
     </ThemeProvider>
   );
@@ -357,33 +364,36 @@ const RootLayoutNav = (): React.ReactElement => {
     <SyncConflictsProvider>
       {warningBanner}
       {syncDbStartErrorBanner}
-      {userId ? (
-        <SyncDbProvider client={syncDb}>
-          <PushTokenRegistrar />
-          <SyncLabRuntime />
-          <SyncHealthToast
-            collectionLabels={{todos: "Todos"}}
-            renderConflictsModal={({collection, conflicts, onDismiss, resolve, visible}) => (
-              <ConflictSheet
-                conflicts={conflicts}
-                onDismiss={onDismiss}
-                onResolve={resolve}
-                title={
-                  collection === "todos"
-                    ? "These todos don't match"
-                    : collection
-                      ? `These ${collection} don't match`
-                      : undefined
-                }
-                visible={visible}
-              />
-            )}
-          />
-          {stack}
-        </SyncDbProvider>
-      ) : (
-        stack
-      )}
+      {/* Always mounted, so the tabs that are still on screen when userId clears (a logout) never
+          render without the client. The client itself is stopped and wiped by the session's
+          logout; only the user-specific children below wait for a signed-in user. */}
+      <SyncDbProvider client={syncDb}>
+        {userId ? (
+          <>
+            <PushTokenRegistrar />
+            <SyncLabRuntime />
+            <SyncHealthToast
+              collectionLabels={{todos: "Todos"}}
+              renderConflictsModal={({collection, conflicts, onDismiss, resolve, visible}) => (
+                <ConflictSheet
+                  conflicts={conflicts}
+                  onDismiss={onDismiss}
+                  onResolve={resolve}
+                  title={
+                    collection === "todos"
+                      ? "These todos don't match"
+                      : collection
+                        ? `These ${collection} don't match`
+                        : undefined
+                  }
+                  visible={visible}
+                />
+              )}
+            />
+          </>
+        ) : null}
+        {stack}
+      </SyncDbProvider>
     </SyncConflictsProvider>
   );
 

@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Card,
+  FormContainer,
   Heading,
   MarkdownEditorField,
   Page,
@@ -108,6 +109,8 @@ const ConfigField: React.FC<{
   if (fieldMeta.secret) {
     return (
       <TextField
+        accessibilityLabel={`${label} (Secret)`}
+        autoComplete="off"
         helperText={helperText ? `${helperText} (secret)` : "Secret value"}
         onChange={onChange}
         testID={testID}
@@ -311,7 +314,8 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
       scroll
       title={title}
     >
-      <Box gap={4} padding={4}>
+      {/* A form holds the secret (password-type) fields, so browsers do not warn about them. */}
+      <FormContainer gap={4} padding={4} testID="config-form">
         {sections.length === 0 ? (
           <EmptySections />
         ) : (
@@ -324,7 +328,7 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
             />
           ))
         )}
-      </Box>
+      </FormContainer>
     </Page>
   );
 };

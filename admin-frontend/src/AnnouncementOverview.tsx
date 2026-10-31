@@ -114,6 +114,8 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
     error,
     isLoading,
   } = useAdminRpcQuery<AnnouncementOverviewResponse>({
+    // Paging keeps the table up while the next page loads.
+    keepPreviousData: true,
     providesTags: OVERVIEW_TAGS,
     rpc,
     transformResponse: unwrapAdminEnvelope,

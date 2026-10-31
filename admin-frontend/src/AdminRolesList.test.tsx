@@ -11,7 +11,11 @@ import {AdminRolesList} from "./AdminRolesList";
 import {normalizeRoles, normalizeStatements, type RolesQueryResult} from "./useAdminRoles";
 
 const mockUseListRolesQuery = mock(
-  (): RolesQueryResult => ({data: undefined, error: null, isLoading: false})
+  (_arg?: undefined, _options?: {skip?: boolean}): RolesQueryResult => ({
+    data: undefined,
+    error: null,
+    isLoading: false,
+  })
 );
 const mockRefetch = mock(() => {});
 const mockCreateRole = mock(() => ({unwrap: async () => ({})}));
@@ -555,6 +559,25 @@ describe("AdminRolesField", () => {
       roleSelect.props.onChange("manager");
     });
     expect(onChange).toHaveBeenCalledWith(["member", "manager"]);
+  });
+
+  it("does not load the role catalog for a read-only field", () => {
+    mockUseListRolesQuery.mockClear();
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminRolesField
+        apiBase="/admin"
+        fieldConfig={fieldConfig}
+        fieldKey="roles"
+        onChange={mock(() => undefined)}
+        readOnly
+        value={["member"]}
+      />
+    );
+
+    expect(mockUseListRolesQuery.mock.calls.at(-1)).toEqual([undefined, {skip: true}]);
+    expect(getByTestId("admin-field-roles-selected-member")).toBeTruthy();
+    expect(queryByTestId("admin-field-roles-add")).toBeNull();
+    expect(queryByTestId("admin-field-roles-load-error")).toBeNull();
   });
 
   it("removes an assigned role without changing other assignments", async () => {

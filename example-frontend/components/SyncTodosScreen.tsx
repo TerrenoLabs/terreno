@@ -410,24 +410,42 @@ const SyncTodosScreen: React.FC = () => {
   const handleOpenWindows = useCallback((): void => {
     router.push("/todo-windows");
   }, [router]);
+  const handleOpenBrowser = useCallback((): void => {
+    router.push("/todo-browser");
+  }, [router]);
 
   const listHeader = useMemo(
     (): React.ReactElement => (
       <Box>
         <SyncDevPanel />
-        <Box alignItems="center" direction="row" justifyContent="between" marginBottom={6}>
+        {/* Stacked on phones: the title and three controls do not fit one row below `lg`. */}
+        <Box
+          alignItems="start"
+          direction="column"
+          gap={3}
+          justifyContent="between"
+          lgDirection="row"
+          marginBottom={6}
+        >
           <Box flex="grow">
             <Heading size="xl">My Todos</Heading>
             <Text color="secondaryLight" size="sm">
               Local-first via @terreno/syncdb
             </Text>
           </Box>
-          <Box alignItems="center" direction="row" gap={2}>
+          <Box alignItems="center" direction="row" gap={2} wrap>
             <Button
               iconName="filter"
               onClick={handleOpenWindows}
               testID="todos-open-windows"
               text="Query windows"
+              variant="muted"
+            />
+            <Button
+              iconName="table-columns"
+              onClick={handleOpenBrowser}
+              testID="todos-browse-button"
+              text="Browse"
               variant="muted"
             />
             <NotificationCenterBell />
@@ -445,7 +463,7 @@ const SyncTodosScreen: React.FC = () => {
         <TodoSummaryCard />
       </Box>
     ),
-    [countSummary, handleCreate, handleOpenWindows, isSyncDbReady, totalCount]
+    [countSummary, handleCreate, handleOpenBrowser, handleOpenWindows, isSyncDbReady, totalCount]
   );
 
   const listEmpty = useMemo(

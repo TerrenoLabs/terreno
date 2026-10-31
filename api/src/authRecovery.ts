@@ -206,6 +206,16 @@ export const sendEmailChangedNotice = async ({
   }
 };
 
+/** Whether the app User has a legacy JWT (passport) password. */
+const hasLegacyPassword = async (userModel: UserModel, user: User): Promise<boolean> => {
+  if (userModel.schema.path("hash") === undefined) {
+    return false;
+  }
+  return Boolean(
+    await userModel.exists({_id: user._id, hash: {$exists: true, $ne: null}} as never)
+  );
+};
+
 const incrementTokenEpoch = (user: User): void => {
   user.tokenEpoch = (user.tokenEpoch ?? 0) + 1;
 };
@@ -266,12 +276,27 @@ export const addAuthRecoveryRoutes = (
   if (authOptions) {
     app.locals[AUTH_OPTIONS_LOCAL_KEY] = authOptions;
   }
+  // With Better Auth registered (TerrenoApp wires syncPasswordResetToBetterAuth after these routes
+  // are added, so read it per request), the legacy routes only replace an existing JWT password:
+  // POST /auth/login has no second factor, so an account without one (such as a social-only
+  // account) must not gain a way to sign in there. Pure JWT apps keep today's behaviour.
+  const canResetWithLegacyRoute = async (user: User): Promise<boolean> => {
+    if (!authOptions?.syncPasswordResetToBetterAuth) {
+      return true;
+    }
+    return hasLegacyPassword(userModel, user);
+  };
+
   const forgotPassword = asyncHandler(async (req: express.Request, res: express.Response) => {
     const email = normalizeEmail(req.body?.email);
     if (email) {
       try {
         const user = await findUserByEmail(userModel, email);
-        if (user) {
+        if (user && !(await canResetWithLegacyRoute(user))) {
+          logger.info(
+            "[auth] Skipped legacy password reset mail for an account without a JWT password"
+          );
+        } else if (user) {
           if (!authOptions?.publicAppUrl) {
             logger.error("[auth] publicAppUrl is required to send password reset mail");
           } else {
@@ -316,6 +341,14 @@ export const addAuthRecoveryRoutes = (
     }
     if (isUserDisabled(user)) {
       throw new APIError({status: 401, title: "User is disabled"});
+    }
+    if (!(await canResetWithLegacyRoute(user))) {
+      throw new APIError({
+        code: "legacy-password-reset-unavailable",
+        detail: "Request a new reset link from the sign-in page.",
+        status: 400,
+        title: "This account cannot reset its password here",
+      });
     }
     await changeUserPassword(user, password, {authOptions});
     const tokens = await generateTokens(user, authOptions);

@@ -3,8 +3,8 @@
  * `bun test` process would keep those replacements for every other syncdb file.
  */
 import {afterAll, afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
-
-import type {BetterAuthSessionClientLike} from "../auth/betterAuthTypes";
+import type {BetterAuthClient} from "../auth/betterAuthClient";
+import type {BetterAuthClientFeatures, BetterAuthSessionClientLike} from "../auth/betterAuthTypes";
 
 type ExpoOptions = {
   scheme?: string;
@@ -98,6 +98,8 @@ const {
   createBetterAuthClient,
   createStorageAdapter,
   getBetterAuthBearerToken,
+  getBetterAuthClientWebAuth,
+  linkSocialWithHandoff,
   repairCookieJar,
   signInSocialWithHandoff,
   withCookieJarRepair,
@@ -214,6 +216,18 @@ describe("createStorageAdapter (native)", () => {
     ]);
     expect(secureCalls.set).toEqual([]);
   });
+
+  // @better-auth/expo 1.7 reads and writes through `getItemAsync` / `setItemAsync` on its
+  // serialized path; without them every request failed with "undefined is not a function".
+  it("provides the async pair the 1.7 Expo plugin calls", async () => {
+    const adapter = createStorageAdapter(false);
+
+    expect(await adapter.getItemAsync?.("auth")).toBe("secure-auth");
+    await adapter.setItemAsync?.("auth", "token");
+
+    expect(secureCalls.get).toEqual(["auth"]);
+    expect(secureCalls.set).toEqual([["auth", "token"]]);
+  });
 });
 
 describe("repairCookieJar", () => {
@@ -266,6 +280,33 @@ describe("withCookieJarRepair", () => {
     expect(storage.getItem("terreno_session_data")).toBe(sessionCache);
   });
 
+  it("repairs the jar on the async read the 1.7 plugin uses, and passes other keys through", async () => {
+    const storage = withCookieJarRepair({
+      cookieJarKey: "terreno_cookie",
+      storage: {
+        getItem: () => null,
+        getItemAsync: async (key: string) => (key === "terreno_cookie" ? CORRUPT_JAR : "plain"),
+        setItem: () => {},
+      },
+    });
+
+    const repaired = await storage.getItemAsync?.("terreno_cookie");
+
+    expect(JSON.parse((repaired as string) ?? "{}")).toEqual({
+      "better-auth.session_data": {expires: null, value: "cached"},
+    });
+    expect(await storage.getItemAsync?.("terreno_session_data")).toBe("plain");
+  });
+
+  it("adds no async read when the storage has none", () => {
+    const storage = withCookieJarRepair({
+      cookieJarKey: "terreno_cookie",
+      storage: {getItem: () => null, setItem: () => {}},
+    });
+
+    expect(storage.getItemAsync).toBeUndefined();
+  });
+
   it("repairs promise-shaped reads from the web adapter", async () => {
     const storage = withCookieJarRepair({
       cookieJarKey: "terreno_cookie",
@@ -287,6 +328,7 @@ interface BearerFetchOptions {
   auth: {token: () => string | null; type: string};
   credentials: string;
   onRequest: (context: {headers: Headers; url: string | URL}) => unknown;
+  onResponse: (context: {request: {url: string | URL}; response: Response}) => unknown;
   onSuccess: (context: {
     data: unknown;
     request: {headers: Headers; url: string | URL};
@@ -375,6 +417,37 @@ describe("createBetterAuthClient with webAuth bearer on web", () => {
     } else {
       delete globalWithWindow.window;
     }
+  });
+
+  it("reports a client's web auth mode and its stored bearer token", () => {
+    const bearerStorage = createMemoryStorage();
+    const bearerClient = createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "app",
+      webAuth: "bearer",
+    });
+    expect(getBetterAuthClientWebAuth(bearerClient)).toEqual({
+      bearerToken: null,
+      webAuth: "bearer",
+    });
+    bearerStorage.setItem("app_bearer_token", "t9");
+    expect(getBetterAuthClientWebAuth(bearerClient)).toEqual({
+      bearerToken: "t9",
+      webAuth: "bearer",
+    });
+
+    const cookieClient = createBetterAuthClient({
+      baseURL: "http://localhost:3000",
+      scheme: "terreno",
+    });
+    expect(getBetterAuthClientWebAuth(cookieClient)).toEqual({
+      bearerToken: null,
+      webAuth: "cookie",
+    });
+    // A client createBetterAuthClient did not make is treated as cookie mode.
+    expect(getBetterAuthClientWebAuth({})).toEqual({bearerToken: null, webAuth: "cookie"});
   });
 
   it("stores set-auth-token in localStorage, sends it as the bearer, and omits cookies", async () => {
@@ -657,6 +730,275 @@ describe("createBetterAuthClient with webAuth bearer on web", () => {
   });
 });
 
+const CHALLENGE_HEADER = "X-Terreno-Auth-Challenge";
+const CHALLENGE_KEY = "terreno_auth_challenge";
+const TWO_FACTOR = "better-auth.two_factor";
+const TRUST_DEVICE = "better-auth.trust_device";
+const PASSKEY = "better-auth.better-auth-passkey";
+const DONT_REMEMBER = "better-auth.dont_remember";
+
+interface ChallengeRequest {
+  challenge: string | null;
+  pathname: string;
+}
+
+// Loose view of the real client the challenge tests drive.
+interface ChallengeClient {
+  getSession: () => Promise<unknown>;
+  passkey: {listUserPasskeys: () => Promise<unknown>};
+  signIn: {
+    email: (body: {email: string; password: string}) => Promise<unknown>;
+    passkey: () => Promise<unknown>;
+  };
+  signOut: () => Promise<unknown>;
+  twoFactor: {verifyTotp: (body: {code: string; trustDevice?: boolean}) => Promise<unknown>};
+}
+
+const challengeHeader = (pairs: Record<string, string>): Record<string, string> => ({
+  [CHALLENGE_HEADER]: new URLSearchParams(pairs).toString(),
+});
+
+// Creates a web bearer client with the 2FA and passkey plugins, backed by a fake server, and
+// records the challenge header each call sent.
+const createChallengeClient = (
+  bearerStorage: MemoryStorage,
+  server: FakeServer
+): {client: ChallengeClient; sent: ChallengeRequest[]} => {
+  const sent: ChallengeRequest[] = [];
+  captured.build = (config: Record<string, unknown>): unknown => {
+    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      const {pathname} = new URL(input.toString());
+      sent.push({challenge: new Headers(init?.headers).get(CHALLENGE_HEADER), pathname});
+      return server(pathname);
+    };
+    return createRealAuthClient({
+      baseURL: config.baseURL as string,
+      fetchOptions: {
+        ...(config.fetchOptions as Record<string, unknown>),
+        customFetchImpl: customFetchImpl as never,
+      },
+      plugins: config.plugins as never,
+    });
+  };
+  const client = createBetterAuthClient({
+    baseURL: "http://localhost:4000",
+    bearerStorage,
+    features: {passkey: true, twoFactor: true},
+    scheme: "terreno",
+    webAuth: "bearer",
+  }) as unknown as ChallengeClient;
+  return {client, sent};
+};
+
+const heldChallenge = (bearerStorage: MemoryStorage): Record<string, string> =>
+  Object.fromEntries(new URLSearchParams(bearerStorage.values.get(CHALLENGE_KEY) ?? ""));
+
+describe("cookie-free challenges in web bearer mode", () => {
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+  });
+
+  it("stores the challenge from sign-in and sends it on verify, opting in when none is held", async () => {
+    const bearerStorage = createMemoryStorage();
+    const {client, sent} = createChallengeClient(bearerStorage, (pathname) => {
+      if (pathname.endsWith("/sign-in/email")) {
+        return jsonResponse(
+          {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+          {headers: challengeHeader({[TWO_FACTOR]: "2fa-id.sig"})}
+        );
+      }
+      return jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}});
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa-id.sig"});
+    await client.twoFactor.verifyTotp({code: "123456"});
+
+    expect(sent).toEqual([
+      {challenge: "-", pathname: "/api/auth/sign-in/email"},
+      {
+        challenge: new URLSearchParams({[TWO_FACTOR]: "2fa-id.sig"}).toString(),
+        pathname: "/api/auth/two-factor/verify-totp",
+      },
+    ]);
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t1");
+  });
+
+  it("keeps the stored token when a sign-in answers with a two-factor redirect", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t0"});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {twoFactorMethods: ["totp"], twoFactorRedirect: true},
+        {headers: {...challengeHeader({[TWO_FACTOR]: "2fa.sig"}), "set-auth-token": "dead"}}
+      )
+    );
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t0");
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa.sig"});
+  });
+
+  it("drops dont_remember with the two-factor challenge after a successful verify", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [DONT_REMEMBER]: "true.sig",
+        [TRUST_DEVICE]: "trust.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({token: "t1"}, {headers: {"set-auth-token": "t1"}})
+    );
+
+    await client.twoFactor.verifyTotp({code: "123456"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+  });
+
+  it("sends the challenge only on two-factor, passkey, and sign-in calls", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TRUST_DEVICE}=trust.sig`});
+    const {client, sent} = createChallengeClient(bearerStorage, () => jsonResponse({}));
+
+    await client.getSession();
+    await client.passkey.listUserPasskeys();
+    await client.signOut();
+
+    expect(sent).toEqual([
+      {challenge: null, pathname: "/api/auth/get-session"},
+      {challenge: `${TRUST_DEVICE}=trust.sig`, pathname: "/api/auth/passkey/list-user-passkeys"},
+      {challenge: null, pathname: "/api/auth/sign-out"},
+    ]);
+  });
+
+  it("clears the two-factor challenge after a successful verify and keeps the trusted device", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa-id.sig`});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {token: "t1"},
+        {headers: {...challengeHeader({[TRUST_DEVICE]: "trust.sig"}), "set-auth-token": "t1"}}
+      )
+    );
+
+    await client.twoFactor.verifyTotp({code: "123456", trustDevice: true});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+  });
+
+  it("keeps the two-factor challenge when verify fails, so the user can retry", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa-id.sig`});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({code: "INVALID_CODE"}, {status: 401})
+    );
+
+    await client.twoFactor.verifyTotp({code: "000000"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TWO_FACTOR]: "2fa-id.sig"});
+  });
+
+  it("forgets a challenge the server expires, even on an error response", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [TRUST_DEVICE]: "t.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse(
+        {code: "TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE"},
+        {headers: challengeHeader({[TWO_FACTOR]: ""}), status: 400}
+      )
+    );
+
+    await client.twoFactor.verifyTotp({code: "000000"});
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "t.sig"});
+  });
+
+  it("replaces a rotated trust value and removes the key when nothing is left", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TRUST_DEVICE}=old.sig`});
+    let header: Record<string, string> = challengeHeader({[TRUST_DEVICE]: "new.sig"});
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({token: "t1"}, {headers: {...header, "set-auth-token": "t1"}})
+    );
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "new.sig"});
+
+    header = challengeHeader({[TRUST_DEVICE]: ""});
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
+  });
+
+  it("drops pending challenges on sign-out but keeps the trusted device", async () => {
+    const bearerStorage = createMemoryStorage({
+      [CHALLENGE_KEY]: new URLSearchParams({
+        [PASSKEY]: "pk.sig",
+        [TRUST_DEVICE]: "trust.sig",
+        [TWO_FACTOR]: "2fa.sig",
+      }).toString(),
+      terreno_bearer_token: "t1",
+    });
+    const {client} = createChallengeClient(bearerStorage, () =>
+      jsonResponse({message: "down"}, {status: 503})
+    );
+
+    await client.signOut();
+
+    expect(heldChallenge(bearerStorage)).toEqual({[TRUST_DEVICE]: "trust.sig"});
+    expect(bearerStorage.values.has("terreno_bearer_token")).toBe(false);
+  });
+
+  it("removes the challenge key on sign-out when nothing is trusted", async () => {
+    const bearerStorage = createMemoryStorage({[CHALLENGE_KEY]: `${TWO_FACTOR}=2fa.sig`});
+    const {client} = createChallengeClient(bearerStorage, () => jsonResponse({success: true}));
+
+    await client.signOut();
+
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
+  });
+
+  it("stores the passkey challenge under a custom storagePrefix", async () => {
+    const bearerStorage = createMemoryStorage();
+    const sent: ChallengeRequest[] = [];
+    captured.build = (config: Record<string, unknown>): unknown =>
+      createRealAuthClient({
+        baseURL: config.baseURL as string,
+        fetchOptions: {
+          ...(config.fetchOptions as Record<string, unknown>),
+          customFetchImpl: (async (input: string | URL, init?: RequestInit): Promise<Response> => {
+            sent.push({
+              challenge: new Headers(init?.headers).get(CHALLENGE_HEADER),
+              pathname: new URL(input.toString()).pathname,
+            });
+            return jsonResponse(
+              {challenge: "c"},
+              {headers: challengeHeader({[PASSKEY]: "pk.sig"})}
+            );
+          }) as never,
+        },
+      });
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      scheme: "terreno",
+      storagePrefix: "myapp",
+      webAuth: "bearer",
+    }) as unknown as {$fetch: (path: string, options: {method: string}) => Promise<unknown>};
+
+    await client.$fetch("/passkey/generate-authenticate-options", {method: "GET"});
+
+    expect(sent[0].challenge).toBe("-");
+    expect(bearerStorage.values.get("myapp_auth_challenge")).toBe(`${PASSKEY}=pk.sig`);
+    expect(bearerStorage.values.has(CHALLENGE_KEY)).toBe(false);
+  });
+});
+
 interface HandoffRequest {
   authorization: string | null;
   body: unknown;
@@ -742,7 +1084,10 @@ const useRealClient = (
     };
     return createRealAuthClient({
       baseURL: config.baseURL as string,
-      fetchOptions: {...(config.fetchOptions as Record<string, unknown>), customFetchImpl},
+      fetchOptions: {
+        ...(config.fetchOptions as Record<string, unknown>),
+        customFetchImpl: customFetchImpl as never,
+      },
     });
   };
   return {sent};
@@ -782,10 +1127,7 @@ describe("OAuth handoff for web bearer clients", () => {
     });
 
   // Starts a sign-in on the app's home page and returns the nonce it stored.
-  const startSignIn = (
-    client: ReturnType<typeof createBetterAuthClient>,
-    browser: FakeBrowser
-  ): string => {
+  const startSignIn = (client: BetterAuthClient, browser: FakeBrowser): string => {
     signInSocialWithHandoff({client, provider: "google"});
     const nonce = browser.sessionStorage.getItem(NONCE_KEY);
     if (!nonce) {
@@ -1250,9 +1592,488 @@ describe("OAuth handoff for web bearer clients", () => {
     await expect(completeBetterAuthOAuthHandoff({client})).resolves.toBe(false);
 
     const browser = installBrowser("http://localhost:8082/?handoff=n#ott=abc");
-    const foreign = {} as ReturnType<typeof createBetterAuthClient>;
+    const foreign = {} as BetterAuthClient;
     await expect(completeBetterAuthOAuthHandoff({client: foreign})).resolves.toBe(false);
     expect(browser.href()).toBe("http://localhost:8082/");
+  });
+});
+
+interface SubmittedForm {
+  action: string;
+  appended: boolean;
+  fields: Record<string, string>;
+  method: string;
+  submitted: boolean;
+}
+
+// A document just big enough for the hidden form: it records the form and its fields.
+const installFormDocument = (): SubmittedForm[] => {
+  const forms: SubmittedForm[] = [];
+  const createElement = (tag: string): Record<string, unknown> => {
+    if (tag === "form") {
+      const form: SubmittedForm = {
+        action: "",
+        appended: false,
+        fields: {},
+        method: "",
+        submitted: false,
+      };
+      forms.push(form);
+      const element = {
+        set action(value: string) {
+          form.action = value;
+        },
+        appendChild: (child: {name: string; value: string}): void => {
+          form.fields[child.name] = child.value;
+        },
+        set method(value: string) {
+          form.method = value;
+        },
+        style: {} as Record<string, string>,
+        submit: (): void => {
+          form.submitted = true;
+        },
+      };
+      formElements.set(element, form);
+      return element;
+    }
+    return {name: "", style: {}, type: "", value: ""};
+  };
+  const formElements = new Map<object, SubmittedForm>();
+  (globalThis as unknown as {window: Record<string, unknown>}).window.document = {
+    body: {
+      appendChild: (element: object): void => {
+        const form = formElements.get(element);
+        if (form) {
+          form.appended = true;
+        }
+      },
+    },
+    createElement,
+  };
+  return forms;
+};
+
+describe("linkSocialWithHandoff", () => {
+  const globalWithWindow = globalThis as {window?: unknown};
+  const hadWindow = "window" in globalWithWindow;
+  const originalWindow = globalWithWindow.window;
+
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+    if (hadWindow) {
+      globalWithWindow.window = originalWindow;
+    } else {
+      delete globalWithWindow.window;
+    }
+  });
+
+  const intentResponse = (): Response =>
+    jsonResponse({
+      startURL: "http://localhost:4000/api/auth/oauth-handoff/link-start",
+      token: "link-token-1",
+    });
+
+  it("posts the intent with the bearer, then submits the token in a hidden form", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "bearer-1"});
+    const {sent} = useRealClient(() => intentResponse());
+    const browser = installBrowser("http://localhost:8082/settings/security");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/login?linked=google",
+      client,
+      provider: "google",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(sent).toHaveLength(1);
+    expect(sent[0].pathname).toBe("/api/auth/oauth-handoff/link-intent");
+    expect(sent[0].authorization).toBe("Bearer bearer-1");
+    // Absolute URLs, and the error page defaults to the return page.
+    expect(sent[0].body).toEqual({
+      callbackURL: "http://localhost:8082/login?linked=google",
+      errorCallbackURL: "http://localhost:8082/login?linked=google",
+      provider: "google",
+    });
+    expect(forms).toEqual([
+      {
+        action: "http://localhost:4000/api/auth/oauth-handoff/link-start",
+        appended: true,
+        fields: {token: "link-token-1"},
+        method: "POST",
+        submitted: true,
+      },
+    ]);
+    // The token never goes into the page URL.
+    expect(browser.assigned).toEqual([]);
+    expect(browser.href()).toBe("http://localhost:8082/settings/security");
+  });
+
+  it("passes an errorCallbackURL through", async () => {
+    const {sent} = useRealClient(() => intentResponse());
+    installBrowser("http://localhost:8082/settings");
+    installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    await linkSocialWithHandoff({
+      callbackURL: "http://localhost:8082/login",
+      client,
+      errorCallbackURL: "/settings?tab=security",
+      provider: "github",
+    });
+
+    expect((sent[0].body as {errorCallbackURL: string}).errorCallbackURL).toBe(
+      "http://localhost:8082/settings?tab=security"
+    );
+  });
+
+  it("returns the refusal and submits nothing when the intent is refused", async () => {
+    useRealClient(() =>
+      jsonResponse(
+        {code: "LINKING_DISABLED", message: "Account linking is turned off"},
+        {status: 403}
+      )
+    );
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({callbackURL: "/login", client, provider: "google"});
+
+    expect(result.error).toEqual({
+      code: "LINKING_DISABLED",
+      message: "Account linking is turned off",
+      status: 403,
+    });
+    expect(forms).toEqual([]);
+  });
+
+  it("refuses a start URL that is not http(s) and submits nothing", async () => {
+    useRealClient(() => jsonResponse({startURL: "javascript:alert(1)", token: "t"}));
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+
+    const result = await linkSocialWithHandoff({callbackURL: "/login", client, provider: "google"});
+
+    expect(result.error?.status).toBe(500);
+    expect(forms).toEqual([]);
+  });
+
+  it("calls linkSocial in cookie mode, with no intent and no form", async () => {
+    const calls: unknown[] = [];
+    captured.build = (): unknown => ({
+      linkSocial: async (body: unknown): Promise<{data: unknown; error: null}> => {
+        calls.push(body);
+        return {data: {redirect: true, url: "https://accounts.google.com/o"}, error: null};
+      },
+    });
+    installBrowser("http://localhost:8082/settings");
+    const forms = installFormDocument();
+    const client = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      provider: "google",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(calls).toEqual([{callbackURL: "/settings", provider: "google"}]);
+    expect(forms).toEqual([]);
+  });
+
+  it("returns linkSocial's error in cookie mode", async () => {
+    const calls: unknown[] = [];
+    captured.build = (): unknown => ({
+      linkSocial: async (body: unknown): Promise<{data: null; error: Record<string, unknown>}> => {
+        calls.push(body);
+        return {
+          data: null,
+          error: {code: "LINKING_DISABLED", message: "off", status: 403, statusText: "Forbidden"},
+        };
+      },
+    });
+    installBrowser("http://localhost:8082/settings");
+    const client = createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      errorCallbackURL: "/settings?failed=1",
+      provider: "google",
+    });
+
+    expect(result.error).toEqual({code: "LINKING_DISABLED", message: "off", status: 403});
+    expect(calls).toEqual([
+      {callbackURL: "/settings", errorCallbackURL: "/settings?failed=1", provider: "google"},
+    ]);
+  });
+
+  it("calls linkSocial for a bearer-configured client when there is no window", async () => {
+    const calls: unknown[] = [];
+    const fetched: string[] = [];
+    captured.build = (): unknown => ({
+      $fetch: async (path: string): Promise<{data: null; error: null}> => {
+        fetched.push(path);
+        return {data: null, error: null};
+      },
+      linkSocial: async (body: unknown): Promise<{data: unknown; error: null}> => {
+        calls.push(body);
+        return {data: {redirect: false, url: ""}, error: null};
+      },
+    });
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage: createMemoryStorage({terreno_bearer_token: "bearer-1"}),
+      scheme: "terreno",
+      webAuth: "bearer",
+    });
+    delete globalWithWindow.window;
+
+    const result = await linkSocialWithHandoff({
+      callbackURL: "/settings",
+      client,
+      provider: "github",
+    });
+
+    expect(result).toEqual({error: null});
+    expect(calls).toEqual([{callbackURL: "/settings", provider: "github"}]);
+    expect(fetched).toEqual([]);
+  });
+});
+
+interface FeatureRequest {
+  method: string | undefined;
+  pathname: string;
+}
+
+// Loose view of the real client the feature tests drive, since the test file is not type-checked
+// against the feature overloads.
+interface FeatureClient {
+  getLastUsedLoginMethod: () => string | null;
+  isLastUsedLoginMethod: (method: string) => boolean;
+  multiSession: {listDeviceSessions: () => Promise<unknown>};
+  oneTimeToken: {verify: (body: {token: string}) => Promise<unknown>};
+  passkey: {addPasskey: () => Promise<{error: unknown}>};
+  signIn: {email: (body: {email: string; password: string}) => Promise<unknown>};
+  twoFactor: {enable: (body: {password: string}) => Promise<unknown>};
+}
+
+// Makes createBetterAuthClient return the real Better Auth client built from the plugins and
+// options it passed, with fetch replaced by a fake server.
+const useRealFeatureClient = (
+  server: FakeServer
+): {auth: Array<Omit<SentRequest, "pathname">>; sent: FeatureRequest[]} => {
+  const sent: FeatureRequest[] = [];
+  const auth: Array<Omit<SentRequest, "pathname">> = [];
+  captured.build = (config: Record<string, unknown>): unknown => {
+    const customFetchImpl = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+      sent.push({method: init?.method, pathname: new URL(input.toString()).pathname});
+      auth.push({
+        authorization: new Headers(init?.headers).get("authorization"),
+        credentials: init?.credentials,
+      });
+      return server(new URL(input.toString()).pathname);
+    };
+    return createRealAuthClient({
+      baseURL: config.baseURL as string,
+      fetchOptions: {
+        ...(config.fetchOptions as Record<string, unknown>),
+        customFetchImpl: customFetchImpl as never,
+      },
+      // The mocked expo plugin has no hooks, so the real client runs only the feature plugins.
+      plugins: config.plugins as never,
+    });
+  };
+  return {auth, sent};
+};
+
+const pluginIds = (): unknown[] => {
+  const plugins = (captured.auth?.plugins ?? []) as Array<{id?: string; name?: string}>;
+  return plugins.map((plugin) => plugin.id ?? plugin.name);
+};
+
+const createFeatureClient = (features: BetterAuthClientFeatures): FeatureClient => {
+  return createBetterAuthClient({
+    baseURL: "http://localhost:4000",
+    features,
+    scheme: "terreno",
+  }) as unknown as FeatureClient;
+};
+
+describe("createBetterAuthClient features", () => {
+  const globalWithDocument = globalThis as {document?: unknown};
+  const hadDocument = "document" in globalWithDocument;
+  const originalDocument = globalWithDocument.document;
+
+  beforeEach(() => {
+    captured.auth = null;
+    captured.build = null;
+  });
+
+  afterEach(() => {
+    captured.build = null;
+    if (hadDocument) {
+      globalWithDocument.document = originalDocument;
+    } else {
+      delete globalWithDocument.document;
+    }
+  });
+
+  it("registers only the expo plugin without features, as before", () => {
+    createBetterAuthClient({baseURL: "http://localhost:4000", scheme: "terreno"});
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+    expect(Object.keys(captured.auth ?? {}).sort()).toEqual(["baseURL", "plugins"]);
+  });
+
+  it("registers no feature plugins for features that are off", () => {
+    createFeatureClient({});
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+    createFeatureClient({
+      lastLoginMethod: false,
+      multiSession: false,
+      oneTimeToken: false,
+      passkey: false,
+      twoFactor: false,
+    });
+    expect(pluginIds()).toEqual(["expo-plugin"]);
+  });
+
+  it("registers every feature plugin after the expo plugin", () => {
+    createFeatureClient({
+      lastLoginMethod: true,
+      multiSession: true,
+      oneTimeToken: true,
+      passkey: true,
+      twoFactor: true,
+    });
+    expect(pluginIds()).toEqual([
+      "expo-plugin",
+      "two-factor",
+      "passkey",
+      "multi-session",
+      "last-login-method-client",
+      "one-time-token",
+    ]);
+  });
+
+  it("twoFactor exposes client.twoFactor, posting enable to /two-factor/enable", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({totpURI: "otpauth://x"}));
+    const client = createFeatureClient({twoFactor: true});
+
+    await client.twoFactor.enable({password: "secret"});
+
+    expect(pluginIds()).toContain("two-factor");
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/two-factor/enable"}]);
+  });
+
+  it("twoFactor calls onTwoFactorRedirect with the methods when sign-in needs a second factor", async () => {
+    useRealFeatureClient(() => jsonResponse({twoFactorMethods: ["totp"], twoFactorRedirect: true}));
+    const redirects: unknown[] = [];
+    const client = createFeatureClient({
+      twoFactor: {
+        onTwoFactorRedirect: (context): void => {
+          redirects.push(context);
+        },
+      },
+    });
+
+    await client.signIn.email({email: "a@example.com", password: "secret"});
+
+    expect(redirects).toEqual([{twoFactorMethods: ["totp"]}]);
+  });
+
+  it("passkey exposes client.passkey.addPasskey, which asks /passkey/generate-register-options", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({message: "nope"}, {status: 401}));
+    const client = createFeatureClient({passkey: true});
+
+    const result = await client.passkey.addPasskey();
+
+    expect(result.error).toBeTruthy();
+    expect(sent).toEqual([
+      {method: "GET", pathname: "/api/auth/passkey/generate-register-options"},
+    ]);
+  });
+
+  it("multiSession exposes client.multiSession, reading /multi-session/list-device-sessions", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse([]));
+    const client = createFeatureClient({multiSession: true});
+
+    await client.multiSession.listDeviceSessions();
+
+    expect(pluginIds()).toContain("multi-session");
+    expect(sent).toEqual([
+      {method: "GET", pathname: "/api/auth/multi-session/list-device-sessions"},
+    ]);
+  });
+
+  it("lastLoginMethod exposes getLastUsedLoginMethod, read from the cookie with no request", () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({}));
+    globalWithDocument.document = {cookie: "better-auth.last_used_login_method=github"};
+    const client = createFeatureClient({lastLoginMethod: true});
+
+    expect(client.getLastUsedLoginMethod()).toBe("github");
+    expect(client.isLastUsedLoginMethod("github")).toBe(true);
+    expect(sent).toEqual([]);
+  });
+
+  it("sends feature calls with the stored bearer and no cookies in web bearer mode", async () => {
+    const bearerStorage = createMemoryStorage({terreno_bearer_token: "t1"});
+    const {auth, sent} = useRealFeatureClient(() =>
+      jsonResponse({totpURI: "otpauth://x"}, {headers: {"set-auth-token": "t2"}})
+    );
+    const client = createBetterAuthClient({
+      baseURL: "http://localhost:4000",
+      bearerStorage,
+      features: {twoFactor: true},
+      scheme: "terreno",
+      webAuth: "bearer",
+    }) as unknown as FeatureClient;
+
+    await client.twoFactor.enable({password: "secret"});
+
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/two-factor/enable"}]);
+    expect(auth).toEqual([{authorization: "Bearer t1", credentials: "omit"}]);
+    // A token a feature endpoint issues replaces the stored one.
+    expect(bearerStorage.values.get("terreno_bearer_token")).toBe("t2");
+  });
+
+  it("oneTimeToken exposes client.oneTimeToken, posting verify to /one-time-token/verify", async () => {
+    const {sent} = useRealFeatureClient(() => jsonResponse({session: null}));
+    const client = createFeatureClient({oneTimeToken: true});
+
+    await client.oneTimeToken.verify({token: "t"});
+
+    expect(pluginIds()).toContain("one-time-token");
+    expect(sent).toEqual([{method: "POST", pathname: "/api/auth/one-time-token/verify"}]);
   });
 });
 

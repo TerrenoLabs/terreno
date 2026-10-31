@@ -1,12 +1,13 @@
 import {type APIRequestContext, test as setup} from "@playwright/test";
 import {ADMIN_USER, ALL_E2E_USERS, SYNCDB_LOADLAB_USER} from "./fixtures/testUsers";
-import {setUserAdmin} from "./helpers/adminAuth";
+import {setBetterAuthEmailVerified, setUserAdmin} from "./helpers/adminAuth";
 import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
 import {acceptPendingConsentForms} from "./helpers/consentForms";
 
 setup("create test users", async ({request}) => {
   for (const user of ALL_E2E_USERS) {
     await createUser(request, user);
+    await setBetterAuthEmailVerified(user.email);
     if (user.email === ADMIN_USER.email) {
       await setUserAdmin(ADMIN_USER.email);
     }

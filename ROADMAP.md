@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-28T04:42:40.018Z.
+> dates are promised. Last updated: 2026-10-29T17:18:52.204Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -31,6 +31,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 - [Charts and dashboard primitives](https://github.com/TerrenoLabs/terreno/issues/1175) (Feature, Shipped) — IP: [charts-and-dashboards](docs/implementationPlans/charts-and-dashboards.md) · Tasks: [charts-and-dashboards](docs/tasks/charts-and-dashboards.md)
 - [First-class dark mode](https://github.com/TerrenoLabs/terreno/issues/1176) (Feature, Planned)
+- [ListDetailLayout: a route-driven list/detail layout for phone and tablet](https://github.com/TerrenoLabs/terreno/issues/1652) (Feature, Planned) — IP: [list-detail-layout](docs/implementationPlans/list-detail-layout.md)
 - [Native module baseline for the next major release](https://github.com/TerrenoLabs/terreno/issues/1026) (Breaking, Shipped) — IP: [native-module-baseline](docs/implementationPlans/native-module-baseline.md) · Tasks: [native-module-baseline](docs/tasks/native-module-baseline.md)
 - [Ops dashboard chart parity](https://github.com/TerrenoLabs/terreno/issues/1494) (Feature, Planned) — IP: [dashboard-chart-parity](docs/implementationPlans/dashboard-chart-parity.md) · Tasks: [dashboard-chart-parity](docs/tasks/dashboard-chart-parity.md)
 

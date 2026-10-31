@@ -15,11 +15,13 @@
   "description": "Local-first data layer with TinyBase, durable outbox, and delta sync — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@biomejs/biome": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/react-sdk": "catalog:",
     "@openfeature/web-sdk": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
+    "@terreno/ui": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/luxon": "catalog:",
@@ -102,10 +104,12 @@
   "name": "@terreno/syncdb",
   "peerDependencies": {
     "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/react-sdk": "catalog:",
     "@openfeature/web-sdk": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
+    "@terreno/ui": "workspace:*",
     "better-auth": "catalog:",
     "expo-constants": "*",
     "expo-network": "catalog:",
@@ -118,6 +122,9 @@
     "@better-auth/expo": {
       "optional": true
     },
+    "@better-auth/passkey": {
+      "optional": true
+    },
     "@modelcontextprotocol/client": {
       "optional": true
     },
@@ -128,6 +135,9 @@
       "optional": true
     },
     "@react-native-async-storage/async-storage": {
+      "optional": true
+    },
+    "@terreno/ui": {
       "optional": true
     },
     "better-auth": {
@@ -161,7 +171,7 @@
   },
   "scripts": {
     "build:binary": "bun build --compile src/codegen/cli.ts --outfile dist/terreno-syncdb-codegen",
-    "compile": "tsc",
+    "compile": "tsc && tsc -p tsconfig.typetests.json",
     "compile:watch": "tsc -w",
     "dev": "tsc -w",
     "lint": "biome check .",

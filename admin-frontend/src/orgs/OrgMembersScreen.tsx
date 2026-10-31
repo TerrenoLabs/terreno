@@ -12,6 +12,7 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
+import {MemberSecurityPanel} from "./MemberSecurityPanel";
 import {normalizeListData} from "./normalizeListData";
 import {useOrganizationsApi} from "./useOrganizationsApi";
 
@@ -40,7 +41,7 @@ const COLUMNS: DataTableColumn[] = [
   {columnType: "text", sortable: false, title: "Email", width: 240},
   {columnType: "text", sortable: false, title: "Role", width: 130},
   {columnType: "text", sortable: false, title: "Status", width: 120},
-  {columnType: ACTION_COLUMN, sortable: false, title: "", width: 320},
+  {columnType: ACTION_COLUMN, sortable: false, title: "", width: 420},
 ];
 
 const mutationErrorTitle = (error: unknown, fallback: string): string => {
@@ -54,6 +55,9 @@ const mutationErrorTitle = (error: unknown, fallback: string): string => {
   const title = (data as {title?: unknown}).title;
   return typeof title === "string" ? title : fallback;
 };
+
+const memberLabel = (user: MembershipUser): string =>
+  user.name ?? user.email ?? user._id ?? "Unknown user";
 
 const membershipUser = (membership: OrgMembership): MembershipUser => {
   if (typeof membership.userId === "string") {
@@ -71,13 +75,14 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
   const [email, setEmail] = useState("");
   const [attachError, setAttachError] = useState<string>();
   const [actionError, setActionError] = useState<string>();
+  const [securityMember, setSecurityMember] = useState<MembershipUser>();
   const {
     useMemberAttachMutation,
     useMemberRemoveMutation,
     useMemberUpdateMutation,
     useMembersQuery,
   } = useOrganizationsApi(basePath);
-  const {data, error, isLoading} = useMembersQuery<OrgMembership>(organizationId);
+  const {data, error, isLoading, refetch} = useMembersQuery<OrgMembership>(organizationId);
   const memberships = normalizeListData<OrgMembership>(data);
   const [attachMember, {isLoading: isAttaching}] = useMemberAttachMutation();
   const [updateMember, {isLoading: isUpdating}] = useMemberUpdateMutation();
@@ -124,6 +129,31 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
     [organizationId, updateMember]
   );
 
+  const handleReactivate = useCallback(
+    async (membership: OrgMembership): Promise<void> => {
+      try {
+        setActionError(undefined);
+        await updateMember({
+          body: {status: "active"},
+          id: organizationId,
+          memberId: membership._id,
+        }).unwrap();
+      } catch (mutationError) {
+        setActionError(mutationErrorTitle(mutationError, "Could not reactivate member."));
+      }
+    },
+    [organizationId, updateMember]
+  );
+
+  const handleSecurityClose = useCallback((): void => {
+    setSecurityMember(undefined);
+  }, []);
+
+  // A security action can change a membership (suspend-membership), so reload the list.
+  const handleSecurityActionComplete = useCallback((): void => {
+    void refetch();
+  }, [refetch]);
+
   const handleRemove = useCallback(
     async (membership: OrgMembership): Promise<void> => {
       try {
@@ -146,8 +176,33 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
   }> = useCallback(
     ({cellData}) => {
       const membership = cellData.value as OrgMembership;
+      const user = membershipUser(membership);
+      const isActive = membership.status === "active";
       return (
         <Box direction="row" gap={2}>
+          {isActive && user._id ? (
+            <Button
+              accessibilityLabel={`Security for ${memberLabel(user)}`}
+              onClick={() => setSecurityMember(user)}
+              size="sm"
+              testID={`org-members-security-${user._id}`}
+              text="Security"
+              variant="outline"
+            />
+          ) : null}
+          {isActive ? null : (
+            <Button
+              accessibilityLabel={`Reactivate ${memberLabel(user)}`}
+              disabled={isUpdating}
+              onClick={() => {
+                void handleReactivate(membership);
+              }}
+              size="sm"
+              testID={`org-members-reactivate-${user._id ?? membership._id}`}
+              text="Reactivate"
+              variant="outline"
+            />
+          )}
           <Button
             disabled={isUpdating}
             onClick={() => {
@@ -169,7 +224,7 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
         </Box>
       );
     },
-    [handleRemove, handleToggleRole, isRemoving, isUpdating]
+    [handleReactivate, handleRemove, handleToggleRole, isRemoving, isUpdating]
   );
   const customColumns: DataTableCustomComponentMap = useMemo(
     () => ({[ACTION_COLUMN]: ActionsCell}),
@@ -178,7 +233,7 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
   const rows = memberships.map((membership) => {
     const user = membershipUser(membership);
     return [
-      {value: user.name ?? user.email ?? user._id ?? "Unknown user"},
+      {value: memberLabel(user)},
       {value: user.email ?? ""},
       {value: membership.roleName},
       {value: membership.status},
@@ -225,6 +280,18 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
             testID="org-members-table"
           />
         )}
+        {securityMember?._id ? (
+          <MemberSecurityPanel
+            baseURL={basePath}
+            key={securityMember._id}
+            memberLabel={memberLabel(securityMember)}
+            onActionComplete={handleSecurityActionComplete}
+            onClose={handleSecurityClose}
+            orgId={organizationId}
+            testID="org-members-security-panel"
+            userId={securityMember._id}
+          />
+        ) : null}
       </Box>
       <Modal
         onDismiss={handleDismiss}

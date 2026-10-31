@@ -113,7 +113,9 @@ when the package imports them. Coverage-script unit tests run in the cheap
 Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 `admin-table`, `syncdb`) instead of one container per spec file. Each shard
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. Repository
+file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+which builds its own web bundle and backend (`playwright.config.ts` with
+`E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
@@ -322,6 +324,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin SPA Build and E2E | `admin-spa-ci` |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
+| _(cross-site bearer specs, not required)_ | `e2e-cross-site` (after `e2e-prepare`; also the explicit-linking pass) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |

@@ -4,11 +4,11 @@
  * `src/testing/useAdminModelApiDouble.ts` does not replace the real module.
  */
 import {afterEach, describe, expect, it} from "bun:test";
-import {act} from "@testing-library/react-native";
+import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {AdminProvider} from "../AdminProvider";
-import {OrgContextProvider} from "../orgs/useOrgContext";
+import {OrgContextProvider, useOrgContext} from "../orgs/useOrgContext";
 import {type AdminModelApi, useAdminModelApi} from "../useAdminModelApi";
 import {normalizeRoles, normalizeStatements} from "../useAdminRoles";
 
@@ -217,6 +217,39 @@ describe("useAdminModelApi", () => {
     for (const request of captured) {
       expect(request.headers.get("X-Organization-Id")).toBe("org-1");
     }
+  });
+
+  it("reads the record again for the organization chosen after the first read started", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    let selectOrganization: (organization: {_id: string; name: string}) => void = () => {};
+    let latest: ReturnType<AdminModelApi["useReadQuery"]> | undefined;
+    const Probe: React.FC = () => {
+      selectOrganization = useOrgContext().selectOrganization;
+      latest = useAdminModelApi("/admin/users", "User").useReadQuery("u1");
+      return null;
+    };
+    renderWithTheme(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <OrgContextProvider>
+          <Probe />
+        </OrgContextProvider>
+      </AdminProvider>
+    );
+    await flush();
+
+    // The org switcher settles on a default organization after the screen's first read.
+    act(() => {
+      selectOrganization({_id: "org-a", name: "Alpha"});
+    });
+
+    await waitFor(() => {
+      expect(captured.map((request) => request.headers.get("X-Organization-Id"))).toEqual([
+        null,
+        "org-a",
+      ]);
+    });
+    expect(latest?.isLoading).toBe(false);
   });
 
   it("skips requests without a route path or read id", async () => {

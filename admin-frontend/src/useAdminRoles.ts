@@ -43,6 +43,11 @@ interface StatementsQueryResult {
 /** Roles arrive as a bare array or wrapped in a `{data}` envelope. */
 export type RolesQueryData = RbacRoleRow[] | {data?: RbacRoleRow[]} | undefined;
 
+/** Options for `useListRolesQuery`. `skip` leaves `/rbac/roles` unrequested. */
+interface ListRolesQueryOptions {
+  skip?: boolean;
+}
+
 /** @internal */
 export interface RolesQueryResult {
   data: RolesQueryData;
@@ -70,7 +75,7 @@ const resolveRbacBase = (apiBase: string): string => apiBase.replace(/\/admin\/?
 
 export interface AdminRolesApi {
   useCreateRoleMutation: () => CreateRoleMutation;
-  useListRolesQuery: () => RolesQueryResult;
+  useListRolesQuery: (arg?: undefined, options?: ListRolesQueryOptions) => RolesQueryResult;
   useListStatementsQuery: () => StatementsQueryResult;
   useUpdateRoleMutation: () => UpdateRoleMutation;
 }
@@ -88,9 +93,10 @@ export const useAdminRoles = (apiBase: string): AdminRolesApi => {
         meta,
       ];
     },
-    useListRolesQuery: () =>
+    useListRolesQuery: (_arg?: undefined, options?: ListRolesQueryOptions) =>
       useAdminRpcQuery<RolesQueryData>({
         rpc,
+        skip: options?.skip,
         url: `${rbacBase}/rbac/roles`,
       }),
     useListStatementsQuery: () =>

@@ -1,5 +1,6 @@
 {
   "catalog": {
+    "@better-auth/passkey": "1.7.4",
     "@biomejs/biome": "^2.3.6",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/titillium-web": "^0.4.1",
@@ -162,8 +163,8 @@
   },
   "overrides": {
     "@babel/core": "^7.29.0",
-    "@better-auth/expo": "1.6.25",
-    "better-auth": "1.6.25",
+    "@better-auth/expo": "1.7.4",
+    "better-auth": "1.7.4",
     "ajv": "8.20.0",
     "bson": "7.2.0",
     "expo": "~58.0.14",
@@ -315,6 +316,7 @@
     "ui:dev": "bun run --filter '@terreno/ui' dev",
     "ui:lint": "bun run --filter '@terreno/ui' lint",
     "ui:charts:compare": "bun scripts/charts/compareRenderedSnapshots.ts",
+    "ui:list-detail:capture": "bun scripts/captureListDetail.ts",
     "ui:charts:update-snapshots": "bun scripts/charts/compareRenderedSnapshots.ts --update",
     "ui:test": "bun run --filter '@terreno/ui' test:ci",
     "ui:web": "bun run --filter '@terreno/ui' web",

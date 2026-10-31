@@ -138,6 +138,20 @@ export const goSyncOnline = async (page: Page): Promise<void> => {
 };
 
 /**
+ * Lets Better Auth calls (`/api/auth/*`) through while every other API call stays refused, so a
+ * sign-out reaches the server but the outbox cannot drain. rtk's `logout()` keeps a cookie session
+ * it could not end on the server, so a user switch with work still queued needs this.
+ */
+export const allowAuthWhileOffline = async (page: Page): Promise<void> => {
+  await page.unroute(`${API_URL}/**`);
+  await page.route(`${API_URL}/**`, (route) =>
+    route.request().url().includes("/api/auth/")
+      ? route.continue()
+      : route.abort("connectionrefused")
+  );
+};
+
+/**
  * Restore the network without waiting for the reconnect indicator — used when the
  * page is mid user-switch and the sync UI is not mounted.
  */

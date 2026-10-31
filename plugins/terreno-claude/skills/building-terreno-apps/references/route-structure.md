@@ -15,6 +15,10 @@ app/
     _layout.tsx            # Tab navigator
     index.tsx              # Main screen (e.g. todos list)
     profile.tsx
+  mail/
+    _layout.tsx            # ListDetailLayout: list pane + Stack; unstable_settings.initialRouteName = "index"
+    index.tsx              # ListDetailIndex: the list on a phone, the empty state on a tablet
+    [id].tsx               # Detail screen; the open item lives in the URL
   admin/
     _layout.tsx            # AdminShellLayout wrapper
     index.tsx              # AdminHome
@@ -40,6 +44,9 @@ store/
 - Ensure a route matches `/` so the app is never blank.
 - Use `(group)` routes to organize without affecting URLs.
 - Use `_layout.tsx` for stacks and provider wrappers.
+- Build list/detail screens (mail, inbox, records) as a route group with `ListDetailLayout` as its
+  `_layout.tsx`, `ListDetailIndex` as `index.tsx`, and the detail as `[id].tsx`. Phones push the
+  detail; tablets show the list and detail side by side.
 
 ### Auth-gated routing
 

@@ -1,4 +1,4 @@
-import {Box, Button, Heading, Page, Text, TextField} from "@terreno/ui";
+import {Box, Button, FormContainer, Heading, Page, Text, TextField} from "@terreno/ui";
 import {useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useMemo, useState} from "react";
@@ -20,7 +20,12 @@ const ResetPasswordScreen: React.FC = () => {
   const [isComplete, setIsComplete] = useState(false);
   const [resetPassword] = usePostResetPasswordMutation();
 
+  const canSubmit = Boolean(token) && password.length >= 6;
+
   const handleSubmit = useCallback(async (): Promise<void> => {
+    if (!canSubmit || isSubmitting) {
+      return;
+    }
     setIsSubmitting(true);
     try {
       const result = await submitPasswordReset({
@@ -40,7 +45,7 @@ const ResetPasswordScreen: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [password, resetPassword, token]);
+  }, [canSubmit, isSubmitting, password, resetPassword, token]);
 
   const handleBackToLogin = useCallback((): void => {
     router.replace("/login");
@@ -60,14 +65,18 @@ const ResetPasswordScreen: React.FC = () => {
             />
           </>
         ) : (
-          <>
+          <FormContainer gap={4} onSubmit={handleSubmit} testID="reset-password-form">
             {!token ? (
               <Text color="error" testID="reset-password-missing-token">
                 This reset link is missing a token. Request a new email from the login page.
               </Text>
             ) : null}
             <TextField
+              accessibilityLabel="New password"
+              autoComplete="new-password"
               onChange={setPassword}
+              onEnter={handleSubmit}
+              returnKeyType="go"
               testID="reset-password-password"
               title="New password"
               type="password"
@@ -79,7 +88,7 @@ const ResetPasswordScreen: React.FC = () => {
               </Text>
             ) : null}
             <Button
-              disabled={!token || password.length < 6}
+              disabled={!canSubmit}
               loading={isSubmitting}
               onClick={handleSubmit}
               testID="reset-password-submit"
@@ -91,7 +100,7 @@ const ResetPasswordScreen: React.FC = () => {
               text="Back to login"
               variant="ghost"
             />
-          </>
+          </FormContainer>
         )}
       </Box>
     </Page>

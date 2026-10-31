@@ -1349,14 +1349,15 @@ const _buildModelRouter = <T>(
         });
       }
       // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument. Merge into a detached copy: the array elements are the
-      // loaded document's live subdocuments, and only the body that survives the hooks below
-      // may change the document.
+      // other parts of the subdocument. Merge plain data from the detached copy: $clone() loses
+      // the subdocument's parent, so assigning a nested document array to it can throw in
+      // Mongoose's setters. The loaded document's live subdocuments must not change until only
+      // the body that survives the hooks below is applied.
       if (operation === "PATCH" && isValidObjectId(itemId)) {
-        const current = array[index] as {$clone?: () => object} | object;
+        const current = array[index] as {toObject?: () => object} | object;
         const detached =
-          typeof (current as {$clone?: unknown}).$clone === "function"
-            ? (current as {$clone: () => object}).$clone()
+          typeof (current as {toObject?: unknown}).toObject === "function"
+            ? (current as {toObject: () => object}).toObject()
             : {...current};
         Object.assign(detached, req.body[field]);
         array[index] = detached;
@@ -1405,7 +1406,37 @@ const _buildModelRouter = <T>(
     // Using .save here runs the risk of a versioning error if you try to make two simultaneous
     // updates. We won't wind up with corrupted data, just an API error.
     try {
-      Object.assign(doc, body);
+      const bodyRecord = body as Record<string, unknown>;
+      const finalArray = bodyRecord[field];
+      const liveArray = (doc as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(finalArray) && Array.isArray(liveArray)) {
+        const mergedArray = finalArray.map((item) => {
+          if (!item || typeof item !== "object") {
+            return item;
+          }
+          const itemIdValue = (item as {id?: unknown}).id ?? (item as {_id?: unknown})._id;
+          if (itemIdValue == null) {
+            return item;
+          }
+          const liveItem = liveArray.find((live) => {
+            if (!live || typeof live !== "object") {
+              return false;
+            }
+            const liveId = (live as {id?: unknown}).id ?? (live as {_id?: unknown})._id;
+            return String(liveId) === String(itemIdValue);
+          });
+          if (liveItem && typeof liveItem === "object" && (liveItem as {$__?: unknown}).$__) {
+            Object.assign(liveItem, item);
+            return liveItem;
+          }
+          return item;
+        });
+        (doc as unknown as Record<string, unknown>)[field] = mergedArray;
+        const {[field]: _arrayField, ...restBody} = bodyRecord;
+        Object.assign(doc, restBody);
+      } else {
+        Object.assign(doc, body);
+      }
       await doc.save();
     } catch (error: unknown) {
       throw passthroughOrWrapWrite(error, {

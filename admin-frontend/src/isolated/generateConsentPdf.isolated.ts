@@ -63,6 +63,7 @@ Platform.OS = "web";
 
 // Single import of the module-under-test so all tests share coverage counters.
 import {generateConsentPdf} from "../generateConsentPdf";
+import {formatDate} from "../pdfUtils";
 
 describe("generateConsentPdf", () => {
   beforeEach(() => {
@@ -296,5 +297,51 @@ describe("generateConsentPdf", () => {
     });
     const pageBreaks = calls.filter((c) => c.method === "addPage");
     expect(pageBreaks.length).toBeGreaterThan(0);
+  });
+  it("draws a provisional signature with the signer, date, note, IP, and void date", async () => {
+    await generateConsentPdf({
+      _id: "response-9",
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00Z",
+      consentFormId: {slug: "intake", title: "Intake", type: "agreement", version: 1},
+      provisional: true,
+      provisionalNote: "Guardian agreed by phone",
+      provisionalSignedBy: {_id: "staff-1", email: "dana@example.com", name: "Dana Rivera"},
+      provisionalSignerIp: "10.0.0.7",
+      userId: {_id: "member-1", name: "Sam"},
+      voidedAt: "2026-10-21T09:00:00Z",
+    });
+
+    const textArgs = calls.filter((c) => c.method === "text").map((c) => String(c.args[0]));
+    expect(textArgs).toContain("Provisional signature");
+    expect(textArgs).toContain("Dana Rivera");
+    expect(textArgs).toContain(formatDate("2026-10-20T15:30:00Z"));
+    expect(textArgs).toContain("Guardian agreed by phone");
+    expect(textArgs).toContain("10.0.0.7");
+    expect(textArgs).toContain(`Voided ${formatDate("2026-10-21T09:00:00Z")}`);
+  });
+
+  it("falls back to Staff when the provisional signer is not populated", async () => {
+    await generateConsentPdf({
+      agreed: true,
+      provisional: true,
+      provisionalSignedBy: "staff-1",
+      userId: "member-1",
+    });
+    const textArgs = calls.filter((c) => c.method === "text").map((c) => String(c.args[0]));
+    expect(textArgs).toContain("Provisional signature");
+    expect(textArgs).toContain("Staff");
+    expect(textArgs).not.toContain("Signed at:");
+  });
+
+  it("draws no provisional section for the user's own response", async () => {
+    await generateConsentPdf({
+      agreed: true,
+      agreedAt: "2026-10-20T15:30:00Z",
+      provisional: false,
+      userId: "member-1",
+    });
+    const textArgs = calls.filter((c) => c.method === "text").map((c) => String(c.args[0]));
+    expect(textArgs).not.toContain("Provisional signature");
   });
 });

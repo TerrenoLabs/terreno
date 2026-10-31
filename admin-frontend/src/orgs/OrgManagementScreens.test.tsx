@@ -84,6 +84,21 @@ const MEMBERSHIP = {
   userId: {_id: "user-1", email: "admin@example.com", name: "Admin"},
 };
 
+const SECURITY_SUMMARY = {
+  actions: [{destructive: false, id: "send-password-reset", label: "Send password reset"}],
+  betterAuthLinked: true,
+  disabled: false,
+  emailVerified: true,
+  lastSignIn: {at: null, method: "email"},
+  legacyPassword: false,
+  passkeys: {count: 0, items: []},
+  password: true,
+  providers: [],
+  sessions: {active: 1},
+  twoFactor: {backupCodesRemaining: null, enabled: false},
+  userId: "user-1",
+};
+
 describe("organization management screens", () => {
   beforeEach(() => {
     calls.length = 0;
@@ -283,6 +298,109 @@ describe("organization management screens", () => {
     await waitFor(() => {
       expect(screen.getByTestId("org-members-add-modal")).toBeTruthy();
       expect(screen.getByText("User not found")).toBeTruthy();
+    });
+  });
+
+  it("opens the security panel for an active member and closes it", async () => {
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+
+    routes.set("GET /orgs/org-1/members/user-1/security", {body: {data: SECURITY_SUMMARY}});
+    const security = await screen.findByLabelText("Security for Admin");
+    await act(async () => {
+      fireEvent(security, "click");
+    });
+    expect(screen.getByTestId("org-members-security-panel")).toBeTruthy();
+    expect(screen.getByText("Security: Admin")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent(screen.getByTestId("org-members-security-panel-close"), "click");
+    });
+    expect(screen.queryByTestId("org-members-security-panel")).toBeNull();
+  });
+
+  it("reloads members after a security action", async () => {
+    routes.set("GET /orgs/org-1/members/user-1/security", {body: {data: SECURITY_SUMMARY}});
+    routes.set("POST /orgs/org-1/members/user-1/security/send-password-reset", {
+      body: {data: {action: "send-password-reset", changed: true}},
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+    const securityButton = await screen.findByTestId("org-members-security-user-1");
+    await act(async () => {
+      fireEvent(securityButton, "click");
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByTestId("org-members-security-panel-action-send-password-reset")
+      ).toBeTruthy();
+    });
+    const memberLoads = (): number =>
+      calls.filter((call) => call.method === "GET" && call.url === "/orgs/org-1/members").length;
+    const loadsBefore = memberLoads();
+
+    await act(async () => {
+      fireEvent(
+        screen.getByTestId("org-members-security-panel-action-send-password-reset"),
+        "click"
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Password reset email sent")).toBeTruthy();
+    });
+
+    expect(
+      findCall("POST", "/orgs/org-1/members/user-1/security/send-password-reset")
+    ).toBeDefined();
+    await waitFor(() => {
+      expect(memberLoads()).toBe(loadsBefore + 1);
+    });
+  });
+
+  it("reactivates a suspended member instead of offering security", async () => {
+    routes.set("GET /orgs/org-1/members", {
+      body: {
+        data: [
+          {
+            _id: "membership-2",
+            roleName: "member",
+            status: "suspended",
+            userId: {_id: "user-2", email: "member@example.com"},
+          },
+        ],
+      },
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+
+    const reactivate = await screen.findByTestId("org-members-reactivate-user-2");
+    expect(screen.queryByTestId("org-members-security-user-2")).toBeNull();
+    await act(async () => {
+      fireEvent(reactivate, "click");
+    });
+    await waitFor(() => {
+      expect(findCall("PATCH", "/orgs/org-1/members/membership-2")).toMatchObject({
+        body: {status: "active"},
+        headers: {"x-organization-id": "org-1"},
+      });
+    });
+  });
+
+  it("shows the reactivate error title", async () => {
+    routes.set("GET /orgs/org-1/members", {
+      body: {
+        data: [{_id: "membership-2", roleName: "member", status: "suspended", userId: "user-2"}],
+      },
+    });
+    routes.set("PATCH /orgs/org-1/members/membership-2", {
+      body: {title: "Membership not found"},
+      status: 404,
+    });
+    const screen = renderOrg(<OrgMembersScreen organizationId="org-1" />);
+
+    const reactivate = await screen.findByTestId("org-members-reactivate-user-2");
+    await act(async () => {
+      fireEvent(reactivate, "click");
+    });
+    await waitFor(() => {
+      expect(screen.getByText("Membership not found")).toBeTruthy();
     });
   });
 

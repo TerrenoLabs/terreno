@@ -37,10 +37,54 @@ Modern session-based authentication with built-in social OAuth support.
 3. Backend redirects to OAuth provider or validates credentials
 4. Better Auth creates session in MongoDB
 5. Frontend receives a session cookie (web, default), a bearer session token (native), or, on web with `webAuth: "bearer"`, a bearer token from the `set-auth-token` header. Bearer on web is the option when the web app and the API are on different sites, where browsers block the third-party session cookie. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
-6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). An email alone does not prove someone owns an existing account, so an existing app `User` with the same email is linked only after Better Auth verifies that email, and never when the row already belongs to another Better Auth account. Linking removes a legacy password the row never proved with a verified email. `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
+6. As the session is created, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`), recording the OAuth provider in `oauthProvider`. An email alone does not prove someone owns an existing account, so a Better Auth user claims an existing `User` with the same email only when Better Auth verified that email or its sign-up password matches that `User`'s passport hash; otherwise the sign-up answers 409 "Verify your email to use this account" before any Better Auth user is created. A `User` that already belongs to another Better Auth account is never relinked (409 `ACCOUNT_ALREADY_EXISTS`). Linking through a verified email removes a legacy password the row never proved with a verified email, and bumps `tokenEpoch`. See [Account linking](account-linking.md). The first authenticated request or socket handshake retries the sync if it did not run. `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
 7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
+
+#### Challenges without cookies
+
+Bearer mode sends no cookies, but Better Auth keeps three short-lived values in signed cookies:
+the two-factor challenge set when a sign-in needs a second factor, the trust-device token set
+when the user ticks "trust this device", and the passkey challenge set by the WebAuthn options
+endpoints. A cross-site bearer client never sends them back, so without help it could not finish
+a 2FA or passkey sign-in.
+
+When `twoFactor` or `passkey` is configured, Terreno adds a plugin that carries those cookies in
+the `X-Terreno-Auth-Challenge` header instead:
+
+1. A bearer client sends the header on every `{basePath}/two-factor/*`, `/passkey/*`, and
+   `/sign-in/*` call. It sends `-` when it holds nothing, which opts it in.
+2. For a request that sent the header, the response copies each challenge cookie it sets into
+   the header as `name=value` pairs (URL search params), still signed with the auth secret. Only
+   values that response sets are copied, never cookies the request already had. An expired
+   cookie comes back with an empty value. A `rememberMe: false` sign-in's `dont_remember` cookie
+   rides along with the two-factor challenge, so the verified session stays short. The header is
+   added to `Access-Control-Expose-Headers`, the same way `bearer()` exposes `set-auth-token`.
+   A sign-in answered with a two-factor challenge loses its `set-auth-token`, which named the
+   session two-factor had just deleted.
+3. On those paths the server turns the header back into cookies before Better Auth reads them.
+   A real cookie always wins, and only the challenge cookies (plus `dont_remember`) are accepted. The header can
+   never set a session cookie, and a tampered value fails Better Auth's signature check (the 2FA
+   verify answers 401, a passkey verify 400 `CHALLENGE_NOT_FOUND`, and a tampered trust value
+   just asks for the second factor).
+4. `@terreno/syncdb/auth`'s bearer mode stores the header under `${storagePrefix}_auth_challenge` in the same
+   `bearerStorage` as the bearer token. It never stores a token from a response that asks for a
+   second factor. It drops the 2FA challenge and `dont_remember` after a successful verify, and
+   everything but the trust-device value on sign-out. The trust-device value stays until the server
+   expires it or `trustDeviceDays` runs out, so the device stays trusted across sign-outs.
+
+Clients that do not send the header (cookie mode, native) never receive it, so their challenge
+cookies stay httpOnly. That holds only for requests the page's own code does not send with the
+header: a script on the page that adds it to a sign-in or verify call can read the challenge
+values that call's response sets.
+
+Exposure: in bearer mode the trust-device token lives in web storage beside the bearer token.
+Any XSS on the frontend's origin can read both, and a stolen trust value skips the second factor
+for that account until it expires (it is still useless without the password). Apps that handle
+PHI should pass `bearerStorage: window.sessionStorage`, which ends trust with the tab, and serve
+a strict Content-Security-Policy. See
+[Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites).
 
 **Key properties:**
 - Session-based (cookies / bearer session) vs. stateless JWT

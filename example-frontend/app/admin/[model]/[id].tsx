@@ -1,8 +1,9 @@
-import {AdminModelForm} from "@terreno/admin-frontend";
-import {Box, Button, Card, Text, TextField, useToast} from "@terreno/ui";
+import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
+import {Box, Button, Card, FormContainer, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {useAdminUsersPasswordMutation} from "@/store/apiSdk";
+import {useAdminUsersPasswordMutation, useGetAuthMeQuery} from "@/store/apiSdk";
+import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
 const ADMIN_BASE_URL = "/admin";
 const MIN_PASSWORD_LENGTH = 8;
@@ -42,8 +43,8 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
   }, [confirmPassword, password, setPasswordForUser, toast, userId]);
 
   return (
-    <Card color="base" padding={4}>
-      <Box gap={3}>
+    <Card color="base" padding={4} testID="admin-user-password-card">
+      <FormContainer gap={3} onSubmit={handleSetPassword} testID="admin-user-password-form">
         <Text bold size="lg">
           Set Password
         </Text>
@@ -51,6 +52,8 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           This updates the password immediately for this user.
         </Text>
         <TextField
+          accessibilityLabel="New Password"
+          autoComplete="new-password"
           onChange={setPassword}
           placeholder="Enter a new password"
           title="New Password"
@@ -58,7 +61,10 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
           value={password}
         />
         <TextField
+          accessibilityLabel="Confirm Password"
+          autoComplete="new-password"
           onChange={setConfirmPassword}
+          onEnter={handleSetPassword}
           placeholder="Re-enter the new password"
           title="Confirm Password"
           type="password"
@@ -72,19 +78,34 @@ const AdminUserPasswordCard: React.FC<AdminUserPasswordCardProps> = ({userId}) =
             variant="primary"
           />
         </Box>
-      </Box>
+      </FormContainer>
     </Card>
   );
 };
 
 const AdminEditScreen: React.FC = () => {
   const {model, id} = useLocalSearchParams<{model: string; id: string}>();
+  const {data: profile} = useGetAuthMeQuery();
+  // Recovery routes refuse self-targeting (D9); staff manage their own account from their own
+  // security screen.
+  const isOwnRecord = Boolean(id) && (profile?._id === id || profile?.id === id);
+  const canOpenSecurity =
+    !isOwnRecord &&
+    canManageUserSecurity({admin: profile?.admin, permissions: profile?.permissions});
+  // The set-password action is admin-only (Permissions.IsAdmin); operators who can open a user
+  // record for security work would only see it fail.
+  const canSetPassword = Boolean(profile?.admin);
   const footerContent = useMemo((): React.ReactNode => {
     if (model?.toLowerCase() !== "user") {
       return undefined;
     }
-    return <AdminUserPasswordCard userId={id} />;
-  }, [id, model]);
+    return (
+      <Box gap={4}>
+        {canOpenSecurity && id ? <UserSecurityLink routeBase={ADMIN_BASE_URL} userId={id} /> : null}
+        {canSetPassword ? <AdminUserPasswordCard userId={id} /> : null}
+      </Box>
+    );
+  }, [canOpenSecurity, canSetPassword, id, model]);
 
   return (
     <AdminModelForm

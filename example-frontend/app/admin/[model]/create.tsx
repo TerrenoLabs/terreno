@@ -1,5 +1,5 @@
 import {type AdminFieldValue, AdminModelForm} from "@terreno/admin-frontend";
-import {Box, Card, Text, TextField, useToast} from "@terreno/ui";
+import {Card, FormContainer, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import {useAdminUsersPasswordMutation} from "@/store/apiSdk";
@@ -31,7 +31,7 @@ const UserCreatePasswordCard: React.FC<{
 
   return (
     <Card color="base" padding={4}>
-      <Box gap={3}>
+      <FormContainer gap={3} testID="admin-user-create-password-form">
         <Text bold size="lg">
           Initial Password
         </Text>
@@ -39,6 +39,8 @@ const UserCreatePasswordCard: React.FC<{
           Optional. Leave blank to create the user without setting a password here.
         </Text>
         <TextField
+          accessibilityLabel="Password"
+          autoComplete="new-password"
           onChange={handlePasswordChange}
           placeholder="Enter a password"
           title="Password"
@@ -46,13 +48,15 @@ const UserCreatePasswordCard: React.FC<{
           value={value.password}
         />
         <TextField
+          accessibilityLabel="Confirm Password"
+          autoComplete="new-password"
           onChange={handleConfirmPasswordChange}
           placeholder="Re-enter password"
           title="Confirm Password"
           type="password"
           value={value.confirmPassword}
         />
-      </Box>
+      </FormContainer>
     </Card>
   );
 };

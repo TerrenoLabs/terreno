@@ -18,9 +18,14 @@ export interface ConsentHistoryEntry {
   formVersionSnapshot?: number;
   ipAddress?: string;
   locale?: string;
+  /** True when staff recorded this agreement on the user's behalf. */
+  provisional?: boolean;
+  /** The provisional signer's name only; the user never sees the signer's note. */
+  provisionalSignedBy?: {name: string} | null;
   signature?: string;
   signedAt?: string;
   userAgent?: string;
+  voidedAt?: string;
 }
 
 interface ConsentHistoryResponse {

@@ -53,7 +53,17 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 5. **Exercise changed behavior.** For UI-facing work in **this task's file list**, spawn
    at most one specialized UI/runtime verifier with the same briefing. Interact with the
    actual changed workflow and capture required screenshots/video/logs. App launch alone
-   is not proof. Skip that child when this task has no UI/runtime files.
+   is not proof. The verifier follows `verify-ui-changes`: a stack it owns (ports already
+   taken by something else are a blocker, never a shortcut), adversarial steps, the
+   required checks on every run (right page, not blank, no error overlay, console
+   clean, DOM assertion, interaction proof, screenshot), the matching Maestro flow on the
+   simulator for mobile-focused work (direct simulator commands when the app has no
+   Maestro), and a report with a Result line. It is report-only and never edits the
+   tree; a missing `testID` or flow is `FAIL` for Pick. A flow it could not run is
+   `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`; so is a required
+   leg, such as the simulator for mobile-focused work, that the report lists only as
+   not run or remaining risk. Skip
+   that child when this task has no UI/runtime files.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`.
 7. **Classify each criterion.** Record `PASS`, `FAIL`, or `BLOCKED` with reproducible

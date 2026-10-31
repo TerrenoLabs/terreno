@@ -1,7 +1,7 @@
 import {afterEach, describe, it} from "bun:test";
 import {act} from "@testing-library/react-native";
 import {assert} from "chai";
-import React from "react";
+import React, {useState} from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminProvider} from "./AdminProvider";
 import {
@@ -261,6 +261,181 @@ describe("useAdminRpc", () => {
       await Promise.resolve();
     });
     assert.isOk(latest.error);
+  });
+
+  it("drops the previous body and reports loading when the URL changes", async () => {
+    let gets = 0;
+    let resolveNext: ((response: Response) => void) | undefined;
+    globalThis.fetch = (async () => {
+      gets += 1;
+      if (gets > 1) {
+        return await new Promise<Response>((resolve) => {
+          resolveNext = resolve;
+        });
+      }
+      return new Response(JSON.stringify({name: "Ada"}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    let setUrl: ((next: string) => void) | undefined;
+    let queryState: {data?: {name: string}; isLoading: boolean} | undefined;
+    const Harness: React.FC = () => {
+      const [url, setNextUrl] = useState("/users/a");
+      setUrl = setNextUrl;
+      const rpc = useAdminRpc();
+      queryState = useAdminRpcQuery<{name: string}>({rpc, url});
+      return null;
+    };
+
+    renderWithTheme(
+      <AdminProvider
+        apiBase="/admin"
+        credentials="same-origin"
+        getAuthHeaders={() => ({})}
+        routeBase="/admin"
+      >
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.equal(gets, 1);
+    assert.deepEqual(queryState?.data, {name: "Ada"});
+    assert.isFalse(queryState?.isLoading);
+
+    await act(async () => {
+      setUrl?.("/users/b");
+    });
+    assert.isUndefined(queryState?.data);
+    assert.isTrue(queryState?.isLoading);
+
+    await act(async () => {
+      resolveNext?.(
+        new Response(JSON.stringify({name: "Bea"}), {
+          headers: {"Content-Type": "application/json"},
+          status: 200,
+        })
+      );
+      await Promise.resolve();
+    });
+    assert.equal(gets, 2);
+    assert.deepEqual(queryState?.data, {name: "Bea"});
+    assert.isFalse(queryState?.isLoading);
+  });
+
+  it("keeps the previous body, not loading, while a keepPreviousData query pages", async () => {
+    let gets = 0;
+    let resolveNext: ((response: Response) => void) | undefined;
+    globalThis.fetch = (async () => {
+      gets += 1;
+      if (gets > 1) {
+        return await new Promise<Response>((resolve) => {
+          resolveNext = resolve;
+        });
+      }
+      return new Response(JSON.stringify({page: 1}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    let setUrl: ((next: string) => void) | undefined;
+    let queryState: {data?: {page: number}; isFetching: boolean; isLoading: boolean} | undefined;
+    const Harness: React.FC = () => {
+      const [url, setNextUrl] = useState("/list?page=1");
+      setUrl = setNextUrl;
+      const rpc = useAdminRpc();
+      queryState = useAdminRpcQuery<{page: number}>({keepPreviousData: true, rpc, url});
+      return null;
+    };
+
+    renderWithTheme(
+      <AdminProvider
+        apiBase="/admin"
+        credentials="same-origin"
+        getAuthHeaders={() => ({})}
+        routeBase="/admin"
+      >
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.deepEqual(queryState?.data, {page: 1});
+    assert.isFalse(queryState?.isLoading);
+
+    await act(async () => {
+      setUrl?.("/list?page=2");
+    });
+    // Page 1 stays on screen while page 2 is in flight.
+    assert.deepEqual(queryState?.data, {page: 1});
+    assert.isFalse(queryState?.isLoading);
+    assert.isTrue(queryState?.isFetching);
+
+    await act(async () => {
+      resolveNext?.(
+        new Response(JSON.stringify({page: 2}), {
+          headers: {"Content-Type": "application/json"},
+          status: 200,
+        })
+      );
+      await Promise.resolve();
+    });
+    assert.deepEqual(queryState?.data, {page: 2});
+    assert.isFalse(queryState?.isFetching);
+  });
+
+  it("reports loading when returning to a URL before the other one finishes", async () => {
+    let gets = 0;
+    globalThis.fetch = (async () => {
+      gets += 1;
+      if (gets > 1) {
+        return await new Promise<Response>(() => undefined);
+      }
+      return new Response(JSON.stringify({name: "Ada"}), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+
+    let setUrl: ((next: string) => void) | undefined;
+    let queryState: {data?: {name: string}; isLoading: boolean} | undefined;
+    const Harness: React.FC = () => {
+      const [url, setNextUrl] = useState("/users/a");
+      setUrl = setNextUrl;
+      const rpc = useAdminRpc();
+      queryState = useAdminRpcQuery<{name: string}>({rpc, url});
+      return null;
+    };
+
+    renderWithTheme(
+      <AdminProvider
+        apiBase="/admin"
+        credentials="same-origin"
+        getAuthHeaders={() => ({})}
+        routeBase="/admin"
+      >
+        <Harness />
+      </AdminProvider>
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    assert.deepEqual(queryState?.data, {name: "Ada"});
+
+    await act(async () => {
+      setUrl?.("/users/b");
+    });
+    await act(async () => {
+      setUrl?.("/users/a");
+    });
+    assert.equal(gets, 3);
+    assert.isUndefined(queryState?.data);
+    assert.isTrue(queryState?.isLoading);
   });
 
   it("refetches mounted queries after a successful tagged mutation", async () => {

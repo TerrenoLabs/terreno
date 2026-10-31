@@ -299,6 +299,16 @@ Better Auth automatically:
 - Extracts sessions from requests and populates `req.user`
 - Syncs Better Auth users to your Mongoose User model (requires `betterAuthId` field)
 - Supports email/password signup and login
+- Serves public `GET {basePath}/terreno/methods` (enabled providers, email/password, sign-up,
+  linking mode); login screens read it with rtk `useAuthMethods(authClient)` instead of
+  hard-coding providers
+
+Auth features are config fields, not hand-added plugins: `accountLinking`, `twoFactor`,
+`passkey`, `signUp: {mode: "closed"}`, `lastLoginMethod`, `multiSession`, `oauthProxy`,
+`nativeApps`, and the key form of `appleOAuth` (`betterAuthFeatures.ts`). All are off by
+default. Feature plugins go after `terreno-methods` and before `config.plugins`; closed sign-up
+adds `terreno-sign-up-closed` after `config.plugins`. Table:
+`docs/how-to/configure-better-auth.md#auth-features`.
 
 `oauthHandoff: {webOrigins, callbackPaths?}` (opt-in) lets a bearer-mode web client on another
 site finish social sign-in without cookies. It adds `GET {basePath}/oauth-handoff/start` (a

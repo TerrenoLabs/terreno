@@ -1343,6 +1343,17 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## list-detail-layout
+
+**Title:** `ListDetailLayout: a route-driven list/detail layout for phone and tablet`
+
+**Labels:** `area:ui`, `type:feature`  
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`list-detail-layout`, Status=`Planned`
+
+- **Implementation plan:** [list-detail-layout.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/list-detail-layout.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

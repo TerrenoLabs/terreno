@@ -8,22 +8,33 @@ import {
   type AskSubmission,
   type BlockChatEvent,
   Box,
+  Button,
   GPTChat,
   type GPTChatHistory,
   type GPTChatMessage,
   type GPTChatProps,
   Heading,
+  isSupportedDesktopWidth,
   type MCPToolDetail,
   type MessageContentPart,
+  Modal,
   type SelectedFile,
   selectedFileMimeType,
+  Text,
   useStoredState,
 } from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {type ImageSourcePropType, Linking, Platform, Image as RNImage} from "react-native";
+import {
+  type ImageSourcePropType,
+  Linking,
+  Platform,
+  Image as RNImage,
+  useWindowDimensions,
+} from "react-native";
+import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
 import {bearerAuthHeaders} from "@/lib/authHeaders";
 import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
@@ -507,6 +518,34 @@ const AiScreen: React.FC = () => {
     setCurrentHistoryId(undefined);
     setCurrentMessages([]);
   }, [stopResume]);
+
+  // Below the desktop floor the history sidebar would squeeze the chat into a strip, so the
+  // chat takes the full width and history moves into a sheet opened from the header.
+  const {width: windowWidth} = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isDesktopLayout = isSupportedDesktopWidth({width: windowWidth});
+  const [isHistorySheetOpen, setIsHistorySheetOpen] = useState(false);
+
+  const handleOpenHistorySheet = useCallback((): void => {
+    setIsHistorySheetOpen(true);
+  }, []);
+
+  const handleCloseHistorySheet = useCallback((): void => {
+    setIsHistorySheetOpen(false);
+  }, []);
+
+  const handleSelectSheetHistory = useCallback(
+    (id: string): void => {
+      handleSelectHistory(id);
+      setIsHistorySheetOpen(false);
+    },
+    [handleSelectHistory]
+  );
+
+  const handleNewSheetChat = useCallback((): void => {
+    handleCreateHistory();
+    setIsHistorySheetOpen(false);
+  }, [handleCreateHistory]);
 
   // Reopen the chat that was open before a reload once its row is in the synced store. After a
   // fresh login the row arrives with the first sync, so this waits for it instead of giving up.
@@ -1021,7 +1060,7 @@ const AiScreen: React.FC = () => {
     [fetchDataset]
   );
 
-  return (
+  const chat = (
     <GPTChat
       allowHtml
       askErrors={askErrors}
@@ -1052,6 +1091,7 @@ const AiScreen: React.FC = () => {
       resolveDataset={resolveDataset}
       resolveImage={resolveImage}
       selectedModel={selectedModel}
+      showHistory={isDesktopLayout}
       suggestedPrompts={[
         "Tell me a dad joke about TypeScript",
         "Make a pun about React hooks",
@@ -1065,6 +1105,68 @@ const AiScreen: React.FC = () => {
       testID="chat"
       uiBlocks
     />
+  );
+
+  if (isDesktopLayout) {
+    return chat;
+  }
+
+  return (
+    <Box
+      dangerouslySetInlineStyle={{__style: {paddingTop: insets.top}}}
+      flex="grow"
+      testID="ai-phone-layout"
+    >
+      <Box
+        alignItems="center"
+        direction="row"
+        gap={2}
+        justifyContent="between"
+        paddingX={3}
+        paddingY={2}
+      >
+        <Button
+          iconName="clock-rotate-left"
+          onClick={handleOpenHistorySheet}
+          testID="ai-history-button"
+          text="Chats"
+          variant="outline"
+        />
+        <Button
+          iconName="plus"
+          onClick={handleNewSheetChat}
+          testID="ai-new-chat-button"
+          text="New chat"
+          variant="outline"
+        />
+      </Box>
+      <Box flex="grow">{chat}</Box>
+      <Modal
+        onDismiss={handleCloseHistorySheet}
+        testID="ai-history-sheet"
+        title="Chats"
+        visible={isHistorySheetOpen}
+      >
+        <Box gap={2} testID="ai-history-list">
+          {histories.length === 0 ? (
+            <Text color="secondaryLight" testID="ai-history-empty">
+              No chats yet.
+            </Text>
+          ) : (
+            histories.map((history) => (
+              <Button
+                fullWidth
+                key={history.id}
+                onClick={() => handleSelectSheetHistory(history.id)}
+                testID={`ai-history-item-${history.id}`}
+                text={history.title || "Untitled chat"}
+                variant={history.id === currentHistoryId ? "primary" : "muted"}
+              />
+            ))
+          )}
+        </Box>
+      </Modal>
+    </Box>
   );
 };
 

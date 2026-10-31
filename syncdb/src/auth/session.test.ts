@@ -10,6 +10,7 @@ import {
   type SessionSnapshot,
   type SessionSource,
   type SessionStoreConfig,
+  SIGN_OUT_FAILED_MESSAGE,
 } from "./session";
 
 interface User {
@@ -149,6 +150,7 @@ describe("createSessionStore", () => {
       error: null,
       isAuthenticated: false,
       isLoading: true,
+      isSigningOut: false,
       user: null,
       userId: null,
     });
@@ -169,6 +171,7 @@ describe("createSessionStore", () => {
       error: null,
       isAuthenticated: true,
       isLoading: false,
+      isSigningOut: false,
       user: {id: "u1", name: "Ada"},
       userId: "u1",
     });
@@ -295,6 +298,7 @@ describe("createSessionStore", () => {
       error: SESSION_SYNC_ERROR,
       isAuthenticated: false,
       isLoading: false,
+      isSigningOut: false,
       user: null,
       userId: null,
     });
@@ -406,7 +410,7 @@ describe("createSessionStore", () => {
   });
 
   describe("logout", () => {
-    it("signs out syncdb clients in order, then the source, runs onLogout, and clears", async () => {
+    it("signs out the source, then syncdb clients in order, runs onLogout, and clears", async () => {
       const fake = makeSource(snapshot("u1"));
       const events: string[] = [];
       const source: SessionSource<User> = {
@@ -440,11 +444,12 @@ describe("createSessionStore", () => {
       await store.logout();
 
       expect(fake.signOuts()).toBe(1);
-      expect(events).toEqual(["a", "b", "source", "onLogout"]);
+      expect(events).toEqual(["source", "a", "b", "onLogout"]);
       expect(store.getState()).toEqual({
         error: null,
         isAuthenticated: false,
         isLoading: false,
+        isSigningOut: false,
         user: null,
         userId: null,
       });
@@ -518,9 +523,18 @@ describe("createSessionStore", () => {
       expect(store.getState().isAuthenticated).toBe(false);
     });
 
-    it("still tears down and clears when every side effect fails", async () => {
+    it("still tears down and clears when every side effect fails after the session is gone", async () => {
       const fake = makeSource(snapshot("u1"));
+      const warn = console.warn;
+      console.warn = (): void => {};
+      const errors: unknown[][] = [];
+      const originalError = console.error;
+      console.error = (...args: unknown[]): void => {
+        errors.push(args);
+      };
+      // The sign-out call fails, but the server no longer has the session.
       fake.failSignOut();
+      fake.set(null);
       let secondSyncDbSignedOut = false;
       const store = createSessionStore({
         onLogout: (): void => {
@@ -543,11 +557,191 @@ describe("createSessionStore", () => {
       store.start();
       await flush();
 
-      await store.logout();
+      try {
+        await store.logout();
+      } finally {
+        console.warn = warn;
+        console.error = originalError;
+      }
 
       expect(secondSyncDbSignedOut).toBe(true);
       expect(store.getState().isAuthenticated).toBe(false);
       expect(store.getState().userId).toBeNull();
+      expect(errors.length).toBeGreaterThanOrEqual(2);
+    });
+
+    describe("when the server's sign-out does not land", () => {
+      const quietly = async (run: () => Promise<void>): Promise<void> => {
+        const warn = console.warn;
+        console.warn = (): void => {};
+        try {
+          await run();
+        } finally {
+          console.warn = warn;
+        }
+      };
+
+      it("keeps the session and wipes nothing when the session is still live", async () => {
+        const fake = makeSource(snapshot("u1"));
+        fake.failSignOut();
+        const events: string[] = [];
+        const store = createSessionStore({
+          onLogout: (): void => {
+            events.push("onLogout");
+          },
+          source: fake.source,
+          syncDbs: [
+            {
+              signOut: async (): Promise<void> => {
+                events.push("syncdb");
+              },
+            },
+          ],
+        });
+        store.start();
+        await flush();
+
+        await quietly(() => store.logout());
+
+        expect(events).toEqual([]);
+        expect(store.getState()).toEqual({
+          error: SIGN_OUT_FAILED_MESSAGE,
+          isAuthenticated: true,
+          isLoading: false,
+          isSigningOut: false,
+          user: {id: "u1", name: "u1"},
+          userId: "u1",
+        });
+      });
+
+      it("keeps the session when the server cannot be asked and the client may hold one", async () => {
+        const fake = makeSource(snapshot("u1"));
+        fake.failSignOut();
+        const store = createSessionStore({pollIntervalMs: 0, source: fake.source});
+        store.start();
+        await flush();
+        fake.set(new Error("offline"));
+
+        await quietly(() => store.logout());
+
+        expect(store.getState().userId).toBe("u1");
+        expect(store.getState().error).toBe(SIGN_OUT_FAILED_MESSAGE);
+      });
+
+      it("clears the session when the server cannot be asked and the client holds nothing", async () => {
+        const fake = makeSource(snapshot("u1"));
+        fake.failSignOut();
+        const source: SessionSource<User> = {...fake.source, mayHoldSession: () => false};
+        const store = createSessionStore({pollIntervalMs: 0, source});
+        store.start();
+        await flush();
+        fake.set(new Error("offline"));
+
+        await quietly(() => store.logout());
+
+        expect(store.getState().userId).toBeNull();
+        expect(store.getState().error).toBeNull();
+      });
+
+      it("treats a hung sign-out as unreachable once signOutTimeoutMs passes", async () => {
+        const fake = makeSource(snapshot("u1"));
+        const source: SessionSource<User> = {
+          ...fake.source,
+          signOut: () => new Promise<void>(() => {}),
+        };
+        const store = createSessionStore({pollIntervalMs: 0, signOutTimeoutMs: 10, source});
+        store.start();
+        await flush();
+
+        await quietly(() => store.logout());
+
+        // The session check answers that the session is live.
+        expect(store.getState().userId).toBe("u1");
+        expect(store.getState().error).toBe(SIGN_OUT_FAILED_MESSAGE);
+        expect(store.getState().isSigningOut).toBe(false);
+      });
+
+      it("clears the error on the next successful logout", async () => {
+        const fake = makeSource(snapshot("u1"));
+        fake.failSignOut();
+        const store = createSessionStore({pollIntervalMs: 0, source: fake.source});
+        store.start();
+        await flush();
+        await quietly(() => store.logout());
+        expect(store.getState().error).toBe(SIGN_OUT_FAILED_MESSAGE);
+
+        const healthy = makeSource(snapshot("u1"));
+        const retry = createSessionStore({pollIntervalMs: 0, source: healthy.source});
+        retry.start();
+        await flush();
+        await retry.logout();
+
+        expect(retry.getState().error).toBeNull();
+        expect(retry.getState().userId).toBeNull();
+      });
+    });
+
+    it("keeps the session in the state, with isSigningOut set, while the server answers", async () => {
+      const fake = makeSource(snapshot("u1"));
+      let finishSignOut: (() => void) | undefined;
+      const source: SessionSource<User> = {
+        ...fake.source,
+        signOut: () =>
+          new Promise<void>((resolve) => {
+            finishSignOut = (): void => {
+              void fake.source.signOut().then(resolve);
+            };
+          }),
+      };
+      const store = createSessionStore({pollIntervalMs: 0, source});
+      store.start();
+      await flush();
+
+      const loggingOut = store.logout();
+      await flush();
+
+      expect(store.getState().isSigningOut).toBe(true);
+      expect(store.getState().userId).toBe("u1");
+
+      // A push of the signed-out session during the wait does not clear it early.
+      fake.push(null);
+      expect(store.getState().userId).toBe("u1");
+
+      finishSignOut?.();
+      await loggingOut;
+
+      expect(store.getState().isSigningOut).toBe(false);
+      expect(store.getState().userId).toBeNull();
+    });
+
+    it("lets a different user who signed in during the logout win", async () => {
+      const fake = makeSource(snapshot("u1"));
+      const source: SessionSource<User> = {
+        ...fake.source,
+        signOut: async (): Promise<void> => {
+          await fake.source.signOut();
+          fake.push(snapshot("u2"));
+        },
+      };
+      const store = createSessionStore({pollIntervalMs: 0, source});
+      store.start();
+      await flush();
+
+      await store.logout();
+
+      expect(store.getState().userId).toBe("u2");
+      expect(store.getState().isSigningOut).toBe(false);
+    });
+
+    it("runs one logout for concurrent calls", async () => {
+      const fake = makeSource(snapshot("u1"));
+      const store = createSessionStore({pollIntervalMs: 0, source: fake.source});
+      store.start();
+      await flush();
+
+      await Promise.all([store.logout(), store.logout()]);
+
+      expect(fake.signOuts()).toBe(1);
     });
 
     it("ignores a read that was in flight when logout started", async () => {

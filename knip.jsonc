@@ -87,7 +87,8 @@
         "scripts/**/*.test.ts",
         ".github/scripts/**/*.test.ts",
         "scripts/ci/prepare-package-publish.mjs",
-        "scripts/charts/compareRenderedSnapshots.ts"
+        "scripts/charts/compareRenderedSnapshots.ts",
+        "scripts/captureListDetail.ts"
       ],
       // Policy/release scripts are development entries, not production modules.
       "project": [
@@ -320,7 +321,10 @@
         "react-native-purchases-ui",
         "jspdf",
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
-        "expo-mcp"
+        "expo-mcp",
+        // auth-experience T2 owns the lockfile and adds this ahead of its first import
+        // (T22's TOTP e2e helper). Remove the entry when T22 lands.
+        "otpauth"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

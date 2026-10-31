@@ -212,6 +212,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {name: "Host", reason: "Portal host is application shell, not a visual story"},
   {name: "IconRegistryProvider", reason: "Icon registry is application shell"},
+  {name: "ListDetailIndex", reason: "Covered by the ListDetailLayout story"},
   {
     name: "NotificationBell",
     reason:
@@ -229,6 +230,11 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {name: "Portal", reason: "Portal is a host primitive, not a visual story"},
   {name: "PortalContext", reason: "React context object, not a visual component"},
+  {
+    name: "ProvisionalConsentSigner",
+    reason:
+      "Requires a consumer RTK Query `api` and a ConsentApp backend; example-frontend /consent-sign/[userId] exercises it",
+  },
   {
     name: "ScrollView",
     reason: "Thin React Native ScrollView re-export, not a Terreno visual component",

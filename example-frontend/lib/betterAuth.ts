@@ -5,6 +5,7 @@
 import {
   completeBetterAuthOAuthHandoff,
   createBetterAuthClient,
+  createRememberedAccountsStore,
   getBetterAuthBearerToken,
   signInSocialWithHandoff,
 } from "@terreno/syncdb/auth";
@@ -29,11 +30,26 @@ export const isWebBearerAuth = isWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_
 // (the API client, sockets, syncdb) already uses. A separate resolver here previously
 // fell back to `extra.BASE_URL` (localhost:4000) in dev, which points at the
 // device itself on an Android emulator instead of the host machine.
+//
+// The features match what example-backend turns on, so the login screen can run the two-factor
+// step, passkey sign-in, and device-session switching. The two-factor client has no
+// `onTwoFactorRedirect`: TerrenoLoginScreen shows the challenge inline (app/login.tsx).
 export const betterAuthClient = createBetterAuthClient({
   baseURL: baseUrl,
+  features: {multiSession: true, passkey: true, twoFactor: true},
   scheme: getAppScheme(),
   storagePrefix: BETTER_AUTH_STORAGE_PREFIX,
   webAuth: isWebBearerAuth ? "bearer" : "cookie",
+});
+
+/**
+ * Accounts that signed in on this device, for the login screen's "last used" badge and "Continue
+ * as" cards. The example opts into `rememberIdentity`, so the cards show the name, a masked email
+ * and the avatar; apps for shared devices should leave it off.
+ */
+export const rememberedAccounts = createRememberedAccountsStore({
+  rememberIdentity: true,
+  storageKey: `${BETTER_AUTH_STORAGE_PREFIX}_remembered_accounts`,
 });
 
 /**
@@ -54,14 +70,61 @@ export const getStoredBearerToken = (): string | null => {
 const OAUTH_RETURN_PATH = "/login";
 
 /**
- * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
- * button shows only in web bearer builds with `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`; example-backend
- * registers the provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ * Where a social sign-in started from the login screen returns. Bearer mode needs the path (the
+ * server matches it against `oauthHandoff.callbackPaths`); native passes the path to Better Auth's
+ * Expo plugin, which turns it into a deep link; a cookie-mode web page needs its own origin, or
+ * Better Auth would resolve the path against the API's host.
  */
-export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+export const getLoginCallbackURL = (): string => {
+  if (isWebBearerAuth || !isWeb || typeof window === "undefined" || !window.location?.origin) {
+    return OAUTH_RETURN_PATH;
+  }
+  return `${window.location.origin}${OAUTH_RETURN_PATH}`;
+};
 
-export const isMockOidcSignInEnabled =
-  isWebBearerAuth && process.env.EXPO_PUBLIC_MOCK_OIDC_SIGN_IN === "true";
+/** The security screen's route (app/settings/security.tsx). */
+const SECURITY_RETURN_PATH = "/settings/security";
+
+/**
+ * Where linking a provider from the security screen returns. On web it is the page's absolute
+ * URL: bearer mode accepts any page on the server's `oauthHandoff.webOrigins`, and cookie mode
+ * would otherwise resolve the path against the API's host. Native passes the path, which Better
+ * Auth's Expo plugin turns into a deep link.
+ */
+export const getSecurityCallbackURL = (): string => {
+  if (!isWeb || typeof window === "undefined" || !window.location?.origin) {
+    return SECURITY_RETURN_PATH;
+  }
+  return `${window.location.origin}${SECURITY_RETURN_PATH}`;
+};
+
+/**
+ * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
+ * button shows when the server's `/terreno/methods` lists it: example-backend registers the
+ * provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ */
+const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+/** Button labels for providers @terreno/ui does not brand. */
+export const OAUTH_PROVIDER_LABELS: Record<string, string> = {
+  [MOCK_OIDC_PROVIDER_ID]: "Mock OIDC",
+};
+
+/** Providers @terreno/ui's SocialLoginButton brands, in the order the auth screens show them. */
+const BRANDED_OAUTH_PROVIDERS = ["google", "github", "apple"] as const;
+
+export type BrandedOAuthProvider = (typeof BRANDED_OAUTH_PROVIDERS)[number];
+
+/**
+ * The branded providers among those the server's `/terreno/methods` lists, in display order.
+ * Pass `undefined` while the methods load to get none.
+ */
+export const brandedOAuthProviders = (
+  configuredProviders: string[] | undefined
+): BrandedOAuthProvider[] => {
+  const enabled = configuredProviders ?? [];
+  return BRANDED_OAUTH_PROVIDERS.filter((provider) => enabled.includes(provider));
+};
 
 /**
  * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to

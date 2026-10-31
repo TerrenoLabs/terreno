@@ -1,144 +1,93 @@
-import {useSession} from "@terreno/syncdb/auth";
-import {baseUrl} from "@terreno/syncdb/config";
-import type {LoginScreenProps} from "@terreno/ui";
-import {Box, Button, LoginScreen} from "@terreno/ui";
+import {
+  type LoginControllerStep,
+  type LoginSignedInEvent,
+  TerrenoLoginScreen,
+  useSession,
+} from "@terreno/syncdb/auth";
 import {useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {useCallback, useMemo} from "react";
 import {
   betterAuthClient,
-  isMockOidcSignInEnabled,
-  MOCK_OIDC_PROVIDER_ID,
-  signInWithSocial,
+  getLoginCallbackURL,
+  OAUTH_PROVIDER_LABELS,
+  rememberedAccounts,
 } from "@/lib/betterAuth";
-import {getOAuthErrorMessage} from "@/lib/oauthErrorMessage";
 
+/** Matches Better Auth's default `trustDeviceMaxAge`, which example-backend leaves as is. */
+const TRUST_DEVICE_DAYS = 30;
+
+/**
+ * The example's login route: `TerrenoLoginScreen` from @terreno/syncdb/auth, driven by the
+ * server's `/terreno/methods`. It shows the providers the server lists (the mock OIDC provider in
+ * e2e), "Continue as" cards and the last used method from this device, the passkey button on web,
+ * and the two-factor challenge inline. A social sign-in returns here, so the screen finds the new
+ * session, records the method, and navigates on; app/_layout.tsx leaves a signed-in user on this
+ * route for that reason.
+ */
 const Login: React.FC = () => {
   const router = useRouter();
-  // Re-read the session right after sign-in so the root layout sees the new user before navigating.
-  const {refresh: refreshSession} = useSession();
-  // index.js hides any handoff token before Expo Router loads, and app/_layout.tsx exchanges it,
-  // so `error` here is a provider's failed return, never a half-read handoff.
-  const {error: oauthError} = useLocalSearchParams<{error?: string}>();
-  const [socialLoading, setSocialLoading] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(() =>
-    getOAuthErrorMessage(oauthError)
-  );
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // index.js hides any handoff token before Expo Router loads, so `error` here is a provider's
+  // failed return, never a half-read handoff. The screen maps known codes to guidance and never
+  // shows the raw value.
+  const {error} = useLocalSearchParams<{error?: string}>();
+  const callbackURL = useMemo((): string => getLoginCallbackURL(), []);
 
-  const handleSubmit = useCallback(
-    async (values: Record<string, string>): Promise<void> => {
-      const {email, password} = values;
-      setErrorMessage(undefined);
-      setIsSubmitting(true);
-      try {
-        const result = await betterAuthClient.signIn.email({email, password});
-        if (result.error) {
-          setErrorMessage(result.error.message ?? "Sign in failed.");
-          return;
-        }
+  const {refresh: refreshSession, userId} = useSession();
+
+  // Expo Router keeps the initial "(tabs)" route under /login, so go back to it rather than
+  // adding a second tabs screen on top.
+  const leaveLogin = useCallback((): void => {
+    router.dismissTo("/(tabs)");
+  }, [router]);
+
+  const handleSignedIn = useCallback(
+    async ({user}: LoginSignedInEvent): Promise<void> => {
+      // The session already holds this user when the app opened on /login signed in (a social
+      // sign-in returning here); refreshing again would flip the root layout's spinner and
+      // remount the Stack.
+      if (userId !== user.id) {
         await refreshSession();
-        router.replace("/(tabs)");
-      } catch (error: unknown) {
-        // A thrown error here is a transport failure rather than rejected credentials
-        // (those come back as result.error above), so log the cause: on native it is
-        // usually an unreachable API base URL.
-        console.error("[login] Email sign in threw", {baseUrl, error});
-        setErrorMessage("Sign in failed. Please try again.");
-      } finally {
-        setIsSubmitting(false);
+      }
+      leaveLogin();
+    },
+    [leaveLogin, refreshSession, userId]
+  );
+
+  // A signed-in user whose session the screen could not confirm (the check threw) would otherwise
+  // be left on the form; app/_layout.tsx no longer moves anyone off /login.
+  const handleStepChange = useCallback(
+    (step: LoginControllerStep): void => {
+      if (step === "login" && userId) {
+        leaveLogin();
       }
     },
-    [refreshSession, router]
+    [leaveLogin, userId]
   );
-
-  const handleSocialLogin = useCallback(
-    async (provider: string): Promise<void> => {
-      setSocialLoading(provider);
-      setErrorMessage(undefined);
-      try {
-        const isRedirecting = await signInWithSocial(provider);
-        if (isRedirecting) {
-          // The page is leaving for the provider; the session is read when it comes back.
-          return;
-        }
-        await refreshSession();
-        router.replace("/(tabs)");
-      } catch (error: unknown) {
-        console.error("[login] Social sign in threw", {baseUrl, error, provider});
-        setErrorMessage("Sign in failed. Please try again.");
-      } finally {
-        // Also clears it when the page is leaving, so a Back from the provider that restores
-        // this page from the browser's cache shows usable buttons.
-        setSocialLoading(null);
-      }
-    },
-    [refreshSession, router]
-  );
-
-  const handleMockOidcLogin = useCallback((): Promise<void> => {
-    return handleSocialLogin(MOCK_OIDC_PROVIDER_ID);
-  }, [handleSocialLogin]);
-
-  const oauthProviders = useMemo((): LoginScreenProps["oauthProviders"] => {
-    return (["google", "github", "apple"] as const).map((provider) => ({
-      disabled: isSubmitting || Boolean(socialLoading),
-      loading: socialLoading === provider,
-      onPress: () => handleSocialLogin(provider),
-      provider,
-    }));
-  }, [isSubmitting, socialLoading, handleSocialLogin]);
 
   const handleSignUpPress = useCallback((): void => {
     router.push("/signup");
   }, [router]);
 
-  const handleForgotPassword = useCallback((): void => {
+  const handleForgotPasswordPress = useCallback((): void => {
     router.push("/forgotPassword");
   }, [router]);
 
-  const isLoading = isSubmitting || Boolean(socialLoading);
-
-  const loginScreen = (
-    <LoginScreen
-      error={errorMessage}
-      fields={[
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
-        {label: "Password", name: "password", required: true, type: "password"},
-      ]}
-      loading={isLoading}
-      oauthProviders={oauthProviders}
-      onForgotPassword={handleForgotPassword}
-      onSignUpPress={handleSignUpPress}
-      onSubmit={handleSubmit}
-      testID="login-screen"
-    />
-  );
-
-  if (!isMockOidcSignInEnabled) {
-    return loginScreen;
-  }
-
-  // Dev and e2e only: @terreno/ui's SocialLoginButton brands Google, GitHub and Apple, so the
-  // local mock OIDC provider gets a plain button below the form.
   return (
-    <Box flex="grow">
-      {loginScreen}
-      <Box alignItems="center" paddingY={4}>
-        <Box maxWidth={400} paddingX={4} width="100%">
-          <Button
-            disabled={isLoading}
-            fullWidth
-            iconName="key"
-            loading={socialLoading === MOCK_OIDC_PROVIDER_ID}
-            onClick={handleMockOidcLogin}
-            testID="login-mock-oidc-button"
-            text="Continue with Mock OIDC"
-            variant="outline"
-          />
-        </Box>
-      </Box>
-    </Box>
+    <TerrenoLoginScreen
+      callbackURL={callbackURL}
+      client={betterAuthClient}
+      error={error}
+      onForgotPasswordPress={handleForgotPasswordPress}
+      onSignedIn={handleSignedIn}
+      onSignUpPress={handleSignUpPress}
+      onStepChange={handleStepChange}
+      providerLabels={OAUTH_PROVIDER_LABELS}
+      rememberedAccounts={rememberedAccounts}
+      rememberIdentity
+      testID="login-screen"
+      trustDeviceDays={TRUST_DEVICE_DAYS}
+    />
   );
 };
 

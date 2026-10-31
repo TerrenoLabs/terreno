@@ -219,6 +219,163 @@ export const useCommsTestPushMutation = (
     ...options,
   });
 
+export type ConsentresponsesProvisionalArgs = {
+  consentFormId: string;
+  locale?: string;
+  note: string;
+  userId: string;
+};
+
+export type ConsentresponsesProvisionalRes = {
+  _id: string;
+  agreed: boolean;
+  agreedAt: string;
+  consentFormId: string;
+  contentSnapshot?: string;
+  formVersionSnapshot?: number;
+  id: string;
+  locale: string;
+  provisional: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy: {
+    _id: string;
+    email?: string;
+    id?: string;
+    name?: string;
+  };
+  userId: string;
+  voidedAt?: string;
+  voidedBy?: {
+    _id: string;
+    email?: string;
+    id?: string;
+    name?: string;
+  };
+  voidReason?: string;
+};
+
+export const consentresponsesProvisionalRequest = (
+  arg: ConsentresponsesProvisionalArgs
+): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/consent-responses/provisional`,
+});
+
+/** Sign a consent form provisionally on behalf of another user */
+export const useConsentresponsesProvisionalMutation = (
+  options: UseApiMutationOptions<
+    ConsentresponsesProvisionalArgs,
+    ConsentresponsesProvisionalRes
+  > = {}
+): UseApiMutationResult<ConsentresponsesProvisionalArgs, ConsentresponsesProvisionalRes> =>
+  useApiMutation<ConsentresponsesProvisionalArgs, ConsentresponsesProvisionalRes>(
+    consentresponsesProvisionalRequest,
+    {invalidatesTags: ["consentresponses"], ...options}
+  );
+
+export type ConsentresponsesStatusArgs = string;
+
+export type ConsentresponsesStatusRes = {
+  form: {
+    _id: string;
+    content: Record<string, string>;
+    id: string;
+    slug: string;
+    title: string;
+    type: string;
+    version: number;
+  };
+  isConsented: boolean;
+  provisional?: {
+    note?: string;
+    responseId: string;
+    signedAt: string;
+    signedBy: {
+      email?: string;
+      id: string;
+      name?: string;
+    } | null;
+  };
+  respondedAt?: string;
+  status: "pending" | "provisional" | "signed" | "declined";
+}[];
+
+export const consentresponsesStatusRequest = (arg: ConsentresponsesStatusArgs): ApiRequestArgs => ({
+  method: "GET",
+  params: {userId: arg},
+  url: `/consent-responses/status`,
+});
+
+/** List a user's consent status for each form */
+export const useConsentresponsesStatusQuery = (
+  arg: ConsentresponsesStatusArgs,
+  options: ApiSdkQueryOptions<ConsentresponsesStatusRes> = {}
+): UseApiQueryResult<ConsentresponsesStatusRes> =>
+  useApiQuery<ConsentresponsesStatusRes>(consentresponsesStatusRequest(arg), {
+    ...options,
+    providesTags: ["consentresponses"],
+  });
+
+export const useLazyConsentresponsesStatusQuery = (
+  options: ApiSdkLazyOptions<ConsentresponsesStatusRes> = {}
+): UseLazyApiQueryResult<ConsentresponsesStatusRes, ConsentresponsesStatusArgs> =>
+  useLazyApiQuery<ConsentresponsesStatusRes, ConsentresponsesStatusArgs>({
+    ...options,
+    providesTags: ["consentresponses"],
+    toRequest: consentresponsesStatusRequest,
+  });
+
+export type ConsentresponsesVoidArgs = {
+  id: string;
+  body: {
+    reason: string;
+  };
+};
+
+export type ConsentresponsesVoidRes = {
+  _id: string;
+  agreed: boolean;
+  agreedAt: string;
+  consentFormId: string;
+  contentSnapshot?: string;
+  formVersionSnapshot?: number;
+  id: string;
+  locale: string;
+  provisional: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy: {
+    _id: string;
+    email?: string;
+    id?: string;
+    name?: string;
+  };
+  userId: string;
+  voidedAt?: string;
+  voidedBy?: {
+    _id: string;
+    email?: string;
+    id?: string;
+    name?: string;
+  };
+  voidReason?: string;
+};
+
+export const consentresponsesVoidRequest = (arg: ConsentresponsesVoidArgs): ApiRequestArgs => ({
+  body: arg.body,
+  method: "POST",
+  url: `/consent-responses/${encodeURIComponent(String(arg.id))}/void`,
+});
+
+/** Void a provisional consent signature */
+export const useConsentresponsesVoidMutation = (
+  options: UseApiMutationOptions<ConsentresponsesVoidArgs, ConsentresponsesVoidRes> = {}
+): UseApiMutationResult<ConsentresponsesVoidArgs, ConsentresponsesVoidRes> =>
+  useApiMutation<ConsentresponsesVoidArgs, ConsentresponsesVoidRes>(consentresponsesVoidRequest, {
+    invalidatesTags: ["consentresponses"],
+    ...options,
+  });
+
 export type DeleteAdminAnnouncementsByIdArgs = string;
 
 export type DeleteAdminAnnouncementsByIdRes = null;
@@ -550,6 +707,72 @@ export const useDeleteOrgsByIdMembersByMemberIdMutation = (
     {invalidatesTags: ["organizations"], ...options}
   );
 
+export type DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdArgs = {
+  orgId: string;
+  userId: string;
+  providerId: string;
+};
+
+export type DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRes = unknown;
+
+export const deleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRequest = (
+  arg: DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/accounts/${encodeURIComponent(String(arg.providerId))}`,
+});
+
+/** Unlink provider */
+export const useDeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdArgs,
+    DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRes
+  > = {}
+): UseApiMutationResult<
+  DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdArgs,
+  DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRes
+> =>
+  useApiMutation<
+    DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdArgs,
+    DeleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRes
+  >(deleteOrgsByOrgIdMembersByUserIdSecurityAccountsByProviderIdRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdArgs = {
+  orgId: string;
+  userId: string;
+  passkeyId: string;
+};
+
+export type DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRes = unknown;
+
+export const deleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRequest = (
+  arg: DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/passkeys/${encodeURIComponent(String(arg.passkeyId))}`,
+});
+
+/** Remove passkey */
+export const useDeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdArgs,
+    DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRes
+  > = {}
+): UseApiMutationResult<
+  DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdArgs,
+  DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRes
+> =>
+  useApiMutation<
+    DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdArgs,
+    DeleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRes
+  >(deleteOrgsByOrgIdMembersByUserIdSecurityPasskeysByPasskeyIdRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
 export type DeleteUsersByIdArgs = string;
 
 export type DeleteUsersByIdRes = null;
@@ -564,6 +787,70 @@ export const useDeleteUsersByIdMutation = (
 ): UseApiMutationResult<DeleteUsersByIdArgs, DeleteUsersByIdRes> =>
   useApiMutation<DeleteUsersByIdArgs, DeleteUsersByIdRes>(deleteUsersByIdRequest, {
     invalidatesTags: ["users"],
+    ...options,
+  });
+
+export type DeleteUsersByUserIdSecurityAccountsByProviderIdArgs = {
+  userId: string;
+  providerId: string;
+};
+
+export type DeleteUsersByUserIdSecurityAccountsByProviderIdRes = unknown;
+
+export const deleteUsersByUserIdSecurityAccountsByProviderIdRequest = (
+  arg: DeleteUsersByUserIdSecurityAccountsByProviderIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/users/${encodeURIComponent(String(arg.userId))}/security/accounts/${encodeURIComponent(String(arg.providerId))}`,
+});
+
+/** Unlink provider */
+export const useDeleteUsersByUserIdSecurityAccountsByProviderIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteUsersByUserIdSecurityAccountsByProviderIdArgs,
+    DeleteUsersByUserIdSecurityAccountsByProviderIdRes
+  > = {}
+): UseApiMutationResult<
+  DeleteUsersByUserIdSecurityAccountsByProviderIdArgs,
+  DeleteUsersByUserIdSecurityAccountsByProviderIdRes
+> =>
+  useApiMutation<
+    DeleteUsersByUserIdSecurityAccountsByProviderIdArgs,
+    DeleteUsersByUserIdSecurityAccountsByProviderIdRes
+  >(deleteUsersByUserIdSecurityAccountsByProviderIdRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type DeleteUsersByUserIdSecurityPasskeysByPasskeyIdArgs = {
+  userId: string;
+  passkeyId: string;
+};
+
+export type DeleteUsersByUserIdSecurityPasskeysByPasskeyIdRes = unknown;
+
+export const deleteUsersByUserIdSecurityPasskeysByPasskeyIdRequest = (
+  arg: DeleteUsersByUserIdSecurityPasskeysByPasskeyIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/users/${encodeURIComponent(String(arg.userId))}/security/passkeys/${encodeURIComponent(String(arg.passkeyId))}`,
+});
+
+/** Remove passkey */
+export const useDeleteUsersByUserIdSecurityPasskeysByPasskeyIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteUsersByUserIdSecurityPasskeysByPasskeyIdArgs,
+    DeleteUsersByUserIdSecurityPasskeysByPasskeyIdRes
+  > = {}
+): UseApiMutationResult<
+  DeleteUsersByUserIdSecurityPasskeysByPasskeyIdArgs,
+  DeleteUsersByUserIdSecurityPasskeysByPasskeyIdRes
+> =>
+  useApiMutation<
+    DeleteUsersByUserIdSecurityPasskeysByPasskeyIdArgs,
+    DeleteUsersByUserIdSecurityPasskeysByPasskeyIdRes
+  >(deleteUsersByUserIdSecurityPasskeysByPasskeyIdRequest, {
+    invalidatesTags: ["account-security"],
     ...options,
   });
 
@@ -1217,7 +1504,7 @@ export type GetAdminAuditEventsArgs = {
         $lte?: string;
       };
   verb?:
-    | ("created" | "deleted" | "updated")
+    | ("created" | "deleted" | "updated" | "viewed")
     | {
         $in?: string[];
       };
@@ -1247,12 +1534,19 @@ export type GetAdminAuditEventsRes = {
     after?: unknown;
     before?: unknown;
     modelName: string;
-    operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "update";
+    operation:
+      | "arrayPush"
+      | "arrayRemove"
+      | "arrayUpdate"
+      | "create"
+      | "delete"
+      | "read"
+      | "update";
     organizationId?: string;
     recordId?: string;
     recordLabel?: string;
-    source: "admin" | "modelRouter" | "rbac";
-    verb: "created" | "deleted" | "updated";
+    source: "admin" | "modelRouter" | "rbac" | "security";
+    verb: "created" | "deleted" | "updated" | "viewed";
     _id: string;
     updated: string;
     created: string;
@@ -1305,12 +1599,12 @@ export type GetAdminAuditEventsByIdRes = {
   after?: unknown;
   before?: unknown;
   modelName: string;
-  operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "update";
+  operation: "arrayPush" | "arrayRemove" | "arrayUpdate" | "create" | "delete" | "read" | "update";
   organizationId?: string;
   recordId?: string;
   recordLabel?: string;
-  source: "admin" | "modelRouter" | "rbac";
-  verb: "created" | "deleted" | "updated";
+  source: "admin" | "modelRouter" | "rbac" | "security";
+  verb: "created" | "deleted" | "updated" | "viewed";
   _id: string;
   updated: string;
   created: string;
@@ -1589,6 +1883,11 @@ export type GetAdminConsentResponsesArgs = {
     | {
         $in?: boolean[];
       };
+  provisional?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
   locale?:
     | string
     | {
@@ -1622,6 +1921,14 @@ export type GetAdminConsentResponsesRes = {
     formVersionSnapshot?: number;
     ipAddress?: string;
     locale: string;
+    provisional?: boolean;
+    provisionalNote?: string;
+    provisionalSignedBy?: {
+      name?: string;
+      email?: string;
+    };
+    provisionalSignerIp?: string;
+    provisionalSignerUserAgent?: string;
     signature?: string;
     signedAt?: string;
     userAgent?: string;
@@ -1629,6 +1936,9 @@ export type GetAdminConsentResponsesRes = {
       name?: string;
       email?: string;
     };
+    voidedAt?: string;
+    voidedBy?: string;
+    voidReason?: string;
     _id: string;
     updated: string;
     created: string;
@@ -1651,6 +1961,7 @@ export const getAdminConsentResponsesRequest = (
     limit: arg.limit,
     locale: arg.locale,
     page: arg.page,
+    provisional: arg.provisional,
     q: arg.q,
     sort: arg.sort,
     userId: arg.userId,
@@ -1692,6 +2003,14 @@ export type GetAdminConsentResponsesByIdRes = {
   formVersionSnapshot?: number;
   ipAddress?: string;
   locale: string;
+  provisional?: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy?: {
+    name?: string;
+    email?: string;
+  };
+  provisionalSignerIp?: string;
+  provisionalSignerUserAgent?: string;
   signature?: string;
   signedAt?: string;
   userAgent?: string;
@@ -1699,6 +2018,9 @@ export type GetAdminConsentResponsesByIdRes = {
     name?: string;
     email?: string;
   };
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
   _id: string;
   updated: string;
   created: string;
@@ -1978,6 +2300,7 @@ export type GetAdminMcpServiceTokensRes = {
     lastUsedAt?: string;
     name: string;
     revokedAt?: string;
+    tokenEpoch?: number;
     tokenHash: string;
     tokenPrefix: string;
     userId: string;
@@ -2040,6 +2363,7 @@ export type GetAdminMcpServiceTokensByIdRes = {
   lastUsedAt?: string;
   name: string;
   revokedAt?: string;
+  tokenEpoch?: number;
   tokenHash: string;
   tokenPrefix: string;
   userId: string;
@@ -2281,6 +2605,7 @@ export type GetAdminUsersRes = {
     salt?: string;
     roles?: string[];
     emailVerified?: boolean;
+    disabled?: boolean;
     updated: string;
     created: string;
     deleted?: boolean;
@@ -2337,6 +2662,7 @@ export type GetAdminUsersByIdRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -3250,6 +3576,7 @@ export type GetAuthMeRes = {
   _id: string;
   roles: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated?: string;
   created?: string;
   deleted?: boolean;
@@ -3423,6 +3750,7 @@ export type GetCommsPushTokensByIdRes = {
   lastSeenAt: string;
   platform: "android" | "ios" | "web";
   token: string;
+  tokenEpoch?: number;
   userId: string;
   _id: string;
   updated: string;
@@ -3515,6 +3843,148 @@ export const useLazyGetCommsStatsQuery = (
     ...options,
     providesTags: ["admin", "comms"],
     toRequest: getCommsStatsRequest,
+  });
+
+export type GetConsentResponsesArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+
+export type GetConsentResponsesRes = {
+  data?: {
+    agreed: boolean;
+    agreedAt: string;
+    checkboxValues?: Record<string, boolean>;
+    consentFormId: {
+      title?: string;
+      slug?: string;
+      version?: number;
+      type?: "agreement" | "privacy" | "hipaa" | "research" | "terms" | "custom";
+    };
+    contentSnapshot?: string;
+    formVersionSnapshot?: number;
+    ipAddress?: string;
+    locale: string;
+    provisional?: boolean;
+    provisionalNote?: string;
+    provisionalSignedBy?: {
+      name?: string;
+      email?: string;
+    };
+    provisionalSignerIp?: string;
+    provisionalSignerUserAgent?: string;
+    signature?: string;
+    signedAt?: string;
+    userAgent?: string;
+    userId: {
+      name?: string;
+      email?: string;
+    };
+    voidedAt?: string;
+    voidedBy?: string;
+    voidReason?: string;
+    _id: string;
+    updated: string;
+    created: string;
+    deleted?: boolean;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+
+export const getConsentResponsesRequest = (arg: GetConsentResponsesArgs): ApiRequestArgs => ({
+  method: "GET",
+  params: {_id: arg._id, limit: arg.limit, page: arg.page, sort: arg.sort},
+  url: `/consent-responses/`,
+});
+
+export const useGetConsentResponsesQuery = (
+  arg: GetConsentResponsesArgs,
+  options: ApiSdkQueryOptions<GetConsentResponsesRes> = {}
+): UseApiQueryResult<GetConsentResponsesRes> =>
+  useApiQuery<GetConsentResponsesRes>(getConsentResponsesRequest(arg), {
+    ...options,
+    providesTags: ["consentresponses"],
+  });
+
+export const useLazyGetConsentResponsesQuery = (
+  options: ApiSdkLazyOptions<GetConsentResponsesRes> = {}
+): UseLazyApiQueryResult<GetConsentResponsesRes, GetConsentResponsesArgs> =>
+  useLazyApiQuery<GetConsentResponsesRes, GetConsentResponsesArgs>({
+    ...options,
+    providesTags: ["consentresponses"],
+    toRequest: getConsentResponsesRequest,
+  });
+
+export type GetConsentResponsesByIdArgs = string;
+
+export type GetConsentResponsesByIdRes = {
+  agreed: boolean;
+  agreedAt: string;
+  checkboxValues?: Record<string, boolean>;
+  consentFormId: {
+    title?: string;
+    slug?: string;
+    version?: number;
+    type?: "agreement" | "privacy" | "hipaa" | "research" | "terms" | "custom";
+  };
+  contentSnapshot?: string;
+  formVersionSnapshot?: number;
+  ipAddress?: string;
+  locale: string;
+  provisional?: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy?: {
+    name?: string;
+    email?: string;
+  };
+  provisionalSignerIp?: string;
+  provisionalSignerUserAgent?: string;
+  signature?: string;
+  signedAt?: string;
+  userAgent?: string;
+  userId: {
+    name?: string;
+    email?: string;
+  };
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
+  _id: string;
+  updated: string;
+  created: string;
+  deleted?: boolean;
+};
+
+export const getConsentResponsesByIdRequest = (
+  arg: GetConsentResponsesByIdArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/consent-responses/${encodeURIComponent(String(arg))}`,
+});
+
+export const useGetConsentResponsesByIdQuery = (
+  arg: GetConsentResponsesByIdArgs,
+  options: ApiSdkQueryOptions<GetConsentResponsesByIdRes> = {}
+): UseApiQueryResult<GetConsentResponsesByIdRes> =>
+  useApiQuery<GetConsentResponsesByIdRes>(getConsentResponsesByIdRequest(arg), {
+    ...options,
+    providesTags: ["consentresponses"],
+  });
+
+export const useLazyGetConsentResponsesByIdQuery = (
+  options: ApiSdkLazyOptions<GetConsentResponsesByIdRes> = {}
+): UseLazyApiQueryResult<GetConsentResponsesByIdRes, GetConsentResponsesByIdArgs> =>
+  useLazyApiQuery<GetConsentResponsesByIdRes, GetConsentResponsesByIdArgs>({
+    ...options,
+    providesTags: ["consentresponses"],
+    toRequest: getConsentResponsesByIdRequest,
   });
 
 export type GetConsentsPendingArgs = void;
@@ -4444,6 +4914,45 @@ export const useLazyGetOrgsByIdMembersQuery = (
     toRequest: getOrgsByIdMembersRequest,
   });
 
+export type GetOrgsByOrgIdMembersByUserIdSecurityArgs = {
+  orgId: string;
+  userId: string;
+};
+
+export type GetOrgsByOrgIdMembersByUserIdSecurityRes = unknown;
+
+export const getOrgsByOrgIdMembersByUserIdSecurityRequest = (
+  arg: GetOrgsByOrgIdMembersByUserIdSecurityArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security`,
+});
+
+/** Get a user's sign-in security summary */
+export const useGetOrgsByOrgIdMembersByUserIdSecurityQuery = (
+  arg: GetOrgsByOrgIdMembersByUserIdSecurityArgs,
+  options: ApiSdkQueryOptions<GetOrgsByOrgIdMembersByUserIdSecurityRes> = {}
+): UseApiQueryResult<GetOrgsByOrgIdMembersByUserIdSecurityRes> =>
+  useApiQuery<GetOrgsByOrgIdMembersByUserIdSecurityRes>(
+    getOrgsByOrgIdMembersByUserIdSecurityRequest(arg),
+    {...options, providesTags: ["account-security"]}
+  );
+
+export const useLazyGetOrgsByOrgIdMembersByUserIdSecurityQuery = (
+  options: ApiSdkLazyOptions<GetOrgsByOrgIdMembersByUserIdSecurityRes> = {}
+): UseLazyApiQueryResult<
+  GetOrgsByOrgIdMembersByUserIdSecurityRes,
+  GetOrgsByOrgIdMembersByUserIdSecurityArgs
+> =>
+  useLazyApiQuery<
+    GetOrgsByOrgIdMembersByUserIdSecurityRes,
+    GetOrgsByOrgIdMembersByUserIdSecurityArgs
+  >({
+    ...options,
+    providesTags: ["account-security"],
+    toRequest: getOrgsByOrgIdMembersByUserIdSecurityRequest,
+  });
+
 export type GetOrgsMineArgs = void;
 
 export type GetOrgsMineRes = unknown;
@@ -4594,6 +5103,7 @@ export type GetUsersRes = {
     salt?: string;
     roles?: string[];
     emailVerified?: boolean;
+    disabled?: boolean;
     updated: string;
     created: string;
     deleted?: boolean;
@@ -4646,6 +5156,7 @@ export type GetUsersByIdRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -4669,6 +5180,36 @@ export const useLazyGetUsersByIdQuery = (
     ...options,
     providesTags: ["users"],
     toRequest: getUsersByIdRequest,
+  });
+
+export type GetUsersByUserIdSecurityArgs = string;
+
+export type GetUsersByUserIdSecurityRes = unknown;
+
+export const getUsersByUserIdSecurityRequest = (
+  arg: GetUsersByUserIdSecurityArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/users/${encodeURIComponent(String(arg))}/security`,
+});
+
+/** Get a user's sign-in security summary */
+export const useGetUsersByUserIdSecurityQuery = (
+  arg: GetUsersByUserIdSecurityArgs,
+  options: ApiSdkQueryOptions<GetUsersByUserIdSecurityRes> = {}
+): UseApiQueryResult<GetUsersByUserIdSecurityRes> =>
+  useApiQuery<GetUsersByUserIdSecurityRes>(getUsersByUserIdSecurityRequest(arg), {
+    ...options,
+    providesTags: ["account-security"],
+  });
+
+export const useLazyGetUsersByUserIdSecurityQuery = (
+  options: ApiSdkLazyOptions<GetUsersByUserIdSecurityRes> = {}
+): UseLazyApiQueryResult<GetUsersByUserIdSecurityRes, GetUsersByUserIdSecurityArgs> =>
+  useLazyApiQuery<GetUsersByUserIdSecurityRes, GetUsersByUserIdSecurityArgs>({
+    ...options,
+    providesTags: ["account-security"],
+    toRequest: getUsersByUserIdSecurityRequest,
   });
 
 export type GetVersionCheckArgs = {
@@ -5417,6 +5958,7 @@ export type PatchAdminUsersByIdArgs = {
     salt?: string;
     roles?: string[];
     emailVerified?: boolean;
+    disabled?: boolean;
     updated?: string;
     created?: string;
     deleted?: boolean;
@@ -5435,6 +5977,7 @@ export type PatchAdminUsersByIdRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -5630,6 +6173,8 @@ export type PatchAuthMeArgs = {
   email?: string;
   name?: string;
   oauthProvider?: "google" | "github" | "apple" | null;
+  disabled?: boolean;
+  currentPassword?: string;
 };
 
 export type PatchAuthMeRes = {
@@ -5642,6 +6187,7 @@ export type PatchAuthMeRes = {
   _id: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated?: string;
   created?: string;
   deleted?: boolean;
@@ -5845,6 +6391,7 @@ export type PatchUsersByIdArgs = {
     salt?: string;
     roles?: string[];
     emailVerified?: boolean;
+    disabled?: boolean;
     updated?: string;
     created?: string;
     deleted?: boolean;
@@ -5863,6 +6410,7 @@ export type PatchUsersByIdRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -6529,6 +7077,7 @@ export type PostAdminUsersArgs = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated?: string;
   created?: string;
   deleted?: boolean;
@@ -6546,6 +7095,7 @@ export type PostAdminUsersRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -7511,10 +8061,18 @@ export type PostConsentsRespondRes = {
   formVersionSnapshot?: number;
   ipAddress?: string;
   locale: string;
+  provisional?: boolean;
+  provisionalNote?: string;
+  provisionalSignedBy?: string;
+  provisionalSignerIp?: string;
+  provisionalSignerUserAgent?: string;
   signature?: string;
   signedAt?: string;
   userAgent?: string;
   userId: string;
+  voidedAt?: string;
+  voidedBy?: string;
+  voidReason?: string;
   _id: string;
   updated?: string;
   created?: string;
@@ -7921,6 +8479,134 @@ export const usePostOrgsByIdMembersMutation = (
     ...options,
   });
 
+export type PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorArgs = {
+  orgId: string;
+  userId: string;
+};
+
+export type PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRes = unknown;
+
+export const postOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRequest = (
+  arg: PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/reset-two-factor`,
+});
+
+/** Reset two-factor */
+export const usePostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorMutation = (
+  options: UseApiMutationOptions<
+    PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorArgs,
+    PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRes
+  > = {}
+): UseApiMutationResult<
+  PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorArgs,
+  PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRes
+> =>
+  useApiMutation<
+    PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorArgs,
+    PostOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRes
+  >(postOrgsByOrgIdMembersByUserIdSecurityResetTwoFactorRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsArgs = {
+  orgId: string;
+  userId: string;
+};
+
+export type PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRes = unknown;
+
+export const postOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRequest = (
+  arg: PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/revoke-sessions`,
+});
+
+/** Sign out everywhere */
+export const usePostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsMutation = (
+  options: UseApiMutationOptions<
+    PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsArgs,
+    PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRes
+  > = {}
+): UseApiMutationResult<
+  PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsArgs,
+  PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRes
+> =>
+  useApiMutation<
+    PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsArgs,
+    PostOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRes
+  >(postOrgsByOrgIdMembersByUserIdSecurityRevokeSessionsRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetArgs = {
+  orgId: string;
+  userId: string;
+};
+
+export type PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRes = unknown;
+
+export const postOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRequest = (
+  arg: PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/send-password-reset`,
+});
+
+/** Send password reset */
+export const usePostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetMutation = (
+  options: UseApiMutationOptions<
+    PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetArgs,
+    PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRes
+  > = {}
+): UseApiMutationResult<
+  PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetArgs,
+  PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRes
+> =>
+  useApiMutation<
+    PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetArgs,
+    PostOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRes
+  >(postOrgsByOrgIdMembersByUserIdSecuritySendPasswordResetRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipArgs = {
+  orgId: string;
+  userId: string;
+};
+
+export type PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRes = unknown;
+
+export const postOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRequest = (
+  arg: PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/orgs/${encodeURIComponent(String(arg.orgId))}/members/${encodeURIComponent(String(arg.userId))}/security/suspend-membership`,
+});
+
+/** Suspend membership */
+export const usePostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipMutation = (
+  options: UseApiMutationOptions<
+    PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipArgs,
+    PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRes
+  > = {}
+): UseApiMutationResult<
+  PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipArgs,
+  PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRes
+> =>
+  useApiMutation<
+    PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipArgs,
+    PostOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRes
+  >(postOrgsByOrgIdMembersByUserIdSecuritySuspendMembershipRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
 export type PostResetPasswordArgs = {
   newPassword?: string;
   password?: string;
@@ -7960,6 +8646,7 @@ export type PostUsersArgs = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated?: string;
   created?: string;
   deleted?: boolean;
@@ -7977,6 +8664,7 @@ export type PostUsersRes = {
   salt?: string;
   roles?: string[];
   emailVerified?: boolean;
+  disabled?: boolean;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -7993,6 +8681,171 @@ export const usePostUsersMutation = (
 ): UseApiMutationResult<PostUsersArgs, PostUsersRes> =>
   useApiMutation<PostUsersArgs, PostUsersRes>(postUsersRequest, {
     invalidatesTags: ["users"],
+    ...options,
+  });
+
+export type PostUsersByUserIdSecurityDisableArgs = string;
+
+export type PostUsersByUserIdSecurityDisableRes = unknown;
+
+export const postUsersByUserIdSecurityDisableRequest = (
+  arg: PostUsersByUserIdSecurityDisableArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/disable`,
+});
+
+/** Disable account */
+export const usePostUsersByUserIdSecurityDisableMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecurityDisableArgs,
+    PostUsersByUserIdSecurityDisableRes
+  > = {}
+): UseApiMutationResult<
+  PostUsersByUserIdSecurityDisableArgs,
+  PostUsersByUserIdSecurityDisableRes
+> =>
+  useApiMutation<PostUsersByUserIdSecurityDisableArgs, PostUsersByUserIdSecurityDisableRes>(
+    postUsersByUserIdSecurityDisableRequest,
+    {invalidatesTags: ["account-security"], ...options}
+  );
+
+export type PostUsersByUserIdSecurityEnableArgs = string;
+
+export type PostUsersByUserIdSecurityEnableRes = unknown;
+
+export const postUsersByUserIdSecurityEnableRequest = (
+  arg: PostUsersByUserIdSecurityEnableArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/enable`,
+});
+
+/** Enable account */
+export const usePostUsersByUserIdSecurityEnableMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecurityEnableArgs,
+    PostUsersByUserIdSecurityEnableRes
+  > = {}
+): UseApiMutationResult<PostUsersByUserIdSecurityEnableArgs, PostUsersByUserIdSecurityEnableRes> =>
+  useApiMutation<PostUsersByUserIdSecurityEnableArgs, PostUsersByUserIdSecurityEnableRes>(
+    postUsersByUserIdSecurityEnableRequest,
+    {invalidatesTags: ["account-security"], ...options}
+  );
+
+export type PostUsersByUserIdSecurityIssueSignInLinkArgs = string;
+
+export type PostUsersByUserIdSecurityIssueSignInLinkRes = unknown;
+
+export const postUsersByUserIdSecurityIssueSignInLinkRequest = (
+  arg: PostUsersByUserIdSecurityIssueSignInLinkArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/issue-sign-in-link`,
+});
+
+/** Issue sign-in link */
+export const usePostUsersByUserIdSecurityIssueSignInLinkMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecurityIssueSignInLinkArgs,
+    PostUsersByUserIdSecurityIssueSignInLinkRes
+  > = {}
+): UseApiMutationResult<
+  PostUsersByUserIdSecurityIssueSignInLinkArgs,
+  PostUsersByUserIdSecurityIssueSignInLinkRes
+> =>
+  useApiMutation<
+    PostUsersByUserIdSecurityIssueSignInLinkArgs,
+    PostUsersByUserIdSecurityIssueSignInLinkRes
+  >(postUsersByUserIdSecurityIssueSignInLinkRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostUsersByUserIdSecurityResetTwoFactorArgs = string;
+
+export type PostUsersByUserIdSecurityResetTwoFactorRes = unknown;
+
+export const postUsersByUserIdSecurityResetTwoFactorRequest = (
+  arg: PostUsersByUserIdSecurityResetTwoFactorArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/reset-two-factor`,
+});
+
+/** Reset two-factor */
+export const usePostUsersByUserIdSecurityResetTwoFactorMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecurityResetTwoFactorArgs,
+    PostUsersByUserIdSecurityResetTwoFactorRes
+  > = {}
+): UseApiMutationResult<
+  PostUsersByUserIdSecurityResetTwoFactorArgs,
+  PostUsersByUserIdSecurityResetTwoFactorRes
+> =>
+  useApiMutation<
+    PostUsersByUserIdSecurityResetTwoFactorArgs,
+    PostUsersByUserIdSecurityResetTwoFactorRes
+  >(postUsersByUserIdSecurityResetTwoFactorRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostUsersByUserIdSecurityRevokeSessionsArgs = string;
+
+export type PostUsersByUserIdSecurityRevokeSessionsRes = unknown;
+
+export const postUsersByUserIdSecurityRevokeSessionsRequest = (
+  arg: PostUsersByUserIdSecurityRevokeSessionsArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/revoke-sessions`,
+});
+
+/** Sign out everywhere */
+export const usePostUsersByUserIdSecurityRevokeSessionsMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecurityRevokeSessionsArgs,
+    PostUsersByUserIdSecurityRevokeSessionsRes
+  > = {}
+): UseApiMutationResult<
+  PostUsersByUserIdSecurityRevokeSessionsArgs,
+  PostUsersByUserIdSecurityRevokeSessionsRes
+> =>
+  useApiMutation<
+    PostUsersByUserIdSecurityRevokeSessionsArgs,
+    PostUsersByUserIdSecurityRevokeSessionsRes
+  >(postUsersByUserIdSecurityRevokeSessionsRequest, {
+    invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type PostUsersByUserIdSecuritySendPasswordResetArgs = string;
+
+export type PostUsersByUserIdSecuritySendPasswordResetRes = unknown;
+
+export const postUsersByUserIdSecuritySendPasswordResetRequest = (
+  arg: PostUsersByUserIdSecuritySendPasswordResetArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/users/${encodeURIComponent(String(arg))}/security/send-password-reset`,
+});
+
+/** Send password reset */
+export const usePostUsersByUserIdSecuritySendPasswordResetMutation = (
+  options: UseApiMutationOptions<
+    PostUsersByUserIdSecuritySendPasswordResetArgs,
+    PostUsersByUserIdSecuritySendPasswordResetRes
+  > = {}
+): UseApiMutationResult<
+  PostUsersByUserIdSecuritySendPasswordResetArgs,
+  PostUsersByUserIdSecuritySendPasswordResetRes
+> =>
+  useApiMutation<
+    PostUsersByUserIdSecuritySendPasswordResetArgs,
+    PostUsersByUserIdSecuritySendPasswordResetRes
+  >(postUsersByUserIdSecuritySendPasswordResetRequest, {
+    invalidatesTags: ["account-security"],
     ...options,
   });
 

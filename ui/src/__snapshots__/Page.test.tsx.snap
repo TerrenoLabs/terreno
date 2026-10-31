@@ -1405,7 +1405,7 @@ exports[`Page renders with custom color 1`] = `
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
                   "alignSelf": "center",
-                  "backgroundColor": undefined,
+                  "backgroundColor": "#2B6072",
                   "display": "flex",
                   "flex": undefined,
                   "flexDirection": "column",
@@ -1437,7 +1437,7 @@ exports[`Page renders with custom color 1`] = `
             "scrollEventThrottle": 50,
             "style": {
               "alignSelf": "center",
-              "backgroundColor": undefined,
+              "backgroundColor": "#2B6072",
               "display": "flex",
               "flex": undefined,
               "flexDirection": "column",

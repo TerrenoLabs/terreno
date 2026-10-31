@@ -1,11 +1,11 @@
 import {describe, expect, it, spyOn} from "bun:test";
 import {render} from "@testing-library/react-native";
 import {createRef} from "react";
-import type {Text as NativeText} from "react-native";
+import type {Text as NativeText, TextProps} from "react-native";
 
 import {Text} from "./Text";
 import {ThemeProvider} from "./Theme";
-import {renderWithTheme} from "./test-utils";
+import {elementProps, renderWithTheme} from "./test-utils";
 
 describe("Text", () => {
   it("renders correctly with default props", () => {
@@ -116,7 +116,7 @@ describe("Text", () => {
 
   // Color tests
   it("renders with secondary color", () => {
-    const {toJSON} = renderWithTheme(<Text color="secondary">Secondary color</Text>);
+    const {toJSON} = renderWithTheme(<Text color="secondaryDark">Secondary color</Text>);
     expect(toJSON()).toMatchSnapshot();
   });
 
@@ -177,7 +177,7 @@ describe("Text", () => {
       </Text>,
       {
         createNodeMock: (element) =>
-          element.props.accessibilityRole === "header" ? nativeText : null,
+          elementProps<TextProps>(element).accessibilityRole === "header" ? nativeText : null,
         wrapper: ThemeProvider,
       }
     );

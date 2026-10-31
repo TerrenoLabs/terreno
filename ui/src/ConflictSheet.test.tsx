@@ -2,7 +2,7 @@ import {describe, expect, it, mock} from "bun:test";
 import {fireEvent, within} from "@testing-library/react-native";
 import {DateTime} from "luxon";
 
-import {ConflictSheet, type SyncConflictItem} from "./ConflictSheet";
+import {ConflictSheet, type ConflictSheetProps, type SyncConflictItem} from "./ConflictSheet";
 import {renderWithTheme} from "./test-utils";
 
 /**
@@ -286,7 +286,7 @@ describe("ConflictSheet", () => {
   });
 
   it("calls onResolve with keepMine but keeps the sheet open until the conflict clears", async () => {
-    const onResolve = mock(() => {});
+    const onResolve = mock((_args: Parameters<ConflictSheetProps["onResolve"]>[0]) => {});
     const onDismiss = mock(() => {});
     const {getByTestId, rerender} = renderWithTheme(
       <ConflictSheet
@@ -337,7 +337,7 @@ describe("ConflictSheet", () => {
   });
 
   it("calls onResolve with useServer without dismissing when other conflicts remain", async () => {
-    const onResolve = mock(() => {});
+    const onResolve = mock((_args: Parameters<ConflictSheetProps["onResolve"]>[0]) => {});
     const onDismiss = mock(() => {});
     const {getByTestId} = renderWithTheme(
       <ConflictSheet
@@ -355,7 +355,7 @@ describe("ConflictSheet", () => {
   });
 
   it("uses the server version for every conflict after confirmation, dismissing once they clear", async () => {
-    const onResolve = mock(() => {});
+    const onResolve = mock((_args: Parameters<ConflictSheetProps["onResolve"]>[0]) => {});
     const onDismiss = mock(() => {});
     const {findByText, getByTestId, rerender} = renderWithTheme(
       <ConflictSheet
@@ -385,7 +385,7 @@ describe("ConflictSheet", () => {
   });
 
   it("keeps the local version for every conflict after confirmation, dismissing once they clear", async () => {
-    const onResolve = mock(() => {});
+    const onResolve = mock((_args: Parameters<ConflictSheetProps["onResolve"]>[0]) => {});
     const onDismiss = mock(() => {});
     const {findByText, getByTestId, rerender} = renderWithTheme(
       <ConflictSheet

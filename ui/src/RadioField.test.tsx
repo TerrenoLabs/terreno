@@ -1,6 +1,6 @@
 import {describe, expect, it, mock} from "bun:test";
 import {fireEvent} from "@testing-library/react-native";
-
+import type {FieldOption} from "./Common";
 import {RadioField} from "./RadioField";
 import {renderWithTheme} from "./test-utils";
 
@@ -78,7 +78,12 @@ describe("RadioField", () => {
   });
 
   it("renders options using value when label is not provided", () => {
-    const optionsWithoutLabels = [{value: "first"}, {value: "second"}, {value: "third"}];
+    // FieldOption requires a label; untyped callers can still omit it.
+    const optionsWithoutLabels = [
+      {value: "first"},
+      {value: "second"},
+      {value: "third"},
+    ] as unknown as FieldOption[];
     const {getByText} = renderWithTheme(
       <RadioField onChange={() => {}} options={optionsWithoutLabels} title="Title" value="" />
     );

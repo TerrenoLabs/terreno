@@ -260,7 +260,6 @@ describe("Banner", () => {
         buttonOnClick={handleClick}
         buttonText="Loading"
         id="test-banner"
-        loading
         text="Banner loading"
       />
     );

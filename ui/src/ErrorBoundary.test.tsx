@@ -1,10 +1,11 @@
 import {afterAll, beforeAll, describe, expect, it, mock, spyOn} from "bun:test";
 import React from "react";
 
+import type {ErrorPageProps} from "./Common";
 import {ErrorBoundary} from "./ErrorBoundary";
 import {ErrorPage} from "./ErrorPage";
 import {Text} from "./Text";
-import {renderWithTheme} from "./test-utils";
+import {elementProps, renderWithTheme} from "./test-utils";
 
 describe("ErrorBoundary", () => {
   // Suppress console.warn during tests
@@ -89,7 +90,8 @@ describe("ErrorBoundary", () => {
     const renderedElement = boundary.render() as React.ReactElement;
 
     expect(renderedElement.type).toBe(ErrorPage);
-    expect(renderedElement.props.error).toBe(error);
-    expect(typeof renderedElement.props.resetError).toBe("function");
+    const pageProps = elementProps<ErrorPageProps>(renderedElement);
+    expect(pageProps.error).toBe(error);
+    expect(typeof pageProps.resetError).toBe("function");
   });
 });

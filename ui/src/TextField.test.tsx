@@ -399,21 +399,25 @@ describe("TextField", () => {
         const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
         const originalSetTimeout = globalThis.setTimeout;
         let scheduledRefocus: (() => void) | undefined;
-        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-          (handler, timeout, ...args) => {
-            scheduledRefocus = handler as unknown as () => void;
-            return originalSetTimeout(() => {}, timeout, ...args);
-          }
-        );
+        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
+          handler: () => void,
+          timeout?: number,
+          ...args: unknown[]
+        ) => {
+          scheduledRefocus = handler;
+          return originalSetTimeout(() => {}, timeout, ...args);
+        }) as unknown as typeof setTimeout);
         reactNative.Platform.OS = "web";
-        globalThis.requestAnimationFrame = undefined;
+        (
+          globalThis as {requestAnimationFrame?: typeof requestAnimationFrame}
+        ).requestAnimationFrame = undefined;
 
         try {
           const {getByDisplayValue, getByTestId} = renderWithTheme(
             <TextField onChange={mockOnChange} testID="pw" type="password" value="hunter2" />
           );
           const input = getByDisplayValue("hunter2");
-          const webInput = {focus: () => void 0};
+          const webInput = {focus: (): void => {}};
           const ref = (input.props as unknown as {ref?: (value: TextInput | null) => void}).ref;
           assert.isFunction(ref);
           const focusSpy = mock(() => {});
@@ -770,8 +774,10 @@ describe("TextField", () => {
 
     it("warns for not-yet-supported field types", () => {
       const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      // TextFieldProps excludes numberRange; untyped callers can still pass it.
+      const unsupportedType = "numberRange" as unknown as TextFieldProps["type"];
       try {
-        renderWithTheme(<TextField onChange={mockOnChange} type="numberRange" value="" />);
+        renderWithTheme(<TextField onChange={mockOnChange} type={unsupportedType} value="" />);
         expect(warnSpy).toHaveBeenCalledWith("numberRange is not yet supported");
       } finally {
         warnSpy.mockRestore();

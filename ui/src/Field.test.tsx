@@ -6,33 +6,23 @@ import {renderWithTheme} from "./test-utils";
 
 describe("Field", () => {
   it("renders text field by default", () => {
-    const {toJSON} = renderWithTheme(<Field label="Name" onChange={() => {}} value="" />);
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders text field with type text", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Name" onChange={() => {}} type="text" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="text" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders password field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Password" onChange={() => {}} type="password" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="password" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("reveals the password value from the visibility toggle", () => {
     const {getByDisplayValue, getByTestId} = renderWithTheme(
-      <Field
-        label="Password"
-        onChange={() => {}}
-        testID="field-password"
-        type="password"
-        value="hunter2"
-      />
+      <Field onChange={() => {}} testID="field-password" type="password" value="hunter2" />
     );
 
     expect(getByDisplayValue("hunter2").props.secureTextEntry).toBe(true);
@@ -42,58 +32,46 @@ describe("Field", () => {
   });
 
   it("renders email field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Email" onChange={() => {}} type="email" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="email" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders url field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Website" onChange={() => {}} type="url" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="url" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders number field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Age" onChange={() => {}} type="number" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="number" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders textarea field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Description" onChange={() => {}} type="textarea" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="textarea" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders boolean field", () => {
     const handleChange = mock((_value: boolean) => {});
     const {toJSON} = renderWithTheme(
-      <Field label="Active" onChange={handleChange} type="boolean" value={false} />
+      <Field onChange={handleChange} type="boolean" value={false} />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders date field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Birth Date" onChange={() => {}} type="date" value={null} />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="date" value={undefined} />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders time field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Start Time" onChange={() => {}} type="time" value={null} />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="time" value={undefined} />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders datetime field", () => {
     const {toJSON} = renderWithTheme(
-      <Field label="Appointment" onChange={() => {}} type="datetime" value={null} />
+      <Field onChange={() => {}} type="datetime" value={undefined} />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -101,7 +79,6 @@ describe("Field", () => {
   it("renders select field", () => {
     const {toJSON} = renderWithTheme(
       <Field
-        label="Country"
         onChange={() => {}}
         options={[
           {label: "USA", value: "us"},
@@ -117,12 +94,12 @@ describe("Field", () => {
   it("renders multiselect field", () => {
     const {toJSON} = renderWithTheme(
       <Field
-        label="Skills"
         onChange={() => {}}
         options={[
           {label: "JavaScript", value: "js"},
           {label: "Python", value: "py"},
         ]}
+        title="Skills"
         type="multiselect"
         value={[]}
       />
@@ -132,22 +109,23 @@ describe("Field", () => {
 
   it("renders address field", () => {
     const {toJSON} = renderWithTheme(
-      <Field label="Address" onChange={() => {}} type="address" value="" />
+      <Field
+        onChange={() => {}}
+        type="address"
+        value={{address1: "", city: "", state: "", zipcode: ""}}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders phoneNumber field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Phone" onChange={() => {}} type="phoneNumber" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="phoneNumber" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders customSelect field", () => {
     const {toJSON} = renderWithTheme(
       <Field
-        label="Custom"
         onChange={() => {}}
         options={[
           {label: "Option A", value: "a"},
@@ -161,9 +139,7 @@ describe("Field", () => {
   });
 
   it("renders signature field", () => {
-    const {toJSON} = renderWithTheme(
-      <Field label="Sign here" onChange={() => {}} type="signature" value="" />
-    );
+    const {toJSON} = renderWithTheme(<Field onChange={() => {}} type="signature" value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 });

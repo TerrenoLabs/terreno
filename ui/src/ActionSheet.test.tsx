@@ -9,6 +9,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Text,
+  type View,
 } from "react-native";
 
 import {
@@ -27,26 +28,21 @@ const layoutEvent = (height: number, width: number): LayoutChangeEvent =>
   ({nativeEvent: {layout: {height, width, x: 0, y: 0}}}) as LayoutChangeEvent;
 
 /** Stands in for the SafeAreaView ref, whose measureInWindow reports `height`. */
-const measuringSafeAreaRef = (
-  height: number
-): React.RefObject<{
-  measureInWindow: (
-    callback: (x: number, y: number, width: number, height: number) => void
-  ) => void;
-}> => ({
-  current: {
+const measuringSafeAreaRef = (height: number): React.RefObject<View | null> => {
+  const measuringView: Pick<View, "measureInWindow"> = {
     measureInWindow: (callback) => {
       callback(0, 0, 100, height);
     },
-  },
-});
+  };
+  return {current: measuringView as View};
+};
 
 beforeAll(() => {
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
     return setTimeout(() => callback(Date.now()), 0) as unknown as number;
   };
-  globalThis.cancelAnimationFrame = (id: number) => {
-    clearTimeout(id);
+  globalThis.cancelAnimationFrame = (id: number | null | undefined) => {
+    clearTimeout(id ?? undefined);
   };
 });
 
@@ -607,7 +603,11 @@ describe("ActionSheet", () => {
   });
 
   describe("_onKeyboardShow", () => {
-    const timing = (Animated as unknown as {timing: Mock<(...args: never[]) => unknown>}).timing;
+    const timing = (
+      Animated as unknown as {
+        timing: Mock<(value: unknown, config: Animated.TimingAnimationConfig) => unknown>;
+      }
+    ).timing;
 
     /**
      * Focuses a field at `pageY` with a 40pt height and measures it synchronously, mirroring

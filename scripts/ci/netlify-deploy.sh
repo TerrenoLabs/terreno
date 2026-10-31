@@ -64,6 +64,7 @@ case "$target" in
     publish_dir="demo/dist"
     ;;
   frontend)
+    export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
     node .github/scripts/compile-workspace-deps.js example-frontend admin-frontend api ai
     bun run --filter '@terreno/admin-frontend' --filter '@terreno/api' --filter '@terreno/ai' compile
     # STABLE_BACKEND_URL moves the stable web app with the backend (see backend-auth-env.sh).

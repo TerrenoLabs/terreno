@@ -815,7 +815,7 @@ export const completeBetterAuthOAuthHandoff = ({
     return Promise.resolve(false);
   }
   const pending = pendingHandoffs.get(client);
-  if (pending) {
+  if (pending !== undefined) {
     return pending;
   }
   const handoff = takeHandoffToken(client);

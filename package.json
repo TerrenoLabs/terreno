@@ -1,7 +1,7 @@
 {
   "catalog": {
     "@better-auth/passkey": "1.7.4",
-    "@biomejs/biome": "^2.3.6",
+    "@biomejs/biome": "2.5.13",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/titillium-web": "^0.4.1",
     "@expo/config-plugins": "~57.0.8",
@@ -45,7 +45,7 @@
     "ajv": "8.20.0",
     "axios": "^1.13.2",
     "babel-preset-expo": "~57.0.7",
-    "better-auth": "^1.6.25",
+    "better-auth": "^1.7.4",
     "chai": "^6.2.2",
     "csv-parse": "^6.1.0",
     "expo": "~57.0.14",
@@ -128,16 +128,15 @@
     "@playwright/test": "catalog:",
     "@rtk-query/codegen-openapi": "catalog:",
     "@types/chai": "^5.2.3",
-    "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",
     "bun-types": "^1.4.0",
     "chai": "catalog:",
-    "dependency-cruiser": "^18.2.0",
-    "knip": "^6.34.0",
+    "dependency-cruiser": "^18.4.0",
+    "knip": "^6.38.0",
     "luxon": "catalog:",
-    "pixelmatch": "^5.3.0",
+    "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0",
-    "rulesync": "^9.6.3",
+    "rulesync": "^17.0.0",
     "simple-git-hooks": "^2.14.0",
     "ts-node": "^10.9.2",
     "zod": "catalog:"
@@ -162,6 +161,9 @@
     }
   },
   "overrides": {
+    "@babel/core": "^7.29.0",
+    "@better-auth/expo": "1.7.4",
+    "better-auth": "1.7.4",
     "ajv": "8.20.0",
     "bson": "7.2.0",
     "linkify-it": "^5.0.2",

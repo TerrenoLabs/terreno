@@ -153,6 +153,15 @@ interface UploadedFileResponse {
   url: string;
 }
 
+/** The `data` of a POST /gpt/skills/upload response. */
+interface UploadedSkillResponse {
+  _id: string;
+  description: string;
+  instructions: string;
+  name: string;
+  scope?: "user" | "global";
+}
+
 export const terrenoApi = openapi
   .enhanceEndpoints({addTagTypes: ["profile"]})
   .injectEndpoints({
@@ -273,6 +282,18 @@ export const terrenoApi = openapi
           url: "/gpt/histories",
         }),
       }),
+      // Hand-written: the generated `gptskillsUpload` sends no body. This one sends the multipart
+      // `file` part (and an optional `scope` part) the same way postFilesUpload does.
+      postGptSkillsUpload: builder.mutation<UploadedSkillResponse, FormData>({
+        invalidatesTags: ["gptskills"],
+        query: (body) => ({
+          body,
+          method: "POST",
+          responseHandler: "content-type",
+          url: "/gpt/skills/upload",
+        }),
+        transformResponse: (response: {data: UploadedSkillResponse}) => response.data,
+      }),
       postNotificationsDevNotify: builder.mutation<
         {notificationId: string},
         {body?: string; href?: string; kind?: string; title?: string} | undefined
@@ -347,6 +368,7 @@ export const {
   usePostAuthVerifyEmailMutation,
   usePostCommsDevTestPushMutation,
   usePostFilesUploadMutation,
+  usePostGptSkillsUploadMutation,
   usePostNotificationsDevNotifyMutation,
   useGetAiModelsQuery,
   useSetAdminUserPasswordMutation,

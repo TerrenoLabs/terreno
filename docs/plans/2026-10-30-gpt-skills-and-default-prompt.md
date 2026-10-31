@@ -455,7 +455,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, generate-sdk
   - Docs: T12
 
-- [ ] **T9** — Let users create, upload, and delete skills on a Skills screen
+- [x] **T9** — Let users create, upload, and delete skills on a Skills screen
   - Depends on: T1, T8
   - Files: example-frontend/app/settings/skills.tsx, example-frontend/app/settings/skills.test.tsx, example-frontend/app/settings/_layout.tsx, example-frontend/app/(tabs)/ai.tsx, example-frontend/e2e/gpt-skills.spec.ts, example-frontend/e2e/fixtures/poster-style.md, example-frontend/e2e/fixtures/team-poster.zip, docs/user-guide/README.md, docs/user-guide/ai/skills.md
   - Criteria:

@@ -4,6 +4,7 @@ import {
   type AskSubmission,
   type BlockChatEvent,
   Box,
+  Button,
   GPTChat,
   type GPTChatHistory,
   type GPTChatMessage,
@@ -1073,6 +1074,10 @@ const AiScreen: React.FC = () => {
     [fetchDataset]
   );
 
+  const handleOpenSkills = useCallback((): void => {
+    router.push("/settings/skills");
+  }, []);
+
   if (isLoading) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center">
@@ -1082,49 +1087,60 @@ const AiScreen: React.FC = () => {
   }
 
   return (
-    <GPTChat
-      allowHtml
-      askErrors={askErrors}
-      attachments={fileUploadsEnabled ? attachments : []}
-      availableModels={availableModels}
-      currentHistoryId={currentHistoryId}
-      currentMessages={currentMessages}
-      geminiApiKey={geminiApiKey}
-      histories={histories}
-      hostActions={["exportDataset", "export_csv", "scaleStepper", "toggleChecklist"]}
-      isStreaming={isStreaming}
-      mascot={mascot}
-      mcpTools={mcpTools}
-      onAskSubmit={handleAskSubmit}
-      onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
-      onBlockAction={handleBlockAction}
-      onBlockCallback={handleBlockCallback}
-      onCreateHistory={handleCreateHistory}
-      onDeleteHistory={handleDeleteHistory}
-      onGeminiApiKeyChange={setGeminiApiKey}
-      onModelChange={setSelectedModel}
-      onRateFeedback={handleRateFeedback}
-      onRemoveAttachment={handleRemoveAttachment}
-      onSelectHistory={handleSelectHistory}
-      onSubmit={handleSubmit}
-      onUpdateTitle={handleUpdateTitle}
-      resolveAskFiles={resolveAskFiles}
-      resolveDataset={resolveDataset}
-      resolveImage={resolveImage}
-      selectedModel={selectedModel}
-      suggestedPrompts={[
-        "Tell me a dad joke about TypeScript",
-        "Make a pun about React hooks",
-        "Tell me a witty joke about MongoDB",
-        "Help me pick a plan",
-        "Archive old chats",
-        "Draft an announcement",
-        "Fill in the invoice details",
-        "Upload a receipt",
-      ]}
-      testID="chat"
-      uiBlocks
-    />
+    <Box flex="grow">
+      <Box direction="row" justifyContent="end" paddingX={3} paddingY={1}>
+        <Button
+          iconName="wand-magic-sparkles"
+          onClick={handleOpenSkills}
+          testID="ai-skills-button"
+          text="Skills"
+          variant="muted"
+        />
+      </Box>
+      <GPTChat
+        allowHtml
+        askErrors={askErrors}
+        attachments={fileUploadsEnabled ? attachments : []}
+        availableModels={availableModels}
+        currentHistoryId={currentHistoryId}
+        currentMessages={currentMessages}
+        geminiApiKey={geminiApiKey}
+        histories={histories}
+        hostActions={["exportDataset", "export_csv", "scaleStepper", "toggleChecklist"]}
+        isStreaming={isStreaming}
+        mascot={mascot}
+        mcpTools={mcpTools}
+        onAskSubmit={handleAskSubmit}
+        onAttachFiles={fileUploadsEnabled ? handleAttachFiles : undefined}
+        onBlockAction={handleBlockAction}
+        onBlockCallback={handleBlockCallback}
+        onCreateHistory={handleCreateHistory}
+        onDeleteHistory={handleDeleteHistory}
+        onGeminiApiKeyChange={setGeminiApiKey}
+        onModelChange={setSelectedModel}
+        onRateFeedback={handleRateFeedback}
+        onRemoveAttachment={handleRemoveAttachment}
+        onSelectHistory={handleSelectHistory}
+        onSubmit={handleSubmit}
+        onUpdateTitle={handleUpdateTitle}
+        resolveAskFiles={resolveAskFiles}
+        resolveDataset={resolveDataset}
+        resolveImage={resolveImage}
+        selectedModel={selectedModel}
+        suggestedPrompts={[
+          "Tell me a dad joke about TypeScript",
+          "Make a pun about React hooks",
+          "Tell me a witty joke about MongoDB",
+          "Help me pick a plan",
+          "Archive old chats",
+          "Draft an announcement",
+          "Fill in the invoice details",
+          "Upload a receipt",
+        ]}
+        testID="chat"
+        uiBlocks
+      />
+    </Box>
   );
 };
 

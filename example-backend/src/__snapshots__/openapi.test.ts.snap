@@ -24523,9 +24523,81 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                 "schema": {
                   "properties": {
                     "data": {
+                      "properties": {
+                        "_id": {
+                          "type": "string",
+                        },
+                        "created": {
+                          "description": "ISO 8601 creation time",
+                          "type": "string",
+                        },
+                        "description": {
+                          "type": "string",
+                        },
+                        "enabled": {
+                          "type": "boolean",
+                        },
+                        "files": {
+                          "items": {
+                            "properties": {
+                              "filename": {
+                                "type": "string",
+                              },
+                              "mimeType": {
+                                "type": "string",
+                              },
+                              "size": {
+                                "type": "number",
+                              },
+                            },
+                            "required": [
+                              "filename",
+                              "mimeType",
+                              "size",
+                            ],
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "instructions": {
+                          "type": "string",
+                        },
+                        "name": {
+                          "type": "string",
+                        },
+                        "scope": {
+                          "enum": [
+                            "user",
+                            "global",
+                          ],
+                          "type": "string",
+                        },
+                        "updated": {
+                          "description": "ISO 8601 last update time",
+                          "type": "string",
+                        },
+                        "userId": {
+                          "description": "Owner of a user skill; absent for global skills",
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "_id",
+                        "created",
+                        "description",
+                        "enabled",
+                        "files",
+                        "instructions",
+                        "name",
+                        "scope",
+                        "updated",
+                      ],
                       "type": "object",
                     },
                   },
+                  "required": [
+                    "data",
+                  ],
                   "type": "object",
                 },
               },

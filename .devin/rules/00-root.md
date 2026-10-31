@@ -84,7 +84,8 @@ bun run bootstrap        # Install dependencies + compile all packages (dev-read
 bun run bootstrap:update # Reinstall + recompile after pulling changes or switching branches
 bun install              # Install dependencies
 bun run compile          # Compile all packages
-bun run lint             # Lint all packages
+bun run lint             # Lint all packages (ends with typecheck)
+bun run typecheck        # Typecheck all packages, src + tests (run compile first)
 bun run lint:fix         # Fix lint issues
 bun run test             # Run all workspace test suites
 bun run test:agent       # Run all tests with passing cases suppressed

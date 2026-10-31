@@ -1282,6 +1282,23 @@ jobs:
 
   # One container for the former eight policy jobs. Each used to checkout + bun
   # install on its own small/medium class and then sit in the queue behind e2e.
+  # Repo-wide typecheck: every package's tsconfig.typecheck.json covers src and
+  # tests. Compiles all packages first because typecheck reads workspace dist types.
+  typecheck:
+    executor: node22
+    resource_class: large
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Compile all packages
+          no_output_timeout: 20m
+          command: bun run compile
+      - run:
+          name: Typecheck all packages (src + tests)
+          no_output_timeout: 20m
+          command: bun run typecheck
+
   repo-policies:
     executor: node22_knip
     steps:
@@ -2679,6 +2696,7 @@ workflows:
     when: << pipeline.parameters.run-repo-policies >>
     jobs:
       - repo-policies
+      - typecheck
 
   e2e:
     when: << pipeline.parameters.run-e2e >>

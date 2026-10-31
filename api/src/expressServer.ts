@@ -3,7 +3,6 @@ import * as Sentry from "@sentry/bun";
 import cron from "cron";
 import express, {type Router} from "express";
 import type jwt from "jsonwebtoken";
-import cloneDeep from "lodash/cloneDeep";
 import onFinished from "on-finished";
 import passport from "passport";
 import type {ModelRouterOptions} from "./api";
@@ -15,25 +14,77 @@ import {sendToSlack} from "./notifiers/slackNotifier";
 const SLOW_READ_MAX = 200;
 const SLOW_WRITE_MAX = 500;
 const IS_JEST = process.env.JEST_WORKER_ID !== undefined;
-const SENSITIVE_REQUEST_BODY_KEYS = [
-  "newPassword",
-  "oldPassword",
+const REDACTED = "<REDACTED>";
+// Stop at a depth no real request body reaches, so a self-referencing body cannot loop.
+const MAX_REDACTION_DEPTH = 32;
+
+// Matched anywhere in a key after lowercasing and removing separators, e.g. currentPassword,
+// refresh_token, client_secret, code_verifier, x-api-key.
+const SENSITIVE_KEY_FRAGMENTS = [
+  "apikey",
+  "authorization",
+  "credential",
+  "passcode",
+  "passphrase",
+  "passwd",
   "password",
-  "refreshToken",
+  "privatekey",
+  "secret",
+  "signature",
   "token",
+  "verifier",
 ] as const;
 
-const redactSensitiveRequestBody = (body: Record<string, unknown>): Record<string, unknown> => {
-  const bodyCopy = cloneDeep(body);
-  for (const key of SENSITIVE_REQUEST_BODY_KEYS) {
-    if (key in bodyCopy && bodyCopy[key] !== undefined) {
-      bodyCopy[key] = "<REDACTED>";
-    }
-  }
-  return bodyCopy;
+// Matched as whole words of a key, so `code` covers OAuth and verification codes without
+// matching unrelated words that merely contain the letters. `note` and `reason` are free text
+// that can hold PHI, such as a provisional consent signer's note or a void reason.
+const SENSITIVE_KEY_WORDS = new Set<string>(["code", "note", "otp", "pin", "reason"]);
+
+const keyWords = (key: string): string[] => {
+  return key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 };
 
-const sensitiveQueryKeySet = new Set<string>(SENSITIVE_REQUEST_BODY_KEYS);
+/** Whether a request body or query key names credential material that must not be logged. */
+const isSensitiveRequestKey = (key: string): boolean => {
+  const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (SENSITIVE_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment))) {
+    return true;
+  }
+  return keyWords(key).some((word) => SENSITIVE_KEY_WORDS.has(word));
+};
+
+const redactSensitiveValue = (value: unknown, depth: number): unknown => {
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  if (depth >= MAX_REDACTION_DEPTH) {
+    return REDACTED;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSensitiveValue(item, depth + 1));
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return value;
+  }
+  const redacted: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (child !== undefined && isSensitiveRequestKey(key)) {
+      redacted[key] = REDACTED;
+    } else {
+      redacted[key] = redactSensitiveValue(child, depth + 1);
+    }
+  }
+  return redacted;
+};
+
+const redactSensitiveRequestBody = (body: Record<string, unknown>): unknown => {
+  return redactSensitiveValue(body, 0);
+};
 
 export const redactSensitiveRequestUrl = (url: string | undefined): string => {
   if (!url) {
@@ -43,8 +94,8 @@ export const redactSensitiveRequestUrl = (url: string | undefined): string => {
   const parsed = new URL(url, "http://terreno.invalid");
   let didRedact = false;
   for (const key of parsed.searchParams.keys()) {
-    if (sensitiveQueryKeySet.has(key)) {
-      parsed.searchParams.set(key, "<REDACTED>");
+    if (isSensitiveRequestKey(key)) {
+      parsed.searchParams.set(key, REDACTED);
       didRedact = true;
     }
   }
@@ -210,6 +261,11 @@ export const createRouterWithAuth = (
 
 export interface AuthRecoveryMail {
   html?: string;
+  /**
+   * True on Terreno's recovery mail: it carries a one-time secret link. Mail transports should
+   * not store its content; `@terreno/comms` keeps no payload for it in the message log.
+   */
+  sensitive?: boolean;
   subject: string;
   text: string;
   to: string;
@@ -244,7 +300,19 @@ export interface AuthOptions {
    * BetterAuthApp is registered.
    */
   syncPasswordResetToBetterAuth?: (user: User, password: string) => Promise<void>;
+  /**
+   * Check a password against the user's Better Auth credential account. `PATCH /auth/me` uses it
+   * to confirm an email change for a user with no passport password. TerrenoApp wires this when
+   * BetterAuthApp is registered.
+   */
+  verifyBetterAuthPassword?: (user: User, password: string) => Promise<BetterAuthPasswordCheck>;
 }
+
+/**
+ * Result of {@link AuthOptions.verifyBetterAuthPassword}: the password matched, did not match, or
+ * the user has no Better Auth credential password to check.
+ */
+export type BetterAuthPasswordCheck = "verified" | "wrong" | "no-password";
 
 export const cronjob = (
   name: string,

@@ -6,6 +6,15 @@ This guide is **AI-context-first**: it is written for an agent (or human) perfor
 
 `modelRouter` `realtime`, `realtimeList`, `realtimeDocument`, and `setRealtimeSocket` are **deprecated** and **will be removed in Terreno 58**. `RealtimeApp` stays as the socket host for syncdb. Removal checklist: [`docs/tasks/remove-legacy-realtime.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-legacy-realtime.md).
 
+`installTerrenoDevConsoleLogger` moved to `@terreno/syncdb`. The `@terreno/rtk` export is a **deprecated** re-export kept for the deprecation window. Change the import and pass the base URL:
+
+```typescript
+import {baseUrl} from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+
+installTerrenoDevConsoleLogger({baseUrl});
+```
+
 ## 1. Before you start
 
 | Decision | Requirement | Why |
@@ -335,8 +344,9 @@ export const syncDb = createSyncDb({authProvider, baseUrl, collections: ["todos"
 
 Better Auth session tokens live in the Better Auth client (`@terreno/rtk` `createBetterAuthClient`):
 
-- **Native:** `expo-secure-store`
-- **Web:** `@react-native-async-storage/async-storage`
+- **Native:** the Expo plugin's cookie jar in `expo-secure-store`
+- **Web (default):** Better Auth's HttpOnly session cookie, managed by the browser. No token is in app storage
+- **Web with `webAuth: "bearer"`:** the `set-auth-token` bearer in `localStorage` (or the `bearerStorage` you pass), readable with `getBetterAuthBearerToken()`. See [Frontend and API on different sites](configure-better-auth.md#frontend-and-api-on-different-sites)
 
 Syncdb does not store tokens itself — it calls `authProvider` on every transport/HTTP request.
 
@@ -346,11 +356,13 @@ On connect, the socket transport sends the bearer token from `getToken()`. When 
 
 ### Backend
 
+Register `BetterAuthApp` and `RealtimeApp` on the same `TerrenoApp`. `RealtimeApp` picks up the
+Better Auth instance by itself, so no extra option is needed. Legacy JWT sockets keep working
+alongside it. Only a `RealtimeApp` mounted without `TerrenoApp` needs the instance passed in:
+
 ```typescript
 new RealtimeApp({betterAuth: {auth, userModel: User}})
 ```
-
-Required for Better Auth socket sessions. Legacy JWT sockets continue to work without it.
 
 ## 8. Codegen
 

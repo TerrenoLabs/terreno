@@ -1,6 +1,6 @@
 # Implementation Plan: Deploy to Vercel + `deploy-vercel` Skill
 
-**Status:** Approved — open Vercel spike TODOs; other decisions recorded (2026-07-29)
+**Status:** Implemented — V1/V2/V3 decided 2026-10-11; Vercel runs in parallel with Cloud Run + Netlify for an evaluation period
 **Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1012
 **Priority:** High
 **Effort:** Big batch
@@ -28,23 +28,32 @@ Give Terreno the fastest possible "my app is on the internet" path, and a skill 
 
 | # | Question | Decision |
 |---|----------|----------|
-| V1 | Backend host | **Open — spike required.** Candidate: all-in-one on Vercel (web + backend + Blob storage). Fallback: Railway/Render/Fly + Vercel static web (see [`deployment-foundation`](deployment-foundation.md)). **Do not publish a final answer until TODOs below are closed.** |
-| V2 | Document `server` output? | **Open — depends on V1 spike.** Default if documented: advanced section, Expo SDK ≥ 55, SSE buffering caveat |
-| V3 | Commit `vercel.json`? | **Open — depends on V1 spike.** Candidate: wired to real deployment in `example-frontend` and `example-backend` |
+| V1 | Backend host | **Decided 2026-10-11 (human): run all-in-one on Vercel in parallel with the existing split deploy.** `terreno-backend` (Vercel Functions, Fluid compute) serves `@terreno/api` with Socket.IO; `terreno-frontend` and `terreno-demo` are static exports. Both topologies are documented; split stays the conservative default for apps that need background workers or GCS uploads. Uploads (GCS) and the jobs worker are disabled on Vercel during the evaluation. |
+| V2 | Document `server` output? | **Decided: A** — advanced section only (repo is on Expo SDK 57); both apps keep `static` output; SSE buffering caveat documented. |
+| V3 | Commit `vercel.json`? | **Decided: A** — committed in `example-backend`, `example-frontend`, and `demo`, wired to real projects in the `terrenolabs` Vercel team (owner: Josh) and deployed by CircleCI (`vercel-deploy` job, `terreno-vercel` context). |
 | V4 | Preview deployments | **A** — include CORS + Better Auth `trustedOrigins` for preview URLs |
 | V5 | Disambiguate Vercel AI SDK vs hosting | **A** — consistent phrasing: "the Vercel AI SDK" vs "Vercel (hosting)" |
+
+## Spike outcome (2026-10-11)
+
+Answered by deploying the examples, not a scratch spike. See `docs/how-to/deploy-to-vercel.md` and `docs/how-to/vercel-function-websockets.md`.
+
+- `@terreno/api` runs on Vercel Functions (Node 24, Fluid compute) by exporting an `http.Server` that `TerrenoApp` attaches to (`example-backend/src/app.ts`, `start(false, server)`). WebSocket upgrades work; change-stream watchers run per instance.
+- The backend must be fully bundled with Bun (`build:vercel`): Vercel's launcher refuses `require()` of ESM, Bun inlines `NODE_ENV`, and the Express preset needs an `import "express"` marker.
+- Clients must use WebSocket-only Socket.IO on Vercel; `@terreno/rtk` `useSocketConnection({transports})` and `@terreno/syncdb` `createSyncDb({socketTransports})` were added.
+- Preview origins are matched with `CORS_ORIGINS` wildcards (`toCorsOrigin`), and Better Auth gets the raw patterns.
 
 ## Open TODOs (pre-implementation spike)
 
 Complete these before Phase 1 of the how-to guide ships:
 
-- [ ] **V1-todo:** Can `@terreno/api` run on Vercel with Socket.io sessions and MongoDB change streams? Use [Vercel Functions WebSockets (Public Beta)](https://vercel.com/docs/functions/websockets) as the source of truth. Document runtime limits, Fluid compute, cold starts, max-duration disconnects, and that a connection is pinned to one function instance (not session affinity across reconnects).
-- [ ] **V1-todo:** Write operator docs for websocket usage on Vercel Functions (see **Vercel Functions WebSockets** below). Link the beta page; do not copy it. Re-verify every config key and limitation against that page before the how-to ships.
-- [ ] **V1-todo:** Can `@terreno/ai` SSE streaming work through `expo-server/adapter/vercel` without unacceptable buffering?
-- [ ] **V1-todo:** Where do user file uploads land on an all-in-one Vercel deploy (Blob, external GCS, or other)?
-- [ ] **V1-todo:** Compare all-in-one Vercel vs split (Vercel web + long-running backend) on cost, ops complexity, and preview-deployment ergonomics.
-- [ ] **V2-todo:** If `server` output is documented, confirm Expo SDK ≥ 55+ requirements and list which Terreno features break under static/server export.
-- [ ] **V3-todo:** If committing `vercel.json`, confirm CI/deploy wiring for `example-frontend` and `example-backend` and who owns the Vercel project.
+- [x] **V1-todo:** Can `@terreno/api` run on Vercel with Socket.io sessions and MongoDB change streams? Use [Vercel Functions WebSockets (Public Beta)](https://vercel.com/docs/functions/websockets) as the source of truth. Document runtime limits, Fluid compute, cold starts, max-duration disconnects, and that a connection is pinned to one function instance (not session affinity across reconnects).
+- [x] **V1-todo:** Write operator docs for websocket usage on Vercel Functions (see **Vercel Functions WebSockets** below). Link the beta page; do not copy it. Re-verify every config key and limitation against that page before the how-to ships.
+- [x] **V1-todo:** (Deferred — Terreno does not route AI through Expo server output; the guide tells operators to keep `/gpt/prompt` on the `@terreno/api` backend.) Can `@terreno/ai` SSE streaming work through `expo-server/adapter/vercel` without unacceptable buffering?
+- [x] **V1-todo:** (Deferred, owner Josh — GCS uploads are off on Vercel during the evaluation; Blob vs external GCS is future work.) Where do user file uploads land on an all-in-one Vercel deploy (Blob, external GCS, or other)?
+- [x] **V1-todo:** Compare all-in-one Vercel vs split (Vercel web + long-running backend) on cost, ops complexity, and preview-deployment ergonomics.
+- [x] **V2-todo:** If `server` output is documented, confirm Expo SDK ≥ 55+ requirements and list which Terreno features break under static/server export.
+- [x] **V3-todo:** If committing `vercel.json`, confirm CI/deploy wiring for `example-frontend` and `example-backend` and who owns the Vercel project.
 
 ## Architecture
 
@@ -185,7 +194,7 @@ None.
 
 **Create**
 
-- `docs/how-to/deploy-to-vercel.md` (blocked on Phase 0 spike)
+- `docs/how-to/deploy-to-vercel.md` (named for both web and backend; the task list's `deploy-web-to-vercel.md`)
 - `docs/how-to/vercel-function-websockets.md` (Vercel Functions WebSockets beta; may ship during Phase 0)
 - `.rulesync/skills/deploy-vercel/SKILL.md`
 

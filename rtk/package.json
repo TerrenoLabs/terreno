@@ -5,10 +5,12 @@
   "dependencies": {
     "@ai-sdk/react": "^3.0.118",
     "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@openfeature/core": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
     "@reduxjs/toolkit": "catalog:",
+    "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "ai": "catalog:",
     "async-mutex": "^0.5.0",
@@ -53,6 +55,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
     ".ai/**/*"
@@ -81,7 +84,7 @@
     "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
-    "compile": "tsc",
+    "compile": "tsc && tsc -p tsconfig.typetests.json",
     "compile:watch": "tsc -w",
     "dev": "tsc -w",
     "lint": "biome check .",
@@ -93,5 +96,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.15.0"
+  "version": "57.20.0"
 }

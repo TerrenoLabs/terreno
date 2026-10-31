@@ -5,13 +5,15 @@ import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
 import qs from "qs";
+import {AccountSecurityApp} from "./accountSecurity/accountSecurityApp";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
 import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
+import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
-  type BetterAuthInstance,
   createBetterAuthSessionMiddleware,
+  verifyBetterAuthCredentialPassword,
 } from "./betterAuthSetup";
 import {addTerrenoDevBrowserLogsRoute} from "./browserLogsRoute";
 import {
@@ -28,6 +30,8 @@ import {
 import {type AddRoutes, type AuthOptions, logRequests} from "./expressServer";
 import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./githubAuth";
 import {type LoggingOptions, logger, setupLogging} from "./logger";
+import {addMcpOAuthRoutes} from "./mcp/oauth";
+import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
 import {
   addMcpServiceTokenRoutes,
@@ -54,14 +58,6 @@ import {ensureSyncIndexes} from "./sync/registry";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 import openapi from "./vendor/wesleytodd-openapi/index";
 import {jsonBodyParserOptions, urlencodedBodyParserOptions} from "./webhooks/rawBody";
-
-/** A registered plugin that exposes a Better Auth instance, e.g. BetterAuthApp. */
-interface BetterAuthProvider {
-  getAuth: () => BetterAuthInstance | undefined;
-  ensureAuth?: () => BetterAuthInstance;
-  markSessionMiddlewareMounted?: () => void;
-  getBetterAuthBasePath?: () => string;
-}
 
 type CorsOrigin =
   | string
@@ -143,6 +139,15 @@ export interface TerrenoAppOptions {
    * mounts `/mcp/service-tokens` and accepts `Authorization: Bearer mcp_…` on `/mcp`.
    */
   mcpServiceTokens?: McpServiceTokensAppOption;
+  /**
+   * Opt-in OAuth 2.1 authorization server for `/mcp`, so remote MCP clients (Claude.ai
+   * connectors, ChatGPT apps) can connect to a JWT-auth app. Off unless `enabled: true`. Mounts
+   * RFC 9728 / RFC 8414 discovery, authorize + consent, token, and revocation endpoints, and makes
+   * `/mcp` answer credential-less requests with a 401 challenge. Dynamic client registration is a
+   * second opt-in (`dynamicClientRegistration: true`). See
+   * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
+   */
+  mcpOAuth?: McpOAuthAppOption;
   /**
    * Versioned MongoDB migrations. `runOnStart` defaults to false. When true, wet `up`
    * runs after listen and `ensureSyncIndexes`. Production still requires
@@ -264,6 +269,20 @@ export class TerrenoApp {
   }
 
   /**
+   * The RBAC access control passed as `accessControl`, if any.
+   */
+  getAccessControl(): TerrenoAppOptions["accessControl"] {
+    return this.options.accessControl;
+  }
+
+  /**
+   * The application user model this app authenticates against.
+   */
+  getUserModel(): TerrenoAppOptions["userModel"] {
+    return this.options.userModel;
+  }
+
+  /**
    * Returns only TerrenoPlugin registrations (excludes model routers).
    */
   getPlugins(): TerrenoPlugin[] {
@@ -365,6 +384,11 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
+    // instance exists, so the app User guard and sync are installed with it.
+    findBetterAuthProvider(this.registrations)?.adoptUserModel?.(options.userModel);
+    // Resolve first so a misconfigured issuer or consent URL fails at boot.
+    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
 
     // Record mount paths on layers for Express 5 → OpenAPI compat
     patchAppUse(app);
@@ -403,11 +427,7 @@ export class TerrenoApp {
       next();
     });
 
-    const betterAuthForLimiter = this.registrations.find(
-      (registration) =>
-        "getAuth" in registration &&
-        typeof (registration as Partial<BetterAuthProvider>).getAuth === "function"
-    ) as BetterAuthProvider | undefined;
+    const betterAuthForLimiter = findBetterAuthProvider(this.registrations);
     if (betterAuthForLimiter?.ensureAuth) {
       const auth = betterAuthForLimiter.ensureAuth();
       app.use(createBetterAuthSessionMiddleware(auth, options.userModel));
@@ -434,7 +454,7 @@ export class TerrenoApp {
     const authOptions = options.authOptions;
     addAuthRoutes(app, options.userModel, authOptions);
 
-    if (options.logRequests !== false) {
+    if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
     }
 
@@ -509,15 +529,17 @@ export class TerrenoApp {
     }
 
     // Mount MCP at POST /mcp when any model opted in or a custom tool was registered.
-    const betterAuthPlugin = this.registrations.find(
-      (registration) =>
-        "getAuth" in registration &&
-        typeof (registration as Partial<BetterAuthProvider>).getAuth === "function"
-    ) as BetterAuthProvider | undefined;
-    const betterAuth = betterAuthPlugin?.ensureAuth?.() ?? betterAuthPlugin?.getAuth();
+    const betterAuth = getProvidedBetterAuth(findBetterAuthProvider(this.registrations));
     if (betterAuth) {
       authOptions.syncPasswordResetToBetterAuth = async (user, password): Promise<void> => {
         await applyJwtPasswordResetToBetterAuth(betterAuth, user, password);
+      };
+      authOptions.verifyBetterAuthPassword = async (user, password) => {
+        return verifyBetterAuthCredentialPassword(
+          betterAuth,
+          user as {betterAuthId?: string},
+          password
+        );
       };
     }
     const mcpServiceTokens = resolveMcpServiceTokensOption(options.mcpServiceTokens);
@@ -527,8 +549,12 @@ export class TerrenoApp {
         publicMcpUrl: mcpServiceTokens.publicMcpUrl,
       });
     }
+    if (mcpOAuth) {
+      addMcpOAuthRoutes(app, {oauth: mcpOAuth, openApi: oapi, userModel: options.userModel});
+    }
     mountMCPServer(app, {
       betterAuth,
+      mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
       userModel: options.userModel,
     });
@@ -588,10 +614,19 @@ export class TerrenoApp {
       if (!hasOrgsPlugin) {
         const orgConfig =
           typeof this.options.organizations === "object" ? this.options.organizations : {};
+        // Org-admins get member recovery routes only when the app registered AccountSecurityApp.
+        const accountSecurity =
+          orgConfig.accountSecurity ??
+          this.registrations.find(
+            (registration): registration is AccountSecurityApp =>
+              !this.isModelRouterRegistration(registration) &&
+              registration instanceof AccountSecurityApp
+          );
         this.register(
           new OrgsApp({
             ...orgConfig,
             access: this.options.accessControl,
+            accountSecurity,
             userModel: this.options.userModel,
           })
         );

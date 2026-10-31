@@ -92,6 +92,8 @@ describe("buildVersionInfo", () => {
 
 describe("versionInfo", () => {
   it("reads Expo config through buildVersionInfo", () => {
+    // The shared test environment resets __DEV__ to true after every test.
+    (globalThis as {__DEV__?: boolean}).__DEV__ = false;
     const info = versionInfo();
     expect(info.environment).toBe("staging");
     expect(info.updateChannel).toBe("staging");

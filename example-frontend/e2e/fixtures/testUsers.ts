@@ -2,6 +2,11 @@ export interface E2EUser {
   email: string;
   name: string;
   password: string;
+  /**
+   * Base32 TOTP secret for a user with two-factor on. `loginAs` answers the challenge with the
+   * current code from it.
+   */
+  totpSecret?: string;
 }
 
 export const TEST_USER: E2EUser = {
@@ -56,6 +61,16 @@ export const SYNCDB_CHAOS_USER = suiteUser("syncdb-chaos", "E2E SyncDB Chaos Use
  */
 export const SYNCDB_LOADLAB_USER = suiteUser("syncdb-loadlab", "E2E SyncDB LoadLab User");
 
+/** The member staff sign consent for in provisionalConsent.spec.ts. */
+export const PROVISIONAL_MEMBER_USER = suiteUser("provisional-member", "E2E Provisional Member");
+/** Non-admin staff granted consentResponse:signOnBehalf through an RBAC role. */
+export const PROVISIONAL_STAFF_USER = suiteUser("provisional-staff", "E2E Provisional Staff");
+/** Non-admin user without the role; the signer screen must refuse them. */
+export const PROVISIONAL_OUTSIDER_USER = suiteUser(
+  "provisional-outsider",
+  "E2E Provisional Outsider"
+);
+
 /** Every user auth.setup.ts must create (ADMIN_USER is additionally promoted). */
 export const ALL_E2E_USERS: E2EUser[] = [
   TEST_USER,
@@ -72,4 +87,7 @@ export const ALL_E2E_USERS: E2EUser[] = [
   SYNCDB_STORAGE_USER,
   SYNCDB_CHAOS_USER,
   SYNCDB_LOADLAB_USER,
+  PROVISIONAL_MEMBER_USER,
+  PROVISIONAL_STAFF_USER,
+  PROVISIONAL_OUTSIDER_USER,
 ];

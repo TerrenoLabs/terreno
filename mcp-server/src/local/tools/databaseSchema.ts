@@ -2,6 +2,7 @@ import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
 import {resolveTerrenoProjectRoot} from "../projectRoot.js";
+import {withLocalMongoDb} from "./localMongo.js";
 
 interface DatabaseSchemaArgs {
   collectionFilter?: string;
@@ -82,17 +83,7 @@ export const databaseSchema = async (args: DatabaseSchemaArgs): Promise<string> 
     return lines.join("\n");
   }
 
-  const mongoose = await import("mongoose");
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(mongoUri);
-    }
-
-    const db = mongoose.connection.db;
-    if (!db) {
-      return "Connected to Mongo but `connection.db` is not available.";
-    }
-
+  return withLocalMongoDb(mongoUri, async (db) => {
     const filter = args.collectionFilter?.toLowerCase().trim();
     const names = (await db.listCollections().toArray())
       .map((c) => c.name)
@@ -114,7 +105,5 @@ export const databaseSchema = async (args: DatabaseSchemaArgs): Promise<string> 
     }
 
     return lines.join("\n");
-  } finally {
-    await mongoose.disconnect().catch(() => undefined);
-  }
+  });
 };

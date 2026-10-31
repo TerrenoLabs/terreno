@@ -34,6 +34,9 @@
     "**/openApiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
     "example-backend/migrations/**": ["files", "exports", "types"],
+    // Bin entry points (terreno-test-shard / terreno-test-hygiene): the pure functions and
+    // types behind them are exported for their unit tests only, not as a library surface.
+    "test/src/cli/**": ["exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],
     // Runtime adapters expose these hooks only so deterministic tests can replace or
     // reset process-global browser, Metro, log-path, and console state.
@@ -89,7 +92,8 @@
         "scripts/**/*.test.ts",
         ".github/scripts/**/*.test.ts",
         "scripts/ci/prepare-package-publish.mjs",
-        "scripts/charts/compareRenderedSnapshots.ts"
+        "scripts/charts/compareRenderedSnapshots.ts",
+        "scripts/captureListDetail.ts"
       ],
       // Policy/release scripts are development entries, not production modules.
       "project": [
@@ -161,7 +165,7 @@
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts"
+        "src/isolated/**/*.isolated.{ts,tsx}"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -186,7 +190,28 @@
       // The test logger discovers @terreno/api through a runtime require. Declaring it
       // here would cycle with API's own @terreno/test dependency and break the
       // topological order that .github/scripts/compile-workspace-deps.js relies on.
-      "ignoreDependencies": ["@sentry/bun", "@terreno/api"],
+      // The expo tests import Expo/RN modules and app aliases that the preload only mocks;
+      // they are never installed by @terreno/test or its consumers' backend entry point.
+      "ignoreDependencies": [
+        "@sentry/bun",
+        "@terreno/api",
+        "@react-native-async-storage/async-storage",
+        "@hooks/useA",
+        "@store",
+        "expo-clipboard",
+        "expo-constants",
+        "expo-haptics",
+        "expo-linking",
+        "expo-secure-store",
+        "expo-splash-screen",
+        // The service-mock tests import the SDKs their registrars replace with mock.module.
+        "@google-cloud/storage",
+        "@google-cloud/tasks",
+        "@sendgrid/mail",
+        "expo-server-sdk",
+        "google-auth-library",
+        "twilio"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/preload/**!"
@@ -307,7 +332,10 @@
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
         "expo-mcp",
         // RTK OpenAPI's CLI loads TypeScript configuration through ts-node.
-        "ts-node"
+        "ts-node",
+        // auth-experience T2 owns the lockfile and adds this ahead of its first import
+        // (T22's TOTP e2e helper). Remove the entry when T22 lands.
+        "otpauth"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -318,6 +346,7 @@
         "jspdf-native-stub.js",
         "fingerprint.config.js",
         "playwright.circleci.config.ts",
+        "playwright.smoke.config.ts",
         "tests/bunSetup.ts",
         "tests/testPreload.ts"
       ],
@@ -358,6 +387,7 @@
         "@terreno/jobs!",
         "@thream/socketio-jwt!",
         "ai!",
+        "better-auth!",
         "expo-server-sdk!",
         "express!",
         "google-auth-library!",
@@ -372,6 +402,8 @@
       ],
       "entry": [
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",

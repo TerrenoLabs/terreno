@@ -15,6 +15,8 @@ export interface ProfileResponse {
 export interface UpdateProfileRequest {
   name?: string;
   email?: string;
+  /** Required by the server when `email` changes the mailbox. */
+  currentPassword?: string;
   password?: string;
 }
 

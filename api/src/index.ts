@@ -1,8 +1,24 @@
+export {ISSUE_SIGN_IN_LINK_PERMISSION} from "./accountSecurity/accessActions";
+export * from "./accountSecurity/accountSecurityApp";
+export * from "./accountSecurity/accountSecurityService";
+export {suspendMembershipAction} from "./accountSecurity/membershipActions";
+export {
+  createOrgSecurityAuthorizer,
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "./accountSecurity/orgSecurityRoutes";
+export {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
+export * from "./accountSecurity/securityEvents";
+export * from "./accountSecurity/securityNotifications";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";
 export {AuditApp, type AuditAppOptions} from "./audit/auditApp";
 export {
+  AUDIT_EVENT_SOURCES,
   type AuditEventDocument,
   type AuditEventModel,
   type AuditEventOperation,
@@ -35,12 +51,24 @@ export * from "./authRecovery";
 export * from "./authTokens";
 export * from "./betterAuth";
 export * from "./betterAuthApp";
+export * from "./betterAuthChallengeHeaders";
+export * from "./betterAuthFeatures";
+export * from "./betterAuthMethods";
 export * from "./betterAuthSetup";
 export * from "./browserLogsRoute";
 export * from "./config";
 export * from "./configurationApp";
 export * from "./configurationPlugin";
 export * from "./consentApp";
+export {
+  type ConsentStatus,
+  type ConsentStatusForm,
+  type ConsentStatusProvisional,
+  type ConsentStatusRow,
+  type ConsentStatusSigner,
+  getConsentStatuses,
+  type ResolveConsentForms,
+} from "./consentStatus";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";
@@ -53,7 +81,22 @@ export {
 export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
-export {extractUserFromHeaders, type MCPAuthContext} from "./mcp/auth";
+export {
+  extractAuthFromHeaders,
+  extractUserFromHeaders,
+  type MCPAuthContext,
+  type MCPAuthResult,
+} from "./mcp/auth";
+export {addMcpOAuthRoutes, type McpOAuthRoutesOptions} from "./mcp/oauth";
+export {
+  buildAuthorizationServerMetadata,
+  buildProtectedResourceMetadata,
+  type McpOAuthAppOption,
+  type McpOAuthOptions,
+  type ResolvedMcpOAuthOptions,
+  resolveMcpOAuthOption,
+  sendMcpOAuthChallenge,
+} from "./mcp/oauthMetadata";
 export type {MCPCustomTool} from "./mcp/registry";
 export {
   clearMCPRegistry,
@@ -94,6 +137,10 @@ export * from "./migrations/schemaCatalog";
 export * from "./migrations/types";
 export * from "./models/consentForm";
 export * from "./models/consentResponse";
+export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
+export {McpOAuthClient} from "./models/mcpOAuthClient";
+export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
+export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
 export * from "./models/mcpServiceToken";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
@@ -183,6 +230,14 @@ export * from "./rbac/scopes";
 export * from "./rbac/statements";
 export * from "./rbac/types";
 export * from "./rbac/userPlugin";
+export {
+  assertCanWriteTargetUser,
+  assertCanWriteUserIdentity,
+  isRbacUserModelName,
+  isWriteKeyForField,
+  USER_IDENTITY_FIELDS,
+  USER_UPDATE_IDENTITY_ACTION,
+} from "./rbac/userWriteGuards";
 export {
   type AuthorizedEmitEntry,
   emitPayloadToAuthorizedRoom,
@@ -292,6 +347,15 @@ export * from "./terrenoPlugin";
 export * from "./transformers";
 export * from "./types/consentForm";
 export * from "./types/consentResponse";
+export type {
+  McpOAuthAuthorizationDocument,
+  McpOAuthAuthorizationStatus,
+  McpOAuthClientDocument,
+  McpOAuthConfidentialClientOptions,
+  McpOAuthRevokedFamilyDocument,
+  McpOAuthTokenDocument,
+  McpOAuthTokenEndpointAuthMethod,
+} from "./types/mcpOAuth";
 export * from "./utils";
 export * from "./versionCheckPlugin";
 export type {

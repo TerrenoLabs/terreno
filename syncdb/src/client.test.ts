@@ -1,8 +1,12 @@
 import "fake-indexeddb/auto";
 
 import {describe, expect, it} from "bun:test";
+import {createServer} from "node:http";
+import type {AddressInfo} from "node:net";
 import {assert} from "chai";
+import {Server} from "socket.io";
 
+import {betterAuthAdapter} from "./auth/betterAuthAdapter";
 import {createSyncDb, type SyncDbConfig} from "./client";
 import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
 import {getConflict} from "./mutations/conflicts";
@@ -12,7 +16,7 @@ import type {PersisterFactory} from "./persisters/types";
 import {idbGet} from "./storage/idb";
 import {SYNC_SCHEMA_VERSION} from "./storage/schema";
 import {CURSORS_TABLE} from "./storage/types";
-import {AuthRequiredError, type HttpChannel} from "./sync/httpChannel";
+import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
 import type {SyncTransport} from "./sync/transport";
 import {createFakeTransport, type FakeTransport} from "./testing/fakeTransport";
 import type {
@@ -252,6 +256,39 @@ describe("createSyncDb", () => {
       streams: {},
       totalThisDrain: 0,
     });
+  });
+
+  it("opens the default socket with the configured socketTransports", async () => {
+    const httpServer = createServer();
+    const io = new Server(httpServer);
+    const firstTransports: string[] = [];
+    io.on("connection", (socket) => {
+      firstTransports.push(socket.conn.transport.name);
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const {port} = httpServer.address() as AddressInfo;
+
+    const harness = makeHarness();
+    const client = createSyncDb({
+      ...harness.config,
+      baseUrl: `http://127.0.0.1:${port}`,
+      socketTransports: ["websocket"],
+      transport: undefined,
+    });
+    try {
+      await client.start();
+      for (let attempt = 0; attempt < 50 && firstTransports.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      expect(firstTransports).toEqual(["websocket"]);
+    } finally {
+      await client.stop();
+      io.disconnectSockets(true);
+      httpServer.closeAllConnections();
+      await new Promise<void>((resolve) => {
+        io.close(() => resolve());
+      });
+    }
   });
 
   it("start() rejects without an authenticated user", async () => {
@@ -2636,6 +2673,46 @@ describe("createSyncDb", () => {
     });
   });
 
+  describe("auth change while the session read fails (betterAuthAdapter)", () => {
+    it("keeps the user and mutate() working when the device goes offline before the auth-change handler reads the session", async () => {
+      // start() subscribes to the session atom, which hands over the current session at
+      // once; the handler that emission queues runs after start() resolves. When the
+      // network drops in between, its get-session read fails. That must not count as a
+      // sign-out.
+      const listeners = new Set<(value: unknown) => void>();
+      // Only start()'s own read gets through; the network is gone for every later one.
+      let sessionReads = 0;
+      const session = {data: {session: {token: "tok"}, user: {id: "u1"}}};
+      const harness = makeHarness({
+        authProvider: betterAuthAdapter({
+          getSession: async () => {
+            sessionReads += 1;
+            if (sessionReads > 1) {
+              throw new TypeError("Failed to fetch");
+            }
+            return session;
+          },
+          useSession: {
+            subscribe: (listener) => {
+              listeners.add(listener);
+              listener(session);
+              return () => listeners.delete(listener);
+            },
+          },
+        }),
+      });
+      const client = createSyncDb(harness.config);
+      await client.start();
+      await waitUntil(() => sessionReads > 1);
+      await flush();
+
+      expect(client.getSyncStatus().paused).toBeUndefined();
+      const {id} = client.mutate({collection: "todos", data: {title: "x"}, operation: "create"});
+      expect(id).toBeTruthy();
+      await client.stop();
+    });
+  });
+
   describe("signOut() (A4)", () => {
     it("serializes against a concurrent auth change and leaves no destroyed persister behind", async () => {
       const harness = makeHarness();
@@ -2710,6 +2787,47 @@ describe("createSyncDb", () => {
   });
 
   describe("lifecycle serialization (E1)", () => {
+    it("drops a startup reconcile's streams request that a stop() overtook while it read the token", async () => {
+      // The app stops syncdb, then signs out. A reconcile fired just before the stop is still
+      // awaiting getToken(); sending its request after the stop would carry a token the
+      // sign-out is revoking.
+      let releaseToken = (): void => {};
+      const tokenGate = new Promise<void>((resolve) => {
+        releaseToken = (): void => resolve();
+      });
+      const sent: string[] = [];
+      const httpChannel = createHttpChannel({
+        authProvider: {
+          getToken: async (): Promise<string> => {
+            await tokenGate;
+            return "token";
+          },
+        },
+        baseUrl: "http://api",
+        fetchImpl: async (input: string): Promise<Response> => {
+          sent.push(input);
+          return new Response(JSON.stringify({streams: []}), {status: 200});
+        },
+      });
+      const harness = makeHarness({httpChannel});
+      const client = createSyncDb(harness.config);
+      const originalWarn = console.warn;
+      const warnings: unknown[][] = [];
+      console.warn = (...args: unknown[]): void => {
+        warnings.push(args);
+      };
+      try {
+        await client.start();
+        await client.stop();
+        releaseToken();
+        await flush();
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.deepEqual(sent, []);
+      assert.deepEqual(warnings, []);
+    });
+
     it("a rapid stop()-then-start() for a new user leaves the new user's persistence working", async () => {
       const name = uniqueName();
       const harness = makeHarness({name});
@@ -2752,6 +2870,32 @@ describe("createSyncDb", () => {
         title: "user two",
       });
       await reopened.stop();
+    });
+
+    it("an auth change queued behind a stop() does not reconnect the stopped client", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+      // start() subscribes to auth changes, then holds the mutex on its connect.
+      const releaseConnect = observable.gateNextConnect();
+      const startPromise = client.start();
+      await waitUntil(() => observable.events.includes("connect"));
+
+      // A sign-out stops the client while start() is still connecting, and an auth change
+      // (still the same signed-in user) fires before stop() runs: it queues behind the stop.
+      const stopPromise = client.stop();
+      harness.auth.emitAuthChange();
+      releaseConnect();
+      await startPromise;
+      await stopPromise;
+      const eventsAtStop = observable.events.length;
+      const streamsAtStop = harness.http.state.streamsCount;
+      await flush();
+      await flush();
+
+      expect(observable.events.slice(eventsAtStop)).toEqual([]);
+      expect(harness.http.state.streamsCount).toBe(streamsAtStop);
+      expect(client.getSyncStatus().isOnline).toBe(false);
     });
 
     it("double start() is a no-op: listeners are not double-registered", async () => {
@@ -3615,6 +3759,185 @@ describe("snapshot paging concurrency", () => {
 
     expect(fetched).toEqual(["todos|tenant:w0", failing]);
     expect(isBootstrapped(client, "todos|tenant:w2")).toBe(false);
+    await client.stop();
+  });
+});
+
+describe("debug event stream: reconcile decisions", () => {
+  /** Labels of every recorded reconcile event, in order. */
+  const reconcileLabels = (client: ReturnType<typeof createSyncDb>): string[] =>
+    (client.debug?.getEvents() ?? [])
+      .filter((event) => event.type === "reconcile")
+      .map((event) => event.label);
+
+  it("records a skip for a stream whose collection is not configured and a join for the rest", async () => {
+    const harness = makeHarness({debug: true});
+    const unconfigured = "projects|tenant:org1";
+    harness.http.state.streams = [
+      {collection: "todos", stream: DEFAULT_STREAM},
+      {collection: "projects", stream: unconfigured},
+    ];
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+
+    const skipped = client.debug
+      ?.getEvents()
+      .find((event) => event.label.startsWith("stream skipped"));
+    expect(skipped).toMatchObject({
+      detail: {collection: "projects", stream: unconfigured},
+      direction: "system",
+      label: `stream skipped (unconfigured collection): ${unconfigured}`,
+      type: "reconcile",
+    });
+    expect(reconcileLabels(client)).toContain(`stream join: ${DEFAULT_STREAM}`);
+    await client.stop();
+  });
+
+  it("records a leave with the number of entities it purged", async () => {
+    const harness = makeHarness({debug: true});
+    const leaving = "todos|tenant:org1";
+    harness.http.state.streams = [
+      {collection: "todos", stream: DEFAULT_STREAM},
+      {collection: "todos", stream: leaving},
+    ];
+    harness.http.state.pages[leaving] = {
+      cursor: 2,
+      entities: [
+        {data: {title: "org doc"}, deleted: false, id: "og1", seq: 1},
+        {data: {title: "org doc 2"}, deleted: false, id: "og2", seq: 2},
+      ],
+      frontierSeq: 2,
+      hasMore: false,
+      oldestRetainedSeq: 0,
+      stream: leaving,
+    };
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+
+    harness.http.state.streams = [{collection: "todos", stream: DEFAULT_STREAM}];
+    await client.reconcile();
+
+    const leave = client.debug?.getEvents().find((event) => event.label.startsWith("stream leave"));
+    expect(leave).toMatchObject({
+      detail: {purged: 2, stream: leaving},
+      label: `stream leave: purged ${leaving} (2 entities)`,
+    });
+    await client.stop();
+  });
+
+  it("records how many legacy snapshot cursors it migrated", async () => {
+    const harness = makeHarness({collections: ["todos", "notes"], debug: true});
+    const client = createSyncDb(harness.config);
+    client.store.raw.setRow(CURSORS_TABLE, "snapshot:todos", {seq: 42, updatedAt: "old"});
+    client.store.raw.setRow(CURSORS_TABLE, "snapshot:notes", {seq: 7, updatedAt: "old"});
+
+    await client.start();
+    await flush();
+
+    const migration = client.debug?.getEvents().find((event) => event.label.startsWith("migrated"));
+    expect(migration).toMatchObject({
+      detail: {migrated: 2},
+      label: "migrated 2 legacy snapshot cursors",
+    });
+    await client.stop();
+  });
+
+  it("records tombstone compaction only when a reconcile actually removes rows", async () => {
+    const retentionMs = 90 * 24 * 60 * 60 * 1_000;
+    const harness = makeHarness({debug: true, tombstoneRetentionMs: retentionMs});
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+    harness.transport.deliverDelta({
+      collection: "todos",
+      deleted: true,
+      id: "old-tombstone",
+      method: "delete",
+      seq: 1,
+      stream: DEFAULT_STREAM,
+    });
+
+    await client.reconcile();
+    expect(reconcileLabels(client).some((label) => label.startsWith("compacted"))).toBe(false);
+
+    harness.clock.value += retentionMs + 1_000;
+    await client.reconcile();
+
+    const compaction = client.debug
+      ?.getEvents()
+      .find((event) => event.label.startsWith("compacted"));
+    expect(compaction).toMatchObject({detail: {removed: 1}, label: "compacted 1 tombstone(s)"});
+    await client.stop();
+  });
+
+  it("records the fallback to per-stream paging when the server lacks snapshot batch", async () => {
+    const harness = makeHarness({debug: true});
+    harness.http.channel.fetchSnapshotBatch = async () => ({type: "unsupported"});
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+
+    expect(reconcileLabels(client)).toContain(
+      "snapshot batch unsupported by server; paging per stream"
+    );
+    // The per-stream fallback still bootstrapped the stream.
+    expect(harness.http.state.fetchCount).toBeGreaterThan(0);
+    await client.stop();
+  });
+
+  it("brackets forceResync with start and end events that carry the purge totals", async () => {
+    const harness = makeHarness({debug: true});
+    harness.http.state.pages[DEFAULT_STREAM] = {
+      cursor: 1,
+      entities: [{data: {title: "stale"}, deleted: false, id: "local-1", seq: 1}],
+      frontierSeq: 1,
+      hasMore: false,
+      oldestRetainedSeq: 0,
+      stream: DEFAULT_STREAM,
+    };
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+    harness.http.state.pages[DEFAULT_STREAM] = emptyPage(DEFAULT_STREAM, 5);
+
+    const result = await client.forceResync();
+
+    assert.equal(result.ok, true);
+    const events = client.debug?.getEvents() ?? [];
+    const start = events.find((event) => event.label === "force resync start");
+    const end = events.find((event) => event.label.startsWith("force resync end"));
+    expect(start).toMatchObject({phase: "start", type: "reconcile"});
+    expect(end).toMatchObject({
+      detail: {purged: result.purged, repaired: result.repaired, streams: result.streams},
+      label: `force resync end (${result.streams} streams, ${result.purged} purged, ${result.repaired} repaired)`,
+      phase: "end",
+    });
+    // The injected clock never advanced, so the measured duration is exact.
+    expect(end?.durationMs).toBe(0);
+    expect(start?.id ?? Number.POSITIVE_INFINITY).toBeLessThan(end?.id ?? 0);
+    await client.stop();
+  });
+
+  it("records the streams a subscribe confirmation caught up", async () => {
+    const harness = makeHarness({debug: true});
+    const client = createSyncDb(harness.config);
+    await client.start();
+    await flush();
+
+    harness.transport.confirmSubscribed({collection: "todos", streams: ["todos|owner:new"]});
+    await waitUntil(() =>
+      reconcileLabels(client).some((label) => label.startsWith("subscribe catch-up"))
+    );
+
+    const catchUp = client.debug
+      ?.getEvents()
+      .find((event) => event.label.startsWith("subscribe catch-up"));
+    expect(catchUp).toMatchObject({
+      detail: {streams: ["todos|owner:new"]},
+      label: "subscribe catch-up: todos|owner:new",
+    });
     await client.stop();
   });
 });

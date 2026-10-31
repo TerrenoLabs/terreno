@@ -5,7 +5,9 @@ import type {User} from "../auth";
 import {APIError, isAPIError} from "../errors";
 import {createFeatureFlaggedLogger, logger} from "../logger";
 import {resolveOrgContext, runWithOrgContext} from "../orgs/orgContext";
+import {checkPermissions} from "../permissions";
 import {findOneOrNoneFor} from "../plugins";
+import {authorizeAdminBroadcastDocument} from "./adminBroadcastScope";
 import {
   type AdminWindowMutationScope,
   buildAdminWindowExecutorOptions,
@@ -26,7 +28,7 @@ import {SYNC_MUTATION_LEASE_MS, SyncMutation, type SyncMutationDocument} from ".
 import {findSyncEntryByCollectionTag, type SyncRegistryEntry} from "./registry";
 import type {SyncAppOptions} from "./routes";
 import {serializeSyncDoc} from "./routes";
-import {getScopeField} from "./streams";
+import {getScopeField, resolveStreamForDoc, resolveUserStreamsForEntry} from "./streams";
 import type {
   SyncAck,
   SyncMutateBatchResponse,
@@ -173,19 +175,70 @@ const makeNack = (nack: SyncNack): SyncMutationOutcome => {
 };
 
 /**
+ * A replayed conflict hands back the LIVE document, so the caller must still be allowed to
+ * read it now: the admin broadcast scope for an admin-window replay, otherwise the
+ * collection's read permission plus membership in the document's sync stream (the checks a
+ * snapshot applies).
+ */
+const canReadReplayedDoc = async ({
+  doc,
+  entry,
+  mutation,
+  scopeResolver,
+  user,
+}: {
+  doc: mongoose.Document;
+  entry: SyncRegistryEntry;
+  mutation: SyncMutateRequest;
+  scopeResolver?: SyncMutationScopeResolver;
+  user: User;
+}): Promise<boolean> => {
+  const plain = doc.toObject() as Record<string, unknown>;
+  if (mutation.mutationMode === "adminWindow") {
+    const decision = await authorizeAdminBroadcastDocument({
+      doc: plain,
+      modelName: entry.modelName,
+      user,
+    });
+    return decision === "allow";
+  }
+  if (!(await checkPermissions("read", entry.options.permissions.read, user, doc))) {
+    return false;
+  }
+  const stream = resolveStreamForDoc({
+    collectionTag: entry.collectionTag,
+    doc: plain,
+    scope: entry.config.scope,
+  });
+  const userStreams = await resolveUserStreamsForEntry({
+    entry,
+    getUserScopes: scopeResolver,
+    user,
+  });
+  return userStreams.includes(stream);
+};
+
+/**
  * Load a document by id INCLUDING tombstones (`isDeletedPlugin` would otherwise filter a
  * soft-deleted doc out) and serialize it for a sync payload. Returns undefined when the
- * document is gone, the id does not cast, or the consumer's serializer throws — callers
- * treat a missing `serverDoc` as "seq only", which is what the client needs to re-base.
+ * document is gone, the id does not cast, the caller may no longer read it, or the
+ * consumer's serializer throws — callers treat a missing `serverDoc` as "seq only", which
+ * is what the client needs to re-base.
  */
 const serializeLiveDoc = async ({
   entry,
   id,
+  mutation,
   request,
+  scopeResolver,
+  user,
 }: {
   entry: SyncRegistryEntry;
   id: string | undefined;
+  mutation: SyncMutateRequest;
   request: express.Request;
+  scopeResolver?: SyncMutationScopeResolver;
+  user: User;
 }): Promise<unknown> => {
   if (!id) {
     return undefined;
@@ -195,6 +248,9 @@ const serializeLiveDoc = async ({
     const found = await model.find({_id: id, deleted: {$in: [true, false]}}).limit(1);
     const doc = found[0] as mongoose.Document | undefined;
     if (!doc) {
+      return undefined;
+    }
+    if (!(await canReadReplayedDoc({doc, entry, mutation, scopeResolver, user}))) {
       return undefined;
     }
     return await serializeSyncDoc({doc, entry, req: request});
@@ -218,12 +274,18 @@ const serializeLiveDoc = async ({
  */
 const outcomeFromLedgerRow = async ({
   entry,
+  mutation,
   request,
   row,
+  scopeResolver,
+  user,
 }: {
   entry: SyncRegistryEntry;
+  mutation: SyncMutateRequest;
   request: express.Request;
   row: SyncMutationDocument;
+  scopeResolver?: SyncMutationScopeResolver;
+  user: User;
 }): Promise<SyncMutationOutcome | undefined> => {
   if (row.status === "applied") {
     return {
@@ -236,7 +298,14 @@ const outcomeFromLedgerRow = async ({
       code: "conflict",
       message: row.error,
       mutationId: row.mutationId,
-      serverDoc: await serializeLiveDoc({entry, id: row.resultId, request}),
+      serverDoc: await serializeLiveDoc({
+        entry,
+        id: row.resultId,
+        mutation,
+        request,
+        scopeResolver,
+        user,
+      }),
       serverSeq: row.resultSeq,
     });
   }
@@ -281,14 +350,18 @@ const takeoverStaleLease = async (
  */
 const waitForRecordedOutcome = async ({
   entry,
+  mutation,
   mutationId,
   request,
+  scopeResolver,
   user,
   onTakeover,
 }: {
   entry: SyncRegistryEntry;
+  mutation: SyncMutateRequest;
   mutationId: string;
   request: express.Request;
+  scopeResolver?: SyncMutationScopeResolver;
   user: User;
   /** Invoked with the re-claimed row when a stale lease is taken over. */
   onTakeover: (row: SyncMutationDocument) => Promise<SyncMutationOutcome>;
@@ -303,7 +376,23 @@ const waitForRecordedOutcome = async ({
           mutationId,
         });
       }
-      const outcome = await outcomeFromLedgerRow({entry, request, row});
+      // Rows recorded before collectionTag existed carry none; their replays still pass
+      // the live read check in serializeLiveDoc.
+      if (row.collectionTag !== undefined && row.collectionTag !== entry.collectionTag) {
+        return makeNack({
+          code: "unauthorized",
+          message: `Mutation ${mutationId} was submitted for another collection`,
+          mutationId,
+        });
+      }
+      const outcome = await outcomeFromLedgerRow({
+        entry,
+        mutation,
+        request,
+        row,
+        scopeResolver,
+        user,
+      });
       if (outcome) {
         return outcome;
       }
@@ -865,6 +954,7 @@ export const applySyncMutation = async ({
   try {
     claimed = await SyncMutation.create({
       claimedAt: DateTime.now().toJSDate(),
+      collectionTag: entry.collectionTag,
       mutationId,
       status: "pending",
       userId: String(user.id),
@@ -875,6 +965,7 @@ export const applySyncMutation = async ({
     }
     return waitForRecordedOutcome({
       entry,
+      mutation,
       mutationId,
       onTakeover: (takenOver) =>
         applyClaimedMutation({
@@ -888,6 +979,7 @@ export const applySyncMutation = async ({
           user,
         }),
       request,
+      scopeResolver,
       user,
     });
   }

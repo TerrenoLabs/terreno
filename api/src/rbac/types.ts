@@ -111,6 +111,13 @@ export interface PermissionSource {
   ttlMs?: number;
   staleOnFailure?: StaleOnFailurePolicy;
   staleMaxAgeMs?: number;
+  /**
+   * When true (the default), a failed `getGrants` for a user this process has no last-known deny
+   * posture for (cold instance, or the posture was evicted) throws a 503 instead of resolving
+   * local roles without this source's deny. Set it to `false` on additive-only sources that never
+   * return `deny`, so their outage drops only their grants.
+   */
+  failClosedWhenDenyUnknown?: boolean;
   getGrants: (args: {user: User}) => Promise<PermissionSourceGrants | null>;
 }
 
@@ -180,7 +187,12 @@ export interface TerrenoAccess<S extends Statements> {
   readonly statements: S;
   readonly ac: ReturnType<typeof createAccessControl<S>>;
   can: (args: AccessCheckArgs<S>) => Promise<AccessResult>;
-  getPermissions: (args: {user: User}) => Promise<PermissionSet>;
+  /**
+   * The user's effective permissions. With `requireComplete`, a permission source that failed and
+   * whose grants are unknown throws 503 instead of leaving its grants out; use it for a user whose
+   * missing permissions would loosen a check (the target of "may the actor act on this user?").
+   */
+  getPermissions: (args: {user: User; requireComplete?: boolean}) => Promise<PermissionSet>;
   queryFilter: (args: {
     user?: User;
     resource: string;
@@ -200,4 +212,9 @@ export interface TerrenoAccess<S extends Statements> {
   permission: (permissions: PermissionRequest<S>) => PermissionMethod<unknown>;
   roles: RoleManager;
   invalidateCache: (args?: {userId?: string}) => void;
+  /**
+   * The `userModel` passed to `createAccess`. Write paths use it to recognize the user model when
+   * it is compiled under a name other than `"User"`.
+   */
+  readonly userModel?: UserModel;
 }

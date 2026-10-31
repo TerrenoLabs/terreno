@@ -79,15 +79,94 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 
 | CircleCI shard | Specs |
 | --- | --- |
-| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
+| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` `two-factor` |
 | `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
-| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
+| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` `org-admin-security` `admin-user-security` |
+| `e2e-cross-site` (not required) | the cross-site specs below, then `account-linking` with `E2E_ACCOUNT_LINKING=explicit` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |
 
 Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loadlab`) is
 not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when that job
 failed.
+
+The cross-site specs (`CROSS_SITE_SPEC_FILES` in `playwright.config.ts`:
+`e2e/crossSiteBearer.spec.ts`, `e2e/crossSiteOAuth.spec.ts`, `e2e/authMethods.spec.ts`,
+`e2e/crossSiteChallenges.spec.ts`, `e2e/crossSiteLogin.spec.ts`,
+`e2e/account-linking.spec.ts`, `e2e/account-security.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
+check, rather than in an `e2e` shard: they need
+a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
+`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
+`BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
+`MOCK_OIDC_ISSUER` (the login page shows the mock provider's button because
+`/api/auth/terreno/methods` then lists `mock-oidc`), and the mock OIDC provider on
+`127.0.0.1:4555`. Naming any of those spec files (or
+setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
+the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
+`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. CI serves a static
+export instead of a Metro dev server, which gets OOM-killed bundling beside the backend and
+Chromium. To run the specs exactly as `e2e-cross-site` does:
+
+```bash
+cd example-frontend
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+  bun expo export --platform web --output-dir dist-cross-site --clear
+bunx serve dist-cross-site -s -l 8082 &
+CI=true E2E_CROSS_SITE_BEARER=true MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
+  bunx playwright test --config playwright.circleci.config.ts --reporter=list
+```
+
+`--clear` matters: Metro's cache keeps the `EXPO_PUBLIC_*` values of an earlier export. A new
+spec that needs
+the mock provider or cookie-less sessions joins `CROSS_SITE_SPEC_FILES` and the
+`cross-site-bearer` shard in `scripts/ci/e2eAffected/shards.ts`.
+
+`e2e/account-linking.spec.ts` has cases for the backend's `explicit` linking mode, which skip
+unless the backend reports that mode. `E2E_ACCOUNT_LINKING=explicit` starts the backend with
+`AUTH_ACCOUNT_LINKING=explicit`; run that spec alone, because the other specs expect the default
+`verified-email` (`e2e-cross-site` does this as its second step):
+`cd example-frontend && E2E_ACCOUNT_LINKING=explicit bunx playwright test e2e/account-linking.spec.ts`.
+
+### Deployed bearer smoke (`deploy-frontend-preview`)
+
+`netlify-deploy.sh frontend` builds the web app with `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`
+for production and previews. After the preview deploy, the `deploy-frontend-preview` job's
+"Smoke the deployed preview in web bearer mode" step runs `bun run smoke:deployed`
+(`playwright.smoke.config.ts`, `e2e/deployedBearer.smoke.ts`) against
+`https://pr-<n>--terreno-frontend.netlify.app`. It signs up a new `smoke-*@example.com` user on
+the PR's own backend, agrees to the consent forms, reloads, opens the profile, and fails if the
+API's origin holds a Better Auth session cookie. It also checks that the Google button's OAuth
+handoff start link redirects (to the provider, or back to `/login?error=provider_not_found`)
+instead of returning 404; `gcp-deploy.sh` sets `BETTER_AUTH_OAUTH_HANDOFF=true` on both backends.
+Production deploys never run it. To re-run it:
+
+1. Against the PR preview, which takes about 1 minute:
+
+   ```bash
+   cd example-frontend
+   SMOKE_BASE_URL=https://pr-<n>--terreno-frontend.netlify.app \
+     SMOKE_API_URL=https://pr-<n>---terreno-backend-example-7knxlrnpqq-uc.a.run.app \
+     bun run smoke:deployed
+   ```
+
+2. Against a local cross-site stack, which takes about 5 minutes because of the web export.
+   Start the backend with Better Auth on `127.0.0.1:4000`, then build and serve the web app
+   with the flag on `localhost:8082` (a different site):
+
+   ```bash
+   # Terminal 1, from example-backend/ (the replica-set mongod from step 2 above)
+   AUTH_PROVIDER=better-auth BETTER_AUTH_URL=http://127.0.0.1:4000 PORT=4000 \
+     BETTER_AUTH_OAUTH_HANDOFF=true \
+     MONGO_URI="mongodb://127.0.0.1:27017/terreno-smoke?replicaSet=rs0" \
+     TOKEN_SECRET=dev TOKEN_ISSUER=dev REFRESH_TOKEN_SECRET=dev SESSION_SECRET=dev \
+     bun run src/index.ts
+   # Terminal 2, from example-frontend/. --clear: Metro's cache can keep an earlier
+   # build's EXPO_PUBLIC_* values.
+   EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+     bun run export --clear && bunx serve dist -s -l 8082
+   # Terminal 3, from example-frontend/
+   SMOKE_BASE_URL=http://localhost:8082 bun run smoke:deployed
+   ```
 
 CircleCI skips a shard no changed file can reach. Ask for the same verdict before
 pushing with `bun run check:e2e-affected` (see

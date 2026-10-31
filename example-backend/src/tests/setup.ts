@@ -1,3 +1,4 @@
+import {afterEach} from "bun:test";
 import {registerSimpleMongoPreload} from "@terreno/test";
 import mongoose from "mongoose";
 
@@ -7,14 +8,12 @@ const defaultLocalMongoUri =
   process.env.TEST_MONGO_URI ||
   "mongodb://127.0.0.1:27017/terreno-example-test?connectTimeoutMS=360000";
 
+// The first wipe after a file loads its models waits on index builds across every example
+// collection, which can pass Bun's 5s hook default in a full run.
+const COLLECTION_WIPE_TIMEOUT_MS = 30_000;
+
 registerSimpleMongoPreload({
   defaultLocalMongoUri,
-  onAfterEach: async () => {
-    const collections = mongoose.connection.collections;
-    for (const key of Object.keys(collections)) {
-      await collections[key].deleteMany({});
-    }
-  },
   onBeforeEach: () => {
     process.env.ADMIN_SPA_ENABLED = "false";
     process.env.AUTH_PROVIDER = "better-auth";
@@ -34,6 +33,22 @@ registerSimpleMongoPreload({
     Reflect.deleteProperty(process.env, "GOOGLE_VERTEX_PROJECT");
     Reflect.deleteProperty(process.env, "ADMIN_SPA_DIST_DIR");
     Reflect.deleteProperty(process.env, "MIGRATIONS_DIR");
+    Reflect.deleteProperty(process.env, "BETTER_AUTH_OAUTH_HANDOFF");
+    Reflect.deleteProperty(process.env, "MOCK_OIDC_ISSUER");
+    Reflect.deleteProperty(process.env, "AUTH_ACCOUNT_LINKING");
+    Reflect.deleteProperty(process.env, "AUTH_SIGN_UP");
+    Reflect.deleteProperty(process.env, "PASSKEY_RP_ID");
+    Reflect.deleteProperty(process.env, "FRONTEND_URL");
+    Reflect.deleteProperty(process.env, "OAUTH_PROXY_PRODUCTION_URL");
+    for (const key of [
+      "APPLE_CLIENT_ID",
+      "APPLE_CLIENT_SECRET",
+      "APPLE_TEAM_ID",
+      "APPLE_KEY_ID",
+      "APPLE_PRIVATE_KEY",
+    ]) {
+      Reflect.deleteProperty(process.env, key);
+    }
   },
   testEnv: {
     extra: {
@@ -57,3 +72,10 @@ registerSimpleMongoPreload({
     tokenIssuer: "terreno-example.test",
   },
 });
+
+afterEach(async () => {
+  const collections = mongoose.connection.collections;
+  for (const key of Object.keys(collections)) {
+    await collections[key].deleteMany({});
+  }
+}, COLLECTION_WIPE_TIMEOUT_MS);

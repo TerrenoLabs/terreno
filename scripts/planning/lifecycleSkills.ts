@@ -73,6 +73,7 @@ const PRE_GROW_SKILL_DIRECTORIES = ["terreno-prd"] as const;
 
 const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
+  "attach-pr-media",
   "backend-test-env",
   "building-admin-interfaces",
   "building-terreno-apps",
@@ -81,9 +82,14 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "generate-release-announcements",
   "generate-sdk",
   "mongoose-schema-safety",
+  "set-up-social-login",
   "store-assets",
   "terreno-backend-api",
+  "terreno-backend-tests",
   "terreno-data-fetching",
+  "terreno-frontend-tests",
+  "terreno-mobile-tests",
+  "terreno-test-setup",
   "terreno-ui",
   "update-docs",
   "upgrading-terreno",
@@ -374,8 +380,14 @@ export const validateStageContent = ({
     if (!content.includes("Never hand a wait back to the human")) {
       errors.push(`${prefix}: Taste must not return PENDING to a human`);
     }
-    if (!content.includes("at most 3 fix pushes") || !content.includes("at most 3 hours")) {
-      errors.push(`${prefix}: Taste standalone entry must be bounded by pushes and wait time`);
+    if (!content.includes("at most 3 fix rounds") || !content.includes("at most 3 hours")) {
+      errors.push(`${prefix}: Taste standalone entry must be bounded by fix rounds and wait time`);
+    }
+    if (!content.includes("push-ownership.md") || !content.includes("still red after")) {
+      errors.push(`${prefix}: Taste must escalate a PR that stays red after its fix rounds`);
+    }
+    if (!content.includes("unanswered bot thread")) {
+      errors.push(`${prefix}: Taste must not PASS with an unanswered review-bot thread`);
     }
     if (!content.includes("If step 10 did not push")) {
       errors.push(`${prefix}: Taste must preserve an emit path when no fix was pushed`);

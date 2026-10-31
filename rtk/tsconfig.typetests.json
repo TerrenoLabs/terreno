@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    "sourceMap": false,
+    "types": ["bun"]
+  },
+  "exclude": ["node_modules", "dist"],
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.types.test.ts"]
+}

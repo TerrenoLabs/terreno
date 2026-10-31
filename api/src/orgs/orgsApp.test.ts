@@ -5,7 +5,12 @@ import type {Application} from "express";
 import mongoose from "mongoose";
 import type {PassportLocalMongooseDocument} from "passport-local-mongoose";
 
-import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "../auth";
+import {
+  type User as AuthUser,
+  type UserModel as AuthUserModel,
+  addAuthRoutes,
+  setupAuth,
+} from "../auth";
 import {apiErrorMiddleware, apiUnauthorizedMiddleware} from "../errors";
 import {createAccess} from "../rbac/access";
 import {terrenoStatements} from "../rbac/statements";
@@ -38,6 +43,7 @@ const createUser = async (args: {email: string; roles?: string[]}): Promise<User
 describe("OrgsApp", () => {
   let app: Application;
   let auditEvents: OrgAuditEvent[];
+  let access: ReturnType<typeof createAccess>;
 
   beforeEach(async () => {
     await Promise.all([
@@ -46,7 +52,7 @@ describe("OrgsApp", () => {
       UserModel.deleteMany({}),
     ]);
     auditEvents = [];
-    const access = createAccess({
+    access = createAccess({
       connection: mongoose.connection,
       organizations: true,
       statements: terrenoStatements,
@@ -244,6 +250,99 @@ describe("OrgsApp", () => {
       .post(`/orgs/${org._id}/members`)
       .send({email: "Member@Example.com", roleName: "member"});
     assert.equal(mixedCase.status, 409);
+  });
+
+  it("applies a membership's org-admin grants at once, not after the permission cache expires", async () => {
+    const operator = await createUser({email: "operator@example.com", roles: ["operator"]});
+    const member = await createUser({email: "new-org-admin@example.com"});
+    const org = await Organization.create({name: "Acme", ownerId: operator._id});
+    const operatorAgent = await loginWithPassword(app, {
+      email: "operator@example.com",
+      password: PASSWORD,
+    });
+    const memberUser = member as unknown as AuthUser;
+    // Resolve (and cache) the user's permissions before they join.
+    assert.isUndefined((await access.getPermissions({user: memberUser})).admin);
+
+    const attached = await operatorAgent
+      .post(`/orgs/${org._id}/members`)
+      .send({email: "new-org-admin@example.com", roleName: "org-admin"});
+    assert.equal(attached.status, 201);
+    assert.deepEqual((await access.getPermissions({user: memberUser})).admin, ["access"]);
+
+    const demoted = await operatorAgent
+      .patch(`/orgs/${org._id}/members/${attached.body.data._id}`)
+      .send({roleName: "member"});
+    // The operator's attach left the new member as the only org-admin, so demoting is refused;
+    // suspend instead, which another active org-admin makes possible.
+    assert.equal(demoted.status, 400);
+    await Membership.create({organizationId: org._id, roleName: "org-admin", userId: operator._id});
+    const suspended = await operatorAgent
+      .patch(`/orgs/${org._id}/members/${attached.body.data._id}`)
+      .send({status: "suspended"});
+    assert.equal(suspended.status, 200);
+    assert.isUndefined((await access.getPermissions({user: memberUser})).admin);
+  });
+
+  describe("permission cache", () => {
+    const setUpOrgAdmins = async (): Promise<{
+      operatorAgent: Awaited<ReturnType<typeof loginWithPassword>>;
+      org: Awaited<ReturnType<typeof Organization.create>>;
+      orgAdmins: AuthUser[];
+      removable: Awaited<ReturnType<typeof Membership.create>>;
+    }> => {
+      const operator = await createUser({email: "operator@example.com", roles: ["operator"]});
+      const first = await createUser({email: "first-org-admin@example.com"});
+      const second = await createUser({email: "second-org-admin@example.com"});
+      const org = await Organization.create({name: "Acme", ownerId: operator._id});
+      const removable = await Membership.create({
+        organizationId: org._id,
+        roleName: "org-admin",
+        userId: first._id,
+      });
+      await Membership.create({organizationId: org._id, roleName: "org-admin", userId: second._id});
+      const orgAdmins = [first, second] as unknown as AuthUser[];
+      // Resolve (and cache) each org-admin's permissions before the change.
+      for (const orgAdmin of orgAdmins) {
+        assert.deepEqual((await access.getPermissions({user: orgAdmin})).admin, ["access"]);
+      }
+      const operatorAgent = await loginWithPassword(app, {
+        email: "operator@example.com",
+        password: PASSWORD,
+      });
+      return {operatorAgent, org, orgAdmins, removable};
+    };
+
+    it("takes a removed org-admin's permissions away at once", async () => {
+      const {operatorAgent, org, orgAdmins, removable} = await setUpOrgAdmins();
+
+      const removed = await operatorAgent.delete(`/orgs/${org._id}/members/${removable._id}`);
+
+      assert.equal(removed.status, 204);
+      assert.isUndefined((await access.getPermissions({user: orgAdmins[0] as AuthUser})).admin);
+    });
+
+    it("takes every org-admin's permissions away at once when the organization is disabled", async () => {
+      const {operatorAgent, org, orgAdmins} = await setUpOrgAdmins();
+
+      const disabled = await operatorAgent.patch(`/orgs/${org._id}`).send({disabled: true});
+
+      assert.equal(disabled.status, 200);
+      for (const orgAdmin of orgAdmins) {
+        assert.isUndefined((await access.getPermissions({user: orgAdmin})).admin);
+      }
+    });
+
+    it("takes every org-admin's permissions away at once when the organization is deleted", async () => {
+      const {operatorAgent, org, orgAdmins} = await setUpOrgAdmins();
+
+      const deleted = await operatorAgent.delete(`/orgs/${org._id}`);
+
+      assert.equal(deleted.status, 204);
+      for (const orgAdmin of orgAdmins) {
+        assert.isUndefined((await access.getPermissions({user: orgAdmin})).admin);
+      }
+    });
   });
 
   it("attaches an existing user by userId", async () => {

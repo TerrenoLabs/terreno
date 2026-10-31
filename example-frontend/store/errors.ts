@@ -13,7 +13,23 @@ const ignoredErrors = [
   "Registration failed - permission denied",
   "TypeError: Load failed",
   "TypeError: Failed to fetch",
+  "The current password is incorrect",
+  "Enter your current password to change your email",
 ];
+
+/** Copy request args for logs and Sentry with password values (`password`, `currentPassword`) masked. */
+const redactPasswordArgs = (
+  args: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined => {
+  if (!args || typeof args !== "object") {
+    return args;
+  }
+  return Object.fromEntries(
+    Object.entries(args).map(([key, value]) =>
+      key.toLowerCase().includes("password") ? [key, "<REDACTED>"] : [key, value]
+    )
+  );
+};
 
 interface RtkRejectedAction {
   error?: boolean;
@@ -56,11 +72,17 @@ export const rtkQueryErrorMiddleware: Middleware = () => (next) => (action: unkn
       endpointInfo = `${rejectedAction.meta.arg.endpointName} rejected ${rejectedAction.meta.arg.type || ""} `;
     }
 
-    const argsString = rejectedAction.meta?.arg?.originalArgs
-      ? JSON.stringify(rejectedAction.meta.arg.originalArgs)
-      : "no args";
+    const redactedArgs = redactPasswordArgs(rejectedAction.meta?.arg?.originalArgs);
+    const redactedAction: RtkRejectedAction = {
+      ...rejectedAction,
+      meta: {
+        ...rejectedAction.meta,
+        arg: {...rejectedAction.meta?.arg, originalArgs: redactedArgs},
+      },
+    };
+    const argsString = redactedArgs ? JSON.stringify(redactedArgs) : "no args";
     const message = `${endpointInfo.trim()}: ${errorMessage} (args: ${argsString})`;
-    console.debug(message, JSON.stringify(action));
+    console.debug(message, JSON.stringify(redactedAction));
 
     if (rejectedAction.payload.status === 404 || rejectedAction.payload.status === 401) {
       return next(action);
@@ -74,9 +96,9 @@ export const rtkQueryErrorMiddleware: Middleware = () => (next) => (action: unkn
       const error = new Error(message);
       Sentry.withScope((scope: Sentry.Scope) => {
         scope.setContext("request", {
-          args: rejectedAction.meta?.arg?.originalArgs,
+          args: redactedArgs,
           endpointInfo,
-          fullAction: rejectedAction,
+          fullAction: redactedAction,
         });
         captureException(error);
       });

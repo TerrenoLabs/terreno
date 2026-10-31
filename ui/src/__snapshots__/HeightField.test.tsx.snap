@@ -216,7 +216,7 @@ exports[`HeightField snapshots should match snapshot with default props 1`] = `
                                                       ],
                                                       "props": {
                                                         "style": {
-                                                          "color": "#092E3A",
+                                                          "color": "#FFFFFF",
                                                           "fontSize": 16,
                                                           "fontWeight": "700",
                                                         },
@@ -978,7 +978,7 @@ exports[`HeightField snapshots should match snapshot with value 1`] = `
                                                       ],
                                                       "props": {
                                                         "style": {
-                                                          "color": "#092E3A",
+                                                          "color": "#FFFFFF",
                                                           "fontSize": 16,
                                                           "fontWeight": "700",
                                                         },
@@ -1573,6 +1573,7 @@ exports[`HeightField snapshots should match snapshot with all props 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",
@@ -1840,7 +1841,7 @@ exports[`HeightField snapshots should match snapshot with all props 1`] = `
                                                       ],
                                                       "props": {
                                                         "style": {
-                                                          "color": "#092E3A",
+                                                          "color": "#FFFFFF",
                                                           "fontSize": 16,
                                                           "fontWeight": "700",
                                                         },
@@ -2634,7 +2635,7 @@ exports[`HeightField snapshots should match snapshot when disabled 1`] = `
                                                       ],
                                                       "props": {
                                                         "style": {
-                                                          "color": "#092E3A",
+                                                          "color": "#FFFFFF",
                                                           "fontSize": 16,
                                                           "fontWeight": "700",
                                                         },
@@ -3229,6 +3230,7 @@ exports[`HeightField snapshots should match snapshot with error state 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",
@@ -3467,7 +3469,7 @@ exports[`HeightField snapshots should match snapshot with error state 1`] = `
                                                       ],
                                                       "props": {
                                                         "style": {
-                                                          "color": "#092E3A",
+                                                          "color": "#FFFFFF",
                                                           "fontSize": 16,
                                                           "fontWeight": "700",
                                                         },

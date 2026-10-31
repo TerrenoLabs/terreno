@@ -68,6 +68,11 @@ fresh subagent with no parent conversation. If the repository root defines a `pr
 package script, Taste runs it as the authoritative local gate; otherwise it falls back
 to lint, typecheck, and locally affected tests in each affected package. Taste then
 pushes and watches product CI.
+Every stage that pushes follows `references/push-ownership.md`: it owns the PR until
+CI is green on every host and every review-bot comment is fixed, declined with a
+reply, or raised as a decision. After three fix rounds that leave the PR red, Taste
+stops pushing and escalates as `BLOCKED`; the final message starts with
+`BLOCKED — PR #<n> still red after <k> fix rounds`. No stage ends quietly on a red PR.
 Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
 Buildkite, and similar), not only GitHub checks. A documented not-applicable host
 counts as skipped; an unexplained untriggered host prevents Brew `PASS`. Brew still
@@ -100,6 +105,12 @@ contains reproducible testing instructions. Brew updates verification as testing
 changes but otherwise keeps the body stable instead of summarizing the latest turn.
 These are the only visible PR sections; optional detail is expandable; comments are
 reserved for blocked decisions or non-obvious review resolutions.
+
+The body is also the approval bot's input (`brewery approve`, scored with
+`docs/approval-rubric.md`), so its shape is strict. The headings are spelled exactly as
+above. `Why` ends with the plan's repository path and the task ids the PR delivers.
+Every `Verification` row starts with `✅`, `🧭`, or `⚠️` and names the outcome, not only
+the command. The stage-result `ip` is the plan's filename, and later stages keep it.
 
 Every stage follows the
 [documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):

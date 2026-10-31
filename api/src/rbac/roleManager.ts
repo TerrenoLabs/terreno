@@ -87,10 +87,12 @@ const assertNoEscalation = async (
 const assertCanModifyTargetUser = async (
   actor: User,
   target: User,
-  getActorPermissions: (user: User) => Promise<PermissionSet>
+  getActorPermissions: (user: User) => Promise<PermissionSet>,
+  getTargetPermissions: (user: User) => Promise<PermissionSet>
 ): Promise<void> => {
   const actorPermissions = await getActorPermissions(actor);
-  const targetPermissions = await getActorPermissions(target);
+  // A target missing a failed source's grants would look less privileged than it is.
+  const targetPermissions = await getTargetPermissions(target);
   if (!isPermissionSubset(actorPermissions, targetPermissions)) {
     logger.warn("RBAC privileged-user mutation denied", {
       actorId: actor.id,
@@ -109,6 +111,12 @@ export const createRoleManager = (args: {
   defaultRoles?: RoleDefinition[];
   getActorPermissions: (user: User) => Promise<PermissionSet>;
   getPreviewPermissions: (user: User) => Promise<PermissionSet>;
+  /**
+   * Resolves the user a role change acts on. It must return the complete set or throw (the
+   * access instance passes `requireComplete: true`), since a target missing a failed source's
+   * grants looks less privileged than it is. Defaults to `getActorPermissions`.
+   */
+  getTargetPermissions?: (user: User) => Promise<PermissionSet>;
   invalidateCache: (invalidateArgs?: {userId?: string}) => void;
   userModel?: UserModel;
   persistAudit?: boolean;
@@ -120,6 +128,7 @@ export const createRoleManager = (args: {
     defaultRoles = terrenoDefaultRoles,
     getActorPermissions,
     getPreviewPermissions,
+    getTargetPermissions = getActorPermissions,
     invalidateCache,
     userModel,
     persistAudit = true,
@@ -180,6 +189,56 @@ export const createRoleManager = (args: {
     }
   };
 
+  // Users hold roles by name, so a rename changes who holds which permissions. Treat it like a
+  // permission edit: the actor must hold the role's grants, and the new name must not already
+  // bind any user or role (a stale `user.roles` entry would otherwise inherit the grants).
+  const assertRenameAllowed = async (args: {
+    actor: User;
+    existing: RbacRoleDocument;
+    newName: unknown;
+    roleName: string;
+  }): Promise<void> => {
+    const {actor, existing, newName, roleName} = args;
+    if (existing.isLocked) {
+      throw new APIError({status: 400, title: "Cannot rename a locked role"});
+    }
+    if (typeof newName !== "string" || newName.trim() === "") {
+      throw new APIError({status: 400, title: "Role name must be a non-empty string"});
+    }
+    await assertNoEscalationOrAudit({
+      action: "role.update",
+      actor,
+      permissions: existing.permissions ?? {},
+      targetRoleName: roleName,
+    });
+    if (await rbacRoleModel.exists({name: newName})) {
+      throw new APIError({status: 409, title: "A role with that name already exists"});
+    }
+    if (userModel && (await userModel.countDocuments({roles: newName})) > 0) {
+      throw new APIError({status: 409, title: "Users already hold a role with that name"});
+    }
+  };
+
+  // Keeps holders of a renamed role on the same grants.
+  const moveRoleHolders = async (args: {fromName: string; toName: string}): Promise<void> => {
+    try {
+      if (userModel) {
+        await userModel.updateMany({roles: args.fromName}, {$set: {"roles.$": args.toName}});
+      }
+      await rbacRoleModel.updateMany(
+        {excludesRoles: args.fromName},
+        {$set: {"excludesRoles.$": args.toName}}
+      );
+    } catch (error) {
+      logger.error("Failed to move role holders after a rename", {
+        error,
+        fromName: args.fromName,
+        toName: args.toName,
+      });
+      throw error;
+    }
+  };
+
   const seedDefaults = async (): Promise<void> => {
     await rbacRoleModel.seedDefaults({extraRoles: defaultRoles, statements});
   };
@@ -193,7 +252,7 @@ export const createRoleManager = (args: {
       if (!targetUser) {
         throw new APIError({status: 404, title: "User not found"});
       }
-      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions);
+      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions, getTargetPermissions);
     },
     assign: async ({actor, userId, roleNames}) => {
       await assertCanAssignRoles(actor, getActorPermissions);
@@ -205,7 +264,7 @@ export const createRoleManager = (args: {
       if (!targetUser) {
         throw new APIError({status: 404, title: "User not found"});
       }
-      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions);
+      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions, getTargetPermissions);
       const uniqueRoleNames = [...new Set(roleNames)];
       for (let i = 0; i < uniqueRoleNames.length; i++) {
         for (let j = i + 1; j < uniqueRoleNames.length; j++) {
@@ -284,7 +343,7 @@ export const createRoleManager = (args: {
       if (!targetUser) {
         throw new APIError({status: 404, title: "User not found"});
       }
-      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions);
+      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions, getTargetPermissions);
       const uniqueRoleNames = [...new Set(roleNames)];
       for (const roleName of uniqueRoleNames) {
         const role = await rbacRoleModel.findExactlyOne({name: roleName});
@@ -348,7 +407,7 @@ export const createRoleManager = (args: {
       if (!targetUser) {
         throw new APIError({status: 404, title: "User not found"});
       }
-      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions);
+      await assertCanModifyTargetUser(actor, targetUser, getActorPermissions, getTargetPermissions);
       assertUserSaveAvailable(targetUser);
       const before = await getPreviewPermissions(targetUser);
       const rbacUser = targetUser as unknown as User & {roles: string[]};
@@ -381,17 +440,28 @@ export const createRoleManager = (args: {
           });
         }
       }
-      if (changes.permissions) {
-        assertValidPermissionSet(changes.permissions, statements);
+      // Any `permissions` key is written below, so validate on presence, not truthiness:
+      // `false` or `""` would otherwise skip both checks and empty the role.
+      if ("permissions" in changes) {
+        const incoming: unknown = changes.permissions;
+        if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+          throw new APIError({
+            detail: "permissions must be an object of resource action lists",
+            status: 400,
+            title: "Invalid permissions",
+          });
+        }
+        assertValidPermissionSet(incoming as PermissionSet, statements);
         await assertNoEscalationOrAudit({
           action: "role.update",
           actor,
-          permissions: unionPermissionSets(existing.permissions ?? {}, changes.permissions),
+          permissions: unionPermissionSets(existing.permissions ?? {}, incoming as PermissionSet),
           targetRoleName: roleName,
         });
       }
-      if (changes.name && existing.isLocked) {
-        throw new APIError({status: 400, title: "Cannot rename a locked role"});
+      const isRename = changes.name !== undefined && changes.name !== roleName;
+      if (isRename) {
+        await assertRenameAllowed({actor, existing, newName: changes.name, roleName});
       }
       if (changes.excludesRoles && userModel) {
         const holders = await userModel.find({roles: roleName});
@@ -423,6 +493,9 @@ export const createRoleManager = (args: {
         existing.set("description", undefined);
       }
       await existing.save();
+      if (isRename) {
+        await moveRoleHolders({fromName: roleName, toName: existing.name});
+      }
       invalidateCache();
       await emitAudit({
         action: "role.update",

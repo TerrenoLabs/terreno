@@ -453,9 +453,9 @@ commands:
             source "$BASH_ENV"
             shard="<< parameters.spec >>"
             case "$shard" in
-              auth) specs="login signup consents forgot-password reset-password verify-email" ;;
-              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
-              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
+              auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
+              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
@@ -590,6 +590,27 @@ commands:
             if [ ${#missing[@]} -ne 0 ]; then
               echo "terreno-gcp is missing required variables: ${missing[*]}"
               echo "CircleCI is the only GCP deployer; fill the context and rerun."
+              exit 1
+            fi
+
+  require_vercel_context:
+    description: Fail before checkout/install when terreno-vercel is missing the token or project id
+    parameters:
+      project-id-var:
+        type: string
+    steps:
+      - run:
+          name: Validate terreno-vercel context
+          command: |
+            set -euo pipefail
+            project_id_var="<< parameters.project-id-var >>"
+            missing=()
+            for name in VERCEL_TOKEN VERCEL_ORG_ID "$project_id_var"; do
+              if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+            done
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "terreno-vercel is missing required variables: ${missing[*]}"
+              echo "Fill the context (see docs/how-to/deploy-to-vercel.md) and rerun."
               exit 1
             fi
 
@@ -730,7 +751,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui
+          packages: blocks syncdb ui
       - run:
           name: Lint / compile / test rtk
           working_directory: ~/project/rtk
@@ -850,7 +871,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements syncdb create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -1028,7 +1049,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui rtk admin-frontend syncdb
+          packages: blocks ui syncdb rtk admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1113,7 +1134,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1183,7 +1204,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build / smoke
           working_directory: ~/project/admin-spa
@@ -1302,10 +1323,12 @@ jobs:
           name: CircleCI path-filter parity
           command: bun run check:circleci-parity
       - run:
-          name: Changelog fragments
+          name: Changelog fragments and what's new data
           command: |
             bun run check:changelog
             bun test scripts/changelog/
+            bun run check:whats-new
+            bun test scripts/whats-new/
       - run:
           name: Static analysis
           command: |
@@ -1431,6 +1454,82 @@ jobs:
               echo "Architectural review failed (non-blocking, matches GHA continue-on-error)"
               exit 0
             }
+
+  # Risk-scored PR review by the terreno-approval-agent GitHub App (brewery approve).
+  # Policy (.brewery.json, docs/approval-rubric.md) is read from origin/master, so a PR
+  # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
+  # never installs or executes code from the PR checkout: the working tree is reset to
+  # origin/master before anything runs. It waits for every other
+  # check on the head before judging, so it runs once, last. It approves only levels in
+  # approveLevels (low); medium and high get a comment for a human. A not-approved
+  # verdict is not a pipeline failure.
+  approve:
+    executor: node22
+    resource_class: small
+    environment:
+      # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
+      # is pinned; bump the sha deliberately (brewery has no release tag yet).
+      BREWERY_REF: 3e160cc6a8dbdf45fc255a399855bf32154a2ac4
+    steps:
+      - skip_if_fork_pull_request
+      - run:
+          name: Skip when approve secrets are missing
+          command: |
+            set -euo pipefail
+            if [ -z "${TERRENO_APP_ID:-}" ] || [ -z "${TERRENO_APP_PRIVATE_KEY:-}" ] || [ -z "${ANTHROPIC_API_KEY:-}" ] || [ -z "${GITHUB_TOKEN:-}" ]; then
+              echo "TERRENO_APP_ID, TERRENO_APP_PRIVATE_KEY, ANTHROPIC_API_KEY, or GITHUB_TOKEN missing. Attach terreno-approve and terreno-github-api to this job. Skipping."
+              circleci step halt
+            fi
+      - checkout
+      # Nothing from the PR tree runs in this job: the working tree is origin/master from
+      # here on (the PR-number script, bunfig.toml, and the agent's cwd all come from it).
+      # The PR head stays in the object store, and brewery reads it with `git show <sha>:`.
+      - run:
+          name: Reset to origin/master (trusted scripts, policy source)
+          command: |
+            set -euo pipefail
+            git fetch origin master
+            git checkout --force origin/master
+      # GitHub App pipelines leave CIRCLE_PULL_REQUEST unset; resolve the PR by branch.
+      - resolve_preview_pr_number
+      - node/install-bun
+      - run:
+          name: Install gh, Claude Code, and brewery
+          command: |
+            set -euo pipefail
+            if ! command -v gh >/dev/null; then
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+              sudo apt-get update -qq && sudo apt-get install -y -qq gh
+            fi
+            # Pinned: this job holds the App key. Bump the version deliberately.
+            sudo npm install -g @anthropic-ai/claude-code@2.1.304
+            # fetch by sha (clone --branch takes only branches and tags)
+            git init -q "$HOME/brewery"
+            git -C "$HOME/brewery" fetch -q --depth 1 https://github.com/joshgachnang/brewery.git "$BREWERY_REF"
+            git -C "$HOME/brewery" checkout -q FETCH_HEAD
+            cd "$HOME/brewery/cli" && bun install --frozen-lockfile
+      - run:
+          name: brewery approve
+          no_output_timeout: 60m
+          command: |
+            set -euo pipefail
+            # gh reads GH_TOKEN; the read side (pr view, pr diff) uses the API PAT. The App
+            # token is minted inside brewery for the review and check run only. Neither
+            # reaches the model: brewery runs agents with an allowlisted environment.
+            export GH_TOKEN="$GITHUB_TOKEN"
+            # store_artifacts fails on a missing path; brewery may exit before creating it.
+            mkdir -p .terreno/brewery
+            # --wait-checks: wait (limits.ciWaitMin, 45 min) for every other check on this
+            # head, then judge it; a red or still-pending head is skipped, model unspent.
+            # This job's own check (ci/circleci: approve) is excluded (selfChecks in .brewery.json).
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR_NUMBER" --repo "$PWD" --base master --wait-checks || {
+              echo "brewery approve could not produce a verdict (non-blocking; see above)"
+              exit 0
+            }
+      - store_artifacts:
+          path: .terreno/brewery
+          destination: brewery-approve
 
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
@@ -1694,6 +1793,105 @@ jobs:
           skip-compile: true
           skip-web-export: true
 
+  # The cross-site web bearer specs (CROSS_SITE_SPEC_FILES in playwright.config.ts): social
+  # sign-in through the mock OIDC provider, remembered accounts, passkeys, two-factor challenges
+  # without cookies, account linking, and the Security screen. They need their own web build
+  # (cross-site API URL, bearer flag), backend (OAuth handoff, mock provider) and mock provider
+  # server, so the shared cookie-mode export cannot serve them. Like the e2e shards, the web app
+  # is a static export served on 8082 (a Metro dev server bundling beside the backend and
+  # Chromium gets OOM-killed); playwright.config.ts starts the backend and mock provider itself.
+  # Not a required check: a red run here does not block a merge.
+  e2e-cross-site:
+    executor: node22_browsers_mongo_rs_heavy
+    steps:
+      - checkout
+      - restore_e2e_dists
+      - install_bun_and_deps
+      - init_mongo_replica
+      - resolve_e2e_secrets
+      - run:
+          name: Export cross-site example-frontend web
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+            EXPO_NO_TELEMETRY: "1"
+            EXPO_PUBLIC_API_URL: "http://127.0.0.1:4000"
+            EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true"
+            NODE_OPTIONS: "--max-old-space-size=3072"
+          # --clear: Metro's transform cache keeps EXPO_PUBLIC_* values from an earlier export.
+          command: bun expo export --platform web --output-dir dist-cross-site --clear
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          name: Serve cross-site exported web
+          working_directory: ~/project/example-frontend
+          background: true
+          command: bunx serve dist-cross-site -s -l 8082
+      - run:
+          name: Wait for cross-site static web
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              code="$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8082/login || true)"
+              if [ "$code" = "200" ]; then
+                echo "static web ready after ${i} attempts"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "static web failed to become ready"
+            exit 1
+      - run:
+          name: Playwright cross-site bearer specs
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/cross-site
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            # The CircleCI overlay reuses the static web server above.
+            bunx playwright test --config playwright.circleci.config.ts \
+              --reporter=list --reporter=html --output test-results/cross-site
+      - run:
+          # account-linking.spec.ts's explicit-mode case needs a backend started with
+          # AUTH_ACCOUNT_LINKING=explicit; its verified-email cases skip themselves here.
+          name: Playwright explicit account linking
+          when: always
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_ACCOUNT_LINKING: explicit
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/explicit-linking
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            bunx playwright test --config playwright.circleci.config.ts e2e/account-linking.spec.ts \
+              --reporter=list --reporter=html --output test-results/explicit-linking
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: playwright-report-cross-site
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: playwright-test-results-cross-site
+
   # Heavier syncdb-loadlab spec — nightly/manual only, never PR-blocking
   # (mirrors GHA e2e-load-nightly).
   e2e-load:
@@ -1891,7 +2089,8 @@ jobs:
           command: scripts/ci/netlify-deploy.sh demo preview "pr-${PR_NUMBER}"
 
   deploy-frontend-preview:
-    executor: node22
+    # The browsers image carries Chromium's system libraries for the deployed smoke.
+    executor: node22_browsers
     resource_class: large
     steps:
       - skip_if_fork_deploy
@@ -1910,6 +2109,37 @@ jobs:
             export EXPO_PUBLIC_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
             export NETLIFY_WAIT_FOR_HEALTH_URL="$EXPO_PUBLIC_API_URL"
             scripts/ci/netlify-deploy.sh frontend preview "pr-${PR_NUMBER}"
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          # Signs up a fresh user on this PR's isolated backend, so it never runs on production.
+          # The deploy waits only for a healthy backend tag, so on a re-push it can still be the
+          # previous revision while gcp-cd-preview rolls out; rerun the job if that races.
+          name: Smoke the deployed preview in web bearer mode
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+          command: |
+            set -euo pipefail
+            missing=()
+            if [ -z "${PR_NUMBER:-}" ]; then missing+=("PR_NUMBER"); fi
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "Missing required environment variables: ${missing[*]}" >&2
+              exit 1
+            fi
+            export SMOKE_BASE_URL="https://pr-${PR_NUMBER}--terreno-frontend.netlify.app"
+            export SMOKE_API_URL="https://pr-${PR_NUMBER}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+            export SMOKE_RUN_ID="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-local}"
+            bun run smoke:deployed
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: deployed-bearer-smoke-playwright-report
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: deployed-bearer-smoke-test-results
 
   deploy-docs-preview:
     executor: node22
@@ -1959,6 +2189,39 @@ jobs:
             - run:
                 name: Deploy backend and isolated tasks preview
                 command: scripts/ci/gcp-deploy.sh backend-preview
+
+  # Runs beside the Netlify and Cloud Run deploys while Vercel hosting is evaluated.
+  vercel-deploy:
+    executor: node22
+    resource_class: large
+    parameters:
+      target:
+        type: enum
+        enum: [backend, frontend, demo]
+      mode:
+        type: enum
+        enum: [production, preview]
+      project-id-var:
+        type: string
+    steps:
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - skip_if_fork_deploy
+      - require_vercel_context:
+          project-id-var: << parameters.project-id-var >>
+      - checkout
+      - install_bun_and_deps
+      - when:
+          condition:
+            equal: [preview, << parameters.mode >>]
+          steps:
+            - resolve_preview_pr_number
+      - run:
+          name: Deploy << parameters.target >> << parameters.mode >> to Vercel
+          no_output_timeout: 25m
+          command: scripts/ci/vercel-deploy.sh << parameters.target >> << parameters.mode >> "${PR_NUMBER:-}"
 
   deploy-preview-manual:
     executor: node22
@@ -2063,6 +2326,18 @@ jobs:
               exit 2
             fi
             bun run check:upgrade-docs "$CIRCLE_TAG"
+      # Packages ship the tag's CHANGELOG.md, so refuse a stable tag that is not
+      # on master with its assembled release notes (docs/how-to/release-automation.md).
+      - run:
+          name: Require merged release notes
+          command: |
+            set -euo pipefail
+            git fetch origin master
+            on_master=false
+            if git merge-base --is-ancestor HEAD origin/master; then
+              on_master=true
+            fi
+            bun run scripts/ci/release/cli.ts check-tag "$CIRCLE_TAG" "$on_master"
       - run:
           name: Compile release packages once
           command: |
@@ -2245,14 +2520,24 @@ jobs:
             GITHUB_TOKEN="$REPO_ADMIN_TOKEN" scripts/ci/github-release.sh publish "$CIRCLE_TAG"
 
 workflows:
-  # Never put GITHUB_TOKEN or CURSOR_API_KEY in project env vars (injected into
-  # every job); scope them to these two jobs through contexts.
+  # Never put GITHUB_TOKEN, CURSOR_API_KEY, or the approval App key in project env
+  # vars (injected into every job); scope them to these three jobs through contexts.
   always:
     jobs:
       - dco:
           context: [terreno-github-api]
+      # ci-bench/* are benchmark replays (scripts/ci/bench); they are never reviewed or merged.
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
+      - approve:
+          context: [terreno-github-api, terreno-approve]
+          requires: [dco, architectural-pr-review]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>
@@ -2388,6 +2673,7 @@ workflows:
     jobs:
       - packages-ci:
           package: test
+          compile-deps: blocks ui api
 
   repo-policies:
     when: << pipeline.parameters.run-repo-policies >>
@@ -2411,6 +2697,9 @@ workflows:
                 - admin-core
                 - admin-table
                 - syncdb
+      - e2e-cross-site:
+          requires:
+            - e2e-prepare
 
   # Started when setup continues with {"e2e-load": true} after a
   # {"run-e2e-load": true} setup-pipeline trigger.
@@ -2475,6 +2764,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-production
+          target: demo
+          mode: production
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-frontend-production:
     when:
@@ -2485,6 +2786,18 @@ workflows:
       - deploy-frontend:
           context: [terreno-netlify, terreno-github-deployments]
           serial-group: << pipeline.project.slug >>/netlify-frontend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-production
+          target: frontend
+          mode: production
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-production
           filters:
             branches:
               only: master
@@ -2524,6 +2837,18 @@ workflows:
               only: master
             tags:
               ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-production
+          target: backend
+          mode: production
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-production
+          filters:
+            branches:
+              only: master
+            tags:
+              ignore: /.*/
 
   deploy-demo-preview:
     when: << pipeline.parameters.run-deploy-demo >>
@@ -2533,7 +2858,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-demo-preview
+          target: demo
+          mode: preview
+          project-id-var: VERCEL_DEMO_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2545,7 +2883,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-frontend-preview
+          target: frontend
+          mode: preview
+          project-id-var: VERCEL_FRONTEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2557,7 +2908,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-docs-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2572,7 +2924,20 @@ workflows:
           serial-group: << pipeline.project.slug >>/gcp-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
+            tags:
+              ignore: /.*/
+      - vercel-deploy:
+          name: vercel-backend-preview
+          target: backend
+          mode: preview
+          project-id-var: VERCEL_BACKEND_PROJECT_ID
+          context: [terreno-vercel, terreno-github-deployments]
+          serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
+          filters:
+            branches:
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 

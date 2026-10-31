@@ -2,7 +2,15 @@
  * Better Auth client configuration for the example frontend.
  */
 
-import {baseUrl, createBetterAuthClient} from "@terreno/rtk";
+import {
+  baseUrl,
+  completeBetterAuthOAuthHandoff,
+  createBetterAuthClient,
+  createRememberedAccountsStore,
+  getBetterAuthBearerToken,
+  IsWeb,
+  signInSocialWithHandoff,
+} from "@terreno/rtk";
 import Constants from "expo-constants";
 
 const getAppScheme = (): string => {
@@ -10,19 +18,140 @@ const getAppScheme = (): string => {
   return expoExtra?.scheme ?? "frontend";
 };
 
+const BETTER_AUTH_STORAGE_PREFIX = "terreno-example";
+
+/**
+ * True when the web build authenticates with a stored bearer token instead of Better Auth's
+ * session cookie. Set `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` when the web app and the API are
+ * on different sites, where browsers block or partition third-party cookies. Native ignores it.
+ */
+const isWebBearerAuth = IsWeb && process.env.EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER === "true";
+
 // `baseUrl` from @terreno/rtk is the single source of truth every other caller
 // (RTK Query, sockets, syncdb) already uses. A separate resolver here previously
 // fell back to `extra.BASE_URL` (localhost:4000) in dev, which points at the
 // device itself on an Android emulator instead of the host machine.
+//
+// The features match what example-backend turns on, so the login screen can run the two-factor
+// step, passkey sign-in, and device-session switching. The two-factor client has no
+// `onTwoFactorRedirect`: TerrenoLoginScreen shows the challenge inline (app/login.tsx).
 export const betterAuthClient = createBetterAuthClient({
   baseURL: baseUrl,
+  features: {multiSession: true, passkey: true, twoFactor: true},
   scheme: getAppScheme(),
-  storagePrefix: "terreno-example",
+  storagePrefix: BETTER_AUTH_STORAGE_PREFIX,
+  webAuth: isWebBearerAuth ? "bearer" : "cookie",
 });
 
-export const signInWithSocial = async (provider: "google" | "github" | "apple"): Promise<void> => {
-  await betterAuthClient.signIn.social({provider});
+/**
+ * Accounts that signed in on this device, for the login screen's "last used" badge and "Continue
+ * as" cards. The example opts into `rememberIdentity`, so the cards show the name, a masked email
+ * and the avatar; apps for shared devices should leave it off.
+ */
+export const rememberedAccounts = createRememberedAccountsStore({
+  rememberIdentity: true,
+  storageKey: `${BETTER_AUTH_STORAGE_PREFIX}_remembered_accounts`,
+});
+
+/**
+ * Reads the bearer token the web bearer client stored, without a network call. Returns null in
+ * cookie mode and on native, where the session lives elsewhere.
+ */
+export const getStoredBearerToken = (): string | null => {
+  if (!isWebBearerAuth) {
+    return null;
+  }
+  return getBetterAuthBearerToken({storagePrefix: BETTER_AUTH_STORAGE_PREFIX});
 };
+
+/**
+ * The page a bearer-mode social sign-in returns to. It must be one of example-backend's
+ * `oauthHandoff.callbackPaths`; lib/oauthHandoff.ts takes the one-time token from it at startup.
+ */
+const OAUTH_RETURN_PATH = "/login";
+
+/**
+ * Where a social sign-in started from the login screen returns. Bearer mode needs the path (the
+ * server matches it against `oauthHandoff.callbackPaths`); native passes the path to Better Auth's
+ * Expo plugin, which turns it into a deep link; a cookie-mode web page needs its own origin, or
+ * Better Auth would resolve the path against the API's host.
+ */
+export const getLoginCallbackURL = (): string => {
+  if (isWebBearerAuth || !IsWeb || typeof window === "undefined" || !window.location?.origin) {
+    return OAUTH_RETURN_PATH;
+  }
+  return `${window.location.origin}${OAUTH_RETURN_PATH}`;
+};
+
+/** The security screen's route (app/settings/security.tsx). */
+const SECURITY_RETURN_PATH = "/settings/security";
+
+/**
+ * Where linking a provider from the security screen returns. On web it is the page's absolute
+ * URL: bearer mode accepts any page on the server's `oauthHandoff.webOrigins`, and cookie mode
+ * would otherwise resolve the path against the API's host. Native passes the path, which Better
+ * Auth's Expo plugin turns into a deep link.
+ */
+export const getSecurityCallbackURL = (): string => {
+  if (!IsWeb || typeof window === "undefined" || !window.location?.origin) {
+    return SECURITY_RETURN_PATH;
+  }
+  return `${window.location.origin}${SECURITY_RETURN_PATH}`;
+};
+
+/**
+ * Generic OAuth provider of the local mock OIDC server (e2e/helpers/mockOidcProvider.ts). Its
+ * button shows when the server's `/terreno/methods` lists it: example-backend registers the
+ * provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
+ */
+const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+
+/** Button labels for providers @terreno/ui does not brand. */
+export const OAUTH_PROVIDER_LABELS: Record<string, string> = {
+  [MOCK_OIDC_PROVIDER_ID]: "Mock OIDC",
+};
+
+/** Providers @terreno/ui's SocialLoginButton brands, in the order the auth screens show them. */
+const BRANDED_OAUTH_PROVIDERS = ["google", "github", "apple"] as const;
+
+export type BrandedOAuthProvider = (typeof BRANDED_OAUTH_PROVIDERS)[number];
+
+/**
+ * The branded providers among those the server's `/terreno/methods` lists, in display order.
+ * Pass `undefined` while the methods load to get none.
+ */
+export const brandedOAuthProviders = (
+  configuredProviders: string[] | undefined
+): BrandedOAuthProvider[] => {
+  const enabled = configuredProviders ?? [];
+  return BRANDED_OAUTH_PROVIDERS.filter((provider) => enabled.includes(provider));
+};
+
+/**
+ * Starts a social sign-in. In web bearer mode the page navigates to the API and comes back to
+ * the login page with a one-time token, so this resolves `true` while the page is leaving and
+ * the caller should wait instead of reading the session. Otherwise it resolves `false` once
+ * Better Auth's own flow returns.
+ */
+export const signInWithSocial = async (provider: string): Promise<boolean> => {
+  if (isWebBearerAuth) {
+    signInSocialWithHandoff({
+      callbackURL: OAUTH_RETURN_PATH,
+      client: betterAuthClient,
+      provider,
+    });
+    return true;
+  }
+  await betterAuthClient.signIn.social({provider});
+  return false;
+};
+
+/**
+ * Exchanges the one-time token a bearer-mode social sign-in brought back for the bearer, after
+ * removing it from the URL. Resolves `true` when a bearer was stored; never rejects.
+ */
+export const completeOAuthHandoff = (): Promise<boolean> =>
+  completeBetterAuthOAuthHandoff({client: betterAuthClient});
 
 interface BetterAuthActionResult {
   error?: {message?: string} | null;
@@ -72,14 +201,11 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 /**
  * Number of `getSession()` attempts `getSessionToken()` makes before giving up.
- * Callers (e.g. `useSocketConnection`'s `getAuthToken`) only call this once they
- * believe the user is signed in — right after login/session-sync resolved a userId
- * into Redux — so an empty session on the first attempt is more likely a transient
- * race (the freshly-set session cookie not yet consistently queryable) than a real
- * signed-out state. `useSocketConnection` has no retry of its own for this case (its
- * token-refresh-driven reconnect only fires for the JWT auth slice, not Better Auth),
- * so a transient empty result here would otherwise leave the socket connection
- * permanently unattempted until some unrelated effect re-triggers it.
+ * Callers (the AI tab, GCS settings, and the Sync Lab's raw fetches) only call this
+ * once they believe the user is signed in — right after login/session-sync resolved a
+ * userId into Redux — so an empty session on the first attempt is more likely a
+ * transient race (the freshly-set session cookie not yet consistently queryable) than
+ * a real signed-out state.
  */
 const GET_SESSION_TOKEN_RETRY_ATTEMPTS = 3;
 const GET_SESSION_TOKEN_RETRY_DELAY_MS = 250;

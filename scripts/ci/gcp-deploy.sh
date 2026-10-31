@@ -28,6 +28,8 @@ export GCP_DOCUMENTS_BUCKET="${GCP_DOCUMENTS_BUCKET:-flourish-terreno-example-do
 # shellcheck source=scripts/ci/github-deployment-lib.sh
 source scripts/ci/github-deployment-lib.sh
 
+# The Cloud Run service's own URL; preview tags hang off it. The stable deploy's public URLs
+# (STABLE_BACKEND_URL, STABLE_FRONTEND_URL) are read by scripts/ci/backend-auth-env.sh.
 backend_prod_url="https://terreno-backend-example-7knxlrnpqq-uc.a.run.app"
 
 gcp_auth() {
@@ -100,7 +102,9 @@ deploy_backend() {
   docker push "$image"
 
   secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest,LANGFUSE_SECRET_KEY=${GCP_BACKEND_SERVICE}-langfuse-secret-key:latest,LANGFUSE_PUBLIC_KEY=${GCP_BACKEND_SERVICE}-langfuse-public-key:latest"
-  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
+  # The Netlify web build uses Better Auth's bearer scheme; its social sign-in returns through the
+  # OAuth one-time-token handoff to CORS_ORIGINS' /login. Cookie builds keep CROSS_DOMAIN_AUTH_COOKIES.
+  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,BETTER_AUTH_OAUTH_HANDOFF=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
   args=(
     run deploy "$GCP_BACKEND_SERVICE"
     "--project=$GCP_PROJECT_ID"
@@ -126,30 +130,36 @@ deploy_backend() {
     env_vars+=",ANNOUNCEMENTS_UPLOAD_TOKEN=terreno-example-announcement-upload"
   fi
 
+  # Previews share the stable BETTER_AUTH_SECRET: oauth-proxy encrypts the OAuth state and the
+  # returned profile with it, so a preview can finish a sign-in that stable's callback received.
   better_auth_secret="${GCP_BACKEND_SERVICE}-better-auth-secret"
   if gcloud secrets versions access latest --secret="$better_auth_secret" >/dev/null 2>&1; then
     secrets+=",BETTER_AUTH_SECRET=${better_auth_secret}:latest"
-    if [ "$tag" = "prod" ]; then
-      better_auth_url="https://terreno-backend-example-7knxlrnpqq-uc.a.run.app"
-    else
-      better_auth_url="https://${tag}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
-    fi
-    env_vars+=",AUTH_PROVIDER=better-auth,BETTER_AUTH_URL=${better_auth_url}"
+    env_vars+=",AUTH_PROVIDER=better-auth"
   fi
+  # GOOGLE_*, GITHUB_* and APPLE_* for the providers whose secrets have a version (client IDs
+  # only on previews).
+  local oauth_secret
+  while IFS= read -r oauth_secret; do
+    secrets+=",${oauth_secret}"
+  done < <(scripts/ci/backend-auth-env.sh secrets "$tag")
 
   local revision_suffix=""
   if [ "$tag" = "prod" ]; then
     args+=("--tag=$tag" "--memory=512Mi")
-    env_vars+=",CORS_ORIGINS=https://terreno-frontend.netlify.app"
   else
     # Deploy untagged, then tag the new revision: tagging during deploy fails
     # when an older pr-* tag points at a revision that never became Ready.
     revision_suffix="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-$(date +%s)}"
     args+=(--no-traffic --no-cpu-throttling --cpu-boost "--memory=1Gi" "--revision-suffix=$revision_suffix")
-    env_vars+=",CORS_ORIGINS=https://pr-${PR_NUMBER}--terreno-frontend.netlify.app,MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
+    env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
     .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh "$GCP_BACKEND_SERVICE" "$GCP_BACKEND_REGION"
   fi
-  args+=("--set-secrets=$secrets" "--set-env-vars=$env_vars")
+  # Adds the web and auth vars; CORS_ORIGINS can list two origins while stable moves domains,
+  # so the value uses ";" as gcloud's delimiter (gcloud topic escaping).
+  local env_flag_value
+  env_flag_value="$(scripts/ci/backend-auth-env.sh gcloud-env "$tag" "$env_vars")"
+  args+=("--set-secrets=$secrets" "--set-env-vars=${env_flag_value}")
   gcloud "${args[@]}"
   if [[ "$tag" == pr-* ]]; then
     gcloud run services update-traffic "$GCP_BACKEND_SERVICE" \

@@ -106,7 +106,9 @@ when the package imports them. Coverage-script unit tests run in the cheap
 Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 `admin-table`, `syncdb`) instead of one container per spec file. Each shard
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. Repository
+file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+which builds its own web bundle and backend (`playwright.config.ts` with
+`E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
@@ -239,7 +241,8 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 | `terreno-e2e` | `E2E_TOKEN_SECRET`, `E2E_REFRESH_TOKEN_SECRET`, `E2E_SESSION_SECRET` | `e2e`, `admin-spa-integration`, `maestro-e2e` |
 | `terreno-release` | `REPO_ADMIN_TOKEN`, `ZOOM_WEBHOOK_URL`, `ZOOM_WEBHOOK_TOKEN` | stable version bump + release notification |
 | `terreno-agentic` | `CURSOR_API_KEY`, optional `CURSOR_MODEL` | `architectural-pr-review` |
-| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review` |
+| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review`, `approve` |
+| `terreno-approve` | `TERRENO_APP_ID`, `TERRENO_APP_PRIVATE_KEY` (the terreno-approval-agent GitHub App), `ANTHROPIC_API_KEY` | `approve` |
 | `terreno-github-deployments` | `GITHUB_DEPLOYMENTS_TOKEN`: fine-grained PAT on `TerrenoLabs/terreno` with **Deployments: read/write** and **Pull requests: read** only | GitHub Deployment records + preview PR lookup in every Netlify/GCP deploy job |
 
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
@@ -247,8 +250,9 @@ Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets on
 GitHub PAT) in project env vars — those are injected into every job, including
 `bun` scripts from the PR. `terreno-github-api` must hold the PAT as
 `GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
-The `always` workflow attaches it **only** to `dco` and `architectural-pr-review`
-(the latter also gets `terreno-agentic`). DCO skips if `GITHUB_TOKEN` is unset.
+The `always` workflow attaches it **only** to `dco`, `architectural-pr-review`
+(which also gets `terreno-agentic`), and `approve` (which also gets `terreno-approve`).
+DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.
@@ -293,6 +297,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
 | `dco` | `dco` |
+| (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |
 | Admin backend lint, compile, coverage | `packages-ci` (`admin-backend`) |
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
@@ -313,6 +318,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin SPA Build and E2E | `admin-spa-ci` |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
+| _(cross-site bearer specs, not required)_ | `e2e-cross-site` (after `e2e-prepare`; also the explicit-linking pass) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |
@@ -339,6 +345,46 @@ CD replacement map:
 | Publish on tag (`publish-on-tag.yml`) | `publish-release` |
 | Appium Android / iOS | Not ported (Maestro web is `maestro-e2e`) |
 
+## Approval agent
+
+`approve` runs `brewery approve` from
+[joshgachnang/brewery](https://github.com/joshgachnang/brewery) on every same-repo PR
+pipeline and posts one review as the **terreno-approval-agent** GitHub App plus a
+`terreno/approve` check run. Policy lives in `.brewery.json` (`approve` block: levels
+the App may approve, path rules that floor, cap, or forbid approval; when a file matches
+both a floor and a lower ceiling, the floor wins) and
+`docs/approval-rubric.md` (what the model scores). Both are read from `origin/master`,
+so a PR cannot change the rules it is judged by, and a PR that edits either file is
+never approved. The job resets its working tree to `origin/master` right after
+checkout, so the PR-number script, `bunfig.toml`, and the agent's working directory all
+come from master and nothing from the PR tree runs while the App key is in the
+environment; brewery reads the head through `git show <sha>:`. Brewery itself is
+pinned to a commit (`BREWERY_REF`) and cloned into `$HOME`; the model runs read-only
+with an allowlisted environment that holds no GitHub or App credential. The job waits
+(`--wait-checks`, up to 45 minutes) for every other check on the head before judging,
+ignoring its own `ci/circleci: approve` check (`selfChecks` in `.brewery.json`), and
+skips a red or still-pending head without spending a model, so it runs once per push,
+last.
+
+To teach the agent from what reviewers actually say, run
+`brewery calibrate TerrenoLabs/terreno` (optionally `--reviewer <login>` or `--notes
+<file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
+path rules from the review comments since the last pass.
+
+Levels and human approvals (defined in `docs/approval-rubric.md`):
+
+| Level | Human approvals | Examples |
+| --- | --- | --- |
+| low | None once automated review and security checks are green | docs, copy, internal-only features, additive changes behind a flag |
+| medium | One person | ordinary product changes, and sensitive areas such as caching, app updates, and AI system prompts |
+| high | One person | security-related code: auth, permissions, secrets, crypto, PHI handling |
+
+`approveLevels` is `["low"]`, so the App's approval satisfies master's one-review rule
+for low PRs. Medium and high PRs get a `COMMENT` review that says the risk level and
+why, and a human approves. The prompts and answers behind each
+verdict are stored as the `brewery-approve` job artifact. Full reference:
+[brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
+
 ## Manual pipelines
 
 Trigger a pipeline from the CircleCI UI/API on the ref containing the code to
@@ -362,7 +408,9 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`publish-release` compiles the 16 lockstep packages once with
+`publish-release` first requires the tag to be on `master` with its assembled
+`CHANGELOG.md` section ([release automation](release-automation.md)), then
+compiles the lockstep packages once with
 `bun run --filter ... compile` (dependency order), then runs
 `scripts/ci/publish-package.sh` for all of them in parallel with
 `TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
@@ -381,8 +429,8 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
 
-The release skill pushes the tag and creates the GitHub release with
-`gh release create --draft`. The repository has immutable releases on: a
+The **Bot merge** workflow (or the release skill, when a human merges) pushes
+the tag and creates the GitHub release with `gh release create --draft`. The repository has immutable releases on: a
 published release cannot take new assets (GitHub answers `422`). So CI publishes
 the draft last with `scripts/ci/github-release.sh publish`.
 `archive-docs-version` does it right after the upload on `X.Y.0` tags.
@@ -478,6 +526,74 @@ Map every CircleCI test job to a local command with
 circleci config validate .circleci/config.yml
 circleci config validate .circleci/continue-config.yml
 ```
+
+## Measure PR CI speed
+
+```bash
+bun run ci:wall-clock                                  # last 60 merged PRs
+bun run ci:wall-clock --limit 20 --max-directories 3   # rolling window used by the speed loop
+bun run ci:wall-clock --json                           # per-PR rows for a ledger
+```
+
+The command needs an authenticated `gh`. It reads each merged PR's head-commit
+statuses and reports the median, p25, and p75 wall clock for average PRs and
+for all PRs. It also lists which job finished last.
+
+| Term | Definition |
+| --- | --- |
+| Wall clock | First `ci/circleci:` status to the last terminal status of a test or build job |
+| Not counted as the end | `approve`, `architectural-pr-review`, `dco`, `deploy-*`, `*-preview`, `serial-*` |
+| Average PR | Touches at most `--max-directories` top-level directories, not counting `docs/`, `website/`, dot-directories, or root files |
+| Rerun job | Its newest status counts; a job whose newest status is pending makes the PR unmeasured |
+| PRs over 100 files | Directories are counted from the first 100 files (`gh pr list` limit) |
+
+The speed goal and loop that use this metric are in
+[`circleci-pr-speed-loop.md`](../implementationPlans/circleci-pr-speed-loop.md).
+
+## Benchmark a CI change
+
+```bash
+bun run ci:bench --branch origin/master --label baseline           # master only
+bun run ci:bench --branch ci-speed/1-cache --label iter1           # control vs treatment
+bun run ci:bench --branch ci-speed/1-cache --label iter1 --cases api-only --runs 1
+bun run ci:bench --suggest-cases                                   # replayable cases for cases.ts
+```
+
+The command needs an authenticated `gh` and push access. The branch under test
+must contain `origin/master`; otherwise it would run an older job set. For each
+case in `scripts/ci/bench/cases.ts`, run by run, it:
+
+1. Builds `ci-bench/<label>/<case>-<run>-control` from `master` and
+   `…-treatment` from the branch under test, in a temporary worktree. Both
+   reverse-apply the case PR's diff, so the replay touches the same files with
+   real code and keeps later work in those files. `docs/`, `changelog/`, and
+   `website/` are left out: they only drive the docs preview. A case whose code
+   no longer reverts cleanly on `master` is refused before anything is pushed. The control also
+   appends a comment to each file the branch under test changes, so path
+   filtering starts the same workflows for both. A file `master` does not have
+   yet maps to the nearest existing file with comment syntax in the same
+   directory or a parent. If there is none, the touch is skipped. This mirror
+   is best-effort: a touch that lands in a parent directory can start a
+   different set of path filters than the new file does.
+2. Opens both as draft PRs labelled `ci-bench`. Preview deploys,
+   `architectural-pr-review`, and `approve` skip `ci-bench/*` branches.
+3. Waits until every counted job has finished and no status has changed for
+   3 minutes (time out at 60 minutes). Then it measures each with the
+   [PR CI speed](#measure-pr-ci-speed) metric.
+4. Closes both PRs and deletes their branches, even on failure. A branch whose
+   PR never opened is deleted directly. A cleanup that still fails is
+   reported as `cleanupError` on the results, so you can remove it by hand.
+
+| Result | Meaning |
+| --- | --- |
+| `ok` | Every counted job succeeded; the run counts |
+| `invalid` | A counted job failed, usually because later code depends on what the replay reverted. Swap the case in `cases.ts` |
+| `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
+| role `case` | The case failed before either role ran: it no longer reverts, has no code to replay, or a PR could not open |
+
+Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary
+compares the median of per-case medians for control and treatment. Only `ok`
+runs count.
 
 ## Disabled GitHub workflows
 

@@ -27,12 +27,14 @@ syncdb/src/
   index.ts          # createSyncDb, types, betterAuthAdapter, wipeLocalData, ...
   react/index.ts    # SyncDbProvider, useEntity, useQuery, useMutate, ...
   testing/index.ts  # createFakeTransport
+  devConsoleLogger.ts # installTerrenoDevConsoleLogger (also re-exported from index.ts)
 ```
 
 Import paths:
 - `@terreno/syncdb` — client, protocol types, auth adapter, persisters
 - `@terreno/syncdb/react` — React hooks (optional peer: `react`)
 - `@terreno/syncdb/testing` — test doubles
+- `@terreno/syncdb/devConsoleLogger` — the dev console logger alone, without the sync client
 
 ### File structure (consumer app)
 
@@ -63,6 +65,8 @@ export const syncDb = createSyncDb({
   debug: __DEV__ ? {capacity: 1000} : false,
 });
 ```
+
+The default socket transport uses `["polling", "websocket"]`. On hosts without session affinity (Vercel Functions), pass `socketTransports: ["websocket"]`; see `docs/how-to/vercel-function-websockets.md`.
 
 Call `syncDb.start()` when the user is authenticated and `syncDb.stop()` on logout. Gate `mutate()` until `start()` resolves.
 

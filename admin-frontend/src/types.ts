@@ -56,7 +56,11 @@ export interface AdminFieldConfig {
   ref?: string;
   searchable?: boolean;
   widget?: string;
-  /** For array fields of sub-documents: metadata about each item's sub-fields */
+  /**
+   * Subfield metadata. For array fields of sub-documents, each item's subfields; for nested
+   * (non-array) `object` fields, the object's own subfields, rendered as a grouped fieldset.
+   * Absent for Mixed and Map fields, which use the JSON editor.
+   */
   items?: Record<string, AdminFieldConfig>;
   /** For array fields of primitives: the item type (string/number/boolean/objectid) */
   itemType?: string;

@@ -67,6 +67,7 @@
     "react-native-modalize": "catalog:",
     "react-native-permissions": "^5.4.4",
     "react-native-picker-select": "^9.1.3",
+    "react-native-qrcode-svg": "6.3.26",
     "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
@@ -113,6 +114,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
     ".ai/**/*"
@@ -163,7 +165,7 @@
     "test:coverage": "TZ=America/New_York bun run ../scripts/check-coverage.ts",
     "types": "bun typedoc"
   },
-  "version": "57.15.0",
+  "version": "57.20.0",
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },

@@ -61,11 +61,22 @@ export const terrenoStatements = {
   announcementImpression: ["list", "read"],
   configuration: ["read", "update"],
   consentForm: MODEL_CRUD,
-  consentResponse: ["list", "read"],
+  consentResponse: ["list", "read", "signOnBehalf"],
   featureFlag: MODEL_CRUD,
   organization: ORGANIZATION_ACTIONS,
   rbac: ["read", "manageRoles", "assignRoles"],
-  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword"],
+  user: [
+    "create",
+    "list",
+    "read",
+    "update",
+    "delete",
+    "impersonate",
+    "setPassword",
+    "updateIdentity",
+    "manageSecurity",
+    "issueSignInLink",
+  ],
 } as const;
 
 export type Statements = Record<string, readonly string[]>;
@@ -130,6 +141,18 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
   aiTrace: {
     list: "List traces and observability status",
     read: "View trace detail and run trace test helpers",
+  },
+  consentResponse: {
+    list: "List consent responses",
+    read: "View consent responses",
+    signOnBehalf: "Record, view, and void provisional consent signatures for other users",
+  },
+  user: {
+    issueSignInLink:
+      "Create a sign-in account for a legacy user and hand them a set-password link (AccountSecurityApp)",
+    manageSecurity: "View any user's sign-in methods and run account recovery (AccountSecurityApp)",
+    updateIdentity:
+      "Change another user's email, disabled flag, email verification, or linked Better Auth and GitHub ids",
   },
 };
 

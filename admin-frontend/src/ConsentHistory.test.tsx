@@ -1,6 +1,15 @@
-import {describe, expect, it, mock} from "bun:test";
+import {afterAll, describe, expect, it, mock, spyOn} from "bun:test";
+import * as terrenoUi from "@terreno/ui";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {renderWithTheme} from "../../ui/src/test-utils";
+
+const printedHtml: string[] = [];
+// Capture what the print button hands to @terreno/ui's printConsentHtml.
+const printSpy = spyOn(terrenoUi, "printConsentHtml").mockImplementation(
+  async ({html}: {html: string}) => {
+    printedHtml.push(html);
+  }
+);
 
 import {ConsentHistory} from "./ConsentHistory";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
@@ -158,4 +167,63 @@ describe("ConsentHistory", () => {
     );
     expect(getByTestId("consent-history-item-entry-1")).toBeTruthy();
   });
+  describe("provisional entries", () => {
+    const provisionalEntry = (): ConsentHistoryEntry =>
+      makeEntry({
+        _id: "entry-prov",
+        agreedAt: "2026-10-20T15:30:00.000Z",
+        provisional: true,
+        provisionalSignedBy: {name: "Dana Rivera"},
+      });
+
+    it("shows the provisional badge and signer", () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <ConsentHistory api={createApi({data: [provisionalEntry()]})} />
+      );
+      expect(getByTestId("consent-history-provisional-entry-prov")).toBeTruthy();
+      expect(getByText("Provisional")).toBeTruthy();
+      expect(getByText("Signed on your behalf by Dana Rivera")).toBeTruthy();
+    });
+
+    it("marks a voided provisional entry", () => {
+      const {getByText} = renderWithTheme(
+        <ConsentHistory
+          api={createApi({
+            data: [{...provisionalEntry(), voidedAt: "2026-10-21T09:00:00.000Z"}],
+          })}
+        />
+      );
+      expect(getByText("Voided")).toBeTruthy();
+    });
+
+    it("shows no provisional badge on the user's own entries", () => {
+      const {queryByTestId} = renderWithTheme(
+        <ConsentHistory api={createApi({data: [makeEntry()]})} />
+      );
+      expect(queryByTestId("consent-history-provisional-entry-1")).toBeNull();
+    });
+
+    it("prints the entry with the provisional block and no note", async () => {
+      printedHtml.length = 0;
+      const {getByTestId} = renderWithTheme(
+        <ConsentHistory api={createApi({data: [provisionalEntry()]})} />
+      );
+      fireEvent.press(getByTestId("consent-history-item-toggle-entry-prov"));
+      await act(async () => {
+        fireEvent.press(getByTestId("consent-history-print-entry-prov"));
+        await new Promise((r) => setTimeout(r, 100));
+      });
+      await waitFor(() => {
+        expect(printedHtml).toHaveLength(1);
+      });
+      expect(printedHtml[0]).toContain("<h2>Provisional signature</h2>");
+      expect(printedHtml[0]).toContain("Dana Rivera");
+      expect(printedHtml[0]).toContain("Terms of Service");
+      expect(printedHtml[0]).not.toContain("Note:");
+    });
+  });
+});
+
+afterAll(() => {
+  printSpy.mockRestore();
 });

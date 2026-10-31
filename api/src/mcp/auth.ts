@@ -4,13 +4,25 @@ import {DateTime} from "luxon";
 import type {User, UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
-import {McpServiceToken} from "../models/mcpServiceToken";
+import {MCP_OAUTH_ACCESS_TOKEN_PREFIX, McpOAuthToken} from "../models/mcpOAuthToken";
+import {MCP_SERVICE_TOKEN_PREFIX, McpServiceToken} from "../models/mcpServiceToken";
 import {findOneOrNoneFor} from "../plugins";
+import type {RequestCredential} from "../requestContext";
 
 export interface MCPAuthContext {
   userModel: UserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
+  /** Accept `mcpat_` OAuth access tokens issued by the MCP OAuth server. */
+  mcpOAuth?: boolean;
+}
+
+/** The authenticated user plus the credential type that proved it. */
+export interface MCPAuthResult {
+  credential: RequestCredential;
+  /** Scopes granted to an MCP OAuth access token; unset for other credentials. */
+  scopes?: string[];
+  user: User;
 }
 
 /**
@@ -29,15 +41,23 @@ const rejectIfDisabled = (user: User | undefined, source: string): User | undefi
   return user;
 };
 
+/** The user's credential generation; a password reset or session revocation increments it. */
+export const userTokenEpoch = (user: unknown): number => {
+  const tokenEpoch = (user as {tokenEpoch?: unknown} | null | undefined)?.tokenEpoch;
+  return typeof tokenEpoch === "number" ? tokenEpoch : 0;
+};
+
 /**
- * Extract user from raw headers using whichever auth provider is configured.
- * Works with both JWT and Better Auth, mirroring authenticateMiddleware behavior.
+ * True when a credential minted under `issuedEpoch` predates the user's current tokenEpoch.
+ * A credential stored before the field existed counts as epoch 0, as a refresh token without
+ * `te` does.
  */
-export const extractUserFromHeaders = async (
-  headers: Record<string, string | string[] | undefined>,
-  context: MCPAuthContext
-): Promise<User | undefined> => {
-  const {userModel, betterAuth, mcpServiceTokens} = context;
+export const isCredentialEpochStale = (issuedEpoch: number | undefined, user: unknown): boolean =>
+  (issuedEpoch ?? 0) !== userTokenEpoch(user);
+
+export const bearerFromHeaders = (
+  headers: Record<string, string | string[] | undefined>
+): {authorization?: string; token?: string} => {
   const authorization =
     typeof headers.authorization === "string"
       ? headers.authorization
@@ -45,28 +65,86 @@ export const extractUserFromHeaders = async (
         ? headers.authorization[0]
         : undefined;
   const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : authorization;
+  return {authorization, token};
+};
 
-  // Resolve MCP service tokens before session/JWT auth because mcp_ is a distinct credential type.
-  if (mcpServiceTokens && token?.startsWith("mcp_")) {
-    const serviceToken = await McpServiceToken.verify(token);
-    if (!serviceToken) {
-      return undefined;
-    }
-    const user = await userModel.findById(serviceToken.userId);
-    const activeUser = rejectIfDisabled(user as unknown as User | undefined, "MCP service token");
-    if (!activeUser) {
-      return undefined;
-    }
-    void McpServiceToken.updateOne(
-      {_id: serviceToken._id},
-      {$set: {lastUsedAt: DateTime.now().toJSDate()}}
-    ).catch((error) => {
-      logger.debug(`MCP service token last-used update failed: ${error}`);
-    });
-    return activeUser;
+const authenticateServiceToken = async (
+  token: string,
+  userModel: UserModel
+): Promise<MCPAuthResult | undefined> => {
+  const serviceToken = await McpServiceToken.verify(token);
+  if (!serviceToken) {
+    return undefined;
+  }
+  const user = await userModel.findById(serviceToken.userId);
+  const activeUser = rejectIfDisabled(user as unknown as User | undefined, "MCP service token");
+  if (!activeUser) {
+    return undefined;
+  }
+  if (isCredentialEpochStale(serviceToken.tokenEpoch, activeUser)) {
+    logger.warn(
+      `[mcp] Revoking an MCP service token issued before user ${activeUser.id}'s credentials changed`
+    );
+    await McpServiceToken.updateOne(
+      {_id: serviceToken._id, revokedAt: {$exists: false}},
+      {$set: {revokedAt: DateTime.now().toJSDate()}}
+    );
+    return undefined;
+  }
+  void McpServiceToken.updateOne(
+    {_id: serviceToken._id},
+    {$set: {lastUsedAt: DateTime.now().toJSDate()}}
+  ).catch((error) => {
+    logger.debug(`MCP service token last-used update failed: ${error}`);
+  });
+  return {credential: "mcp-service-token", user: activeUser};
+};
+
+const authenticateOAuthAccessToken = async (
+  token: string,
+  userModel: UserModel
+): Promise<MCPAuthResult | undefined> => {
+  const accessToken = await McpOAuthToken.verifyAccessToken(token);
+  if (!accessToken) {
+    return undefined;
+  }
+  const user = await userModel.findById(accessToken.userId);
+  const activeUser = rejectIfDisabled(user as unknown as User | undefined, "MCP OAuth");
+  if (!activeUser) {
+    return undefined;
+  }
+  if (isCredentialEpochStale(accessToken.tokenEpoch, activeUser)) {
+    logger.warn(
+      `[mcp] Revoking an MCP OAuth grant issued before user ${activeUser.id}'s credentials changed`
+    );
+    await McpOAuthToken.revokeFamily(accessToken.familyId);
+    return undefined;
+  }
+  const scopes = (accessToken.scope ?? "").split(" ").filter((scope) => scope.length > 0);
+  return {credential: "oauth", scopes, user: activeUser};
+};
+
+/**
+ * Resolve the caller and the credential type from raw headers using whichever auth providers
+ * are configured, mirroring authenticateMiddleware behavior: `mcp_` service tokens and `mcpat_`
+ * OAuth access tokens first (each is a distinct credential type), then a Better Auth session,
+ * then a Terreno JWT.
+ */
+export const extractAuthFromHeaders = async (
+  headers: Record<string, string | string[] | undefined>,
+  context: MCPAuthContext
+): Promise<MCPAuthResult | undefined> => {
+  const {userModel, betterAuth, mcpServiceTokens, mcpOAuth} = context;
+  const {authorization, token} = bearerFromHeaders(headers);
+
+  if (mcpServiceTokens && token?.startsWith(MCP_SERVICE_TOKEN_PREFIX)) {
+    return authenticateServiceToken(token, userModel);
   }
 
-  // Try Better Auth first if configured.
+  if (mcpOAuth && token?.startsWith(MCP_OAUTH_ACCESS_TOKEN_PREFIX)) {
+    return authenticateOAuthAccessToken(token, userModel);
+  }
+
   if (betterAuth) {
     try {
       const session = await betterAuth.api.getSession({
@@ -79,7 +157,8 @@ export const extractUserFromHeaders = async (
         // working whether or not the consumer's model has the findOneOrNone plugin applied.
         const appUser = await findOneOrNoneFor(userModel, {betterAuthId: session.user.id});
         if (appUser) {
-          return rejectIfDisabled(appUser as unknown as User, "Better Auth");
+          const activeUser = rejectIfDisabled(appUser as unknown as User, "Better Auth");
+          return activeUser ? {credential: "better-auth-session", user: activeUser} : undefined;
         }
       }
     } catch (error) {
@@ -87,12 +166,7 @@ export const extractUserFromHeaders = async (
     }
   }
 
-  // Try JWT auth
-  if (!authorization) {
-    return undefined;
-  }
-
-  if (!token) {
+  if (!authorization || !token) {
     return undefined;
   }
 
@@ -113,9 +187,22 @@ export const extractUserFromHeaders = async (
     }
 
     const user = await userModel.findById(userId);
-    return rejectIfDisabled(user as unknown as User | undefined, "JWT");
+    const activeUser = rejectIfDisabled(user as unknown as User | undefined, "JWT");
+    return activeUser ? {credential: "jwt", user: activeUser} : undefined;
   } catch (error) {
     logger.debug(`MCP JWT verification failed: ${error}`);
     return undefined;
   }
+};
+
+/**
+ * Extract user from raw headers using whichever auth provider is configured.
+ * Works with both JWT and Better Auth, mirroring authenticateMiddleware behavior.
+ * Use {@link extractAuthFromHeaders} when the credential type matters.
+ */
+export const extractUserFromHeaders = async (
+  headers: Record<string, string | string[] | undefined>,
+  context: MCPAuthContext
+): Promise<User | undefined> => {
+  return (await extractAuthFromHeaders(headers, context))?.user;
 };

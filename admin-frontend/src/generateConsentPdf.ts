@@ -1,119 +1,21 @@
-import {buildConsentPdfHtml, type PdfTemplateData, sharePdfFromHtml} from "@terreno/ui";
+import {buildConsentPdfHtml, sharePdfFromHtml} from "@terreno/ui";
 import {DateTime} from "luxon";
 import {Platform} from "react-native";
-
+import {
+  buildConsentResponseTemplateData,
+  type ConsentResponseData,
+  extractResponseFields,
+  responseProvisionalSection,
+} from "./consentPdfTemplates";
 import {
   CONTENT_WIDTH,
+  drawProvisionalSignature,
   ensureSpace,
   formatDate,
   MARGIN_LEFT,
   MARGIN_RIGHT,
   PAGE_WIDTH,
 } from "./pdfUtils";
-
-interface ConsentResponseData {
-  _id?: string;
-  agreed: boolean;
-  agreedAt?: string;
-  checkboxValues?: Record<string, boolean>;
-  consentFormId?: {title?: string; slug?: string; version?: number; type?: string} | string;
-  contentSnapshot?: string;
-  formVersionSnapshot?: number;
-  ipAddress?: string;
-  locale?: string;
-  signature?: string;
-  signedAt?: string;
-  userAgent?: string;
-  userId?: {_id?: string; email?: string; id?: string; name?: string} | string;
-}
-
-const extractResponseFields = (response: ConsentResponseData) => {
-  const formTitle =
-    typeof response.consentFormId === "object"
-      ? (response.consentFormId?.title ?? "Unknown Form")
-      : "Unknown Form";
-
-  const formSlug =
-    typeof response.consentFormId === "object" ? (response.consentFormId?.slug ?? "") : "";
-
-  const formType =
-    typeof response.consentFormId === "object" ? (response.consentFormId?.type ?? "") : "";
-
-  const formVersion =
-    typeof response.consentFormId === "object"
-      ? response.consentFormId?.version
-      : response.formVersionSnapshot;
-
-  const userId =
-    typeof response.userId === "object"
-      ? String(response.userId?._id ?? response.userId?.id ?? response.userId)
-      : String(response.userId ?? "");
-
-  const userEmail = typeof response.userId === "object" ? (response.userId?.email ?? "") : "";
-
-  const userName = typeof response.userId === "object" ? (response.userId?.name ?? "") : "";
-
-  return {formSlug, formTitle, formType, formVersion, userEmail, userId, userName};
-};
-
-const buildTemplateData = (response: ConsentResponseData): PdfTemplateData => {
-  const {formTitle, formSlug, formType, formVersion, userId, userEmail, userName} =
-    extractResponseFields(response);
-
-  const fields: PdfTemplateData["fields"] = [];
-  if (formSlug) {
-    fields.push({label: "Form Slug:", value: formSlug});
-  }
-  if (formType) {
-    fields.push({label: "Form Type:", value: formType});
-  }
-  if (formVersion !== undefined) {
-    fields.push({label: "Form Version:", value: String(formVersion)});
-  }
-  fields.push({label: "Decision:", value: response.agreed ? "Agreed" : "Declined"});
-  if (response.agreedAt) {
-    fields.push({label: "Agreed At:", value: formatDate(response.agreedAt)});
-  }
-  if (response.locale) {
-    fields.push({label: "Locale:", value: response.locale});
-  }
-
-  const checkboxEntries =
-    response.checkboxValues && typeof response.checkboxValues === "object"
-      ? Object.entries(response.checkboxValues)
-      : [];
-
-  const checkboxes = checkboxEntries.map(([index, checked]) => ({
-    checked: Boolean(checked),
-    label: `Checkbox ${index}`,
-  }));
-
-  const auditTrail: PdfTemplateData["fields"] = [];
-  if (response.ipAddress) {
-    auditTrail.push({label: "IP Address:", value: response.ipAddress});
-  }
-  if (response.userAgent) {
-    auditTrail.push({label: "User Agent:", value: response.userAgent});
-  }
-  if (response.formVersionSnapshot !== undefined) {
-    auditTrail.push({label: "Form Version:", value: String(response.formVersionSnapshot)});
-  }
-  if (response.signedAt) {
-    auditTrail.push({label: "Signed At:", value: formatDate(response.signedAt)});
-  }
-
-  return {
-    auditTrail: auditTrail.length > 0 ? auditTrail : undefined,
-    checkboxes: checkboxes.length > 0 ? checkboxes : undefined,
-    contentSnapshot: response.contentSnapshot,
-    fields,
-    formTitle,
-    responseId: response._id,
-    signature: response.signature,
-    title: "Consent Record",
-    userInfo: {email: userEmail || undefined, name: userName || undefined, userId},
-  };
-};
 
 const generatePdfWeb = async (response: ConsentResponseData): Promise<void> => {
   const {jsPDF: JsPDF} = await import("jspdf");
@@ -250,6 +152,11 @@ const generatePdfWeb = async (response: ConsentResponseData): Promise<void> => {
     y += 4;
   }
 
+  const provisional = responseProvisionalSection(response);
+  if (provisional) {
+    y = drawProvisionalSignature(doc, y, provisional);
+  }
+
   // Signature
   if (response.signature) {
     y = ensureSpace(doc, y, 50);
@@ -314,7 +221,7 @@ const generatePdfWeb = async (response: ConsentResponseData): Promise<void> => {
 };
 
 const generatePdfMobile = async (response: ConsentResponseData): Promise<void> => {
-  const templateData = buildTemplateData(response);
+  const templateData = buildConsentResponseTemplateData(response);
   const html = buildConsentPdfHtml(templateData);
   const {formSlug, userId} = extractResponseFields(response);
   const filename = `consent-${formSlug || "response"}-${userId.slice(-6)}-${DateTime.now().toFormat("yyyy-MM-dd")}.pdf`;

@@ -140,6 +140,31 @@ describe("useWindowQuery", () => {
     });
   });
 
+  it("refetches, loads the next page, and drops listeners on unmount", async () => {
+    const harness = await setup();
+    const {client, wrapper} = harness;
+    const baseline = client.store.raw.getListenerStats();
+    const {result, unmount} = renderHook(
+      () => useWindowQuery<Message>("messages", {where: {threadId: "a"}}),
+      {wrapper}
+    );
+    await waitFor(() => {
+      expect(result.current.ids).toEqual(["m1", "m2"]);
+    });
+    await act(async () => {
+      await result.current.refetch();
+    });
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+    expect(result.current.ids).toEqual(["m1", "m2"]);
+    unmount();
+    expect(client.store.raw.getListenerStats()).toEqual(baseline);
+    await act(async () => {
+      await client.stop();
+    });
+  });
+
   it("does nothing while skip is set", async () => {
     const harness = await setup();
     const {client, wrapper} = harness;

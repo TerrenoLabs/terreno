@@ -56,6 +56,9 @@ export const LineChart: FC<LineChartProps> = ({
   height = DEFAULT_HEIGHT,
   legendLabel,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   onPeriodPress,
   periodLabel,
   series,
@@ -130,6 +133,9 @@ export const LineChart: FC<LineChartProps> = ({
       legendItems={legendItems}
       legendLabel={legendLabel}
       loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
       testID={testID}
       tooltipText={tooltipText}
     >

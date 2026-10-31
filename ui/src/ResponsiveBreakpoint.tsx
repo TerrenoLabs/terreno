@@ -116,6 +116,20 @@ export const isSupportedDesktopViewport = ({
   return isBreakpointAtLeast({breakpoint, minimum: "xl"});
 };
 
+/** True when `width` is at or above the desktop floor for `surface` (web `lg`, native `xl`). */
+export const isSupportedDesktopWidth = ({
+  surface = getBreakpointSurface(),
+  width,
+}: {
+  surface?: BreakpointSurface;
+  width: number;
+}): boolean => {
+  return isSupportedDesktopViewport({
+    breakpoint: getBreakpointForWidth(width, surface),
+    surface,
+  });
+};
+
 const getServerBreakpointSnapshot = (): ResponsiveBreakpoint => {
   return "xs";
 };

@@ -8,6 +8,8 @@ Redux Toolkit Query utilities for @terreno/api backends.
 
 > **Removed in Terreno 58:** `realtimeList`, `realtimeDocument`, `setRealtimeSocket`, and `getRealtimeSocket`. `modelRouter` `realtime` is also removed then. `RealtimeApp` stays for syncdb sockets.
 
+> **Moved to `@terreno/syncdb`:** `installTerrenoDevConsoleLogger`. Import it from `@terreno/syncdb` and call `installTerrenoDevConsoleLogger({baseUrl})`. The `@terreno/rtk` export is a deprecated re-export for this deprecation window; it calls the syncdb logger with the rtk `baseUrl` when you pass no arguments.
+
 > **Historical note:** the offline mutation queue (`createOfflineMiddleware`, `offlineSlice`, `configureOfflineMutationEndpoints`) and realtime cache patching (`realtimeList`, `realtimeDocument`) were superseded by `@terreno/syncdb` before this deprecation window.
 
 ## Features
@@ -88,6 +90,8 @@ const {socket, isSocketConnected} = useSocketConnection({
   onDisconnect: () => console.log("Disconnected"),
 });
 ```
+
+Transports default to polling, then websocket. On hosts without session affinity, such as Vercel Functions, pass `transports: ["websocket"]` (see `docs/how-to/vercel-function-websockets.md`).
 
 ## Exports
 

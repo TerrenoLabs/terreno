@@ -5,6 +5,7 @@ import {
   authenticateMiddleware,
   generateTokens,
   type HasSetPassword,
+  isUserDisabled,
   MAX_PASSWORD_LENGTH,
   setPasswordForUser,
   type User,
@@ -112,6 +113,7 @@ export const sendVerificationEmail = async (
   const verifyUrl = buildVerifyUrl(authOptions.publicAppUrl, issued.token);
   await deliverRecoveryMail(authOptions, {
     html: verifyEmailHtml(verifyUrl),
+    sensitive: true,
     subject: VERIFY_EMAIL_SUBJECT,
     text: verifyEmailText(verifyUrl),
     to: userEmail(user),
@@ -134,8 +136,126 @@ const deliverRecoveryMail = async (
   );
 };
 
+const EMAIL_CHANGED_SUBJECT = "Your account email was changed";
+
+const maskSegment = (value: string): string => {
+  if (value.length === 0) {
+    return "***";
+  }
+  return `${value[0]}***`;
+};
+
+/**
+ * Partially mask an email for a notice: `renamed@example.com` becomes `r***@e***.com`. Keeps the
+ * first character of the local part and of the domain, plus the top-level domain.
+ */
+export const maskEmailAddress = (email: string): string => {
+  const trimmed = email.trim();
+  const atIndex = trimmed.lastIndexOf("@");
+  if (atIndex <= 0) {
+    return maskSegment(trimmed);
+  }
+  const local = trimmed.slice(0, atIndex);
+  const domain = trimmed.slice(atIndex + 1);
+  const dotIndex = domain.lastIndexOf(".");
+  if (dotIndex <= 0) {
+    return `${maskSegment(local)}@${maskSegment(domain)}`;
+  }
+  return `${maskSegment(local)}@${maskSegment(domain.slice(0, dotIndex))}${domain.slice(dotIndex)}`;
+};
+
+const emailChangedText = (maskedNewEmail: string): string =>
+  `The email address on your account was changed to ${maskedNewEmail}. ` +
+  "If you did not make this change, contact support right away.";
+
+const emailChangedHtml = (maskedNewEmail: string): string =>
+  `<p>The email address on your account was changed to ${maskedNewEmail}.</p>` +
+  "<p>If you did not make this change, contact support right away.</p>";
+
+/**
+ * Tell the previous address that the account email changed. The notice carries no link or token
+ * that acts on the account. Without a configured `sendMail` it logs a warning and sends nothing;
+ * a delivery failure is logged and never undoes the change.
+ */
+export const sendEmailChangedNotice = async ({
+  authOptions,
+  newEmail,
+  previousEmail,
+}: {
+  authOptions?: AuthOptions;
+  newEmail: string;
+  previousEmail: string;
+}): Promise<void> => {
+  if (!authOptions?.sendMail) {
+    logger.warn(
+      "[auth] No sendMail configured; skipped the email change notice to the old address"
+    );
+    return;
+  }
+  const maskedNewEmail = maskEmailAddress(newEmail);
+  try {
+    await authOptions.sendMail({
+      html: emailChangedHtml(maskedNewEmail),
+      sensitive: true,
+      subject: EMAIL_CHANGED_SUBJECT,
+      text: emailChangedText(maskedNewEmail),
+      to: previousEmail,
+    });
+  } catch (error: unknown) {
+    logger.error("[auth] Failed to send the email change notice to the old address", {error});
+  }
+};
+
+/** Whether the app User has a legacy JWT (passport) password. */
+const hasLegacyPassword = async (userModel: UserModel, user: User): Promise<boolean> => {
+  if (userModel.schema.path("hash") === undefined) {
+    return false;
+  }
+  return Boolean(
+    await userModel.exists({_id: user._id, hash: {$exists: true, $ne: null}} as never)
+  );
+};
+
 const incrementTokenEpoch = (user: User): void => {
   user.tokenEpoch = (user.tokenEpoch ?? 0) + 1;
+};
+
+// The auth options passed to addAuthRoutes, kept on the app so changeUserPassword can reach the
+// Better Auth credential sync that TerrenoApp wires after the routes are added.
+const AUTH_OPTIONS_LOCAL_KEY = "terrenoAuthOptions";
+
+const authOptionsFromApp = (app: express.Application | undefined): AuthOptions | undefined =>
+  app?.locals?.[AUTH_OPTIONS_LOCAL_KEY] as AuthOptions | undefined;
+
+export interface ChangeUserPasswordOptions {
+  /** The admin making the change; recorded in the audit log line, never with the password. */
+  adminId?: unknown;
+  /** The Express app (`req.app`) the auth routes were added to. */
+  app?: express.Application;
+  /** Auth options to use instead of the ones registered on `app`. */
+  authOptions?: AuthOptions;
+}
+
+/**
+ * Change a user's password on the server and end the credentials issued before it: sets the
+ * passport password, increments `tokenEpoch` (legacy refresh tokens and MCP credentials stop
+ * working), saves, and, when Better Auth is registered, sets the Better Auth password and deletes
+ * that user's Better Auth sessions. Use it for every server-side password change; calling
+ * `setPasswordForUser` alone revokes nothing.
+ */
+export const changeUserPassword = async (
+  user: User,
+  password: string,
+  options: ChangeUserPasswordOptions = {}
+): Promise<void> => {
+  const audit = options.adminId === undefined ? undefined : {adminId: options.adminId};
+  await setPasswordForUser(user as unknown as HasSetPassword, password, undefined, audit);
+  incrementTokenEpoch(user);
+  await (user as unknown as {save: () => Promise<unknown>}).save();
+  const authOptions = options.authOptions ?? authOptionsFromApp(options.app);
+  if (authOptions?.syncPasswordResetToBetterAuth) {
+    await authOptions.syncPasswordResetToBetterAuth(user, password);
+  }
 };
 
 export const addAuthRecoveryRoutes = (
@@ -143,12 +263,30 @@ export const addAuthRecoveryRoutes = (
   userModel: UserModel,
   authOptions?: AuthOptions
 ): void => {
+  if (authOptions) {
+    app.locals[AUTH_OPTIONS_LOCAL_KEY] = authOptions;
+  }
+  // With Better Auth registered (TerrenoApp wires syncPasswordResetToBetterAuth after these routes
+  // are added, so read it per request), the legacy routes only replace an existing JWT password:
+  // POST /auth/login has no second factor, so an account without one (such as a social-only
+  // account) must not gain a way to sign in there. Pure JWT apps keep today's behaviour.
+  const canResetWithLegacyRoute = async (user: User): Promise<boolean> => {
+    if (!authOptions?.syncPasswordResetToBetterAuth) {
+      return true;
+    }
+    return hasLegacyPassword(userModel, user);
+  };
+
   const forgotPassword = asyncHandler(async (req: express.Request, res: express.Response) => {
     const email = normalizeEmail(req.body?.email);
     if (email) {
       try {
         const user = await findUserByEmail(userModel, email);
-        if (user) {
+        if (user && !(await canResetWithLegacyRoute(user))) {
+          logger.info(
+            "[auth] Skipped legacy password reset mail for an account without a JWT password"
+          );
+        } else if (user) {
           if (!authOptions?.publicAppUrl) {
             logger.error("[auth] publicAppUrl is required to send password reset mail");
           } else {
@@ -156,6 +294,7 @@ export const addAuthRecoveryRoutes = (
             const resetUrl = buildResetUrl(authOptions.publicAppUrl, issued.token);
             await deliverRecoveryMail(authOptions, {
               html: resetPasswordHtml(resetUrl),
+              sensitive: true,
               subject: RESET_PASSWORD_SUBJECT,
               text: resetPasswordText(resetUrl),
               to: userEmail(user, email),
@@ -190,12 +329,18 @@ export const addAuthRecoveryRoutes = (
     if (!user) {
       throw new APIError({status: 400, title: "Invalid or expired reset token"});
     }
-    await setPasswordForUser(user as unknown as HasSetPassword, password);
-    incrementTokenEpoch(user);
-    await (user as unknown as {save: () => Promise<unknown>}).save();
-    if (authOptions?.syncPasswordResetToBetterAuth) {
-      await authOptions.syncPasswordResetToBetterAuth(user, password);
+    if (isUserDisabled(user)) {
+      throw new APIError({status: 401, title: "User is disabled"});
     }
+    if (!(await canResetWithLegacyRoute(user))) {
+      throw new APIError({
+        code: "legacy-password-reset-unavailable",
+        detail: "Request a new reset link from the sign-in page.",
+        status: 400,
+        title: "This account cannot reset its password here",
+      });
+    }
+    await changeUserPassword(user, password, {authOptions});
     const tokens = await generateTokens(user, authOptions);
     return res.json({
       data: {refreshToken: tokens.refreshToken, token: tokens.token, userId: user._id},

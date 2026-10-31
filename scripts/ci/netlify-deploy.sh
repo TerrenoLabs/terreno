@@ -58,17 +58,24 @@ case "$target" in
     bun run --filter '@terreno/ui' types
     (cd demo && bun run export)
     bash demo/scripts/fix-netlify-assets.sh demo/dist
+    # Fixture messages are real files via generateStaticParams. Any other id, such as a
+    # removed message, still has to load the client so it can show the missing-message screen.
+    printf '/*    /index.html   200\n' > demo/dist/_redirects
     publish_dir="demo/dist"
     ;;
   frontend)
     node .github/scripts/compile-workspace-deps.js example-frontend admin-frontend api ai
     bun run --filter '@terreno/admin-frontend' --filter '@terreno/api' --filter '@terreno/ai' compile
-    prod_url="https://prod---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
+    # STABLE_BACKEND_URL moves the stable web app with the backend (see backend-auth-env.sh).
+    prod_url="${STABLE_BACKEND_URL:-https://terreno-backend-example-7knxlrnpqq-uc.a.run.app}"
     api_url="${EXPO_PUBLIC_API_URL:-$prod_url}"
     jq --arg url "$api_url" \
       '.expo.extra.BASE_URL = $url | .expo.extra.apiBaseUrl = $url' \
       example-frontend/app.json > example-frontend/app.json.tmp
     mv example-frontend/app.json.tmp example-frontend/app.json
+    # Netlify and Cloud Run are different sites, so Better Auth's session cookie would be a
+    # third-party cookie that Safari blocks. The web build signs in with a stored bearer token.
+    export EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true
     (cd example-frontend && bun run export)
     bash demo/scripts/fix-netlify-assets.sh example-frontend/dist
     printf '/*    /index.html   200\n' > example-frontend/dist/_redirects

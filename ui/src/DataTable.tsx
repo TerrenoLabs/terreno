@@ -63,6 +63,12 @@ const DATA_TABLE_WINDOW_SIZE = 5;
 const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
 
 /** Inverted text when primary text falls below WCAG AA on the cell's highlight fill. */
+// Dark neutralLight (#686868) is too light for a stripe: ghost and link text drop near 2:1 on it.
+const useStripeColor = (): string => {
+  const {colorScheme, theme} = useTheme();
+  return colorScheme === "dark" ? theme.primitives.neutral900 : theme.surface.neutralLight;
+};
+
 const useHighlightTextColor = (cellData: DataTableCellData): "inverted" | undefined => {
   const {theme} = useTheme();
   const highlightColor = cellData.highlight ? theme.surface[cellData.highlight] : undefined;
@@ -247,8 +253,9 @@ const DataTableRowComponent: FC<DataTableRowProps> = ({
   testID,
 }) => {
   const {theme} = useTheme();
+  const stripeColor = useStripeColor();
   const backgroundColor =
-    alternateRowBackground && rowIndex % 2 === 1 ? theme.surface.neutralLight : theme.surface.base;
+    alternateRowBackground && rowIndex % 2 === 1 ? stripeColor : theme.surface.base;
 
   return (
     <View
@@ -303,15 +310,14 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
   rowHeight,
 }) => {
   const {theme} = useTheme();
+  const stripeColor = useStripeColor();
 
   return (
     <View
       style={{
         alignItems: "center",
         backgroundColor:
-          alternateRowBackground && rowIndex % 2 === 1
-            ? theme.surface.neutralLight
-            : theme.surface.base,
+          alternateRowBackground && rowIndex % 2 === 1 ? stripeColor : theme.surface.base,
         borderBottomColor: theme.border.default,
         borderBottomWidth: 1,
         height: rowHeight ?? 54,
@@ -327,9 +333,7 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
         style={{
           alignItems: "center",
           backgroundColor:
-            alternateRowBackground && rowIndex % 2 === 1
-              ? theme.surface.base
-              : theme.surface.neutralLight,
+            alternateRowBackground && rowIndex % 2 === 1 ? theme.surface.base : stripeColor,
           borderRadius: theme.radius.rounded,
           height: 32,
           justifyContent: "center",

@@ -8,14 +8,17 @@ import {
   findOneOrNone,
 } from "../plugins";
 
-export type AuditEventVerb = "created" | "deleted" | "updated";
-export type AuditEventSource = "admin" | "modelRouter" | "rbac";
+export type AuditEventVerb = "created" | "deleted" | "updated" | "viewed";
+/** Every framework surface that writes `AuditEvent` rows. `security` is AccountSecurityApp. */
+export const AUDIT_EVENT_SOURCES = ["admin", "modelRouter", "rbac", "security"] as const;
+export type AuditEventSource = (typeof AUDIT_EVENT_SOURCES)[number];
 export type AuditEventOperation =
   | "arrayPush"
   | "arrayRemove"
   | "arrayUpdate"
   | "create"
   | "delete"
+  | "read"
   | "update";
 
 type AuditEventMethods = Record<string, never>;
@@ -74,8 +77,8 @@ const auditEventSchema: AuditEventSchema = new mongoose.Schema<
       type: String,
     },
     operation: {
-      description: "Fine-grained mutation kind",
-      enum: ["arrayPush", "arrayRemove", "arrayUpdate", "create", "delete", "update"],
+      description: "Fine-grained mutation kind, or read for an audited read",
+      enum: ["arrayPush", "arrayRemove", "arrayUpdate", "create", "delete", "read", "update"],
       required: true,
       type: String,
     },
@@ -96,14 +99,14 @@ const auditEventSchema: AuditEventSchema = new mongoose.Schema<
     },
     source: {
       description: "Which framework surface wrote this event",
-      enum: ["admin", "modelRouter", "rbac"],
+      enum: [...AUDIT_EVENT_SOURCES],
       index: true,
       required: true,
       type: String,
     },
     verb: {
-      description: "Widget-compatible mutation verb",
-      enum: ["created", "deleted", "updated"],
+      description: "Widget-compatible mutation verb, or viewed for an audited read",
+      enum: ["created", "deleted", "updated", "viewed"],
       index: true,
       required: true,
       type: String,

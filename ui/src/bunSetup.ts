@@ -668,13 +668,44 @@ if (typeof globalThis.expo === "undefined") {
 }
 
 // Mock expo-router
+const mockNavigationFonts = {
+  bold: {fontFamily: "System", fontWeight: "600"},
+  heavy: {fontFamily: "System", fontWeight: "700"},
+  medium: {fontFamily: "System", fontWeight: "500"},
+  regular: {fontFamily: "System", fontWeight: "400"},
+};
 mock.module("expo-router", () => ({
+  DarkTheme: {
+    colors: {
+      background: "rgb(1, 1, 1)",
+      border: "rgb(39, 39, 41)",
+      card: "rgb(18, 18, 18)",
+      notification: "rgb(255, 69, 58)",
+      primary: "rgb(10, 132, 255)",
+      text: "rgb(229, 229, 231)",
+    },
+    dark: true,
+    fonts: mockNavigationFonts,
+  },
+  DefaultTheme: {
+    colors: {
+      background: "rgb(242, 242, 242)",
+      border: "rgb(216, 216, 216)",
+      card: "rgb(255, 255, 255)",
+      notification: "rgb(255, 59, 48)",
+      primary: "rgb(0, 122, 255)",
+      text: "rgb(28, 28, 30)",
+    },
+    dark: false,
+    fonts: mockNavigationFonts,
+  },
   Link: ({children, ...props}: MockComponentProps) => React.createElement("Link", props, children),
   Navigator: ({children, ...props}: MockComponentProps) =>
     React.createElement("Navigator", props, children),
   router: {
     back: mock(() => {}),
     canGoBack: mock(() => true),
+    dismissTo: mock(() => {}),
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
@@ -684,6 +715,7 @@ mock.module("expo-router", () => ({
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
+  ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
   useGlobalSearchParams: mock(() => ({})),
   useLocalSearchParams: mock(() => ({})),
@@ -851,9 +883,11 @@ mock.module("react-native-actions-sheet", () => ({
   }),
 }));
 
-// Mock MediaQuery
+// Mock MediaQuery. Desktop floor is 1024pt on web and native; keep this aligned with
+// isSupportedDesktopWidth in ResponsiveBreakpoint.tsx.
 mock.module("./MediaQuery", () => ({
   isNarrowViewport: mock(() => false),
+  isSupportedDesktopWidth: ({width}: {width: number}): boolean => width >= 1024,
   mediaQueryLargerThan: mock(() => false),
   mediaQuerySmallerThan: mock(() => false),
 }));
@@ -901,6 +935,15 @@ mock.module("expo-clipboard", () => ({
   hasStringAsync: mock(() => Promise.resolve(false)),
   setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
+}));
+
+// Mock expo-print (native print and PDF export). Tests drive these mocks through
+// `import * as Print from "expo-print"` instead of registering their own module mock.
+mock.module("expo-print", () => ({
+  printAsync: mock(async (_options: {html?: string}): Promise<void> => {}),
+  printToFileAsync: mock(
+    async (_options: {html?: string}): Promise<{uri: string}> => ({uri: "file:///tmp/consent.pdf"})
+  ),
 }));
 
 // Mock expo-localization

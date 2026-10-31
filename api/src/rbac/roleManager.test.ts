@@ -339,6 +339,70 @@ describe("roleManager", () => {
     expect((await UserModel.findById(unprivileged.id))?.roles).toEqual(["member"]);
   });
 
+  it("refuses with 503 when the target's grants from a failed source are unknown", async () => {
+    await setupDb();
+    const UserModel = getRbacTestUserModel();
+    const target = await UserModel.create({email: "source-target@example.com", roles: []});
+    let isDown = false;
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Assigner",
+          name: "assigner",
+          permissions: {rbac: ["assignRoles"], todo: ["read"]},
+        },
+      ],
+      sources: [
+        {
+          // Additive only, so an outage drops its grants instead of failing every request.
+          failClosedWhenDenyUnknown: false,
+          getGrants: async ({user}) => {
+            if (String(user.id) !== target.id) {
+              return null;
+            }
+            if (isDown) {
+              throw new Error("idp down");
+            }
+            return {permissions: {user: ["delete"]}};
+          },
+          name: "idp-grants",
+          ttlMs: 0,
+        },
+      ],
+      statements: appStatements,
+      userModel: UserModel as unknown as UserModel,
+    });
+    await access.roles.seedDefaults();
+    const actor = createTestUser({roles: ["assigner"]});
+    const denied = {
+      status: 403,
+      title: "Cannot modify a user with permissions you do not hold",
+    };
+    await expect(
+      access.roles.assign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(denied);
+
+    isDown = true;
+    access.invalidateCache({userId: target.id});
+
+    // Without the source the target looks like it holds nothing the actor lacks.
+    const unavailable = {status: 503, title: "Permission source unavailable"};
+    await expect(
+      access.roles.assign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.unassign({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.assertCanModifyUser({actor, userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    await expect(
+      access.roles.previewAssignment({actor, roleNames: ["member"], userId: target.id})
+    ).rejects.toMatchObject(unavailable);
+    expect((await UserModel.findById(target.id))?.roles).toEqual([]);
+  });
+
   it("assertCanModifyUser rejects when the actor lacks the target user's permissions", async () => {
     await setupDb();
     const UserModel = getRbacTestUserModel();
@@ -635,6 +699,7 @@ describe("roleManager", () => {
     const UserModel = getRbacTestUserModel();
     let shouldFail = false;
     const source: PermissionSource = {
+      failClosedWhenDenyUnknown: false,
       getGrants: async () => {
         if (shouldFail) {
           throw new Error("source unavailable");
@@ -771,6 +836,137 @@ describe("roleManager", () => {
         roleName: "admin",
       })
     ).rejects.toMatchObject({status: 400, title: "Cannot rename a locked role"});
+  });
+
+  it("rejects non-object permissions on a role update without changing the role", async () => {
+    await setupDb();
+    const access = createAccess({
+      connection: mongoose.connection,
+      defaultRoles: [
+        {
+          displayName: "Role manager",
+          name: "role-manager",
+          permissions: {rbac: ["read", "manageRoles"], todo: ["read"]},
+        },
+      ],
+      statements: appStatements,
+    });
+    await access.roles.seedDefaults();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const before = (await RbacRole.findExactlyOne({name: "admin"})).permissions;
+    const manager = createTestUser({roles: ["role-manager"]});
+    const superadmin = createTestUser({roles: ["superadmin"]});
+
+    for (const actor of [manager, superadmin]) {
+      for (const permissions of [false, 0, "", null, ["todo"]]) {
+        await expect(
+          access.roles.update({
+            actor,
+            changes: {permissions: permissions as never},
+            roleName: "admin",
+          })
+        ).rejects.toMatchObject({status: 400, title: "Invalid permissions"});
+      }
+    }
+    await expect(
+      access.roles.update({actor: manager, changes: {permissions: {}}, roleName: "admin"})
+    ).rejects.toMatchObject({status: 403});
+
+    const after = (await RbacRole.findExactlyOne({name: "admin"})).permissions;
+    expect(after).toEqual(before);
+  });
+
+  describe("role renames", () => {
+    const setup = async () => {
+      await setupDb();
+      const UserModel = getRbacTestUserModel();
+      await UserModel.deleteMany({});
+      const access = createAccess({
+        connection: mongoose.connection,
+        defaultRoles: [
+          {
+            displayName: "Delegate",
+            name: "delegate",
+            permissions: {rbac: ["read", "manageRoles"], todo: ["read"]},
+          },
+          {displayName: "Viewer", name: "viewer", permissions: {todo: ["list"]}},
+          {
+            displayName: "Clinician",
+            name: "clinician",
+            permissions: {todo: ["update", "delete"]},
+          },
+        ],
+        statements: appStatements,
+        userModel: UserModel as unknown as UserModel,
+      });
+      await access.roles.seedDefaults();
+      const actor = (await UserModel.create({
+        email: "rename-delegate@example.com",
+        roles: ["delegate", "viewer"],
+      })) as unknown as RbacTestUser;
+      const clinician = await UserModel.create({
+        email: "rename-clinician@example.com",
+        roles: ["clinician"],
+      });
+      return {access, actor, clinician, UserModel};
+    };
+
+    it("does not let a manageRoles holder rename a stronger role onto a name it holds", async () => {
+      const {access, actor, UserModel} = await setup();
+
+      await access.roles.update({actor, changes: {name: "viewer-parked"}, roleName: "viewer"});
+      const reloadedActor = (await UserModel.findById(actor._id).orFail()) as unknown as User;
+      await expect(
+        access.roles.update({
+          actor: reloadedActor,
+          changes: {name: "viewer"},
+          roleName: "clinician",
+        })
+      ).rejects.toMatchObject({status: 403, title: "Cannot grant permissions you do not hold"});
+
+      const permissions = await access.getPermissions({
+        user: (await UserModel.findById(actor._id).orFail()) as unknown as User,
+      });
+      expect(permissions.todo ?? []).not.toContain("delete");
+      expect(permissions.todo ?? []).toContain("list");
+    });
+
+    it("moves holders to the new name so their grants do not change", async () => {
+      const {access, clinician, UserModel} = await setup();
+      const superadmin = createTestUser({roles: ["superadmin"]});
+
+      await access.roles.update({
+        actor: superadmin,
+        changes: {name: "care-clinician"},
+        roleName: "clinician",
+      });
+
+      const reloaded = await UserModel.findById(clinician._id).orFail();
+      expect(reloaded.roles).toEqual(["care-clinician"]);
+      const permissions = await access.getPermissions({user: reloaded as unknown as User});
+      expect(permissions.todo).toEqual(expect.arrayContaining(["update", "delete"]));
+    });
+
+    it("rejects a rename onto a name users already hold", async () => {
+      const {access, UserModel} = await setup();
+      const superadmin = createTestUser({roles: ["superadmin"]});
+      await UserModel.create({email: "stale-holder@example.com", roles: ["retired-role"]});
+
+      await expect(
+        access.roles.update({
+          actor: superadmin,
+          changes: {name: "retired-role"},
+          roleName: "clinician",
+        })
+      ).rejects.toMatchObject({status: 409});
+      await expect(
+        access.roles.update({
+          actor: superadmin,
+          changes: {name: "viewer"},
+          roleName: "clinician",
+        })
+      ).rejects.toMatchObject({status: 409});
+    });
   });
 
   it("requires a configured user model for assignment operations", async () => {

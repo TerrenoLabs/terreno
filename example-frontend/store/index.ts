@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {combineReducers, configureStore} from "@reduxjs/toolkit";
-import {generateBetterAuthSlice, registerTerrenoDevStore} from "@terreno/rtk";
+import {combineReducers, configureStore, type UnknownAction} from "@reduxjs/toolkit";
+import {generateBetterAuthSlice, registerTerrenoDevStore, setTokenSource} from "@terreno/rtk";
 import {DateTime} from "luxon";
 import {useDispatch} from "react-redux";
 import type {Storage as PersistStorage} from "redux-persist";
@@ -10,10 +10,60 @@ import {createSentryReduxEnhancer} from "@/utils/sentry";
 import appState from "./appState";
 import {rtkQueryErrorMiddleware} from "./errors";
 import {terrenoApi} from "./sdk";
+import {authProvider, setSyncDbReady, syncDb} from "./syncdb";
 
-const betterAuth = generateBetterAuthSlice({authClient: betterAuthClient});
+// Registered before the store exists, so the first RTK request, socket handshake, and MCP call
+// already read the Better Auth token instead of rtk's default JWT source.
+setTokenSource(authProvider);
 
-export const logout = betterAuth.actions.logout;
+// Purge the SDK cache on logout or user switch so no account sees another's cached responses.
+const betterAuth = generateBetterAuthSlice({
+  apisToReset: [terrenoApi],
+  authClient: betterAuthClient,
+});
+
+/** Resolves once the slice's sign-out has settled (`isSigningOut` back to false). */
+const signOutSettled = (): Promise<void> =>
+  new Promise((resolve) => {
+    let unsubscribe = (): void => {};
+    const check = (): void => {
+      if (!store.getState().betterAuth.isSigningOut) {
+        unsubscribe();
+        resolve();
+      }
+    };
+    unsubscribe = store.subscribe(check);
+    check();
+  });
+
+/**
+ * Stops syncdb, then signs out with rtk's `logout()`, which keeps the session until the server
+ * answers. Stopping first means no sync request goes out with a session being revoked. When the
+ * sign-out could not reach the server the session stays (with the slice's `error` set), so syncdb
+ * starts again.
+ */
+export const logout =
+  () =>
+  async (dispatch: (action: UnknownAction) => unknown): Promise<void> => {
+    setSyncDbReady(false);
+    try {
+      await syncDb.stop();
+    } catch (error: unknown) {
+      console.warn("[syncdb] Failed to stop client before sign out", error);
+    }
+    dispatch(betterAuth.actions.logout());
+    await signOutSettled();
+    if (!store.getState().betterAuth.userId) {
+      return;
+    }
+    try {
+      await syncDb.start();
+      setSyncDbReady(true);
+    } catch (error: unknown) {
+      console.error("[syncdb] Failed to restart client after a failed sign out", error);
+    }
+  };
+
 export const syncBetterAuthSession = betterAuth.syncSession;
 
 const createSafeStorage = (): PersistStorage => {

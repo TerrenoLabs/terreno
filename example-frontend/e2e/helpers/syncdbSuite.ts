@@ -66,9 +66,6 @@ export const allowSyncDbNoise = (consoleGuard: ConsoleGuard): void => {
   // Queueing mutations against a severed network is the point of these suites, so the
   // app's own "queue is deep" health warning is expected rather than a defect.
   consoleGuard.allow(/Sync is falling behind/i);
-  // The AI tab stays mounted under Expo Router Tabs, so useMCPTools still
-  // tries POST /mcp while these suites have aborted page HTTP.
-  consoleGuard.allow("useMCPTools error");
 };
 
 export const todoItemByTitle = (page: Page, title: string): Locator =>
@@ -143,6 +140,20 @@ export const goSyncOnline = async (page: Page): Promise<void> => {
   await page.unroute(`${API_URL}/**`);
   // socket.io retries with backoff (max 5s), so reconnect lands within a few seconds.
   await page.getByTestId("sync-offline-indicator").waitFor({state: "hidden", timeout: 30_000});
+};
+
+/**
+ * Lets Better Auth calls (`/api/auth/*`) through while every other API call stays refused, so a
+ * sign-out reaches the server but the outbox cannot drain. rtk's `logout()` keeps a cookie session
+ * it could not end on the server, so a user switch with work still queued needs this.
+ */
+export const allowAuthWhileOffline = async (page: Page): Promise<void> => {
+  await page.unroute(`${API_URL}/**`);
+  await page.route(`${API_URL}/**`, (route) =>
+    route.request().url().includes("/api/auth/")
+      ? route.continue()
+      : route.abort("connectionrefused")
+  );
 };
 
 /**

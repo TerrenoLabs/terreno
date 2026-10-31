@@ -100,7 +100,6 @@ import { Text, Heading, Title } from "@terreno/ui";
 import {
   TextField,
   EmailField,
-  PasswordField,
   NumberField,
   TextArea,
   SelectField,
@@ -110,19 +109,26 @@ import {
   RadioField,
 } from "@terreno/ui";
 
+// Fields share `title`, `value`, `onChange`, `errorText`, and `helperText`.
 <TextField
-  label="Name"
+  title="Name"
   value={name}
-  onChangeText={setName}
+  onChange={setName}
   placeholder="Enter your name"
-  error={errors.name}
+  errorText={errors.name}
   helperText="Your full legal name"
 />
 
+// Passwords: TextField with type="password" (adds a show/hide control).
+<TextField title="Password" type="password" value={password} onChange={setPassword} />
+
+// NumberField values are strings; type is "number" or "decimal".
+<NumberField title="Age" type="number" value={age} onChange={setAge} />
+
 <SelectField
-  label="Country"
+  title="Country"
   value={country}
-  onChangeValue={setCountry}
+  onChange={setCountry}
   options={[
     { label: "United States", value: "US" },
     { label: "Canada", value: "CA" },
@@ -130,16 +136,16 @@ import {
 />
 
 <DateTimeField
-  label="Date of Birth"
+  title="Date of Birth"
+  type="date"
   value={dob}
   onChange={setDob}
-  mode="date"
 />
 
 <BooleanField
-  label="Accept Terms"
+  title="Accept Terms"
   value={accepted}
-  onChangeValue={setAccepted}
+  onChange={setAccepted}
 />
 ```
 
@@ -202,7 +208,7 @@ import {
 ### Page & Layout
 
 ```typescript
-import { Page, SplitPage, ScrollView } from "@terreno/ui";
+import { Page, ScrollView } from "@terreno/ui";
 
 <Page
   navigation={navigation}
@@ -214,6 +220,32 @@ import { Page, SplitPage, ScrollView } from "@terreno/ui";
   </ScrollView>
 </Page>
 ```
+
+List/detail screens (mail, inbox, records) use `ListDetailLayout` as a route group's
+`_layout.tsx`. Phones push the detail route; tablets and wide browsers show the list in a left
+pane beside it. The open item lives in the URL.
+
+```typescript
+import { ListDetailIndex, ListDetailLayout, useListDetail } from "@terreno/ui";
+
+// app/mail/_layout.tsx
+export const unstable_settings = { initialRouteName: "index" };
+export default () => (
+  <ListDetailLayout
+    detailHref={(id) => `/mail/${id}`}
+    indexHref="/mail"
+    list={<MailList />}
+  />
+);
+
+// app/mail/index.tsx
+export default () => <ListDetailIndex />;
+
+// MailList rows read and change the open item
+const { selectedId, select } = useListDetail();
+```
+
+Use `SplitPage` only for list/detail views without their own routes.
 
 ## Theme System
 
@@ -253,17 +285,16 @@ radiusSm, radiusMd, radiusLg, radiusXl, radius2xl, radius3xl
 ## Utilities
 
 ```typescript
-import { useStoredState, MediaQuery, isNarrowViewport } from "@terreno/ui";
+import {isNarrowViewport, isSupportedDesktopWidth, useStoredState} from "@terreno/ui";
+import {useWindowDimensions} from "react-native";
 
 // Persist state to storage
 const [value, setValue] = useStoredState("key", defaultValue);
 
-// Responsive rendering
-<MediaQuery minWidth={768}>
-  <DesktopLayout />
-</MediaQuery>
+const {width} = useWindowDimensions();
+const isDesktopLayout = isSupportedDesktopWidth({width});
 
-// Current window is below the desktop breakpoint.
+// Current window is below the desktop floor (web lg / native xl, 1024pt).
 // isMobileDevice() is deprecated in favor of isNarrowViewport().
 if (isNarrowViewport()) {
   // Narrow-viewport code

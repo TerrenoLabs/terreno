@@ -1,20 +1,20 @@
 import {type APIRequestContext, test as setup} from "@playwright/test";
 import {ADMIN_USER, ALL_E2E_USERS, SYNCDB_LOADLAB_USER} from "./fixtures/testUsers";
-import {setUserAdmin} from "./helpers/adminAuth";
+import {setBetterAuthEmailVerified, setUserAdmin} from "./helpers/adminAuth";
 import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
-
-const API_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
+import {acceptPendingConsentForms} from "./helpers/consentForms";
 
 setup("create test users", async ({request}) => {
   for (const user of ALL_E2E_USERS) {
     await createUser(request, user);
+    await setBetterAuthEmailVerified(user.email);
     if (user.email === ADMIN_USER.email) {
       await setUserAdmin(ADMIN_USER.email);
     }
     if (user.email === SYNCDB_LOADLAB_USER.email) {
       await setUserAdmin(SYNCDB_LOADLAB_USER.email);
     }
-    await acceptPendingConsentForms(request, user);
+    await acceptPendingConsentForms(request, await signUpOrSignInBetterAuth(request, user));
   }
 });
 
@@ -30,33 +30,5 @@ const createUser = async (
       return;
     }
     throw error;
-  }
-};
-
-const acceptPendingConsentForms = async (
-  request: APIRequestContext,
-  user: {email: string; name: string; password: string}
-): Promise<void> => {
-  const token = await signUpOrSignInBetterAuth(request, user);
-
-  const pendingRes = await request.get(`${API_URL}/consents/pending`, {
-    headers: {authorization: `Bearer ${token}`},
-  });
-  if (!pendingRes.ok()) {
-    return;
-  }
-  const pendingData = await pendingRes.json();
-  const forms: Array<{_id: string; captureSignature?: boolean}> = pendingData?.data ?? [];
-
-  for (const form of forms) {
-    await request.post(`${API_URL}/consents/respond`, {
-      data: {
-        agreed: true,
-        consentFormId: form._id,
-        locale: "en",
-        ...(form.captureSignature ? {signature: "Test User"} : {}),
-      },
-      headers: {authorization: `Bearer ${token}`},
-    });
   }
 };

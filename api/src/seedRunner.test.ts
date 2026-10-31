@@ -1,7 +1,11 @@
 import {afterEach, describe, it} from "bun:test";
+import {randomUUID} from "node:crypto";
 import {assert} from "chai";
 import mongoose, {Schema} from "mongoose";
+import passportLocalMongoose from "passport-local-mongoose";
 
+import {type HasSetPassword, setPasswordForUser} from "./auth";
+import {createBetterAuth, getMongoClientFromMongoose} from "./betterAuthSetup";
 import {APIError} from "./errors";
 import {isDeletedPlugin} from "./plugins";
 import {runSeedCli, runSeeds, type SeedStep, seedBetterAuthUser} from "./seedRunner";
@@ -541,6 +545,27 @@ describe("seedBetterAuthUser", () => {
     assert.equal((user as {betterAuthId?: string}).betterAuthId, authId);
   });
 
+  it("links an application user that already exists for the seeded email", async () => {
+    const existing = await SeedAuthUser.create({email: seedUser.email, name: "Legacy Seed"});
+    const authId = new mongoose.Types.ObjectId().toString();
+    const auth = {
+      api: {
+        signUpEmail: async () => ({
+          user: {email: seedUser.email, emailVerified: false, id: authId, name: seedUser.name},
+        }),
+      },
+    };
+
+    const user = await seedBetterAuthUser({
+      auth: auth as never,
+      user: seedUser,
+      userModel: SeedAuthUser as never,
+    });
+
+    assert.equal(String((user as {_id?: unknown})._id), String(existing._id));
+    assert.equal((user as {betterAuthId?: string}).betterAuthId, authId);
+  });
+
   it("falls back to sign-in when sign-up fails", async () => {
     const authId = new mongoose.Types.ObjectId().toString();
     const auth = {
@@ -588,4 +613,56 @@ describe("seedBetterAuthUser", () => {
     assert.instanceOf(thrown, APIError);
     assert.equal((thrown as APIError).title, "Better Auth seed returned no user");
   });
+});
+
+const legacySeedUserSchema = new Schema<SeedAuthUserDocument>({
+  betterAuthId: {description: "Better Auth id", type: String},
+  email: {description: "Email", required: true, type: String},
+  name: {description: "Name", type: String},
+});
+legacySeedUserSchema.plugin(
+  passportLocalMongoose as unknown as (schema: Schema, options?: Record<string, unknown>) => void,
+  {usernameField: "email"}
+);
+const LegacySeedUser =
+  (mongoose.models.SeedRunnerLegacyUser as mongoose.Model<SeedAuthUserDocument> | undefined) ??
+  mongoose.model<SeedAuthUserDocument>("SeedRunnerLegacyUser", legacySeedUserSchema);
+
+describe("seedBetterAuthUser with an existing passport User", () => {
+  afterEach(async () => {
+    await LegacySeedUser.deleteMany({});
+  });
+
+  for (const withUserModel of [true, false]) {
+    it(`links the User when the seed password matches (auth userModel: ${withUserModel})`, async () => {
+      const seedUser = {
+        email: `legacy-seed-${randomUUID()}@example.com`,
+        name: "Legacy Seed",
+        password: "testpassword123",
+      };
+      const legacy = new LegacySeedUser({email: seedUser.email, name: "Legacy"});
+      await setPasswordForUser(legacy as unknown as HasSetPassword, seedUser.password);
+      await legacy.save();
+      const auth = createBetterAuth({
+        config: {
+          baseURL: "http://localhost:3000",
+          enabled: true,
+          secret: "test-secret-at-least-32-characters-long",
+        },
+        mongoClient: getMongoClientFromMongoose(),
+        ...(withUserModel ? {userModel: LegacySeedUser as never} : {}),
+      });
+
+      const user = await seedBetterAuthUser({
+        auth,
+        user: seedUser,
+        userModel: LegacySeedUser as never,
+      });
+
+      assert.equal(String((user as {_id?: unknown})._id), String(legacy._id));
+      assert.equal(await LegacySeedUser.countDocuments({email: seedUser.email}), 1);
+      const stored = await LegacySeedUser.findById(legacy._id).lean();
+      assert.isString(stored?.betterAuthId);
+    });
+  }
 });

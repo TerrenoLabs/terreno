@@ -11,6 +11,7 @@ import {
   SyncStatusBanner,
   Text,
   TextField,
+  WhatsNewBanner,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import {DateTime} from "luxon";
@@ -21,6 +22,7 @@ import {NotificationCenterBell} from "@/components/NotificationCenter";
 import {useSyncConflictsController} from "@/components/SyncConflictsController";
 import {SyncDevPanel} from "@/components/SyncDevPanel";
 import {TodoSummaryCard} from "@/components/TodoSummaryCard";
+import {WHATS_NEW_RELEASES} from "@/constants/whatsNew";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
 import {logout, useAppDispatch} from "@/store/index";
 import {
@@ -398,6 +400,9 @@ const SyncTodosScreen: React.FC = () => {
   const handleOpenWindows = useCallback((): void => {
     router.push("/todo-windows");
   }, [router]);
+  const handleOpenBrowser = useCallback((): void => {
+    router.push("/todo-browser");
+  }, [router]);
 
   const listHeader = useMemo(
     (): React.ReactElement => (
@@ -418,6 +423,13 @@ const SyncTodosScreen: React.FC = () => {
               text="Query windows"
               variant="muted"
             />
+            <Button
+              iconName="table-columns"
+              onClick={handleOpenBrowser}
+              testID="todos-browse-button"
+              text="Browse"
+              variant="muted"
+            />
             <NotificationCenterBell />
           </Box>
         </Box>
@@ -433,7 +445,7 @@ const SyncTodosScreen: React.FC = () => {
         <TodoSummaryCard />
       </Box>
     ),
-    [countSummary, handleCreate, handleOpenWindows, isSyncDbReady, totalCount]
+    [countSummary, handleCreate, handleOpenBrowser, handleOpenWindows, isSyncDbReady, totalCount]
   );
 
   const listEmpty = useMemo(
@@ -467,6 +479,7 @@ const SyncTodosScreen: React.FC = () => {
         sentThisDrain={syncStatus.sentThisDrain}
         totalThisDrain={syncStatus.totalThisDrain}
       />
+      <WhatsNewBanner releases={WHATS_NEW_RELEASES} testID="todos-whats-new-banner" />
       <FlashList
         contentContainerStyle={{paddingBottom: listBottomPadding}}
         contentInsetAdjustmentBehavior="automatic"

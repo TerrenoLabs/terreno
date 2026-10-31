@@ -1,0 +1,32 @@
+---
+title: "ChartCard"
+description: "Card chrome for a chart or table: title, optional filter summary, and optional period badge action."
+sidebar_label: "ChartCard"
+slug: /reference/components/chartcard
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# ChartCard
+
+Card chrome for a chart or table: title, optional filter summary, and optional period badge action.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `ChartCardProps`  
+**Story source:** [`demo/stories/ChartCard.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/ChartCard.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="ChartCard" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | Yes |  |
+| `title` | `string` | Yes | Card heading. |
+| `filterSummary` | `string` |  | Optional context shown below the title row. |
+| `onPeriodPress` | `reflection` |  | Makes the period badge pressable when provided. |
+| `periodLabel` | `string` |  | Date range or relative period shown in the header. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

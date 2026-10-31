@@ -124,6 +124,24 @@ describe("GPTChat", () => {
     assert.isOk(getByText("New Chat"));
   });
 
+  it("shows the history sidebar by default", () => {
+    const {getByTestId} = renderChat();
+
+    assert.isOk(getByTestId("gpt-history-sidebar"));
+    assert.isOk(getByTestId("gpt-new-chat-button"));
+  });
+
+  it("leaves out the history sidebar when showHistory is false", () => {
+    const {getByTestId, queryByTestId, queryByText} = renderChat({showHistory: false});
+
+    assert.isNull(queryByTestId("gpt-history-sidebar"));
+    assert.isNull(queryByTestId("gpt-new-chat-button"));
+    assert.isNull(queryByText("Chats"));
+    assert.isNull(queryByText("First chat"));
+    assert.isOk(getByTestId("gpt-messages"));
+    assert.isOk(getByTestId("gpt-chat"));
+  });
+
   it("selects, creates, and deletes histories", async () => {
     const onSelectHistory = mock((_id: string) => {});
     const onCreateHistory = mock(() => {});
@@ -232,6 +250,22 @@ describe("GPTChat", () => {
     await press(getByTestId("gpt-api-key-button"));
     fireEvent.changeText(getByTestId("gpt-api-key-input"), "new-key");
     await press(getByText("Save"));
+
+    assert.deepEqual(onGeminiApiKeyChange.mock.calls, [["new-key"]]);
+  });
+
+  it("saves the Gemini API key on Enter and labels the key field", async () => {
+    const onGeminiApiKeyChange = mock((_key: string) => {});
+    const {getByTestId} = renderChat({onGeminiApiKeyChange});
+
+    await press(getByTestId("gpt-api-key-button"));
+    const input = getByTestId("gpt-api-key-input");
+    assert.equal(input.props["aria-label"], "Gemini API key");
+    assert.equal(input.props.autoComplete, "off");
+    fireEvent.changeText(input, "new-key");
+    await act(async () => {
+      fireEvent(getByTestId("gpt-api-key-input"), "submitEditing");
+    });
 
     assert.deepEqual(onGeminiApiKeyChange.mock.calls, [["new-key"]]);
   });

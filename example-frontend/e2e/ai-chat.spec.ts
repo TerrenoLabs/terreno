@@ -757,14 +757,6 @@ test.describe("AI chat history", () => {
       title: secondTitle,
       user: TEST_USER,
     });
-    // TEMP DIAGNOSTIC: print socket frames that carry a nack so CI shows why the rename fails.
-    page.on("websocket", (ws) => {
-      ws.on("framereceived", (frame) => {
-        if (String(frame.payload).includes("nack")) {
-          console.info(`TEMP-NACK ${String(frame.payload).slice(0, 600)}`);
-        }
-      });
-    });
     await loginAs(page);
     await page.goto("/ai");
     await page.getByTestId("gpt-history-sidebar").waitFor({state: "visible"});

@@ -144,8 +144,8 @@ describe("example-backend AI wiring (default prompt, skills, image generation)",
   it("marks both ai prompt fields as markdown widgets in the configuration meta", async () => {
     const res = await admin.get("/configuration/meta").expect(200);
     const ai = res.body.sections.find((section: {name: string}) => section.name === "ai");
-    expect(ai.fields.systemPrompt.widget).toBe("markdown");
-    expect(ai.fields.imageStylePrompt.widget).toBe("markdown");
+    expect(ai.fields.systemPrompt.widget).toBe("prompt");
+    expect(ai.fields.imageStylePrompt.widget).toBe("prompt");
   });
 
   it("offers the new generate_image tool when the request sends x-ai-api-key", async () => {

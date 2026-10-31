@@ -38,6 +38,31 @@ export const MarkdownFieldWidget: React.FC<AdminFieldWidgetProps> = ({
   );
 };
 
+/** Markdown editor without the preview pane, for LLM prompts that are read as source. */
+export const PromptFieldWidget: React.FC<AdminFieldWidgetProps> = ({
+  fieldKey,
+  fieldConfig,
+  value,
+  onChange,
+  errorText,
+  readOnly,
+}) => {
+  const label = startCase(fieldKey);
+  const isReadOnly = Boolean(readOnly);
+  return (
+    <MarkdownEditorField
+      disabled={isReadOnly}
+      errorText={errorText}
+      helperText={fieldConfig.description}
+      onChange={onChange}
+      showPreview={false}
+      testID={`admin-field-${fieldKey}`}
+      title={label}
+      value={typeof value === "string" ? value : ""}
+    />
+  );
+};
+
 export const TextareaFieldWidget: React.FC<AdminFieldWidgetProps> = ({
   fieldKey,
   fieldConfig,

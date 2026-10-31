@@ -232,8 +232,8 @@ const auditConfigurationUpdate = async (
 /** Options for `TerrenoApp.configure(AppConfiguration, ...)`. */
 export const appConfigurationOptions: Omit<ConfigurationAppOptions, "model"> = {
   fieldOverrides: {
-    "ai.imageStylePrompt": {widget: "markdown"},
-    "ai.systemPrompt": {widget: "markdown"},
+    "ai.imageStylePrompt": {widget: "prompt"},
+    "ai.systemPrompt": {widget: "prompt"},
   },
   postUpdate: auditConfigurationUpdate,
 };

@@ -416,6 +416,16 @@ labels come from the agent.
 <TextArea grow maxHeight={200} onChange={setNotes} value={notes} />
 ```
 
+### MarkdownEditor and MarkdownEditorField showPreview
+
+Both editors render a preview pane beside the input by default. Pass `showPreview={false}` to
+render only the input, for text that is read as source, such as an LLM prompt. The admin
+`prompt` field widget does this.
+
+```tsx
+<MarkdownEditorField onChange={setPrompt} showPreview={false} title="System prompt" value={prompt} />
+```
+
 ### TextField password visibility
 
 `type="password"` masks the value and renders a show/hide eye control at the end of the field.

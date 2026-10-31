@@ -32,13 +32,14 @@ export const AppConfiguration = mongoose.model<
 >("AppConfiguration", appConfigSchema);
 ```
 
-Give both fields the markdown widget on the Configuration screen:
+Give both fields the `prompt` widget on the Configuration screen. It is the markdown editor
+without the preview pane, since a prompt is read by the model as source, not rendered:
 
 ```typescript
 new TerrenoApp({userModel: User}).configure(AppConfiguration, {
   fieldOverrides: {
-    "ai.imageStylePrompt": {widget: "markdown"},
-    "ai.systemPrompt": {widget: "markdown"},
+    "ai.imageStylePrompt": {widget: "prompt"},
+    "ai.systemPrompt": {widget: "prompt"},
   },
 });
 ```

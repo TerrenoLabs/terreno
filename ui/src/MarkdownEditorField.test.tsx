@@ -35,6 +35,15 @@ describe("MarkdownEditorField", () => {
     expect(getByText("Preview")).toBeTruthy();
   });
 
+  it("hides the preview pane when showPreview is false", () => {
+    const {getByTestId, queryByText} = renderWithTheme(
+      <MarkdownEditorField onChange={() => {}} showPreview={false} testID="editor" value="" />
+    );
+
+    expect(getByTestId("editor-input")).toBeTruthy();
+    expect(queryByText("Preview")).toBeNull();
+  });
+
   it("renders the markdown preview instead of the placeholder when a value is set", () => {
     const {queryByText} = renderWithTheme(
       <MarkdownEditorField onChange={() => {}} value="# Heading" />

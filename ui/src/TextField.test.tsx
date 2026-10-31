@@ -5,6 +5,7 @@ import type {ReactElement} from "react";
 import type {TextInput} from "react-native";
 import type {TextFieldProps} from "./Common";
 import {TextField} from "./TextField";
+import {defaultThemePrimitives, useTheme} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
 describe("TextField", () => {
@@ -1165,6 +1166,72 @@ describe("TextField", () => {
       } finally {
         setOS(originalOS);
       }
+    });
+  });
+
+  describe("field theming", () => {
+    type ThemeContextValue = ReturnType<typeof useTheme>;
+
+    const renderWithFieldTheme = (
+      props: Partial<TextFieldProps> = {}
+    ): {captured: () => ThemeContextValue | undefined; findBox: (color: string) => unknown[]} => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = (): null => {
+        captured = useTheme();
+        return null;
+      };
+      const view = renderWithTheme(
+        <>
+          <Capture />
+          <TextField onChange={() => {}} testID="themed-field" value="" {...props} />
+        </>
+      );
+      const findBox = (color: string): unknown[] =>
+        view.UNSAFE_root.findAll(
+          (node) =>
+            typeof node.type === "string" &&
+            node.props.style?.backgroundColor === color &&
+            node.props.style?.borderRadius === 4
+        );
+      return {captured: () => captured, findBox};
+    };
+
+    it("paints the input box from field.background and field.border", () => {
+      const {captured, findBox} = renderWithFieldTheme();
+      act(() => {
+        captured()?.setTheme({field: {background: "primary000", border: "primary500"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.primary000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.primary500);
+    });
+
+    it("paints a disabled input from field.backgroundDisabled and field.borderDisabled", () => {
+      const {captured, findBox} = renderWithFieldTheme({disabled: true});
+      act(() => {
+        captured()?.setTheme({
+          field: {backgroundDisabled: "accent050", borderDisabled: "accent700"},
+        });
+      });
+      const boxes = findBox(defaultThemePrimitives.accent050) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.accent700);
+    });
+
+    it("paints an error border from field.borderError", () => {
+      const {captured, findBox} = renderWithFieldTheme({errorText: "Required"});
+      act(() => {
+        captured()?.setTheme({field: {borderError: "warning200"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.neutral000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.warning200);
     });
   });
 });

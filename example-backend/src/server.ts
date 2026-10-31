@@ -71,7 +71,7 @@ import {todoRouter} from "./api/todos";
 import {usersRouter} from "./api/users";
 import {registerUsersTodoStatusTool} from "./api/usersTodoStatus";
 import {bindPortEarly, closeEarlyListenHolder} from "./bindPortEarly";
-import {isDeployed, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
+import {isDeployed, isPrPreview, isWebsocketService, WEBSOCKETS_DEBUG} from "./conf";
 import {consentDefinitions} from "./consentDefinitions";
 import {exampleAdminHome} from "./exampleAdminConfig";
 import {exampleFeatureFlagSegments} from "./featureFlagSegments";
@@ -569,7 +569,7 @@ export const start = async (
       );
     }
 
-    await seedDefaultDataOnBoot({isDeployed});
+    await seedDefaultDataOnBoot({isDeployed, isPrPreview});
 
     const app = terraApp.start();
 

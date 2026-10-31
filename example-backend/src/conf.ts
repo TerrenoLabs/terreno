@@ -127,6 +127,9 @@ export const isStaging = Configuration.get<string>("APP_ENV") === "staging";
 // running locally.
 export const isDeployed = Configuration.get<string>("NODE_ENV") === "production";
 
+// A per-PR Cloud Run preview with its own throwaway database; production never sets PR_NUMBER.
+export const isPrPreview = Boolean(process.env.PR_NUMBER);
+
 export const isWebsocketService =
   Configuration.get<string>("BACKEND_SERVICE") === "websockets" ||
   Configuration.get<string>("BACKEND_SERVICE") === "all";

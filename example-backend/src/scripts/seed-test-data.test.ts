@@ -220,4 +220,13 @@ describe("seedDefaultDataOnBoot", () => {
     assert.isUndefined(result);
     assert.equal(await User.countDocuments({}), 0);
   });
+
+  it("seeds the default users into a deployed PR preview", async () => {
+    process.env.SEED_DEFAULTS = "true";
+
+    const result = await seedDefaultDataOnBoot({isDeployed: true, isPrPreview: true});
+
+    assert.exists(result);
+    assert.exists(await User.findByEmail("admin@example.com"));
+  });
 });

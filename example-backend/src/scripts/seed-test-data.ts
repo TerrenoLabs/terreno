@@ -939,18 +939,21 @@ export const seedDefaultData = async (): Promise<SeedRunResult> => {
 
 /**
  * Seeds the default example data at server start when `SEED_DEFAULTS=true`. A deployed process
- * never seeds on boot: the default accounts, admins included, use a password published in this
- * repository.
+ * seeds on boot only as a PR preview: the default accounts, admins included, use a password
+ * published in this repository, which is acceptable on a throwaway per-PR database but never in
+ * production.
  */
 export const seedDefaultDataOnBoot = async ({
   isDeployed,
+  isPrPreview = false,
 }: {
   isDeployed: boolean;
+  isPrPreview?: boolean;
 }): Promise<SeedRunResult | undefined> => {
   if (process.env.SEED_DEFAULTS !== "true") {
     return undefined;
   }
-  if (isDeployed) {
+  if (isDeployed && !isPrPreview) {
     logger.warn(
       "SEED_DEFAULTS ignored: a deployed process does not seed accounts with published passwords"
     );

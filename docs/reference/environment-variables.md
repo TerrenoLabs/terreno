@@ -317,7 +317,10 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 
 `SEED_DEFAULTS=true` runs the example seed (default users, all with the published password
 `testpassword123`) when the server starts. A process with `NODE_ENV=production` logs a warning and
-skips it, so no deployed revision, PR previews included, holds those accounts.
+skips it unless `PR_NUMBER` is set. The Cloud Run PR preview sets both, so each preview's
+throwaway `terreno-example-pr-<n>` database holds `test@example.com` and `admin@example.com`.
+Production never sets `PR_NUMBER`, and each deploy replaces the revision's whole env with
+`--set-env-vars`, so production never holds those accounts.
 
 ## Testing & CI (tooling only)
 

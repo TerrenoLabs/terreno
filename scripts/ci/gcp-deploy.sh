@@ -152,7 +152,7 @@ deploy_backend() {
     # when an older pr-* tag points at a revision that never became Ready.
     revision_suffix="pr${PR_NUMBER}-${CIRCLE_BUILD_NUM:-$(date +%s)}"
     args+=(--no-traffic --no-cpu-throttling --cpu-boost "--memory=1Gi" "--revision-suffix=$revision_suffix")
-    env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
+    env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},PR_NUMBER=${PR_NUMBER},SEED_DEFAULTS=true,GCS_FOLDER_PREFIX=pr-${PR_NUMBER}/"
     .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh "$GCP_BACKEND_SERVICE" "$GCP_BACKEND_REGION"
   fi
   # Adds the web and auth vars; CORS_ORIGINS can list two origins while stable moves domains,

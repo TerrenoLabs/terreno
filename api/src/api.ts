@@ -264,7 +264,7 @@ export interface ModelRouterOptions<T> {
   preCreate?: (
     value: Partial<T> | (Partial<T> | undefined)[] | null | undefined,
     request: express.Request
-  ) => T | Promise<T> | null;
+  ) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before changes are made for update operations.
    * Can update the body fields based on the request or the user.
@@ -274,7 +274,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The request body relative to the model update (type: Partial<T>). Note: this does not contain the entire document to be updated, only the fields being updated.
    * @param request - The Express request object.
    */
-  preUpdate?: (value: Partial<T>, request: express.Request) => T | Promise<T> | null;
+  preUpdate?: (value: Partial<T>, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before the object is deleted.
    * Return null to return a generic 403 error.
@@ -283,7 +283,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The document to be deleted, before the soft update of deleted: true (type: T).
    * @param request - The Express request object.
    */
-  preDelete?: (value: T, request: express.Request) => T | Promise<T> | null;
+  preDelete?: (value: T, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after the object is created but before the responseHandler serializes and
    * returned. This is a good spot to perform dependent changes to other models or performing async

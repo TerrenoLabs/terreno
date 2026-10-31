@@ -52,7 +52,7 @@ describe("enrichModelRouterOptions", () => {
         const widget = body as Partial<Widget>;
         return {...widget, title: `${widget.title}-created`};
       },
-      preUpdate: () => null,
+      preUpdate: async () => null,
     };
     const enriched = enrichModelRouterOptions(WidgetModel, options, {});
     const created = await enriched.preCreate?.({secret: "x", title: "Hi"}, {} as never);

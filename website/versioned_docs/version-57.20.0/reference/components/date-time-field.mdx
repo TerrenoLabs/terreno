@@ -1,0 +1,51 @@
+---
+title: "Date & Time field"
+description: "This form field allows the user to select a date and a time. Used in conjunction with the date & time modal in this pattern."
+sidebar_label: "Date & Time field"
+slug: /reference/components/date-time-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Date & Time field
+
+This form field allows the user to select a date and a time. Used in conjunction with the date & time modal in this pattern.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `DateTimeFieldProps`  
+**Story source:** [`demo/stories/Date&Timefield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Date&Timefield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Date & Time field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `reflection` | Yes |  |
+| `type` | `union` | Yes |  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `dateFormat` | `string` |  |  |
+| `disabled` | `boolean` |  |  |
+| `errorPosition` | `union` |  | Where  |
+| `errorText` | `string` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onEntryStatusChange` | `reflection` |  | Called after each typed change and picker selection with what the field now holds.  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `onTimezoneChange` | `reflection` |  |  |
+| `pickerType` | `union` |  |  |
+| `placeholder` | `string` |  |  |
+| `showTimezone` | `boolean` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `timezone` | `string` |  |  |
+| `title` | `string` |  |  |
+| `value` | `string` |  |  |

@@ -37,7 +37,7 @@ Optional flags:
 | `appName` (positional) | yes | — kebab-case directory and package name (`^[a-z][a-z0-9-]*$`) |
 | `--display-name` | unless `--yes` | derived from `appName` when `--yes` |
 | `--description` | no | empty |
-| `--mcp-server-url` | no | `https://mcp.terreno.app` |
+| `--mcp-server-url` | no | `https://mcp.terreno.app` (base URL; the CLI appends `/mcp`) |
 | `--yes` | no | off |
 
 The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/TerrenoLabs/terreno/tree/master/create-terreno-app) in the Terreno monorepo.
@@ -61,11 +61,11 @@ cd .. && bunx create-terreno-app my-app --yes
 | `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`, `@terreno/rtk`) |
 | `Dockerfile` | Consumer backend image (`backend/` only — not the Terreno monorepo) |
 | `.dockerignore` | Excludes local env secrets, dependencies, and build output from the image context |
-| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold) |
+| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold). `backend/.env` sets `NODE_ENV=development`, which turns on the dev-only `POST /__terreno/browser-logs` route |
 | `backend/.env.example`, `frontend/.env.example` | Committed templates for production and export |
 | `.github/workflows/` | Backend and frontend CI |
-| `.cursor/mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling |
-| `README.md` | App-specific next steps and deploy links |
+| `.cursor/mcp.json`, `.mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling ([Set up Terreno MCP](set-up-terreno-mcp.md)) |
+| `README.md` | App-specific next steps, deploy links, and a link to [Set up Terreno MCP](set-up-terreno-mcp.md) |
 
 Generated `@terreno/*` dependencies pin to `^<create-terreno-app version>` at scaffold time.
 
@@ -130,11 +130,13 @@ Open `http://localhost:8082` and sign in as `test@example.com` / `testpassword12
 
 `frontend/.env` defaults `EXPO_PUBLIC_API_URL` to `http://localhost:4000`. For production web builds, set it **before** export — see [Build for web](build-for-web.md).
 
+In development, `frontend/app/_layout.tsx` calls `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` at startup. It sends console errors, warnings, and uncaught errors to the backend's `POST /__terreno/browser-logs`, which writes `backend/.terreno/logs/browser.log`. `terreno-mcp-local` reads that file for `read_logs` and `last_error` with the `browser` source. The call does nothing in production builds. See [Set up Terreno MCP](set-up-terreno-mcp.md).
+
 ## Deploy
 
 Read the [deployment baseline](../explanation/deployment-baseline.md) first.
 
-**Backend:** the root `Dockerfile` builds only `backend/` on `oven/bun`, listens on `PORT` (default `8080` in the image), binds `0.0.0.0`, and exposes `GET /health`. It does not copy Terreno monorepo packages.
+**Backend:** the root `Dockerfile` builds only `backend/` on `oven/bun:1.4.4-slim`, listens on `PORT` (default `8080` in the image), binds `0.0.0.0`, and exposes `GET /health`. It does not copy Terreno monorepo packages.
 
 ```bash
 docker build -t my-app-backend .
@@ -142,10 +144,11 @@ docker run --rm -p 8080:8080 \
   -e MONGO_URI='mongodb+srv://...' \
   -e BETTER_AUTH_SECRET='...' \
   -e BETTER_AUTH_URL='https://api.example.com' \
+  -e FRONTEND_URL='https://app.example.com' \
   my-app-backend
 ```
 
-Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. `GET /users` list and read require an admin.
+Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. Set `FRONTEND_URL` to the web app's URL: until it is set, a production backend leaves passkeys off (see [Auth features in generated apps](configure-better-auth.md#auth-features-in-generated-apps)). `GET /users` list and read require an admin.
 
 **Frontend:** [Build for web](build-for-web.md) — set `EXPO_PUBLIC_API_URL` at export time.
 

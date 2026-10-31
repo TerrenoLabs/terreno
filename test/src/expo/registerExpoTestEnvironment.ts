@@ -95,7 +95,9 @@ const installAssetPlugin = (): void => {
 };
 
 const installGlobals = (): void => {
-  const globals = globalThis as typeof globalThis & ExpoTestGlobals;
+  // Not `typeof globalThis & ...`: when expo-modules-core's ambient types load, they narrow
+  // `globalThis.expo` to the real ExpoGlobal, which the stub below does not satisfy.
+  const globals = globalThis as unknown as ExpoTestGlobals;
   globals.__DEV__ = true;
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   if (globals.expo !== undefined) {

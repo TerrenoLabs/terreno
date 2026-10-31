@@ -8,6 +8,7 @@ import {
   type StyleProp,
   TextInput,
   type TextInputChangeEvent,
+  type TextInputProps,
   View,
 } from "react-native";
 
@@ -64,6 +65,51 @@ const textContentMap: {
   username: "username",
 };
 
+type TextFieldAutoComplete = NonNullable<TextFieldProps["autoComplete"]>;
+
+/**
+ * Native autofill hints for each `autoComplete` value. `autoComplete` goes to React Native, which
+ * maps the web token to Android's autofill hint; `textContentType` is iOS's hint. "on" means "no
+ * opinion", so the field falls back to the hint for its `type`.
+ */
+const NATIVE_AUTOFILL: Record<
+  TextFieldAutoComplete,
+  Pick<TextInputProps, "autoComplete" | "textContentType"> | undefined
+> = {
+  "current-password": {autoComplete: "current-password", textContentType: "password"},
+  email: {autoComplete: "email", textContentType: "emailAddress"},
+  "new-password": {autoComplete: "new-password", textContentType: "newPassword"},
+  off: {autoComplete: "off", textContentType: "none"},
+  on: undefined,
+  "one-time-code": {autoComplete: "one-time-code", textContentType: "oneTimeCode"},
+  username: {autoComplete: "username", textContentType: "username"},
+  // Passkey autofill is web only; native platforms get the plain username hint.
+  "username webauthn": {autoComplete: "username", textContentType: "username"},
+};
+
+/**
+ * The input's autofill props: the raw token on web (react-native-web writes it to the
+ * `autocomplete` attribute, which accepts token lists such as "username webauthn"), or the
+ * Android and iOS hints on native.
+ */
+const getAutofillProps = ({
+  autoComplete,
+  type,
+}: {
+  autoComplete: TextFieldProps["autoComplete"];
+  type: string;
+}): Pick<TextInputProps, "autoComplete" | "textContentType"> => {
+  const textContentType = textContentMap[type];
+  if (Platform.OS === "web") {
+    return {
+      ...(autoComplete ? ({autoComplete} as unknown as Pick<TextInputProps, "autoComplete">) : {}),
+      textContentType,
+    };
+  }
+  const nativeHints = autoComplete ? NATIVE_AUTOFILL[autoComplete] : undefined;
+  return nativeHints ?? {textContentType};
+};
+
 interface WebTextInputRef {
   focus: () => void;
   selectionEnd: number | null;
@@ -76,6 +122,7 @@ export const TextField: FC<TextFieldProps> = ({
   disabled,
   helperText,
   errorText,
+  errorPosition = "above",
   value,
   onChange,
   placeholder,
@@ -100,6 +147,8 @@ export const TextField: FC<TextFieldProps> = ({
   testIDs,
   id,
   aiSuggestion,
+  accessibilityLabel,
+  mono = false,
 }) => {
   const {theme} = useTheme();
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
@@ -167,9 +216,10 @@ export const TextField: FC<TextFieldProps> = ({
   let borderColor = focused ? theme.border.focus : theme.border.dark;
   if (disabled) {
     borderColor = theme.border.activeNeutral;
-  } else if (errorText) {
+  } else if (errorText && !focused) {
     borderColor = theme.border.error;
   }
+  const borderWidth = focused ? 3 : errorText ? 2 : 1;
 
   const calculatedHeight: DimensionValue = useMemo(() => {
     if (grow) {
@@ -189,10 +239,11 @@ export const TextField: FC<TextFieldProps> = ({
     const style: StyleProp<TextStyleWithOutline> = {
       color: theme.text.primary,
       flex: 1,
-      fontFamily: "text",
+      fontFamily: mono ? "monospace" : "text",
       fontSize: 16,
       gap: 10,
       height: calculatedHeight,
+      letterSpacing: mono ? 2 : undefined,
       paddingVertical: 0,
       width: "100%",
     };
@@ -201,7 +252,7 @@ export const TextField: FC<TextFieldProps> = ({
       style.outline = "none";
     }
     return style;
-  }, [calculatedHeight, theme.text.primary]);
+  }, [calculatedHeight, mono, theme.text.primary]);
 
   if (["numberRange", "decimalRange", "height"].includes(type)) {
     console.warn(`${type} is not yet supported`);
@@ -260,8 +311,8 @@ export const TextField: FC<TextFieldProps> = ({
     onChangeRef.current(text);
   }, []);
 
+  const autofillProps = getAutofillProps({autoComplete, type: type || "text"});
   const keyboardType = keyboardMap[type];
-  const textContentType = textContentMap[type || "text"];
 
   return (
     <View
@@ -271,13 +322,15 @@ export const TextField: FC<TextFieldProps> = ({
       }}
     >
       {Boolean(title) && <FieldTitle testID={fieldTestIDs.label} text={title!} />}
-      {Boolean(errorText) && <FieldError testID={fieldTestIDs.error} text={errorText!} />}
+      {Boolean(errorText) && errorPosition === "above" && (
+        <FieldError testID={fieldTestIDs.error} text={errorText!} />
+      )}
       <View
         style={{
           backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
           borderColor,
           borderRadius: 4,
-          borderWidth: focused ? 3 : 1,
+          borderWidth,
           flexDirection: "column",
           gap: aiSuggestion ? 10 : 0,
           overflow: "hidden",
@@ -299,9 +352,12 @@ export const TextField: FC<TextFieldProps> = ({
         >
           <TextInput
             {...(Platform.OS === "web" ? {spellCheck: false} : {})}
+            {...autofillProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}
-            aria-label="Text input field"
+            aria-describedby={errorText ? fieldTestIDs.error : undefined}
+            aria-invalid={Boolean(errorText)}
+            aria-label={accessibilityLabel ?? "Text input field"}
             autoCapitalize={type === "text" ? "sentences" : "none"}
             autoCorrect={shouldAutocorrect}
             blurOnSubmit={blurOnSubmit}
@@ -363,7 +419,6 @@ export const TextField: FC<TextFieldProps> = ({
             secureTextEntry={isPasswordField && !isValueRevealed}
             style={defaultTextInputStyles}
             testID={fieldTestIDs.input}
-            textContentType={textContentType}
             underlineColorAndroid="transparent"
             value={value}
           />
@@ -394,6 +449,9 @@ export const TextField: FC<TextFieldProps> = ({
           )}
         </View>
       </View>
+      {Boolean(errorText) && errorPosition === "below" && (
+        <FieldError testID={fieldTestIDs.error} text={errorText!} />
+      )}
       {Boolean(helperText) && <FieldHelperText testID={fieldTestIDs.helper} text={helperText!} />}
       {/* {type === "numberRange" && value && (
         <NumberPickerActionSheet

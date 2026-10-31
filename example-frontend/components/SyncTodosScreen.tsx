@@ -400,6 +400,9 @@ const SyncTodosScreen: React.FC = () => {
   const handleOpenWindows = useCallback((): void => {
     router.push("/todo-windows");
   }, [router]);
+  const handleOpenBrowser = useCallback((): void => {
+    router.push("/todo-browser");
+  }, [router]);
 
   const listHeader = useMemo(
     (): React.ReactElement => (
@@ -420,6 +423,13 @@ const SyncTodosScreen: React.FC = () => {
               text="Query windows"
               variant="muted"
             />
+            <Button
+              iconName="table-columns"
+              onClick={handleOpenBrowser}
+              testID="todos-browse-button"
+              text="Browse"
+              variant="muted"
+            />
             <NotificationCenterBell />
           </Box>
         </Box>
@@ -435,7 +445,7 @@ const SyncTodosScreen: React.FC = () => {
         <TodoSummaryCard />
       </Box>
     ),
-    [countSummary, handleCreate, handleOpenWindows, isSyncDbReady, totalCount]
+    [countSummary, handleCreate, handleOpenBrowser, handleOpenWindows, isSyncDbReady, totalCount]
   );
 
   const listEmpty = useMemo(

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two-factor: wrong code</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&amp;family=Titillium+Web:wght@600;700&amp;display=swap">
+<style>
+body{margin:0;background:#e9eef0;display:flex;justify-content:center;padding:24px 0}
+a{color:#0a7092}a:hover{color:#095a75}
+.screen{--surface-base:#ffffff;--surface-primary:#0e9dcd;--surface-sec-xl:#f2f9fa;--text-primary:#1c1c1c;--text-secondary:#686868;--text-link:#0a7092;--text-error:#bd1111;--text-sec-d:#092e3a;--border-default:#cdcdcd;--border-error:#d33232;box-sizing:border-box;width:390px;min-height:100%;padding:24px 24px 32px;background:var(--surface-base);color:var(--text-primary);font-family:Nunito,system-ui,sans-serif;display:flex;flex-direction:column;gap:24px}
+.back{display:inline-flex;align-items:center;gap:4px;height:44px;align-self:flex-start;margin-left:-8px;padding:0 8px;border:0;background:none;font:700 16px/1 Nunito,sans-serif;color:var(--text-link);cursor:pointer}
+.back svg{width:20px;height:20px}
+.badge{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--surface-sec-xl);color:var(--text-sec-d)}
+.badge svg{width:28px;height:28px}
+.h1{margin:0;font:700 32px/38px "Titillium Web",sans-serif}
+.sub{margin:8px 0 0;font-size:16px;line-height:24px;color:var(--text-secondary)}
+.otp{display:flex;gap:8px;justify-content:space-between}
+.digit{box-sizing:border-box;width:48px;height:56px;border:2px solid var(--border-error);border-radius:4px;text-align:center;font:700 24px/1 "Titillium Web",sans-serif;color:var(--text-primary);background:var(--surface-base)}
+.err{display:flex;gap:6px;align-items:flex-start;margin:8px 0 0;font-size:14px;line-height:20px;color:var(--text-error)}
+.err svg{flex:none;width:16px;height:16px;margin-top:2px}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:16px;line-height:22px;cursor:pointer}
+.check input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:#0e9dcd}
+.check small{display:block;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;height:48px;box-sizing:border-box;border-radius:360px;border:1px solid var(--border-default);background:var(--surface-base);color:var(--text-primary);font:700 16px/1 Nunito,sans-serif;cursor:pointer}
+.btn-primary{background:var(--surface-primary);border-color:var(--surface-primary);color:#fff;font-size:19px}
+.alt{display:flex;flex-direction:column;align-items:center;gap:4px}
+.link{font:700 16px/24px Nunito,sans-serif;color:var(--text-link);text-decoration:none;background:none;border:0;padding:10px 0;cursor:pointer}
+.foot{margin-top:auto;text-align:center}
+</style>
+<main class="screen">
+  <button class="back" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+    Back
+  </button>
+
+  <div class="badge" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6l-8-3z"></path><path d="m9 12 2 2 4-4"></path></svg>
+  </div>
+
+  <div>
+    <h1 class="h1">Enter your code</h1>
+    <p class="sub">Open your authenticator app and enter the 6-digit code for j***@n***.io.</p>
+  </div>
+
+  <form style="display: flex; flex-direction: column; gap: 24px">
+    <fieldset style="border: 0; margin: 0; padding: 0">
+      <legend style="position: absolute; width: 1px; height: 1px; overflow: hidden">Authentication code</legend>
+      <div class="otp">
+        <input class="digit" value="4" inputmode="numeric" maxlength="1" aria-label="Digit 1" aria-invalid="true" aria-describedby="tfe-err">
+        <input class="digit" value="8" inputmode="numeric" maxlength="1" aria-label="Digit 2" aria-invalid="true">
+        <input class="digit" value="2" inputmode="numeric" maxlength="1" aria-label="Digit 3" aria-invalid="true">
+        <input class="digit" value="1" inputmode="numeric" maxlength="1" aria-label="Digit 4" aria-invalid="true">
+        <input class="digit" value="0" inputmode="numeric" maxlength="1" aria-label="Digit 5" aria-invalid="true">
+        <input class="digit" value="7" inputmode="numeric" maxlength="1" aria-label="Digit 6" aria-invalid="true">
+      </div>
+      <p class="err" id="tfe-err" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 16h.01"></path></svg>
+        That code didn't work. Codes change every 30 seconds, so enter the one your app shows now.
+      </p>
+    </fieldset>
+
+    <label class="check">
+      <input type="checkbox" checked>
+      <span>Trust this device<small>We won't ask for a code here for 30 days.</small></span>
+    </label>
+
+    <button class="btn btn-primary" type="submit">Verify</button>
+  </form>
+
+  <div class="alt">
+    <button class="link" type="button">Use a backup code instead</button>
+  </div>
+
+  <div class="foot">
+    <button class="link" type="button" style="color: #686868">Sign in a different way</button>
+  </div>
+</main>
+</body>
+</html>

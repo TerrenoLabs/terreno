@@ -9,7 +9,6 @@ import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
 import {
   baseUrl,
-  installTerrenoDevConsoleLogger,
   selectBetterAuthIsLoading,
   selectBetterAuthUserId,
   setRealtimeSocket,
@@ -18,6 +17,7 @@ import {
   useTerrenoFeatureFlags,
   useUpgradeCheck,
 } from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
@@ -46,7 +46,7 @@ import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 
-installTerrenoDevConsoleLogger();
+installTerrenoDevConsoleLogger({baseUrl});
 
 interface ProfileData {
   _id: string;
@@ -265,18 +265,21 @@ const RootLayoutNav = (): React.ReactElement => {
       return;
     }
 
-    const isLoginOrSignup = segments[0] === "login" || segments[0] === "signup";
+    const isLogin = segments[0] === "login";
     const isPublicAuthPage =
-      isLoginOrSignup ||
+      isLogin ||
+      segments[0] === "signup" ||
       segments[0] === "forgotPassword" ||
       segments[0] === "resetPassword" ||
       segments[0] === "verifyEmail";
 
     if (!userId && !isPublicAuthPage) {
       router.replace("/login");
-    } else if (userId && isLoginOrSignup) {
+    } else if (userId && segments[0] === "signup") {
       router.replace("/(tabs)");
     }
+    // A signed-in user on /login stays: TerrenoLoginScreen finds the session, records the
+    // sign-in method for this device (a social sign-in returns here), and navigates on itself.
   }, [userId, segments, router, isAuthLoading]);
 
   // Hold the navigator until the session (and, for signed-in users, the profile that
@@ -285,7 +288,9 @@ const RootLayoutNav = (): React.ReactElement => {
   // Stack — a remounted Stack resets to initialRouteName "(tabs)", silently discarding
   // a deep-linked route like /profile or /admin. Rendering only once the tree shape is
   // final means the Stack mounts exactly once per auth state and keeps the requested URL.
-  if (isAuthLoading || (Boolean(userId) && isProfileLoading)) {
+  // Only a session load with no user yet holds it: a refresh or a sign-out while signed in
+  // (rtk's logout keeps the session until the server answers) leaves the current screen up.
+  if ((isAuthLoading && !userId) || (Boolean(userId) && isProfileLoading)) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center" testID="app-auth-loading">
         <ThemedStatusBar />
@@ -338,7 +343,9 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="notifications" />
+        <Stack.Screen name="consent-sign/[userId]" />
         <Stack.Screen name="todo-windows/index" />
+        <Stack.Screen name="todo-browser" />
       </Stack>
     </ThemeProvider>
   );

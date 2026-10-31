@@ -18,6 +18,7 @@
     "@types/luxon": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "chai": "catalog:",
     "expo-sqlite": "catalog:",
     "fake-indexeddb": "^6.0.0",
     "react": "catalog:",
@@ -35,6 +36,10 @@
       "default": "./dist/codegen/generate.js",
       "types": "./dist/codegen/generate.d.ts"
     },
+    "./devConsoleLogger": {
+      "default": "./dist/devConsoleLogger.js",
+      "types": "./dist/devConsoleLogger.d.ts"
+    },
     "./react": {
       "default": "./dist/react/index.js",
       "types": "./dist/react/index.d.ts"
@@ -45,6 +50,7 @@
     }
   },
   "files": [
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*"
   ],
@@ -92,5 +98,5 @@
     "test:coverage": "bun run ../scripts/check-coverage.ts"
   },
   "types": "dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "57.20.0"
 }

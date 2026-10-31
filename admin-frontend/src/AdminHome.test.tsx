@@ -1,7 +1,9 @@
 // noExplicitAny: test harness doubles
 // biome-ignore-all lint/suspicious/noExplicitAny: test harness doubles
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import React from "react";
+import type {ScaledSize} from "react-native";
+import {useWindowDimensions} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
@@ -103,7 +105,38 @@ const countTestIdInSubtree = (root: ReactTestInstance, testId: string): number =
   return count;
 };
 
+type WindowDimensionsImpl = () => ScaledSize;
+type MockableUseWindowDimensions = WindowDimensionsImpl & {
+  mockImplementation?: (impl: WindowDimensionsImpl) => void;
+};
+
+const getScaledSize =
+  (width: number): WindowDimensionsImpl =>
+  (): ScaledSize => ({
+    fontScale: 1,
+    height: 1000,
+    scale: 2,
+    width,
+  });
+
+const setWindowWidth = (width: number): (() => void) => {
+  const useWindowDimensionsMock = useWindowDimensions as MockableUseWindowDimensions;
+  const dimensionsImpl = getScaledSize(width);
+
+  if (typeof useWindowDimensionsMock.mockImplementation === "function") {
+    useWindowDimensionsMock.mockImplementation(dimensionsImpl);
+
+    return (): void => {
+      useWindowDimensionsMock.mockImplementation(getScaledSize(375));
+    };
+  }
+
+  return (): void => {};
+};
+
 describe("AdminHome", () => {
+  let restoreWindowWidth: (() => void) | undefined;
+
   beforeEach(() => {
     resetUseAdminApiDouble();
     configureUseAdminApiDouble({
@@ -116,6 +149,12 @@ describe("AdminHome", () => {
     });
     configState.config = null;
     configState.isLoading = false;
+    restoreWindowWidth = setWindowWidth(375);
+  });
+
+  afterEach(() => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = undefined;
   });
 
   it("renders scriptRunner in the top band with contentTop widgets on the same row, not inside main", () => {
@@ -214,5 +253,29 @@ describe("AdminHome", () => {
     configState.config = buildConfig();
     const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
     expect(getByTestId("admin-version-config-widget")).toBeTruthy();
+  });
+
+  it("stacks the home columns below the desktop floor", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(800);
+    configState.config = buildConfig();
+    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("column");
+  });
+
+  it("places the home columns side by side at the desktop floor", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(1024);
+    configState.config = buildConfig();
+    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" />);
+    expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("row");
+  });
+
+  it("keeps an embedded dashboard stacked at desktop width", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(1024);
+    configState.config = buildConfig();
+    const {getByTestId} = renderWithTheme(<AdminHome api={adminApi} baseUrl="/admin" embedded />);
+    expect(getByTestId("admin-home-columns").props.style.flexDirection).toBe("column");
   });
 });

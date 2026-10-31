@@ -30,6 +30,13 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
 - Testing (`@terreno/syncdb/testing`): `createFakeTransport`
+- Dev console logger: `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb`, also
+  `@terreno/syncdb/devConsoleLogger`. In `__DEV__` it batches `console.error` / `console.warn`,
+  React Native `ErrorUtils`, and web `window` errors to `POST {baseUrl}/__terreno/browser-logs`,
+  which `read_logs` / `last_error` read back. An `ErrorUtils` error that the previous handler
+  rethrows (the web default) is left to the `window` listeners, so a caught error is not logged.
+  It does nothing outside `__DEV__`. Moved here from
+  `@terreno/rtk`, which keeps a deprecated re-export.
 
 ## Installation
 
@@ -254,7 +261,7 @@ before anything else has confirmed one.
 | Method | Description |
 |--------|-------------|
 | `start()` | Resolve user, run wipe-on-user-change check, start persistence, connect transport, subscribe collections, start reconcile timer. Resolves even when offline. Idempotent while already started. |
-| `stop()` | Disconnect, stop persistence, clear timers and listeners. |
+| `stop()` | Disconnect, stop persistence, clear timers and listeners. Auth changes that fired before the stop but had not run yet are dropped, so a stopped client never reconnects on its own (for example while the app signs out). A stream discovery (`GET /sync/streams`) that was still reading the token when `stop()` ran is not sent, so it never reaches the server with a session the app is signing out of. |
 | `goOffline()` | Simulated outage: disconnect transport, pause replay/reconcile/timer; local mutations keep queueing. |
 | `goOnline()` | End simulated outage; reconnect triggers reconcile + outbox replay. |
 | `mutate({collection, operation, id?, data?})` | Optimistic local write + durable outbox enqueue + fire-and-forget replay. Returns `{mutationId, id}`. |

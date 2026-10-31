@@ -291,6 +291,29 @@ describe("password reset routes", () => {
       .expect(200);
   });
 
+  it("lets an account with no password set one in a pure JWT app", async () => {
+    // Without Better Auth the legacy routes are the only recovery path, so they keep working for
+    // an account that has no password yet (for example one an admin created).
+    await UserModel.create({email: "no-password@example.com"});
+    const stored = await UserModel.collection.findOne({email: "no-password@example.com"});
+    assert.isUndefined(stored?.hash);
+
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "no-password@example.com"})
+      .expect(202);
+    assert.lengthOf(sentMail, 1);
+    const token = tokenFromResetUrl(sentMail[0]?.text ?? "");
+    await supertest(app)
+      .post("/auth/resetPassword")
+      .send({password: "first-password-123", token})
+      .expect(200);
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "no-password@example.com", password: "first-password-123"})
+      .expect(200);
+  });
+
   it("returns 202 without issuing a token when publicAppUrl is missing", async () => {
     const noUrlApp = new TerrenoApp({
       authOptions: {

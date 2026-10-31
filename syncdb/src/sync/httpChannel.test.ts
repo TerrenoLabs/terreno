@@ -7,6 +7,7 @@ import {
   type FetchLike,
   ListRequestError,
   QueryFieldNotAllowedError,
+  RequestSupersededError,
 } from "./httpChannel";
 
 const authProvider: Pick<AuthProvider, "getToken"> = {
@@ -184,6 +185,31 @@ describe("createHttpChannel", () => {
       const {fetchImpl} = makeFetch(() => json({}, 500));
       const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
       await expect(channel.fetchStreams()).rejects.toThrow("status 500");
+    });
+    it("sends nothing when the caller was superseded while the token resolved", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({streams: []}));
+      let superseded = false;
+      const channel = createHttpChannel({
+        authProvider: {
+          getToken: async (): Promise<string> => {
+            superseded = true;
+            return "token-123";
+          },
+        },
+        baseUrl: "http://api",
+        fetchImpl,
+      });
+      await expect(channel.fetchStreams({isSuperseded: () => superseded})).rejects.toBeInstanceOf(
+        RequestSupersededError
+      );
+      expect(requests).toHaveLength(0);
+    });
+
+    it("sends the request while the caller is still current", async () => {
+      const {fetchImpl, requests} = makeFetch(() => json({streams: []}));
+      const channel = createHttpChannel({authProvider, baseUrl: "http://api", fetchImpl});
+      await expect(channel.fetchStreams({isSuperseded: () => false})).resolves.toEqual([]);
+      expect(requests).toHaveLength(1);
     });
   });
 

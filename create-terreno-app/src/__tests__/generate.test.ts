@@ -17,6 +17,7 @@ const EXPECTED_PATHS = [
   ".github/workflows/backend-ci.yml",
   ".github/workflows/frontend-ci.yml",
   ".gitignore",
+  ".mcp.json",
   "CLAUDE.md",
   "Dockerfile",
   "README.md",
@@ -53,6 +54,7 @@ const EXPECTED_PATHS = [
   "frontend/app/+not-found.tsx",
   "frontend/app/_layout.tsx",
   "frontend/app/login.tsx",
+  "frontend/app/settings/security.tsx",
   "frontend/app/signup.tsx",
   "frontend/biome.jsonc",
   "frontend/constants/theme.ts",
@@ -145,7 +147,23 @@ describe("generateAllFiles", () => {
       `@playwright/mcp@${PLAYWRIGHT_MCP_PACKAGE_VERSION}`,
     ]);
     assert.equal(mcpJson.mcpServers["terreno-local"].command, "bunx");
-    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, ["terreno-mcp-local"]);
+    assert.deepEqual(mcpJson.mcpServers["terreno-local"].args, [
+      "-p",
+      "@terreno/mcp",
+      "terreno-mcp-local",
+    ]);
+  });
+
+  test("writes the same MCP servers for Claude Code as for Cursor", () => {
+    const files = generateAllFiles({
+      appDisplayName: "Claude MCP",
+      appName: "claude-mcp",
+    });
+    const cursorJson = files.find((file) => file.path === ".cursor/mcp.json")?.content;
+    const claudeJson = files.find((file) => file.path === ".mcp.json")?.content;
+
+    assert.isString(claudeJson);
+    assert.equal(claudeJson, cursorJson);
   });
 
   test("uses a custom MCP server URL", () => {
@@ -172,7 +190,7 @@ describe("generateAllFiles", () => {
       files.find((file) => file.path === "backend/package.json")?.content ?? "{}"
     ) as {scripts: Record<string, string>};
 
-    assert.include(dockerfile, "FROM oven/bun:1-slim");
+    assert.include(dockerfile, "FROM oven/bun:1.4.4-slim");
     assert.include(dockerfile, "ENV PORT=8080");
     assert.include(dockerfile, "EXPOSE 8080");
     assert.include(dockerfile, `CMD curl -fsS "http://127.0.0.1:\${PORT}/health"`);
@@ -199,6 +217,8 @@ describe("generateAllFiles", () => {
 
     assert.include(backendEnv, "MONGO_URI=mongodb://127.0.0.1:27017/env_app?replicaSet=rs0");
     assert.include(backendEnv, "PORT=4000");
+    // TerrenoApp registers POST /__terreno/browser-logs only when NODE_ENV=development.
+    assert.include(backendEnv, "\nNODE_ENV=development\n");
     assert.include(backendEnvExample, "MONGO_URI=");
     assert.include(backendEnvExample, "BETTER_AUTH_SECRET=");
     assert.include(backendEnvExample, "PORT=8080");
@@ -232,6 +252,11 @@ describe("generateAllFiles", () => {
       readme,
       "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/build-for-web.md"
     );
+    assert.include(
+      readme,
+      "https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md"
+    );
+    assert.include(readme, "terreno-mcp-local");
   });
 
   test("declares mongodb as a direct backend dependency for Better Auth ESM resolution", () => {
@@ -453,6 +478,22 @@ describe("generated frontend Terreno 57 compatibility", () => {
     assert.notInclude(syncdb, "betterAuthClient as unknown as BetterAuthClientLike");
   });
 
+  test("root layout ships dev console errors to the backend browser-log route", () => {
+    const rootLayout = read("frontend/app/_layout.tsx");
+    const frontendPackage = JSON.parse(read("frontend/package.json")) as {
+      dependencies: Record<string, string>;
+    };
+
+    assert.include(rootLayout, 'import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";');
+    assert.match(rootLayout, /import \{baseUrl,[^}]*\} from "@terreno\/rtk";/);
+    assert.include(rootLayout, "\ninstallTerrenoDevConsoleLogger({baseUrl});\n");
+    assert.isBelow(
+      rootLayout.indexOf("installTerrenoDevConsoleLogger({baseUrl});"),
+      rootLayout.indexOf("export default function RootLayout")
+    );
+    assert.equal(frontendPackage.dependencies["@terreno/syncdb"], TERRENO_RANGE);
+  });
+
   test("store registers the syncdb Better Auth adapter as the rtk token source", () => {
     const storeIndex = read("frontend/store/index.ts");
     const syncdb = read("frontend/store/syncdb.ts");
@@ -484,6 +525,16 @@ describe("generated frontend Terreno 57 compatibility", () => {
       assert.notInclude(file.content, "betterAuthApi", file.path);
       assert.notInclude(file.content, "readSessionToken", file.path);
     }
+  });
+
+  test("auth screens give browsers autofill hints instead of turning autofill off", () => {
+    const login = read("frontend/app/login.tsx");
+    const signup = read("frontend/app/signup.tsx");
+
+    assert.notInclude(login, "fields=", "TerrenoLoginScreen's default fields carry the hints");
+    assert.include(signup, '{autoComplete: "email", label: "Email"');
+    assert.notInclude(login, 'autoComplete: "off"');
+    assert.notInclude(signup, 'autoComplete: "off"');
   });
 
   test("profile screen reads unwrapped profile fields from rtk's base query", () => {
@@ -547,5 +598,141 @@ describe("generated frontend Terreno 57 compatibility", () => {
     assert.include(tsconfig.compilerOptions.types ?? [], "bun");
     assert.property(frontendPackageJson.devDependencies, "@types/bun");
     assert.property(frontendPackageJson.devDependencies, "ts-node");
+  });
+});
+
+describe("generated auth suite", () => {
+  const files = generateAllFiles({
+    appDisplayName: "Suite App",
+    appName: "suite-app",
+  });
+
+  const read = (path: string): string => {
+    const file = files.find((candidate) => candidate.path === path);
+    assert.isDefined(file, path);
+    return file?.content ?? "";
+  };
+
+  test("backend config turns on linking, 2FA, passkeys, last method, multi-session, and native apps", () => {
+    const config = read("backend/src/utils/betterAuthConfig.ts");
+
+    assert.include(config, 'export const APP_NAME = "Suite App";');
+    assert.include(config, 'process.env.AUTH_ACCOUNT_LINKING || "verified-email"');
+    assert.include(config, "accountLinking: {mode: getAccountLinkingMode()}");
+    assert.include(config, "twoFactor: {issuer: APP_NAME, trustDeviceDays: 30}");
+    assert.include(config, "lastLoginMethod: true");
+    assert.include(config, "multiSession: {}");
+    assert.include(config, "nativeApps: true");
+    assert.include(config, 'process.env.AUTH_SIGN_UP || "open"');
+    assert.include(config, "signUp: {mode: getSignUpMode()}");
+    assert.include(config, "publicAppUrl: getFrontendUrl()");
+  });
+
+  test("backend passkeys bind to FRONTEND_URL and stay off in production on a loopback URL", () => {
+    const config = read("backend/src/utils/betterAuthConfig.ts");
+
+    assert.include(config, "process.env.FRONTEND_URL || DEFAULT_FRONTEND_URL");
+    assert.include(config, "process.env.PASSKEY_RP_ID || frontend.hostname");
+    assert.include(config, "return {origin: [...origins], rpID, rpName: APP_NAME};");
+    assert.include(config, 'process.env.NODE_ENV !== "production"');
+    assert.include(config, "LOOPBACK_HOSTS.has(new URL(passkey.origin[0]).hostname)");
+    assert.include(config, "config.passkey = passkey;");
+  });
+
+  test("User schema stores RBAC roles so the seeded admin's operator role is saved", () => {
+    const userModel = read("backend/src/models/user.ts");
+    const userTypes = read("backend/src/types/models/userTypes.ts");
+    const seed = read("backend/src/scripts/seed.ts");
+
+    assert.include(userModel, 'import {rbacUserPlugin} from "@terreno/api";');
+    assert.include(userModel, 'userSchema.plugin(rbacUserPlugin, {defaultRoles: ["member"]});');
+    assert.isBelow(
+      userModel.indexOf("userSchema.plugin(rbacUserPlugin"),
+      userModel.indexOf("mongoose.model<UserDocument, UserModel>")
+    );
+    assert.include(userTypes, "roles: string[];");
+    assert.include(seed, '"operator"');
+  });
+
+  test("seed builds its own Better Auth instance with sign-up open", () => {
+    const seed = read("backend/src/scripts/seed.ts");
+
+    assert.include(seed, "config: {...config, signUp: undefined}");
+  });
+
+  test("profile leaves passwords to the Security screen and notes the email limit", () => {
+    const profile = read("frontend/app/(tabs)/profile.tsx");
+    const sdk = read("frontend/store/sdk.ts");
+
+    assert.notInclude(profile, "New Password");
+    assert.notInclude(profile, "handleSavePassword");
+    assert.notInclude(profile, "password: value");
+    assert.notInclude(sdk, "password?: string");
+    assert.include(profile, "Better Auth keeps signing in with the old email");
+  });
+
+  test("backend registers AuditApp before AccountSecurityApp", () => {
+    const server = read("backend/src/server.ts");
+
+    assert.include(server, "new AuditApp()");
+    assert.include(server, "new AccountSecurityApp({accessControl: access})");
+    assert.isBelow(server.indexOf("new AuditApp()"), server.indexOf("new AccountSecurityApp("));
+  });
+
+  test("backend env files name the auth suite's settings", () => {
+    const env = read("backend/.env");
+    const envExample = read("backend/.env.example");
+
+    assert.include(env, "FRONTEND_URL=http://localhost:8082");
+    assert.include(envExample, "FRONTEND_URL=https://app.example.com");
+    for (const name of ["PASSKEY_RP_ID=", "AUTH_ACCOUNT_LINKING=", "AUTH_SIGN_UP="]) {
+      assert.include(envExample, name);
+    }
+  });
+
+  test("frontend client enables the matching features and remembers the method only", () => {
+    const betterAuthLib = read("frontend/lib/betterAuth.ts");
+
+    assert.include(betterAuthLib, "features: {");
+    assert.include(betterAuthLib, "lastLoginMethod: true");
+    assert.include(betterAuthLib, "multiSession: true");
+    assert.include(betterAuthLib, "passkey: true");
+    assert.include(betterAuthLib, "twoFactor: true");
+    assert.include(
+      betterAuthLib,
+      "export const rememberedAccounts = createRememberedAccountsStore({rememberIdentity: false});"
+    );
+  });
+
+  test("login route renders the connected TerrenoLoginScreen and is its own OAuth return page", () => {
+    const login = read("frontend/app/login.tsx");
+
+    assert.include(login, "<TerrenoLoginScreen");
+    assert.include(login, 'callbackURL="/login"');
+    assert.include(login, "client={betterAuthClient}");
+    assert.include(login, "error={error}");
+    assert.include(login, "rememberIdentity={false}");
+    assert.include(login, "rememberedAccounts={rememberedAccounts}");
+    assert.include(login, "trustDeviceDays={30}");
+    assert.include(login, "await syncBetterAuthSession(dispatch);");
+    assert.notInclude(login, "signIn.email", "the controller signs in");
+  });
+
+  test("settings/security renders TerrenoAccountSecurityScreen behind the signed-in guard", () => {
+    const security = read("frontend/app/settings/security.tsx");
+    const layout = read("frontend/app/_layout.tsx");
+    const profile = read("frontend/app/(tabs)/profile.tsx");
+
+    assert.include(security, "<TerrenoAccountSecurityScreen");
+    assert.include(security, 'callbackURL="/settings/security"');
+    assert.include(security, "client={betterAuthClient}");
+    assert.include(security, "linkError={error}");
+
+    const signedInGuard = layout.indexOf("<Stack.Protected guard={Boolean(userId)}>");
+    assert.isAbove(signedInGuard, -1);
+    assert.isAbove(layout.indexOf('<Stack.Screen name="settings/security"'), signedInGuard);
+
+    assert.include(profile, 'router.push("/settings/security")');
+    assert.include(profile, 'testID="profile-security-button"');
   });
 });

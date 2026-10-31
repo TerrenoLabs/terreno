@@ -225,6 +225,35 @@ describe("expressServer", () => {
       }
     });
 
+    it("redacts free-text note and reason fields that can hold PHI", () => {
+      const logged: string[] = [];
+      const originalDebug = logger.debug;
+      logger.debug = ((message: string) => {
+        logged.push(message);
+      }) as typeof logger.debug;
+      try {
+        const req = {
+          body: {
+            consentFormId: "form-1",
+            note: "Guardian Jane agreed by phone",
+            provisionalNote: "Also mentioned the diagnosis",
+            reason: "Signed for the wrong member",
+          },
+          method: "POST",
+          url: "/consent-responses/provisional",
+        };
+        logRequests(req as never, {locals: {}, on: () => {}} as never, () => {});
+        const combined = logged.join("\n");
+        expect(combined).not.toContain("Guardian Jane");
+        expect(combined).not.toContain("diagnosis");
+        expect(combined).not.toContain("wrong member");
+        expect(combined).toContain("form-1");
+        expect(req.body.note).toBe("Guardian Jane agreed by phone");
+      } finally {
+        logger.debug = originalDebug;
+      }
+    });
+
     it("redacts credentials under any key name and at any depth in logged bodies", () => {
       const logged: string[] = [];
       const originalDebug = logger.debug;

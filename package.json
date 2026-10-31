@@ -1,5 +1,6 @@
 {
   "catalog": {
+    "@better-auth/passkey": "1.7.4",
     "@biomejs/biome": "^2.3.6",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/titillium-web": "^0.4.1",
@@ -239,6 +240,8 @@
     "check:whats-new": "bun run scripts/whats-new/generate.ts --check",
     "changelog:assemble": "bun run scripts/changelog/assemble.ts",
     "changelog:preview": "bun run scripts/changelog/preview.ts",
+    "ci:bench": "bun run scripts/ci/bench/check.ts",
+    "ci:wall-clock": "bun run scripts/ci/ciWallClock/check.ts",
     "whats-new:generate": "bun run scripts/whats-new/generate.ts",
     "cli:compile": "bun run --filter '@terreno/cli' compile",
     "cli:lint": "bun run --filter '@terreno/cli' lint",
@@ -315,6 +318,7 @@
     "ui:dev": "bun run --filter '@terreno/ui' dev",
     "ui:lint": "bun run --filter '@terreno/ui' lint",
     "ui:charts:compare": "bun scripts/charts/compareRenderedSnapshots.ts",
+    "ui:list-detail:capture": "bun scripts/captureListDetail.ts",
     "ui:charts:update-snapshots": "bun scripts/charts/compareRenderedSnapshots.ts --update",
     "ui:test": "bun run --filter '@terreno/ui' test:ci",
     "ui:web": "bun run --filter '@terreno/ui' web",

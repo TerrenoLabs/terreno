@@ -5,14 +5,15 @@ import {Stack} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import {useEffect} from "react";
 import "react-native-reanimated";
-import {baseUrl, installTerrenoDevConsoleLogger, selectBetterAuthUserId} from "@terreno/rtk";
+import {baseUrl, selectBetterAuthUserId} from "@terreno/rtk";
+import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
 import {TerrenoProvider} from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
 import {useColorScheme} from "@/components/useColorScheme";
 import store, {persistor} from "@/store/index";
 
-installTerrenoDevConsoleLogger();
+installTerrenoDevConsoleLogger({baseUrl});
 
 export {ErrorBoundary} from "expo-router";
 

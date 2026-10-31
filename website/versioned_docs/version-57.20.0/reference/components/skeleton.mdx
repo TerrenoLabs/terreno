@@ -1,0 +1,32 @@
+---
+title: "Skeleton"
+description: "Placeholder shapes shown while content loads."
+sidebar_label: "Skeleton"
+slug: /reference/components/skeleton
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Skeleton
+
+Skeletons are placeholders in the shape of content that is still loading. Pass one as `loadingComponent` to Box, Card, ChartCard, Scorecard, Page, SplitPage, or a chart, or wrap a custom component with `withLoading`.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `SkeletonProps`  
+**Story source:** [`demo/stories/Skeleton.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Skeleton.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Skeleton" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `animation` | `SkeletonAnimation` |  | Overrides the nearest  |
+| `color` | `keyof SurfaceTheme` |  | Placeholder fill. |
+| `height` | `NumberOrPercentage` |  |  |
+| `rounding` | `union` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `width` | `NumberOrPercentage` |  |  |

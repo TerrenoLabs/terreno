@@ -1,0 +1,55 @@
+---
+title: "Text area"
+description: "Use the text area form field to allow the user to enter multiple lines of text."
+sidebar_label: "Text area"
+slug: /reference/components/text-area
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Text area
+
+Use the text area form field to allow the user to enter multiple lines of text.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `TextAreaProps`  
+**Story source:** [`demo/stories/Textarea.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Textarea.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Text area" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `OnChangeCallback` | Yes |  |
+| `accessibilityLabel` | `string` |  | Accessible name for the input. Screen readers otherwise announce "Text input field". |
+| `aiSuggestion` | `AiSuggestionProps` |  |  |
+| `autoComplete` | `union` |  | Autofill hint. On web it is set as the input's  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `disabled` | `boolean` |  |  |
+| `errorPosition` | `union` |  | Where  |
+| `errorText` | `string` |  |  |
+| `grow` | `boolean` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `inputRef` | `reflection` |  |  |
+| `maxHeight` | `number` |  | Caps the height (in pixels) a  |
+| `mono` | `boolean` |  | Renders the value in a monospace face with tracking, for codes such as backup codes. |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `placeholder` | `string` |  |  |
+| `returnKeyType` | `union` |  |  |
+| `rows` | `number` |  |  |
+| `showVisibilityToggle` | `boolean` |  | Renders the show/hide eye control on  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `trimOnBlur` | `boolean` |  |  |
+| `value` | `string` |  |  |

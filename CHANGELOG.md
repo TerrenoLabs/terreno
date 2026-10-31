@@ -20,6 +20,447 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.20.0] - 2026-10-30
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.20.0.md`](mcp-server/src/docs/upgrades/57.20.0.md).
+
+### Breaking
+
+- `@terreno/api`: the app `User` claim guard moves before the Better Auth user is created, and
+  legacy users can prove ownership with their password. 57.17.0 refused to link an unverified
+  Better Auth user to an existing `User` by email, but only after the Better Auth user existed, so
+  a later email verification could still hand that user the `User`. Now a Better Auth user claims
+  an unlinked `User` only when the email is verified (by the provider), or when the sign-up (or
+  email sign-in) password verifies against that `User`'s passport-local-mongoose hash. A refused
+  sign-up answers 409 with `code: "VERIFY_EMAIL_TO_USE_ACCOUNT"` ("Verify your email to use this
+  account"; OAuth callbacks redirect with that `error`) and creates no Better Auth user, account,
+  or verification email. A `User` bound to another Better Auth account is refused before
+  creation too, with `code: "ACCOUNT_ALREADY_EXISTS"`. `syncBetterAuthUser` throws `APIError`
+  409 with the matching title, and never inserts a duplicate `User`. Emails match ignoring case.
+  A refusal reveals that an app `User` has that email (an accepted account-existence signal).
+  57.17.0's rules still hold: a verified-email link removes a legacy password the `User` never
+  proved and bumps `tokenEpoch`, and `trustEmail` seeds skip the checks.
+- `BetterAuthApp` registered without a `userModel` now adopts `TerrenoApp`'s before it creates
+  Better Auth (new `adoptUserModel`, called by `TerrenoApp.build()`), so the guard runs whenever
+  TerrenoApp's session middleware links app `User`s. The legacy hash check does not touch
+  passport's `limitAttempts` counters.
+- With a user model, the `terreno-app-user-sync` plugin syncs the app `User` as each Better Auth
+  session is created, not only on the first authenticated request, and the OAuth provider id
+  fills `oauthProvider`. A password-proven link that fails to save fails the sign-in with 500
+  `APP_USER_LINK_FAILED`. `syncBetterAuthUser`'s options gain `password`;
+  `seedBetterAuthUser` passes the seed password beside `trustEmail`.
+- `accountLinking: {mode: "never"}` (or `options.account.accountLinking.enabled: false`) now
+  refuses `POST {basePath}/link-social` with 403 `LINKING_DISABLED` instead of failing at the
+  provider callback.
+- Migration for JWT apps: users who sign up with their existing password, or sign in with a
+  provider that verified their email, link at once. Users with no password hash (GitHub JWT
+  sign-in) reset their password through JWT `POST /auth/forgotPassword` first, or sign in with a
+  verified provider, so keep the JWT routes mounted during the move. See
+  `docs/explanation/account-linking.md`.
+
+### Added
+
+- `AccountSecurityApp` adds access recovery routes under `/users/:id/security`: `revoke-sessions` deletes every Better Auth session (bearer clients get 401 on their next request; cookie sessions can survive up to Better Auth's 5-minute cookie cache) and bumps `tokenEpoch` when the User model has it; `send-password-reset` mails a reset link (501 without `sendMail` or `publicAppUrl`, 409 for a user with no Better Auth account); `disable` sets `User.disabled` and revokes sessions, and `enable` clears it (both need `isDisabledPlugin`). Each change is audited.
+- `POST /users/:id/security/issue-sign-in-link` creates a Better Auth account for a legacy User with no Better Auth link and no password, links it by `betterAuthId`, and returns a single-use set-password link `{url, expiresAt}` for the administrator to hand over. The email stays unverified. A link that was never used can be issued again (the earlier one stops working). It needs the new RBAC statement `user:issueSignInLink`, which only `superadmin` holds by default (`admin: true` without RBAC).
+- Security route actions can be marked `platformOnly` (`disable`, `enable`, and `issue-sign-in-link` are) and can name a `requiredPermission`. `mountSecurityRoutes(router, authorize, {includePlatformOnly})` leaves platform-only actions out unless asked, so org-admin prefixes never expose them.
+- The security summary reports `emailVerified` and `legacyPassword`, and `AccountSecurityApp` takes a `publicAppUrl` option (defaulting to the registered `BetterAuthApp`'s).
+- The example backend's User applies `isDisabledPlugin`, so its admin and security screens can disable accounts.
+- `AccountSecurityApp` (`@terreno/api`) adds platform account-recovery routes: `GET /users/:id/security` summarizes a user's linked providers, passkeys, 2FA state and remaining backup codes, active sessions, last sign-in, and available actions without exposing any secret, and `POST /users/:id/security/reset-two-factor` turns a locked-out user's 2FA off and forgets their trusted devices. Access needs the new RBAC statement `user:manageSecurity` (held by `superadmin` and `operator`; an existing `operator` role gains it once on the next seed, and a later revocation sticks through the new `RbacRole.appliedGrants`) and the user's own session (JWT or Better Auth session; MCP tokens and any other credential get 403). Acting on yourself, or on someone holding a permission you lack (such as a superadmin), is refused with 403. The plugin refuses to start without `AuditApp` unless you pass `audit: false`. See `docs/reference/account-security.md`.
+- `AuditEvent.source` accepts `security`. `recordSecurityAction` writes one security event per recovery action that changes something, and `onSecurityAction` lets in-process listeners react to it.
+- `mountSecurityRoutes(router, authorize)` mounts the same handlers under another prefix with its own authorizer, and `TerrenoApp.getAccessControl()` returns the app's RBAC access control.
+- `DELETE /users/:id/security/passkeys/:passkeyId` removes one of a user's passkeys (another user's passkey id is a 404), and `DELETE /users/:id/security/accounts/:providerId` unlinks a sign-in provider. The password can't be unlinked. Either action that would leave no sign-in method is refused with 409 unless the user's email is verified, in which case a password-reset link is mailed first (and also afterwards, if a concurrent removal took the last other method). Unlinking doesn't end sessions started with that provider. Both actions are audited and appear in the summary's `actions` when they apply. A custom action that reuses an action id now throws at construction.
+- The example backend registers `AccountSecurityApp`.
+- `MemberSecurityPanel` in `@terreno/admin-frontend` shows a user's sign-in security (providers, password, passkeys, two-factor, sessions, last sign-in, disabled and email-verified state) and runs the recovery actions the server lists. Actions render from the summary's `actions`, so new server actions get a button without a frontend change; destructive ones confirm first, results and server error titles show inline, and a returned sign-in link is shown once with a copy button. It calls `/orgs/:orgId/members/:userId/security` or, without `orgId`, `/users/:id/security` through the host-bound `adminRequest`.
+- `OrgMembersScreen` rows get a **Security** button that opens the panel for active members, and a **Reactivate** button for suspended memberships.
+- `useMemberSecurityApi`, `memberSecurityPath`, and `resolveSecurityActionRequest` are exported for custom security screens.
+- Each entry of the account security summary's `actions` now carries its route: `method` (`POST` or `DELETE`) and `path` relative to the user's security base, with `:param` placeholders such as `/passkeys/:passkeyId`. Clients can run any listed action, including custom ones, from the summary alone.
+- `UserSecurityScreen` in `@terreno/admin-frontend` is the platform staff page for one user's sign-in security: a header with the user's name and email from their admin record, then `MemberSecurityPanel` against `/users/:id/security`, so operators and superadmins can sign a user out everywhere, send a password reset, disable or enable the account, and run every other recovery action the server lists.
+- `UserSecurityLink` and `userSecurityRoute` add a **Security** button to an admin user record (for example in `AdminModelForm` `footerContent`) that opens `{routeBase}/users/:id/security`.
+- The example app mounts the screen at `/admin/users/[id]/security` and links it from the admin `User` record, both only for staff holding `user:manageSecurity`; the link is hidden on the viewer's own record.
+- `@terreno/api`: `BetterAuthConfig` turns auth features on without hand-built plugins:
+  `accountLinking: {mode: "verified-email" | "explicit" | "never", trustedProviders?}`,
+  `twoFactor: {issuer, backupCodes?, trustDeviceDays?}`, `passkey: {rpID, rpName, origin}`,
+  `signUp: {mode: "open" | "closed"}`, `lastLoginMethod`, `multiSession: {maximumSessions?}`,
+  `oauthProxy: {productionURL}`, and `nativeApps` (the `@better-auth/expo` server plugin).
+  Every feature is off until set; with none set the plugin list stays
+  `bearer`, `terreno-methods`, then `config.plugins`. Feature plugins go before
+  `config.plugins`, and `options` still overrides what they set.
+- `signUp: {mode: "closed"}` stops new accounts through email and password and OAuth: email
+  sign-up answers 400, and a social or generic OAuth sign-in for an unknown email fails with
+  `signup_disabled`, even with `requestSignUp: true`. Other sign-in plugins added through
+  `plugins` (magic link, email OTP, phone number, anonymous) need their own `disableSignUp`.
+- `passkey` config is checked at startup: each `origin` must be a bare http(s) origin on
+  `rpID` or a subdomain of it.
+- `appleOAuth` also accepts `{clientId, teamId, keyId, privateKey, appBundleIdentifier?}` and
+  signs Apple's ES256 client secret at startup (valid 180 days).
+- `GET {basePath}/terreno/methods` now reports real `twoFactor`, `passkey`, and
+  `multiSession` flags.
+- With `rateLimit` on, `{basePath}/two-factor/*`, `/passkey/*`, `/link-social`,
+  `/unlink-account`, `/multi-session/*`, `/oauth-proxy-callback`, and
+  `/expo-authorization-proxy` use the `auth` bucket.
+- New dependencies: `@better-auth/passkey` (catalog, api and rtk), `@better-auth/expo` (api),
+  `react-native-qrcode-svg` (ui), and `otpauth` (example-frontend dev).
+- `@terreno/api`: every Better Auth server now answers `GET {basePath}/terreno/methods`
+  (public, no session) with `{emailPassword, signUp, providers, passkey, twoFactor,
+  accountLinking, multiSession}`. `providers` lists the configured Google, GitHub, and Apple
+  providers and any `genericOAuth` provider ids. `createBetterAuth` adds the `terreno-methods`
+  plugin after `bearer()`, before `config.plugins`.
+- `@terreno/rtk`: `useAuthMethods(authClient)` returns `{methods, isLoading, error}` from that
+  endpoint through the client's `$fetch`, so bearer and cookie modes both work.
+- example-frontend: the login screen shows only the social providers the server reports, and
+  shows the mock OIDC button when the server lists `mock-oidc`.
+  `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN` is no longer read.
+- `@terreno/api` serves `POST {basePath}/terreno/set-password` (`{newPassword}`) so a signed-in user without a password, such as one who signed up with a provider, can add one. It needs a fresh session (403 `SESSION_NOT_FRESH` otherwise) read from the database, refuses with 409 `PASSWORD_ALREADY_SET` when a password exists, follows Better Auth's length rules, and sits in the `auth` rate-limit bucket. With a `userModel`, an app User linked by `betterAuthId` that already has a JWT password gets the new one too, and its `tokenEpoch` is bumped; a social-only account does not gain a JWT password. Two concurrent sets leave one password.
+- A successful set records the new `password-set` security event, which emails the user "A password was added to your account" (template `securityPasswordSet`) when security notifications are on.
+- Two-factor, trusted-device, and passkey sign-in now work for bearer-mode web clients that send no cookies (`createBetterAuthClient({webAuth: "bearer"})`). With `twoFactor` or `passkey` configured, `@terreno/api` copies Better Auth's signed challenge cookies into the `X-Terreno-Auth-Challenge` header for clients that send it and turns the header back into cookies on `/two-factor/*`, `/passkey/*`, and `/sign-in/*`. rtk's bearer mode stores the header beside the bearer token (`${storagePrefix}_auth_challenge`), sends it on those calls, never stores the dead token of a sign-in waiting on a second factor, drops the 2FA challenge after a successful verify and pending challenges on sign-out, and keeps the trusted-device value until it expires. Cookie-mode and native clients are unchanged.
+- create-terreno-app: generated apps get the auth suite. `backend/src/utils/betterAuthConfig.ts` turns on `accountLinking` (`AUTH_ACCOUNT_LINKING`, default `verified-email`), `twoFactor` (issuer = the app's display name, 30 trusted days), `passkey` (origin and rpID from `FRONTEND_URL`, or `PASSKEY_RP_ID`; off in production while `FRONTEND_URL` is a loopback URL), `lastLoginMethod`, `multiSession`, `nativeApps`, and `signUp` (`AUTH_SIGN_UP`, default `open`); `getWebOrigins` now includes the `FRONTEND_URL` origin. `server.ts` registers `AuditApp` and `AccountSecurityApp`; the generated User schema now applies `rbacUserPlugin` (`roles`, default `member`), so the seeded admin's `operator` role is saved and reaches the `/users/:id/security` recovery routes; and the seed keeps sign-up open on its own instance. On the frontend, `lib/betterAuth.ts` passes the matching client `features` and exports a `rememberedAccounts` store that keeps only the sign-in method (`rememberIdentity: false`). `app/login.tsx` renders `TerrenoLoginScreen`, and a new `app/settings/security.tsx` renders `TerrenoAccountSecurityScreen`, opened from the Profile tab's **Security** button. The Profile tab's "New Password" field is gone: it sent `password` to `PATCH /auth/me`, which refuses password fields since 57.17.0. Change passwords on the Security screen. The "Current password" field that an email change needs stays. Generated apps set no `sendMail`, so forgot-password, the `send-password-reset` and `issue-sign-in-link` recovery actions (501), and security notification emails do nothing until the app passes `@terreno/comms` `sendMail` and `renderAuthMail` to the Better Auth config. To move an existing generated app over, copy those files (and `models/user.ts`, `types/models/userTypes.ts`) from a freshly generated app and add `FRONTEND_URL` to the backend env.
+- example-backend turns on every Better Auth feature: account linking (`AUTH_ACCOUNT_LINKING`, default `verified-email`), sign-up mode (`AUTH_SIGN_UP`, default `open`), two-factor (issuer "Terreno Example"), passkeys (origin from `FRONTEND_URL`, rpID from `PASSKEY_RP_ID` or the `FRONTEND_URL` host; off in production while `FRONTEND_URL` is a loopback URL), last-used method, multi-session, and native sign-in. `GET /api/auth/terreno/methods` reports them. Seeded users (`seedBetterAuthUserInProcess` and the e2e setup) get a verified Better Auth email, and seeding still works with `AUTH_SIGN_UP=closed`. See [Auth features in example-backend](docs/how-to/configure-better-auth.md#auth-features-in-example-backend).
+- The e2e mock OIDC provider can sign in any email, verified or not, per browser context with `setMockOidcIdentity(context, {email, emailVerified})` (or a `login_hint`). `playwright.config.ts` lists the cross-site bearer specs in `CROSS_SITE_SPEC_FILES`, and the new `e2e/authMethods.spec.ts` checks the discovery endpoint there.
+- `ListDetailLayout`, `ListDetailIndex`, and `useListDetail` in `@terreno/ui`: a route-driven list/detail layout for an Expo Router group's `_layout.tsx`, like a mail inbox. Phones push the detail route; when the layout is at least 768px wide (tablets, wide browsers, inside a sidebar), the list stays in a left pane and the detail opens beside it. The open item lives in the URL, so deep links and back work, and it stays open across rotation and resize. See `docs/how-to/build-list-detail-screens.md`. `SplitPage` is unchanged; its docs now point new screens to `ListDetailLayout`.
+- `Box` `accessibilityState.selected`. A clickable row sends it as `aria-current="true"` on web; a selectable `accessibilityRole` (`tab`, `option`, `row`, ...) sends `aria-selected`.
+- The demo inbox exports each fixture message (`generateStaticParams`), and the Netlify demo deploy rewrites any other path to `index.html`, so `/demo/list-detail/2` and `/demo/sidebar-navigation/mail/2` load on refresh.
+- The example todo browser shows a spinner while a deep-linked todo is still syncing, and “This todo does not exist” only after sync is idle and the row is absent.
+- A clickable `Box` with `selected` sends only `aria-current` on web. `selected` is left off the host `accessibilityState`, so react-native-web does not also set `aria-selected` on the button.
+- The hosted Terreno MCP server rate limits JSON-RPC calls per client IP (default 120 requests per 60 seconds). Excess calls get HTTP 429 with a JSON-RPC error naming the limit and retry window. Configure with `TERRENO_MCP_RATE_LIMIT_MAX` (`0` disables), `TERRENO_MCP_RATE_LIMIT_WINDOW_MS`, and `TERRENO_MCP_TRUST_PROXY_HOPS`.
+- `@terreno/api` MCP OAuth accepts `grant_type=client_credentials` for a confidential client created with `McpOAuthClient.issueConfidential`. The helper binds the client to a user, stores the secret as a SHA-256 hash, and returns the secret once. The token endpoint accepts `client_secret_basic` or `client_secret_post`, whichever method the client was created with, and returns an `mcpat_` access token with no refresh token. The token acts as that user (`credential: "oauth"`). Revoking the client ends every token it holds, and a revoked client is rejected at `/oauth/authorize` and `/oauth/token`. An authorization-code exchange, a refresh, or a client_credentials grant that loses a race with that revoke is discarded. `deleteOne`, `findOneAndDelete`, and `deleteMany` do the same. A query `deleteOne` or `findOneAndDelete` whose filter matches more than one client pins the delete to one document and revokes that client's tokens. Dynamic client registration stays public-only. Discovery advertises `client_credentials`, `client_secret_basic`, and `client_secret_post`.
+- `@terreno/api`: with `oauthHandoff`, a bearer-mode web client on another site can link a
+  social or generic OAuth provider to the signed-in user. `POST {basePath}/oauth-handoff/link-intent`
+  (bearer- or cookie-authenticated, `{provider, callbackURL, errorCallbackURL?}`) returns
+  `{token, startURL}`: a single-use, three-minute link token, stored hashed and bound to the
+  caller's session. Both URLs must be absolute pages on one of `oauthHandoff.webOrigins` that
+  `trustedOrigins` allows (400 otherwise); `callbackPaths` do not apply, since no token travels
+  on a link's return. The intent answers 403 `LINKING_DISABLED` when account linking is off. The web app posts the token
+  from a hidden form to `POST {basePath}/oauth-handoff/link-start`, which refuses a missing, `null`, or
+  foreign `Origin` with 403 (so web origins must not serve `Referrer-Policy: no-referrer` or
+  `same-origin`), then uses the token up (400 with no
+  redirect when it is unknown, used, or expired), sets only the OAuth state cookie, first-party on the
+  API's origin, and redirects to the provider. The provider callback links the account and
+  redirects to `callbackURL` with no one-time token, since no session is created. A session
+  revoked after the intent comes back with `error=session_expired`. Both routes are in the auth
+  rate-limit bucket, and Better Auth's limiter allows three of each per ten seconds per IP.
+- `@terreno/rtk`: new `linkSocialWithHandoff({client, provider, callbackURL, errorCallbackURL?})`.
+  On web in bearer mode it posts the intent and submits the hidden form; in cookie mode and on
+  native it calls `client.linkSocial`. It resolves `{error}` (`null` once the browser is on its
+  way to the provider). New type `BetterAuthLinkClient`.
+- Org-admins can run account recovery on members of their organization. When the app registers `AccountSecurityApp`, `OrgsApp` mounts the security routes at `/orgs/:orgId/members/:userId/security/*` (`TerrenoApp` passes the registered plugin; pass `accountSecurity` to a hand-registered `OrgsApp`). An org-admin may act on any active member of the org, even one in other orgs. Suspended members and non-members answer `404`; platform staff (`superadmin`, `operator`) and `admin: true` targets answer `403`; disabled orgs answer `403`. Platform staff holding `user:manageSecurity` pass the org checks. Every event records the org.
+- New org-only action `suspend-membership` replaces `disable` under the org prefix: it suspends the membership in that org only, so the user still signs in and keeps their other orgs. `disable`, `enable`, and `issue-sign-in-link` stay platform-only. Security route actions can be marked `orgOnly`, mounted only with `mountSecurityRoutes(..., {includeOrgOnly: true})`. `mountSecurityRoutes` also takes `pathPrefix` (such as `/:orgId/members`) so a prefix's params appear in OpenAPI.
+- `OrgsApp` takes `orgRecovery: {minMembershipDays}` (default `0`) to refuse org-admin recovery on members who joined too recently.
+- The recovery routes' "target holds permissions you lack" check resolves each user in their own context: outside any organization on the platform routes, and under each user's own membership in `:orgId` on the org routes (authorizers return it as `orgScope`). A target is never judged by the acting org-admin's membership grants.
+- `OrgsApp` throws `OrgsApp accountSecurity is not registered` when handed an `AccountSecurityApp` that is not registered (`AccountSecurityApp.isRegistered()`), so the org routes never run without the audit check, access control, or user model.
+- `suspend-membership` keeps the last-org-admin rule under concurrency (suspend, recount, undo), so two org-admins suspending each other never leave the org without one.
+- `oauthProxy` on the production server itself (`productionURL` on the `baseURL` origin) now sets oauth-proxy's `currentURL`, so that server's own sign-ins, including server-side starts such as `GET {basePath}/oauth-handoff/start` and requests on another host name, skip the proxy and keep Better Auth's state-cookie check. Its callback still forwards previews' returns.
+- The OAuth one-time-token handoff also runs when oauth-proxy finishes a preview's sign-in (`GET {basePath}/callback/:id/oauth-proxy`, and the deprecated `GET {basePath}/oauth-proxy-callback`), so a bearer-mode web app on a preview gets `#ott=<token>` after the stable deploy forwards the provider's return.
+- example-backend turns on `oauthProxy` from `OAUTH_PROXY_PRODUCTION_URL`, reads the Sign in with Apple key form (`APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`; `APPLE_CLIENT_SECRET` still works), and trusts `https://appleid.apple.com` when Apple is configured.
+- The example deploy sends every preview's social sign-in through the stable backend's registered callbacks. `STABLE_BACKEND_URL` and `STABLE_FRONTEND_URL` (defaulting to today's Cloud Run and Netlify hosts) set the stable `BETTER_AUTH_URL`, `FRONTEND_URL`, `OAUTH_PROXY_PRODUCTION_URL`, and, when both are subdomains of one domain, `PASSKEY_RP_ID`. Stable mounts the `GOOGLE_*`, `GITHUB_*` and `APPLE_*` secrets that have a version; previews mount only the `*_CLIENT_ID` ones and configure providers with the placeholder secret `OAUTH_PROXY_PREVIEW_CLIENT_SECRET`, since stable exchanges every code. `STABLE_PASSKEY_RP_ID` overrides the derived rpID, terraform creates the secret containers, and the stable web build defaults to the same untagged Cloud Run URL as the deploy. New guide: [Set up social login](docs/how-to/set-up-social-login.md).
+- `OAUTH_CALLBACK_TAG=pr-<n>` makes that example preview own the registered OAuth callbacks: it mounts every provider secret and exchanges codes itself, other previews proxy through it, and stable gets only client IDs. It lets the providers be tried before stable runs a release with this setup. See [Register on a preview first](docs/how-to/set-up-social-login.md#register-on-a-preview-first).
+- New `set-up-social-login` skill (planning plugin): the order of work for Google, GitHub, and Sign in with Apple in a Terreno app, from server config and callback URLs to secrets, preview-first registration, and the `/terreno/methods` check. [Set up social login](docs/how-to/set-up-social-login.md) now covers the whole setup end to end: setting the gcloud project, choosing same-site hosts, the server config, a callback URL table for local dev, previews, and stable, and how to check the result.
+- **Provisional consent signing.** Staff can record consent on a user's behalf with
+  `POST /consent-responses/provisional` and a required note. Pass `accessControl` to
+  `ConsentApp` and grant the new `consentResponse:signOnBehalf` RBAC action (the built-in
+  `admin` role gets it on the next role seed); without RBAC only `user.admin` may sign. A
+  provisional signature counts as consent but leaves the form in the user's consent gate,
+  which now shows "Signed on your behalf by <name> on <date>". The user's own answer always
+  wins.
+- `getConsentStatuses({userId})` (`@terreno/api`) and `GET /consent-responses/status` return
+  each form's `pending`, `provisional`, `signed`, or `declined` status. `POST
+  /consent-responses/:id/void` voids a provisional signature and keeps the record. With
+  `AuditApp`, signing, voiding, and status reads write audit events; audit events gain a
+  `read` operation and a `viewed` verb.
+- `ProvisionalConsentSigner` and `useProvisionalConsent` (`@terreno/ui`) list a user's forms,
+  sign with a note, print, and void. `printConsentHtml` prints consent HTML on native and web,
+  and `buildConsentPdfHtml` renders a "Provisional signature" section.
+- `ConsentResponseViewer` and `ConsentHistory` (`@terreno/admin-frontend`) show provisional
+  signatures and gain Print buttons, and their PDFs include the provisional signature.
+- `@terreno/rtk`: `createRememberedAccountsStore({rememberIdentity})` remembers who signed in on
+  this device and how, for the login screen's "last used" badge and "Continue as" cards. It stores
+  `{userId, method, lastUsedAt}` in SecureStore on native and localStorage on web, keeps the newest
+  5, re-reads storage before each change (and follows `storage` events on web) so a stale tab
+  cannot bring back a forgotten account, and resets on unreadable data. `rememberIdentity` is
+  required: pass `false` to keep only the method. With `true`, the name, a masked email
+  (`j***@n***.io`) and an `https://` avatar are stored too, and switching back to `false` scrubs
+  them on the next load. `useRememberedAccounts(store)` returns `{accounts, lastUsedMethod,
+  isHydrated, forget, clear}`, and `toLoginAccountOptions()` maps accounts to `@terreno/ui`
+  `LoginScreen`'s `rememberedAccounts`.
+- `@terreno/rtk`: `createBetterAuthClient({features})` adds the Better Auth client plugins for the
+  server's auth features: `twoFactor` (`twoFactorClient`, with `onTwoFactorRedirect`), `passkey`
+  (`passkeyClient` from `@better-auth/passkey/client`), `multiSession`, `lastLoginMethod` and
+  `oneTimeToken`. Each enabled feature's namespace is typed without casts (`client.twoFactor.enable`,
+  `client.passkey.addPasskey`, `client.multiSession.listDeviceSessions`, ...), and the plugins run
+  after the Expo plugin on native. Without `features` (or with a config whose type does not name
+  them) the client and its type are unchanged. In web bearer mode `multiSession` lists no
+  sessions, and 2FA and passkey challenges still need cookies. New types:
+  `BetterAuthClientFeatures`, `BetterAuthClientWithFeatures`, `BetterAuthClientFor`,
+  `BetterAuthHandoffClient`.
+  `BetterAuthOAuthProvider` now accepts any generic OAuth provider id, the OAuth handoff helpers
+  accept clients with features, and `BetterAuthClientInterface` accepts the stricter session types
+  those clients return, so they work with `generateBetterAuthSlice`, which now stores a missing
+  user `image` as `null`.
+- `AccountSecurityApp` emails the affected user about every security action, admin and
+  self-service.
+  - Each email says who acted ("you" or "an administrator", never the admin's name), when, and how
+    to get help.
+  - It names the org only with `notifications.includeOrgName: true` (default `false`), and never
+    includes tokens, links, passkey names, or other secrets.
+  - Mail goes out only when `sendMail` is configured. `notifications: {enabled: false}` turns it
+    off, and `notifications.sendMail` supplies a mailer outside `TerrenoApp`.
+  - `notifications.throttleMinutes` (default 10) sends at most one email per user, template,
+    origin (self or admin), and org per window, so an admin action is never hidden behind the
+    user's own change.
+  - A failed delivery is logged and never fails the action.
+  - `send-password-reset` sends no extra email, because its reset mail is the notice.
+    `issue-sign-in-link` tells the user a link was created, without the link.
+  - The newest registered `AccountSecurityApp` owns the emails, so two apps in one process never
+    email twice. `unsubscribeNotifications()` stops them.
+- `createBetterAuth` records the user's own security changes as security actions with
+  `origin: "self"`, written as `AuditEvent`s when `AuditApp` is registered.
+  - Recorded: a provider linked or unlinked, a passkey added or removed, two-factor turned on or
+    off, a password changed or reset with a link, and other sessions signed out.
+  - Two-factor changes are read from the database, not the cookie-cached session.
+  - The new action ids are `password-reset` and `other-sessions-revoked`.
+- The emails render with a built-in renderer. `BetterAuthConfig.renderAuthMail` is not used for
+  them; opt in to a custom renderer with `notifications.render`. `BetterAuthConfig.authMailTemplates`
+  accepts the new `security*` ids as overrides.
+- `@terreno/comms` `renderAuthMail` renders the `security*` template ids (subject, text, and HTML),
+  so it can be passed as `notifications.render`. It takes optional `data`, `token` is now optional,
+  and HTML bodies get HTML-escaped values.
+- `@terreno/rtk` adds `TerrenoAccountSecurityScreen`, a drop-in account security screen, and `useAccountSecurity`, the hook behind it. It renders `@terreno/ui`'s `AccountSecurityScreen` with the cards the server's `/terreno/methods` turns on: linked providers (linking through the OAuth handoff in bearer mode), the password (change, or set a first one), passkeys (web), two-factor (enrolment returns the backup codes to the card), and signed-in sessions ("Sign out everywhere else" calls `revokeOtherSessions`). Every Better Auth `{error}` becomes the calling card's error, each change reloads only the affected section, the screen never asks the server to remove a user's only sign-in method, `SESSION_NOT_FRESH` reads "Sign in again to manage this.", and a credential row without a password switches the password card to set mode.
+- `useAuthMethods` returns `refetch()` for a Try again button and takes `{skip: true}` for callers that already have the methods.
+- A link's `?error=`, an error code, or a provider id that matches an `Object.prototype` key (`__proto__`, `constructor`, `toString`) reads as the generic link error or goes unlabelled, instead of crashing the screen with a non-string value.
+- `@terreno/rtk` adds `TerrenoLoginScreen`, a drop-in login screen, and `useLoginController`, the hook behind it. They read the server's `/terreno/methods` and skip the screen when a session is live. They offer "Continue as" cards for this device's signed-in sessions (`multiSession`, not in bearer mode) and its remembered accounts, a session card hiding the same user's remembered card. They badge the last used method from the remembered-accounts store, offer passkeys (button and web autofill), and sign in socially through the OAuth handoff in bearer mode or `signIn.social` otherwise. The two-factor step runs inline unless `onTwoFactorRequired` routes to the app's own screen. Each finished sign-in is recorded in the remembered-accounts store.
+- `getLoginFeedback` turns server refusals into login guidance: `account_not_linked` worded for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` as "verify your email", and `signup_disabled` (and the ID-token "signup disabled") as "ask your administrator for access", with the sign-up link hidden. Text from a URL is never shown.
+- `getBetterAuthClientWebAuth(client)` reports whether a client is in web bearer mode and the token it holds. `recordRememberedSignIn` records a sign-in finished on an app's own screen.
+- `@terreno/ui` `LoginScreen` takes `initialValues`, which prefill form fields; a new object later replaces those fields and keeps what the user typed in the others. With `fields={[]}` it leaves out the form block (fields, Log In, forgot-password, and the email dividers), and `TerrenoLoginScreen` does that when the server has email and password off. `OAuthButtons` takes `dividerPosition: "none"`.
+- `TerrenoLoginScreen` takes `onStepChange`, called with each step the screen moves to, so an app that already holds a session can leave a login route the screen could not skip.
+- A remembered method or a provider id that matches an `Object.prototype` key (`__proto__`, `constructor`) is named from the id ("Proto", "Constructor") instead of an inherited value.
+- `@terreno/ui` adds `LinkedAccountsCard` and `PasswordCard`, the first account security cards.
+  `LinkedAccountsCard` shows one row per linked account (so two Google accounts are each
+  unlinkable) with its email and linked date, and a Link row for each offered provider without
+  one. Unlink asks for confirmation and calls `onUnlink(providerId, account)`; pass `account.id`
+  (Better Auth's account row id) to `unlinkAccount({accountId})`. The acting row shows a spinner
+  while `onLink` or `onUnlink` runs, and Unlink is disabled with an explanation when it would
+  remove the user's last sign-in method (the `credential` password account and
+  `otherMethodCount` count; `canUnlinkLast` opts out). `PasswordCard` shows "Change password"
+  (current, new, confirm, optional "Sign out of other devices" sent as `revokeOtherSessions`) or
+  "Set a password" for provider-only users, with inline length and confirmation errors, focus on
+  the first invalid field plus an alert summary, Enter to submit, and a promise-based `onSubmit`.
+  Also exported: the `LinkedAccount` (`linkedAt` accepts a `Date` or ISO string),
+  `LinkableProvider` and `PasswordCardSubmission` types, `CREDENTIAL_PROVIDER_ID`, and
+  `hasPasswordCredential(accounts)`.
+  A provider id that matches an `Object.prototype` key (`__proto__`, `constructor`) is labelled
+  with its id instead of an inherited value.
+- `@terreno/ui` adds `AccountSecurityScreen`, a security settings screen composed from the account
+  security cards. Pass each card's props as one object (`linkedAccounts`, `password`, `passkeys`,
+  `twoFactor`, `sessions`); a card renders only when its object is given, so a feature the server
+  has off hides its card. Cards appear in a fixed order (sign-in methods, then passkeys, two-factor
+  and sessions) in one centered column up to `maxWidth` (720px by default), under a "Security"
+  heading with optional `description` and `header`. `isLoading` shows a spinner, `error` shows a
+  page-level alert with Try again (`onRetry`), and `children` add app-specific content after the
+  cards. The screen wraps itself in a scrolling `Page`; pass `withPage={false}` to place it inside
+  your own `Page` or `ScrollView`. Also exported: the `AccountSecurityScreenProps` type.
+
+  `Heading` gains an optional `level` (1–6): with it, the heading renders `role="heading"` and
+  `aria-level` (an `<h1>`–`<h6>` on web, the header accessibility role on native); without it,
+  output is unchanged. The account security cards' titles are now level 2 headings and the screen
+  title level 1. Below the desktop floor (`isSupportedDesktopWidth`), `Card` and
+  `AccountSecurityScreen` draw edge to edge.
+- `@terreno/ui` adds `FormContainer`: a real `<form>` on web (`display: contents`, `noValidate`, page reload always prevented) and a `Box` on native. `ref.requestSubmit()` submits through the form element on web so password managers see a real submit and offer "Save password"; `username` adds a hidden `autocomplete="username"` input for change-password forms. Chrome no longer logs "Password field is not contained in a form" on `LoginScreen`, `SignUpScreen`, `PasswordCard`, the `TwoFactorSettingsCard` password step, `GPTChat`'s API key modal, the admin configuration screen, or the example app's reset-password, profile, and admin password forms.
+- `TextField` sends `autoComplete` to native too: React Native's `autoComplete` (Android's autofill hint) and the matching iOS `textContentType` (`username`, `emailAddress`, `password`, `newPassword`, `oneTimeCode`, `none`), so iOS and Android offer saved passwords, strong new passwords, and one-time codes. It also accepts `"one-time-code"`.
+- `LoginScreen` and `SignUpScreen` default the email field to `autoComplete="username"`, name each input by its field label, and handle Enter: it moves to the next field and submits from the last one once, only when the submit button is enabled. `PasswordCard` now moves from current to new to confirm on Enter and submits from confirm. `OtpField` gains `onEnter`, and `TwoFactorChallengeScreen` submits a complete code on Enter.
+- `PasswordCard` and `TwoFactorSettingsCard` take a `username`, which `useAccountSecurity` fills with the session user's email.
+- `LoginScreen` (`@terreno/ui`) gains optional props for returning users: `lastUsedMethod` badges the
+  method this device used last and moves a provider or passkey above the form; `currentSessions` and
+  `rememberedAccounts` render one-tap "Continue" cards (`onContinue`, `onForget`); `onPasskeyPress`
+  adds a "Sign in with a passkey" button and `passkeyAutofill` asks web browsers to offer saved
+  passkeys in the email field; `notice` shows guidance such as an `account_not_linked` hint; and
+  `genericProviders` renders providers without a branded button (for example a generic OIDC
+  provider). `OAuthButtons` accepts `genericProviders`, `lastUsed`, and `dividerPosition`. Without the
+  new props the screen renders exactly as before. A method or provider id that matches an
+  `Object.prototype` key (`__proto__`, `constructor`) is named by its id, and the new
+  `getSocialProviderName(providerId)` returns a branded provider's name or `undefined`.
+- `@terreno/ui` adds `PasskeysCard` and `SessionsCard` to the account security cards.
+  `PasskeysCard` lists passkeys with their added and last-used dates and a "Synced" badge for
+  backed-up ones (an unnamed passkey shows `authenticatorName`, for example from
+  `getAuthenticatorName(aaguid)`, else "Unnamed passkey"), and adds (with an optional name, `onAdd(name?)`), renames (`onRename(id, name)`)
+  and removes (confirmed, `onRemove(passkey)`) them; `supported={false}` hides Add and explains that
+  the device can't create passkeys. `SessionsCard` lists sessions with the browser and OS parsed
+  from the user agent, location and IP when known, "Signed in" (`createdAt`) and "Last refreshed"
+  (`updatedAt`, which Better Auth moves only once per `session.updateAge`) as Luxon relative times
+  that recompute every minute (inject `now` for deterministic output). The current session, matched by `currentSessionId` or
+  `currentSessionToken`, comes first, is marked "This device", and can't be revoked on its own;
+  other sessions have Sign out (`onRevoke(session)`), and "Sign out everywhere else"
+  (`onRevokeOthers()`) asks for confirmation and is disabled when no other session exists. Better
+  Auth's `listUserPasskeys()` and `listSessions()` items fit the new `AccountPasskey` and
+  `AccountSession` types as is. Also exported: `parseUserAgent` and `describeUserAgent`, a small
+  dependency-free user agent parser that also recognizes React Native app clients. The account
+  security docs and examples now unwrap Better Auth's `{data, error}` results and throw, since the
+  client does not reject and the cards only show errors from rejected callbacks.
+- `@terreno/ui` adds `OtpField` and `TwoFactorChallengeScreen`. `OtpField` is a one-time code input
+  with a cell per digit: paste or one-time-code autofill fills every cell, backspace steps back a
+  cell, each cell is labelled "Digit k of N", and `onComplete(code)` fires when the code is full.
+  `TwoFactorChallengeScreen` is the second sign-in step: an authenticator code that submits itself
+  once complete, a toggle to a backup code, an optional "Don't ask again on this device for N days"
+  checkbox (`trustDeviceDays`), an alert error that clears the code, and
+  `onSubmit({code, kind: "totp" | "backup", trustDevice})`. `TextField` accepts
+  `accessibilityLabel` to set its input's accessible name.
+- `@terreno/ui` adds `TwoFactorSettingsCard` to the account security cards. Turning on two-factor
+  authentication walks through four steps: confirm the password (`onStartEnroll(password)` resolves
+  `{totpURI, backupCodes}`, narrowed from the TOTP branch of Better Auth's `twoFactor.enable()`
+  data, which is `{method: "otp"}` or `{method: "totp", totpURI, backupCodes}`), scan a QR code drawn with
+  `react-native-qrcode-svg` or copy the setup key under it, enter a code in `OtpField`
+  (`onVerify(code)`), then save the backup codes with Copy and Download (a `.txt` file on web) or
+  Share (native), with Finish gated on "I saved these backup codes". Once on, the card offers new
+  backup codes (`onRegenerateBackupCodes(password)`, shown with the same gate) and Turn off
+  (`onDisable(password)`, after a destructive confirm), and warns when `backupCodesRemaining` drops
+  below 3. Better Auth requires the password unless its two-factor plugin sets `allowPasswordless`,
+  so `hasPassword={false}` disables the card's actions and asks an OAuth-only user to set a
+  password first, and
+  `requirePassword={false}` skips the password steps on a passwordless server. Also exported:
+  `parseTotpSecret(totpURI)`, `parseTotpDigits(totpURI)` (the code length defaults to it) and the
+  `TwoFactorEnrollment` type. Step changes move focus to the step on web and are announced on native.
+
+### Changed
+
+- `@terreno/admin-frontend` renders a nested (non-array) object field that has `items` in its admin config as a titled group with one control per subfield, instead of a JSON text box. Groups recurse to any depth and also render inside array-of-subdocument items. `Mixed`, `Map`, and objects without `items` keep the JSON editor, and a field `widget` still takes precedence. Subfield test IDs use the dotted path (`admin-field-tasks.enabled`, group `admin-field-group-tasks`); inside array items, nested groups are prefixed with the array key and item index (`admin-field-servers.0.media.port`). New array items and create-mode nested objects start from subfield defaults and leave out system fields and enums, refs, dates, and `Mixed` subfields that have no default. Save still sends the whole object for the field.
+- The example app's login route is now `TerrenoLoginScreen` with `rememberIdentity: true`. It shows a badge on the last used method and "Continue as" cards after sign-out, offers a passkey button on web, and runs the two-factor challenge inline. Its Better Auth client turns on the `multiSession`, `passkey` and `twoFactor` features. The mock OIDC provider's button is now the login screen's generic provider button, `login-screen-oauth-mock-oidc`, which replaces `login-mock-oidc-button`. The root layout leaves a signed-in user on `/login`, so the screen can record a returning social sign-in before it moves on. The example's `logout` stops syncdb before it dispatches rtk's `logout()`, and the profile screen shows the sign-out in progress on its button, and the error when a sign-out could not reach the server. The root layout shows its loading spinner only while no user is loaded, so a session refresh or a sign-out keeps the current screen.
+- e2e: `loginAs` answers the two-factor challenge for a user with a `totpSecret`. `crossSiteChallenges.spec.ts` now runs (its `test.fixme` is removed). New cross-site specs `crossSiteLogin.spec.ts`, `two-factor.spec.ts` and `account-linking.spec.ts` cover the last used method, "Continue as", passkey sign-in, TOTP and backup codes, and email and mock-OAuth sign-ins that end up in one account. `E2E_ACCOUNT_LINKING=explicit` starts the backend in explicit linking mode for that spec's explicit-mode case.
+- The example app has a Security screen at `/settings/security` (`TerrenoAccountSecurityScreen`), opened from the profile's **Security** button (`profile-security-link`). It links and unlinks providers, changes the password through Better Auth's `changePassword`, adds and removes passkeys, turns two-factor on with backup codes, and signs out other sessions. The profile's "New Password" field, which sent `password` to `PATCH /auth/me` (refused since 57.17.0), is gone; the "Current password" field an email change needs stays.
+- e2e: `account-security.spec.ts` joins the cross-site bearer run. It links the mock OIDC provider and unlinks it (the password still signs in), turns on two-factor and signs in with a saved backup code, adds and removes a passkey through the virtual authenticator, signs out a second browser's session (which then gets 401), and changes the password (the old one is refused, the new one signs in). `profile.spec.ts` opens Security from the profile in the cookie-mode run.
+- The hosted Terreno MCP server moves to `https://mcp.terreno.app/mcp`. The README, docs, and `create-terreno-app` now use it. `https://mcp.terreno.flourish.health/mcp` keeps serving for at least one more release; update `.cursor/mcp.json`, `.mcp.json`, and `claude mcp add` registrations as described in `docs/how-to/set-up-terreno-mcp.md`.
+- Card, MarkdownEditor, the admin shell, and the admin filter drawer switch to the narrow layout below the desktop floor (1024pt) instead of 768pt. Admin home and the example sync debugger stack their side-by-side panes below that floor. Demo headers and stories read the live window width instead of a one-time viewport check. `isSupportedDesktopWidth` reports that floor. `ADMIN_FILTER_MOBILE_BREAKPOINT` is 1024.
+- `useLoginController` maps a cancelled sign-in (`AUTH_CANCELLED`, or a message of "auth cancelled"
+  / "authentication cancelled") to an info notice. A wrong email or password
+  (`INVALID_EMAIL_OR_PASSWORD`, `INVALID_PASSWORD`, `INVALID_EMAIL`, or those messages on a response)
+  is `passwordError` on the login screen instead of the error banner. Continuing a remembered email
+  account that has a usable address sets `continuingAccount` and opens the password step.
+  Canceling that step, or canceling two-factor, clears `continuingAccount` and sets the form
+  password back to empty so the next account does not keep the previous password.
+  `account_not_linked` notices name the original method and, when that method is known, offer
+  "Sign in with {method}". The two-factor failure message tells the user to enter the code their
+  app shows now. `TerrenoLoginScreen` passes the email that started the challenge as
+  `accountLabel`. Pass `initialTrustDevice={false}` to start "Trust this device" unchecked;
+  otherwise the inline challenge keeps the authenticator default (checked).
+- `@terreno/rtk` `generateBetterAuthSlice`: `logout()` no longer clears the session before the server answers. The session stays in the state until `authClient.signOut()` finishes (`signOutTimeoutMs`, default 10 seconds), and then it is cleared. Meanwhile the new `isSigningOut` state (`selectBetterAuthIsSigningOut`) is true; `isLoading` is left alone, so a navigator gated on it keeps its screen. Before, a login screen that opened at once could find the still-live session and sign the user straight back in. A sign-out that fails or times out checks the session first. A session that is still live, or a cookie or native session the server cannot be asked about, stays signed in, and `error` is set to `SIGN_OUT_FAILED_MESSAGE` ("Couldn't sign out. Check your connection and try again."). A web bearer client, which drops its token before the request leaves, ends signed out. The global `auth/logout` action (a refused session) now ends signed out even when the sign-out request fails. With `apisToReset` (57.17.0), `logout()` purges the cache when the session clears, not when it is dispatched: a purge at dispatch refetched every mounted screen mid-sign-out, and a refetch that could not reach the server answered 401 and signed the user out even though the sign-out failed. A failed sign-out keeps both the session and the cache. The global `auth/logout` action still purges at once (only the first of several in flight) and again when the session clears. A sign-in for another user that lands while a sign-out is in flight is kept; a sign-out that started signed out asks `getSession` first, so a restore of the session it revoked is cleared. Show `selectBetterAuthIsSigningOut` on the sign-out control and `selectBetterAuthError` after a failed sign-out.
+- `@terreno/ui`: `SyncStatusBanner` no longer flashes "Offline" while the sync socket first connects or during brief drops. The badge appears only after `isOnline` stays false for `offlineGraceMs` (default 3000 ms) and hides as soon as the client reconnects. Pass `offlineGraceMs={0}` to show it immediately, as before.
+- `LoginScreen` matches the login redesign. Method pills sit above the email form. Returning users
+  see a continue-as list, with other methods behind "Sign in another way". Edit removes a remembered
+  account from this device; a signed-in session cannot be removed there. A remembered email opens a
+  password step (`continuingAccount`). A wrong password is `passwordError` on the password field.
+  `error` is a banner, and one `notice` (info, warning, or error) replaces it. The submit button
+  reads "Sign in". `TwoFactorChallengeScreen` titles the authenticator step "Enter your code" and
+  the backup step "Use a backup code", checks "Trust this device" by default for an authenticator
+  code (`initialTrustDevice={false}` starts it unchecked), and shows the `error` string it was
+  given. `OAuthButtons` `appearance="pill"` and
+  `SocialLoginButton` `variant="outline"` render the same neutral pill.
+
+### Deprecated
+
+- `installTerrenoDevConsoleLogger` moves to `@terreno/syncdb` (also `@terreno/syncdb/devConsoleLogger`) and takes `{baseUrl}`. The `@terreno/rtk` export is a deprecated wrapper that keeps working with no arguments.
+- `terreno-mcp-local` adds `get_client_state`, which inspects either the RTK Query store or a SyncDB client and returns a `layer` field (`rtk`, `syncdb`, `syncdb+rtk`, or `none`). `get_rtk_state` is now a deprecated alias for one release and returns the same wrapped response. `terreno state` uses the new tool.
+
+### Fixed
+
+- `@terreno/admin-frontend`: an admin record no longer stays on its loading spinner when the organization switcher settles on a default organization after the record's request started. `useAdminApi`'s `useListQuery` and `useReadQuery` now carry the organization in the query argument, so the switch fetches the new organization's entry instead of waiting on one that was never requested. A read-only user record's `roles` field also no longer requests `GET /rbac/roles`, which staff without `rbac:read` (such as an operator viewing a user) were refused with 403; it lists the assigned role names instead.
+- The admin user security header clears the previous user's name and email while the next user's record loads, so a recovery action is not confirmed under the wrong identity.
+- `@terreno/api` answers a malformed JSON request body with 400 `Malformed request body` instead of 500 `Internal server error`. `apiErrorMiddleware` now converts body-parser client errors with the new `bodyParserErrorToAPIError` helper and keeps the parser's status: an oversized body returns 413 `Request body too large`, and an unsupported charset returns 415 `Unsupported request body encoding`. The parser's message is in `detail`. These errors are logged at `warn` and are not sent to Sentry.
+- `@terreno/api`: a Better Auth password reset no longer gives a social-only account a JWT password. `onPasswordReset` now copies the new password to the app User's passport hash only when that User already has one (the same rule as `terreno/set-password` and `change-password`), so an account that signed in only with a provider cannot then sign in at `POST /auth/login`, which has no second factor. A dual-enrolled account still gets its JWT password replaced, and every matching app User's `tokenEpoch` is still bumped, so outstanding JWT refresh tokens and MCP credentials stop working after any reset.
+- Terreno's Better Auth password reset sync to the app User's JWT password now also reads the new password from the parsed body of the Better Auth endpoint being served, so direct `auth.api.resetPassword` calls and the email-OTP and phone-number resets (which send `password`) update the passport hash and bump `tokenEpoch` the same way `POST {basePath}/reset-password` does.
+- OpenAPI specs and model metadata from `@terreno/api` no longer mark a field as required when
+  its Mongoose `required` is a function. Such a field is only required on some documents, so
+  generated SDKs now type it as optional (for example `ConsentResponse.provisionalNote` and
+  `GptHistory.text`). Saving still enforces the condition.
+- Apps generated by `create-terreno-app` now send web console errors and warnings to the backend, so `read_logs` and `last_error` with the `browser` source see them. The generated `frontend/app/_layout.tsx` calls `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` at startup, and the generated `backend/.env` sets `NODE_ENV=development` so `TerrenoApp` registers `POST /__terreno/browser-logs`. In an existing app, add both lines; see `docs/how-to/set-up-terreno-mcp.md`.
+- `create-terreno-app` MCP configs now start `terreno-mcp-local` with `bunx -p @terreno/mcp terreno-mcp-local`. The old `bunx terreno-mcp-local` entry failed in generated apps because no npm package has that name. Generated apps also get a root `.mcp.json` for Claude Code with the same servers as `.cursor/mcp.json`. In an existing app, add `"-p", "@terreno/mcp"` before `"terreno-mcp-local"` in the `terreno-local` args; see `docs/how-to/set-up-terreno-mcp.md`.
+- `installTerrenoDevConsoleLogger` no longer logs `Requiring unknown module "<id>"` on the first lazy component load on web (for example `ConsentNavigator` after login). Metro reports the missing split-bundle module to `ErrorUtils` while Expo's web `import()` probes it, and Expo then catches the rethrown error and loads the bundle. The logger now records an `ErrorUtils` error only after the previous handler consumes it. An error that is rethrown and never caught is still logged by the window listeners, and unhandled rejections now include the `Error` stack.
+- `@terreno/api`: with `BetterAuthApp` registered, the JWT recovery routes no longer give an account without a JWT password one. `POST /auth/forgotPassword` mails no legacy reset link to such an account (it still answers 202, so the response does not reveal the account), and `POST /auth/resetPassword` (and the `POST /resetPassword` alias) refuses its token with 400 `legacy-password-reset-unavailable` and issues no tokens. Before, a social-only account could reset through these routes and then sign in at `POST /auth/login`, which has no second factor. That account resets through Better Auth instead. Accounts that already have a JWT password reset here as before, and apps without Better Auth are unchanged.
+- `terreno_bootstrap_ai_rules` now returns files that `rulesync generate` accepts with rulesync 9. `rulesync.jsonc` and the root rule target `cursor`, `claudecode`, `copilot`, and `agentsmd` (rulesync 9 has no `windsurf` target; Windsurf reads `AGENTS.md`). The single `.rulesync/rules/00-root.md` root rule now covers Claude Code, so the tool no longer returns the `01-claudecode-root.md` `localRoot` rule that rulesync rejected; delete it if an earlier bootstrap left it behind. The instructions run `bunx rulesync@9 generate` instead of the removed `rulesync sync`. The root rule now includes everything `create-terreno-app` writes to `CLAUDE.md` and `.cursorrules` (including the "Adding Features" steps), and the instructions say to delete the superseded `.cursorrules` and to move hand edits to `CLAUDE.md`, `AGENTS.md`, `.claude/rules/`, `.cursor/rules/`, and `.github/instructions/` into `.rulesync/rules/10-project.md` before generating, because `rulesync generate` overwrites or deletes them.
+- The MCP server's `terreno_bootstrap` frontend template drops the profile screen's "New Password" field. It sent `password` to `PATCH /auth/me`, which refuses password fields since 57.17.0; change passwords through Better Auth (`changePassword`, or `TerrenoAccountSecurityScreen` from `@terreno/rtk`). The "Current password" field that an email change needs stays.
+- `terreno_generate_form_fields` now emits code that compiles against `@terreno/ui`: fields use `title`, `onChange`, and `errorText` (not `label`, `onChangeText`/`onChangeValue`, `error`), dates use `type` (not `mode`), `NumberField` gets `type="number"` and a string value, passwords use `TextField type="password"`, and required fields declare the `errors` state they read. A test type-checks the output against the `@terreno/ui` declarations so prop drift fails CI. The `terreno://docs/ui` form-field example uses the same props.
+- `terreno_validate_model_schema` no longer reports "Missing TypeScript interfaces" when the model imports its `Document` type from `src/types/models/` or `src/modelInterfaces.ts`; it still reports a model with no `Document` type.
+- The hosted Terreno MCP image now builds the full `@terreno/ui` props data and the versioned docs search corpus, so `terreno_get_component_docs` knows every component and `terreno_search_docs` searches versioned docs instead of only the bundled resources. The `terreno://docs/patterns` resource now shows SyncDB collection CRUD instead of the deprecated RTK pattern.
+- `terreno-mcp-local` CDP tools (`read_logs` source `app`, `last_error`, `get_client_state`, `evaluate`, `navigate`) connect to Metro again on Expo 57. The debugger socket now sends the `Origin` header React Native dev-middleware requires, and when another debugger such as React Native DevTools takes the session the status names Metro's close reason.
+- `terreno-mcp-local` `database_schema` and `database_query` work under Bun again. They previously failed with `undefined is not an object (evaluating 'mongoose.connection.readyState')` whenever a Mongo URI was found; each call now uses its own short-lived connection.
+- `GET /oauth/authorize` accepts a loopback `redirect_uri` (`localhost`, `127.0.0.1`, or `[::1]`) on any port when a registered URI has the same scheme, host, path, and query (RFC 8252 §7.3). The authorization code is returned to the port the client sent. Those three hosts do not match each other, and every other redirect URI must still match exactly.
+- Prevented modelRouter array-item PATCH requests with nested subdocument arrays from failing after the first update.
+- The example app's native (Android) sign-in now works with the local mock OIDC provider: Better
+  Auth's Expo authorization proxy refuses plain-http provider URLs, so example-backend serves that
+  proxy for the mock issuer's origin itself while `MOCK_OIDC_ISSUER` is set. The mock provider takes
+  `MOCK_OIDC_PORT`, `MOCK_OIDC_ISSUER` and `MOCK_OIDC_REDIRECT_URI`, and
+  `example-frontend/maestro/native-social-login.yaml` drives the sign-in on an emulator. See the new
+  "Native" section of `docs/how-to/set-up-social-login.md`.
+- The `operator` role can find users in the admin panel and open a user's record, and from there their Security screen, in apps that declare an `adminUser` statement (as the example app does). Seeding gives the operator `adminUser:read` (never `write`), and an operator row seeded earlier gains it once through `appliedGrants`. Before this fix, `/admin/config` left User out for operators and `/admin/User/:id` showed a spinner that never finished.
+- `@terreno/api`: `OrgsApp` now clears a user's cached permissions when their membership is added, changed, or removed through `POST` / `PATCH` / `DELETE /orgs/:id/members`. Before, a newly attached org-admin could be refused the admin page (no `admin:access`) for up to the 30-second permission cache TTL, and a demoted, suspended, or removed org-admin kept it as long. Disabling (`PATCH /orgs/:id` with `disabled: true`) or deleting (`DELETE /orgs/:id`) an organization, which suspends all of its memberships, now clears the cached permissions of every member too, so the organization's org-admins lose `admin:access` on their next request.
+- A server bundled with `bun build --compile` no longer crashes at startup with "tsyringe requires a reflect polyfill". `@terreno/api` now depends on `reflect-metadata` and loads it before the passkey plugin, whose `@peculiar/x509` dependency needs it.
+- `@terreno/api`: the account-security reach check (an org-admin or platform operator acting on another user) and the RBAC user-write guard no longer let an actor through because a permission source was down. A failed source drops its grants from the target's resolved permissions, which made the target look less privileged than it is. Both now resolve the target with the new `access.getPermissions({user, requireComplete: true})`, which answers 503 `Permission source unavailable` when a failed source's grants are unknown (grants served from a `"use-stale"` cache still count).
+- `@terreno/api`: the RoleManager target-privilege rule (`access.roles.assign`, `unassign`, `previewAssignment`, and `assertCanModifyUser`, used by `PUT /rbac/users/:id/roles`, `POST /rbac/users/:id/roles/preview`, and `@terreno/admin-backend` user writes) now resolves the target user with `requireComplete`. Before, when an additive permission source was down, the target's grants from it were dropped, so the target looked less privileged and an actor without those permissions could change its roles. The check now answers 503 `Permission source unavailable` in that case. `createRoleManager` takes an optional `getTargetPermissions` for this.
+- `SocialLoginButton` now follows later changes to its `loading` prop instead of reading it only on
+  the first render, so a parent can start or clear the spinner after mount.
+- `@terreno/api`: a recovery action that changes something (such as `suspend-membership` under `/orgs/:orgId/members/:userId/security`) now clears the target's cached permissions, so a suspended org-admin loses `admin:access` at once instead of keeping it for up to the 30-second permission cache TTL.
+- @terreno/syncdb no longer sends a stream discovery (`GET /sync/streams`) that a `stop()` overtook while it was reading the token. An app that stops syncdb and then signs out (as the example's `logout` does) used to see that request go out with the revoked session and fail with a 401. `createHttpChannel`'s `fetchStreams` takes an optional `{isSuperseded}` checked before the request is sent; a superseded request rejects with the new exported `RequestSupersededError` and reaches nothing.
+- `@terreno/ui`: `TextField` now sets its `autoComplete` prop as the input's `autocomplete`
+  attribute on web (it was ignored before). Native rendering is unchanged. The prop also accepts
+  `"email"`, `"new-password"`, and `"username webauthn"` (passkey autofill).
+- Because the hint now reaches the browser, `autoComplete="off"` takes effect on web and turns
+  autofill off for that field. The example app, `create-terreno-app`, and the MCP bootstrap
+  templates switch their email fields from `"off"` to `"username"` (login) and `"email"`
+  (sign-up).
+- `Field type="password"` still defaults to `"current-password"`; pass `autoComplete="new-password"`
+  (also through `TapToEdit`) on fields that set a new password. The example admin set-password
+  fields now do.
+  `SignUpScreen` password fields default to `"new-password"` and `LoginScreen` password fields to
+  `"current-password"` unless the field config sets its own.
+- `LoginScreen` names each email and password input by its field label for screen readers,
+  instead of the generic "Text input field".
+- `Avatar` takes keyboard focus only when it is editable (`status="imagePicker"`), so a display
+  avatar, such as the one on a remembered-account card, is no longer an empty tab stop.
+
+## [57.19.2] - 2026-10-26
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.19.2.md`](mcp-server/src/docs/upgrades/57.19.2.md).
+
+57.19.0 and 57.19.1 were tagged but never published to npm (the publish gate failed before the release notes had merged). This release contains everything from both.
+
+### Added
+
+- `@terreno/test` gains the test helpers Flourish built and proved in its own suites:
+
+  - `waitUntil` / `waitForCalls` to poll a condition instead of sleeping, and `freezeTime` to
+    freeze `Date.now()`, `new Date()`, and Luxon together.
+  - `authWithToken` for a supertest agent with a pre-minted token (no login round-trip),
+    `expectAPIError` for `APIError` bodies, and `assertStrictResponseProperties` to fail on any
+    response field outside an allowlist.
+  - Opt-in `mock.module` registrars for Cloud Tasks (with `drainTasks`), SendGrid, Twilio, Expo
+    push, GCS, Google auth, and the `@terreno/api` notifiers, plus `createMockLanguageModel` for
+    the AI SDK.
+  - `@terreno/test/expo/*`: `registerExpoTestEnvironment`, `renderWithTerreno`, in-memory auth
+    token storage, and a module-alias mocker for Bun + Expo tests. `example-frontend` now uses it.
+  - `terreno-test-shard` (weighted test sharding) and `terreno-test-hygiene` (AST lint for leaky
+    or flaky Bun test patterns, with a baseline) CLIs.
+- Testing skills for Terreno apps, installable with the other agent skills: `terreno-test-setup`
+  bootstraps backend (Bun + in-memory Mongo), frontend (Bun + React Native Testing Library,
+  Playwright), and mobile (Maestro) test setups; `terreno-backend-tests`,
+  `terreno-frontend-tests`, and `terreno-mobile-tests` cover writing tests for each. New how-to:
+  [Set up tests in a Terreno app](docs/how-to/set-up-app-tests.md).
+- `@terreno/ui` loading skeletons: `Box` and the container components (`Card`, `EditableCard`, `ChartCard`, `Scorecard`, `Page`, `SplitPage`, and the charts) take `loading`, `loadingComponent`, `loadingAnimation`, and `loadingLabel` props. New `Skeleton`, `SkeletonText`, `SkeletonCircle`, `SkeletonCard`, `SkeletonList`, and `SkeletonGroup` components support `pulse`, `shimmer`, or no animation and respect reduce-motion. `withLoading(Component, options)` adds the props to custom components. See [Show loading skeletons](docs/how-to/show-loading-skeletons.md). (#1571)
+- Published packages now include the repository `CHANGELOG.md` in their tarballs. (#1632)
+
+### Changed
+
+- `@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. 1.4.4 patches the Brotli decoder (CVE-2026-111497). CI, `example-backend`, and `mcp-server` images pin that release. `oven/bun:1` and `oven/bun:1-slim` can still resolve to an affected release, and `bun build --compile` embeds the builder's Bun binary. New apps from `create-terreno-app` get `oven/bun:1.4.4-slim`. Existing apps should set that tag in their Dockerfile and rebuild. See [Upgrade Terreno](docs/how-to/upgrade-terreno.md).
+
+  EAS build profiles stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
+### Fixed
+
+- `create-terreno-app` did nothing when run through its package bin (`bunx create-terreno-app`,
+  `npx create-terreno-app`): the entry check compared the module URL with the unresolved
+  `node_modules/.bin` symlink. It now resolves the path first.
+- `@terreno/test` now installs and imports outside the monorepo. `supertest`,
+  `@types/supertest`, and the `mongodb-memory-server` packages moved from
+  `devDependencies` to `dependencies` (57.17.0 failed with `Cannot find package
+  'supertest'` on import), and the published tarball no longer ships test files.
+- `registerSimpleMongoPreload` now passes `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` (default 60s) to
+  `mongodb-memory-server`, so a cold `mongod` start no longer fails at the library's 10s default.
+
 ## [57.18.0] - 2026-10-25
 
 ### Added

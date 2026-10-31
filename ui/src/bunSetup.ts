@@ -705,6 +705,7 @@ mock.module("expo-router", () => ({
   router: {
     back: mock(() => {}),
     canGoBack: mock(() => true),
+    dismissTo: mock(() => {}),
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
@@ -882,9 +883,11 @@ mock.module("react-native-actions-sheet", () => ({
   }),
 }));
 
-// Mock MediaQuery
+// Mock MediaQuery. Desktop floor is 1024pt on web and native; keep this aligned with
+// isSupportedDesktopWidth in ResponsiveBreakpoint.tsx.
 mock.module("./MediaQuery", () => ({
   isNarrowViewport: mock(() => false),
+  isSupportedDesktopWidth: ({width}: {width: number}): boolean => width >= 1024,
   mediaQueryLargerThan: mock(() => false),
   mediaQuerySmallerThan: mock(() => false),
 }));
@@ -932,6 +935,15 @@ mock.module("expo-clipboard", () => ({
   hasStringAsync: mock(() => Promise.resolve(false)),
   setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
+}));
+
+// Mock expo-print (native print and PDF export). Tests drive these mocks through
+// `import * as Print from "expo-print"` instead of registering their own module mock.
+mock.module("expo-print", () => ({
+  printAsync: mock(async (_options: {html?: string}): Promise<void> => {}),
+  printToFileAsync: mock(
+    async (_options: {html?: string}): Promise<{uri: string}> => ({uri: "file:///tmp/consent.pdf"})
+  ),
 }));
 
 // Mock expo-localization

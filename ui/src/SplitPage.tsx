@@ -26,6 +26,7 @@ import {IconButton} from "./IconButton";
 import {isNarrowViewport} from "./MediaQuery";
 import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
+import {SplitPageLoading} from "./SplitPageLoading";
 import {useTheme} from "./Theme";
 
 // flex: 1 (basis 0, shrink 1) sizes the content container to the pane. A height: "100%"
@@ -76,15 +77,24 @@ const renderDesktopChildColumn = ({
   );
 };
 
-// A component for rendering a list on one side and a details view on the right for large screens,
-// and a scrollable list where clicking an item takes you the details view.
-// On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
-// on the narrow viewport. `narrowBelowWidth` chooses that viewport from the window width;
-// otherwise it follows `isNarrowViewport()`. The native SplitPage ignores those props.
+/**
+ * A component for rendering a list on one side and a details view on the right for large screens,
+ * and a scrollable list where clicking an item takes you the details view.
+ * On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
+ * on the narrow viewport. `narrowBelowWidth` chooses that viewport from the window width;
+ * otherwise it follows `isNarrowViewport()`. The native SplitPage ignores those props.
+ *
+ * Prefer `ListDetailLayout` for new list/detail screens. It keeps the selected item in the
+ * route, so deep links and back navigation work, and splits on native tablets too. SplitPage
+ * remains supported for list/detail views that do not have their own routes.
+ */
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -671,13 +681,20 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       padding={isLabeledPagerBody ? 0 : 2}
       width="100%"
     >
-      {loading === true && (
-        <Spinner
-          color={theme.text.primary as unknown as ComponentProps<typeof Spinner>["color"]}
-          size="md"
-        />
-      )}
-      {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
+      <SplitPageLoading
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={loadingComponent}
+        loadingLabel={loadingLabel}
+        spinner={
+          <Spinner
+            color={theme.text.primary as unknown as ComponentProps<typeof Spinner>["color"]}
+            size="md"
+          />
+        }
+      >
+        {isNarrowLayout ? renderMobileSplitPage() : renderSplitPage()}
+      </SplitPageLoading>
     </Box>
   );
 };

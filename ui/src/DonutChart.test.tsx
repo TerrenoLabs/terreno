@@ -177,6 +177,21 @@ describe("DonutChart", () => {
     expect(queryByTestId("chart.tooltip")).toBeNull();
   });
 
+  it("records a positive plot width from layout", () => {
+    const {getByTestId} = renderWithTheme(<DonutChart data={POINTS} testID="chart" />);
+
+    act(() => {
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 0, width: 0}},
+      });
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 180, width: 320}},
+      });
+    });
+
+    expect(getByTestId("chart.plot")).toBeTruthy();
+  });
+
   it("does not open URLs from slice legend labels", () => {
     const {getByText} = renderWithTheme(
       <DonutChart data={[{label: "https://evil.example", value: 10}]} />

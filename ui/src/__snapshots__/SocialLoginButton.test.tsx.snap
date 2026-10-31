@@ -213,18 +213,20 @@ exports[`SocialLoginButton renders with outline variant 1`] = `
   "children": [
     {
       "$$typeof": Symbol(react.test.json),
-      "children": [
-        {
-          "$$typeof": Symbol(react.test.json),
-          "children": null,
-          "props": {
-            "style": {
-              "marginRight": 12,
-            },
-            "testID": undefined,
-          },
-          "type": "View",
+      "children": null,
+      "props": {
+        "style": {
+          "alignItems": "center",
+          "justifyContent": "center",
+          "width": 28,
         },
+        "testID": undefined,
+      },
+      "type": "View",
+    },
+    {
+      "$$typeof": Symbol(react.test.json),
+      "children": [
         {
           "$$typeof": Symbol(react.test.json),
           "children": [
@@ -234,7 +236,9 @@ exports[`SocialLoginButton renders with outline variant 1`] = `
             "style": {
               "color": "#1C1C1C",
               "fontSize": 16,
-              "fontWeight": "600",
+              "fontWeight": "700",
+              "textAlign": "center",
+              "width": "100%",
             },
           },
           "type": "Text",
@@ -243,7 +247,22 @@ exports[`SocialLoginButton renders with outline variant 1`] = `
       "props": {
         "style": {
           "alignItems": "center",
-          "flexDirection": "row",
+          "flex": 1,
+          "minWidth": 0,
+          "paddingHorizontal": 4,
+        },
+        "testID": undefined,
+      },
+      "type": "View",
+    },
+    {
+      "$$typeof": Symbol(react.test.json),
+      "children": null,
+      "props": {
+        "style": {
+          "alignItems": "flex-end",
+          "justifyContent": "center",
+          "minWidth": 28,
         },
         "testID": undefined,
       },
@@ -251,23 +270,25 @@ exports[`SocialLoginButton renders with outline variant 1`] = `
     },
   ],
   "props": {
-    "accessibilityHint": "Sign in with Google",
+    "accessibilityRole": "button",
+    "accessibilityState": {
+      "disabled": false,
+    },
     "aria-label": "Continue with Google",
-    "aria-role": "button",
-    "disabled": undefined,
-    "onPress": [Function: debounced],
+    "disabled": false,
+    "onPress": [Function],
     "style": {
       "alignItems": "center",
-      "alignSelf": "stretch",
       "backgroundColor": "#FFFFFF",
-      "borderColor": "#dadce0",
+      "borderColor": "#CDCDCD",
       "borderRadius": 360,
       "borderWidth": 1,
       "flexDirection": "row",
-      "justifyContent": "center",
+      "minHeight": 48,
       "opacity": 1,
-      "paddingHorizontal": 20,
-      "paddingVertical": 12,
+      "paddingLeft": 16,
+      "paddingRight": 12,
+      "paddingVertical": 8,
       "width": "100%",
     },
     "testID": "social-login-google",

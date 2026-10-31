@@ -1,8 +1,21 @@
-import {Badge, Box, Button, Card, Heading, MarkdownView, Page, Spinner, Text} from "@terreno/ui";
+import {
+  Badge,
+  Box,
+  Button,
+  Card,
+  Heading,
+  MarkdownView,
+  Page,
+  printConsentHtml,
+  Spinner,
+  Text,
+} from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useCallback, useState} from "react";
 import {Image} from "react-native";
+import {consentResponsePrintHtml} from "./consentPdfTemplates";
 import {generateConsentPdf} from "./generateConsentPdf";
+import {provisionalSignerName} from "./pdfUtils";
 import {type AdminApi, resolveAdminBases} from "./types";
 import {useAdminApi} from "./useAdminApi";
 
@@ -57,6 +70,22 @@ export const ConsentResponseViewer: React.FC<ConsentResponseViewerProps> = ({
       console.error("Failed to generate PDF", err);
     } finally {
       setIsDownloading(false);
+    }
+  }, [response]);
+
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const handlePrint = useCallback(async () => {
+    if (!response) {
+      return;
+    }
+    setIsPrinting(true);
+    try {
+      await printConsentHtml({html: consentResponsePrintHtml(response)});
+    } catch (err) {
+      console.error("Failed to print consent response", err);
+    } finally {
+      setIsPrinting(false);
     }
   }, [response]);
 
@@ -116,13 +145,23 @@ export const ConsentResponseViewer: React.FC<ConsentResponseViewerProps> = ({
       <Box gap={4} padding={4}>
         <Box alignItems="center" direction="row" justifyContent="between">
           <Heading size="lg">Consent Response</Heading>
-          <Button
-            iconName="download"
-            loading={isDownloading}
-            onClick={handleDownloadPdf}
-            text="Download PDF"
-            variant="outline"
-          />
+          <Box direction="row" gap={2}>
+            <Button
+              iconName="print"
+              loading={isPrinting}
+              onClick={handlePrint}
+              testID="consent-response-print-button"
+              text="Print"
+              variant="outline"
+            />
+            <Button
+              iconName="download"
+              loading={isDownloading}
+              onClick={handleDownloadPdf}
+              text="Download PDF"
+              variant="outline"
+            />
+          </Box>
         </Box>
 
         {/* Core Fields */}
@@ -158,6 +197,65 @@ export const ConsentResponseViewer: React.FC<ConsentResponseViewerProps> = ({
             )}
           </Box>
         </Card>
+
+        {/* Provisional signature: recorded by staff on the user's behalf */}
+        {Boolean(response.provisional) && (
+          <Card padding={4} testID="consent-response-provisional">
+            <Box gap={3}>
+              <Box alignItems="center" direction="row" gap={2}>
+                <Heading size="sm">Provisional Signature</Heading>
+                <Badge status="info" value="Provisional" />
+                {response.voidedAt ? (
+                  <Badge
+                    status="error"
+                    testID="consent-response-provisional-voided"
+                    value="Voided"
+                  />
+                ) : null}
+              </Box>
+
+              <Box alignItems="center" direction="row" gap={2}>
+                <Text color="secondaryDark">Signed By:</Text>
+                <Text>{provisionalSignerName(response.provisionalSignedBy)}</Text>
+              </Box>
+
+              {Boolean(response.agreedAt) && (
+                <Box alignItems="center" direction="row" gap={2}>
+                  <Text color="secondaryDark">Signed At:</Text>
+                  <Text>{formatDate(response.agreedAt)}</Text>
+                </Box>
+              )}
+
+              {Boolean(response.provisionalNote) && (
+                <Box gap={1}>
+                  <Text color="secondaryDark">Note:</Text>
+                  <Text testID="consent-response-provisional-note">{response.provisionalNote}</Text>
+                </Box>
+              )}
+
+              {Boolean(response.provisionalSignerIp) && (
+                <Box alignItems="center" direction="row" gap={2}>
+                  <Text color="secondaryDark">Signer IP:</Text>
+                  <Text>{response.provisionalSignerIp}</Text>
+                </Box>
+              )}
+
+              {Boolean(response.voidedAt) && (
+                <Box alignItems="center" direction="row" gap={2}>
+                  <Text color="secondaryDark">Voided At:</Text>
+                  <Text>{formatDate(response.voidedAt)}</Text>
+                </Box>
+              )}
+
+              {Boolean(response.voidReason) && (
+                <Box gap={1}>
+                  <Text color="secondaryDark">Void Reason:</Text>
+                  <Text>{response.voidReason}</Text>
+                </Box>
+              )}
+            </Box>
+          </Card>
+        )}
 
         {/* User Information */}
         <Card padding={4}>

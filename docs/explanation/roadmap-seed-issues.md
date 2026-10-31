@@ -1336,9 +1336,20 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 **Title:** `CircleCI PR Speed Loop`
 
 **Labels:** `area:dx`, `type:feature`  
-**Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`Shaping`
+**Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`In progress`
 
 - **Implementation plan:** [circleci-pr-speed-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/circleci-pr-speed-loop.md)
+
+---
+
+## list-detail-layout
+
+**Title:** `ListDetailLayout: a route-driven list/detail layout for phone and tablet`
+
+**Labels:** `area:ui`, `type:feature`  
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`list-detail-layout`, Status=`Planned`
+
+- **Implementation plan:** [list-detail-layout.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/list-detail-layout.md)
 
 ---
 

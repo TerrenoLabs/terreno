@@ -31,6 +31,7 @@ import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
+import {FormContainer} from "./FormContainer";
 import {Heading} from "./Heading";
 import {Icon} from "./Icon";
 import {IconButton} from "./IconButton";
@@ -1383,15 +1384,20 @@ const ApiKeyModal = ({
       title="Gemini API Key"
       visible={isVisible}
     >
-      <Box padding={2}>
+      {/* A form keeps the browser from warning about a password field outside one. */}
+      <FormContainer onSubmit={handleSaveApiKey} padding={2}>
         <TextField
+          accessibilityLabel="Gemini API key"
+          autoComplete="off"
           onChange={setApiKeyDraft}
+          onEnter={handleSaveApiKey}
           placeholder="Enter Gemini API key..."
+          returnKeyType="done"
           testID="gpt-api-key-input"
           type="password"
           value={apiKeyDraft}
         />
-      </Box>
+      </FormContainer>
     </Modal>
   );
 };

@@ -77,7 +77,7 @@ describe("mocked local tools and syncdb", () => {
     ).toBe(0);
     const output = io.stdoutLines.join("\n");
     expect(output).toContain('"sources":["backend","metro"]');
-    expect(output).toContain("get_rtk_state");
+    expect(output).toContain("get_client_state");
     expect(output).toContain("evaluate");
     expect(output).toContain("navigate");
     expect(output).toContain("database_query");

@@ -454,9 +454,9 @@ commands:
             source "$BASH_ENV"
             shard="<< parameters.spec >>"
             case "$shard" in
-              auth) specs="login signup consents forgot-password reset-password verify-email" ;;
-              app) specs="todos todo-windows profile realtime ai-chat pdf notifications" ;;
-              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth" ;;
+              auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
+              admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
               *) specs="$shard" ;;
@@ -1461,15 +1461,16 @@ jobs:
   # cannot relax the rules it is judged by. The job clones brewery and runs its CLI; it
   # never installs or executes code from the PR checkout: the working tree is reset to
   # origin/master before anything runs. It waits for every other
-  # check on the head before judging, so it runs once, last. Comment-only while
-  # approveLevels is empty. A not-approved verdict is not a pipeline failure.
+  # check on the head before judging, so it runs once, last. It approves only levels in
+  # approveLevels (low); medium and high get a comment for a human. A not-approved
+  # verdict is not a pipeline failure.
   approve:
     executor: node22
     resource_class: small
     environment:
       # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
       # is pinned; bump the sha deliberately (brewery has no release tag yet).
-      BREWERY_REF: 3d59a77e52ccf732c81c50e08057a489d44bca92
+      BREWERY_REF: 3e160cc6a8dbdf45fc255a399855bf32154a2ac4
     steps:
       - skip_if_fork_pull_request
       - run:
@@ -1796,6 +1797,105 @@ jobs:
           spec: << parameters.shard >>
           skip-compile: true
           skip-web-export: true
+
+  # The cross-site web bearer specs (CROSS_SITE_SPEC_FILES in playwright.config.ts): social
+  # sign-in through the mock OIDC provider, remembered accounts, passkeys, two-factor challenges
+  # without cookies, account linking, and the Security screen. They need their own web build
+  # (cross-site API URL, bearer flag), backend (OAuth handoff, mock provider) and mock provider
+  # server, so the shared cookie-mode export cannot serve them. Like the e2e shards, the web app
+  # is a static export served on 8082 (a Metro dev server bundling beside the backend and
+  # Chromium gets OOM-killed); playwright.config.ts starts the backend and mock provider itself.
+  # Not a required check: a red run here does not block a merge.
+  e2e-cross-site:
+    executor: node22_browsers_mongo_rs_heavy
+    steps:
+      - checkout
+      - restore_e2e_dists
+      - install_bun_and_deps
+      - init_mongo_replica
+      - resolve_e2e_secrets
+      - run:
+          name: Export cross-site example-frontend web
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 15m
+          environment:
+            CI: "true"
+            EXPO_NO_TELEMETRY: "1"
+            EXPO_PUBLIC_API_URL: "http://127.0.0.1:4000"
+            EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER: "true"
+            NODE_OPTIONS: "--max-old-space-size=3072"
+          # --clear: Metro's transform cache keeps EXPO_PUBLIC_* values from an earlier export.
+          command: bun expo export --platform web --output-dir dist-cross-site --clear
+      - run:
+          name: Install Playwright Chromium
+          working_directory: ~/project/example-frontend
+          command: bunx playwright install --with-deps chromium
+      - run:
+          name: Serve cross-site exported web
+          working_directory: ~/project/example-frontend
+          background: true
+          command: bunx serve dist-cross-site -s -l 8082
+      - run:
+          name: Wait for cross-site static web
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              code="$(curl -sS --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8082/login || true)"
+              if [ "$code" = "200" ]; then
+                echo "static web ready after ${i} attempts"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "static web failed to become ready"
+            exit 1
+      - run:
+          name: Playwright cross-site bearer specs
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/cross-site
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            # The CircleCI overlay reuses the static web server above.
+            bunx playwright test --config playwright.circleci.config.ts \
+              --reporter=list --reporter=html --output test-results/cross-site
+      - run:
+          # account-linking.spec.ts's explicit-mode case needs a backend started with
+          # AUTH_ACCOUNT_LINKING=explicit; its verified-email cases skip themselves here.
+          name: Playwright explicit account linking
+          when: always
+          working_directory: ~/project/example-frontend
+          no_output_timeout: 20m
+          environment:
+            CI: "true"
+            E2E_ACCOUNT_LINKING: explicit
+            E2E_CROSS_SITE_BEARER: "true"
+            EXPO_NO_TELEMETRY: "1"
+            MONGO_URI: "mongodb://127.0.0.1/terreno-e2e?replicaSet=rs0"
+            NODE_OPTIONS: "--max-old-space-size=2048"
+            PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/explicit-linking
+            TOKEN_ISSUER: terreno-e2e
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            bunx playwright test --config playwright.circleci.config.ts e2e/account-linking.spec.ts \
+              --reporter=list --reporter=html --output test-results/explicit-linking
+      - store_artifacts:
+          path: example-frontend/playwright-report
+          destination: playwright-report-cross-site
+      - store_artifacts:
+          path: example-frontend/test-results
+          destination: playwright-test-results-cross-site
 
   # Heavier syncdb-loadlab spec — nightly/manual only, never PR-blocking
   # (mirrors GHA e2e-load-nightly).
@@ -2239,6 +2339,18 @@ jobs:
               exit 2
             fi
             bun run check:upgrade-docs "$CIRCLE_TAG"
+      # Packages ship the tag's CHANGELOG.md, so refuse a stable tag that is not
+      # on master with its assembled release notes (docs/how-to/release-automation.md).
+      - run:
+          name: Require merged release notes
+          command: |
+            set -euo pipefail
+            git fetch origin master
+            on_master=false
+            if git merge-base --is-ancestor HEAD origin/master; then
+              on_master=true
+            fi
+            bun run scripts/ci/release/cli.ts check-tag "$CIRCLE_TAG" "$on_master"
       - run:
           name: Compile release packages once
           command: |
@@ -2427,11 +2539,18 @@ workflows:
     jobs:
       - dco:
           context: [terreno-github-api]
+      # ci-bench/* are benchmark replays (scripts/ci/bench); they are never reviewed or merged.
       - architectural-pr-review:
           context: [terreno-github-api, terreno-agentic]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
       - approve:
           context: [terreno-github-api, terreno-approve]
           requires: [dco, architectural-pr-review]
+          filters:
+            branches:
+              ignore: /ci-bench\/.*/
 
   rulesync:
     when: << pipeline.parameters.run-rulesync >>
@@ -2591,6 +2710,9 @@ workflows:
                 - admin-core
                 - admin-table
                 - syncdb
+      - e2e-cross-site:
+          requires:
+            - e2e-prepare
 
   # Started when setup continues with {"e2e-load": true} after a
   # {"run-e2e-load": true} setup-pipeline trigger.
@@ -2749,7 +2871,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2761,7 +2884,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-demo-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2773,7 +2896,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2785,7 +2909,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-frontend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2797,7 +2921,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/netlify-docs-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 
@@ -2812,7 +2937,8 @@ workflows:
           serial-group: << pipeline.project.slug >>/gcp-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              # ci-bench/* are benchmark replays (scripts/ci/bench); they never need a preview.
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
       - vercel-deploy:
@@ -2824,7 +2950,7 @@ workflows:
           serial-group: << pipeline.project.slug >>/vercel-backend-preview-<< pipeline.git.branch >>
           filters:
             branches:
-              ignore: master
+              ignore: [master, /ci-bench\/.*/]
             tags:
               ignore: /.*/
 

@@ -1,0 +1,5 @@
+## Properties
+
+### organizationId
+
+> **organizationId**: `ObjectId`

@@ -30,32 +30,28 @@ import {addGptHistoryRoutes} from "./gptHistories";
 
 type SseResponse = supertest.Response & {body: string};
 
-type StreamTextOptions = Parameters<typeof import("ai").streamText>[0];
-type StreamTextResult = ReturnType<typeof import("ai").streamText>;
+// Mock langfuseVercelAi to avoid transitive langfuse SDK import in tests.
+// Spread the real module so later-loaded test files still see the real exports.
+// The package compiles as CommonJS, so modules load with require instead of top-level await.
+const realLangfuseVercelAi: typeof import("../langfuseVercelAi.js") = require("../langfuseVercelAi");
+mock.module("../langfuseVercelAi", () => ({
+  ...realLangfuseVercelAi,
+  createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
+  preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
+}));
+
+const realAi: typeof import("ai") = require("ai");
+type StreamTextOptions = Parameters<typeof realAi.streamText>[0];
+type StreamTextResult = ReturnType<typeof realAi.streamText>;
+const realStreamText = realAi.streamText;
 let streamTextOverride: ((options: StreamTextOptions) => StreamTextResult) | undefined;
-let addGptRoutes: typeof import("./gpt.js").addGptRoutes;
-let realLangfuseVercelAi: typeof import("../langfuseVercelAi.js");
+mock.module("ai", () => ({
+  ...realAi,
+  streamText: (options: StreamTextOptions): StreamTextResult =>
+    streamTextOverride ? streamTextOverride(options) : realStreamText(options),
+}));
 
-beforeAll(async () => {
-  // Mock langfuseVercelAi to avoid transitive langfuse SDK import in tests.
-  // Spread the real module so later-loaded test files still see the real exports.
-  realLangfuseVercelAi = await import("../langfuseVercelAi.js");
-  mock.module("../langfuseVercelAi", () => ({
-    ...realLangfuseVercelAi,
-    createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-    preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-  }));
-
-  const realAi = await import("ai");
-  const realStreamText = realAi.streamText;
-  mock.module("ai", () => ({
-    ...realAi,
-    streamText: (options: StreamTextOptions): StreamTextResult =>
-      streamTextOverride ? streamTextOverride(options) : realStreamText(options),
-  }));
-
-  ({addGptRoutes} = await import("./gpt.js"));
-});
+const {addGptRoutes}: typeof import("./gpt.js") = require("./gpt");
 
 // Create mock AI model (LanguageModelV2)
 const createMockModel = (modelId = "mock-model") => ({

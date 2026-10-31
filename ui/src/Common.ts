@@ -260,6 +260,16 @@ export interface BorderThemeConfig {
   warning: keyof ThemePrimitiveColors;
 }
 
+/** Maps form field (TextField, TextArea, SelectField, etc.) colors to primitives. */
+export interface FieldThemeConfig {
+  background: keyof ThemePrimitiveColors;
+  backgroundDisabled: keyof ThemePrimitiveColors;
+  border: keyof ThemePrimitiveColors;
+  borderFocus: keyof ThemePrimitiveColors;
+  borderError: keyof ThemePrimitiveColors;
+  borderDisabled: keyof ThemePrimitiveColors;
+}
+
 export interface StatusThemeConfig {
   active: keyof ThemePrimitiveColors;
   doNotDisturb: keyof ThemePrimitiveColors;
@@ -334,6 +344,22 @@ export interface BorderTheme {
   warning: string;
 }
 
+/** Computed form field colors: the input box background and border in each state. */
+export interface FieldTheme {
+  /** Input background when enabled. */
+  background: string;
+  /** Input background when disabled. */
+  backgroundDisabled: string;
+  /** Input border at rest. */
+  border: string;
+  /** Input border while focused. */
+  borderFocus: string;
+  /** Input border when the field has an error. */
+  borderError: string;
+  /** Input border when disabled. */
+  borderDisabled: string;
+}
+
 export interface StatusTheme {
   active: string;
   doNotDisturb: string;
@@ -377,6 +403,7 @@ export interface TerrenoTheme {
   text: TextTheme;
   surface: SurfaceTheme;
   border: BorderTheme;
+  field: FieldTheme;
   status: StatusTheme;
   radius: RadiusTheme;
   spacing: SpacingTheme;
@@ -389,6 +416,7 @@ export interface TerrenoThemeConfig {
   text: TextThemeConfig;
   surface: SurfaceThemeConfig;
   border: BorderThemeConfig;
+  field: FieldThemeConfig;
   status: StatusThemeConfig;
   radius: RadiusThemeConfig;
   spacing: SpacingThemeConfig;

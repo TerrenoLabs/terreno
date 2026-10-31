@@ -74,7 +74,7 @@ const DateTimeSegment: FC<DateTimeSegmentProps> = ({
       style={{
         alignItems: "center",
         backgroundColor: "transparent",
-        borderColor: error ? theme.border.error : "transparent",
+        borderColor: error ? theme.field.borderError : "transparent",
         flexDirection: "row",
         flexShrink: 1,
         height: 40,
@@ -237,7 +237,7 @@ const MobileTimeDisplay: FC<MobileTimeDisplayProps> = ({
         paddingVertical: showBorder ? 8 : 4,
         ...(showBorder
           ? {
-              backgroundColor: disabled ? theme.surface.disabled : theme.surface.base,
+              backgroundColor: disabled ? theme.surface.disabled : theme.field.background,
               borderColor,
               borderRadius: 4,
               borderWidth: 1,
@@ -497,11 +497,11 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   const timezone = providedTimezone ?? localTimezone;
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  let borderColor = theme.border.dark;
+  let borderColor = theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (errorText || Object.values(fieldErrors).some((error) => error !== undefined)) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
 
   /** Builds the ordered array of {@link FieldConfig} for each input segment based on the field type. */
@@ -1082,7 +1082,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           onPress={openActionSheet}
           style={{
             alignItems: parentIsLessThanBreakpointOrIsMobile ? "stretch" : "center",
-            backgroundColor: theme.surface.base,
+            backgroundColor: theme.field.background,
             borderColor,
             borderRadius: 4,
             borderWidth: 1,

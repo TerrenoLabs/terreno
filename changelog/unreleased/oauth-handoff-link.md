@@ -17,7 +17,7 @@ category: Added
   redirects to `callbackURL` with no one-time token, since no session is created. A session
   revoked after the intent comes back with `error=session_expired`. Both routes are in the auth
   rate-limit bucket, and Better Auth's limiter allows three of each per ten seconds per IP.
-- `@terreno/rtk`: new `linkSocialWithHandoff({client, provider, callbackURL, errorCallbackURL?})`.
+- `@terreno/syncdb/auth`: new `linkSocialWithHandoff({client, provider, callbackURL, errorCallbackURL?})`.
   On web in bearer mode it posts the intent and submits the hidden form; in cookie mode and on
   native it calls `client.linkSocial`. It resolves `{error}` (`null` once the browser is on its
   way to the provider). New type `BetterAuthLinkClient`.

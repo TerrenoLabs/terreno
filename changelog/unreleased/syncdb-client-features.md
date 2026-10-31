@@ -2,7 +2,7 @@
 category: Added
 ---
 
-`@terreno/rtk`: `createBetterAuthClient({features})` adds the Better Auth client plugins for the
+`@terreno/syncdb/auth`: `createBetterAuthClient({features})` adds the Better Auth client plugins for the
 server's auth features: `twoFactor` (`twoFactorClient`, with `onTwoFactorRedirect`), `passkey`
 (`passkeyClient` from `@better-auth/passkey/client`), `multiSession`, `lastLoginMethod` and
 `oneTimeToken`. Each enabled feature's namespace is typed without casts (`client.twoFactor.enable`,
@@ -14,5 +14,5 @@ sessions, and 2FA and passkey challenges still need cookies. New types:
 `BetterAuthHandoffClient`.
 `BetterAuthOAuthProvider` now accepts any generic OAuth provider id, the OAuth handoff helpers
 accept clients with features, and `BetterAuthClientInterface` accepts the stricter session types
-those clients return, so they work with `generateBetterAuthSlice`, which now stores a missing
+those clients return, so they work with `SessionProvider`, which now stores a missing
 user `image` as `null`.

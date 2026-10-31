@@ -2,7 +2,7 @@
 category: Added
 ---
 
-`@terreno/rtk`: `createRememberedAccountsStore({rememberIdentity})` remembers who signed in on
+`@terreno/syncdb/auth`: `createRememberedAccountsStore({rememberIdentity})` remembers who signed in on
 this device and how, for the login screen's "last used" badge and "Continue as" cards. It stores
 `{userId, method, lastUsedAt}` in SecureStore on native and localStorage on web, keeps the newest
 5, re-reads storage before each change (and follows `storage` events on web) so a stale tab

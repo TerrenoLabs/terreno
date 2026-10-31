@@ -269,7 +269,7 @@ const RootLayoutNav = (): React.ReactElement => {
   // a deep-linked route like /profile or /admin. Rendering only once the tree shape is
   // final means the Stack mounts exactly once per auth state and keeps the requested URL.
   // Only a session load with no user yet holds it: a refresh or a sign-out while signed in
-  // (rtk's logout keeps the session until the server answers) leaves the current screen up.
+  // (the session's logout keeps the session until the server answers) leaves the current screen up.
   if ((isAuthLoading && !userId) || (Boolean(userId) && isProfileLoading)) {
     return (
       <Box alignItems="center" flex="grow" justifyContent="center" testID="app-auth-loading">

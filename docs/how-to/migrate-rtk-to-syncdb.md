@@ -47,6 +47,12 @@ Keep `better-auth`, `@better-auth/expo`, and `@openfeature/react-sdk` / `@openfe
 if the app uses them; they are optional peers of `@terreno/syncdb`. Rebuild native clients
 after adding `expo-sqlite`.
 
+Pin `better-auth`, `@better-auth/expo`, and `@better-auth/passkey` to the same `1.7.4`.
+Mixed 1.6 and 1.7 versions fail to type-check, and the 1.7 Expo plugin needs the async storage
+methods `createBetterAuthClient` provides. The server needs `nativeApps: true`, or native
+sign-out answers `403 Missing or null Origin`. See
+[Better Auth 1.7 and native sign-in](../../mcp-server/src/docs/upgrades/58.0.0.md#better-auth-17-and-native-sign-in).
+
 Delete `store/index.ts`, `store/appState.ts`, `store/sdk.ts`, `store/openApiSdk.ts`,
 `store/betterAuthApi.ts`, `openapi-config.ts`, `scripts/generate-sdk.ts`, and
 `tsconfig.codegen.json`.
@@ -142,6 +148,10 @@ useEffect(() => {
   };
 }, [userId]);
 ```
+
+Mount `<SyncDbProvider>` unconditionally, not only while `userId` is set: unmounting it during
+logout throws in screens that are still on screen. `logout()` waits for the server and keeps the
+session if sign-out fails; show `useSession().isSigningOut` on the sign-out button.
 
 Remove `<Provider store={store}>`, `<PersistGate>`, `configureStore`, and every
 `useSelector` / `useDispatch`. Move app-state slices to React context or `useStoredState`
@@ -267,6 +277,11 @@ Example: `example-frontend/components/SyncTodosScreen.tsx`.
 | Admin `api` prop, `useAdminApi(api, …)` | Removed; see [Admin no longer takes an RTK `api`](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#admin-no-longer-takes-an-rtk-api) |
 | `getAdminAuthHeaders` from `@/store/betterAuthApi` | `() => authProvider.getToken()` as a Bearer header, passed to `AdminProvider` `getAuthHeaders` |
 
+## Copy the example app's changes
+
+Native build config, auth wiring, and phone layout fixes the example app needed are listed in
+[Example app changes to copy](../../mcp-server/src/docs/upgrades/58.0.0.md#example-app-changes-to-copy).
+
 ## 9. Verify
 
 ```bash
@@ -274,7 +289,7 @@ rg -l "@terreno/rtk|@reduxjs/toolkit|react-redux|redux-persist|rtk-query" --glob
 bun run compile && bun run lint && bun test
 ```
 
-The search returns nothing. Then sign in, open each screen that read or wrote data, sign out,
+The search returns nothing. Run the app on an iOS and an Android dev client, not only web. Then sign in, open each screen that read or wrote data, sign out,
 and sign in as a second user.
 
 ## Every removed export

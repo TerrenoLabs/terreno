@@ -23,5 +23,5 @@ category: Added
 - With `rateLimit` on, `{basePath}/two-factor/*`, `/passkey/*`, `/link-social`,
   `/unlink-account`, `/multi-session/*`, `/oauth-proxy-callback`, and
   `/expo-authorization-proxy` use the `auth` bucket.
-- New dependencies: `@better-auth/passkey` (catalog, api and rtk), `@better-auth/expo` (api),
+- New dependencies: `@better-auth/passkey` (catalog, api and syncdb), `@better-auth/expo` (api),
   `react-native-qrcode-svg` (ui), and `otpauth` (example-frontend dev).

@@ -1,0 +1,37 @@
+---
+title: "Custom Select Field"
+description: "Displays a list of options using the browser’s native select and includes a custom option that renders a text field when selected and allows user to input value not included in predefined options."
+sidebar_label: "Custom Select Field"
+slug: /reference/components/custom-select-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Custom Select Field
+
+Displays a list of options using the browser’s native select and includes a custom option that renders a text field when selected and allows user to input value not included in predefined options.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `CustomSelectFieldProps`  
+**Story source:** [`demo/stories/CustomSelectField.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/CustomSelectField.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Custom Select Field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `reflection` | Yes | The function to call when the custom select field value changes. |
+| `options` | `array` | Yes | The options available for selection in the select field. Each option should have a label and a value. |
+| `value` | `union` | Yes | The current value of the custom select field. |
+| `disabled` | `boolean` |  | If true, the select field will be disabled. |
+| `disableSearch` | `boolean` |  | When true, hides the type-to-filter search UI. Search is enabled by default. |
+| `errorText` | `string` |  | The error text to display if there is an error. |
+| `helperText` | `string` |  | The helper text to display below the select field. |
+| `placeholder` | `string` |  | The placeholder text to display when no option is selected. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  | The title of the custom select field. |

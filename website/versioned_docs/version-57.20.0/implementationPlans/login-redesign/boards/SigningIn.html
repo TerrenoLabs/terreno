@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in: signing in</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&amp;family=Titillium+Web:wght@600;700&amp;display=swap">
+<style>
+body{margin:0;background:#e9eef0;display:flex;justify-content:center;padding:24px 0}
+a{color:#0a7092}a:hover{color:#095a75}
+.screen{--surface-base:#ffffff;--surface-alt:#f2f2f2;--surface-primary:#0e9dcd;--surface-sec-xl:#f2f9fa;--surface-sec-l:#b6cdd5;--text-primary:#1c1c1c;--text-secondary:#686868;--text-extraLight:#949494;--text-link:#0a7092;--border-default:#cdcdcd;box-sizing:border-box;width:390px;min-height:100%;padding:24px 24px 32px;background:var(--surface-base);color:var(--text-primary);font-family:Nunito,system-ui,sans-serif;display:flex;flex-direction:column;gap:24px}
+.back{display:inline-flex;align-items:center;gap:4px;height:44px;align-self:flex-start;margin-left:-8px;padding:0 8px;border:0;background:none;font:700 16px/1 Nunito,sans-serif;color:var(--text-secondary);cursor:default}
+.back svg{width:20px;height:20px}
+.h1{margin:0;font:700 32px/38px "Titillium Web",sans-serif}
+.who{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:16px;background:var(--surface-sec-xl);border:1px solid var(--surface-sec-l)}
+.avatar{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 18px/1 "Titillium Web",sans-serif}
+.who-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.who-name{font-weight:700;font-size:16px;line-height:22px}
+.who-meta{font-size:12px;line-height:16px;color:var(--text-secondary)}
+.form{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl{font:600 16px/24px Nunito,sans-serif}
+.input{box-sizing:border-box;width:100%;height:48px;padding:0 14px;border:1px solid var(--border-default);border-radius:4px;background:var(--surface-alt);font:16px Nunito,sans-serif;color:var(--text-secondary)}
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:48px;box-sizing:border-box;padding:0 20px;border-radius:360px;border:1px solid var(--border-default);font:700 16px/1 Nunito,sans-serif}
+.btn-primary{background:var(--surface-primary);border-color:var(--surface-primary);color:#fff;font-size:19px;cursor:progress}
+.spin{width:20px;height:20px}
+.foot{margin-top:auto;text-align:center;font-size:16px;line-height:24px;color:var(--text-secondary)}
+</style>
+<main class="screen" aria-busy="true">
+  <button class="back" type="button" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+    All sign-in options
+  </button>
+
+  <h1 class="h1">Enter your password</h1>
+
+  <div class="who">
+    <span class="avatar" style="background: #0a7092" aria-hidden="true">J</span>
+    <span class="who-body">
+      <span class="who-name">Josh Gachnang</span>
+      <span class="who-meta">josh@example.com</span>
+    </span>
+  </div>
+
+  <form class="form">
+    <div class="field">
+      <label class="lbl" for="si-pw">Password</label>
+      <input class="input" id="si-pw" type="password" value="password123" disabled>
+    </div>
+    <button class="btn btn-primary" type="submit" disabled>
+      <svg class="spin" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.35" stroke-width="3"></circle><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path></svg>
+      Signing in
+    </button>
+  </form>
+
+  <p class="foot">New here? <a href="#">Create an account</a></p>
+</main>
+</body>
+</html>

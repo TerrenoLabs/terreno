@@ -1,0 +1,41 @@
+---
+title: "Image"
+description: "Remote image with required width via naturalWidth or fullWidth."
+sidebar_label: "Image"
+slug: /reference/components/image
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Image
+
+Remote image with required width via naturalWidth or fullWidth.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `ImageProps`  
+**Story source:** [`demo/stories/Image.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Image.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Image" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `color` | `BoxColor` | Yes |  |
+| `src` | `string` | Yes |  |
+| `alt` | `string` |  |  |
+| `children` | `ReactNode` |  |  |
+| `fit` | `union` |  |  |
+| `fullWidth` | `boolean` |  |  |
+| `maxHeight` | `number` |  |  |
+| `maxWidth` | `number` |  |  |
+| `naturalHeight` | `number` |  |  |
+| `naturalWidth` | `number` |  |  |
+| `onError` | `reflection` |  |  |
+| `onLoad` | `reflection` |  |  |
+| `size` | `string` |  |  |
+| `srcSet` | `string` |  |  |
+| `style` | `ImageStyle` |  |  |

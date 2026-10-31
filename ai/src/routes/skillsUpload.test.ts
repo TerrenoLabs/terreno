@@ -94,6 +94,27 @@ describe("POST /gpt/skills/upload", () => {
     expect(String(saved?.userId)).toBe(userId.toString());
   });
 
+  it("documents the created skill as the upload response in OpenAPI", async () => {
+    const agent = await authAsUser(buildApp(false), "notAdmin");
+    const res = await agent.get("/openapi.json");
+    const responses = res.body.paths["/gpt/skills/upload"]?.post?.responses;
+    const schema = (responses?.["201"] ?? responses?.["200"])?.content["application/json"].schema;
+    const skill = schema.properties.data;
+    expect(Object.keys(skill.properties).sort()).toEqual([
+      "_id",
+      "created",
+      "description",
+      "enabled",
+      "files",
+      "instructions",
+      "name",
+      "scope",
+      "updated",
+      "userId",
+    ]);
+    expect(skill.properties.scope.enum).toEqual(["user", "global"]);
+  });
+
   it("stores zip files under skills/<skillId> with the uploader's userId", async () => {
     const agent = await authAsUser(buildApp(), "notAdmin");
     const res = await agent

@@ -2,6 +2,7 @@ import {APIError, createdUpdatedPlugin, isDeletedPlugin, logger} from "@terreno/
 import mongoose from "mongoose";
 
 import type {FileStorageService} from "../service/fileStorage";
+import {SKILL_MAX_INSTRUCTIONS_LENGTH} from "../service/skillPackage";
 import type {GptSkillDocument, GptSkillFile, GptSkillModel} from "../types/skills";
 
 const SKILL_NAME_PATTERN = /^[a-z0-9-]{1,64}$/;
@@ -91,7 +92,7 @@ const gptSkillSchema = new mongoose.Schema<GptSkillDocument, GptSkillModel>(
     },
     instructions: {
       description: "Full markdown instructions returned by load_skill",
-      maxlength: 50000,
+      maxlength: SKILL_MAX_INSTRUCTIONS_LENGTH,
       required: true,
       type: String,
     },

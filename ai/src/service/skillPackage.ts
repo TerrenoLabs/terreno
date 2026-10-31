@@ -19,6 +19,8 @@ const SKILL_FILENAME = "SKILL.md";
 const MAX_FILES = 20;
 const MAX_FILES_BYTES = 10 * 1024 * 1024;
 const MAX_SKILL_MD_BYTES = 1024 * 1024;
+/** Longest `instructions` a skill may store; an upload past it is a 400 before any file is saved. */
+export const SKILL_MAX_INSTRUCTIONS_LENGTH = 50000;
 
 const MIME_TYPES_BY_EXTENSION: Record<string, string> = {
   csv: "text/csv",
@@ -58,7 +60,14 @@ const parseSkillMarkdown = (
   if (typeof description !== "string" || !description.trim()) {
     throw frontmatterError();
   }
-  return {description: description.trim(), instructions: match[2].trim(), name: name.trim()};
+  const instructions = match[2].trim();
+  if (instructions.length > SKILL_MAX_INSTRUCTIONS_LENGTH) {
+    throw new APIError({
+      status: 400,
+      title: `SKILL.md instructions may be at most ${SKILL_MAX_INSTRUCTIONS_LENGTH} characters`,
+    });
+  }
+  return {description: description.trim(), instructions, name: name.trim()};
 };
 
 // Archive metadata that zip tools add and nobody means to upload.

@@ -556,12 +556,12 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 | `/gpt/skills` | POST | authenticated | `{name, description, instructions, scope?}`. Saved as the caller's `user` skill. `scope: "global"` needs an admin: otherwise 403 `Only admins can create global skills`. |
 | `/gpt/skills/:id` | PATCH | owner, or admin for a global skill | Only `name`, `description`, `instructions`, `enabled` are applied. |
 | `/gpt/skills/:id` | DELETE | owner, or admin for a global skill | Soft delete; the skill's files are removed from storage. |
-| `/gpt/skills/upload` | POST | authenticated | Multipart `file` (`.md` or `.zip`, at most 10 MB, else 413 `A skill package may be at most 10 MB`) and optional `scope`. No file is 400 `No file provided`. 201 with the skill (list fields plus `instructions`, and `userId` for a user skill). |
+| `/gpt/skills/upload` | POST | authenticated | Multipart `file` (`.md` or `.zip`, at most 10 MB, else 413 `A skill package may be at most 10 MB`) and optional `scope`. No file is 400 `No file provided`. 201 with the skill (list fields plus `instructions`, and `userId` for a user skill); the OpenAPI spec documents that shape. |
 
 Upload rules (`parseSkillPackage({buffer, filename})`, exported):
 
 - The file must end in `.md` or `.zip`, else 400 `Upload a SKILL.md file or a .zip skill package`.
-- `SKILL.md` needs YAML frontmatter with `name` and `description`; the body is `instructions`. Otherwise 400 `SKILL.md frontmatter needs name and description`. In a zip it may be at most 1 MB (`SKILL.md may be at most 1 MB`).
+- `SKILL.md` needs YAML frontmatter with `name` and `description`; the body is `instructions`. Otherwise 400 `SKILL.md frontmatter needs name and description`. In a zip it may be at most 1 MB (`SKILL.md may be at most 1 MB`). The body may be at most 50,000 characters (`SKILL_MAX_INSTRUCTIONS_LENGTH`), else 400 `SKILL.md instructions may be at most 50000 characters`.
 - A `.zip` holds `SKILL.md` at its root or inside one top-level folder, plus up to 20 files beside it (subfolders allowed) totaling at most 10 MB. Allowed extensions: `png`, `jpg`, `jpeg`, `gif`, `webp`, `pdf`, `txt`, `csv`, `json`, `md`. Hidden files and `__MACOSX/` are skipped. 400s: `The skill package is not a valid zip file`, `No SKILL.md found in the package`, `Files must sit in the SKILL.md folder: <path>`, `Unsupported file type: <name>`, `Invalid file path: <path>` (`..`, absolute, or backslash), `A skill can hold at most 20 files`, `A skill's files may total at most 10 MB`.
 - A package with files and no storage is 400 `File storage is not configured`.
 - Files are stored with `keyPrefix: "skills/<skillId>"` under the uploader's id. The create is atomic: if any upload or the save fails, uploaded keys are deleted and nothing is saved (500 `Could not store the skill's files` for a storage failure).

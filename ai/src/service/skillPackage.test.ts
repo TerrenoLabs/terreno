@@ -174,6 +174,17 @@ describe("parseSkillPackage", () => {
     expect(error.title).toBe("SKILL.md may be at most 1 MB");
   });
 
+  it("accepts instructions at the length limit and rejects one character more", async () => {
+    const skillMd = (length: number): Buffer =>
+      Buffer.from(`---\nname: long\ndescription: Long\n---\n${"a".repeat(length)}`);
+    const parsed = await parseSkillPackage({buffer: skillMd(50000), filename: "SKILL.md"});
+    expect(parsed.instructions.length).toBe(50000);
+
+    const error = await parseError({buffer: skillMd(50001), filename: "SKILL.md"});
+    expect(error.status).toBe(400);
+    expect(error.title).toBe("SKILL.md instructions may be at most 50000 characters");
+  });
+
   it("rejects a file outside the SKILL.md folder", async () => {
     const error = await parseError({
       buffer: zipOf({"poster-style/SKILL.md": SKILL_MD, "README.txt": "x"}),

@@ -7,6 +7,7 @@ import {
   type PermissionMethod,
   Permissions,
   recordAuditEvent,
+  z,
 } from "@terreno/api";
 import type express from "express";
 import mongoose from "mongoose";
@@ -29,6 +30,20 @@ interface SkillUser {
   admin?: boolean;
   id?: string;
 }
+
+// OpenAPI shape of the skill the upload action creates; matches serializeSkill(skill, "create").
+const uploadedSkillSchema = z.object({
+  _id: z.string(),
+  created: z.string().describe("ISO 8601 creation time"),
+  description: z.string(),
+  enabled: z.boolean(),
+  files: z.array(z.object({filename: z.string(), mimeType: z.string(), size: z.number()})),
+  instructions: z.string(),
+  name: z.string(),
+  scope: z.enum(["user", "global"]),
+  updated: z.string().describe("ISO 8601 last update time"),
+  userId: z.string().optional().describe("Owner of a user skill; absent for global skills"),
+});
 
 const UPDATABLE_FIELDS = ["name", "description", "instructions", "enabled"] as const;
 
@@ -215,6 +230,7 @@ export const addSkillRoutes = (router: express.Router, options?: SkillRouteOptio
             uploadSkill({fileStorageService: options?.fileStorageService, req, res}),
           method: "POST",
           permissions: [Permissions.IsAuthenticated],
+          response: uploadedSkillSchema,
           status: 201,
           summary: "Create a skill from an uploaded SKILL.md or .zip package",
         },

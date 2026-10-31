@@ -1,8 +1,5 @@
 import {defineConfig, devices, type Project} from "@playwright/test";
-import {pointAtInstalledBrowsers} from "./e2e/helpers/browsersPath";
 import {MOCK_OIDC_ISSUER} from "./e2e/helpers/mockOidcProvider";
-
-pointAtInstalledBrowsers();
 
 const chromium = {...devices["Desktop Chrome"]};
 

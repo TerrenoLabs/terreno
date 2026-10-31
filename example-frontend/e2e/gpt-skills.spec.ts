@@ -8,7 +8,9 @@ import {ensureLoggedOut, loginAs} from "./helpers/login";
 import {type SkillsApi, skillsApiAs} from "./helpers/skillsApi";
 
 const POSTER_STYLE = path.resolve(__dirname, "fixtures/poster-style.md");
-const TEAM_POSTER = path.resolve(__dirname, "fixtures/team-poster.zip");
+// SKILL.md only: a zip with extra files needs file storage, which the e2e backend does not have.
+// team-poster.zip (SKILL.md + PNG) is for the manual AI-new-1 check against a real bucket.
+const TEAM_POSTER = path.resolve(__dirname, "fixtures/team-poster-skill-only.zip");
 
 const openSkills = async (page: Page): Promise<void> => {
   await page.goto("/settings/skills");

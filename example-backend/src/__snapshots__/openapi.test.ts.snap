@@ -7958,6 +7958,106 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/admin/gpt/skills/bulk-patch": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "ids": {
+                    "description": "Document ids to update",
+                    "items": {
+                      "type": "string",
+                    },
+                    "required": true,
+                    "type": "array",
+                  },
+                  "patch": {
+                    "description": "Partial document; keys must be allowlisted for this model",
+                    "required": true,
+                    "type": "object",
+                  },
+                },
+                "required": [
+                  "ids",
+                  "patch",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "failures": {
+                      "type": "array",
+                    },
+                    "updated": {
+                      "type": "number",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Bulk patch GptSkill documents",
+        "tags": [
+          "admin",
+        ],
+      },
+    },
     "/admin/mcp-service-tokens/": {
       "get": {
         "parameters": [
@@ -22701,6 +22801,1146 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         "summary": "Remix text",
         "tags": [
           "gpt",
+        ],
+      },
+    },
+    "/gpt/skills/": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "_id",
+            "schema": {
+              "properties": {
+                "$in": {
+                  "items": {
+                    "type": "string",
+                  },
+                  "type": "array",
+                },
+              },
+              "type": "object",
+            },
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "schema": {
+              "oneOf": [
+                {
+                  "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                  "type": "string",
+                },
+                {
+                  "properties": {
+                    "$in": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "scope",
+            "schema": {
+              "oneOf": [
+                {
+                  "description": "user skills are visible to their owner; global skills to every user",
+                  "enum": [
+                    "user",
+                    "global",
+                  ],
+                  "type": "string",
+                },
+                {
+                  "properties": {
+                    "$in": {
+                      "items": {
+                        "type": "string",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "enabled",
+            "schema": {
+              "oneOf": [
+                {
+                  "default": true,
+                  "description": "Disabled skills are left out of the catalog and load_skill",
+                  "type": "boolean",
+                },
+                {
+                  "properties": {
+                    "$in": {
+                      "items": {
+                        "type": "boolean",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "type": "object",
+                },
+              ],
+            },
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "number",
+            },
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "number",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "_id": {
+                            "type": "string",
+                          },
+                          "created": {
+                            "description": "When this document was created",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "deleted": {
+                            "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                            "type": "boolean",
+                          },
+                          "description": {
+                            "description": "When to use the skill; listed in the chat's skill catalog",
+                            "type": "string",
+                          },
+                          "enabled": {
+                            "description": "Disabled skills are left out of the catalog and load_skill",
+                            "type": "boolean",
+                          },
+                          "files": {
+                            "description": "Reference files stored with the skill",
+                            "items": {
+                              "properties": {
+                                "filename": {
+                                  "description": "Original file name",
+                                  "type": "string",
+                                },
+                                "gcsKey": {
+                                  "description": "Storage key of the file; never sent to clients",
+                                  "type": "string",
+                                },
+                                "mimeType": {
+                                  "description": "MIME type of the file",
+                                  "enum": [
+                                    "image/jpeg",
+                                    "image/png",
+                                    "image/gif",
+                                    "image/webp",
+                                    "application/pdf",
+                                    "text/plain",
+                                    "text/csv",
+                                    "application/json",
+                                    "text/markdown",
+                                  ],
+                                  "type": "string",
+                                },
+                                "size": {
+                                  "description": "File size in bytes",
+                                  "type": "number",
+                                },
+                              },
+                              "required": [
+                                "filename",
+                                "gcsKey",
+                                "mimeType",
+                                "size",
+                              ],
+                              "type": "object",
+                            },
+                            "type": "array",
+                          },
+                          "instructions": {
+                            "description": "Full markdown instructions returned by load_skill",
+                            "type": "string",
+                          },
+                          "name": {
+                            "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                            "type": "string",
+                          },
+                          "ownerId": {
+                            "type": "any",
+                          },
+                          "scope": {
+                            "description": "user skills are visible to their owner; global skills to every user",
+                            "enum": [
+                              "user",
+                              "global",
+                            ],
+                            "type": "string",
+                          },
+                          "updated": {
+                            "description": "When this document was last updated",
+                            "format": "date-time",
+                            "type": "string",
+                          },
+                          "userId": {
+                            "description": "Owner of a user skill; unset for global skills",
+                            "format": "objectid",
+                            "type": "string",
+                          },
+                        },
+                        "required": [
+                          "description",
+                          "instructions",
+                          "name",
+                          "_id",
+                          "created",
+                          "updated",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "limit": {
+                      "type": "number",
+                    },
+                    "more": {
+                      "type": "boolean",
+                    },
+                    "page": {
+                      "type": "number",
+                    },
+                    "total": {
+                      "type": "number",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful list",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "gptskills",
+        ],
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "_id": {
+                    "type": "string",
+                  },
+                  "created": {
+                    "description": "When this document was created",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "deleted": {
+                    "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                    "type": "boolean",
+                  },
+                  "description": {
+                    "description": "When to use the skill; listed in the chat's skill catalog",
+                    "type": "string",
+                  },
+                  "enabled": {
+                    "description": "Disabled skills are left out of the catalog and load_skill",
+                    "type": "boolean",
+                  },
+                  "files": {
+                    "description": "Reference files stored with the skill",
+                    "items": {
+                      "properties": {
+                        "filename": {
+                          "description": "Original file name",
+                          "type": "string",
+                        },
+                        "gcsKey": {
+                          "description": "Storage key of the file; never sent to clients",
+                          "type": "string",
+                        },
+                        "mimeType": {
+                          "description": "MIME type of the file",
+                          "enum": [
+                            "image/jpeg",
+                            "image/png",
+                            "image/gif",
+                            "image/webp",
+                            "application/pdf",
+                            "text/plain",
+                            "text/csv",
+                            "application/json",
+                            "text/markdown",
+                          ],
+                          "type": "string",
+                        },
+                        "size": {
+                          "description": "File size in bytes",
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "filename",
+                        "gcsKey",
+                        "mimeType",
+                        "size",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "instructions": {
+                    "description": "Full markdown instructions returned by load_skill",
+                    "type": "string",
+                  },
+                  "name": {
+                    "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                    "type": "string",
+                  },
+                  "ownerId": {
+                    "type": "any",
+                  },
+                  "scope": {
+                    "description": "user skills are visible to their owner; global skills to every user",
+                    "enum": [
+                      "user",
+                      "global",
+                    ],
+                    "type": "string",
+                  },
+                  "updated": {
+                    "description": "When this document was last updated",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "userId": {
+                    "description": "Owner of a user skill; unset for global skills",
+                    "format": "objectid",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "description": {
+                      "description": "When to use the skill; listed in the chat's skill catalog",
+                      "type": "string",
+                    },
+                    "enabled": {
+                      "description": "Disabled skills are left out of the catalog and load_skill",
+                      "type": "boolean",
+                    },
+                    "files": {
+                      "description": "Reference files stored with the skill",
+                      "items": {
+                        "properties": {
+                          "filename": {
+                            "description": "Original file name",
+                            "type": "string",
+                          },
+                          "gcsKey": {
+                            "description": "Storage key of the file; never sent to clients",
+                            "type": "string",
+                          },
+                          "mimeType": {
+                            "description": "MIME type of the file",
+                            "enum": [
+                              "image/jpeg",
+                              "image/png",
+                              "image/gif",
+                              "image/webp",
+                              "application/pdf",
+                              "text/plain",
+                              "text/csv",
+                              "application/json",
+                              "text/markdown",
+                            ],
+                            "type": "string",
+                          },
+                          "size": {
+                            "description": "File size in bytes",
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "filename",
+                          "gcsKey",
+                          "mimeType",
+                          "size",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "instructions": {
+                      "description": "Full markdown instructions returned by load_skill",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                      "type": "string",
+                    },
+                    "ownerId": {
+                      "type": "any",
+                    },
+                    "scope": {
+                      "description": "user skills are visible to their owner; global skills to every user",
+                      "enum": [
+                        "user",
+                        "global",
+                      ],
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "description": "Owner of a user skill; unset for global skills",
+                      "format": "objectid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "description",
+                    "instructions",
+                    "name",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful create",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "gptskills",
+        ],
+      },
+    },
+    "/gpt/skills/upload": {
+      "post": {
+        "description": "Multipart \`file\` (a SKILL.md or .zip skill package, at most 10 MB) and optional \`scope\`.",
+        "operationId": "gptskills_upload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful response",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Create a skill from an uploaded SKILL.md or .zip package",
+        "tags": [
+          "gptskills",
+        ],
+      },
+    },
+    "/gpt/skills/{id}": {
+      "delete": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful delete",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "gptskills",
+        ],
+      },
+      "get": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "description": {
+                      "description": "When to use the skill; listed in the chat's skill catalog",
+                      "type": "string",
+                    },
+                    "enabled": {
+                      "description": "Disabled skills are left out of the catalog and load_skill",
+                      "type": "boolean",
+                    },
+                    "files": {
+                      "description": "Reference files stored with the skill",
+                      "items": {
+                        "properties": {
+                          "filename": {
+                            "description": "Original file name",
+                            "type": "string",
+                          },
+                          "gcsKey": {
+                            "description": "Storage key of the file; never sent to clients",
+                            "type": "string",
+                          },
+                          "mimeType": {
+                            "description": "MIME type of the file",
+                            "enum": [
+                              "image/jpeg",
+                              "image/png",
+                              "image/gif",
+                              "image/webp",
+                              "application/pdf",
+                              "text/plain",
+                              "text/csv",
+                              "application/json",
+                              "text/markdown",
+                            ],
+                            "type": "string",
+                          },
+                          "size": {
+                            "description": "File size in bytes",
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "filename",
+                          "gcsKey",
+                          "mimeType",
+                          "size",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "instructions": {
+                      "description": "Full markdown instructions returned by load_skill",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                      "type": "string",
+                    },
+                    "ownerId": {
+                      "type": "any",
+                    },
+                    "scope": {
+                      "description": "user skills are visible to their owner; global skills to every user",
+                      "enum": [
+                        "user",
+                        "global",
+                      ],
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "description": "Owner of a user skill; unset for global skills",
+                      "format": "objectid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "description",
+                    "instructions",
+                    "name",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful read",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "gptskills",
+        ],
+      },
+      "patch": {
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "_id": {
+                    "type": "string",
+                  },
+                  "created": {
+                    "description": "When this document was created",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "deleted": {
+                    "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                    "type": "boolean",
+                  },
+                  "description": {
+                    "description": "When to use the skill; listed in the chat's skill catalog",
+                    "type": "string",
+                  },
+                  "enabled": {
+                    "description": "Disabled skills are left out of the catalog and load_skill",
+                    "type": "boolean",
+                  },
+                  "files": {
+                    "description": "Reference files stored with the skill",
+                    "items": {
+                      "properties": {
+                        "filename": {
+                          "description": "Original file name",
+                          "type": "string",
+                        },
+                        "gcsKey": {
+                          "description": "Storage key of the file; never sent to clients",
+                          "type": "string",
+                        },
+                        "mimeType": {
+                          "description": "MIME type of the file",
+                          "enum": [
+                            "image/jpeg",
+                            "image/png",
+                            "image/gif",
+                            "image/webp",
+                            "application/pdf",
+                            "text/plain",
+                            "text/csv",
+                            "application/json",
+                            "text/markdown",
+                          ],
+                          "type": "string",
+                        },
+                        "size": {
+                          "description": "File size in bytes",
+                          "type": "number",
+                        },
+                      },
+                      "required": [
+                        "filename",
+                        "gcsKey",
+                        "mimeType",
+                        "size",
+                      ],
+                      "type": "object",
+                    },
+                    "type": "array",
+                  },
+                  "instructions": {
+                    "description": "Full markdown instructions returned by load_skill",
+                    "type": "string",
+                  },
+                  "name": {
+                    "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                    "type": "string",
+                  },
+                  "ownerId": {
+                    "type": "any",
+                  },
+                  "scope": {
+                    "description": "user skills are visible to their owner; global skills to every user",
+                    "enum": [
+                      "user",
+                      "global",
+                    ],
+                    "type": "string",
+                  },
+                  "updated": {
+                    "description": "When this document was last updated",
+                    "format": "date-time",
+                    "type": "string",
+                  },
+                  "userId": {
+                    "description": "Owner of a user skill; unset for global skills",
+                    "format": "objectid",
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "_id": {
+                      "type": "string",
+                    },
+                    "created": {
+                      "description": "When this document was created",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "deleted": {
+                      "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                      "type": "boolean",
+                    },
+                    "description": {
+                      "description": "When to use the skill; listed in the chat's skill catalog",
+                      "type": "string",
+                    },
+                    "enabled": {
+                      "description": "Disabled skills are left out of the catalog and load_skill",
+                      "type": "boolean",
+                    },
+                    "files": {
+                      "description": "Reference files stored with the skill",
+                      "items": {
+                        "properties": {
+                          "filename": {
+                            "description": "Original file name",
+                            "type": "string",
+                          },
+                          "gcsKey": {
+                            "description": "Storage key of the file; never sent to clients",
+                            "type": "string",
+                          },
+                          "mimeType": {
+                            "description": "MIME type of the file",
+                            "enum": [
+                              "image/jpeg",
+                              "image/png",
+                              "image/gif",
+                              "image/webp",
+                              "application/pdf",
+                              "text/plain",
+                              "text/csv",
+                              "application/json",
+                              "text/markdown",
+                            ],
+                            "type": "string",
+                          },
+                          "size": {
+                            "description": "File size in bytes",
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "filename",
+                          "gcsKey",
+                          "mimeType",
+                          "size",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                    "instructions": {
+                      "description": "Full markdown instructions returned by load_skill",
+                      "type": "string",
+                    },
+                    "name": {
+                      "description": "Skill name: lowercase letters, digits and hyphens, at most 64 characters",
+                      "type": "string",
+                    },
+                    "ownerId": {
+                      "type": "any",
+                    },
+                    "scope": {
+                      "description": "user skills are visible to their owner; global skills to every user",
+                      "enum": [
+                        "user",
+                        "global",
+                      ],
+                      "type": "string",
+                    },
+                    "updated": {
+                      "description": "When this document was last updated",
+                      "format": "date-time",
+                      "type": "string",
+                    },
+                    "userId": {
+                      "description": "Owner of a user skill; unset for global skills",
+                      "format": "objectid",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "description",
+                    "instructions",
+                    "name",
+                    "_id",
+                    "created",
+                    "updated",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Successful update",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "tags": [
+          "gptskills",
         ],
       },
     },

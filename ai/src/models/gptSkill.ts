@@ -104,7 +104,9 @@ const gptSkillSchema = new mongoose.Schema<GptSkillDocument, GptSkillModel>(
     scope: {
       description: "user skills are visible to their owner; global skills to every user",
       enum: ["user", "global"],
-      required: true,
+      // Always required, but as a function so request validation lets clients omit it: the
+      // pre("validate") hook and the /gpt/skills preCreate fill it in.
+      required: (): boolean => true,
       type: String,
     },
     userId: {

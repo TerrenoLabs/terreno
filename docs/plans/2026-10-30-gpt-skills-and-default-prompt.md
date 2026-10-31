@@ -420,7 +420,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-backend-tests, building-admin-interfaces
   - Docs: T12
 
-- [ ] **T8** — Wire the default prompt, skills, and Nano Banana into example-backend
+- [x] **T8** — Wire the default prompt, skills, and Nano Banana into example-backend
   - Depends on: T7
   - Files: example-backend/src/models/appConfiguration.ts, example-backend/src/server.ts, example-backend/src/api/ai.ts, example-backend/src/api/ai.test.ts, example-frontend/store/openApiSdk.ts
   - Criteria:

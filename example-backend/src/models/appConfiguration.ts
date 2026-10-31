@@ -1,11 +1,16 @@
+import {aiConfigurationSchema} from "@terreno/ai";
 import {
   CachingSecretProvider,
   CompositeSecretProvider,
+  type ConfigurationAppOptions,
   type ConfigurationModel,
   configurationPlugin,
   createdUpdatedPlugin,
   EnvSecretProvider,
+  isAuditRecorderInstalled,
+  recordAuditEvent,
 } from "@terreno/api";
+import type express from "express";
 import mongoose, {Schema} from "mongoose";
 
 /**
@@ -105,6 +110,10 @@ const debugSchema = new Schema(
 );
 
 export interface AppConfigDocument {
+  ai: {
+    imageStylePrompt: string;
+    systemPrompt: string;
+  };
   general: {
     appName: string;
     maintenanceMode: boolean;
@@ -127,6 +136,10 @@ export interface AppConfigDocument {
 
 const appConfigSchema = new Schema<AppConfigDocument>(
   {
+    ai: {
+      description: "AI assistant defaults for every user's chat",
+      type: aiConfigurationSchema,
+    },
     debug: {
       description: "Debug and diagnostic settings",
       type: debugSchema,
@@ -154,3 +167,73 @@ export const AppConfiguration = mongoose.model<AppConfigDocument>(
   "AppConfiguration",
   appConfigSchema
 ) as ConfigurationModel<AppConfigDocument>;
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && Object.getPrototypeOf(value) === Object.prototype;
+
+/** Dot paths of every leaf whose value differs between two configuration snapshots. */
+const changedConfigPaths = ({
+  after,
+  before,
+  prefix = "",
+}: {
+  after: Record<string, unknown>;
+  before: Record<string, unknown>;
+  prefix?: string;
+}): string[] => {
+  const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+  return [...keys].flatMap((key) => {
+    if (["_id", "__v", "created", "updated"].includes(key)) {
+      return [];
+    }
+    const path = `${prefix}${key}`;
+    const previous = before[key];
+    const next = after[key];
+    if (isPlainObject(previous) || isPlainObject(next)) {
+      return changedConfigPaths({
+        after: isPlainObject(next) ? next : {},
+        before: isPlainObject(previous) ? previous : {},
+        prefix: `${path}.`,
+      });
+    }
+    return JSON.stringify(previous) === JSON.stringify(next) ? [] : [path];
+  });
+};
+
+/**
+ * Writes one `AuditEvent` per configuration edit (actor plus changed dot paths) when `AuditApp`
+ * is registered, so edits to the default AI prompt are audited like skill edits.
+ */
+const auditConfigurationUpdate = async (
+  config: Record<string, unknown>,
+  prevValue: Record<string, unknown>,
+  req: express.Request
+): Promise<void> => {
+  if (!isAuditRecorderInstalled()) {
+    return;
+  }
+  const changedPaths = changedConfigPaths({after: config, before: prevValue});
+  if (changedPaths.length === 0) {
+    return;
+  }
+  const user = req.user as {_id?: unknown; id?: unknown} | undefined;
+  const actorId = user?.id ?? user?._id;
+  await recordAuditEvent({
+    actorId: actorId ? String(actorId) : undefined,
+    after: {changedPaths},
+    modelName: "AppConfiguration",
+    operation: "update",
+    recordLabel: changedPaths.join(", "),
+    source: "admin",
+    verb: "updated",
+  });
+};
+
+/** Options for `TerrenoApp.configure(AppConfiguration, ...)`. */
+export const appConfigurationOptions: Omit<ConfigurationAppOptions, "model"> = {
+  fieldOverrides: {
+    "ai.imageStylePrompt": {widget: "markdown"},
+    "ai.systemPrompt": {widget: "markdown"},
+  },
+  postUpdate: auditConfigurationUpdate,
+};

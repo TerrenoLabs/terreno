@@ -5,6 +5,7 @@ export const addTagTypes = [
   "observability",
   "gpthistories",
   "gpt",
+  "gptskills",
   "settings",
   "notifications",
   "todos",
@@ -17,6 +18,7 @@ export const addTagTypes = [
   "comms",
   "admin",
   "featureflags",
+  "account-security",
   "jobs",
   "harnessconversations",
   "harnesstasks",
@@ -225,6 +227,13 @@ const injectedRtkApi = api
           }),
         }
       ),
+      deleteGptSkillsById: build.mutation<DeleteGptSkillsByIdRes, DeleteGptSkillsByIdArgs>({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/gpt/skills/${queryArg}`,
+        }),
+      }),
       deleteNotificationPreferencesById: build.mutation<
         DeleteNotificationPreferencesByIdRes,
         DeleteNotificationPreferencesByIdArgs
@@ -259,6 +268,26 @@ const injectedRtkApi = api
           url: `/orgs/${queryArg.id}/members/${queryArg.memberId}`,
         }),
       }),
+      deleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderId: build.mutation<
+        DeleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderIdRes,
+        DeleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderIdArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/accounts/${queryArg.providerId}`,
+        }),
+      }),
+      deleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyId: build.mutation<
+        DeleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyIdRes,
+        DeleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyIdArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/passkeys/${queryArg.passkeyId}`,
+        }),
+      }),
       deleteProjectsById: build.mutation<DeleteProjectsByIdRes, DeleteProjectsByIdArgs>({
         invalidatesTags: ["exampleprojects"],
         query: (queryArg) => ({
@@ -273,6 +302,26 @@ const injectedRtkApi = api
       deleteUsersById: build.mutation<DeleteUsersByIdRes, DeleteUsersByIdArgs>({
         invalidatesTags: ["users"],
         query: (queryArg) => ({method: "DELETE", url: `/users/${queryArg}`}),
+      }),
+      deleteUsersByUserIdSecurityAccountsAndProviderId: build.mutation<
+        DeleteUsersByUserIdSecurityAccountsAndProviderIdRes,
+        DeleteUsersByUserIdSecurityAccountsAndProviderIdArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/users/${queryArg.userId}/security/accounts/${queryArg.providerId}`,
+        }),
+      }),
+      deleteUsersByUserIdSecurityPasskeysAndPasskeyId: build.mutation<
+        DeleteUsersByUserIdSecurityPasskeysAndPasskeyIdRes,
+        DeleteUsersByUserIdSecurityPasskeysAndPasskeyIdArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/users/${queryArg.userId}/security/passkeys/${queryArg.passkeyId}`,
+        }),
       }),
       getAdminAnnouncementAcknowledgements: build.query<
         GetAdminAnnouncementAcknowledgementsRes,
@@ -895,6 +944,25 @@ const injectedRtkApi = api
           url: `/gpt/histories/${queryArg.id}/stream`,
         }),
       }),
+      getGptSkills: build.query<GetGptSkillsRes, GetGptSkillsArgs>({
+        providesTags: ["gptskills"],
+        query: (queryArg) => ({
+          params: {
+            _id: queryArg._id,
+            enabled: queryArg.enabled,
+            limit: queryArg.limit,
+            name: queryArg.name,
+            page: queryArg.page,
+            scope: queryArg.scope,
+            sort: queryArg.sort,
+          },
+          url: `/gpt/skills/`,
+        }),
+      }),
+      getGptSkillsById: build.query<GetGptSkillsByIdRes, GetGptSkillsByIdArgs>({
+        providesTags: ["gptskills"],
+        query: (queryArg) => ({url: `/gpt/skills/${queryArg}`}),
+      }),
       getGptTools: build.query<GetGptToolsRes, GetGptToolsArgs>({
         providesTags: ["gpt"],
         query: () => ({url: `/gpt/tools`}),
@@ -1027,6 +1095,15 @@ const injectedRtkApi = api
         providesTags: ["organizations"],
         query: (queryArg) => ({url: `/orgs/${queryArg}/members`}),
       }),
+      getOrgsByOrgIdMembersAndUserIdSecurity: build.query<
+        GetOrgsByOrgIdMembersAndUserIdSecurityRes,
+        GetOrgsByOrgIdMembersAndUserIdSecurityArgs
+      >({
+        providesTags: ["account-security"],
+        query: (queryArg) => ({
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security`,
+        }),
+      }),
       getOrgsMine: build.query<GetOrgsMineRes, GetOrgsMineArgs>({
         providesTags: ["organizations"],
         query: () => ({url: `/orgs/mine`}),
@@ -1103,6 +1180,13 @@ const injectedRtkApi = api
         providesTags: ["users"],
         query: (queryArg) => ({url: `/users/${queryArg}`}),
       }),
+      getUsersByUserIdSecurity: build.query<
+        GetUsersByUserIdSecurityRes,
+        GetUsersByUserIdSecurityArgs
+      >({
+        providesTags: ["account-security"],
+        query: (queryArg) => ({url: `/users/${queryArg}/security`}),
+      }),
       gpthistoriesPendingAsks: build.query<GpthistoriesPendingAsksRes, GpthistoriesPendingAsksArgs>(
         {
           providesTags: ["gpthistories"],
@@ -1116,6 +1200,10 @@ const injectedRtkApi = api
           method: "POST",
           url: `/gpt/histories/${queryArg.id}/turn`,
         }),
+      }),
+      gptskillsUpload: build.mutation<GptskillsUploadRes, GptskillsUploadArgs>({
+        invalidatesTags: ["gptskills"],
+        query: () => ({method: "POST", url: `/gpt/skills/upload`}),
       }),
       harnessapprovalsApprove: build.mutation<
         HarnessapprovalsApproveRes,
@@ -1320,6 +1408,14 @@ const injectedRtkApi = api
           url: `/gpt/histories/${queryArg.id}/rating`,
         }),
       }),
+      patchGptSkillsById: build.mutation<PatchGptSkillsByIdRes, PatchGptSkillsByIdArgs>({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "PATCH",
+          url: `/gpt/skills/${queryArg.id}`,
+        }),
+      }),
       patchNotificationPreferencesById: build.mutation<
         PatchNotificationPreferencesByIdRes,
         PatchNotificationPreferencesByIdArgs
@@ -1511,6 +1607,17 @@ const injectedRtkApi = api
           body: queryArg,
           method: "POST",
           url: `/admin/feature-flags/bulk-patch`,
+        }),
+      }),
+      postAdminGptSkillsBulkPatch: build.mutation<
+        PostAdminGptSkillsBulkPatchRes,
+        PostAdminGptSkillsBulkPatchArgs
+      >({
+        invalidatesTags: ["admin"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/admin/gpt/skills/bulk-patch`,
         }),
       }),
       postAdminMcpServiceTokensBulkPatch: build.mutation<
@@ -1824,6 +1931,14 @@ const injectedRtkApi = api
           url: `/gpt/remix`,
         }),
       }),
+      postGptSkills: build.mutation<PostGptSkillsRes, PostGptSkillsArgs>({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/gpt/skills/`,
+        }),
+      }),
       postJobsByIdCancel: build.mutation<PostJobsByIdCancelRes, PostJobsByIdCancelArgs>({
         invalidatesTags: ["admin", "jobs"],
         query: (queryArg) => ({
@@ -1910,6 +2025,46 @@ const injectedRtkApi = api
           url: `/orgs/${queryArg.id}/members`,
         }),
       }),
+      postOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactor: build.mutation<
+        PostOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactorRes,
+        PostOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactorArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/reset-two-factor`,
+        }),
+      }),
+      postOrgsByOrgIdMembersAndUserIdSecurityRevokeSessions: build.mutation<
+        PostOrgsByOrgIdMembersAndUserIdSecurityRevokeSessionsRes,
+        PostOrgsByOrgIdMembersAndUserIdSecurityRevokeSessionsArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/revoke-sessions`,
+        }),
+      }),
+      postOrgsByOrgIdMembersAndUserIdSecuritySendPasswordReset: build.mutation<
+        PostOrgsByOrgIdMembersAndUserIdSecuritySendPasswordResetRes,
+        PostOrgsByOrgIdMembersAndUserIdSecuritySendPasswordResetArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/send-password-reset`,
+        }),
+      }),
+      postOrgsByOrgIdMembersAndUserIdSecuritySuspendMembership: build.mutation<
+        PostOrgsByOrgIdMembersAndUserIdSecuritySuspendMembershipRes,
+        PostOrgsByOrgIdMembersAndUserIdSecuritySuspendMembershipArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/orgs/${queryArg.orgId}/members/${queryArg.userId}/security/suspend-membership`,
+        }),
+      }),
       postProjects: build.mutation<PostProjectsRes, PostProjectsArgs>({
         invalidatesTags: ["exampleprojects"],
         query: (queryArg) => ({
@@ -1940,6 +2095,66 @@ const injectedRtkApi = api
           body: queryArg.body,
           method: "POST",
           url: `/users/${queryArg.id}/password`,
+        }),
+      }),
+      postUsersByUserIdSecurityDisable: build.mutation<
+        PostUsersByUserIdSecurityDisableRes,
+        PostUsersByUserIdSecurityDisableArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/disable`,
+        }),
+      }),
+      postUsersByUserIdSecurityEnable: build.mutation<
+        PostUsersByUserIdSecurityEnableRes,
+        PostUsersByUserIdSecurityEnableArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/enable`,
+        }),
+      }),
+      postUsersByUserIdSecurityIssueSignInLink: build.mutation<
+        PostUsersByUserIdSecurityIssueSignInLinkRes,
+        PostUsersByUserIdSecurityIssueSignInLinkArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/issue-sign-in-link`,
+        }),
+      }),
+      postUsersByUserIdSecurityResetTwoFactor: build.mutation<
+        PostUsersByUserIdSecurityResetTwoFactorRes,
+        PostUsersByUserIdSecurityResetTwoFactorArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/reset-two-factor`,
+        }),
+      }),
+      postUsersByUserIdSecurityRevokeSessions: build.mutation<
+        PostUsersByUserIdSecurityRevokeSessionsRes,
+        PostUsersByUserIdSecurityRevokeSessionsArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/revoke-sessions`,
+        }),
+      }),
+      postUsersByUserIdSecuritySendPasswordReset: build.mutation<
+        PostUsersByUserIdSecuritySendPasswordResetRes,
+        PostUsersByUserIdSecuritySendPasswordResetArgs
+      >({
+        invalidatesTags: ["account-security"],
+        query: (queryArg) => ({
+          method: "POST",
+          url: `/users/${queryArg}/security/send-password-reset`,
         }),
       }),
       revokeMcpServiceToken: build.mutation<RevokeMcpServiceTokenRes, RevokeMcpServiceTokenArgs>({
@@ -2681,6 +2896,297 @@ export type GetGptToolsRes = /** status 200 Success */ {
   }[];
 };
 export type GetGptToolsArgs = undefined;
+export type GptskillsUploadRes = /** status 201 Successful response */ {
+  data?: object;
+};
+export type GptskillsUploadArgs = undefined;
+export type PostGptSkillsRes = /** status 201 Successful create */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type PostGptSkillsArgs = {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description?: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions?: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name?: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id?: string;
+  /** When this document was last updated */
+  updated?: string;
+  /** When this document was created */
+  created?: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type GetGptSkillsRes = /** status 200 Successful list */ {
+  data?: {
+    /** When to use the skill; listed in the chat's skill catalog */
+    description: string;
+    /** Disabled skills are left out of the catalog and load_skill */
+    enabled?: boolean;
+    /** Reference files stored with the skill */
+    files?: {
+      /** Original file name */
+      filename: string;
+      /** Storage key of the file; never sent to clients */
+      gcsKey: string;
+      /** MIME type of the file */
+      mimeType:
+        | "image/jpeg"
+        | "image/png"
+        | "image/gif"
+        | "image/webp"
+        | "application/pdf"
+        | "text/plain"
+        | "text/csv"
+        | "application/json"
+        | "text/markdown";
+      /** File size in bytes */
+      size: number;
+    }[];
+    /** Full markdown instructions returned by load_skill */
+    instructions: string;
+    /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+    name: string;
+    /** user skills are visible to their owner; global skills to every user */
+    scope?: "user" | "global";
+    /** Owner of a user skill; unset for global skills */
+    userId?: string;
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+    ownerId?: any;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetGptSkillsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  name?:
+    | string
+    | {
+        $in?: string[];
+      };
+  scope?:
+    | ("user" | "global")
+    | {
+        $in?: string[];
+      };
+  enabled?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetGptSkillsByIdRes = /** status 200 Successful read */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type GetGptSkillsByIdArgs = string;
+export type PatchGptSkillsByIdRes = /** status 200 Successful update */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type PatchGptSkillsByIdArgs = {
+  id: string;
+  body: {
+    /** When to use the skill; listed in the chat's skill catalog */
+    description?: string;
+    /** Disabled skills are left out of the catalog and load_skill */
+    enabled?: boolean;
+    /** Reference files stored with the skill */
+    files?: {
+      /** Original file name */
+      filename: string;
+      /** Storage key of the file; never sent to clients */
+      gcsKey: string;
+      /** MIME type of the file */
+      mimeType:
+        | "image/jpeg"
+        | "image/png"
+        | "image/gif"
+        | "image/webp"
+        | "application/pdf"
+        | "text/plain"
+        | "text/csv"
+        | "application/json"
+        | "text/markdown";
+      /** File size in bytes */
+      size: number;
+    }[];
+    /** Full markdown instructions returned by load_skill */
+    instructions?: string;
+    /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+    name?: string;
+    /** user skills are visible to their owner; global skills to every user */
+    scope?: "user" | "global";
+    /** Owner of a user skill; unset for global skills */
+    userId?: string;
+    _id?: string;
+    /** When this document was last updated */
+    updated?: string;
+    /** When this document was created */
+    created?: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+    ownerId?: any;
+  };
+};
+export type DeleteGptSkillsByIdRes = unknown;
+export type DeleteGptSkillsByIdArgs = string;
 export type AiModelsRes = /** status 200 Successful response */ {
   data?: object;
 };
@@ -3182,6 +3688,8 @@ export type PostUsersRes = /** status 201 Successful create */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -3209,6 +3717,8 @@ export type PostUsersArgs = {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated?: string;
   /** When this document was created */
@@ -3237,6 +3747,8 @@ export type GetUsersRes = /** status 200 Successful list */ {
     roles?: string[];
     /** Whether the user has verified their email address */
     emailVerified?: boolean;
+    /** When a user is set to disable, all requests will return a 401 */
+    disabled?: boolean;
     /** When this document was last updated */
     updated: string;
     /** When this document was created */
@@ -3287,6 +3799,8 @@ export type GetUsersByIdRes = /** status 200 Successful read */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -3315,6 +3829,8 @@ export type PatchUsersByIdRes = /** status 200 Successful update */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -3344,6 +3860,8 @@ export type PatchUsersByIdArgs = {
     roles?: string[];
     /** Whether the user has verified their email address */
     emailVerified?: boolean;
+    /** When a user is set to disable, all requests will return a 401 */
+    disabled?: boolean;
     /** When this document was last updated */
     updated?: string;
     /** When this document was created */
@@ -3787,6 +4305,30 @@ export type PatchFeatureFlagsFlagsByIdArgs = {
 };
 export type DeleteFeatureFlagsFlagsByIdRes = unknown;
 export type DeleteFeatureFlagsFlagsByIdArgs = string;
+export type GetUsersByUserIdSecurityRes = unknown;
+export type GetUsersByUserIdSecurityArgs = string;
+export type PostUsersByUserIdSecurityResetTwoFactorRes = unknown;
+export type PostUsersByUserIdSecurityResetTwoFactorArgs = string;
+export type DeleteUsersByUserIdSecurityPasskeysAndPasskeyIdRes = unknown;
+export type DeleteUsersByUserIdSecurityPasskeysAndPasskeyIdArgs = {
+  userId: string;
+  passkeyId: string;
+};
+export type DeleteUsersByUserIdSecurityAccountsAndProviderIdRes = unknown;
+export type DeleteUsersByUserIdSecurityAccountsAndProviderIdArgs = {
+  userId: string;
+  providerId: string;
+};
+export type PostUsersByUserIdSecurityRevokeSessionsRes = unknown;
+export type PostUsersByUserIdSecurityRevokeSessionsArgs = string;
+export type PostUsersByUserIdSecuritySendPasswordResetRes = unknown;
+export type PostUsersByUserIdSecuritySendPasswordResetArgs = string;
+export type PostUsersByUserIdSecurityDisableRes = unknown;
+export type PostUsersByUserIdSecurityDisableArgs = string;
+export type PostUsersByUserIdSecurityEnableRes = unknown;
+export type PostUsersByUserIdSecurityEnableArgs = string;
+export type PostUsersByUserIdSecurityIssueSignInLinkRes = unknown;
+export type PostUsersByUserIdSecurityIssueSignInLinkArgs = string;
 export type GetJobsSchedulesRes = /** status 200 Success */ {
   data?: {
     cron?: string;
@@ -4983,7 +5525,7 @@ export type GetAdminAuditEventsRes = /** status 200 Successful list */ {
     /** Short human-readable label for the affected record */
     recordLabel?: string;
     /** Which framework surface wrote this event */
-    source: "admin" | "modelRouter" | "rbac";
+    source: "admin" | "modelRouter" | "rbac" | "security";
     /** Widget-compatible mutation verb, or viewed for an audited read */
     verb: "created" | "deleted" | "updated" | "viewed";
     _id: string;
@@ -5060,7 +5602,7 @@ export type GetAdminAuditEventsByIdRes = /** status 200 Successful read */ {
   /** Short human-readable label for the affected record */
   recordLabel?: string;
   /** Which framework surface wrote this event */
-  source: "admin" | "modelRouter" | "rbac";
+  source: "admin" | "modelRouter" | "rbac" | "security";
   /** Widget-compatible mutation verb, or viewed for an audited read */
   verb: "created" | "deleted" | "updated" | "viewed";
   _id: string;
@@ -5070,6 +5612,16 @@ export type GetAdminAuditEventsByIdRes = /** status 200 Successful read */ {
   created: string;
 };
 export type GetAdminAuditEventsByIdArgs = string;
+export type PostAdminGptSkillsBulkPatchRes = /** status 200 Success */ {
+  failures?: any;
+  updated?: number;
+};
+export type PostAdminGptSkillsBulkPatchArgs = {
+  /** Document ids to update */
+  ids: string[];
+  /** Partial document; keys must be allowlisted for this model */
+  patch: object;
+};
 export type PostAdminConsentFormsBulkPatchRes = /** status 200 Success */ {
   failures?: any;
   updated?: number;
@@ -6656,6 +7208,8 @@ export type PostAdminUsersRes = /** status 201 Successful create */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -6683,6 +7237,8 @@ export type PostAdminUsersArgs = {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated?: string;
   /** When this document was created */
@@ -6711,6 +7267,8 @@ export type GetAdminUsersRes = /** status 200 Successful list */ {
     roles?: string[];
     /** Whether the user has verified their email address */
     emailVerified?: boolean;
+    /** When a user is set to disable, all requests will return a 401 */
+    disabled?: boolean;
     /** When this document was last updated */
     updated: string;
     /** When this document was created */
@@ -6788,6 +7346,8 @@ export type GetAdminUsersByIdRes = /** status 200 Successful read */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -6816,6 +7376,8 @@ export type PatchAdminUsersByIdRes = /** status 200 Successful update */ {
   roles?: string[];
   /** Whether the user has verified their email address */
   emailVerified?: boolean;
+  /** When a user is set to disable, all requests will return a 401 */
+  disabled?: boolean;
   /** When this document was last updated */
   updated: string;
   /** When this document was created */
@@ -6845,6 +7407,8 @@ export type PatchAdminUsersByIdArgs = {
     roles?: string[];
     /** Whether the user has verified their email address */
     emailVerified?: boolean;
+    /** When a user is set to disable, all requests will return a 401 */
+    disabled?: boolean;
     /** When this document was last updated */
     updated?: string;
     /** When this document was created */
@@ -7984,6 +8548,43 @@ export type DeleteOrgsByIdMembersAndMemberIdArgs = {
   id: string;
   memberId: string;
 };
+export type GetOrgsByOrgIdMembersAndUserIdSecurityRes = unknown;
+export type GetOrgsByOrgIdMembersAndUserIdSecurityArgs = {
+  orgId: string;
+  userId: string;
+};
+export type PostOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactorRes = unknown;
+export type PostOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactorArgs = {
+  orgId: string;
+  userId: string;
+};
+export type DeleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyIdRes = unknown;
+export type DeleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyIdArgs = {
+  orgId: string;
+  userId: string;
+  passkeyId: string;
+};
+export type DeleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderIdRes = unknown;
+export type DeleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderIdArgs = {
+  orgId: string;
+  userId: string;
+  providerId: string;
+};
+export type PostOrgsByOrgIdMembersAndUserIdSecurityRevokeSessionsRes = unknown;
+export type PostOrgsByOrgIdMembersAndUserIdSecurityRevokeSessionsArgs = {
+  orgId: string;
+  userId: string;
+};
+export type PostOrgsByOrgIdMembersAndUserIdSecuritySendPasswordResetRes = unknown;
+export type PostOrgsByOrgIdMembersAndUserIdSecuritySendPasswordResetArgs = {
+  orgId: string;
+  userId: string;
+};
+export type PostOrgsByOrgIdMembersAndUserIdSecuritySuspendMembershipRes = unknown;
+export type PostOrgsByOrgIdMembersAndUserIdSecuritySuspendMembershipArgs = {
+  orgId: string;
+  userId: string;
+};
 export type CreateMcpServiceTokenRes = /** status 200 Success */ {
   data?: {
     created?: string;
@@ -8063,6 +8664,12 @@ export const {
   usePatchGptHistoriesByIdRatingMutation,
   usePostGptRemixMutation,
   useGetGptToolsQuery,
+  useGptskillsUploadMutation,
+  usePostGptSkillsMutation,
+  useGetGptSkillsQuery,
+  useGetGptSkillsByIdQuery,
+  usePatchGptSkillsByIdMutation,
+  useDeleteGptSkillsByIdMutation,
   useAiModelsQuery,
   useSettingsClearGcsMutation,
   useSettingsConfigureGcsMutation,
@@ -8107,6 +8714,15 @@ export const {
   useGetFeatureFlagsFlagsByIdQuery,
   usePatchFeatureFlagsFlagsByIdMutation,
   useDeleteFeatureFlagsFlagsByIdMutation,
+  useGetUsersByUserIdSecurityQuery,
+  usePostUsersByUserIdSecurityResetTwoFactorMutation,
+  useDeleteUsersByUserIdSecurityPasskeysAndPasskeyIdMutation,
+  useDeleteUsersByUserIdSecurityAccountsAndProviderIdMutation,
+  usePostUsersByUserIdSecurityRevokeSessionsMutation,
+  usePostUsersByUserIdSecuritySendPasswordResetMutation,
+  usePostUsersByUserIdSecurityDisableMutation,
+  usePostUsersByUserIdSecurityEnableMutation,
+  usePostUsersByUserIdSecurityIssueSignInLinkMutation,
   useGetJobsSchedulesQuery,
   usePostJobsSchedulesByNamePauseMutation,
   usePostJobsSchedulesByNameResumeMutation,
@@ -8179,6 +8795,7 @@ export const {
   usePostAdminAuditEventsBulkPatchMutation,
   useGetAdminAuditEventsQuery,
   useGetAdminAuditEventsByIdQuery,
+  usePostAdminGptSkillsBulkPatchMutation,
   usePostAdminConsentFormsBulkPatchMutation,
   usePostAdminConsentFormsMutation,
   useGetAdminConsentFormsQuery,
@@ -8250,6 +8867,13 @@ export const {
   usePostOrgsByIdMembersMutation,
   usePatchOrgsByIdMembersAndMemberIdMutation,
   useDeleteOrgsByIdMembersAndMemberIdMutation,
+  useGetOrgsByOrgIdMembersAndUserIdSecurityQuery,
+  usePostOrgsByOrgIdMembersAndUserIdSecurityResetTwoFactorMutation,
+  useDeleteOrgsByOrgIdMembersAndUserIdSecurityPasskeysPasskeyIdMutation,
+  useDeleteOrgsByOrgIdMembersAndUserIdSecurityAccountsProviderIdMutation,
+  usePostOrgsByOrgIdMembersAndUserIdSecurityRevokeSessionsMutation,
+  usePostOrgsByOrgIdMembersAndUserIdSecuritySendPasswordResetMutation,
+  usePostOrgsByOrgIdMembersAndUserIdSecuritySuspendMembershipMutation,
   useCreateMcpServiceTokenMutation,
   useListMcpServiceTokensQuery,
   useRevokeMcpServiceTokenMutation,

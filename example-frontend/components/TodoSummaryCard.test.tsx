@@ -2,9 +2,18 @@ import {describe, it, mock} from "bun:test";
 import {assert} from "chai";
 import React from "react";
 import TestRenderer, {act, type ReactTestInstance} from "react-test-renderer";
+import type {Todo} from "@/store/syncDbSdk";
 import {TodoSummaryCard} from "./TodoSummaryCard";
 
-let todos: Array<{completed: boolean; id: string; text: string}> = [];
+let todos: Todo[] = [];
+
+const makeTodo = (overrides: Partial<Todo> & Pick<Todo, "_id" | "title">): Todo => ({
+  completed: false,
+  created: "2026-01-01T00:00:00.000Z",
+  ownerId: "user-1",
+  updated: "2026-01-01T00:00:00.000Z",
+  ...overrides,
+});
 let summarizeError: unknown;
 
 const summarizeExampleTextMock = mock((_body: {apiKey?: string; text: string}) => ({
@@ -32,7 +41,7 @@ const hasText = (root: ReactTestInstance, text: string): boolean => {
 
 describe("TodoSummaryCard", () => {
   it("uses the app hooks by default", async () => {
-    let renderer: TestRenderer.ReactTestRenderer;
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(<TodoSummaryCard />);
     });
@@ -44,7 +53,7 @@ describe("TodoSummaryCard", () => {
   it("disables summarize when there are no todos", async () => {
     todos = [];
     summarizeError = undefined;
-    let renderer: TestRenderer.ReactTestRenderer;
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(<TodoSummaryCard dependencies={dependencies} />);
     });
@@ -57,10 +66,10 @@ describe("TodoSummaryCard", () => {
   });
 
   it("renders the unwrapped summary response", async () => {
-    todos = [{completed: false, id: "todo-1", text: "Ship observability"}];
+    todos = [makeTodo({_id: "todo-1", title: "Ship observability"})];
     summarizeError = undefined;
     summarizeExampleTextMock.mockClear();
-    let renderer: TestRenderer.ReactTestRenderer;
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(<TodoSummaryCard dependencies={dependencies} />);
     });
@@ -77,9 +86,9 @@ describe("TodoSummaryCard", () => {
   });
 
   it("shows the API error title", async () => {
-    todos = [{completed: false, id: "todo-1", text: "Ship observability"}];
+    todos = [makeTodo({_id: "todo-1", title: "Ship observability"})];
     summarizeError = {data: {title: "Provide an AI API key."}};
-    let renderer: TestRenderer.ReactTestRenderer;
+    let renderer: TestRenderer.ReactTestRenderer | undefined;
     await act(async () => {
       renderer = TestRenderer.create(<TodoSummaryCard dependencies={dependencies} />);
     });

@@ -6,6 +6,7 @@
     "incremental": false,
     "declaration": false,
     "declarationMap": false,
+    "rootDir": "..",
     "types": [
       "bun"
     ]

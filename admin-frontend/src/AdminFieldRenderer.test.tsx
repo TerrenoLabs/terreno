@@ -210,7 +210,8 @@ describe("AdminFieldRenderer (main)", () => {
     const {toJSON} = renderWithTheme(
       <AdminFieldRenderer
         {...base}
-        fieldConfig={{enum: [null, "a"], required: false, type: "string"}}
+        // Nullable Mongoose enums arrive with a null entry, which `AdminFieldConfig.enum` does not model.
+        fieldConfig={{enum: [null, "a"] as unknown as string[], required: false, type: "string"}}
         fieldKey="status"
         value={undefined}
       />

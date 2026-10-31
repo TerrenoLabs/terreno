@@ -20,8 +20,10 @@ import {ModelsGridWidget} from "../widgets/ModelsGridWidget";
 import {ScriptRunnerWidget} from "../widgets/ScriptRunnerWidget";
 
 const model: AdminModelConfig = {
+  defaultSort: "-created",
   displayName: "Todos",
   fields: {title: {required: true, type: "string"}},
+  listFields: ["title"],
   name: "Todo",
   routePath: "/admin/todos",
 };

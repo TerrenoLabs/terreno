@@ -125,6 +125,8 @@ export interface AdminModelConfig {
     field: string;
     kind: string;
     label?: string;
+    /** Referenced model for `kind: "ref"` filters; defaults to the field's own `ref`. */
+    refModel?: string;
   }[];
   group?: string;
   hiddenFields?: string[];

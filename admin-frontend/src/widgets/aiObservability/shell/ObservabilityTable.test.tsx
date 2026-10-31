@@ -27,7 +27,13 @@ describe("ObservabilityTable", () => {
           {minWidth: 110, title: "Trace"},
         ]}
         rows={[
-          {cells: [longInput, <Button key="open" size="sm" text="Open trace" />], key: "item-1"},
+          {
+            cells: [
+              longInput,
+              <Button key="open" onClick={() => undefined} size="sm" text="Open trace" />,
+            ],
+            key: "item-1",
+          },
           {cells: ["short", "—"], key: "item-2"},
         ]}
         testID="observability-table"

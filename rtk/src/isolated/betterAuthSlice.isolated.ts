@@ -7,7 +7,12 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {configureStore} from "@reduxjs/toolkit";
 
-import type {BetterAuthBearerStorage, BetterAuthUser} from "../betterAuthTypes";
+import type {BetterAuthClient} from "../betterAuthClient";
+import type {
+  BetterAuthBearerStorage,
+  BetterAuthClientInterface,
+  BetterAuthUser,
+} from "../betterAuthTypes";
 
 mock.module("../platform", () => ({IsWeb: true}));
 mock.module("@better-auth/expo/client", () => ({
@@ -56,8 +61,12 @@ const fakeNetwork = (respond: (path: string) => Promise<Response>): string[] => 
 const offline = (): Promise<Response> => Promise.reject(new TypeError("Failed to fetch"));
 
 /** A signed-in store for `client`, and a wait for its logout to settle. */
-const signedInStore = (client: Parameters<typeof generateBetterAuthSlice>[0]["authClient"]) => {
-  const slice = generateBetterAuthSlice({authClient: client});
+const signedInStore = (client: BetterAuthClient) => {
+  // A client without `features` types its namespaces loosely, so it is narrowed to the slice's
+  // interface the same way apps do (see create-terreno-app's generated store).
+  const slice = generateBetterAuthSlice({
+    authClient: client as unknown as BetterAuthClientInterface,
+  });
   const store = configureStore({
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({serializableCheck: false}).concat(...slice.middleware),

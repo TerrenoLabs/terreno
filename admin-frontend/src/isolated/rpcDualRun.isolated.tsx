@@ -7,7 +7,7 @@ import {AdminObjectPicker} from "../AdminObjectPicker";
 import {AdminProvider} from "../AdminProvider";
 import {AdminVersionConfig} from "../AdminVersionConfig";
 import {useCommsDashboardApi} from "../comms/useCommsDashboardApi";
-import type {AdminApi} from "../types";
+import type {AdminApi, AdminConfigResponse} from "../types";
 import {useAdminBackgroundTaskMutation} from "../useAdminBackgroundTask";
 import {useAdminConfig} from "../useAdminConfig";
 import {useAdminRoles} from "../useAdminRoles";
@@ -17,6 +17,8 @@ import {useConfigurationApi} from "../useConfigurationApi";
 import {useConsentHistory} from "../useConsentHistory";
 import {useDocumentStorageApi} from "../useDocumentStorageApi";
 import {AIRequestsScreenWidget} from "../widgets/AIRequestsScreenWidget";
+
+const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
 const makeApi = (): AdminApi => {
   const api: Record<string, unknown> = {};
@@ -332,7 +334,12 @@ describe("admin RPC dual-run", () => {
         credentials="same-origin"
         getAuthHeaders={() => ({})}
       >
-        <AIRequestsScreenWidget api={makeApi()} routeBase="/admin" />
+        <AIRequestsScreenWidget
+          api={makeApi()}
+          config={emptyConfig}
+          routeBase="/admin"
+          screenName="aiRequests"
+        />
       </AdminProvider>
     );
     await flushEffects();

@@ -4,7 +4,7 @@ import {type Href, useLocalSearchParams, useRouter} from "expo-router";
 import type React from "react";
 import {useCallback} from "react";
 import {useGetAdminConsentResponsesByIdQuery} from "@/store/openApiSdk";
-import {terrenoApi} from "@/store/sdk";
+import {adminApi} from "@/store/sdk";
 
 const ADMIN_BASE_URL = "/admin";
 
@@ -35,7 +35,7 @@ const ConsentResponseScreen: React.FC = () => {
           />
         </Box>
       )}
-      <ConsentResponseViewer api={terrenoApi} baseUrl={ADMIN_BASE_URL} id={id} />
+      <ConsentResponseViewer api={adminApi} baseUrl={ADMIN_BASE_URL} id={id} />
     </Box>
   );
 };

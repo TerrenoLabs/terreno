@@ -42,6 +42,7 @@ import {selectGptMascotIndex} from "@/lib/gptMascot";
 import {createPhotoImageResolver} from "@/lib/photoLibraryImages";
 import {useAppDispatch} from "@/store/index";
 import {
+  flagsApi,
   type GptHistory,
   openapi,
   terrenoApi,
@@ -93,11 +94,12 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   id: history.id,
   prompts: history.prompts.map((p) => {
     const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
-    const blockNote = p.type === "assistant" ? componentCaption(p.text) : undefined;
+    const blockNote = p.type === "assistant" ? componentCaption(p.text ?? "") : undefined;
     return {
       ...(ask ? {ask} : {}),
       ...(blockNote ? {blockNote} : {}),
-      content: p.text,
+      // The server defaults `text` to "", so a missing value is only a type-level gap.
+      content: p.text ?? "",
       contentParts: p.content?.map((c): MessageContentPart => {
         if (c.type === "text") {
           return {text: c.text ?? "", type: "text"};
@@ -210,7 +212,9 @@ const readSseEvents = async (
 /** The in-flight reply of a stored history, if /gpt/prompt is still streaming it. */
 const findStreamingReply = (history?: GptHistory): {text: string} | undefined => {
   const last = history?.prompts[history.prompts.length - 1];
-  return last?.type === "assistant" && last.status === "streaming" ? {text: last.text} : undefined;
+  return last?.type === "assistant" && last.status === "streaming"
+    ? {text: last.text ?? ""}
+    : undefined;
 };
 
 /**
@@ -300,7 +304,7 @@ const AiScreen: React.FC = () => {
 
   const dispatch = useAppDispatch();
   const userId = useSelector(selectBetterAuthUserId);
-  const {flags, isLoading: isFlagsLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const {flags, isLoading: isFlagsLoading} = useFeatureFlags(flagsApi, {skip: !userId, userId});
   const fileUploadsEnabled = fileUploadsEnabledFromFlags({flags, isLoading: isFlagsLoading});
 
   // Drop staged files when an admin turns the file-uploads flag off.
@@ -334,8 +338,8 @@ const AiScreen: React.FC = () => {
     (historyId: string, title?: string) => {
       dispatch(
         terrenoApi.util.updateQueryData(
-          "getGptHistories" as never,
-          gptHistoriesListQueryArgs as never,
+          "getGptHistories",
+          gptHistoriesListQueryArgs,
           (draft: {data?: GptHistory[]}) => {
             const entry = draft.data?.find((h: GptHistory) => h.id === historyId);
             if (entry) {
@@ -488,7 +492,8 @@ const AiScreen: React.FC = () => {
         }
         await readSseEvents(response, createStreamEventHandler(partialText));
         // Pick up the final stored reply for later visits to this chat
-        dispatch(terrenoApi.util.invalidateTags([{id: "LIST", type: "gptHistories"}]));
+        // generateTags provides the bare "gpthistories" tag (no "LIST" id), so invalidate by type.
+        dispatch(terrenoApi.util.invalidateTags(["gpthistories"]));
       } catch (err) {
         if (!controller.signal.aborted) {
           console.error("Error resuming reply:", err);
@@ -841,8 +846,8 @@ const AiScreen: React.FC = () => {
               if (data.historyId) {
                 dispatch(
                   terrenoApi.util.updateQueryData(
-                    "getGptHistories" as never,
-                    gptHistoriesListQueryArgs as never,
+                    "getGptHistories",
+                    gptHistoriesListQueryArgs,
                     (draft: {data?: GptHistory[]}) => {
                       const entry = draft.data?.find((h: GptHistory) => h.id === data.historyId);
                       if (entry) {

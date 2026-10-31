@@ -55,7 +55,7 @@ describe("adminRequest", () => {
   });
 
   it("maps 4xx JSON failures to AdminAPIError", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       return new Response(JSON.stringify({detail: "q", title: "Invalid filter"}), {
         headers: {"Content-Type": "application/json"},
         status: 400,
@@ -75,7 +75,7 @@ describe("adminRequest", () => {
   });
 
   it("maps 5xx failures without JSON to AdminAPIError", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       return new Response("nope", {status: 503, statusText: "Service Unavailable"});
     }) as typeof fetch;
 
@@ -115,7 +115,7 @@ describe("adminRequest", () => {
   });
 
   it("returns a Blob when parseAs is blob", async () => {
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       return new Response(new Uint8Array([1, 2, 3]), {
         headers: {"Content-Type": "application/pdf"},
         status: 200,

@@ -5,10 +5,12 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminModelConfig} from "../types";
+import type {AdminApi, AdminConfigResponse, AdminModelConfig} from "../types";
 import {ModelsGridWidget} from "./ModelsGridWidget";
 
-const routerPush = mock(() => {});
+const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+
+const routerPush = mock((_href: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: routerPush},
 }));
@@ -49,7 +51,13 @@ describe("ModelsGridWidget", () => {
 
   it("renders model cards with field and row counts", () => {
     const {getByTestId, getByText} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget
+        api={mockApi}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[model]}
+        routeBase="/admin/"
+      />
     );
 
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeTruthy();
@@ -59,7 +67,13 @@ describe("ModelsGridWidget", () => {
 
   it("navigates to list and create routes from model actions", async () => {
     const {getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget
+        api={mockApi}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[model]}
+        routeBase="/admin/"
+      />
     );
 
     await act(async () => {
@@ -82,7 +96,13 @@ describe("ModelsGridWidget", () => {
       permissions: {create: false},
     };
     const {queryByTestId, getByTestId} = renderWithTheme(
-      <ModelsGridWidget api={mockApi} models={[readOnlyModel]} routeBase="/admin" />
+      <ModelsGridWidget
+        api={mockApi}
+        apiBase="/admin"
+        config={emptyConfig}
+        models={[readOnlyModel]}
+        routeBase="/admin"
+      />
     );
 
     expect(queryByTestId("admin-home-model-add-AuditLog")).toBeNull();

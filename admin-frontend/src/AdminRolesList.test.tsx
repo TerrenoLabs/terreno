@@ -9,7 +9,14 @@ import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminRolesField} from "./AdminRolesField";
 import {AdminRolesList} from "./AdminRolesList";
 import type {AdminApi} from "./types";
-import {normalizeRoles, normalizeStatements, type RolesQueryResult} from "./useAdminRoles";
+import {
+  normalizeRoles,
+  normalizeStatements,
+  type RolesQueryResult,
+  type useAdminRoles,
+} from "./useAdminRoles";
+
+type StatementsQueryResult = ReturnType<ReturnType<typeof useAdminRoles>["useListStatementsQuery"]>;
 
 const mockUseListRolesQuery = mock(
   (_arg?: undefined, _options?: {skip?: boolean}): RolesQueryResult => ({
@@ -19,19 +26,21 @@ const mockUseListRolesQuery = mock(
   })
 );
 const mockRefetch = mock(() => {});
-const mockCreateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUpdateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUseListStatementsQuery = mock(() => ({
-  data: {
-    statements: {
-      admin: ["access", "runScripts"],
-      adminTodo: ["read", "write", "writeOwned"],
-      todo: ["read", "update"],
+const mockCreateRole = mock((_arg: unknown) => ({unwrap: async () => ({})}));
+const mockUpdateRole = mock((_arg: unknown) => ({unwrap: async () => ({})}));
+const mockUseListStatementsQuery = mock(
+  (): StatementsQueryResult => ({
+    data: {
+      statements: {
+        admin: ["access", "runScripts"],
+        adminTodo: ["read", "write", "writeOwned"],
+        todo: ["read", "update"],
+      },
     },
-  },
-  error: null,
-  isLoading: false,
-}));
+    error: null,
+    isLoading: false,
+  })
+);
 
 mock.module("./useAdminRoles", () => ({
   normalizeRoles,

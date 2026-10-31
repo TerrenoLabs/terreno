@@ -8,6 +8,7 @@ import type React from "react";
 import type {ReactNode} from "react";
 import {SafeAreaProvider} from "react-native-safe-area-context";
 import {Provider} from "react-redux";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {terrenoApi} from "@/store/sdk";
 
@@ -53,7 +54,7 @@ const pressSegment = (view: RenderResult, label: string): void => {
     (node) => Array.isArray(node.children) && node.children.some((child) => child === label)
   )[0];
   assert.exists(labelNode);
-  let current = labelNode;
+  let current: ReactTestInstance | null = labelNode;
   while (current && typeof current.props.onPress !== "function") {
     current = current.parent;
   }

@@ -138,10 +138,12 @@ export {
   useOrgContext,
 } from "./orgs/useOrgContext";
 export type {
+  AdminApi,
   AdminCapabilities,
   AdminConfigResponse,
   AdminCustomScreen,
   AdminFieldConfig,
+  AdminFieldValue,
   AdminFieldWidgetProps,
   AdminGetAuthHeaders,
   AdminHomeWidgetProps,

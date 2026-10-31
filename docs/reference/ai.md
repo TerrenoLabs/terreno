@@ -567,7 +567,7 @@ Upload rules (`parseSkillPackage({buffer, filename})`, exported):
 - Files are stored with `keyPrefix: "skills/<skillId>"` under the uploader's id. The create is atomic: if any upload or the save fails, uploaded keys are deleted and nothing is saved (500 `Could not store the skill's files` for a storage failure).
 - Any other file type, scripts included, is rejected with 400 `Unsupported file type: <name>`. Nothing in a package is ever run.
 
-`AIAdminApp` (from `@terreno/ai/admin`) contributes `GptSkill` to the admin panel as **AI → Skills** at `/gpt/skills`: `adminFilter` limits it to `scope: "global"`, and `scope`, `userId`, and `files` are hidden, so an admin create saves a global skill and admins never see users' personal skills.
+`AIAdminApp` (from `@terreno/ai/admin`) contributes `GptSkill` to the admin panel as **AI → Skills** at `/gpt/skills`: `adminFilter` limits it to `scope: "global"`, and `scope`, `userId`, and `files` are hidden, so an admin create saves a global skill and admins never see users' personal skills. With RBAC `accessControl` on `AdminApp`, the model's resource is `adminGptSkill`; declare it (`adminGptSkill: ADMIN_MODEL_ACCESS`) or the model is hidden.
 
 ### addMcpRoutes(router, options)
 

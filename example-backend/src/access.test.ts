@@ -24,6 +24,7 @@ describe("example-backend access statements", () => {
     );
     assert.deepEqual([...appStatements.adminAuditEvent], ["list", "read"]);
     assert.deepEqual([...appStatements.adminAuditLog], ["list", "read"]);
+    assert.deepEqual([...appStatements.adminGptSkill], ["read", "write", "writeOwned"]);
     assert.deepEqual([...appStatements.adminMcpServiceToken], ["read", "write", "writeOwned"]);
     assert.includeMembers([...appStatements.todo], ["list", "read"]);
     assert.deepEqual([...appStatements.adminTodo], ["read", "write", "writeOwned"]);

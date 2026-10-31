@@ -15,6 +15,13 @@ const openConfiguration = async (page: Page): Promise<void> => {
   await page.getByTestId(SYSTEM_PROMPT_INPUT).waitFor({state: "visible"});
 };
 
+/** Replaces a field's text so it reads as an edit even when the stored value already matches. */
+const replaceText = async (page: Page, testId: string, text: string): Promise<void> => {
+  const input = page.getByTestId(testId);
+  await input.fill(`${text} (edit)`);
+  await input.fill(text);
+};
+
 const saveConfiguration = async (page: Page): Promise<void> => {
   const saved = page.waitForResponse(
     (response) =>
@@ -39,8 +46,8 @@ test.describe("Admin AI configuration", () => {
   test("admin saves the system and image style prompts and sees them after reload", async ({
     page,
   }) => {
-    await page.getByTestId(SYSTEM_PROMPT_INPUT).fill("Answer as Terreno Bot");
-    await page.getByTestId(IMAGE_STYLE_INPUT).fill("Flat pastel illustration");
+    await replaceText(page, SYSTEM_PROMPT_INPUT, "Answer as Terreno Bot");
+    await replaceText(page, IMAGE_STYLE_INPUT, "Flat pastel illustration");
     await saveConfiguration(page);
 
     await page.reload();
@@ -50,7 +57,7 @@ test.describe("Admin AI configuration", () => {
   });
 
   test("admin clears the system prompt and it saves as empty", async ({page}) => {
-    await page.getByTestId(SYSTEM_PROMPT_INPUT).fill("Answer as Terreno Bot");
+    await replaceText(page, SYSTEM_PROMPT_INPUT, "Answer as Terreno Bot");
     await saveConfiguration(page);
 
     await page.getByTestId(SYSTEM_PROMPT_INPUT).fill("");
@@ -76,8 +83,13 @@ test.describe("Admin global skills", () => {
   });
 
   test("admin creates team-poster and a regular user sees it with the global badge", async ({
+    consoleGuard,
     page,
   }) => {
+    // Two sign-ins (admin, then user) in one test.
+    test.slow();
+    // Switching from the admin to the user re-keys syncdb's local store, which logs this once.
+    consoleGuard.allow(/\[syncdb\] persisted data for ".*" could not be decrypted/);
     await ensureLoggedOut(page);
     await loginAsAdmin(page);
     await page.goto("/admin/GptSkill/create");

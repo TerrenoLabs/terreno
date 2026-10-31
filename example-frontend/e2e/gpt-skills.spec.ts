@@ -63,7 +63,10 @@ test.describe("Skills screen", () => {
     await expect(page.getByTestId("skills-empty")).toHaveCount(0);
   });
 
-  test("user sees the API error inline for an invalid name", async ({page}) => {
+  test("user sees the API error inline for an invalid name", async ({consoleGuard, page}) => {
+    // The 400 is the behavior under test; the browser and the screen both report it.
+    consoleGuard.allow("Failed to load resource: the server responded with a status of 400");
+    consoleGuard.allow("Failed to create skill");
     await page.getByTestId("skills-new-button").click();
     await page.getByTestId("skills-form-name-input").fill("Bad Name");
     await page.getByTestId("skills-form-description-input").fill("Bad name.");
@@ -112,7 +115,14 @@ test.describe("Skills screen", () => {
     await expect(page.getByTestId("skills-form-global-switch")).toHaveCount(0);
   });
 
-  test("admin uploads a zip for everyone and a user sees it badged", async ({page}) => {
+  test("admin uploads a zip for everyone and a user sees it badged", async ({
+    consoleGuard,
+    page,
+  }) => {
+    // Two sign-ins (admin, then user) in one test.
+    test.slow();
+    // Switching from the admin to the user re-keys syncdb's local store, which logs this once.
+    consoleGuard.allow(/\[syncdb\] persisted data for ".*" could not be decrypted/);
     await ensureLoggedOut(page);
     await loginAsAdmin(page);
     await openSkills(page);

@@ -68,6 +68,8 @@ new AiApp({
 
 To let admins manage global skills in the admin panel, register `AIAdminApp` from
 `@terreno/ai/admin`. It adds **AI → Skills**, which lists and creates global skills only.
+If `AdminApp` gets an RBAC `accessControl`, declare `adminGptSkill: ADMIN_MODEL_ACCESS` in your
+statements (as `example-backend/src/access.ts` does). Without it, RBAC hides Skills from every admin.
 
 ## 3. Configure Nano Banana
 

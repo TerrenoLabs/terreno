@@ -1,14 +1,19 @@
-import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {AuditApp, flushAuditRecorderForTests, TerrenoApp} from "@terreno/api";
-import {expectAPIError} from "@terreno/test";
+import {expectAPIError, registerGcsMock} from "@terreno/test";
 import type express from "express";
 import {strToU8, zipSync} from "fflate";
 import mongoose from "mongoose";
 
+import {FileAttachment} from "../models/fileAttachment";
 import {GptSkill} from "../models/gptSkill";
 import type {UploadFileParams, UploadFileResult} from "../service/fileStorage";
 import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
 import {addSkillRoutes} from "./skills";
+
+// In-memory @google-cloud/storage, so the real FileStorageService can run in one case below.
+const gcs = registerGcsMock();
+const {FileStorageService} = await import("../service/fileStorage");
 
 const SKILL_MD = "---\nname: poster-style\ndescription: Poster look\n---\n# Steps";
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -30,11 +35,15 @@ describe("POST /gpt/skills/upload", () => {
   let upload: ReturnType<typeof mock>;
   let remove: ReturnType<typeof mock>;
 
-  const buildApp = (withStorage = true, withAudit = false): express.Application => {
+  const buildApp = (
+    withStorage = true,
+    withAudit = false,
+    fileStorageService: unknown = withStorage ? {delete: remove, upload} : undefined
+  ): express.Application => {
     const terreno = new TerrenoApp({
       configureApp: (router, options) => {
         addSkillRoutes(router, {
-          fileStorageService: withStorage ? {delete: remove, upload} : undefined,
+          fileStorageService,
           openApiOptions: options,
         } as never);
       },
@@ -146,6 +155,38 @@ describe("POST /gpt/skills/upload", () => {
     expect(await GptSkill.countDocuments({})).toBe(0);
     expect(remove).toHaveBeenCalledTimes(1);
     expect(remove.mock.calls[0][0]).toStartWith("first-key/");
+  });
+
+  it("leaves no object or skill when an attachment write fails after its object is stored", async () => {
+    gcs.reset();
+    await FileAttachment.deleteMany({});
+    const realCreate = FileAttachment.create.bind(FileAttachment);
+    let creates = 0;
+    const create = spyOn(FileAttachment, "create").mockImplementation((async (
+      ...args: Parameters<typeof FileAttachment.create>
+    ) => {
+      creates += 1;
+      if (creates === 2) {
+        throw new Error("attachment write failed");
+      }
+      return realCreate(...args);
+    }) as never);
+    try {
+      const storage = new FileStorageService({bucketName: "test-bucket"});
+      const agent = await authAsUser(buildApp(true, false, storage), "notAdmin");
+      const res = await agent
+        .post("/gpt/skills/upload")
+        .attach("file", zipOf({"a.png": PNG, "b.png": PNG, "SKILL.md": SKILL_MD}), {
+          contentType: "application/zip",
+          filename: "s.zip",
+        });
+      expect(res.status).toBe(500);
+    } finally {
+      create.mockRestore();
+    }
+    expect(gcs.fileMocks.save).toHaveBeenCalledTimes(2);
+    expect(gcs.listObjects()).toEqual([]);
+    expect(await GptSkill.countDocuments({})).toBe(0);
   });
 
   it("forbids a non-admin uploading with scope=global", async () => {

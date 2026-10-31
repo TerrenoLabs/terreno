@@ -17,3 +17,12 @@ category: Added
   At most 4 calls per turn by default. New export: `createGenerateImageTool`.
 - `@terreno/ai`: `FileStorageService.upload` accepts an optional `keyPrefix` (default `uploads`,
   so existing keys are unchanged).
+- `@terreno/ai`: the `generate_image` tool validates its input at runtime (prompt 1–4000
+  characters, at most 4 references, no unknown keys), so a malformed call never reaches storage
+  or the image model. `FileStorageService.upload` deletes the stored object when creating its
+  `FileAttachment` fails, so a failed upload leaves no orphaned file.
+- `@terreno/ui`: `GPTChat` takes an optional `toolLabel(toolCall)` that names a tool row (for
+  example "Used skill team-poster"); return `undefined` to keep `Tool: <name>`. A tool result
+  with an `error` string shows that error in its row. New export: `ToolLabelInput`. New testIDs:
+  `gpt-tool-call-{toolName}`, `gpt-tool-call-error-{toolName}`, and
+  `gpt-message-image-{messageIndex}-{partIndex}`.

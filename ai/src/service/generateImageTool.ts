@@ -1,7 +1,7 @@
 import {randomUUID} from "node:crypto";
 
-import {logger} from "@terreno/api";
-import {generateText, jsonSchema, type LanguageModel, type Tool, tool} from "ai";
+import {logger, z} from "@terreno/api";
+import {generateText, type LanguageModel, type Tool, tool, zodSchema} from "ai";
 import type express from "express";
 import type mongoose from "mongoose";
 
@@ -35,10 +35,19 @@ interface ToolGeneratedImage {
   url: string;
 }
 
-interface GenerateImageInput {
-  prompt: string;
-  references?: string[];
-}
+// Validated at runtime, so a malformed call never reaches storage or the paid image model.
+const generateImageInputSchema = z
+  .object({
+    prompt: z.string().min(1).max(MAX_PROMPT_LENGTH).describe("What the image should show"),
+    references: z
+      .array(z.string())
+      .max(MAX_REFERENCES)
+      .optional()
+      .describe("Reference images: skill:<name>/<filename> or attachment:<key> refs"),
+  })
+  .strict();
+
+type GenerateImageInput = z.infer<typeof generateImageInputSchema>;
 
 type GenerateImageResult = {images: {id: string; mimeType: string}[]} | {error: string};
 
@@ -227,24 +236,6 @@ export const createGenerateImageTool = ({
       onImage(image);
       return {images: [{id, mimeType: image.mimeType}]};
     },
-    inputSchema: jsonSchema<GenerateImageInput>({
-      additionalProperties: false,
-      properties: {
-        prompt: {
-          description: "What the image should show",
-          maxLength: MAX_PROMPT_LENGTH,
-          minLength: 1,
-          type: "string",
-        },
-        references: {
-          description: "Reference images: skill:<name>/<filename> or attachment:<key> refs",
-          items: {type: "string"},
-          maxItems: MAX_REFERENCES,
-          type: "array",
-        },
-      },
-      required: ["prompt"],
-      type: "object",
-    }),
+    inputSchema: zodSchema(generateImageInputSchema),
   });
 };

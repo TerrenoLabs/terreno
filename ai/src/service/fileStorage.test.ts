@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {registerGcsMock} from "@terreno/test";
 import mongoose from "mongoose";
 
@@ -44,6 +44,30 @@ describe("FileStorageService", () => {
       expect(attachment).toBeDefined();
       expect(attachment?.mimeType).toBe("text/plain");
       expect(result.id).toBe(attachment?._id.toString() ?? "");
+    });
+  });
+
+  describe("upload failures", () => {
+    it("deletes the stored object when creating its attachment fails", async () => {
+      const service = new FileStorageService({bucketName: "test-bucket"});
+      const create = spyOn(FileAttachment, "create").mockRejectedValueOnce(
+        new Error("attachment write failed") as never
+      );
+      try {
+        await expect(
+          service.upload({
+            buffer: Buffer.from("x"),
+            filename: "a.png",
+            mimeType: "image/png",
+            userId: new mongoose.Types.ObjectId(),
+          })
+        ).rejects.toThrow("attachment write failed");
+      } finally {
+        create.mockRestore();
+      }
+      expect(gcs.fileMocks.save).toHaveBeenCalledTimes(1);
+      expect(gcs.listObjects()).toEqual([]);
+      expect(await FileAttachment.countDocuments({})).toBe(0);
     });
   });
 

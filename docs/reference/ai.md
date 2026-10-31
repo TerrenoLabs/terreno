@@ -369,7 +369,7 @@ A host tool (route, request, or MCP) named `load_skill` or `generate_image` is r
 | `stylePrompt` | `string \| ({req}) => string \| undefined \| Promise<…>` | Put before every image prompt with a blank line between. Trimmed; empty adds nothing. A function that throws logs `logger.warn` and the image is made from the prompt alone. Use `configurationPromptGetter(AppConfig, "ai.imageStylePrompt")` to let admins edit it. |
 | `maxCallsPerTurn` | number | Default 4. Every call counts, failed ones included. |
 
-`generate_image` input is `{prompt: string (1–4000), references?: string[] (≤ 4)}`. Each reference is one of:
+`generate_image` input is `{prompt: string (1–4000), references?: string[] (≤ 4)}`, validated at runtime with no extra keys allowed. An input outside that shape fails as an invalid tool call before any reference is downloaded or the image model is called. Each reference is one of:
 
 - `skill:<name>/<filename>`: an image file of a skill the caller can see (own or global).
 - `attachment:<gcsKey>`: an image `FileAttachment` the caller uploaded (or one this tool generated for them).

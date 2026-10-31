@@ -550,6 +550,49 @@ describe("generate_image tool", () => {
       expect(imageModel.doGenerate).not.toHaveBeenCalled();
     });
 
+    describe("input contract", () => {
+      const invalidInputs: [string, Record<string, unknown>][] = [
+        ["an empty prompt", {prompt: ""}],
+        ["a prompt over 4000 characters", {prompt: "x".repeat(4001)}],
+        ["more than 4 references", {prompt: "A fox", references: Array(5).fill("attachment:k")}],
+        ["a non-string prompt", {prompt: 42}],
+        ["a non-array references", {prompt: "A fox", references: "attachment:k"}],
+        ["an unknown key", {extra: true, prompt: "A fox"}],
+      ];
+
+      for (const [label, input] of invalidInputs) {
+        it(`rejects ${label} before any download or image-model call`, async () => {
+          const {model, status} = await runTurn({
+            steps: [
+              toolCallStep({input, toolCallId: "call_bad", toolName: "generate_image"}),
+              textStep("done"),
+            ],
+            storage: true,
+          });
+          expect(status).toBe(200);
+          const outputs = toolOutputsOf(model);
+          expect(outputs).toHaveLength(1);
+          expect(JSON.stringify(outputs[0])).toContain("Invalid input");
+          expect(download).not.toHaveBeenCalled();
+          expect(upload).not.toHaveBeenCalled();
+          expect(imageModel.doGenerate).not.toHaveBeenCalled();
+        });
+      }
+
+      it("accepts a 4000-character prompt and exactly 4 references", async () => {
+        await seedGlobal("house-style");
+        const {model} = await runTurn({
+          steps: [
+            imageCall("x".repeat(4000), Array(4).fill("skill:house-style/ref.png")),
+            textStep("done"),
+          ],
+          storage: true,
+        });
+        expect((toolOutputsOf(model)[0] as {images?: unknown[]}).images).toHaveLength(1);
+        expect(download).toHaveBeenCalledTimes(4);
+      });
+    });
+
     it("starts a new turn with a fresh limit", async () => {
       const first = await runTurn({imageGeneration: {maxCallsPerTurn: 1}});
       expect(imageEvents(first.events)).toHaveLength(1);

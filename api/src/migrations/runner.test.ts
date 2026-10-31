@@ -15,10 +15,21 @@ import {
   runDownMigrations,
   runMigrations,
 } from "./runner";
-import {type LoadedMigration, MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION} from "./types";
+import {
+  type LoadedMigration,
+  MIGRATION_LOCK_ID,
+  MIGRATIONS_COLLECTION,
+  type MigrationStoreDoc,
+} from "./types";
 
-const collection = (): mongoose.Collection => {
-  return mongoose.connection.collection(MIGRATIONS_COLLECTION);
+/** Stored rows, including legacy ones that kept timestamps as ISO strings. */
+type StoredMigrationDoc = Omit<MigrationStoreDoc, "appliedAt" | "expiresAt"> & {
+  appliedAt?: Date | string;
+  expiresAt?: Date | string;
+};
+
+const collection = (): mongoose.Collection<StoredMigrationDoc> => {
+  return mongoose.connection.collection<StoredMigrationDoc>(MIGRATIONS_COLLECTION);
 };
 
 const appliedIds = async (): Promise<string[]> => {
@@ -461,12 +472,12 @@ describe("assertMigrationsAllowed", () => {
 
 describe("exerciseReversibleMigrations", () => {
   const fixtures = (...parts: string[]): string => {
-    return join(import.meta.dir, "fixtures", ...parts);
+    return join(__dirname, "fixtures", ...parts);
   };
 
   const sortedAppliedIds = async (): Promise<string[]> => {
     const docs = await mongoose.connection
-      .collection(MIGRATIONS_COLLECTION)
+      .collection<MigrationStoreDoc>(MIGRATIONS_COLLECTION)
       .find({_id: {$ne: MIGRATION_LOCK_ID}})
       .project({id: 1})
       .toArray();

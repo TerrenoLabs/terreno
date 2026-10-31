@@ -9,6 +9,7 @@ import {
   askInputSchemaFor,
   askKindsForSurface,
   COMPACT_ASK_KINDS,
+  type ConfirmAskInput,
   choiceAskInputSchema,
   compactChoiceAskInputSchema,
   confirmAskInputSchema,
@@ -190,9 +191,13 @@ describe("markdownLengthBounds", () => {
 
 describe("confirmButtonLabels", () => {
   it("uses the ask's labels, defaulting to Confirm and Cancel", () => {
-    expect(confirmButtonLabels({prompt: "Go?"})).toEqual({confirm: "Confirm", deny: "Cancel"});
-    expect(
-      confirmButtonLabels({confirmLabel: "Delete 14 todos", denyLabel: "Keep them", prompt: "Go?"})
-    ).toEqual({confirm: "Delete 14 todos", deny: "Keep them"});
+    const plain: ConfirmAskInput = {prompt: "Go?"};
+    const labeled: ConfirmAskInput = {
+      confirmLabel: "Delete 14 todos",
+      denyLabel: "Keep them",
+      prompt: "Go?",
+    };
+    expect(confirmButtonLabels(plain)).toEqual({confirm: "Confirm", deny: "Cancel"});
+    expect(confirmButtonLabels(labeled)).toEqual({confirm: "Delete 14 todos", deny: "Keep them"});
   });
 });

@@ -9,9 +9,10 @@ import {assert} from "chai";
 import mongoose from "mongoose";
 import {runMigrateCli} from "../migrations/cli";
 import {setupDb} from "../tests";
+import {partialEnv} from "../tests/testEnv";
 
 const fixtures = (...parts: string[]): string => {
-  return join(import.meta.dir, "..", "migrations", "fixtures", ...parts);
+  return join(__dirname, "..", "migrations", "fixtures", ...parts);
 };
 
 describe("runMigrateCli Mongo URI connect", () => {
@@ -27,7 +28,7 @@ describe("runMigrateCli Mongo URI connect", () => {
       const err: string[] = [];
       const code = await runMigrateCli({
         argv: ["status", "--dir", fixtures("valid")],
-        env: {MONGODB_URI: uri, NODE_ENV: "test"},
+        env: partialEnv({MONGODB_URI: uri, NODE_ENV: "test"}),
         stderr: {
           write: (chunk: string): void => {
             err.push(chunk);

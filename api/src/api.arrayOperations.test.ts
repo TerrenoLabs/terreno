@@ -20,6 +20,14 @@ import {AdminOwnerTransformer} from "./transformers";
 
 type TestUser = Awaited<ReturnType<typeof setupDb>>[number];
 
+/** Returns a document a postUpdate hook captured, failing the test if the hook never ran. */
+const captured = (doc: Food | undefined): Food => {
+  if (!doc) {
+    throw new Error("Expected postUpdate to capture a document");
+  }
+  return doc;
+};
+
 describe("model array operations", () => {
   let _server: TestAgent;
   let app: express.Application;
@@ -219,7 +227,7 @@ describe("model array operations", () => {
 
     expect(updatedCategory.updated).not.toBe(updatedCategory.created);
     expect(unchangedCategory.updated).toBe(unchangedCategory.created);
-    expect(updatedCategory.name).toBe("Updated Category");
+    expect(updatedCategory?.name).toBe("Updated Category");
     // Unchanged.
     expect(updatedCategory.show).toBe(true);
     expect(unchangedCategory.show).toBe(true);
@@ -268,8 +276,8 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (new category added)
-    expect(postUpdateDoc.categories).toHaveLength(3);
-    expect(postUpdatePrevDoc.categories).toHaveLength(2);
+    expect(captured(postUpdateDoc).categories).toHaveLength(3);
+    expect(captured(postUpdatePrevDoc).categories).toHaveLength(2);
 
     // Reset for next test
     postUpdateCalled = false;
@@ -294,15 +302,15 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (category updated)
-    const updatedCategory = postUpdateDoc.categories.find(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const updatedCategory = captured(postUpdateDoc).categories.find(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
-    const prevCategory = postUpdatePrevDoc.categories.find(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const prevCategory = captured(postUpdatePrevDoc).categories.find(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
 
-    expect(updatedCategory.name).toBe("Updated Category");
-    expect(prevCategory.name).toBe("Fruit");
+    expect(updatedCategory?.name).toBe("Updated Category");
+    expect(prevCategory?.name).toBe("Fruit");
 
     // Reset for next test
     postUpdateCalled = false;
@@ -320,11 +328,11 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (category removed)
-    const remainingCategories = postUpdateDoc.categories.filter(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const remainingCategories = captured(postUpdateDoc).categories.filter(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
-    const prevCategories = postUpdatePrevDoc.categories.filter(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const prevCategories = captured(postUpdatePrevDoc).categories.filter(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
 
     expect(remainingCategories).toHaveLength(0);
@@ -371,10 +379,10 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (new tag added)
-    expect(postUpdateDoc.tags).toHaveLength(3);
-    expect(postUpdatePrevDoc.tags).toHaveLength(2);
-    expect(postUpdateDoc.tags).toContain("organic");
-    expect(postUpdatePrevDoc.tags).not.toContain("organic");
+    expect(captured(postUpdateDoc).tags).toHaveLength(3);
+    expect(captured(postUpdatePrevDoc).tags).toHaveLength(2);
+    expect(captured(postUpdateDoc).tags).toContain("organic");
+    expect(captured(postUpdatePrevDoc).tags).not.toContain("organic");
 
     // Reset for next test
     postUpdateCalled = false;
@@ -388,10 +396,10 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (tag updated)
-    expect(postUpdateDoc.tags).toContain("super-healthy");
-    expect(postUpdatePrevDoc.tags).toContain("healthy");
-    expect(postUpdateDoc.tags).not.toContain("healthy");
-    expect(postUpdatePrevDoc.tags).not.toContain("super-healthy");
+    expect(captured(postUpdateDoc).tags).toContain("super-healthy");
+    expect(captured(postUpdatePrevDoc).tags).toContain("healthy");
+    expect(captured(postUpdateDoc).tags).not.toContain("healthy");
+    expect(captured(postUpdatePrevDoc).tags).not.toContain("super-healthy");
   });
 });
 
@@ -829,7 +837,8 @@ describe("array subdocument PATCH with a stripping preUpdate", () => {
           read: [Permissions.IsAdmin],
           update: [Permissions.IsAdmin],
         },
-        preUpdate: (body) => preUpdate(body as Partial<Food>),
+        // The hook returns the stripped update body, not a whole document.
+        preUpdate: (body) => preUpdate(body) as Food,
       })
     );
     agent = await authAsUser(app, "admin");

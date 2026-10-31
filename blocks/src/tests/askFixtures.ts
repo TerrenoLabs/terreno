@@ -1,9 +1,10 @@
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
+import type {AskErrorCode} from "../asks/errors";
 import type {Ask, AskKind} from "../asks/schema";
 import type {SimpleCard} from "../asks/simpleCard";
 
-const FIXTURES_DIR = join(import.meta.dir, "..", "asks", "fixtures");
+const FIXTURES_DIR = join(__dirname, "..", "asks", "fixtures");
 
 export type ValidAskFixture = Ask & {
   name: string;
@@ -11,7 +12,7 @@ export type ValidAskFixture = Ask & {
 };
 
 export interface InvalidAskFixture {
-  errors: {code: string; path: string}[];
+  errors: {code: AskErrorCode; path: string}[];
   input: unknown;
   kind: AskKind;
   name: string;
@@ -38,3 +39,10 @@ export const validAskFixturesOf = <Kind extends AskKind>(
 
 export const invalidAskFixtures = (): InvalidAskFixture[] =>
   readFixtures<InvalidAskFixture>("invalid");
+
+/**
+ * The ask a fixture describes. The fixture spreads `Ask`, but TypeScript cannot keep `input` and
+ * `kind` correlated once they are read separately, so this restates the pairing.
+ */
+export const fixtureAsk = (fixture: ValidAskFixture): Ask =>
+  ({input: fixture.input, kind: fixture.kind}) as Ask;

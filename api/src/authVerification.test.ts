@@ -8,7 +8,7 @@ import supertest from "supertest";
 import type {UserModel as AuthUserModel} from "./auth";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
-import {setupDb, UserModel} from "./tests";
+import {authUserModel, setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
@@ -44,7 +44,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     openApp = new TerrenoApp({
@@ -55,7 +55,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
   });
 
@@ -109,7 +109,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noVerificationRoutesApp)
@@ -144,7 +144,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(failingApp)
       .post("/auth/login")
@@ -165,7 +165,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(noUrlApp)
       .post("/auth/login")
@@ -275,7 +275,7 @@ describe("email verification gating", () => {
       }
     );
     const JwtResetOnlyUser = (mongoose.models.JwtResetOnlyUser ??
-      mongoose.model("JwtResetOnlyUser", jwtResetOnlySchema)) as AuthUserModel;
+      mongoose.model("JwtResetOnlyUser", jwtResetOnlySchema)) as unknown as AuthUserModel;
     await JwtResetOnlyUser.deleteMany({});
     const registerable = JwtResetOnlyUser as unknown as {
       register: (

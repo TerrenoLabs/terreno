@@ -949,7 +949,7 @@ describe("MCP OAuth authorization server", () => {
     })
       .addMiddleware((req, _res, next) => {
         if (req.path.startsWith("/oauth/authorize/")) {
-          req.user = user ?? undefined;
+          req.user = (user ?? undefined) as unknown as typeof req.user;
         }
         next();
       })

@@ -4,12 +4,19 @@ import {
   apiErrorMiddleware,
   apiUnauthorizedMiddleware,
   BackgroundTask,
+  createScopedLogger,
   createScriptArgs,
   setupAuth,
   type UserModel as UserModelType,
 } from "@terreno/api";
 import {getBaseServer, setupDb, UserModel} from "@terreno/api/testing";
-import {Job, type JobDefinition, JobsApp, unregisterJobsService} from "@terreno/jobs";
+import {
+  Job,
+  type JobDefinition,
+  type JobHandlerContext,
+  JobsApp,
+  unregisterJobsService,
+} from "@terreno/jobs";
 
 import {
   ADMIN_SCRIPT_JOB_NAME,
@@ -38,9 +45,9 @@ const getAdminScriptHandler = (
   return handler;
 };
 
-const mockJobContext = {
-  attempt: 1,
+const mockJobContext: JobHandlerContext = {
   jobId: "job-test",
+  log: createScopedLogger({prefix: "job-test"}),
   signal: new AbortController().signal,
 };
 

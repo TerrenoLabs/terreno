@@ -1,8 +1,9 @@
 import {describe, expect, it} from "bun:test";
-import type {AdminConfig, AdminContribution, TerrenoPlugin} from "@terreno/api";
+import type {AdminConfig, AdminContribution, ScriptResult, TerrenoPlugin} from "@terreno/api";
 import {modelRouter, Permissions} from "@terreno/api";
 import {FoodModel} from "@terreno/api/testing";
 import {assert} from "chai";
+import type {Model} from "mongoose";
 
 import type {AdminModelConfig} from "./adminApp";
 import {
@@ -13,6 +14,9 @@ import {
 } from "./aggregateAdmin";
 import {resetLegacyDeprecationWarningsForTests} from "./legacy";
 import {normalizeAdminRoutePath} from "./routePath";
+
+/** Plugin contributions take `Model<unknown>`; the shared Food fixture keys `_id` as a string. */
+const contributedFoodModel = FoodModel as unknown as Model<unknown>;
 
 const foodAdmin: AdminConfig = {
   displayName: "Foods",
@@ -42,7 +46,7 @@ describe("aggregateAdminContributions", () => {
       models: [
         {
           admin: {displayName: "Plugin Users", listFields: ["email"]},
-          model: FoodModel,
+          model: contributedFoodModel,
           routePath: "/users",
         },
       ],
@@ -98,7 +102,7 @@ describe("aggregateAdminContributions", () => {
   });
 
   it("merges unique scripts, screens, and widget ids and skips duplicates", () => {
-    const runner = async (): Promise<void> => {};
+    const runner = async (): Promise<ScriptResult> => ({results: [], success: true});
     const aggregated = aggregateAdminContributions({
       pluginContributions: [
         {
@@ -134,7 +138,7 @@ describe("aggregateAdminContributions", () => {
           models: [
             {
               admin: {displayName: "Foods", listFields: ["name"]},
-              model: FoodModel,
+              model: contributedFoodModel,
               populatePaths: [{fields: ["email"], path: "ownerId"}],
               routePath: "/foods",
             },
@@ -239,7 +243,7 @@ describe("aggregateFromTerrenoApp", () => {
         models: [
           {
             admin: {displayName: "Flags", listFields: ["key"]},
-            model: FoodModel,
+            model: contributedFoodModel,
             routePath: "/feature-flags",
           },
         ],

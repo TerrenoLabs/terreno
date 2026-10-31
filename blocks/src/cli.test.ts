@@ -3,22 +3,22 @@ import {join} from "node:path";
 
 import {launchBlocksCli, runBlocksCli} from "./cli";
 
-const validFixture = join(import.meta.dir, "fixtures", "valid", "prose.yaml");
-const invalidFixture = join(import.meta.dir, "fixtures", "invalid", "unknown-key.yaml");
+const validFixture = join(__dirname, "fixtures", "valid", "prose.yaml");
+const invalidFixture = join(__dirname, "fixtures", "invalid", "unknown-key.yaml");
 
 describe("terreno-blocks validate", () => {
   it("exits 0 for a valid file and 1 for an invalid file", async () => {
-    const valid = Bun.spawn(["bun", join(import.meta.dir, "cli.ts"), "validate", validFixture], {
+    const valid = Bun.spawn(["bun", join(__dirname, "cli.ts"), "validate", validFixture], {
       stderr: "pipe",
       stdout: "pipe",
     });
     expect(await valid.exited).toBe(0);
     expect(await new Response(valid.stdout).text()).toBe("");
 
-    const invalid = Bun.spawn(
-      ["bun", join(import.meta.dir, "cli.ts"), "validate", invalidFixture],
-      {stderr: "pipe", stdout: "pipe"}
-    );
+    const invalid = Bun.spawn(["bun", join(__dirname, "cli.ts"), "validate", invalidFixture], {
+      stderr: "pipe",
+      stdout: "pipe",
+    });
     expect(await invalid.exited).toBe(1);
     const report = await new Response(invalid.stdout).text();
     expect(report).toContain("blocks[0].color  UNKNOWN_KEY  ");

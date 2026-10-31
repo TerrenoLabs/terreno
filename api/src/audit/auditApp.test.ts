@@ -48,7 +48,7 @@ describe("AuditApp", () => {
 
   it("does not register AuditEvent on the default connection when @terreno/api is imported", async () => {
     deleteAuditEventModel();
-    await import("../index");
+    await import("../index.js");
     assert.isUndefined(mongoose.connection.models.TerrenoAuditEvent);
   });
 

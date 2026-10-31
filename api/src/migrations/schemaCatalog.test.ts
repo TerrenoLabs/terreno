@@ -15,7 +15,10 @@ const catalogTodo = (): mongoose.Model<mongoose.Document> => {
     {collection: "todos"}
   );
   schema.index({title: 1});
-  return mongoose.model(`TodoCatalog${Math.random().toString(16).slice(2)}`, schema);
+  return mongoose.model<mongoose.Document>(
+    `TodoCatalog${Math.random().toString(16).slice(2)}`,
+    schema
+  );
 };
 
 describe("buildSchemaCatalog", () => {

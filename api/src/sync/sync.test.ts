@@ -347,7 +347,7 @@ describe("modelRouter sync option", () => {
     });
 
     const after = findSyncEntryByCollectionTag("syncStuff");
-    expect(after?.options.accessControl).toBe(accessControl);
+    expect<unknown>(after?.options.accessControl).toBe(accessControl);
     expect(after?.options.permissions.list).not.toBe(before);
   });
 });

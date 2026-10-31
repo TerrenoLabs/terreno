@@ -26,7 +26,7 @@ describe("enrichAdminListFilters", () => {
       },
     ];
     const enriched = enrichAdminListFilters(filters, PriorityModel);
-    expect(enriched?.[0]).toEqual({...filters[0], allowEmpty: true});
+    expect<unknown>(enriched?.[0]).toEqual({...filters[0], allowEmpty: true});
     expect(enriched?.[1]).toEqual(filters[1]);
   });
 

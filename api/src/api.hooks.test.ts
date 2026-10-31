@@ -1,6 +1,7 @@
 import {beforeEach, describe, expect, it, type mock} from "bun:test";
 import * as Sentry from "@sentry/bun";
 import type express from "express";
+import type {HydratedDocument} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
@@ -48,8 +49,9 @@ describe("pre and post hooks", () => {
           update: [Permissions.IsAny],
         },
         preCreate: (data) => {
-          data.calories = 14;
-          return data;
+          const food = data as Partial<Food>;
+          food.calories = 14;
+          return food as Food;
         },
         preDelete: (data) => {
           deleteCalled = true;
@@ -57,7 +59,7 @@ describe("pre and post hooks", () => {
         },
         preUpdate: (data) => {
           data.calories = 15;
-          return data;
+          return data as Food;
         },
       })
     );
@@ -158,18 +160,17 @@ describe("pre and post hooks", () => {
           update: [Permissions.IsAny],
         },
         postCreate: async (data) => {
-          data.calories = 14;
-          await data.save();
-          return data;
+          const food = data as HydratedDocument<Food>;
+          food.calories = 14;
+          await food.save();
         },
-        postDelete: (data) => {
+        postDelete: () => {
           deleteCalled = true;
-          return data;
         },
         postUpdate: async (data) => {
-          data.calories = 15;
-          await data.save();
-          return data;
+          const food = data as HydratedDocument<Food>;
+          food.calories = 15;
+          await food.save();
         },
       })
     );

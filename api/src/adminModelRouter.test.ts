@@ -2,7 +2,7 @@ import {describe, expect, it} from "bun:test";
 import mongoose from "mongoose";
 
 import {enrichModelRouterOptions} from "./adminModelRouter";
-import type {ModelRouterOptions} from "./api";
+import type {ModelRouterOptions, OpenApiMiddleware} from "./api";
 
 interface Widget {
   secret?: string;
@@ -34,10 +34,9 @@ describe("enrichModelRouterOptions", () => {
     const options: ModelRouterOptions<Widget> = {
       permissions: {create: [], delete: [], list: [], read: [], update: []},
     };
-    const enriched = enrichModelRouterOptions(WidgetModel, options, {
-      openApi: {enabled: true} as never,
-    });
-    expect(enriched.openApi).toEqual({enabled: true});
+    const openApi = {enabled: true} as unknown as OpenApiMiddleware;
+    const enriched = enrichModelRouterOptions(WidgetModel, options, {openApi});
+    expect(enriched.openApi).toEqual(openApi);
   });
 
   it("scrubs admin fields in preCreate/preUpdate and honors user hooks", async () => {
@@ -49,8 +48,11 @@ describe("enrichModelRouterOptions", () => {
         listFields: ["title"],
       },
       permissions: {create: [], delete: [], list: [], read: [], update: []},
-      preCreate: async (body) => ({...body, title: `${body.title}-created`}),
-      preUpdate: async () => null,
+      preCreate: async (body) => {
+        const widget = body as Partial<Widget>;
+        return {...widget, title: `${widget.title}-created`};
+      },
+      preUpdate: () => null,
     };
     const enriched = enrichModelRouterOptions(WidgetModel, options, {});
     const created = await enriched.preCreate?.({secret: "x", title: "Hi"}, {} as never);

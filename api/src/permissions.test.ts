@@ -287,7 +287,7 @@ describe("permissions module", () => {
 
     it("returns false for user.admin without platform org roles", async () => {
       const user = testUser({
-        _id: new mongoose.Types.ObjectId(),
+        _id: new mongoose.Types.ObjectId() as unknown as AuthUser["_id"],
         admin: true,
         id: new mongoose.Types.ObjectId().toString(),
       });
@@ -309,7 +309,7 @@ describe("permissions module", () => {
         roleName: "member",
         userId,
       });
-      const user = testUser({_id: userId, id: userId.toString()});
+      const user = testUser({_id: userId as unknown as AuthUser["_id"], id: userId.toString()});
       const allowed = await runWithOrgContext({organization: org}, () =>
         Permissions.IsOrganizationMember("update", user, {organizationId: org._id})
       );

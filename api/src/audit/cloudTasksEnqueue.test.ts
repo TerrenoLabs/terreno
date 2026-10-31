@@ -2,6 +2,7 @@ import {describe, it} from "bun:test";
 import {assert} from "chai";
 
 import {APIError} from "../errors";
+import {partialEnv} from "../tests/testEnv";
 import {auditEnqueueFromEnv, createCloudTasksAuditEnqueue} from "./cloudTasksEnqueue";
 import type {AuditEventWrite} from "./record";
 
@@ -102,23 +103,27 @@ describe("createCloudTasksAuditEnqueue", () => {
 
 describe("auditEnqueueFromEnv", () => {
   it("returns undefined until project, location, queue, url, and secret are set", () => {
-    assert.isUndefined(auditEnqueueFromEnv({}));
+    assert.isUndefined(auditEnqueueFromEnv(partialEnv({})));
     assert.isUndefined(
-      auditEnqueueFromEnv({
-        AUDIT_TASKS_SECRET: "s",
-        AUDIT_TASKS_URL: "https://example.com/internal/audit-events",
-        GCP_LOCATION: "us-central1",
-        GCP_PROJECT: "proj",
-      })
+      auditEnqueueFromEnv(
+        partialEnv({
+          AUDIT_TASKS_SECRET: "s",
+          AUDIT_TASKS_URL: "https://example.com/internal/audit-events",
+          GCP_LOCATION: "us-central1",
+          GCP_PROJECT: "proj",
+        })
+      )
     );
     assert.isDefined(
-      auditEnqueueFromEnv({
-        AUDIT_TASKS_SECRET: "s",
-        AUDIT_TASKS_URL: "https://example.com/internal/audit-events",
-        GCP_LOCATION: "us-central1",
-        GCP_PROJECT: "proj",
-        GCP_TASKS_AUDIT_QUEUE: "audit-q",
-      })
+      auditEnqueueFromEnv(
+        partialEnv({
+          AUDIT_TASKS_SECRET: "s",
+          AUDIT_TASKS_URL: "https://example.com/internal/audit-events",
+          GCP_LOCATION: "us-central1",
+          GCP_PROJECT: "proj",
+          GCP_TASKS_AUDIT_QUEUE: "audit-q",
+        })
+      )
     );
   });
 });

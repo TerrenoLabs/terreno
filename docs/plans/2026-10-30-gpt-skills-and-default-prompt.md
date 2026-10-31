@@ -543,7 +543,7 @@ existing GPTChat image rendering. Admin uses the generic Configuration and model
   - Test skills: terreno-frontend-tests, building-admin-interfaces
   - Docs: G3
 
-- [ ] **T12** — Document skills, the default prompt, and image generation
+- [x] **T12** — Document skills, the default prompt, and image generation
   - Depends on: T7
   - Files: docs/reference/ai.md, docs/explanation/ai-skills.md, docs/how-to/configure-gpt-skills-and-images.md, changelog/unreleased/gpt-skills-and-default-prompt.md
   - Criteria:

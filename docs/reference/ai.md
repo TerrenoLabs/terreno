@@ -56,6 +56,8 @@ bun run lint:fix   # Fix lint issues
 src/
   index.ts                 # Public exports
   aiApp.ts                 # AiApp TerrenoPlugin
+  aiAdminApp.ts            # AIAdminApp: AI Requests screen + global Skills admin model
+  configuration.ts         # aiConfigurationSchema, configurationPromptGetter
   langfuseApp.ts           # LangfuseApp TerrenoPlugin
   langfuseClient.ts        # Langfuse SDK client lifecycle
   langfuseCache.ts         # Prompt/trace caching
@@ -67,6 +69,7 @@ src/
     gptHistory.ts          # Conversation history model
     fileAttachment.ts      # Uploaded file metadata
     project.ts             # GPT project + memories
+    gptSkill.ts            # Skills (SKILL.md format) with user and global scopes
   routes/
     gpt.ts                 # Streaming chat, remix, tools, ratings
     gptHistories.ts        # History CRUD, headless pendingAsks and turn actions
@@ -74,11 +77,15 @@ src/
     files.ts               # File upload/signed URL/delete
     projects.ts            # Project CRUD + memories
     mcp.ts                 # MCP server status and tools
+    skills.ts              # /gpt/skills CRUD + upload
   service/
     aiService.ts           # Provider-agnostic AI service
     asks.ts                # Ask tools, reserved ask_ names, paused-turn replay
     chatTurn.ts            # Chat turn runner behind /gpt/prompt (SSE sink) and turn (buffered JSON)
     fileStorage.ts         # GCS upload helper
+    generateImageTool.ts   # Built-in generate_image chat tool
+    skillPackage.ts        # Parse an uploaded SKILL.md or .zip skill package
+    skills.ts              # Skill catalog, load_skill tool, /name activation
     getMCPTools.ts         # modelRouter MCP tools as Vercel AI SDK tools
     mcpService.ts          # MCP client connections
     parseAiJson.ts         # LLM JSON normalization/parsing
@@ -96,8 +103,10 @@ src/
   `getMCPTools`, `runBufferedChatTurn` (one chat turn to completion without HTTP: the same system
   prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
   options, req}` where `req` carries `user` and `headers`)
-- **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
-- **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
+- **Models:** `AIRequest`, `GptHistory`, `FileAttachment`, `GptSkill` (plus `setSkillFileStorage`), `Project` (lazy; prefer `getProjectModel()`)
+- **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`, `addSkillRoutes`
+- **Configuration:** `aiConfigurationSchema`, `configurationPromptGetter` ([Default system prompt](#default-system-prompt))
+- **Skills and images:** `parseSkillPackage`, `createGenerateImageTool`, `GENERATE_IMAGE_TOOL_NAME`, types `SkillPackage`, `SkillPackageFile`, `GptSkillDocument`, `GptSkillFile`, `GptSkillModel`, `GptSkillScope`, `ImageGenerationOptions`, `ImageStylePrompt`, `DefaultSystemPrompt` ([Skills in chat](#skills-in-chat), [Image generation](#image-generation))
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
 - **Gemini / Vertex:** `listGeminiApiModels`, `normalizeGeminiModelId`, `GEMINI_API_BASE_URL`, `createVertexProvider`, `listEnabledVertexModels`, `verifyVertexModelsEnabled`, `assertVertexModelsEnabled`, `isVertexModelAllowed`, `normalizeVertexModelId`, `DEFAULT_VERTEX_LOCATION`
@@ -253,6 +262,28 @@ Metadata for files stored in GCS.
 
 **Virtual:** `ownerId` aliases `userId`.
 
+### GptSkill
+
+A skill in Anthropic's `SKILL.md` shape: a name, a one-line description, markdown instructions, and optional reference files. Collection `gptskills`. Registered on import of `@terreno/ai`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Required. `^[a-z0-9-]{1,64}$` |
+| `description` | string | Required, 1–1024 characters. Listed in the chat's skill catalog |
+| `instructions` | string | Required markdown, at most 50,000 characters. Returned by `load_skill` and `/name` |
+| `files` | array | `{filename, mimeType, size, gcsKey}`. At most 20 files and 10 MB total. MIME types: `image/jpeg`, `image/png`, `image/gif`, `image/webp`, `application/pdf`, `text/plain`, `text/csv`, `application/json`, `text/markdown`. `gcsKey` never leaves the server |
+| `scope` | `"user"` \| `"global"` | Required. `user` skills are visible to their owner; `global` skills to every user |
+| `userId` | ObjectId? | Owner of a `user` skill (required then); unset on a `global` skill |
+| `enabled` | boolean | Default `true`. A disabled skill is left out of the catalog, `load_skill`, and `/name` |
+
+**Plugins:** `createdUpdatedPlugin`, `isDeletedPlugin`. **Virtual:** `ownerId` aliases `userId`.
+
+Rules enforced on the model, so `/gpt/skills` and the admin routes both get them:
+
+- A skill saved with neither `scope` nor `userId` becomes `global` (the admin create path). A `global` skill never keeps a `userId`.
+- A name is unique per (`scope`, `userId`) among non-deleted skills: 409 `Skill <name> already exists`. A `user` skill may not take a global skill's name: 409 `A global skill named <name> already exists`. A unique partial index on (`name`, `scope`, `userId`) backs the same-scope check against concurrent creates; the user-versus-global check has no index.
+- A soft delete (through `doc.save()` or an `updateOne` / `updateMany` / `findOneAndUpdate` that sets `deleted: true`) removes the skill's files from storage. The model reads the storage service from `setSkillFileStorage(service)`, which `addSkillRoutes` calls at registration.
+
 ### Project
 
 GPT project with persistent context and memories. Registered lazily: `getProjectModel()`
@@ -293,9 +324,11 @@ AI resolution order: `x-ai-api-key` header + `createModelFn` → `createServerMo
 2. the Langfuse prompt (`langfuseSystemPromptName`)
 3. project context and memories
 4. the request's `systemPrompt`
-5. the asks, blocks, and compact sections, when those options are on
+5. the `## Skills` catalog, when `skills` is on ([Skills in chat](#skills-in-chat))
+6. one `## Active skill: <name>` section per leading `/name` in the prompt
+7. the asks, blocks, and compact sections, when those options are on
 
-The value is trimmed. An empty or whitespace-only value, or `undefined`, adds nothing. A function that throws is logged with `logger.warn` and the turn continues without it. An admin `promptName` override replaces the whole prompt, the default included. Image-output models receive it too.
+The value is trimmed. An empty or whitespace-only value, or `undefined`, adds nothing. A function that throws is logged with `logger.warn` and the turn continues without it. An admin `promptName` override replaces layers 1–6, the default included. Image-output models receive the default too, but never the skill sections.
 
 To let admins edit it, mount `aiConfigurationSchema` on the app's `configurationPlugin` model and read it per turn with `configurationPromptGetter`:
 
@@ -312,6 +345,47 @@ new AiApp({aiService, defaultSystemPrompt: configurationPromptGetter(AppConfig, 
 ```
 
 `aiConfigurationSchema` (`_id: false`) has `systemPrompt` ("Default system prompt for every GPT chat") and `imageStylePrompt` ("Style guidance added to every generated image prompt"), both strings defaulting to `""`. `configurationPromptGetter(model, path)` returns a function that reads `model.getConfig(path)` on each turn and returns `undefined` for an empty value.
+
+#### Skills in chat
+
+`skills: true` (on `addGptRoutes` and `AiApp`) offers the caller's skills in every chat turn whose model can call tools (`/gpt/prompt` and the headless `turn` action). Off by default; with it off, the system prompt and tools are unchanged. An image-output model (an id containing `image`) gets no catalog and no tool. Why the design looks this way: [Skills and image generation](../explanation/ai-skills.md).
+
+| Piece | Behavior |
+|-------|----------|
+| `## Skills` catalog | Appended after the request's `systemPrompt`. One line per skill: `- <name>: <description>`. Enabled, non-deleted skills only. Global skills first by name, then the caller's skills by `updated` descending, at most 50 lines. A user skill whose name a global skill uses is left out. With no visible skill there is no heading and no `load_skill` tool. |
+| `load_skill` tool | Input `{name}`. Returns `{name, description, instructions, files: [{ref, filename, mimeType}]}` where `ref` is `skill:<name>/<filename>`, or `{error: "Unknown skill: <name>"}`. Resolves any visible skill, including one beyond the 50-line catalog. A global skill wins over the caller's skill of the same name. |
+| `/name` | Up to 3 leading `/name` tokens in `prompt` (`/brand-voice /poster make…`) each add a `## Active skill: <name>` section with the instructions and a `Files:` line of refs. Resolved before the turn starts: an unknown name returns 400 `Unknown skill: <name>` and saves nothing. The stored prompt text is unchanged. |
+
+A host tool (route, request, or MCP) named `load_skill` or `generate_image` is replaced by the built-in one, with a `logger.warn`.
+
+#### Image generation
+
+`imageGeneration` (on `addGptRoutes` and `AiApp`) adds the built-in `generate_image` tool to tool-capable turns. Off by default.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | `({req, modelId}) => LanguageModel \| undefined` | The image-output language model for this request (for example Nano Banana, `gemini-3-pro-image`). Called once per turn. `undefined` leaves the tool out of that turn. It is a `LanguageModel`, not an AI SDK `ImageModel`. |
+| `modelId` | string | Passed to `model`. |
+| `stylePrompt` | `string \| ({req}) => string \| undefined \| Promise<…>` | Put before every image prompt with a blank line between. Trimmed; empty adds nothing. A function that throws logs `logger.warn` and the image is made from the prompt alone. Use `configurationPromptGetter(AppConfig, "ai.imageStylePrompt")` to let admins edit it. |
+| `maxCallsPerTurn` | number | Default 4. Every call counts, failed ones included. |
+
+`generate_image` input is `{prompt: string (1–4000), references?: string[] (≤ 4)}`. Each reference is one of:
+
+- `skill:<name>/<filename>`: an image file of a skill the caller can see (own or global).
+- `attachment:<gcsKey>`: an image `FileAttachment` the caller uploaded (or one this tool generated for them).
+
+Both are read server-side with `fileStorageService.download`. The tool never fetches a URL; any other string, or a reference without storage configured, is `Unknown reference`.
+
+The tool calls `generateText` on the model with one user message: the style prompt, a blank line, the prompt, then each reference as an image part. It keeps the first image in `result.files`.
+
+| Result | When |
+|--------|------|
+| `{images: [{id, mimeType}]}` | An image was made. The model gets ids, never bytes. |
+| `{error: "Unknown reference: <ref>"}` | A reference did not resolve. |
+| `{error: "The image model returned no image"}` | `result.files` held no image. The turn continues. |
+| `{error: "Image limit reached for this turn"}` | The call is over `maxCallsPerTurn`. |
+
+Each image is sent as an SSE `{image: {mimeType, url}}` event and saved on the assistant reply as an `image` content part. With a `fileStorageService` that can upload, the image is stored under `generated/<userId>/…` with a `FileAttachment` owned by the chat user; the saved part carries `gcsKey`, the event `url` is a 1-hour signed URL, and the owner's history reads re-sign it (when `addGptHistoryRoutes` gets `chat` with that storage, as `AiApp` does). Without storage, `url` is a `data:` URL saved as is.
 
 Pass `asks: true` (or `{kinds: ["choice"]}`) to let the model ask the user typed questions in the chat. Asks are off by default; with them off, tools, system prompt, and SSE events are unchanged. See [Agent UI Asks](agent-ui-asks.md).
 
@@ -471,6 +545,30 @@ Requires `fileStorageService` and `gcsBucket` (registered by `AiApp` when both a
 
 `*gcsKey` is the full key with its slashes, such as `uploads/<userId>/<ms>-<name>`.
 
+### addSkillRoutes(router, options?)
+
+`modelRouter` over [`GptSkill`](#gptskill) at `/gpt/skills`, with `audit: true` (rows land when `AuditApp` is registered). Options: `fileStorageService` (needed for packages with files and for file cleanup on delete) and `openApiOptions`. `AiApp` calls it when `skills` is on, passing its storage only when both `fileStorageService` and `gcsBucket` are set.
+
+| Endpoint | Method | Who | Result |
+|----------|--------|-----|--------|
+| `/gpt/skills` | GET | authenticated | The caller's user skills plus every global skill, sorted by name. Fields: `_id, name, description, scope, enabled, files[{filename, mimeType, size}], created, updated`. Never `instructions`. Query fields: `name`, `scope`, `enabled`. |
+| `/gpt/skills/:id` | GET | owner, or anyone for a global skill | Adds `instructions`. Another user's skill is 403. |
+| `/gpt/skills` | POST | authenticated | `{name, description, instructions, scope?}`. Saved as the caller's `user` skill. `scope: "global"` needs an admin: otherwise 403 `Only admins can create global skills`. |
+| `/gpt/skills/:id` | PATCH | owner, or admin for a global skill | Only `name`, `description`, `instructions`, `enabled` are applied. |
+| `/gpt/skills/:id` | DELETE | owner, or admin for a global skill | Soft delete; the skill's files are removed from storage. |
+| `/gpt/skills/upload` | POST | authenticated | Multipart `file` (`.md` or `.zip`, at most 10 MB, else 413 `A skill package may be at most 10 MB`) and optional `scope`. No file is 400 `No file provided`. 201 with the skill (list fields plus `instructions`, and `userId` for a user skill). |
+
+Upload rules (`parseSkillPackage({buffer, filename})`, exported):
+
+- The file must end in `.md` or `.zip`, else 400 `Upload a SKILL.md file or a .zip skill package`.
+- `SKILL.md` needs YAML frontmatter with `name` and `description`; the body is `instructions`. Otherwise 400 `SKILL.md frontmatter needs name and description`. In a zip it may be at most 1 MB (`SKILL.md may be at most 1 MB`).
+- A `.zip` holds `SKILL.md` at its root or inside one top-level folder, plus up to 20 files beside it (subfolders allowed) totaling at most 10 MB. Allowed extensions: `png`, `jpg`, `jpeg`, `gif`, `webp`, `pdf`, `txt`, `csv`, `json`, `md`. Hidden files and `__MACOSX/` are skipped. 400s: `The skill package is not a valid zip file`, `No SKILL.md found in the package`, `Files must sit in the SKILL.md folder: <path>`, `Unsupported file type: <name>`, `Invalid file path: <path>` (`..`, absolute, or backslash), `A skill can hold at most 20 files`, `A skill's files may total at most 10 MB`.
+- A package with files and no storage is 400 `File storage is not configured`.
+- Files are stored with `keyPrefix: "skills/<skillId>"` under the uploader's id. The create is atomic: if any upload or the save fails, uploaded keys are deleted and nothing is saved (500 `Could not store the skill's files` for a storage failure).
+- Any other file type, scripts included, is rejected with 400 `Unsupported file type: <name>`. Nothing in a package is ever run.
+
+`AIAdminApp` (from `@terreno/ai/admin`) contributes `GptSkill` to the admin panel as **AI → Skills** at `/gpt/skills`: `adminFilter` limits it to `scope: "global"`, and `scope`, `userId`, and `files` are hidden, so an admin create saves a global skill and admins never see users' personal skills.
+
 ### addMcpRoutes(router, options)
 
 Requires `mcpService` (registered by `AiApp` when set).
@@ -526,6 +624,8 @@ new AiApp({
 | `titleModelId` | Cheaper model for conversation title generation |
 | `openApiOptions` | Passed to route OpenAPI builders |
 | `projects` | Default `true`. `false` skips the `/gpt/projects` routes, so `AiApp` never registers the `Project` model |
+| `skills` | `true` mounts [`/gpt/skills`](#addskillroutesrouter-options) and offers skills in chat ([Skills in chat](#skills-in-chat)). Default off |
+| `imageGeneration` | `{model, modelId, stylePrompt?, maxCallsPerTurn?}` adds the built-in `generate_image` tool ([Image generation](#image-generation)). Default off |
 
 ## Cost and abuse limits
 
@@ -800,11 +900,13 @@ const storage = new FileStorageService({
   storageOptions: {}, // optional @google-cloud/storage options
 });
 
-await storage.upload({buffer, filename, mimeType, userId}); // {id, filename, gcsKey, mimeType, size, url}
+await storage.upload({buffer, filename, mimeType, userId, keyPrefix}); // {id, filename, gcsKey, mimeType, size, url}
 await storage.download(gcsKey);      // the upload's bytes, as a Buffer
 await storage.getSignedUrl(gcsKey);  // 1-hour v4 signed URL
 await storage.delete(gcsKey);        // GCS delete + soft-delete FileAttachment
 ```
+
+The key is `<keyPrefix>/<userId>/<ms>-<name>`. `keyPrefix` defaults to `uploads`. Skill files use `skills/<skillId>` and generated images use `generated`. Every upload creates a `FileAttachment` owned by `userId`.
 
 ## getMCPTools
 

@@ -76,6 +76,19 @@ describe("GPT skill routes", () => {
       expect(res.body.data.name).toBe("brand-voice");
     });
 
+    it("ignores client-supplied files and userId on create", async () => {
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/gpt/skills")
+        .send({...SKILL_BODY, files: FILES, userId: userBId.toString()});
+      expect(res.status).toBe(201);
+      expect(res.body.data.userId).toBe(userAId.toString());
+      expect(res.body.data.files).toEqual([]);
+      const stored = await GptSkill.findById(res.body.data._id).lean();
+      expect(stored?.files ?? []).toEqual([]);
+      expect(String(stored?.userId)).toBe(userAId.toString());
+    });
+
     it("rejects a request without a token with 401", async () => {
       const res = await (await import("supertest"))
         .default(app)
@@ -247,6 +260,20 @@ describe("GPT skill routes", () => {
       expect(res.status).toBe(200);
       expect(res.body.data.description).toBe("new");
       expect(res.body.data.enabled).toBe(false);
+    });
+
+    it("ignores client-supplied files, scope and userId on patch", async () => {
+      const a = await authAsUser(app, "notAdmin");
+      const created = await a.post("/gpt/skills").send(SKILL_BODY);
+      const res = await a
+        .patch(`/gpt/skills/${created.body.data._id}`)
+        .send({description: "new", files: FILES, scope: "global", userId: userBId.toString()});
+      expect(res.status).toBe(200);
+      expect(res.body.data.description).toBe("new");
+      const stored = await GptSkill.findById(created.body.data._id).lean();
+      expect(stored?.files ?? []).toEqual([]);
+      expect(stored?.scope).toBe("user");
+      expect(String(stored?.userId)).toBe(userAId.toString());
     });
 
     it("forbids patching another user's skill with 403", async () => {

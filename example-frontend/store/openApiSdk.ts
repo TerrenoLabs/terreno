@@ -134,6 +134,16 @@ const injectedRtkApi = api
           url: `/admin/feature-flags/${queryArg}`,
         }),
       }),
+      deleteAdminGptSkillsById: build.mutation<
+        DeleteAdminGptSkillsByIdRes,
+        DeleteAdminGptSkillsByIdArgs
+      >({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          method: "DELETE",
+          url: `/admin/gpt/skills/${queryArg}`,
+        }),
+      }),
       deleteAdminMcpServiceTokensById: build.mutation<
         DeleteAdminMcpServiceTokensByIdRes,
         DeleteAdminMcpServiceTokensByIdArgs
@@ -548,6 +558,28 @@ const injectedRtkApi = api
       >({
         providesTags: ["featureflags"],
         query: (queryArg) => ({url: `/admin/feature-flags/${queryArg}`}),
+      }),
+      getAdminGptSkills: build.query<GetAdminGptSkillsRes, GetAdminGptSkillsArgs>({
+        providesTags: ["gptskills"],
+        query: (queryArg) => ({
+          params: {
+            _id: queryArg._id,
+            description: queryArg.description,
+            enabled: queryArg.enabled,
+            limit: queryArg.limit,
+            name: queryArg.name,
+            page: queryArg.page,
+            q: queryArg.q,
+            scope: queryArg.scope,
+            sort: queryArg.sort,
+            updated: queryArg.updated,
+          },
+          url: `/admin/gpt/skills/`,
+        }),
+      }),
+      getAdminGptSkillsById: build.query<GetAdminGptSkillsByIdRes, GetAdminGptSkillsByIdArgs>({
+        providesTags: ["gptskills"],
+        query: (queryArg) => ({url: `/admin/gpt/skills/${queryArg}`}),
       }),
       getAdminMcpServiceTokens: build.query<
         GetAdminMcpServiceTokensRes,
@@ -1322,6 +1354,17 @@ const injectedRtkApi = api
           url: `/admin/feature-flags/${queryArg.id}`,
         }),
       }),
+      patchAdminGptSkillsById: build.mutation<
+        PatchAdminGptSkillsByIdRes,
+        PatchAdminGptSkillsByIdArgs
+      >({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          body: queryArg.body,
+          method: "PATCH",
+          url: `/admin/gpt/skills/${queryArg.id}`,
+        }),
+      }),
       patchAdminTodosById: build.mutation<PatchAdminTodosByIdRes, PatchAdminTodosByIdArgs>({
         invalidatesTags: ["todos"],
         query: (queryArg) => ({
@@ -1607,6 +1650,14 @@ const injectedRtkApi = api
           body: queryArg,
           method: "POST",
           url: `/admin/feature-flags/bulk-patch`,
+        }),
+      }),
+      postAdminGptSkills: build.mutation<PostAdminGptSkillsRes, PostAdminGptSkillsArgs>({
+        invalidatesTags: ["gptskills"],
+        query: (queryArg) => ({
+          body: queryArg,
+          method: "POST",
+          url: `/admin/gpt/skills/`,
         }),
       }),
       postAdminGptSkillsBulkPatch: build.mutation<
@@ -2897,7 +2948,25 @@ export type GetGptToolsRes = /** status 200 Success */ {
 };
 export type GetGptToolsArgs = undefined;
 export type GptskillsUploadRes = /** status 201 Successful response */ {
-  data?: object;
+  data: {
+    _id: string;
+    /** ISO 8601 creation time */
+    created: string;
+    description: string;
+    enabled: boolean;
+    files: {
+      filename: string;
+      mimeType: string;
+      size: number;
+    }[];
+    instructions: string;
+    name: string;
+    scope: "user" | "global";
+    /** ISO 8601 last update time */
+    updated: string;
+    /** Owner of a user skill; absent for global skills */
+    userId?: string;
+  };
 };
 export type GptskillsUploadArgs = undefined;
 export type PostGptSkillsRes = /** status 201 Successful create */ {
@@ -5622,6 +5691,315 @@ export type PostAdminGptSkillsBulkPatchArgs = {
   /** Partial document; keys must be allowlisted for this model */
   patch: object;
 };
+export type PostAdminGptSkillsRes = /** status 201 Successful create */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type PostAdminGptSkillsArgs = {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description?: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions?: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name?: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id?: string;
+  /** When this document was last updated */
+  updated?: string;
+  /** When this document was created */
+  created?: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type GetAdminGptSkillsRes = /** status 200 Successful list */ {
+  data?: {
+    /** When to use the skill; listed in the chat's skill catalog */
+    description: string;
+    /** Disabled skills are left out of the catalog and load_skill */
+    enabled?: boolean;
+    /** Reference files stored with the skill */
+    files?: {
+      /** Original file name */
+      filename: string;
+      /** Storage key of the file; never sent to clients */
+      gcsKey: string;
+      /** MIME type of the file */
+      mimeType:
+        | "image/jpeg"
+        | "image/png"
+        | "image/gif"
+        | "image/webp"
+        | "application/pdf"
+        | "text/plain"
+        | "text/csv"
+        | "application/json"
+        | "text/markdown";
+      /** File size in bytes */
+      size: number;
+    }[];
+    /** Full markdown instructions returned by load_skill */
+    instructions: string;
+    /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+    name: string;
+    /** user skills are visible to their owner; global skills to every user */
+    scope?: "user" | "global";
+    /** Owner of a user skill; unset for global skills */
+    userId?: string;
+    _id: string;
+    /** When this document was last updated */
+    updated: string;
+    /** When this document was created */
+    created: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+    ownerId?: any;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+export type GetAdminGptSkillsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  q?:
+    | any
+    | {
+        $in?: any[];
+      };
+  name?:
+    | string
+    | {
+        $in?: string[];
+      };
+  description?:
+    | string
+    | {
+        $in?: string[];
+      };
+  scope?:
+    | ("user" | "global")
+    | {
+        $in?: string[];
+      };
+  enabled?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
+  updated?:
+    | string
+    | {
+        /** When this document was last updated */
+        $gt?: string;
+        /** When this document was last updated */
+        $gte?: string;
+        /** When this document was last updated */
+        $lt?: string;
+        /** When this document was last updated */
+        $lte?: string;
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+export type GetAdminGptSkillsByIdRes = /** status 200 Successful read */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type GetAdminGptSkillsByIdArgs = string;
+export type PatchAdminGptSkillsByIdRes = /** status 200 Successful update */ {
+  /** When to use the skill; listed in the chat's skill catalog */
+  description: string;
+  /** Disabled skills are left out of the catalog and load_skill */
+  enabled?: boolean;
+  /** Reference files stored with the skill */
+  files?: {
+    /** Original file name */
+    filename: string;
+    /** Storage key of the file; never sent to clients */
+    gcsKey: string;
+    /** MIME type of the file */
+    mimeType:
+      | "image/jpeg"
+      | "image/png"
+      | "image/gif"
+      | "image/webp"
+      | "application/pdf"
+      | "text/plain"
+      | "text/csv"
+      | "application/json"
+      | "text/markdown";
+    /** File size in bytes */
+    size: number;
+  }[];
+  /** Full markdown instructions returned by load_skill */
+  instructions: string;
+  /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+  name: string;
+  /** user skills are visible to their owner; global skills to every user */
+  scope?: "user" | "global";
+  /** Owner of a user skill; unset for global skills */
+  userId?: string;
+  _id: string;
+  /** When this document was last updated */
+  updated: string;
+  /** When this document was created */
+  created: string;
+  /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+  deleted?: boolean;
+  ownerId?: any;
+};
+export type PatchAdminGptSkillsByIdArgs = {
+  id: string;
+  body: {
+    /** When to use the skill; listed in the chat's skill catalog */
+    description?: string;
+    /** Disabled skills are left out of the catalog and load_skill */
+    enabled?: boolean;
+    /** Reference files stored with the skill */
+    files?: {
+      /** Original file name */
+      filename: string;
+      /** Storage key of the file; never sent to clients */
+      gcsKey: string;
+      /** MIME type of the file */
+      mimeType:
+        | "image/jpeg"
+        | "image/png"
+        | "image/gif"
+        | "image/webp"
+        | "application/pdf"
+        | "text/plain"
+        | "text/csv"
+        | "application/json"
+        | "text/markdown";
+      /** File size in bytes */
+      size: number;
+    }[];
+    /** Full markdown instructions returned by load_skill */
+    instructions?: string;
+    /** Skill name: lowercase letters, digits and hyphens, at most 64 characters */
+    name?: string;
+    /** user skills are visible to their owner; global skills to every user */
+    scope?: "user" | "global";
+    /** Owner of a user skill; unset for global skills */
+    userId?: string;
+    _id?: string;
+    /** When this document was last updated */
+    updated?: string;
+    /** When this document was created */
+    created?: string;
+    /** Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them. */
+    deleted?: boolean;
+    ownerId?: any;
+  };
+};
+export type DeleteAdminGptSkillsByIdRes = unknown;
+export type DeleteAdminGptSkillsByIdArgs = string;
 export type PostAdminConsentFormsBulkPatchRes = /** status 200 Success */ {
   failures?: any;
   updated?: number;
@@ -8796,6 +9174,11 @@ export const {
   useGetAdminAuditEventsQuery,
   useGetAdminAuditEventsByIdQuery,
   usePostAdminGptSkillsBulkPatchMutation,
+  usePostAdminGptSkillsMutation,
+  useGetAdminGptSkillsQuery,
+  useGetAdminGptSkillsByIdQuery,
+  usePatchAdminGptSkillsByIdMutation,
+  useDeleteAdminGptSkillsByIdMutation,
   usePostAdminConsentFormsBulkPatchMutation,
   usePostAdminConsentFormsMutation,
   useGetAdminConsentFormsQuery,

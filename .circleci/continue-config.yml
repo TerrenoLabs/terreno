@@ -210,10 +210,10 @@ commands:
             sudo install /tmp/terraform/terraform /usr/local/bin/terraform
 
   install_bun_and_deps:
-    description: Install Bun 1.4.0 and workspace deps with frozen lockfile (no package cache)
+    description: Install Bun 1.4.4 and workspace deps with frozen lockfile (no package cache)
     steps:
       - node/install-bun:
-          version: "1.4.0"
+          version: "1.4.4"
       - node/install-packages:
           pkg-manager: bun
           with-cache: false

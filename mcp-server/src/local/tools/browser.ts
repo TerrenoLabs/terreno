@@ -112,11 +112,68 @@ const DEFAULT_HEIGHT = 720;
 const DEFAULT_WIDTH = 1280;
 const CURSOR_ARTIFACTS_ROOT = "/opt/cursor/artifacts";
 
+/**
+ * Wraps a Bun WebView so it satisfies {@link BrowserView} when Bun types omit `back`/`forward`.
+ *
+ * @param webview - Native Bun WebView instance created for browser automation.
+ * @returns A view that delegates to the WebView and implements history navigation via `evaluate`.
+ */
+const wrapWebViewAsBrowserView = (webview: Bun.WebView): BrowserView => {
+  return {
+    back: async (): Promise<void> => {
+      await webview.evaluate("history.back()");
+    },
+    click: (selector: string, options?: Bun.WebView.ClickSelectorOptions): Promise<void> => {
+      return webview.click(selector, options);
+    },
+    close: (): void => {
+      webview.close();
+    },
+    evaluate: <T = unknown>(code: string): Promise<T> => {
+      return webview.evaluate(code);
+    },
+    forward: async (): Promise<void> => {
+      await webview.evaluate("history.forward()");
+    },
+    navigate: (url: string): Promise<void> => {
+      return webview.navigate(url);
+    },
+    press: (key: string, options?: Bun.WebView.PressOptions): Promise<void> => {
+      return webview.press(key, options);
+    },
+    reload: (): Promise<void> => {
+      return webview.reload();
+    },
+    screenshot: (options?: {
+      encoding?: "blob";
+      format?: "jpeg" | "png" | "webp";
+      quality?: number;
+    }): Promise<Blob> => {
+      return webview.screenshot(options);
+    },
+    scroll: (x: number, y: number): Promise<void> => {
+      return webview.scroll(x, y);
+    },
+    scrollTo: (selector: string, options?: Bun.WebView.ScrollToOptions): Promise<void> => {
+      return webview.scrollTo(selector, options);
+    },
+    get title(): string {
+      return webview.title;
+    },
+    type: (text: string): Promise<void> => {
+      return webview.type(text);
+    },
+    get url(): string {
+      return webview.url;
+    },
+  };
+};
+
 const defaultCreateBrowserView: CreateBrowserView = (options): BrowserView => {
   if (typeof Bun.WebView !== "function") {
     throw new Error("Bun.WebView requires Bun 1.4 or newer.");
   }
-  return new Bun.WebView(options);
+  return wrapWebViewAsBrowserView(new Bun.WebView(options));
 };
 
 const parseImageFormat = (output: string): "jpeg" | "png" | "webp" => {

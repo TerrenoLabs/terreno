@@ -46,6 +46,18 @@ Read the shared [`scan contract`](references/scan-contract.md),
      (test, build probe, runtime/API/database check, artifact, regression case)
    - at least one criterion that ties back to the metric or names why this slice cannot
      move it alone
+   - an `## E2E tests` section listing the slice's planned specs, or `None — <reason>`.
+     Use the table format of the testing plan contract in the `terreno-planning` plugin
+     (`references/testing-plan.md`, read by `terreno-1-grow`). Take each spec's path and
+     layer from the e2e guide that the agent instructions' `## Testing conventions` table
+     names, or from the contract's default. Pair every UI or cross-process criterion with
+     a row or a reason. Leave `Written in` for Grow to fill. When no guide exists at that
+     path, use the contract's layer names and say so; Grow adds the guide task, so this
+     is not `BLOCKED`
+   - a `## Regression cases` section listing the manual cases the slice adds or changes,
+     or `None — <reason>`, in the testing plan's table format with provisional
+     `<AREA>-new-<n>` IDs. Each case meets the contract's regression-step bar. Leave
+     `Added` for Grow to fill
    - the unacceptable trade-offs from the charter, quoted
    - the docs the slice must create or update
    - known blockers, dependencies on other slices, and residual risk
@@ -74,23 +86,24 @@ lifecycle to load, but Grow and Pick still perform their own discovery.
 ## Evidence produced
 
 - Slice plan with order, rationale, and the findings in each slice
-- Brief path per slice, its resolved reviewer/assignee, and the acceptance-criterion →
-  verification mapping
+- Brief path per slice, its resolved reviewer/assignee, the acceptance-criterion →
+  verification mapping, and its `## E2E tests` and `## Regression cases` sections
 - Findings deferred to a later round, with the budget reason
 - Updated campaign state and structured Plot result
 
 ## Success conditions
 
 - Every planned slice fits the slice policy and has a standalone, criterion-complete
-  brief.
+  brief with both testing-plan sections, each holding rows or `None — <reason>`.
 - Every open finding is either planned into a slice or explicitly deferred with a reason.
 - A fresh Grow invocation can produce an approved IP and task list from one brief alone.
 - Emit `PASS` with `next: track` and `handoff: grow`.
 
 ## Failure conditions
 
-Slices that violate the policy, briefs missing verification methods, or findings silently
-lost between the report and the plan emit `FAIL` with exact defects and `next: plot`.
+Slices that violate the policy, briefs missing verification methods or a testing-plan
+section, or findings silently lost between the report and the plan emit `FAIL` with exact
+defects and `next: plot`.
 
 ## Blocked conditions
 

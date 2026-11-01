@@ -68,6 +68,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "terreno-frontend-tests",
       "terreno-mobile-tests",
       "backend-test-env",
+      "backfill-regression",
     ],
     title: "Testing",
   },

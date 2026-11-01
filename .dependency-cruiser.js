@@ -1,5 +1,5 @@
 /** @type {import("dependency-cruiser").IConfiguration} */
-const generatedPath = "(^|/)(?:build|coverage|dist|node_modules)(/|$)";
+const generatedPath = "(^|/)(?:build|coverage|dist|dist-smoke|node_modules)(/|$)";
 
 module.exports = {
   forbidden: [

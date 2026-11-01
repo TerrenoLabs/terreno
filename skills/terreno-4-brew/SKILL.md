@@ -15,7 +15,8 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
 [`product CI`](references/product-ci.md),
 [`async review bots`](references/async-review-bots.md),
 [`push ownership`](references/push-ownership.md),
-[`independent review procedure`](references/independent-review.md), and
+[`independent review procedure`](references/independent-review.md),
+[`testing plan`](references/testing-plan.md), and
 [`subagent briefing`](references/subagent-briefing.md). All GitHub text
 must follow the [`GitHub attention contract`](references/github-attention-contract.md).
 
@@ -27,7 +28,8 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
 
 ## Inputs
 
-- Approved IP/task and Roast result
+- Approved IP/task and Roast result, including the IP's `## E2E tests` and
+  `## Regression cases` sections and Roast's per-row results
 - Current branch/head/diff and execution state
 - Verification artifacts/evidence
 - Repository instructions, available supporting skills, and PR template
@@ -39,9 +41,36 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
    implementation. Behavioral changes after Roast return to Roast.
 2. **Discover supporting skills.** Load applicable submission, documentation, commit,
    changelog, security, and repository verification skills.
-3. **Run final gates.** Execute repository-required pre-submit checks. When the root
-   `package.json` defines a `prepush` script, run it in a fresh subagent with no parent
-   conversation before the first push. A red local gate is `FAIL`; do not push it. Confirm docs
+3. **Run final gates.** Resolve the e2e guide and `Regression suites` directory per the
+   testing plan, then gate the IP's two testing-plan sections before the other checks.
+   An IP that lacks either section follows the testing-plan legacy rule: warn once and
+   skip that section's gate.
+   - **Planned specs.** Confirm every `## E2E tests` row has a spec at its path that
+     passed: Roast recorded it `PASS` on the tree being submitted, or Brew reruns its
+     command green now. Only Brew accepts a `deferred` row, and only when its recorded
+     command passed locally in this invocation or in a terminal product-CI run on this
+     branch. A deferred row no local runner can reach, whose command a product-CI job
+     on a discovered host runs, does not block the push; step 10 settles it. A missing
+     spec, a failing row, or a red run of a deferred row's command is `FAIL` with
+     `next: pick` that names the row ID. A deferred row whose command neither a local
+     runner nor any CI job on a discovered host runs is `BLOCKED` naming the row and
+     its command.
+   - **Regression cases.** Skip this gate when `Regression suites` is `none` (the
+     testing-plan opt-out). Otherwise merge every `## Regression cases` row into
+     `<Regression suites>/<area>.md`, finding each file by the `Area:` line its
+     `Destination:` prefix names. Create a missing file from the testing-plan suite
+     format. Give each provisional `<AREA>-new-<n>` row the next free ID, set `Added`
+     to the IP slug, and replace an `E<n>` in `Automated by` with that row's spec path.
+     A row with a real ID edits that case in place and keeps its ID and `Added`. Leave
+     the IP tables unchanged; record each provisional-to-real ID mapping in execution
+     state and the Brew result. On a rerun, find rows already merged from this IP by
+     that mapping or, failing that, as rows this branch added to the suite file (diff
+     against the merge base) whose `Added` is the IP slug, and update them instead of
+     adding duplicates.
+
+   Then execute repository-required pre-submit checks, so suite checks see the merged
+   rows. When the root `package.json` defines a `prepush` script, run it in a fresh
+   subagent with no parent conversation before the first push. A red local gate is `FAIL`; do not push it. Confirm docs
    follow the documentation contract, generated files are current, changelog/release
    notes exist when required, and verification artifacts are complete. Ship without
    matching docs is `FAIL`.
@@ -54,7 +83,8 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
 6. **Commit.** Follow repository commit and DCO/sign-off policy. Preserve the existing
    prohibition on AI attribution. Use behavior-scoped commits, one per roasted task,
    with no bookkeeping-only commits; do not rewrite pushed history unless explicitly
-   allowed.
+   allowed. Suite rows merged in step 3 are a deliverable, not bookkeeping: commit
+   them in one commit per Brew invocation that changes them, named for the cases.
 7. **Push.** Push once with upstream. Resolve only mechanical conflicts needed to update the PR,
    using repository conflict guidance and rerunning affected checks. A conflict requiring
    a design/behavior choice is `BLOCKED`.
@@ -65,11 +95,13 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
    brief overview of the approved IP and intended outcomes. Keep both stable unless
    scope or facts change. Always include reproducible testing instructions in
    `Verification`; update those instructions, evidence, and remaining risks as testing
-   changes without rewriting the body around the latest turn. The visible body uses
-   only `Why`, `What changed`, and `Verification`, stays under 250 words, and puts
-   optional detail plus the stage-result YAML in one expandable Details block.
-   Preserve human-edited title/body; make only accurate minimal edits. Attach only
-   decisive UI/runtime artifacts without sensitive data.
+   changes without rewriting the body around the latest turn. List every regression
+   case ID the PR adds or changes in one `Verification` row that links its suite file,
+   under `⚠️ Not tested` unless a person walked every listed case on this branch. The
+   visible body uses only `Why`, `What changed`, and `Verification`, stays under 250
+   words, and puts optional detail plus the stage-result YAML in one expandable
+   Details block. Preserve human-edited title/body; make only accurate minimal edits.
+   Attach only decisive UI/runtime artifacts without sensitive data.
 9. **Do not announce.** Do not post a PR comment for creation, readiness, check results,
    or evidence already present in the body. A top-level comment is allowed only for one
    blocking human action that cannot live in an existing review thread.
@@ -81,7 +113,10 @@ must follow the [`GitHub attention contract`](references/github-attention-contra
     subscriptions; use bounded sleep/re-fetch only as a fallback. Wait until Bugbot,
     CodeQL, and similar review bots on this head are terminal, never appeared after the
     startup grace, or hit the 20-minute timeout. Do not exit while those bots are queued
-    or in progress. Do not wait for ordinary product CI to finish.
+    or in progress. Do not wait for ordinary product CI to finish. The one exception
+    is a deferred `## E2E tests` row step 3 left for CI: wait for the job that runs
+    its command to finish on this head. Green accepts the row; red is `FAIL` with
+    `next: pick` naming the row ID.
 11. **Record and exit.** Update execution state and emit:
     - review-bot timeout → `PENDING` with `next: taste` and `wait`
     - required host untriggered after grace → `FAIL` with `next: brew`
@@ -105,6 +140,9 @@ handling, and mandatory evidence gates.
 ## Evidence produced
 
 - Final checks and independent-review outcomes
+- Each `## E2E tests` row with its spec path and the passing run Brew accepted
+- Each regression case written to the suite, with its provisional and real ID and
+  suite file
 - Commit and pushed head SHA
 - PR URL/number and preserved template/body state
 - Attached artifact references and sensitive-data check
@@ -115,6 +153,9 @@ handling, and mandatory evidence gates.
 ## Success conditions
 
 - Verified implementation is committed/pushed and the PR accurately represents it.
+- Every `## E2E tests` row has a spec at its path with a passing run on this branch.
+- Every `## Regression cases` row is in its suite file under a real ID, and the PR
+  `Verification` section lists those IDs.
 - Product CI on every discovered CI host is triggered (or documented skipped) for the
   recorded current head.
 - Async review bots on this head are terminal or did not appear after the startup grace.
@@ -122,7 +163,8 @@ handling, and mandatory evidence gates.
 
 ## Failure conditions
 
-Failed final checks, **Brew's own independent-review findings** (step 4), push errors,
+Failed final checks, a missing or failing `## E2E tests` row, including a red CI run of
+a deferred row (`next: pick`, naming the row ID), **Brew's own independent-review findings** (step 4), push errors,
 PR setup errors, or a required CI host still untriggered after grace emit `FAIL` with
 evidence and the smallest corrective stage/action:
 behavioral defects use `next: pick`, stale/missing proof uses `next: roast`,
@@ -133,8 +175,8 @@ async review-bot findings as Brew `FAIL`; record them and emit `PASS` with
 ## Blocked conditions
 
 Missing access, required human approval/decision, unsafe conflict, unavailable mandatory
-submission capability, or sensitive-data risk emits `BLOCKED` with
-`next: null` and the exact action required.
+submission capability, a deferred `## E2E tests` row nothing can run, or sensitive-data
+risk emits `BLOCKED` with `next: null` and the exact action required.
 
 ## Recommended next stage
 
@@ -144,4 +186,5 @@ submission capability, or sensitive-data risk emits `BLOCKED` with
 - `BLOCKED` → outer loop routes the named gate
 
 For standalone compatibility, a human/runner may invoke Taste immediately after Brew
-returns. Brew itself never executes Taste and does not wait for product CI to finish.
+returns. Brew itself never executes Taste and does not wait for product CI to finish, except
+for the CI job that settles a deferred `## E2E tests` row.

@@ -1,6 +1,6 @@
 # Scan plugin reference
 
-Plugin: `terreno-scan` (`2.11.0`). Requires the lifecycle plugin
+Plugin: `terreno-scan` (`2.12.0`). Requires the lifecycle plugin `2.13.0` or later
 ([lifecycle plugin reference](lifecycle-plugin.md)).
 
 A scan turns a long-term outcome — "cold builds under 30s", "no unbounded reads", "WCAG
@@ -15,7 +15,7 @@ Scan stages never edit product code. The lifecycle does.
 | `terreno-scan-1-aim` | goal/outcome + repository | approved charter: metric, measured baseline, dry-run rules, exclusions, validity rule, severity rubric, slice policy, budget | Sweep |
 | `terreno-scan-2-sweep` | approved charter | per-rule hits, deterministic shard manifest, schema-valid candidate findings from parallel workers | Sift |
 | `terreno-scan-3-sift` | candidates for the round | deduped, adversarially verified, ranked findings report plus dropped-candidate summary | Plot, or Track when dry |
-| `terreno-scan-4-plot` | findings report + slice policy | ordered PR-sized slices, one standalone Grow brief each, findings marked `planned` | Track, with `handoff: grow` |
+| `terreno-scan-4-plot` | findings report + slice policy | ordered PR-sized slices, one standalone Grow brief each (with `## E2E tests` and `## Regression cases`), findings marked `planned` | Track, with `handoff: grow` |
 | `terreno-scan-5-track` | landed slice or dry round | re-measured metric with command output, findings closed/reopened with evidence, round record, next move | Plot, Sweep, or `null` |
 
 Outer loops (not stages):

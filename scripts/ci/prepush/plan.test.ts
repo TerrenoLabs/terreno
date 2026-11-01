@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {readFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 
 import {readMappings} from "../../check-circleci-parity/lib";
@@ -32,6 +33,14 @@ describe("planPrepush", () => {
     const names = stepNames(["plugins/terreno-planning/skills/terreno-2-pick/SKILL.md"]);
     expect(names).toContain("repo-policies: barrels, explicit-any, lifecycle skills, source rules");
     expect(names).toContain("repo-policies: generated skills in sync");
+  });
+
+  it("checks the regression suites when a suite file changes", () => {
+    const names = stepNames(["docs/regression/auth.md"]);
+    expect(names).toContain("repo-policies: regression suites");
+    expect(stepNames(["scripts/regression/checkSuites.ts"])).toContain(
+      "repo-policies: regression suites"
+    );
   });
 
   it("runs example-backend tests when api changes (OpenAPI snapshot regression)", () => {
@@ -96,6 +105,55 @@ describe("planPrepush", () => {
       mappings: MAPPINGS,
     });
     expect(plan.ciOnly.map((item) => item.parameter)).toContain("run-e2e");
+  });
+
+  it("hints the smoke command for a package change instead of running it", () => {
+    const plan = planPrepush({
+      baseSha: BASE,
+      changedFiles: ["rtk/src/index.ts"],
+      mappings: MAPPINGS,
+    });
+    const smoke = plan.ciOnly.find((item) => item.parameter === "run-smoke");
+    expect(smoke?.hint).toStartWith("bun run smoke");
+    expect(plan.steps.some((step) => step.command.includes("bun run smoke"))).toBe(false);
+  });
+
+  it("hints the smoke command for a change in every package workspace", () => {
+    const {workspaces} = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      workspaces: string[];
+    };
+    const unmapped = workspaces
+      .filter((dir) => dir !== "website")
+      .filter((dir) => {
+        const plan = planPrepush({
+          baseSha: BASE,
+          changedFiles: [`${dir}/src/index.ts`],
+          mappings: MAPPINGS,
+        });
+        return !plan.ciOnly.some((item) => item.parameter === "run-smoke");
+      });
+    expect(unmapped).toEqual([]);
+  });
+
+  it("does not hint the smoke command for a docs-only change", () => {
+    const plan = planPrepush({
+      baseSha: BASE,
+      changedFiles: ["docs/how-to/circleci.md"],
+      mappings: MAPPINGS,
+    });
+    expect(plan.ciOnly.map((item) => item.parameter)).not.toContain("run-smoke");
+  });
+
+  it("leaves the admin-spa smoke to the smoke job", () => {
+    const plan = planPrepush({
+      baseSha: BASE,
+      changedFiles: ["admin-spa/app/index.tsx"],
+      mappings: MAPPINGS,
+    });
+    const adminSpa = plan.steps.find((step) => step.name === "admin-spa-ci: typecheck, web build");
+    expect(adminSpa?.command).toContain("bun run build:web");
+    expect(adminSpa?.command).not.toContain("smoke");
+    expect(plan.ciOnly.map((item) => item.parameter)).toContain("run-smoke");
   });
 
   it("plans every parameter with --all", () => {

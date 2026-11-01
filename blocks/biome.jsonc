@@ -6,6 +6,7 @@
       "package.json",
       "src/**/*.ts",
       "scripts/**/*.ts",
+      "e2e/**/*.ts",
       "!!**/node_modules",
       "!!node_modules",
       "!!**/dist",

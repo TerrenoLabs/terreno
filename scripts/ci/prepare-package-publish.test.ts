@@ -48,4 +48,37 @@ describe("prepare-package-publish", () => {
       rmSync(repoRoot, {force: true, recursive: true});
     }
   });
+
+  it("stamps the release version into a Claude plugin manifest", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "prepare-package-publish-"));
+    try {
+      mkdirSync(join(repoRoot, "plugins/terreno-claude/.claude-plugin"), {recursive: true});
+      writeFileSync(join(repoRoot, "package.json"), JSON.stringify({catalog: {}}));
+      writeFileSync(join(repoRoot, "CHANGELOG.md"), "# Changelog\n");
+      writeFileSync(
+        join(repoRoot, "plugins/terreno-claude/package.json"),
+        JSON.stringify({name: "@terreno/claude-plugin", version: "0.0.0"})
+      );
+      writeFileSync(
+        join(repoRoot, "plugins/terreno-claude/.claude-plugin/plugin.json"),
+        JSON.stringify({name: "terreno", skills: "./skills/"})
+      );
+
+      const result = Bun.spawnSync({
+        cmd: ["bun", SCRIPT_PATH, "plugins/terreno-claude", "58.0.0", "release"],
+        cwd: repoRoot,
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+      assert.equal(result.exitCode, 0, result.stderr.toString());
+
+      const manifest = JSON.parse(
+        readFileSync(join(repoRoot, "plugins/terreno-claude/.claude-plugin/plugin.json"), "utf8")
+      ) as {name: string; version: string};
+      assert.equal(manifest.version, "58.0.0");
+      assert.equal(manifest.name, "terreno");
+    } finally {
+      rmSync(repoRoot, {force: true, recursive: true});
+    }
+  });
 });

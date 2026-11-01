@@ -1,0 +1,33 @@
+{
+  "description": "Goal-driven code scans for Terreno: charter a measurable long-term goal, map-reduce the repository into verified findings, slice them into IPs and tasks, and drive each slice through the Terreno lifecycle until the metric hits target.",
+  "files": [
+    ".claude-plugin/",
+    "references/",
+    "skills/",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "homepage": "https://github.com/TerrenoLabs/terreno/blob/master/plugins/README.md",
+  "keywords": [
+    "claude-code",
+    "claude-plugin",
+    "terreno",
+    "scan",
+    "codebase-health",
+    "map-reduce",
+    "refactoring",
+    "sdlc"
+  ],
+  "license": "MIT",
+  "name": "@terreno/claude-plugin-scan",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "directory": "plugins/terreno-scan-claude",
+    "type": "git",
+    "url": "git+https://github.com/TerrenoLabs/terreno.git"
+  },
+  "version": "0.0.0"
+}

@@ -236,6 +236,20 @@ codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
 ```
 
+Claude Code has three channels: master (above), a pinned release
+(`/plugin marketplace add TerrenoLabs/terreno#<version>`), and the latest stable release
+from npm (`/plugin marketplace add https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json`, then
+`/plugin install terreno@terreno-releases`). Register one. See
+[Install agent skills](../docs/how-to/install-agent-skills.md#pick-a-channel).
+
+The npm channel publishes `terreno-claude/` as `@terreno/claude-plugin` and
+`terreno-scan-claude/` as `@terreno/claude-plugin-scan` from the CircleCI
+`publish-release` job. `bun run skills:sync` generates each `package.json` (committed at
+`0.0.0`) and [`claude-release/.claude-plugin/marketplace.json`](claude-release/.claude-plugin/marketplace.json).
+`scripts/ci/prepare-package-publish.mjs` stamps the release into `package.json` and
+`.claude-plugin/plugin.json` at publish. The committed manifest has no `version`, so
+git installs are versioned by commit SHA and receive every change.
+
 Claude Code's installer collides when the marketplace `name` matches the plugin `name`.
 The marketplace is `terreno-plugins`; the plugin stays `terreno` so Grow is `/terreno:1-grow`.
 

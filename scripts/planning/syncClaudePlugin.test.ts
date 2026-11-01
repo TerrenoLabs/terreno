@@ -1,12 +1,12 @@
 import {describe, it} from "bun:test";
-import {readFileSync} from "node:fs";
 import {resolve} from "node:path";
 import {assert} from "chai";
 import {
   buildClaudePluginFiles,
+  buildReleaseMarketplace,
   rewriteStageNames,
   shortenStageName,
-  syncClaudePlugin,
+  syncAllClaudePlugins,
 } from "./syncClaudePlugin.ts";
 
 const ROOT_DIRECTORY = resolve(import.meta.dir, "../..");
@@ -27,7 +27,7 @@ describe("Claude plugin sync", (): void => {
   });
 
   it("keeps the committed Claude plugin tree in sync", (): void => {
-    assert.deepEqual(syncClaudePlugin({check: true, rootDirectory: ROOT_DIRECTORY}), []);
+    assert.deepEqual(syncAllClaudePlugins({check: true, rootDirectory: ROOT_DIRECTORY}), []);
   });
 
   it("emits shortened skills, shared references, and a terreno manifest", (): void => {
@@ -73,17 +73,42 @@ describe("Claude plugin sync", (): void => {
 
     const manifest = JSON.parse(
       files.find(({path}) => path === ".claude-plugin/plugin.json")?.contents ?? "{}"
-    ) as {agents: string[]; name: string; skills: string; version: string};
-    const cursorManifest = JSON.parse(
-      readFileSync(
-        resolve(ROOT_DIRECTORY, "plugins/terreno-planning/.cursor-plugin/plugin.json"),
-        "utf8"
-      )
-    ) as {version: string};
+    ) as {agents: string[]; name: string; skills: string; version?: string};
 
     assert.equal(manifest.name, "terreno");
     assert.equal(manifest.skills, "./skills/");
     assert.deepEqual(manifest.agents, ["./agents/pre-commit.md", "./agents/ui-verifier.md"]);
-    assert.equal(manifest.version, cursorManifest.version);
+    assert.isUndefined(manifest.version, "git installs must version by commit SHA");
+
+    const packageJson = JSON.parse(
+      files.find(({path}) => path === "package.json")?.contents ?? "{}"
+    ) as {files: string[]; name: string; publishConfig: {access: string}};
+    assert.equal(packageJson.name, "@terreno/claude-plugin");
+    assert.equal(packageJson.publishConfig.access, "public");
+    assert.includeMembers(packageJson.files, [
+      ".claude-plugin/",
+      "agents/",
+      "references/",
+      "skills/",
+    ]);
+  });
+
+  it("points the release marketplace at each plugin's npm package", (): void => {
+    const marketplace = JSON.parse(buildReleaseMarketplace(ROOT_DIRECTORY)) as {
+      name: string;
+      plugins: {name: string; source: {package: string; source: string; version?: string}}[];
+    };
+    assert.equal(marketplace.name, "terreno-releases");
+    assert.deepEqual(
+      marketplace.plugins.map(({name, source}) => [name, source.source, source.package]),
+      [
+        ["terreno", "npm", "@terreno/claude-plugin"],
+        ["terreno-scan", "npm", "@terreno/claude-plugin-scan"],
+      ]
+    );
+    assert.isUndefined(
+      marketplace.plugins[0].source.version,
+      "unpinned tracks the latest dist-tag"
+    );
   });
 });

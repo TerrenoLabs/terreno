@@ -714,8 +714,10 @@ export const validateClaudePluginHost = ({
   if (claudeManifest.name !== "terreno") {
     errors.push("Claude plugin name must be terreno so stages resolve as /terreno:<stage>");
   }
-  if (claudeManifest.version !== cursorManifest.version) {
-    errors.push("Claude and Cursor plugin versions must match");
+  // Claude Code versions a git install by commit SHA only when the manifest has no
+  // version; the npm release copy gets the Terreno version at publish time.
+  if (claudeManifest.version !== undefined) {
+    errors.push("Claude plugin manifest must not pin version (git installs track commits)");
   }
   if (claudeManifest.description !== cursorManifest.description) {
     errors.push("Claude and Cursor plugin descriptions must match");

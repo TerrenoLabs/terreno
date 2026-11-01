@@ -61,6 +61,28 @@ Claude Code stages, app skills, and agents come from the generated copy at
 scan stages come from
 [`plugins/terreno-scan-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-scan-claude).
 
+#### Pick a channel
+
+Register one channel. Each one provides plugins named `terreno` and `terreno-scan`, so
+two channels give duplicate `/terreno:*` skills.
+
+| Channel | Tracks | Add the marketplace | Install |
+| --- | --- | --- | --- |
+| Master | Every merge to `master` | `/plugin marketplace add TerrenoLabs/terreno` | `/plugin install terreno@terreno-plugins` |
+| Pinned release | One release tag, frozen | `/plugin marketplace add TerrenoLabs/terreno#<version>` | `/plugin install terreno@terreno-plugins` |
+| Latest release | The newest stable release, from npm | `/plugin marketplace add https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json` | `/plugin install terreno@terreno-releases` |
+
+The release channel installs `@terreno/claude-plugin` and `@terreno/claude-plugin-scan`
+from npm. Both are published in lockstep with every other `@terreno/*` package, and
+their plugin version is the Terreno release. To move a pinned install to another release, remove
+the marketplace and add it again at the new tag. Only tags from 57.21.0 on carry
+distinct plugin versions. Older tags all report `2.12.0`, so switching between two of
+them can be skipped as already up to date.
+
+Claude Code does not auto-update third-party marketplaces by default. Run
+`/plugin update terreno@<marketplace>`, or turn on auto-update for the marketplace in
+`/plugin` → **Marketplaces**.
+
 ## What you get
 
 | Group | Skills |

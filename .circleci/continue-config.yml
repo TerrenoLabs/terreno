@@ -2385,6 +2385,9 @@ jobs:
               api test blocks ui rtk admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
+            # Generated Claude Code plugins: no compile step and no master version bump
+            # (their committed package.json stays 0.0.0; publish stamps the release).
+            packages+=(plugins/terreno-claude plugins/terreno-scan-claude)
             export TERRENO_PUBLISH_PREBUILT=1
             # npm does not resolve dependencies at publish time, so order does not
             # matter; xargs exits non-zero if any package fails.

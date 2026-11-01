@@ -316,7 +316,8 @@ example-backend **test** setup only. They are not read by `@terreno/jobs`. Use
 
 `SEED_DEFAULTS=true` runs the example seed (default users, all with the published password
 `testpassword123`) when the server starts. A process with `NODE_ENV=production` logs a warning and
-skips it, so no deployed revision, PR previews included, holds those accounts.
+skips it, so no deployed revision holds those accounts. The exception is a PR preview, whose
+`MONGO_DB_NAME` starts with `terreno-example-pr-`: it seeds its own throwaway database.
 
 ## Testing & CI (tooling only)
 

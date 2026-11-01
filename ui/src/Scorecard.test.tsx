@@ -62,4 +62,15 @@ describe("Scorecard", () => {
   it("is available from the package root lazy boundary", () => {
     assert.isFunction(RootScorecard);
   });
+
+  it("keeps the title and hides the value while loading", () => {
+    const {getByText, queryByTestId} = renderWithTheme(
+      <Scorecard loading sparklineData={CURRENT} testID="score" title="Visits" value={42} />
+    );
+
+    assert.exists(getByText("Visits"));
+    assert.notExists(queryByTestId("score.value"));
+    assert.notExists(queryByTestId("score.sparkline"));
+    assert.exists(queryByTestId("score.loading"));
+  });
 });

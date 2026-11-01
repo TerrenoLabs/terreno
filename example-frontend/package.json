@@ -49,6 +49,7 @@
     "babel-preset-expo": "catalog:",
     "expo-mcp": "^0.2.4",
     "mongodb": "catalog:",
+    "otpauth": "^9.5.2",
     "react-test-renderer": "catalog:",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.1",
@@ -78,6 +79,7 @@
     "test:ci": "bun test ./**/*.test.ts ./**/*.test.tsx",
     "test:e2e": "playwright test",
     "test:e2e:report": "playwright show-report",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "web": "NODE_OPTIONS=--max-old-space-size=8192 bun expo start --web --port 8082"
   },
   "version": "1.0.0"

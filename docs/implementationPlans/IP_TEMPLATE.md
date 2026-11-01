@@ -59,10 +59,13 @@ Every planned spec or flow, written by the task that delivers its behaviour. Fol
 
 ## Regression cases
 
-Manual cases this plan adds or changes, in the suite format used by the files in
-`docs/regression/`. IDs here are provisional (`<AREA>-new-<n>`); Brew
-assigns real IDs when it writes them into the suite. Write `None — <reason>` when the
-plan adds none; never delete the section.
+None — no hard-to-automate change
+
+Most plans keep the line above; never delete the section. Replace it only when the plan
+changes something a developer or QA must check by hand (push notifications and other
+hardware or OS behavior, a full cross-device flow, feel) that no existing case covers. See
+"Keep regression minimal" in the planning plugin's testing plan. Cases use the suite format
+of `docs/regression/` with provisional IDs (`<AREA>-new-<n>`); Brew assigns real IDs:
 
 Destination: `<AREA>` → `docs/regression/<area>.md`
 

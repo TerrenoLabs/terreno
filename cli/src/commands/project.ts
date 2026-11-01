@@ -66,7 +66,7 @@ export const runStateCommand = async (
   io: CliIo,
   json: boolean
 ): Promise<number> => {
-  const result = await handleLocalToolCall("get_rtk_state", {
+  const result = await handleLocalToolCall("get_client_state", {
     query: flagString(parsed.flags, "query"),
     slice: flagString(parsed.flags, "slice"),
   });

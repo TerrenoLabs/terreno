@@ -6,65 +6,46 @@ import {renderWithTheme} from "./test-utils";
 
 describe("PhoneNumberField", () => {
   it("renders correctly with default props", () => {
-    const {toJSON} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={() => {}} value="" />
-    );
+    const {toJSON} = renderWithTheme(<PhoneNumberField onChange={() => {}} value="" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders with placeholder", () => {
     const {getByPlaceholderText} = renderWithTheme(
-      <PhoneNumberField
-        label="Phone"
-        onChange={() => {}}
-        placeholder="Enter phone number"
-        value=""
-      />
+      <PhoneNumberField onChange={() => {}} placeholder="Enter phone number" value="" />
     );
     expect(getByPlaceholderText("Enter phone number")).toBeTruthy();
   });
 
   it("renders with initial value", () => {
     const {getByDisplayValue} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={() => {}} value="(555) 123-4567" />
+      <PhoneNumberField onChange={() => {}} value="(555) 123-4567" />
     );
     expect(getByDisplayValue("(555) 123-4567")).toBeTruthy();
   });
 
   it("renders with custom errorText", () => {
     const {getByText} = renderWithTheme(
-      <PhoneNumberField
-        errorText="Phone number is required"
-        label="Phone"
-        onChange={() => {}}
-        value=""
-      />
+      <PhoneNumberField errorText="Phone number is required" onChange={() => {}} value="" />
     );
     expect(getByText("Phone number is required")).toBeTruthy();
   });
 
   it("renders with icon", () => {
     const {toJSON} = renderWithTheme(
-      <PhoneNumberField iconName="phone" label="Phone" onChange={() => {}} value="" />
+      <PhoneNumberField iconName="phone" onChange={() => {}} value="" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("uses US as default country code", () => {
-    const {toJSON} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={() => {}} value="5551234567" />
-    );
+    const {toJSON} = renderWithTheme(<PhoneNumberField onChange={() => {}} value="5551234567" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("accepts custom country code", () => {
     const {toJSON} = renderWithTheme(
-      <PhoneNumberField
-        defaultCountryCode="GB"
-        label="Phone"
-        onChange={() => {}}
-        value="7911123456"
-      />
+      <PhoneNumberField defaultCountryCode="GB" onChange={() => {}} value="7911123456" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -73,12 +54,7 @@ describe("PhoneNumberField", () => {
     const handleBlur = mock((_value: string) => {});
     const handleChange = mock((_value: string) => {});
     const {getByDisplayValue} = renderWithTheme(
-      <PhoneNumberField
-        label="Phone"
-        onBlur={handleBlur}
-        onChange={handleChange}
-        value="(555) 123-4567"
-      />
+      <PhoneNumberField onBlur={handleBlur} onChange={handleChange} value="(555) 123-4567" />
     );
     const input = getByDisplayValue("(555) 123-4567");
     await act(async () => {
@@ -91,7 +67,7 @@ describe("PhoneNumberField", () => {
     const handleBlur = mock((_value: string) => {});
     const handleChange = mock((_value: string) => {});
     const {getByDisplayValue} = renderWithTheme(
-      <PhoneNumberField label="Phone" onBlur={handleBlur} onChange={handleChange} value="" />
+      <PhoneNumberField onBlur={handleBlur} onChange={handleChange} value="" />
     );
     const input = getByDisplayValue("");
     await act(async () => {
@@ -105,7 +81,7 @@ describe("PhoneNumberField", () => {
     const handleBlur = mock((_value: string) => {});
     const handleChange = mock((_value: string) => {});
     const {getByDisplayValue} = renderWithTheme(
-      <PhoneNumberField label="Phone" onBlur={handleBlur} onChange={handleChange} value="" />
+      <PhoneNumberField onBlur={handleBlur} onChange={handleChange} value="" />
     );
     const input = getByDisplayValue("");
     await act(async () => {
@@ -117,7 +93,7 @@ describe("PhoneNumberField", () => {
   it("shows 'Invalid phone number format' on blur when number cannot be parsed", async () => {
     const handleChange = mock((_value: string) => {});
     const {getByDisplayValue, getByText} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={handleChange} value="abc" />
+      <PhoneNumberField onChange={handleChange} value="abc" />
     );
     const input = getByDisplayValue("abc");
     await act(async () => {
@@ -130,7 +106,7 @@ describe("PhoneNumberField", () => {
     const handleChange = mock((_value: string) => {});
     // A number that parses and isPossible() but not isValid() for US
     const {getByDisplayValue, getByText} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={handleChange} value="(555) 555-5555" />
+      <PhoneNumberField onChange={handleChange} value="(555) 555-5555" />
     );
     const input = getByDisplayValue("(555) 555-5555");
     await act(async () => {
@@ -142,7 +118,7 @@ describe("PhoneNumberField", () => {
   it("uses inputValue as-is when it matches formattedValue or has length 4", async () => {
     const handleChange = mock((_value: string) => {});
     const {getByDisplayValue} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={handleChange} value="" />
+      <PhoneNumberField onChange={handleChange} value="" />
     );
     const input = getByDisplayValue("");
     // Input of length 4 triggers the else branch (setLocalValue(inputValue))
@@ -157,7 +133,7 @@ describe("PhoneNumberField", () => {
     // Start with an invalid value so that blur triggers the error path.
     // TextField's onBlur uses its own value prop (localValue), not nativeEvent.text.
     const {getByDisplayValue, getByText, queryByText} = renderWithTheme(
-      <PhoneNumberField label="Phone" onChange={handleChange} value="abc" />
+      <PhoneNumberField onChange={handleChange} value="abc" />
     );
     const input = getByDisplayValue("abc");
     // Blur triggers validatePhoneNumber("abc") → "Invalid phone number format"

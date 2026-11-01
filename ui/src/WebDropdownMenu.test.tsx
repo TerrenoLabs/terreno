@@ -4,11 +4,12 @@ import {assert} from "chai";
 import type {ComponentProps} from "react";
 import {Dimensions} from "react-native";
 
-import {renderWithTheme} from "./test-utils";
+import {findAllByHostType, renderWithTheme} from "./test-utils";
 import {
   resolveDocumentBodyPortalTarget,
   scheduleAfterPaint,
   useWebDropdownAnchor,
+  type WebDropdownAnchor,
   WebDropdownMenu,
 } from "./WebDropdownMenu";
 
@@ -63,7 +64,7 @@ describe("WebDropdownMenu", () => {
   });
 
   it("invokes onSelect with value and index when an option is pressed", () => {
-    const onSelect = mock(() => {});
+    const onSelect = mock((_value: string, _index: number) => {});
     const {getByTestId} = renderWithTheme(
       <WebDropdownMenu
         anchor={anchor}
@@ -365,7 +366,7 @@ describe("WebDropdownMenu disableSearch", () => {
   });
 
   it("reports the original index when selecting a filtered option", () => {
-    const onSelect = mock(() => {});
+    const onSelect = mock((_value: string, _index: number) => {});
     const {getByTestId} = renderWithTheme(
       <WebDropdownMenu
         anchor={anchor}
@@ -469,7 +470,7 @@ describe("WebDropdownMenu keepTriggerFocus portal overlay", () => {
           keyupListeners.push(listener);
         }
       },
-      body: body as HTMLElement,
+      body: body as unknown as HTMLElement,
       removeEventListener: (type: string, listener: (event: KeyboardEvent) => void) => {
         if (type === "keyup") {
           keyupListeners = keyupListeners.filter((registered) => registered !== listener);
@@ -488,7 +489,7 @@ describe("WebDropdownMenu keepTriggerFocus portal overlay", () => {
   };
 
   const dispatchEscapeKey = (): void => {
-    const event = {key: "Escape", stopPropagation: mock(() => {})} as KeyboardEvent;
+    const event = {key: "Escape", stopPropagation: mock(() => {})} as unknown as KeyboardEvent;
     for (const listener of keyupListeners) {
       listener(event);
     }
@@ -542,7 +543,7 @@ describe("WebDropdownMenu keepTriggerFocus portal overlay", () => {
       expect(style.position).toBe("fixed");
       expect(style.left).toBe(anchor.x);
 
-      const modals = root.findAll((node) => node.type === "Modal");
+      const modals = findAllByHostType(root, "Modal");
       expect(modals.length).toBe(0);
     } finally {
       PlatformModule.OS = savedOS;
@@ -562,7 +563,7 @@ describe("WebDropdownMenu keepTriggerFocus portal overlay", () => {
 
       assert.isOk(getByTestId("web_dropdown_menu"));
       assert.isNull(queryByTestId("web_dropdown_modal"));
-      assert.equal(root.findAll((node) => node.type === "Modal").length, 0);
+      assert.equal(findAllByHostType(root, "Modal").length, 0);
     } finally {
       PlatformModule.OS = savedOS;
       restoreWebDocument();
@@ -578,7 +579,7 @@ describe("WebDropdownMenu keepTriggerFocus portal overlay", () => {
       const placeholder = getByTestId("web_dropdown_modal");
       expect(placeholder.props.visible).toBeUndefined();
 
-      const modals = root.findAll((node) => node.type === "Modal");
+      const modals = findAllByHostType(root, "Modal");
       expect(modals.length).toBe(0);
     } finally {
       PlatformModule.OS = savedOS;
@@ -712,7 +713,7 @@ describe("useWebDropdownAnchor", () => {
 
   it("invokes the callback synchronously with the existing anchor when the ref is empty", () => {
     const {result} = renderHook(() => useWebDropdownAnchor());
-    const onMeasured = mock(() => {});
+    const onMeasured = mock((_anchor: WebDropdownAnchor) => {});
     act(() => {
       result.current.measure(onMeasured);
     });
@@ -726,7 +727,7 @@ describe("useWebDropdownAnchor", () => {
       cb(10, 20, 100, 40);
     });
     (result.current.triggerRef as {current: unknown}).current = {measureInWindow};
-    const onMeasured = mock(() => {});
+    const onMeasured = mock((_anchor: WebDropdownAnchor) => {});
     act(() => {
       result.current.measure(onMeasured);
     });
@@ -886,14 +887,14 @@ describe("WebDropdownMenu layout callbacks", () => {
         visible
       />
     );
-    const scrollView = root.findAll((node) => node.type === "ScrollView")[0];
+    const scrollView = findAllByHostType(root, "ScrollView")[0];
     expect(scrollView).toBeTruthy();
     act(() => {
       fireEvent(scrollView, "layout", {nativeEvent: {layout: {height: 200, width: 200}}});
     });
     // The list viewport height is recorded and a scroll is scheduled; the
     // component should remain mounted and functional.
-    expect(root.findAll((node) => node.type === "ScrollView").length).toBeGreaterThan(0);
+    expect(findAllByHostType(root, "ScrollView").length).toBeGreaterThan(0);
   });
 
   it("records option layout and schedules a scroll for the selected option", () => {
@@ -936,7 +937,7 @@ describe("WebDropdownMenu layout callbacks", () => {
         />
       );
 
-      const scrollView = root.findAll((node) => node.type === "ScrollView")[0];
+      const scrollView = findAllByHostType(root, "ScrollView")[0];
       const scrollCalls: Array<{animated?: boolean; y?: number}> = [];
       const scrollRef = scrollView.props.ref as {current: unknown};
       scrollRef.current = {
@@ -975,7 +976,7 @@ describe("WebDropdownMenu layout callbacks", () => {
         />
       );
 
-      const scrollView = root.findAll((node) => node.type === "ScrollView")[0];
+      const scrollView = findAllByHostType(root, "ScrollView")[0];
       const scrollCalls: Array<{animated?: boolean; y?: number}> = [];
       const scrollRef = scrollView.props.ref as {current: unknown};
       scrollRef.current = {
@@ -1013,7 +1014,7 @@ describe("WebDropdownMenu layout callbacks", () => {
         />
       );
 
-      const scrollView = root.findAll((node) => node.type === "ScrollView")[0];
+      const scrollView = findAllByHostType(root, "ScrollView")[0];
       const scrollCalls: Array<{animated?: boolean; y?: number}> = [];
       const scrollRef = scrollView.props.ref as {current: unknown};
       scrollRef.current = {

@@ -1267,7 +1267,7 @@ describe("emitSyncDeltaForChange", () => {
     const deltas = io.emissions.filter((e) => e.event === "sync:delta");
     expect(deltas).toHaveLength(1);
     const receiver = io.sockets.sockets.get(deltas[0].socketId);
-    expect(receiver.decodedToken.id).toBe("user1");
+    expect(receiver?.decodedToken.id).toBe("user1");
   });
 
   it("C7: soft delete emits a delete delta with deleted true and NO data (tombstone stripped)", async () => {
@@ -1697,9 +1697,10 @@ describe("sync:delta — change stream integration", () => {
     const docId = String(doc._id);
     await waitForDelta(io, (d) => d.id === docId);
 
-    const legacy = io.emissions.filter(
-      (e) => e.event === "sync" && e.payload?.id === docId && e.payload?.method === "create"
-    );
+    const legacy = io.emissions.filter((e) => {
+      const payload = e.payload as {id?: string; method?: string} | undefined;
+      return e.event === "sync" && payload?.id === docId && payload?.method === "create";
+    });
     const deltas = io.emissions.filter(
       (e) => e.event === "sync:delta" && (e.payload as SyncDelta).id === docId
     );

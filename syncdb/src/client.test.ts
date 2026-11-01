@@ -16,7 +16,7 @@ import type {PersisterFactory} from "./persisters/types";
 import {idbGet} from "./storage/idb";
 import {SYNC_SCHEMA_VERSION} from "./storage/schema";
 import {CURSORS_TABLE} from "./storage/types";
-import {AuthRequiredError, type HttpChannel} from "./sync/httpChannel";
+import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
 import type {SyncTransport} from "./sync/transport";
 import {createFakeTransport, type FakeTransport} from "./testing/fakeTransport";
 import type {
@@ -2787,6 +2787,47 @@ describe("createSyncDb", () => {
   });
 
   describe("lifecycle serialization (E1)", () => {
+    it("drops a startup reconcile's streams request that a stop() overtook while it read the token", async () => {
+      // The app stops syncdb, then signs out. A reconcile fired just before the stop is still
+      // awaiting getToken(); sending its request after the stop would carry a token the
+      // sign-out is revoking.
+      let releaseToken = (): void => {};
+      const tokenGate = new Promise<void>((resolve) => {
+        releaseToken = (): void => resolve();
+      });
+      const sent: string[] = [];
+      const httpChannel = createHttpChannel({
+        authProvider: {
+          getToken: async (): Promise<string> => {
+            await tokenGate;
+            return "token";
+          },
+        },
+        baseUrl: "http://api",
+        fetchImpl: async (input: string): Promise<Response> => {
+          sent.push(input);
+          return new Response(JSON.stringify({streams: []}), {status: 200});
+        },
+      });
+      const harness = makeHarness({httpChannel});
+      const client = createSyncDb(harness.config);
+      const originalWarn = console.warn;
+      const warnings: unknown[][] = [];
+      console.warn = (...args: unknown[]): void => {
+        warnings.push(args);
+      };
+      try {
+        await client.start();
+        await client.stop();
+        releaseToken();
+        await flush();
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.deepEqual(sent, []);
+      assert.deepEqual(warnings, []);
+    });
+
     it("a rapid stop()-then-start() for a new user leaves the new user's persistence working", async () => {
       const name = uniqueName();
       const harness = makeHarness({name});
@@ -2829,6 +2870,32 @@ describe("createSyncDb", () => {
         title: "user two",
       });
       await reopened.stop();
+    });
+
+    it("an auth change queued behind a stop() does not reconnect the stopped client", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+      // start() subscribes to auth changes, then holds the mutex on its connect.
+      const releaseConnect = observable.gateNextConnect();
+      const startPromise = client.start();
+      await waitUntil(() => observable.events.includes("connect"));
+
+      // A sign-out stops the client while start() is still connecting, and an auth change
+      // (still the same signed-in user) fires before stop() runs: it queues behind the stop.
+      const stopPromise = client.stop();
+      harness.auth.emitAuthChange();
+      releaseConnect();
+      await startPromise;
+      await stopPromise;
+      const eventsAtStop = observable.events.length;
+      const streamsAtStop = harness.http.state.streamsCount;
+      await flush();
+      await flush();
+
+      expect(observable.events.slice(eventsAtStop)).toEqual([]);
+      expect(harness.http.state.streamsCount).toBe(streamsAtStop);
+      expect(client.getSyncStatus().isOnline).toBe(false);
     });
 
     it("double start() is a no-op: listeners are not double-registered", async () => {

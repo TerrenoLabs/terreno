@@ -35,6 +35,10 @@ interface Consumer {
   read: () => string;
 }
 
+// Aliases exist only through the mocker, so the specifiers are variables tsc does not resolve.
+const HOOKS_A_ALIAS: string = "@hooks/useA";
+const STORE_ALIAS: string = "@store";
+
 describe("createModuleAliasMocker", () => {
   let mocker: ModuleAliasMocker;
   let consumer: Consumer;
@@ -79,7 +83,7 @@ describe("createModuleAliasMocker", () => {
   it("overrides one export and keeps the rest real, for relative and alias imports", async () => {
     mocker.mockModule("@hooks", {useA: (): string => "mockA"});
     expect(consumer.read()).toBe("mockA-realB");
-    const viaAlias = (await import("@hooks/useA")) as {shared: string; useA: () => string};
+    const viaAlias = (await import(HOOKS_A_ALIAS)) as {shared: string; useA: () => string};
     expect(viaAlias.useA()).toBe("mockA");
     expect(viaAlias.shared).toBe("fromA");
   });
@@ -105,7 +109,7 @@ describe("createModuleAliasMocker", () => {
 
   it("adds new exports when allowed", async () => {
     mocker.mockModule("@store", {extra: 1, storeName: "mock-store"}, {allowNewExports: true});
-    const store = (await import("@store")) as {extra: number; storeName: string};
+    const store = (await import(STORE_ALIAS)) as {extra: number; storeName: string};
     expect(store).toMatchObject({extra: 1, storeName: "mock-store"});
     expect(mocker.getRealExports("@store")).toEqual({storeName: "real-store"});
   });

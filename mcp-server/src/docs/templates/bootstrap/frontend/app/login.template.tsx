@@ -68,7 +68,7 @@ const LoginScreen: React.FC = () => {
             />
           )}
           <TextField
-            autoComplete="off"
+            autoComplete="username"
             disabled={isLoading}
             onChange={setEmail}
             placeholder="Email"

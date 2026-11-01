@@ -94,6 +94,47 @@ export const resolveMetroHttpBase = (): string => {
   return "http://localhost:8082";
 };
 
+/**
+ * Origin header for Metro's `/inspector/debug` socket. Neither Bun nor Node sends one, and two
+ * checks must both pass:
+ * - `@react-native/dev-middleware` (0.86+) `verifyClient` rejects the upgrade when Origin is missing.
+ *   Otherwise the Origin must equal the server's own `serverBaseUrl` origin or have a loopback hostname
+ *   (`localhost`, `127.0.0.1`, `0.0.0.0`, `[::]`).
+ * - Expo CLI's `isMatchingOrigin` then terminates the socket unless the Origin's host equals the
+ *   `serverBaseUrl` host. Expo always builds `serverBaseUrl` with `hostType: "localhost"`, which its
+ *   UrlCreator rewrites to `127.0.0.1:<Metro port>`, whatever host the caller used. So
+ *   `Origin: http://localhost:8082` is accepted by dev-middleware but terminated by Expo (close 1006).
+ *
+ * `127.0.0.1` on the Metro base URL's own scheme and port satisfies both, for Expo and for the bare
+ * React Native CLI (which has no host check). The hostname is replaced even for a LAN base URL, because
+ * Expo's expected host is `127.0.0.1` there too. The port must be Metro's real port, so a base URL
+ * that reaches Metro through a port-remapping tunnel still fails Expo's check, as does a Metro whose
+ * `serverBaseUrl` host is overridden by `REACT_NATIVE_PACKAGER_HOSTNAME` or `EXPO_PACKAGER_PROXY_URL`.
+ */
+export const metroDebuggerOrigin = (httpBase: string): string => {
+  const base = new URL(httpBase);
+  const port = base.port ? `:${base.port}` : "";
+  return `${base.protocol}//127.0.0.1${port}`;
+};
+
+const NEW_DEBUGGER_OPENED = "[NEW_DEBUGGER_OPENED]";
+
+/**
+ * Status text for a closed debugger socket. Metro's close code and reason say why, for example
+ * `1000 [NEW_DEBUGGER_OPENED] …` when React Native DevTools takes a single-debugger session.
+ */
+const describeCdpClose = (ev: Partial<CloseEvent>): string => {
+  if (typeof ev.code !== "number") {
+    return "CDP disconnected";
+  }
+  const reason = ev.reason?.trim();
+  const detail = reason ? `code ${ev.code}: ${reason}` : `code ${ev.code}`;
+  const hint = reason?.startsWith(NEW_DEBUGGER_OPENED)
+    ? "; another debugger (such as React Native DevTools) took the session, and the next call that reads the app reconnects and disconnects it"
+    : "";
+  return `CDP disconnected (${detail})${hint}`;
+};
+
 const httpToWsBase = (httpBase: string): string => {
   const u = new URL(httpBase);
   const proto = u.protocol === "https:" ? "wss:" : "ws:";
@@ -229,7 +270,8 @@ export const ensureCdpConnected = async (): Promise<{ok: boolean; detail: string
     }
 
     await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
+      // terreno-mcp-local runs on Bun (see the bin shebang); Bun's WebSocket accepts request headers.
+      const ws = new WebSocket(wsUrl, {headers: {Origin: metroDebuggerOrigin(base)}});
       cdpWs = ws;
       ws.addEventListener("open", () => {
         resolve();
@@ -245,10 +287,10 @@ export const ensureCdpConnected = async (): Promise<{ok: boolean; detail: string
           handleCdpMessage(ev.data);
         }
       });
-      ws.addEventListener("close", () => {
+      ws.addEventListener("close", (ev) => {
         if (cdpWs === ws) {
           cdpWs = undefined;
-          lastCdpStatus = "CDP disconnected";
+          lastCdpStatus = describeCdpClose(ev as CloseEvent);
           rejectPendingCdp(lastCdpStatus);
         }
       });

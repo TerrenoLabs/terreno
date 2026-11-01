@@ -39,11 +39,12 @@ const createTestUser = (
   };
 };
 
-const makeEntry = (options: RealtimeRegistryEntry["options"]): RealtimeRegistryEntry => ({
+// Realtime access reads only access/permissions; tests omit the rest of ModelRouterOptions.
+const makeEntry = (options: Partial<RealtimeRegistryEntry["options"]>): RealtimeRegistryEntry => ({
   collectionName: "todos",
   config: {methods: ["create", "update", "delete"], roomStrategy: "owner"},
   modelName: "Todo",
-  options,
+  options: options as RealtimeRegistryEntry["options"],
   routePath: "/todos",
 });
 

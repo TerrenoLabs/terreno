@@ -8,7 +8,12 @@ import {Button} from "./Button";
 import type {ButtonProps} from "./Common";
 import {isNarrowViewport} from "./MediaQuery";
 import * as ThemeModule from "./Theme";
-import {renderWithIcons, renderWithTheme, TEST_CUSTOM_ICON_TEST_ID} from "./test-utils";
+import {
+  renderWithIcons,
+  renderWithTheme,
+  rootJSONNode,
+  TEST_CUSTOM_ICON_TEST_ID,
+} from "./test-utils";
 import {Unifier} from "./Unifier";
 import * as Utilities from "./Utilities";
 
@@ -289,7 +294,7 @@ describe("Button", () => {
   it("defaults to scale press animation", () => {
     const tree = renderWithTheme(<Button onClick={() => {}} text="Default animation" />).toJSON();
     expect(Array.isArray(tree)).toBe(false);
-    expect(tree?.type).toBe("PressableScale");
+    expect(rootJSONNode(tree)?.type).toBe("PressableScale");
   });
 
   it("renders opacity press animation", () => {
@@ -297,7 +302,7 @@ describe("Button", () => {
       <Button onClick={() => {}} pressAnimation="opacity" text="Opacity" />
     ).toJSON();
     expect(Array.isArray(tree)).toBe(false);
-    expect(tree?.type).toBe("PressableOpacity");
+    expect(rootJSONNode(tree)?.type).toBe("PressableOpacity");
   });
 
   it("renders no press animation", () => {
@@ -305,7 +310,7 @@ describe("Button", () => {
       <Button onClick={() => {}} pressAnimation="none" text="No animation" />
     ).toJSON();
     expect(Array.isArray(tree)).toBe(false);
-    expect(tree?.type).toBe("PressableWithoutFeedback");
+    expect(rootJSONNode(tree)?.type).toBe("PressableWithoutFeedback");
   });
 
   // Disabled state
@@ -703,13 +708,13 @@ describe("Button", () => {
   it("uses Pressable when disabled (not PressableScale)", () => {
     const tree = renderWithTheme(<Button disabled onClick={() => {}} text="Disabled" />).toJSON();
     expect(Array.isArray(tree)).toBe(false);
-    expect(tree?.type).toBe("Pressable");
+    expect(rootJSONNode(tree)?.type).toBe("Pressable");
   });
 
   it("uses Pressable when loading (not PressableScale)", () => {
     const tree = renderWithTheme(<Button loading onClick={() => {}} text="Loading" />).toJSON();
     expect(Array.isArray(tree)).toBe(false);
-    expect(tree?.type).toBe("Pressable");
+    expect(rootJSONNode(tree)?.type).toBe("Pressable");
   });
 
   it("renders with custom confirmationText and modalSubTitle", () => {

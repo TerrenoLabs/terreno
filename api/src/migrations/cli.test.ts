@@ -8,11 +8,12 @@ import {join} from "node:path";
 import mongoose from "mongoose";
 
 import {setupDb} from "../tests";
+import {partialEnv} from "../tests/testEnv";
 import {runMigrateCli} from "./cli";
-import {MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION} from "./types";
+import {MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION, type MigrationStoreDoc} from "./types";
 
 const fixtures = (...parts: string[]): string => {
-  return join(import.meta.dir, "fixtures", ...parts);
+  return join(__dirname, "fixtures", ...parts);
 };
 
 const capture = (): {
@@ -41,7 +42,7 @@ const capture = (): {
 
 const appliedIds = async (): Promise<string[]> => {
   const docs = await mongoose.connection
-    .collection(MIGRATIONS_COLLECTION)
+    .collection<MigrationStoreDoc>(MIGRATIONS_COLLECTION)
     .find({_id: {$ne: MIGRATION_LOCK_ID}})
     .project({id: 1})
     .toArray();
@@ -91,7 +92,7 @@ describe("runMigrateCli", () => {
     const io = capture();
     const code = await runMigrateCli({
       argv: ["status", "--dir", fixtures("valid")],
-      env: {},
+      env: partialEnv({}),
       stderr: {write: io.writeErr},
       stdout: {write: io.writeOut},
     });
@@ -175,7 +176,7 @@ describe("runMigrateCli", () => {
     const modelsDir = await mkdtemp(join(tmpdir(), "migrate-cli-models-"));
     try {
       const modelsPath = join(modelsDir, "models.ts");
-      const mongooseUrl = import.meta.resolve("mongoose");
+      const mongooseUrl = require.resolve("mongoose");
       await writeFile(
         modelsPath,
         `import mongoose from ${JSON.stringify(mongooseUrl)};
@@ -249,7 +250,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const io = capture();
     const code = await runMigrateCli({
       argv: ["up", "--dir", fixtures("valid"), "--force"],
-      env: {NODE_ENV: "production"},
+      env: partialEnv({NODE_ENV: "production"}),
       mongoose,
       stderr: {write: io.writeErr},
       stdout: {write: io.writeOut},
@@ -263,7 +264,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const io = capture();
     const code = await runMigrateCli({
       argv: ["up", "--dir", fixtures("valid")],
-      env: {ALLOW_MIGRATIONS: "true", NODE_ENV: "production"},
+      env: partialEnv({ALLOW_MIGRATIONS: "true", NODE_ENV: "production"}),
       mongoose,
       stderr: {write: io.writeErr},
       stdout: {write: io.writeOut},
@@ -276,7 +277,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const io = capture();
     const code = await runMigrateCli({
       argv: ["status", "--dir", fixtures("valid")],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: io.writeErr},
       stdout: {write: io.writeOut},
@@ -290,7 +291,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const upIo = capture();
     const upCode = await runMigrateCli({
       argv: ["up", "--dir", fixtures("valid")],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: upIo.writeErr},
       stdout: {write: upIo.writeOut},
@@ -301,7 +302,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const downIo = capture();
     const downCode = await runMigrateCli({
       argv: ["down", "--dir", fixtures("valid"), "--steps", "1"],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: downIo.writeErr},
       stdout: {write: downIo.writeOut},
@@ -312,7 +313,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const statusIo = capture();
     const statusCode = await runMigrateCli({
       argv: ["status", "--dir", fixtures("valid")],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: statusIo.writeErr},
       stdout: {write: statusIo.writeOut},
@@ -325,14 +326,14 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
   it("fails down when the target file has no down", async () => {
     await runMigrateCli({
       argv: ["up", "--dir", fixtures("valid")],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: () => undefined},
       stdout: {write: () => undefined},
     });
     await runMigrateCli({
       argv: ["down", "--dir", fixtures("valid"), "--steps", "1"],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: () => undefined},
       stdout: {write: () => undefined},
@@ -341,7 +342,7 @@ export const CliGenTodo = mongoose.models.CliGenTodo ?? mongoose.model("CliGenTo
     const io = capture();
     const code = await runMigrateCli({
       argv: ["down", "--dir", fixtures("valid"), "--steps", "1"],
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
       stderr: {write: io.writeErr},
       stdout: {write: io.writeOut},

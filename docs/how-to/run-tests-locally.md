@@ -11,7 +11,7 @@ section).
 ## Do now — prepush mirrors CI
 
 ```bash
-bun run prepush            # lint, compile, then every CI job this branch triggers
+bun run prepush            # compile, lint + typecheck, then every CI job this branch triggers
 bun run prepush --dry-run  # print the plan only
 bun run prepush --all      # every check, regardless of changed files
 ```
@@ -28,6 +28,20 @@ Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, D
 are listed at the end with the command to run by hand. A test in
 `scripts/ci/prepush/plan.test.ts` fails when the mapping gains a parameter that
 `prepush` neither runs nor lists.
+
+## Typecheck
+
+Every package has a `typecheck` script that runs `tsc` with its
+`tsconfig.typecheck.json`. That config extends the build `tsconfig.json`, emits
+nothing, and includes the test files the build excludes (`*.test.ts(x)`,
+`*.isolated.ts(x)`, `src/tests/**`). Root `bun run lint` ends with `bun run typecheck`.
+CircleCI runs it in the `typecheck` job beside `repo-policies`.
+
+```bash
+bun run compile                # typecheck reads workspace packages' dist types
+bun run typecheck              # every package
+cd ui && bun run typecheck     # one package
+```
 
 ## Package tests
 
@@ -74,6 +88,8 @@ workspace `smoke` script against the job's replica-set Mongo sidecar
 (`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
 running it.
 
+`bun run smoke:local` runs every step below in order. Run them yourself to reuse builds:
+
 ```bash
 bun run compile
 (cd admin-spa && bun run build:web) && (cd demo && bun run export)
@@ -107,9 +123,10 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 
 | CircleCI shard | Specs |
 | --- | --- |
-| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
+| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` `two-factor` |
 | `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
-| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
+| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` `org-admin-security` `admin-user-security` |
+| `e2e-cross-site` (not required) | the cross-site specs below, then `account-linking` with `E2E_ACCOUNT_LINKING=explicit` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |
 
@@ -117,14 +134,42 @@ Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loa
 not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when that job
 failed.
 
-`e2e/crossSiteBearer.spec.ts` and `e2e/crossSiteOAuth.spec.ts` have no CircleCI job: they need
-a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000`,
-`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` and `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`, a backend
-with `BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
-`MOCK_OIDC_ISSUER`, and the mock OIDC provider on `127.0.0.1:4555`. Naming either spec file (or
+The cross-site specs (`CROSS_SITE_SPEC_FILES` in `playwright.config.ts`:
+`e2e/crossSiteBearer.spec.ts`, `e2e/crossSiteOAuth.spec.ts`, `e2e/authMethods.spec.ts`,
+`e2e/crossSiteChallenges.spec.ts`, `e2e/crossSiteLogin.spec.ts`,
+`e2e/account-linking.spec.ts`, `e2e/account-security.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
+check, rather than in an `e2e` shard: they need
+a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
+`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
+`BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
+`MOCK_OIDC_ISSUER` (the login page shows the mock provider's button because
+`/api/auth/terreno/methods` then lists `mock-oidc`), and the mock OIDC provider on
+`127.0.0.1:4555`. Naming any of those spec files (or
 setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
-`cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. CI serves a static
+export instead of a Metro dev server, which gets OOM-killed bundling beside the backend and
+Chromium. To run the specs exactly as `e2e-cross-site` does:
+
+```bash
+cd example-frontend
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+  bun expo export --platform web --output-dir dist-cross-site --clear
+bunx serve dist-cross-site -s -l 8082 &
+CI=true E2E_CROSS_SITE_BEARER=true MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
+  bunx playwright test --config playwright.circleci.config.ts --reporter=list
+```
+
+`--clear` matters: Metro's cache keeps the `EXPO_PUBLIC_*` values of an earlier export. A new
+spec that needs
+the mock provider or cookie-less sessions joins `CROSS_SITE_SPEC_FILES` and the
+`cross-site-bearer` shard in `scripts/ci/e2eAffected/shards.ts`.
+
+`e2e/account-linking.spec.ts` has cases for the backend's `explicit` linking mode, which skip
+unless the backend reports that mode. `E2E_ACCOUNT_LINKING=explicit` starts the backend with
+`AUTH_ACCOUNT_LINKING=explicit`; run that spec alone, because the other specs expect the default
+`verified-email` (`e2e-cross-site` does this as its second step):
+`cd example-frontend && E2E_ACCOUNT_LINKING=explicit bunx playwright test e2e/account-linking.spec.ts`.
 
 ### Deployed bearer smoke (`deploy-frontend-preview`)
 

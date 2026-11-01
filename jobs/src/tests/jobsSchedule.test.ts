@@ -167,6 +167,10 @@ describe("jobs recurring schedules", () => {
 
     await jobsApp.startWorker();
     const schedule = await JobSchedule.findExactlyOne({name: "overlap-skip"});
+    // Stop polling before the schedule is due so a 25ms tick cannot enqueue
+    // between the due write and the in-flight child.
+    await jobsApp.stopWorker();
+
     const staleNextRunAt = DateTime.utc().minus({minutes: 1}).toJSDate();
     await JobSchedule.updateOne({_id: schedule._id}, {$set: {nextRunAt: staleNextRunAt}});
 
@@ -176,11 +180,13 @@ describe("jobs recurring schedules", () => {
       scheduleId: schedule._id.toString(),
     });
 
-    await waitUntil(async () => {
-      const updated = await JobSchedule.findExactlyOne({_id: schedule._id});
-      return updated.nextRunAt.getTime() > staleNextRunAt.getTime();
+    await tickDueSchedules({
+      jobsService: getJobsService(),
+      now: DateTime.utc().toJSDate(),
     });
-    await jobsApp.stopWorker();
+
+    const updated = await JobSchedule.findExactlyOne({_id: schedule._id});
+    assert.isAbove(updated.nextRunAt.getTime(), staleNextRunAt.getTime());
 
     const childJobs = await Job.find({name: "overlap-skip"});
     assert.equal(childJobs.length, 1, "overlap tick must not enqueue a second child");

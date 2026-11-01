@@ -56,6 +56,9 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `GITHUB_CLIENT_ID` | `@terreno/api` | ❌ | — | No | server |
 | `GITHUB_CLIENT_SECRET` | `@terreno/api` | ❌ | — | Yes | server |
 | `GITHUB_CALLBACK_URL` | `@terreno/api` | ❌ | — | No | server |
+| `AUTH_ACCOUNT_LINKING` | example-backend `accountLinking.mode`: `verified-email`, `explicit`, or `never` ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | `verified-email` | No | server |
+| `AUTH_SIGN_UP` | example-backend `signUp.mode`: `open` or `closed` ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | `open` | No | server |
+| `PASSKEY_RP_ID` | example-backend `passkey.rpID`: the `FRONTEND_URL` host or a parent domain of it ([details](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ | the `FRONTEND_URL` host | No | server |
 
 ## Server configuration
 
@@ -67,12 +70,12 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | `ENABLE_SWAGGER` | `@terreno/api` | ❌ | `false` | No | server |
 | `APP_ENV` | example-backend | ❌ | `development` | No | server |
 | `BACKEND_URL` | scripts, deploy | ❌ | — | No | server |
-| `FRONTEND_URL` | example-backend CORS and `authOptions.publicAppUrl` | ❌ | `http://localhost:8082` | No | server |
+| `FRONTEND_URL` | example-backend `publicAppUrl` (auth mail links), the first passkey origin, and the default `PASSKEY_RP_ID` (its host). In production a loopback value turns passkeys off ([Auth features in example-backend](../how-to/configure-better-auth.md#auth-features-in-example-backend)) | ❌ (✅ for passkeys on a deploy) | `http://localhost:8082` | No | server |
 | `CORS_ORIGINS` | example-backend (`utils/betterAuthConfig.ts`) | ✅ for deployed web origins | localhost:8082 origins only | No | server |
 | `CROSS_DOMAIN_AUTH_COOKIES` | example-backend Better Auth config | ❌ | `false` | No | server |
 | `API_URL` | microservice split | ❌ | — | No | server |
 | `DISABLE_LOG_ALL_REQUESTS` | `@terreno/api` logging | ❌ | — | No | server |
-| `TERRENO_BROWSER_LOGS` | `@terreno/api` dev log ingestion | ❌ | enabled only in development; loopback or authenticated requests only | No | server |
+| `TERRENO_BROWSER_LOGS` | `@terreno/api` `TerrenoApp` (`POST /__terreno/browser-logs`) | ❌ | on only when `NODE_ENV=development`. `false`/`0` turns it off. `true`/`1` turns it on in any non-production environment. Ignored when `NODE_ENV=production`: the route is never registered and returns 404. See [Development browser-log ingestion](api.md#development-browser-log-ingestion). | No | server |
 | `ALLOW_MIGRATIONS` | `@terreno/api` `terreno-migrate` | ❌ | unset | No | server |
 | `MIGRATIONS_DIR` | example-backend Dockerfile / `resolveMigrationDir` | ❌ | `<cwd>/migrations` when `dir` is `$bunfs` | No | server |
 
@@ -217,7 +220,7 @@ for authenticated test sends.
 | `USE_SENTRY_LOGGING` | `@terreno/api` | ❌ | `false` | No | server |
 | `SLOW_REQUEST_THRESHOLD_MS` | `@terreno/api` | ❌ | `5000` | No | server |
 | `SLOW_DB_QUERY_THRESHOLD_MS` | `@terreno/api` | ❌ | `100` | No | server |
-| `TERRENO_LOG_FILE` | logger | ❌ | — | No | server |
+| `TERRENO_LOG_FILE` | `@terreno/api` logger | ❌ | on unless `NODE_ENV=production`. An on/off switch, not a path: `false`/`0` turns it off, and `true`/`1` turns it on even in production. Writes JSONL to `<cwd>/.terreno/logs/app.log`. | No | server |
 | `TRACE_SAMPLING_RATE` | example-backend OTEL | ❌ | `0.1` | No | server |
 | `MEMORY_SAMPLE_INTERVAL_MS` | example-backend | ❌ | `60000` | No | server |
 | `JOB_TRACE_LOGS` | workers | ❌ | — | No | server |
@@ -269,6 +272,9 @@ secrets and `PUBLIC_API_URL` / `COMMS_WEBHOOK_PUBLIC_URL` as above. See
 | `TERRENO_MCP_DOCS_DIR` | `@terreno/mcp` | ❌ | — | No | tooling |
 | `TERRENO_MCP_EVAL` | MCP eval | ❌ | — | No | tooling |
 | `TERRENO_PROJECT_ROOT` | MCP local | ❌ | — | No | tooling |
+| `TERRENO_MCP_RATE_LIMIT_MAX` | `@terreno/mcp` hosted server | ❌ | `120` (`0` disables) | No | server |
+| `TERRENO_MCP_RATE_LIMIT_WINDOW_MS` | `@terreno/mcp` hosted server | ❌ | `60000` | No | server |
+| `TERRENO_MCP_TRUST_PROXY_HOPS` | `@terreno/mcp` hosted server | ❌ | `1` when `K_SERVICE` is set (Cloud Run), else `0` | No | server |
 
 ## Background jobs
 

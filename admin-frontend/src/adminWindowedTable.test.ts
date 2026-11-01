@@ -4,16 +4,18 @@ import {assert} from "chai";
 import {isWindowedAdminTable, resolveWindowedTableRows} from "./adminWindowedTable";
 import type {AdminModelConfig, AdminSyncDb} from "./types";
 
+// The gate reads only the broadcast flag, sync collection, and `_id` type.
 const stringIdConfig = {
   adminBroadcast: true,
   fields: {_id: {required: true, type: "string"}, title: {required: true, type: "string"}},
   syncCollection: "todos",
-} as AdminModelConfig;
+} as Partial<AdminModelConfig> as AdminModelConfig;
 
+// Test double: the gate only checks that a sync client is present.
 const fakeSyncDb = {
   hydrateWindow: async () => ({hydratedIds: []}),
   store: {getEntity: () => undefined},
-} as AdminSyncDb;
+} as unknown as AdminSyncDb;
 
 describe("isWindowedAdminTable", () => {
   it("requires syncDb, fetch client, adminBroadcast, syncCollection, and string _id", () => {

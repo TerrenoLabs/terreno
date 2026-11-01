@@ -56,6 +56,9 @@ export const AreaChart: FC<AreaChartProps> = ({
   height = DEFAULT_HEIGHT,
   legendLabel,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   onPeriodPress,
   periodLabel,
   series,
@@ -130,6 +133,9 @@ export const AreaChart: FC<AreaChartProps> = ({
       legendItems={legendItems}
       legendLabel={legendLabel}
       loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
       testID={testID}
       tooltipText={tooltipText}
     >

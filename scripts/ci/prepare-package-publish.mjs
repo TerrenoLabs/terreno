@@ -1,4 +1,4 @@
-import {readFileSync, writeFileSync} from "node:fs";
+import {copyFileSync, readFileSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 
 const [packageDirectory, version, dependencyMode = "release"] = process.argv.slice(2);
@@ -48,3 +48,7 @@ for (const dependencyType of ["dependencies", "devDependencies", "peerDependenci
 }
 
 writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+// The changelog lives at the repository root; ship the tagged copy in every tarball
+// so consumers read the release notes for the exact version they installed.
+copyFileSync(resolve("CHANGELOG.md"), resolve(packageDirectory, "CHANGELOG.md"));

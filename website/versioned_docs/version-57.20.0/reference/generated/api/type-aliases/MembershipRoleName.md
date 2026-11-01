@@ -1,0 +1,1 @@
+> **MembershipRoleName** = `"org-admin"` \| `"member"`

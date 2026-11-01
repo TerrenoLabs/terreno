@@ -9,25 +9,38 @@ import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminRolesField} from "./AdminRolesField";
 import {AdminRolesList} from "./AdminRolesList";
 import type {AdminApi} from "./types";
-import {normalizeRoles, normalizeStatements, type RolesQueryResult} from "./useAdminRoles";
+import {
+  normalizeRoles,
+  normalizeStatements,
+  type RolesQueryResult,
+  type useAdminRoles,
+} from "./useAdminRoles";
+
+type StatementsQueryResult = ReturnType<ReturnType<typeof useAdminRoles>["useListStatementsQuery"]>;
 
 const mockUseListRolesQuery = mock(
-  (): RolesQueryResult => ({data: undefined, error: null, isLoading: false})
+  (_arg?: undefined, _options?: {skip?: boolean}): RolesQueryResult => ({
+    data: undefined,
+    error: null,
+    isLoading: false,
+  })
 );
 const mockRefetch = mock(() => {});
-const mockCreateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUpdateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUseListStatementsQuery = mock(() => ({
-  data: {
-    statements: {
-      admin: ["access", "runScripts"],
-      adminTodo: ["read", "write", "writeOwned"],
-      todo: ["read", "update"],
+const mockCreateRole = mock((_arg: unknown) => ({unwrap: async () => ({})}));
+const mockUpdateRole = mock((_arg: unknown) => ({unwrap: async () => ({})}));
+const mockUseListStatementsQuery = mock(
+  (): StatementsQueryResult => ({
+    data: {
+      statements: {
+        admin: ["access", "runScripts"],
+        adminTodo: ["read", "write", "writeOwned"],
+        todo: ["read", "update"],
+      },
     },
-  },
-  error: null,
-  isLoading: false,
-}));
+    error: null,
+    isLoading: false,
+  })
+);
 
 mock.module("./useAdminRoles", () => ({
   normalizeRoles,
@@ -571,6 +584,26 @@ describe("AdminRolesField", () => {
       roleSelect.props.onChange("manager");
     });
     expect(onChange).toHaveBeenCalledWith(["member", "manager"]);
+  });
+
+  it("does not load the role catalog for a read-only field", () => {
+    mockUseListRolesQuery.mockClear();
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminRolesField
+        api={mockApi}
+        apiBase="/admin"
+        fieldConfig={fieldConfig}
+        fieldKey="roles"
+        onChange={mock(() => undefined)}
+        readOnly
+        value={["member"]}
+      />
+    );
+
+    expect(mockUseListRolesQuery.mock.calls.at(-1)).toEqual([undefined, {skip: true}]);
+    expect(getByTestId("admin-field-roles-selected-member")).toBeTruthy();
+    expect(queryByTestId("admin-field-roles-add")).toBeNull();
+    expect(queryByTestId("admin-field-roles-load-error")).toBeNull();
   });
 
   it("removes an assigned role without changing other assignments", async () => {

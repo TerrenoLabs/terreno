@@ -3,7 +3,11 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 
 import {LineChart} from "./LineChart";
+import {Skeleton} from "./Skeleton";
 import {renderWithTheme} from "./test-utils";
+
+// Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
+const HIDDEN = {includeHiddenElements: true};
 
 const POINTS = [
   {label: "A", value: 0},
@@ -261,5 +265,19 @@ describe("LineChart", () => {
     // The suite shares one Linking mock, so a spy on openURL also records calls
     // from other files. A label is inert when it has no press handler.
     expect(getByText("https://evil.example").props.onPress).toBeUndefined();
+  });
+
+  it("renders loadingComponent instead of the spinner while loading", () => {
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <LineChart
+        data={POINTS}
+        loading
+        loadingComponent={<Skeleton height={120} testID="chart-skeleton" />}
+        testID="chart"
+      />
+    );
+    assert.exists(getByTestId("chart-skeleton", HIDDEN));
+    assert.notExists(queryByTestId("chart.spinner"));
+    assert.isTrue(getByTestId("chart").props["aria-busy"]);
   });
 });

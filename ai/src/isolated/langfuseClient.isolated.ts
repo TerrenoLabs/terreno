@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 
 const shutdownMock = mock(async () => {});
 class FakeLangfuseClient {
@@ -12,8 +12,14 @@ mock.module("@langfuse/client", () => ({
   LangfuseClient: FakeLangfuseClient,
 }));
 
-const {getLangfuseClient, initLangfuseClient, isLangfuseInitialized, shutdownLangfuseClient} =
-  await import("../langfuseClient");
+let getLangfuseClient: typeof import("../langfuseClient.js").getLangfuseClient;
+let initLangfuseClient: typeof import("../langfuseClient.js").initLangfuseClient;
+let isLangfuseInitialized: typeof import("../langfuseClient.js").isLangfuseInitialized;
+let shutdownLangfuseClient: typeof import("../langfuseClient.js").shutdownLangfuseClient;
+beforeAll(async () => {
+  ({getLangfuseClient, initLangfuseClient, isLangfuseInitialized, shutdownLangfuseClient} =
+    await import("../langfuseClient.js"));
+});
 
 describe("langfuseClient", () => {
   beforeEach(async () => {

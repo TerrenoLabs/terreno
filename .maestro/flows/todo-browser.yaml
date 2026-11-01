@@ -1,0 +1,38 @@
+url: http://localhost:8082/
+---
+# Open a todo from the ListDetailLayout todo browser (same Maestro session — user is already
+# signed in and create-todo.yaml added "Buy groceries").
+# Do not launchApp — reload resets syncdb and the authenticated session timing.
+
+# Maestro web publishes a pressable's accessible name as its id. The Browse button's
+# testID never appears in that tree.
+- extendedWaitUntil:
+    visible:
+      id: "Browse"
+    timeout: 30000
+
+- tapOn:
+    id: "Browse"
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-browser-list"
+    timeout: 30000
+
+# The todos screen keeps this title as text under "Edit title". The browser row's
+# accessible name is the title, so the id matches only that row.
+- tapOn:
+    id: "Buy groceries"
+
+- extendedWaitUntil:
+    visible:
+      id: "Mark complete"
+    timeout: 30000
+
+# The list is still on screen beside the detail (wide viewport) or one back away (phone).
+- back
+
+- extendedWaitUntil:
+    visible:
+      id: "todo-browser-list"
+    timeout: 30000

@@ -11,6 +11,7 @@ import {
   GPTChat,
   LineChart,
   MarkdownEditor,
+  ProvisionalConsentSigner,
 } from "@terreno/ui";
 import {Box} from "@terreno/ui/Box";
 import EmojiSelectorSubpath from "@terreno/ui/EmojiSelector";
@@ -58,11 +59,13 @@ describe("root import compatibility", () => {
     expect(modulePaths.includes("/AreaChart.tsx")).toBe(false);
     expect(modulePaths.includes("/DonutChart.tsx")).toBe(false);
     expect(modulePaths.includes("/DashboardGrid.tsx")).toBe(true);
+    expect(modulePaths.includes("/ProvisionalConsentSigner.tsx")).toBe(false);
   });
 
   it("exposes lazy root exports for measured heavy optional widgets", () => {
     expect(AIRequestExplorer).toBeTruthy();
     expect(ConsentNavigator).toBeTruthy();
+    expect(ProvisionalConsentSigner).toBeTruthy();
     expect(DraggableList).toBeTruthy();
     expect(EmojiSelector).toBeTruthy();
     expect(GPTChat).toBeTruthy();

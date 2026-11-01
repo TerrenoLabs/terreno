@@ -21,6 +21,8 @@ export type UserDocument = DefaultDoc &
   PassportLocalMongooseDocument & {
     admin: boolean;
     betterAuthId?: string;
+    /** Set by platform staff to refuse every request and socket handshake (isDisabledPlugin). */
+    disabled: boolean;
     email: string;
     name: string;
     oauthProvider?: "google" | "github" | "apple" | null;

@@ -33,7 +33,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `api request <METHOD> <path>` | Invoke by method + path template |
 | `info` | Local `@terreno/*` versions (via MCP local tools) |
 | `logs` | Merge backend/browser JSONL, Metro events, and app CDP console (`--entries`, `--level`, `--since`, `--sources`; `last-error`) |
-| `state` | Inspect Better Auth (via `auth` alias or `betterAuth`) or RTK Query state (`--slice`, `--query`) through the dev store or Metro CDP |
+| `state` | Inspect client state with `get_client_state`: RTK Query (Better Auth via the `auth` alias or `betterAuth`; `--slice`, `--query`) and SyncDB, through the dev stores or Metro CDP. The result names the detected `layer` |
 | `eval` | Evaluate JavaScript in the app runtime through Metro CDP (`--code`; requires `TERRENO_MCP_EVAL=1`) |
 | `navigate` | Navigate Expo Router through Metro CDP (requires `TERRENO_MCP_EVAL=1`) |
 | `web [url]` | Automate the web app with Bun 1.4 `Bun.WebView`; ordered `--action` JSON, `--snapshot`, and `--screenshot` |

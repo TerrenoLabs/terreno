@@ -167,7 +167,8 @@ make it clean, stop and escalate per push ownership.
         files; not the whole workspace unless the change is repo-wide)
       - run the suite-check command when one was given and a suite file changed. The
         suite check is the command the repository's CI or package scripts run against
-        `<Regression suites>`; pass none when the repository has none.
+        `<Regression suites>`; pass none when the repository has none or opted out
+        (`Regression suites` is `none`, which also skips regression ID renumbering).
       - run the declared `Smoke command` when the repository has one
    5. Do not push until last-run failed tests pass locally and the fresh subagent
       reports pass with command output. A duplicate regression ID reported by the gate
@@ -190,7 +191,8 @@ make it clean, stop and escalate per push ownership.
 11. **Preserve PR description.** Never regenerate or replace human-authored text. Fetch the
     latest body before a required minimal evidence edit; skip body mutation if it cannot
     be preserved exactly. Update `Verification` instead of posting test/CI comments. Keep
-    stage-result YAML in the Details toggle, never in the visible body. Keep
+    stage-result YAML in the Details toggle, never in the visible body; when you rewrite
+    it, keep `ip` and the delivered task ids so the approval bot still finds the plan. Keep
     sensitive data out of text and artifacts.
 12. **Default to silence.** Never post progress, thanks, readiness, CI, or PR-summary
     comments. Use an existing review thread when possible. A top-level comment is allowed

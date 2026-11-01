@@ -1,6 +1,7 @@
 import {beforeAll, describe, expect, it} from "bun:test";
 import {IconButton, SelectField, TerrenoProvider} from "@terreno/ui";
 import {act, fireEvent, render} from "@testing-library/react-native";
+import type {ReactTestInstance} from "react-test-renderer";
 
 import {BlocksPlaygroundDemo} from "./BlocksPlayground.stories";
 import type {PresetName} from "./blocksPlaygroundPresets";
@@ -69,8 +70,7 @@ describe("BlocksPlayground Sunday roast", () => {
 
   it("clears the block type picker when a preset button loads another document", async () => {
     const view = await renderPlayground("Sunday roast");
-    const picker = (): {props: {onChange: (value: string) => void; value: string}} =>
-      view.UNSAFE_getByType(SelectField);
+    const picker = (): ReactTestInstance => view.UNSAFE_getByType(SelectField);
     await settle(() => picker().props.onChange("gallery"));
     expect(picker().props.value).toBe("gallery");
     await settle(() => fireEvent.press(view.getByTestId("blocks-playground-preset-layout")));

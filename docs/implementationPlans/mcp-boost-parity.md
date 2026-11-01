@@ -113,7 +113,7 @@ Boost keys guidelines by package major version (`.ai/laravel/11/`, `12/`). Terre
 ```jsonc
 {
   "mcpServers": {
-    "terreno": { "type": "http", "url": "https://mcp.terreno.flourish.health/mcp" },
+    "terreno": { "type": "http", "url": "https://mcp.terreno.app/mcp" },
     "terreno-local": { "command": "bunx", "args": ["terreno-mcp-local"] }
   }
 }

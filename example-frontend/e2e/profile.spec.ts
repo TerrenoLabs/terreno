@@ -5,16 +5,35 @@ import {loginAs} from "./helpers/login";
 test.describe("Profile", () => {
   test.beforeEach(async ({page}) => {
     await loginAs(page);
+    // syncdb starts on every page load and ends its start with stream discovery. Waiting for it
+    // keeps a test that cuts the network off (or signs out) from landing mid-start.
+    const syncDbStarted = page.waitForResponse((response) =>
+      response.url().includes("/sync/streams")
+    );
     await page.goto("/profile");
     await page.getByTestId("profile-name-input.edit-clickable").first().waitFor({state: "visible"});
+    await syncDbStarted;
   });
 
   test("profile screen renders correctly", async ({page}) => {
     await expect(page.getByTestId("profile-name-input.edit-clickable").first()).toBeVisible();
     await expect(page.getByTestId("profile-email-input.edit-clickable").first()).toBeVisible();
-    await expect(page.getByTestId("profile-password-input.edit-clickable").first()).toBeVisible();
+    await expect(page.getByTestId("profile-security-link").first()).toBeVisible();
     await expect(page.getByTestId("profile-logout-button").first()).toBeVisible();
     await expect(page.getByTestId("profile-verify-email-banner").first()).toBeVisible();
+  });
+
+  test("user opens Security from the profile", async ({page}) => {
+    // Passwords change on the Security screen, not on the profile.
+    await expect(page.getByTestId("profile-password-input.edit-clickable")).toHaveCount(0);
+    await page.getByTestId("profile-security-link").first().click();
+
+    await page.getByTestId("security-screen").waitFor({state: "visible"});
+    await expect(page.getByTestId("password-card").first()).toBeVisible();
+    await expect(page.getByTestId("sessions-card").first()).toBeVisible();
+
+    await page.getByTestId("security-screen-back-button").click();
+    await page.getByTestId("profile-security-link").first().waitFor({state: "visible"});
   });
 
   test("shows current user info", async ({page}) => {
@@ -84,6 +103,38 @@ test.describe("Profile", () => {
 
   test("feature flags card renders", async ({page}) => {
     await expect(page.getByTestId("profile-feature-flags-card").first()).toBeVisible();
+  });
+
+  test("user who cannot reach the server stays signed in and sees the sign-out error", async ({
+    consoleGuard,
+    page,
+  }) => {
+    // The sign-out and the session check after it both fail, as they do offline. A cookie
+    // session may still be live on the server, so the app keeps it rather than showing the
+    // login screen.
+    consoleGuard.allow("Failed to load resource");
+    consoleGuard.allow("Better Auth: Error signing out");
+    consoleGuard.allow("Better Auth: Could not check the session after a failed sign out");
+    await page.route("**/api/auth/sign-out", (route) => route.abort("connectionrefused"));
+    await page.route("**/api/auth/get-session**", (route) => route.abort("connectionrefused"));
+
+    // The failed sign-out leaves the user signed in, so syncdb starts again, offline: it cannot
+    // read a session to connect with, and says so (the documented offline start).
+    const offlineStart = "[syncdb] transport connect failed; starting offline";
+    consoleGuard.allow(offlineStart);
+    const syncDbRestarted = page.waitForEvent("console", (message) =>
+      message.text().includes(offlineStart)
+    );
+    await page.getByTestId("profile-logout-button").first().click();
+
+    await expect(page.getByTestId("profile-logout-error").first()).toBeVisible();
+    await expect(page.getByTestId("profile-logout-error").first()).toContainText(
+      "Couldn't sign out"
+    );
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
+    await expect(page.getByTestId("login-screen")).toHaveCount(0);
+    await syncDbRestarted;
   });
 
   test("logout redirects to login", async ({page}) => {

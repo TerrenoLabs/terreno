@@ -29,6 +29,9 @@ written, and its regression-step bar decides whether a case is good enough.
 
 ## Procedure
 
+When `Regression suites` resolves to `none` (the testing-plan opt-out), stop: report that
+the repository opted out of manual regression suites, and write nothing.
+
 1. **Survey.** Use explore subagents in parallel. Collect evidence of behavior automation
    cannot reach, each with a file and line:
    - hardware and OS: push registration and delivery, notification permission, camera,

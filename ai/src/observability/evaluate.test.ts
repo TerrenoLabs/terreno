@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
+import {judgeAnswering} from "../tests/fakeJudge";
 import {
   judgeSchemaMissingDimensions,
   runEvaluator,
@@ -95,9 +96,7 @@ describe("evaluate", () => {
         output: "4",
       },
       {
-        generateJsonObject: async () => {
-          return {confidence: 0.95, correct: true};
-        },
+        generateJsonObject: judgeAnswering(() => ({confidence: 0.95, correct: true})),
       },
       {
         properties: {
@@ -152,7 +151,7 @@ describe("evaluate", () => {
     const base = {
       evaluator: {
         assertion: {constraint: "exists", path: "answer"},
-        dimensions: [{dataType: "boolean", key: "matches", required: true}],
+        dimensions: [{dataType: "boolean" as const, key: "matches", required: true}],
         name: "path-assert",
         type: "json-assert" as const,
       },
@@ -389,7 +388,7 @@ describe("evaluate", () => {
         input: {},
         output: "4",
       },
-      {generateJsonObject: async () => ({correct: true})},
+      {generateJsonObject: judgeAnswering(() => ({correct: true}))},
       {properties: {correct: {type: "boolean"}}, type: "object"}
     );
     assert.equal(missingJudgePrompt.error, "llm-judge evaluator is missing judgePromptName");
@@ -408,7 +407,7 @@ describe("evaluate", () => {
       },
       {
         ai: {
-          generateJsonObject: async () => ({confidence: "not-a-number", correct: 1}),
+          generateJsonObject: judgeAnswering(() => ({confidence: "not-a-number", correct: 1})),
         },
         judgeOutputSchema: {
           properties: {
@@ -461,9 +460,12 @@ describe("evaluate", () => {
         output: "4",
       },
       {
-        generateJsonObject: async () => {
-          return {confidence: "0.8", correct: "true", helpfulness: "not-a-number", tone: 1};
-        },
+        generateJsonObject: judgeAnswering(() => ({
+          confidence: "0.8",
+          correct: "true",
+          helpfulness: "not-a-number",
+          tone: 1,
+        })),
       },
       {
         properties: {
@@ -489,7 +491,7 @@ describe("LocalEvaluatorStore phase 2", () => {
   beforeEach(async () => {
     new ObservabilityApp({plugins: [createLocalObservabilityBundle().plugin]});
     promptStore = new LocalPromptStore();
-    store = new (await import("./local/evaluatorStore")).LocalEvaluatorStore(promptStore);
+    store = new (await import("./local/evaluatorStore.js")).LocalEvaluatorStore(promptStore);
     await registerObsEvaluator().deleteMany({});
     await clearObsPrompts();
     await promptStore.create({

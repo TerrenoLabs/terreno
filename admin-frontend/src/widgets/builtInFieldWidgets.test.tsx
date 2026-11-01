@@ -6,6 +6,7 @@ import {assert} from "chai";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminApi} from "../types";
 import {
   CheckboxListFieldWidget,
   LocaleContentFieldWidget,
@@ -15,12 +16,15 @@ import {
 } from "./builtInFieldWidgets";
 
 const fieldConfig = {description: "Helper copy", required: false, type: "string"};
+// The built-in field widgets never call the deprecated RTK `api`.
+const api = {} as AdminApi;
 
 describe("builtInFieldWidgets", () => {
   it("renders markdown and textarea widgets with labels and values", async () => {
-    const onChange = mock((_value: string) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const markdown = renderWithTheme(
       <MarkdownFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="bodyMarkdown"
         onChange={onChange}
@@ -34,6 +38,7 @@ describe("builtInFieldWidgets", () => {
 
     const textarea = renderWithTheme(
       <TextareaFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="notes"
         onChange={onChange}
@@ -46,6 +51,7 @@ describe("builtInFieldWidgets", () => {
   it("disables markdown and textarea widgets in read-only mode", async () => {
     const markdown = renderWithTheme(
       <MarkdownFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="bodyMarkdown"
         onChange={() => {}}
@@ -61,6 +67,7 @@ describe("builtInFieldWidgets", () => {
 
     const textarea = renderWithTheme(
       <TextareaFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="notes"
         onChange={() => {}}
@@ -76,6 +83,7 @@ describe("builtInFieldWidgets", () => {
     const onChange = mock((_value: unknown) => undefined);
     const editable = renderWithTheme(
       <CheckboxListFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="checkboxes"
         onChange={onChange}
@@ -86,6 +94,7 @@ describe("builtInFieldWidgets", () => {
 
     const readOnly = renderWithTheme(
       <CheckboxListFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="checkboxes"
         onChange={onChange}
@@ -99,9 +108,10 @@ describe("builtInFieldWidgets", () => {
   });
 
   it("renders locale content editor and read-only JSON fallback", () => {
-    const onChange = mock((_value: Record<string, string>) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const editable = renderWithTheme(
       <LocaleContentFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="content"
         onChange={onChange}
@@ -112,6 +122,7 @@ describe("builtInFieldWidgets", () => {
 
     const readOnly = renderWithTheme(
       <LocaleContentFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="content"
         onChange={onChange}
@@ -124,9 +135,10 @@ describe("builtInFieldWidgets", () => {
   });
 
   it("enables locale default select only when parent content has locales", () => {
-    const onChange = mock((_value: string) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const {UNSAFE_root, getByText} = renderWithTheme(
       <LocaleDefaultFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="defaultLocale"
         onChange={onChange}
@@ -142,6 +154,7 @@ describe("builtInFieldWidgets", () => {
 
     const withLocales = renderWithTheme(
       <LocaleDefaultFieldWidget
+        api={api}
         fieldConfig={fieldConfig}
         fieldKey="defaultLocale"
         onChange={onChange}

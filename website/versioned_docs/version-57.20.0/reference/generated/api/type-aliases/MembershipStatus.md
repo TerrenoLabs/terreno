@@ -1,0 +1,1 @@
+> **MembershipStatus** = `"active"` \| `"suspended"`

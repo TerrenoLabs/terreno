@@ -60,7 +60,7 @@ const CI_ONLY_HINTS: Record<string, string> = {
   "run-maestro-demo": "bun run demo:maestro:test",
   "run-mcp-server-docker": "docker build -f mcp-server/Dockerfile .",
   "run-smoke":
-    "bun run smoke (after bun run compile, cd admin-spa && bun run build:web, cd demo && bun run export)",
+    "bun run smoke (after bun run compile, cd admin-spa && bun run build:web, cd demo && bun run export, cd example-frontend && bun run export:smoke); bun run smoke:local does all of it",
 };
 
 /** Deploy parameters: they ship artifacts rather than verify the change. */
@@ -177,8 +177,9 @@ export const planPrepush = ({
   const has = (parameter: string): boolean => parameters.includes(parameter);
 
   const steps: PrepushStep[] = [
-    {command: "bun run lint", name: "lint (all packages)"},
+    // Compile first: root lint runs typecheck, which reads workspace dist types.
     {command: "bun run compile", name: "compile (all packages)"},
+    {command: "bun run lint", name: "lint + typecheck (all packages)"},
   ];
 
   if (has("run-rulesync")) {

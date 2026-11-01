@@ -1,0 +1,58 @@
+---
+title: "ActionSheet"
+description: "Bottom sheet overlay opened from a ref. Open and dismiss from the default demo."
+sidebar_label: "ActionSheet"
+slug: /reference/components/actionsheet
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# ActionSheet
+
+Bottom sheet overlay opened from a ref. Open and dismiss from the default demo.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `ActionSheetProps`  
+**Story source:** [`demo/stories/ActionSheet.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/ActionSheet.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="ActionSheet" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `animated` | `boolean` |  | Animate the opening and closing of ActionSheet. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `bottomOffset` | `number` |  | Snap ActionSheet to this location if  |
+| `bounceOnOpen` | `boolean` |  | Bounces the ActionSheet on open. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `bounciness` | `number` |  | How much you want the ActionSheet to bounce when it is opened. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default:  |
+| `children` | `ReactNode` |  |  |
+| `closable` | `boolean` |  | Prevent ActionSheet from closing on gesture or tapping on backdrop. Instead snap it to  |
+| `closeAnimationDuration` | `number` |  | Duration of closing animation. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default:  |
+| `closeOnPressBack` | `boolean` |  | Will the ActionSheet close on  |
+| `closeOnTouchBackdrop` | `boolean` |  | Control closing ActionSheet by touching on backdrop. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `containerStyle` | `ViewStyle` |  | Any custom styles for the container. \| Type \| Required \| \| ---- \| -------- \| \| Object \| no \| |
+| `CustomHeaderComponent` | `ReactNode` |  | Your custom header component. Using this will hide the default indicator. \| Type \| Required \| \| ---- \| -------- \| \| React.Component \| no \| |
+| `defaultOverlayOpacity` | `number` |  | Default opacity of the overlay/backdrop. \| Type \| Required \| \| ---- \| -------- \| \| number 0 - 1 \| no \| Default:  |
+| `delayActionSheetDraw` | `boolean` |  | Delay draw of ActionSheet on open for android. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `delayActionSheetDrawTime` | `number` |  | Delay draw of ActionSheet on open for android time. \| Type \| Required \| \| ---- \| -------- \| \| number (ms) \| no \| Default:  |
+| `drawUnderStatusBar` | `boolean` |  | Allow ActionSheet to draw under the StatusBar. This is enabled by default. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `elevation` | `number` |  | Add elevation to the ActionSheet container. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default:  |
+| `extraScroll` | `number` |  | Normally when the ActionSheet is fully opened, a small portion from the bottom is hidden by default. Use this prop if you want the ActionSheet to hover over the bottom of screen and not hide a little behind it. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default: |
+| `gestureEnabled` | `boolean` |  | Enables gesture control of ActionSheet \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `headerAlwaysVisible` | `boolean` |  | Keep the header always visible even when gestures are disabled. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `indicatorColor` | `string` |  | Color of the gestureEnabled Indicator. \| Type \| Required \| \| ---- \| -------- \| \| string \| no \| Default:  |
+| `initialOffsetFromBottom` | `number` |  | Use if you want to show the ActionSheet Partially on Opening. **Requires  |
+| `keyboardMode` | `union` |  | Change how ActionSheet behaves when keyboard is opened. \| Type \| Required \| \| ---- \| -------- \| \| "padding" \| "position" \| no \| Default: |
+| `keyboardShouldPersistTaps` | `union` |  | Setting the keyboard persistence of the ScrollView component, should be one of "never", "always", or "handled" \| Type \| Required \| \| ---- \| -------- \| \| string \| no \| Default:  |
+| `onClose` | `reflection` |  | Event called when the ActionSheet closes. \| Type \| Required \| \| ---- \| -------- \| \| function \| no \| # |
+| `onOpen` | `reflection` |  | An event called when the ActionSheet Opens. \| Type \| Required \| \| ---- \| -------- \| \| function \| no \| |
+| `onPositionChanged` | `reflection` |  | Event called when position of ActionSheet changes. |
+| `openAnimationSpeed` | `number` |  | Speed of opening animation. Higher means the ActionSheet will open more quickly. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default:  |
+| `overlayColor` | `string` |  | Color of the overlay/backdrop. \| Type \| Required \| \| ---- \| -------- \| \| string \| no \| Default:  |
+| `ref` | `MutableRefObject` |  |  |
+| `springOffset` | `number` |  | When touch ends and user has not moved farther from the set springOffset, the ActionSheet will return to previous position. \| Type \| Required \| \| ---- \| -------- \| \| number \| no \| Default:  |
+| `statusBarTranslucent` | `boolean` |  | Determine whether the modal should go under the system statusbar. \| Type \| Required \| \| ---- \| -------- \| \| boolean \| no \| Default:  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

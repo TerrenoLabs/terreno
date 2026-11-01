@@ -653,7 +653,8 @@ export const createAgentTasks = (context: AgentLoopContext): AgentTasks => {
       }
       let returned: unknown;
       try {
-        returned = await tool.execute(args.data, {
+        // `args.data` was parsed by this tool's own `parameters`, which match its `execute` args.
+        returned = await tool.execute(args.data as never, {
           conversationId,
           env: rt.env,
           output: (text: string) => {

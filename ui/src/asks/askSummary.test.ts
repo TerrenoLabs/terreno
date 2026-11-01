@@ -3,7 +3,7 @@ import type {ChoiceAskInput, ConfirmAskInput, FormAskInput} from "@terreno/block
 import {assert} from "chai";
 
 import {askSummary} from "./askSummary";
-import type {ChatAsk} from "./askTypes";
+import type {ChatAsk, ChatAskState} from "./askTypes";
 
 const PLAN_INPUT: ChoiceAskInput = {
   options: [
@@ -15,7 +15,7 @@ const PLAN_INPUT: ChoiceAskInput = {
   select: "one",
 };
 
-const planAsk = (state: Partial<ChatAsk>): ChatAsk => ({
+const planAsk = (state: Partial<ChatAskState> & {input?: ChoiceAskInput}): ChatAsk => ({
   input: PLAN_INPUT,
   kind: "choice",
   status: "answered",

@@ -1,34 +1,18 @@
 import {beforeAll, beforeEach, describe, expect, it} from "bun:test";
-import {createdUpdatedPlugin, TerrenoApp} from "@terreno/api";
+import {TerrenoApp} from "@terreno/api";
 import type express from "express";
-import mongoose from "mongoose";
-import passportLocalMongoose from "passport-local-mongoose";
 import supertest from "supertest";
 
 import {LangfuseApp} from "./langfuseApp";
+import {terrenoUserModel, UserModel} from "./tests/helpers";
 
 type PasswordedUser = {setPassword: (password: string) => Promise<void>};
-
-const userSchema = new mongoose.Schema({
-  admin: {default: false, type: Boolean},
-  email: {index: true, type: String},
-  name: String,
-});
-userSchema.plugin(
-  passportLocalMongoose as unknown as (
-    schema: mongoose.Schema,
-    options: {usernameField: string}
-  ) => void,
-  {usernameField: "email"}
-);
-userSchema.plugin(createdUpdatedPlugin);
-const UserModel = mongoose.models.User || mongoose.model("User", userSchema);
 
 const buildApp = (plugin: LangfuseApp) =>
   new TerrenoApp({
     configureApp: (router) => plugin.register(router as unknown as express.Application),
     skipListen: true,
-    userModel: UserModel,
+    userModel: terrenoUserModel,
   }).build();
 
 describe("LangfuseApp", () => {
@@ -40,7 +24,7 @@ describe("LangfuseApp", () => {
   });
 
   beforeEach(async () => {
-    const {shutdownLangfuseClient} = await import("./langfuseClient");
+    const {shutdownLangfuseClient} = await import("./langfuseClient.js");
     await shutdownLangfuseClient();
   });
 

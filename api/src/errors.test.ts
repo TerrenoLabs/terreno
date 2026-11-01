@@ -7,8 +7,10 @@ import supertest from "supertest";
 import {
   APIError,
   apiErrorMiddleware,
+  apiFallthroughErrorMiddleware,
   apiUnauthorizedMiddleware,
   BadRequestError,
+  bodyParserErrorToAPIError,
   ConflictError,
   errorDetail,
   errorMessage,
@@ -618,5 +620,84 @@ describe("apiErrorMiddleware", () => {
       })
     );
     expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("body-parser errors in the terrenoApp middleware order", () => {
+  const buildApp = (limit?: string): express.Express => {
+    const app = express();
+    app.use(express.json(limit ? {limit} : undefined));
+    app.post("/todos", (req, res) => {
+      res.json({data: req.body});
+    });
+    app.use(apiUnauthorizedMiddleware);
+    app.use(apiErrorMiddleware);
+    app.use(apiFallthroughErrorMiddleware);
+    return app;
+  };
+
+  it("returns 400 for a malformed JSON body", async () => {
+    const res = await supertest(buildApp())
+      .post("/todos")
+      .set("Content-Type", "application/json")
+      .send('{"title": broken json')
+      .expect(400);
+    expect(res.body.status).toBe(400);
+    expect(res.body.title).toBe("Malformed request body");
+    expect(typeof res.body.detail).toBe("string");
+    expect(res.body.detail.length).toBeGreaterThan(0);
+  });
+
+  it("returns 413 for a JSON body over the parser limit", async () => {
+    const res = await supertest(buildApp("10b"))
+      .post("/todos")
+      .set("Content-Type", "application/json")
+      .send(JSON.stringify({title: "this body is longer than ten bytes"}))
+      .expect(413);
+    expect(res.body).toEqual(
+      expect.objectContaining({status: 413, title: "Request body too large"})
+    );
+  });
+
+  it("returns 415 for an unsupported body charset", async () => {
+    const res = await supertest(buildApp())
+      .post("/todos")
+      .set("Content-Type", "application/json; charset=klingon")
+      .send('{"title": "x"}')
+      .expect(415);
+    expect(res.body).toEqual(
+      expect.objectContaining({status: 415, title: "Unsupported request body encoding"})
+    );
+  });
+
+  it("still parses a valid JSON body", async () => {
+    const res = await supertest(buildApp()).post("/todos").send({title: "ok"}).expect(200);
+    expect(res.body).toEqual({data: {title: "ok"}});
+  });
+});
+
+describe("bodyParserErrorToAPIError", () => {
+  it("returns null for errors that did not come from body-parser", () => {
+    expect(bodyParserErrorToAPIError(new Error("boom"))).toBeNull();
+    const notExposed = Object.assign(new Error("hidden"), {
+      expose: false,
+      status: 500,
+      type: "stream.encoding.set",
+    });
+    expect(bodyParserErrorToAPIError(notExposed)).toBeNull();
+  });
+
+  it("keeps the parser's status and message and skips Sentry", () => {
+    const parseError = Object.assign(new SyntaxError("Unexpected token b in JSON"), {
+      expose: true,
+      status: 400,
+      type: "entity.parse.failed",
+    });
+    const apiError = bodyParserErrorToAPIError(parseError);
+    expect(apiError?.status).toBe(400);
+    expect(apiError?.title).toBe("Malformed request body");
+    expect(apiError?.detail).toBe("Unexpected token b in JSON");
+    expect(apiError?.cause).toBe(parseError);
+    expect(apiError?.disableExternalErrorTracking).toBe(true);
   });
 });

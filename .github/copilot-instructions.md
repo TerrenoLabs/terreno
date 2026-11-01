@@ -81,7 +81,8 @@ bun run bootstrap        # Install dependencies + compile all packages (dev-read
 bun run bootstrap:update # Reinstall + recompile after pulling changes or switching branches
 bun install              # Install dependencies
 bun run compile          # Compile all packages
-bun run lint             # Lint all packages
+bun run lint             # Lint all packages (ends with typecheck)
+bun run typecheck        # Typecheck all packages, src + tests (run compile first)
 bun run lint:fix         # Fix lint issues
 bun run test             # Run all workspace test suites
 bun run test:agent       # Run all tests with passing cases suppressed
@@ -125,13 +126,13 @@ an intentional repository-wide dependency-graph change. See
 
 Lifecycle skills read this table to find the e2e guide, the manual regression suites,
 and the smoke command. Terreno uses the planning plugin's default paths and declares
-`bun run smoke` as its smoke command.
+`bun run smoke:local` as its smoke command: it builds what the smokes test, then runs `bun run smoke`.
 
 | Key | Value |
 | --- | --- |
 | E2E guide | docs/testing/e2e.md |
 | Regression suites | docs/regression/ |
-| Smoke command | bun run smoke |
+| Smoke command | bun run smoke:local |
 
 ## User guide conventions
 
@@ -335,7 +336,7 @@ auth/health/version plugins, SSE.
 
 React Native UI component library (a large component library):
 
-- **Layout**: Box, Page, SplitPage, Card
+- **Layout**: Box, Page, ListDetailLayout, SplitPage, Card
 - **Forms**: TextField, SelectField, DateTimeField, CheckBox
 - **Display**: Text, Heading, Badge, DataTable
 - **Actions**: Button, IconButton, Link

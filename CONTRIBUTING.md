@@ -17,7 +17,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.4 or newer — CI pins `bun-version: 1.4.0` (via `.github/actions/setup-bun-workspace` on the hot workflows). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
+- [Bun](https://bun.sh/) 1.4.4 or newer — CI pins `bun-version: 1.4.4` (via `.github/actions/setup-bun-workspace` on the hot workflows). 1.4.4 patches the Brotli decoder (CVE-2026-111497). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
 - **MongoDB replica set** — required to run `example-backend` locally (change streams power realtime and feature-flag sync). A single-node replica set is enough for development.
 
 ### Bootstrap

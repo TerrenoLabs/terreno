@@ -56,7 +56,7 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    state, a followable action, and an observable Expected is `FAIL` that names the row
    ID and the missing part; Pick fixes it by rewriting that row in the IP in place.
    A row an e2e guide layer could cover completely is also `FAIL` (testing-plan
-   "Automate first"); Pick moves it to `## E2E tests`. Roast never walks a row.
+   "Keep regression minimal"); Pick moves it to `## E2E tests`. Roast never walks a row.
    An IP that lacks either section follows the testing-plan legacy rule: warn once and
    do not fail.
 4. **Inspect and execute.** Review this task's patch and run concrete checks in this
@@ -71,7 +71,17 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 5. **Exercise changed behavior.** For UI-facing work in **this task's file list**, spawn
    at most one specialized UI/runtime verifier with the same briefing. Interact with the
    actual changed workflow and capture required screenshots/video/logs. App launch alone
-   is not proof. Skip that child when this task has no UI/runtime files.
+   is not proof. The verifier follows `verify-ui-changes`: a stack it owns (ports already
+   taken by something else are a blocker, never a shortcut), adversarial steps, the
+   required checks on every run (right page, not blank, no error overlay, console
+   clean, DOM assertion, interaction proof, screenshot), the matching Maestro flow on the
+   simulator for mobile-focused work (direct simulator commands when the app has no
+   Maestro), and a report with a Result line. It is report-only and never edits the
+   tree; a missing `testID` or flow is `FAIL` for Pick. A flow it could not run is
+   `UNVERIFIED` with the blocker, which is `BLOCKED` here, not `PASS`; so is a required
+   leg, such as the simulator for mobile-focused work, that the report lists only as
+   not run or remaining risk. Skip
+   that child when this task has no UI/runtime files.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`. Check each
    `## User guide` page whose row names this task against the user-guide guide-entry bar

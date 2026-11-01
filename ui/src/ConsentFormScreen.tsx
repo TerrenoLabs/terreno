@@ -1,3 +1,4 @@
+import {DateTime} from "luxon";
 import React, {useCallback, useRef, useState} from "react";
 import {
   type LayoutChangeEvent,
@@ -17,7 +18,7 @@ import {Modal} from "./Modal";
 import {Page} from "./Page";
 import {SignatureField} from "./SignatureField";
 import {Text} from "./Text";
-import type {ConsentFormPublic} from "./useConsentForms";
+import {applyConsentVariables, type ConsentFormPublic} from "./useConsentForms";
 
 interface ConsentFormScreenProps {
   form: ConsentFormPublic;
@@ -49,9 +50,19 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   const scrollViewRef = useRef<ScrollView>(null);
 
   const rawContent = form.content[locale] ?? form.content[form.defaultLocale] ?? "";
-  const content = variables
-    ? rawContent.replace(/\{\{(\w+)\}\}/g, (match, key) => variables[key] ?? match)
-    : rawContent;
+  const content = applyConsentVariables(rawContent, variables);
+
+  // Staff may have signed provisionally; the user still reads and answers the form.
+  const provisionalSignedAt = form.provisionalSignature
+    ? DateTime.fromISO(form.provisionalSignature.signedAt).setLocale(locale)
+    : undefined;
+  const provisionalNotice = form.provisionalSignature
+    ? `Signed on your behalf by ${form.provisionalSignature.signedByName}${
+        provisionalSignedAt?.isValid
+          ? ` on ${provisionalSignedAt.toLocaleString(DateTime.DATETIME_MED)}`
+          : ""
+      }`
+    : undefined;
 
   const allRequiredCheckboxesChecked = form.checkboxes.every((checkbox, index) => {
     if (!checkbox.required) {
@@ -244,6 +255,19 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
         testID="consent-form-scroll-view"
       >
         <Box direction="column" gap={3} paddingY={2}>
+          {Boolean(provisionalNotice) && (
+            <Box
+              border="default"
+              color="secondaryExtraLight"
+              padding={3}
+              rounding="md"
+              testID="consent-form-provisional-notice"
+            >
+              <Text size="md" testID="consent-form-provisional-notice-text">
+                {provisionalNotice}
+              </Text>
+            </Box>
+          )}
           <MarkdownView onLoad={handleMarkdownLoad}>{content}</MarkdownView>
 
           {form.checkboxes.length > 0 && (

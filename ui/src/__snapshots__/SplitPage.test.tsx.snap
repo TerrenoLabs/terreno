@@ -395,6 +395,22 @@ exports[`SplitPage renders with loading state 1`] = `
           "children": [
             {
               "$$typeof": Symbol(react.test.json),
+              "children": null,
+              "props": {
+                "accessibilityLabel": "Loading",
+                "accessibilityState": {
+                  "busy": true,
+                },
+                "aria-busy": true,
+                "onPointerEnter": [Function: AsyncFunction],
+                "onPointerLeave": [Function: AsyncFunction],
+                "style": {},
+                "testID": "split-page-loading",
+              },
+              "type": "View",
+            },
+            {
+              "$$typeof": Symbol(react.test.json),
               "children": [
                 {
                   "$$typeof": Symbol(react.test.json),

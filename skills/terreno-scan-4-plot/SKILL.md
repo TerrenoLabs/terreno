@@ -58,6 +58,11 @@ Read the shared [`scan contract`](references/scan-contract.md),
      or `None — <reason>`, in the testing plan's table format with provisional
      `<AREA>-new-<n>` IDs. Each case meets the contract's regression-step bar. Leave
      `Added` for Grow to fill
+   - a `## User guide` section listing the end-user guide pages the slice adds, updates,
+     or retires, or `None — <reason>`, in the user-guide table format of the
+     `terreno-planning` plugin (`references/user-guide.md`). Leave `Written in` for Grow
+     to fill. A repository whose `## User guide conventions` table sets `none` writes
+     `None — user guide off`
    - the unacceptable trade-offs from the charter, quoted
    - the docs the slice must create or update
    - known blockers, dependencies on other slices, and residual risk

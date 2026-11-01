@@ -18,7 +18,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`product CI`](../../references/product-ci.md),
 [`async review bots`](../../references/async-review-bots.md),
 [`push ownership`](../../references/push-ownership.md),
-[`testing plan`](../../references/testing-plan.md), and
+[`testing plan`](../../references/testing-plan.md),
+[`user guide`](../../references/user-guide.md), and
 [`GitHub attention contract`](../../references/github-attention-contract.md).
 
 Taste owns the PR until it is clean or escalated. Never leave it red, pending with no
@@ -39,6 +40,8 @@ make it clean, stop and escalate per push ownership.
 - The IP's `## E2E tests` and `## Regression cases` sections, the resolved `E2E guide`,
   `Regression suites`, and `Smoke command` per the testing plan, and Brew's recorded
   provisional-to-real regression ID mapping
+- The IP's `## User guide` section and the resolved `User guide` path per the user-guide
+  contract
 - Brew result and prior Taste results/attempted approaches
 - Current CI/job data from every discovered host, mergeability, review threads/comments, and artifacts
 - Repository instructions and available project skills
@@ -110,6 +113,10 @@ make it clean, stop and escalate per push ownership.
      the IP does not plan is a human decision (`BLOCKED`) naming the case. Leave the IP
      tables unchanged. An IP that lacks either section follows the testing-plan legacy
      rule: warn once and skip that section.
+   - When a review or CI fix changes user-visible behaviour, update the user guide pages
+     that describe it in place before the push, holding each edit to the user-guide
+     guide-entry bar, set `updated` to the IP slug, and keep the guide index current.
+     Skip this when the repository opts out of the user guide.
 9. **Before any push, in this order: fetch latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
    1. Always fetch the latest `master` (use the PR base if it is not `master`). Merge it
       into this branch only when one of these holds:

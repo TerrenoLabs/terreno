@@ -3,6 +3,7 @@
 **Status:** Approved
 **Roadmap:** Area=`tooling`, Target=`Next`, Impact=`Feature`
 **Branch:** e2e-and-regression-testing
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1641
 **Owner:** Josh Gachnang
 **Created:** 2026-10-23
 

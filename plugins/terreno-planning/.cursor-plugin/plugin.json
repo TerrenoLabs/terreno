@@ -2,7 +2,7 @@
   "name": "terreno-planning",
   "displayName": "Terreno",
   "description": "Terreno lifecycle and app workflows: Grow, Pick/Roast, Brew, Taste, continuous outer loops, backend/API, UI, data, schema, admin, docs, upgrades, deployment, and verification agents.",
-  "version": "2.13.0",
+  "version": "2.14.0",
   "author": {
     "name": "Terreno",
     "email": "terreno@flourish.health"

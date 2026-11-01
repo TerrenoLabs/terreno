@@ -43,6 +43,15 @@ describe("planPrepush", () => {
     );
   });
 
+  it("checks the user guide when a guide page or its checker changes", () => {
+    expect(stepNames(["docs/user-guide/todos/create-a-todo.md"])).toContain(
+      "repo-policies: user guide"
+    );
+    expect(stepNames(["scripts/userGuide/checkUserGuide.ts"])).toContain(
+      "repo-policies: user guide"
+    );
+  });
+
   it("runs example-backend tests when api changes (OpenAPI snapshot regression)", () => {
     const names = stepNames(["api/src/api.ts"]);
     expect(names).toContain("api-ci: test:coverage");

@@ -36,6 +36,12 @@ Grow plans the rows, Pick writes each spec, Roast runs them, Brew gates on them 
 merges the cases into the suite with the next free ID, and Taste re-checks both after
 fixes and renumbers ID collisions.
 
+Every IP also plans its end-user guide pages ([`references/user-guide.md`](terreno-planning/references/user-guide.md)):
+a required `## User guide` section, one page per feature under `docs/user-guide/`, which
+chat agents read to answer "how do I…" questions. Pick writes each page with its feature,
+Roast checks it against the shipped screens, Brew gates on it, and Taste keeps it current.
+A repo opts out with `User guide | none` in a `## User guide conventions` table.
+
 Three additional skills are **outer loops**, not stages. They invoke the five transitions
 and persist state:
 
@@ -123,6 +129,7 @@ The shared result/state format and outer state machine live in:
 - [`references/github-attention-contract.md`](terreno-planning/references/github-attention-contract.md)
 - [`references/pr-deployments.md`](terreno-planning/references/pr-deployments.md)
 - [`references/testing-plan.md`](terreno-planning/references/testing-plan.md)
+- [`references/user-guide.md`](terreno-planning/references/user-guide.md)
 - [`stage-result.schema.json`](terreno-planning/references/stage-result.schema.json)
 - [`execution-state.schema.json`](terreno-planning/references/execution-state.schema.json)
 

@@ -6,8 +6,14 @@ import React, {useCallback, useMemo, useState} from "react";
  * App-specific roles screen. Unlike `AdminRolesList` from `@terreno/admin-frontend`, it hides
  * model (CRUD) permissions and shows only the named permission checks the app makes, such as
  * `admin.access` or `clinicalIntake.signoff`. Model permissions already on a role are kept
- * unchanged when the role is saved.
+ * unchanged when the role is saved. Pass `showAllPermissions` to also show and edit model
+ * permissions.
  */
+
+interface AppRolesListProps {
+  /** Show model (CRUD) permissions alongside permission checks. Defaults to false. */
+  showAllPermissions?: boolean;
+}
 
 interface RbacRoleRow {
   description?: string;
@@ -70,12 +76,20 @@ const normalizeStatements = (data: StatementsResponse): RbacStatements => {
 };
 
 /** Keeps only resources with at least one permission check, sorted by resource name. */
-const permissionChecks = (permissions: Record<string, readonly string[]>): [string, string[]][] => {
+const visiblePermissions = ({
+  permissions,
+  showAll,
+}: {
+  permissions: Record<string, readonly string[]>;
+  showAll: boolean;
+}): [string, string[]][] => {
   return Object.keys(permissions)
     .sort((a, b) => a.localeCompare(b))
     .map((resource): [string, string[]] => [
       resource,
-      (permissions[resource] ?? []).filter(isPermissionCheck).sort((a, b) => a.localeCompare(b)),
+      (permissions[resource] ?? [])
+        .filter((action) => showAll || isPermissionCheck(action))
+        .sort((a, b) => a.localeCompare(b)),
     ])
     .filter(([, actions]) => actions.length > 0);
 };
@@ -93,13 +107,14 @@ const errorMessage = (failure: unknown, fallback: string): string => {
 
 const PermissionCheckRows: React.FC<{
   permissions: Record<string, readonly string[]>;
+  showAll: boolean;
   testIDPrefix: string;
-}> = ({permissions, testIDPrefix}) => {
-  const rows = permissionChecks(permissions);
+}> = ({permissions, showAll, testIDPrefix}) => {
+  const rows = visiblePermissions({permissions, showAll});
   if (rows.length === 0) {
     return (
       <Text color="secondaryLight" size="sm" testID={`${testIDPrefix}-empty`}>
-        No permission checks granted.
+        {showAll ? "No permissions granted." : "No permission checks granted."}
       </Text>
     );
   }
@@ -135,7 +150,7 @@ const PermissionCheckRows: React.FC<{
   );
 };
 
-export const AppRolesList: React.FC = () => {
+export const AppRolesList: React.FC<AppRolesListProps> = ({showAllPermissions = false}) => {
   const rpc = useAdminRpc();
   const rolesQuery = useAdminRpcQuery<RolesResponse>({
     providesTags: [ROLES_TAG],
@@ -152,7 +167,10 @@ export const AppRolesList: React.FC = () => {
     () => normalizeStatements(statementsQuery.data),
     [statementsQuery.data]
   );
-  const statementChecks = useMemo(() => permissionChecks(statements), [statements]);
+  const statementChecks = useMemo(
+    () => visiblePermissions({permissions: statements, showAll: showAllPermissions}),
+    [showAllPermissions, statements]
+  );
 
   const [editingRole, setEditingRole] = useState<RbacRoleRow | null>(null);
   const [form, setForm] = useState<RoleFormState>(EMPTY_ROLE_FORM);
@@ -317,6 +335,7 @@ export const AppRolesList: React.FC = () => {
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
                 <PermissionCheckRows
                   permissions={role.permissions ?? {}}
+                  showAll={showAllPermissions}
                   testIDPrefix={`admin-roles-item-${role.name}-permission`}
                 />
               </Box>
@@ -328,7 +347,11 @@ export const AppRolesList: React.FC = () => {
             {statementsQuery.isLoading ? <Spinner /> : null}
             {statementsQuery.error ? <Text color="error">Failed to load permissions.</Text> : null}
             {!statementsQuery.isLoading && !statementsQuery.error ? (
-              <PermissionCheckRows permissions={statements} testIDPrefix="admin-permissions" />
+              <PermissionCheckRows
+                permissions={statements}
+                showAll={showAllPermissions}
+                testIDPrefix="admin-permissions"
+              />
             ) : null}
           </Box>
         </Box>

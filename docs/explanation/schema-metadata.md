@@ -43,6 +43,11 @@ const routerDescription = describeModelForRouter(Todo, {
 
 System paths (`_id`, `__v`, `created`, `updated`, `deleted`) are marked with `system: true`.
 
+`required` is true only when the field is required on every document. A conditional
+`required` (a function, such as "required when `provisional` is true") leaves it false, so
+OpenAPI and generated SDKs type the field as optional; Mongoose still enforces the condition
+on save.
+
 ## Views (not canonical)
 
 | Surface | Function | Notes |

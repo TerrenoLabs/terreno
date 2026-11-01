@@ -1,5 +1,6 @@
 import {describe, expect, it} from "bun:test";
 import {invalidAskFixtures, validAskFixtures} from "../tests/askFixtures";
+import type {AskErrorCode} from "./errors";
 import {type AskKind, type AskSurface, isCompactAskKind} from "./schema";
 import {validateAskInput} from "./validateInput";
 
@@ -8,7 +9,7 @@ const NO_OPTION = {id: "no", label: "No"};
 const TWO_OPTIONS = [{id: "yes", label: "Yes"}, NO_OPTION];
 
 /** What the compact surface returns for each valid fixture, read off the compact rules by hand. */
-const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: string; path: string}[]> = {
+const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: AskErrorCode; path: string}[]> = {
   "choice-emoji-label-cut": [{code: "TOO_LONG", path: "options[0].label"}],
   "choice-labels-collide-after-cut": [
     {code: "TOO_LONG", path: "options[0].label"},

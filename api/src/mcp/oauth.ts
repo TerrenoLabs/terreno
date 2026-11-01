@@ -5,7 +5,7 @@
  * authorization-code flow with PKCE S256. Terreno is backend-only, so the app hosts the consent
  * screen at `consentUrl` and calls the approve/deny endpoints with the signed-in user's JWT.
  */
-import {createHash, randomUUID} from "node:crypto";
+import {createHash, randomUUID, timingSafeEqual} from "node:crypto";
 import type {Application, NextFunction, Request, RequestHandler, Response} from "express";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
@@ -27,6 +27,7 @@ import {MCP_SERVICE_TOKEN_PREFIX} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
 import type {
   McpOAuthAuthorizationDocument,
+  McpOAuthClientDocument,
   McpOAuthTokenIssueOptions,
   McpOAuthTokenModel,
 } from "../types/mcpOAuth";
@@ -35,9 +36,9 @@ import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
   LOOPBACK_HOSTS,
+  PUBLIC_CLIENT_GRANT_TYPES,
   protectedResourceMetadataPath,
   type ResolvedMcpOAuthOptions,
-  SUPPORTED_GRANT_TYPES,
   SUPPORTED_RESPONSE_TYPES,
   sendProtocolJson,
 } from "./oauthMetadata";
@@ -261,11 +262,11 @@ const addRegistrationRoute = (app: Application, oauth: ResolvedMcpOAuthOptions):
           "Only public clients are supported: token_endpoint_auth_method must be none"
         );
       }
-      const grantTypes = (body.grant_types as unknown[] | undefined) ?? SUPPORTED_GRANT_TYPES;
+      const grantTypes = (body.grant_types as unknown[] | undefined) ?? PUBLIC_CLIENT_GRANT_TYPES;
       if (
         !Array.isArray(grantTypes) ||
         !grantTypes.includes("authorization_code") ||
-        grantTypes.some((grant) => !SUPPORTED_GRANT_TYPES.includes(grant as string))
+        grantTypes.some((grant) => !PUBLIC_CLIENT_GRANT_TYPES.includes(grant as string))
       ) {
         throw new OAuthProtocolError(
           "invalid_client_metadata",
@@ -312,6 +313,41 @@ const addRegistrationRoute = (app: Application, oauth: ResolvedMcpOAuthOptions):
   );
 };
 
+/**
+ * RFC 8252 §7.3: a native client binds an ephemeral port, so a loopback redirect matches a
+ * registered loopback URI when scheme, hostname, path, and query match. The port is ignored.
+ * `localhost`, `127.0.0.1`, and `[::1]` stay distinct hosts. Every other URI stays an exact match.
+ */
+const redirectUriMatchesRegistered = (requested: string, registered: string[]): boolean => {
+  if (registered.includes(requested)) {
+    return true;
+  }
+  let requestedUrl: URL;
+  try {
+    requestedUrl = new URL(requested);
+  } catch {
+    return false;
+  }
+  if (!LOOPBACK_HOSTS.has(requestedUrl.hostname)) {
+    return false;
+  }
+  return registered.some((candidate) => {
+    let registeredUrl: URL;
+    try {
+      registeredUrl = new URL(candidate);
+    } catch {
+      return false;
+    }
+    return (
+      LOOPBACK_HOSTS.has(registeredUrl.hostname) &&
+      registeredUrl.protocol === requestedUrl.protocol &&
+      registeredUrl.hostname === requestedUrl.hostname &&
+      registeredUrl.pathname === requestedUrl.pathname &&
+      registeredUrl.search === requestedUrl.search
+    );
+  });
+};
+
 const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
   app.get(
     "/oauth/authorize",
@@ -322,7 +358,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
         throw new OAuthProtocolError("invalid_request", "client_id is required");
       }
       const client = await McpOAuthClient.findOneOrNone({clientId});
-      if (!client) {
+      if (!client || client.revokedAt) {
         throw new OAuthProtocolError("invalid_request", "Unknown client_id");
       }
       // RFC 6749 §4.1.2.1: never redirect to an unverified URI, so these two fail in place.
@@ -330,7 +366,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
       const redirectUri =
         requestedRedirect ??
         (client.redirectUris.length === 1 ? client.redirectUris[0] : undefined);
-      if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
+      if (!redirectUri || !redirectUriMatchesRegistered(redirectUri, client.redirectUris)) {
         throw new OAuthProtocolError(
           "invalid_request",
           "redirect_uri does not match a registered redirect URI"
@@ -561,6 +597,18 @@ interface TokenResponse {
   token_type: "Bearer";
 }
 
+/**
+ * A revoke can land after the token route has loaded the client and before this pair exists.
+ * A new family has no tombstone yet, so drop the pair when the client is already revoked.
+ */
+const discardIssuedIfClientRevoked = async (clientId: string, familyId: string): Promise<void> => {
+  const current = await McpOAuthClient.findOneOrNone({clientId});
+  if (!current || current.revokedAt) {
+    await McpOAuthToken.revokeFamily(familyId);
+    throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
+  }
+};
+
 const exchangeAuthorizationCode = async (
   body: Record<string, unknown>,
   clientId: string,
@@ -642,6 +690,10 @@ const exchangeAuthorizationCode = async (
     tokenEpoch: userTokenEpoch(user),
     userId: consumed.userId as mongoose.Types.ObjectId,
   });
+  if (!issued.refreshToken) {
+    throw new OAuthProtocolError("server_error", "Expected a refresh token", 500);
+  }
+  await discardIssuedIfClientRevoked(clientId, issued.mcpOAuthToken.familyId);
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
@@ -663,7 +715,7 @@ const exchangeRefreshToken = async (
   }
   const refreshTokenHash = hashMcpOAuthSecret(refreshToken);
   const current = await McpOAuthToken.findOneOrNone({refreshTokenHash});
-  if (!current || current.clientId !== clientId) {
+  if (!current || current.clientId !== clientId || current.hasRefreshToken === false) {
     throw new OAuthProtocolError("invalid_grant", "Refresh token is invalid");
   }
   const now = DateTime.now();
@@ -709,11 +761,119 @@ const exchangeRefreshToken = async (
     tokenEpoch: userTokenEpoch(user),
     userId: rotated.userId,
   });
+  if (!issued.refreshToken) {
+    throw new OAuthProtocolError("server_error", "Expected a refresh token", 500);
+  }
+  await discardIssuedIfClientRevoked(clientId, issued.mcpOAuthToken.familyId);
   return {
     access_token: issued.accessToken,
     expires_in: oauth.accessTokenTtlSeconds,
     refresh_token: issued.refreshToken,
     scope: rotated.scope,
+    token_type: "Bearer",
+  };
+};
+
+interface BasicClientCredentials {
+  clientId?: string;
+  clientSecret?: string;
+}
+
+/** RFC 6749 §2.3.1 HTTP Basic client authentication. The id and secret are form-encoded. */
+const readBasicClient = (authorization: string | undefined): BasicClientCredentials => {
+  if (!authorization?.startsWith("Basic ")) {
+    return {};
+  }
+  const decoded = Buffer.from(authorization.slice("Basic ".length).trim(), "base64").toString(
+    "utf8"
+  );
+  const separator = decoded.indexOf(":");
+  if (separator < 0) {
+    return {};
+  }
+  try {
+    return {
+      clientId: decodeURIComponent(decoded.slice(0, separator)),
+      clientSecret: decodeURIComponent(decoded.slice(separator + 1)),
+    };
+  } catch {
+    return {};
+  }
+};
+
+const clientSecretMatches = (
+  client: McpOAuthClientDocument,
+  presented: string | undefined
+): boolean => {
+  if (!presented || !client.clientSecretHash) {
+    return false;
+  }
+  const actual = Buffer.from(client.clientSecretHash);
+  const expected = Buffer.from(hashMcpOAuthSecret(presented));
+  if (actual.length !== expected.length) {
+    return false;
+  }
+  return timingSafeEqual(actual, expected);
+};
+
+const assertClientAuthenticated = (
+  client: McpOAuthClientDocument,
+  body: Record<string, unknown>,
+  basic: BasicClientCredentials
+): void => {
+  const method = client.tokenEndpointAuthMethod ?? "none";
+  if (method === "none") {
+    throw new OAuthProtocolError("invalid_client", "Client authentication failed", 401);
+  }
+  const presented =
+    method === "client_secret_basic"
+      ? basic.clientId === client.clientId
+        ? basic.clientSecret
+        : undefined
+      : stringParam(body.client_id) === client.clientId
+        ? stringParam(body.client_secret)
+        : undefined;
+  const usedOtherMethod =
+    method === "client_secret_basic"
+      ? Boolean(stringParam(body.client_secret))
+      : Boolean(basic.clientSecret);
+  if (usedOtherMethod || !clientSecretMatches(client, presented)) {
+    throw new OAuthProtocolError("invalid_client", "Client authentication failed", 401);
+  }
+};
+
+const exchangeClientCredentials = async (
+  body: Record<string, unknown>,
+  client: McpOAuthClientDocument,
+  oauth: ResolvedMcpOAuthOptions,
+  userModel: UserModel
+): Promise<Record<string, unknown>> => {
+  if (!client.userId || (client.tokenEndpointAuthMethod ?? "none") === "none") {
+    throw new OAuthProtocolError("invalid_client", "Client authentication failed", 401);
+  }
+  const user = await userModel.findById(client.userId);
+  if (!user || userIsDisabled(user)) {
+    throw new OAuthProtocolError("invalid_grant", "The user cannot be granted a token");
+  }
+  const allowed = client.scope
+    ? client.scope.split(" ").filter((scope) => scope.length > 0)
+    : oauth.scopesSupported;
+  const scope = parseScope(stringParam(body.scope), allowed);
+  const issued = await issueOrInvalidGrant({
+    accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,
+    clientId: client.clientId,
+    includeRefreshToken: false,
+    refreshTokenTtlSeconds: oauth.accessTokenTtlSeconds,
+    resource: oauth.resource,
+    scope,
+    tokenEpoch: userTokenEpoch(user),
+    userId: client.userId,
+  });
+  await discardIssuedIfClientRevoked(client.clientId, issued.mcpOAuthToken.familyId);
+  return {
+    access_token: issued.accessToken,
+    expires_in: oauth.accessTokenTtlSeconds,
+    scope,
     token_type: "Bearer",
   };
 };
@@ -727,25 +887,36 @@ const addTokenRoutes = (
     "/oauth/token",
     oauthHandler(async (req, res) => {
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const clientId = stringParam(body.client_id);
+      const basic = readBasicClient(
+        typeof req.headers.authorization === "string" ? req.headers.authorization : undefined
+      );
+      const clientId = stringParam(body.client_id) ?? basic.clientId;
       if (!clientId) {
         throw new OAuthProtocolError("invalid_client", "client_id is required", 401);
       }
       const client = await McpOAuthClient.findOneOrNone({clientId});
-      if (!client) {
+      if (!client || client.revokedAt) {
         throw new OAuthProtocolError("invalid_client", "Unknown client_id", 401);
       }
       const grantType = stringParam(body.grant_type);
       if (!grantType || !client.grantTypes.includes(grantType)) {
         throw new OAuthProtocolError(
           "unsupported_grant_type",
-          "grant_type must be authorization_code or refresh_token"
+          "grant_type is not allowed for this client"
         );
       }
+      if (
+        grantType === "client_credentials" ||
+        (client.tokenEndpointAuthMethod && client.tokenEndpointAuthMethod !== "none")
+      ) {
+        assertClientAuthenticated(client, body, basic);
+      }
       const tokens =
-        grantType === "authorization_code"
-          ? await exchangeAuthorizationCode(body, clientId, oauth, userModel)
-          : await exchangeRefreshToken(body, clientId, oauth, userModel);
+        grantType === "client_credentials"
+          ? await exchangeClientCredentials(body, client, oauth, userModel)
+          : grantType === "authorization_code"
+            ? await exchangeAuthorizationCode(body, clientId, oauth, userModel)
+            : await exchangeRefreshToken(body, clientId, oauth, userModel);
       res.setHeader("Cache-Control", "no-store");
       res.setHeader("Pragma", "no-cache");
       sendProtocolJson(res, 200, tokens);

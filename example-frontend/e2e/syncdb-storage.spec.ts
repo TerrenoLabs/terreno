@@ -9,6 +9,7 @@ import {expect, test} from "./fixtures/test";
 import {SECOND_USER, SYNCDB_STORAGE_USER} from "./fixtures/testUsers";
 import {ensureLoggedOut, loginAs} from "./helpers/login";
 import {
+  allowAuthWhileOffline,
   allowSyncDbNoise,
   CONVERGE_TIMEOUT,
   createTodoViaUi,
@@ -96,9 +97,11 @@ test.describe("SyncDB user switch wipe (AC-7)", () => {
     await page.getByTestId("todos-create-button").click();
     await expect(page.getByTestId("sync-queued-count")).toContainText("1");
 
-    // Log out while still offline so the queued mutation cannot replay as A.
+    // Log out while sync is still offline so the queued mutation cannot replay as A. The
+    // sign-out itself must reach the server: rtk's logout() keeps a session it could not end.
     // Navigate via the tab bar (client-side) — a full goto would reload the document
     // and re-evaluate the feature flag against the blocked network.
+    await allowAuthWhileOffline(page);
     await page.getByTestId("tab-profile").click();
     await page.getByTestId("profile-logout-button").waitFor({state: "visible", timeout: 15_000});
     await page.getByTestId("profile-logout-button").click();
@@ -108,9 +111,7 @@ test.describe("SyncDB user switch wipe (AC-7)", () => {
     // user switch, so loginAs is reused here rather than in beforeEach.
     await restoreNetwork(page);
 
-    // The sign-out above ran offline, so it cleared local auth state but never reached
-    // the server — A's session cookie is still valid. Reloading with connectivity back
-    // re-reads that session and lands on the Todos screen instead of /login.
+    // Already signed out; this only confirms the login screen after the network change.
     await ensureLoggedOut(page);
 
     await loginAs(page, SECOND_USER);

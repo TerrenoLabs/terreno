@@ -17,6 +17,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Create a Terreno app](create-a-terreno-app.md) — Scaffold a full-stack app with `create-terreno-app` (Bun or npm)
 - [Update dependencies](update-dependencies.md) — Daily rolling PR, exercise test, Expo fingerprint freeze
 - [CircleCI](circleci.md) — Dual-run CI on CircleCI (package CI / policy / e2e; deploys later)
+- [Release automation](release-automation.md) — Let agents merge release notes and roadmap updates; publish only merged notes
 - [Set up tests in a Terreno app](set-up-app-tests.md) — Bun backend and frontend tests, Playwright web E2E, Maestro on iOS/Android
 - [Run tests locally](run-tests-locally.md) — Map every CircleCI test job to a Cursor Cloud / laptop command
 - [GitHub Actions CI](github-actions-ci.md) — Cut PR runtime: docs previews, compile-once e2e, pinned Bun
@@ -26,15 +27,18 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
 - [Enable the framework audit log](audit-log.md) — `AuditApp`, per-router `audit`, append-only events
+- [Sign consent on a user's behalf](sign-consent-on-behalf.md) — Provisional consent signatures: RBAC grant, signer screen, status checks, void, print
 - [Seed a database](seed-a-database.md) — Idempotent sync, dry runs, and guarded reset-and-reseed
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API
 - [Configure Better Auth](configure-better-auth.md) — Set up Better Auth with social OAuth (Google, GitHub, Apple)
+- [Set up social login](set-up-social-login.md) — Register Google, GitHub, and Apple once on the stable deploy, proxy previews through it, and move stable onto one domain
 - [Password reset and email verification](password-reset.md) — JWT routes, comms templates, Better Auth hooks
+- [Recover a locked-out user](recover-locked-out-user.md) — Platform and org-admin recovery: 2FA, passkeys, providers, sessions, suspend
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
-- [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
-- [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
+- [Set up Terreno MCP](set-up-terreno-mcp.md) — Connect Cursor or Claude Code to the hosted docs/codegen server and the local runtime server
+- [Debug with MCP](debug-with-mcp.md) — Follow a failure from symptom to verified fix with the local MCP tools
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
@@ -47,7 +51,10 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Call external APIs](call-external-apis.md) — Authenticated HTTP client, retries, and error normalization for third-party integrations
 - [Upgrade banner](upgrade-banner.md) — Soft warning and hard-block app update UX
 - [Upgrade Terreno](upgrade-terreno.md) — Lockstep `@terreno/*` bumps, note range, order, rollback
+- [Automate Terreno upgrades](automate-terreno-upgrades.md) — Hourly workflow that launches one upgrade agent when a week-old release is out and no upgrade is open
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
+- [Build a list/detail screen](build-list-detail-screens.md) — `ListDetailLayout` route group: list on a phone, list + detail panes on a tablet, selection in the URL
+- [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
 - [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer

@@ -1,5 +1,6 @@
 # Stage 1: Install dependencies and build
-FROM oven/bun:1 AS builder
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497).
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /app
 
 COPY . .
@@ -8,8 +9,22 @@ RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter "@terreno/blocks" compile
 RUN bun run --filter "@terreno/api" compile
 
-# Stage 2: Runtime - use oven/bun:1 so Sentry/OpenTelemetry instrumentation works
-FROM oven/bun:1
+# The server reads generated docs from mcp-server/src/docs. They are git-ignored, so a clean
+# checkout lacks them, and a checkout that ran the mcp-server tests holds the one-component
+# test fixture instead. Regenerate them here: @terreno/ui props for terreno_get_component_docs
+# (TypeDoc writes demo/ui-types-documentation.json), the repository docs and retained
+# versions for terreno_search_docs, and the package guidelines.
+RUN bun run --filter "@terreno/ui" types \
+  && test -s demo/ui-types-documentation.json
+RUN cd mcp-server \
+  && cp ../demo/ui-types-documentation.json src/docs/ui-types-documentation.json \
+  && bun run sync-versioned-docs \
+  && bun run sync-package-guidelines \
+  && test -d src/docs/versioned/next
+
+# Stage 2: Runtime stays on Bun so Sentry/OpenTelemetry instrumentation works.
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497).
+FROM oven/bun:1.4.4
 WORKDIR /app
 
 COPY --from=builder /app/node_modules ./node_modules

@@ -18,6 +18,8 @@ exports[`TextField snapshots should match snapshot with default props 1`] = `
                 "accessibilityState": {
                   "disabled": undefined,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": false,
                 "aria-label": "Text input field",
                 "autoCapitalize": "sentences",
                 "autoCorrect": true,
@@ -44,6 +46,7 @@ exports[`TextField snapshots should match snapshot with default props 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -142,6 +145,7 @@ exports[`TextField snapshots should match snapshot with all props 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",
@@ -165,6 +169,8 @@ exports[`TextField snapshots should match snapshot with all props 1`] = `
                 "accessibilityState": {
                   "disabled": false,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": true,
                 "aria-label": "Text input field",
                 "autoCapitalize": "sentences",
                 "autoCorrect": true,
@@ -191,6 +197,7 @@ exports[`TextField snapshots should match snapshot with all props 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -226,7 +233,7 @@ exports[`TextField snapshots should match snapshot with all props 1`] = `
           "backgroundColor": "#FFFFFF",
           "borderColor": "#D33232",
           "borderRadius": 4,
-          "borderWidth": 1,
+          "borderWidth": 2,
           "flexDirection": "column",
           "gap": 0,
           "overflow": "hidden",
@@ -311,6 +318,8 @@ exports[`TextField snapshots should match snapshot when disabled 1`] = `
                 "accessibilityState": {
                   "disabled": true,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": false,
                 "aria-label": "Text input field",
                 "autoCapitalize": "sentences",
                 "autoCorrect": true,
@@ -337,6 +346,7 @@ exports[`TextField snapshots should match snapshot when disabled 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -419,6 +429,8 @@ exports[`TextField snapshots should match snapshot with multiline 1`] = `
                 "accessibilityState": {
                   "disabled": undefined,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": false,
                 "aria-label": "Text input field",
                 "autoCapitalize": "sentences",
                 "autoCorrect": true,
@@ -445,6 +457,7 @@ exports[`TextField snapshots should match snapshot with multiline 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 120,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -543,6 +556,7 @@ exports[`TextField snapshots should match snapshot with error state 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",
@@ -566,6 +580,8 @@ exports[`TextField snapshots should match snapshot with error state 1`] = `
                 "accessibilityState": {
                   "disabled": undefined,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": true,
                 "aria-label": "Text input field",
                 "autoCapitalize": "sentences",
                 "autoCorrect": true,
@@ -592,6 +608,7 @@ exports[`TextField snapshots should match snapshot with error state 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -618,7 +635,7 @@ exports[`TextField snapshots should match snapshot with error state 1`] = `
           "backgroundColor": "#FFFFFF",
           "borderColor": "#D33232",
           "borderRadius": 4,
-          "borderWidth": 1,
+          "borderWidth": 2,
           "flexDirection": "column",
           "gap": 0,
           "overflow": "hidden",

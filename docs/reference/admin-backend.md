@@ -293,7 +293,9 @@ assigned after the write through `access.roles.assign`, which requires `rbac:ass
 Admin update, bulk-patch, delete, and admin-window sync writes to another user also require the
 actor to hold every permission the target user holds (the RoleManager target-privilege rule).
 A delegate with `user:update` gets 403 `Cannot modify a user with permissions you do not hold` for
-a superadmin target; bulk-patch reports that target under `failures` and patches the rest. Legacy
+a superadmin target; bulk-patch reports that target under `failures` and patches the rest. When a
+permission source is down and the target's grants from it are unknown, the check answers 503
+`Permission source unavailable` instead of comparing against a partial set. Legacy
 `admin: true` actors and writes to the actor's own record are not checked.
 
 Changing another user's `email`, `disabled`, `betterAuthId`, `githubId`, or `emailVerified`

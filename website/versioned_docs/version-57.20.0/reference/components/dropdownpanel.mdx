@@ -1,0 +1,54 @@
+---
+title: "DropdownPanel"
+description: "A compositional dropdown panel: a trigger that opens an anchored panel of composed content with an optional Apply/Clear/Cancel footer. Built for filters (combine the select menu, boolean, and accordion sub-components) but usable for any panel content. The panel escapes ancestor clipping, right-aligns rather than running off screen, and flips above the trigger when there is no room below."
+sidebar_label: "DropdownPanel"
+slug: /reference/components/dropdownpanel
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# DropdownPanel
+
+A compositional dropdown panel: a trigger that opens an anchored panel of composed content with an optional Apply/Clear/Cancel footer. Built for filters (combine the select menu, boolean, and accordion sub-components) but usable for any panel content. The panel escapes ancestor clipping, right-aligns rather than running off screen, and flips above the trigger when there is no room below.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `DropdownPanelProps`  
+**Story source:** [`demo/stories/DropdownPanel.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/DropdownPanel.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="DropdownPanel" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` | Yes | Composed controls rendered inside the dropdown panel. |
+| `align` | `DropdownPanelAlign` |  | Horizontal alignment of the panel against its trigger.  |
+| `applyButtonText` | `string` |  |  |
+| `applyButtonVariant` | `DropdownPanelVariant` |  | Variant for the footer's Apply button. Defaults to  |
+| `cancelButtonText` | `string` |  |  |
+| `clearButtonText` | `string` |  |  |
+| `defaultOpen` | `boolean` |  | Initial open state when uncontrolled. |
+| `fullWidth` | `boolean` |  | Stretch the trigger (and its wrapper) to the width of the container. |
+| `iconName` | `IconName` |  | Trigger button icon. Defaults to the built-in  |
+| `iconOnly` | `boolean` |  | Render the trigger as a compact  |
+| `isOpen` | `boolean` |  | Controlled open state. Omit to use  |
+| `label` | `string` |  | Trigger button label. |
+| `maxPanelHeight` | `number` |  | Ceiling for the panel height. The panel never exceeds the space available on screen regardless of this value; content beyond it scrolls. |
+| `onApply` | `reflection` |  | Called when Apply is pressed. The dropdown then closes. |
+| `onCancel` | `reflection` |  | Called when Cancel or a click-outside closes the dropdown. |
+| `onClear` | `reflection` |  | Called when Clear is pressed. The panel stays open. |
+| `onOpenChange` | `reflection` |  | Called whenever the dropdown opens or closes. |
+| `renderTrigger` | `reflection` |  | Replaces the built-in trigger. Use when the trigger needs styling the  |
+| `showActionButtons` | `boolean` |  | Master toggle for the Apply/Clear/Cancel footer. |
+| `showApplyButton` | `boolean` |  | Show the Apply button in the footer. |
+| `showCancelButton` | `boolean` |  | Show the Cancel button in the footer. |
+| `showClearButton` | `boolean` |  | Show the Clear hyperlink in the footer. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `triggerAccessibilityLabel` | `string` |  | Accessible name when the visible trigger label is empty or abbreviated. |
+| `triggerSize` | `union` |  | Trigger size. Labeled triggers default to the standard  |
+| `triggerVariant` | `DropdownPanelVariant` |  | Variant for the trigger button. Defaults to  |
+| `variant` | `DropdownPanelVariant` |  | Primary theming for the trigger and Apply button. |
+| `width` | `number` |  | Panel width in pixels. Defaults to 320 per the design spec. |

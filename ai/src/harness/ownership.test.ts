@@ -5,7 +5,12 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {harnessErrorMatching} from "../tests/harnessErrors";
-import type {HarnessChildOutcome, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
+import type {
+  HarnessChildOutcome,
+  HarnessTaskDefinition,
+  HarnessTaskDocument,
+  HarnessTestHooks,
+} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {HarnessModels} from "./commit";
 import {
@@ -19,6 +24,9 @@ import {registerHarnessEvent, registerHarnessEventStream} from "./models/harness
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
 import {type HarnessEngine, sweepWaitingTasks} from "./ownership";
+
+/** A task definition whose input is not checked, so tests can create it with any input. */
+type TestTaskDefinition = HarnessTaskDefinition<unknown, unknown, unknown>;
 
 // Multi-task trees under a loaded full run need more than Bun's 5s default.
 setDefaultTimeout(30_000);
@@ -61,10 +69,9 @@ const findTask = (id: mongoose.Types.ObjectId | string): Promise<HarnessTaskDocu
 const childrenOf = (id: mongoose.Types.ObjectId): Promise<HarnessTaskDocument[]> =>
   TaskModel.find({"ownership.id": id, "ownership.kind": "task"}).sort({created: 1});
 
-const asAny = (definition: unknown): AnyHarnessTaskDefinition =>
-  definition as AnyHarnessTaskDefinition;
+const asAny = (definition: unknown): TestTaskDefinition => definition as TestTaskDefinition;
 
-const completesWith = (name: string, result: unknown): AnyHarnessTaskDefinition =>
+const completesWith = (name: string, result: unknown): TestTaskDefinition =>
   asAny(
     defineTask<unknown, unknown, unknown>({
       initial: () => ({phase: "work"}),
@@ -76,7 +83,7 @@ const completesWith = (name: string, result: unknown): AnyHarnessTaskDefinition 
     })
   );
 
-const failsWith = (name: string, error: string): AnyHarnessTaskDefinition =>
+const failsWith = (name: string, error: string): TestTaskDefinition =>
   asAny(
     defineTask<unknown, unknown, unknown>({
       initial: () => ({phase: "work"}),
@@ -103,11 +110,11 @@ const fanOut = ({
   policy,
   runs,
 }: {
-  children: AnyHarnessTaskDefinition[];
+  children: TestTaskDefinition[];
   name: string;
   policy?: "all" | "failFast";
   runs: {count: number};
-}): AnyHarnessTaskDefinition =>
+}): TestTaskDefinition =>
   asAny(
     defineTask<unknown, unknown, HarnessChildOutcome[]>({
       initial: () => ({phase: "fanOut"}),
@@ -790,7 +797,9 @@ describe("Harness ownership tree", () => {
       expect(second.status).toBe("aborted");
       expect(await SpanModel.countDocuments({name: "abort", traceId: created.traceId})).toBe(1);
       // The first request recorded wins; the other waited for its handler to finish.
-      expect(["first", "second"]).toContain((await findTask(created._id)).abortRequested?.reason);
+      expect<Array<string | undefined>>(["first", "second"]).toContain(
+        (await findTask(created._id)).abortRequested?.reason
+      );
     });
 
     it("keeps aborting the tree when a child's handler throws", async () => {
@@ -940,7 +949,7 @@ describe("Harness ownership tree", () => {
 
   describe("waiting sweep", () => {
     const buildEngine = (
-      definitions: ReadonlyArray<AnyHarnessTaskDefinition> = []
+      definitions: ReadonlyArray<TestTaskDefinition> = []
     ): {engine: HarnessEngine; wakes: {count: number}} => {
       const wakes = {count: 0};
       const models = {
@@ -953,8 +962,10 @@ describe("Harness ownership tree", () => {
       } as unknown as HarnessModels;
       return {
         engine: {
+          agents: new Map(),
           controllers: new Map(),
           definitions: new Map(definitions.map((definition) => [definition.key, definition])),
+          extensions: new Map(),
           models,
           wake: () => {
             wakes.count += 1;

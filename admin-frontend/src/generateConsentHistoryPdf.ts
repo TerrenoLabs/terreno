@@ -1,9 +1,10 @@
-import {buildConsentPdfHtml, type PdfTemplateData, sharePdfFromHtml} from "@terreno/ui";
+import {buildConsentPdfHtml, sharePdfFromHtml} from "@terreno/ui";
 import {DateTime} from "luxon";
 import {Platform} from "react-native";
-
+import {buildConsentHistoryTemplateData, historyProvisionalSection} from "./consentPdfTemplates";
 import {
   CONTENT_WIDTH,
+  drawProvisionalSignature,
   ensureSpace,
   formatDate,
   MARGIN_LEFT,
@@ -11,66 +12,6 @@ import {
   PAGE_WIDTH,
 } from "./pdfUtils";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
-
-const buildTemplateData = (entry: ConsentHistoryEntry): PdfTemplateData => {
-  const formTitle = entry.form?.title ?? "Unknown Form";
-  const formSlug = entry.form?.slug ?? "";
-  const formType = entry.form?.type ?? "";
-  const formVersion = entry.form?.version ?? entry.formVersionSnapshot;
-
-  const fields: PdfTemplateData["fields"] = [];
-  if (formSlug) {
-    fields.push({label: "Form Slug:", value: formSlug});
-  }
-  if (formType) {
-    fields.push({label: "Form Type:", value: formType});
-  }
-  if (formVersion !== undefined) {
-    fields.push({label: "Form Version:", value: String(formVersion)});
-  }
-  fields.push({label: "Decision:", value: entry.agreed ? "Agreed" : "Declined"});
-  if (entry.agreedAt) {
-    fields.push({label: "Agreed At:", value: formatDate(entry.agreedAt)});
-  }
-  if (entry.locale) {
-    fields.push({label: "Locale:", value: entry.locale});
-  }
-
-  const checkboxEntries =
-    entry.checkboxValues && typeof entry.checkboxValues === "object"
-      ? Object.entries(entry.checkboxValues)
-      : [];
-
-  const checkboxes = checkboxEntries.map(([index, checked]) => ({
-    checked: Boolean(checked),
-    label: entry.form?.checkboxes?.[Number(index)]?.label ?? `Checkbox ${index}`,
-  }));
-
-  const auditTrail: PdfTemplateData["fields"] = [];
-  if (entry.ipAddress) {
-    auditTrail.push({label: "IP Address:", value: entry.ipAddress});
-  }
-  if (entry.userAgent) {
-    auditTrail.push({label: "User Agent:", value: entry.userAgent});
-  }
-  if (entry.formVersionSnapshot !== undefined) {
-    auditTrail.push({label: "Form Version:", value: String(entry.formVersionSnapshot)});
-  }
-  if (entry.signedAt) {
-    auditTrail.push({label: "Signed At:", value: formatDate(entry.signedAt)});
-  }
-
-  return {
-    auditTrail: auditTrail.length > 0 ? auditTrail : undefined,
-    checkboxes: checkboxes.length > 0 ? checkboxes : undefined,
-    contentSnapshot: entry.contentSnapshot,
-    fields,
-    formTitle,
-    responseId: entry._id,
-    signature: entry.signature,
-    title: "Consent Record",
-  };
-};
 
 const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
   const {jsPDF: JsPDF} = await import("jspdf");
@@ -185,6 +126,11 @@ const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
     y += 4;
   }
 
+  const provisional = historyProvisionalSection(entry);
+  if (provisional) {
+    y = drawProvisionalSignature(doc, y, provisional);
+  }
+
   if (entry.signature) {
     y = ensureSpace(doc, y, 50);
     doc.setFontSize(12);
@@ -244,7 +190,7 @@ const generatePdfWeb = async (entry: ConsentHistoryEntry): Promise<void> => {
 };
 
 const generatePdfMobile = async (entry: ConsentHistoryEntry): Promise<void> => {
-  const templateData = buildTemplateData(entry);
+  const templateData = buildConsentHistoryTemplateData(entry);
   const html = buildConsentPdfHtml(templateData);
   const formSlug = entry.form?.slug ?? "response";
   const filename = `consent-${formSlug}-${DateTime.now().toFormat("yyyy-MM-dd")}.pdf`;

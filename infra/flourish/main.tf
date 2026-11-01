@@ -267,6 +267,39 @@ resource "google_secret_manager_secret_version" "announcements_upload_token" {
   secret_data = var.announcements_upload_token
 }
 
+# Social sign-in credentials for the stable deploy, which owns the registered OAuth callbacks
+# (previews proxy through it). Terraform creates empty containers; a human adds each value with
+# `gcloud secrets versions add` (H1 in docs/how-to/set-up-social-login.md). The deploy mounts
+# only the ones that have a version (scripts/ci/backend-auth-env.sh), so a provider turns on
+# when both of its values exist.
+locals {
+  backend_oauth_secret_suffixes = toset([
+    "google-client-id",
+    "google-client-secret",
+    "github-client-id",
+    "github-client-secret",
+    "apple-client-id",
+    "apple-team-id",
+    "apple-key-id",
+    "apple-private-key",
+  ])
+}
+
+module "backend_secret_oauth" {
+  source   = "./modules/secret"
+  for_each = local.backend_oauth_secret_suffixes
+
+  project_id = var.project_id
+  secret_id  = "${var.backend_service_name}-${each.value}"
+  labels     = local.common_labels
+
+  accessor_members = {
+    api-runtime = "serviceAccount:${google_service_account.backend_runtime.email}"
+  }
+
+  depends_on = [module.bootstrap]
+}
+
 module "backend_service" {
   source = "./modules/cloud_run_service"
 
@@ -292,6 +325,7 @@ module "backend_service" {
     module.backend_secret_langfuse_public_key,
     module.backend_secret_better_auth,
     module.backend_secret_announcements_upload,
+    module.backend_secret_oauth,
   ]
 }
 

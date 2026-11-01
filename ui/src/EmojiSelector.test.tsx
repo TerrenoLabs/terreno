@@ -351,7 +351,7 @@ describe("EmojiSelector", () => {
       },
     ];
     const getItemMock = mock(async () => JSON.stringify(existing));
-    const setItemMock = mock(async () => undefined);
+    const setItemMock = mock(async (_key: string, _value: string) => undefined);
     const originalGetItem = AsyncStorage.getItem;
     const originalSetItem = AsyncStorage.setItem;
     AsyncStorage.getItem = getItemMock as unknown as typeof AsyncStorage.getItem;
@@ -396,7 +396,7 @@ describe("EmojiSelector", () => {
     const onEmojiSelected = mock(() => {});
     const originalGetItem = AsyncStorage.getItem;
     const originalSetItem = AsyncStorage.setItem;
-    const setItemMock = mock(async () => undefined);
+    const setItemMock = mock(async (_key: string, _value: string) => undefined);
     AsyncStorage.setItem = setItemMock as unknown as typeof AsyncStorage.setItem;
     try {
       const {root, UNSAFE_getAllByType} = renderWithTheme(

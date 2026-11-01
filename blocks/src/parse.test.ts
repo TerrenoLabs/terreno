@@ -1,14 +1,18 @@
 import {describe, expect, it} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
-
-import {parseBlocks} from "./parse";
+import type {BlockError, BlockErrorCode} from "./errors";
+import {type ParseBlocksResult, parseBlocks} from "./parse";
 import {wrapAsTextDocument} from "./schema";
-import {validateBlocks} from "./validate";
+import {type ValidateBlocksResult, validateBlocks} from "./validate";
 
-const fixturesDir = join(import.meta.dir, "fixtures");
+/** The errors of a failed parse or validation, or none when it succeeded. */
+const errorsOf = (result: ParseBlocksResult | ValidateBlocksResult): BlockError[] =>
+  result.ok ? [] : result.errors;
 
-const expectedInvalid: Record<string, {code: string; path: string}[]> = {
+const fixturesDir = join(__dirname, "fixtures");
+
+const expectedInvalid: Record<string, {code: BlockErrorCode; path: string}[]> = {
   // An empty visibleText string trips both the min(1) and the blank-text checks.
   "card-eyebrow-empty.yaml": [
     {code: "TOO_SHORT", path: "blocks[0].eyebrow"},
@@ -159,11 +163,7 @@ describe("block fixtures", () => {
     expect(names.sort()).toEqual(Object.keys(expectedInvalid).sort());
     for (const name of names) {
       const parsed = parseBlocks(readFileSync(join(dir, name), "utf8"));
-      const errors = parsed.ok
-        ? validateBlocks(parsed.value).ok
-          ? []
-          : validateBlocks(parsed.value).errors
-        : parsed.errors;
+      const errors = parsed.ok ? errorsOf(validateBlocks(parsed.value)) : parsed.errors;
       expect(errors.map((item) => ({code: item.code, path: item.path}))).toEqual(
         expectedInvalid[name]
       );
@@ -208,13 +208,13 @@ describe("validateBlocks limits", () => {
   });
 
   it("rejects empty input, a second document, and a mapping without v", () => {
-    expect(parseBlocks("").errors).toEqual([
+    expect(errorsOf(parseBlocks(""))).toEqual([
       expect.objectContaining({code: "NOT_A_DOCUMENT", path: ""}),
     ]);
-    expect(parseBlocks("v: 1\n---\nv: 1\n").errors).toEqual([
+    expect(errorsOf(parseBlocks("v: 1\n---\nv: 1\n"))).toEqual([
       expect.objectContaining({code: "NOT_A_DOCUMENT", path: ""}),
     ]);
-    expect(parseBlocks("blocks:\n  - type: divider\n").errors).toEqual([
+    expect(errorsOf(parseBlocks("blocks:\n  - type: divider\n"))).toEqual([
       expect.objectContaining({code: "NOT_A_DOCUMENT", path: ""}),
     ]);
   });

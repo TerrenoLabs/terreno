@@ -46,8 +46,9 @@ describe("AdminProvider widget registry", () => {
     const CustomHome: HomeWidgetComponent = () => null;
     const CustomField: FieldWidgetComponent = () => null;
     const CustomScreen: ScreenWidgetComponent = () => null;
-    let context: AdminProviderValue | null = null;
-    let registry: AdminWidgetRegistry | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
+    let registry = null as AdminWidgetRegistry | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       registry = useAdminWidgetRegistry();
@@ -146,7 +147,8 @@ describe("AdminProvider widget registry", () => {
 
   it("exposes host-injected credentials and getAuthHeaders on context", () => {
     const getAuthHeaders = (): HeadersInit => ({Authorization: "Bearer ctx-token"});
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
@@ -170,7 +172,8 @@ describe("AdminProvider widget registry", () => {
   });
 
   it("exposes apiOrigin and binds it onto RPC context", () => {
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
@@ -201,7 +204,8 @@ describe("AdminProvider widget registry", () => {
         raw: {addTableListener: () => "listener", delListener: () => {}},
       },
     };
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
@@ -218,7 +222,8 @@ describe("AdminProvider widget registry", () => {
 
   it("exposes the host useConflicts adapter on context", () => {
     const syncConflicts = {conflicts: [], resolve: () => {}};
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;

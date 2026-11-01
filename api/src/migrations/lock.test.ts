@@ -8,10 +8,15 @@ import mongoose from "mongoose";
 import {setupDb} from "../tests";
 import {withMigrationLock} from "./lock";
 import {runMigrations} from "./runner";
-import {type LoadedMigration, MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION} from "./types";
+import {
+  type LoadedMigration,
+  MIGRATION_LOCK_ID,
+  MIGRATIONS_COLLECTION,
+  type MigrationStoreDoc,
+} from "./types";
 
-const collection = (): mongoose.Collection => {
-  return mongoose.connection.collection(MIGRATIONS_COLLECTION);
+const collection = (): mongoose.Collection<MigrationStoreDoc> => {
+  return mongoose.connection.collection<MigrationStoreDoc>(MIGRATIONS_COLLECTION);
 };
 
 describe("withMigrationLock", () => {

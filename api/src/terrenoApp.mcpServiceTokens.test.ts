@@ -27,9 +27,9 @@ const getNoteModel = (): mongoose.Model<{title?: string}> => {
   if (mongoose.models.TokenMcpNote) {
     return mongoose.models.TokenMcpNote as mongoose.Model<{title?: string}>;
   }
-  const schema = new Schema({title: {description: "Note title", type: String}});
+  const schema = new Schema<{title?: string}>({title: {description: "Note title", type: String}});
   schema.plugin(createdUpdatedPlugin);
-  return model("TokenMcpNote", schema);
+  return model<{title?: string}>("TokenMcpNote", schema);
 };
 
 const TokenMcpNote = getNoteModel();

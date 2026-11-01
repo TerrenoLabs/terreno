@@ -2,7 +2,7 @@ import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 import mongoose from "mongoose";
 
-import {addAuthRoutes, setupAuth, type UserModel as UserModelType} from "../auth";
+import {addAuthRoutes, setupAuth, type User, type UserModel as UserModelType} from "../auth";
 import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, findOneOrNoneFor, isDeletedPlugin} from "../plugins";
 import {authAsUser, getBaseServer, setupDb, UserModel} from "../tests";
@@ -88,7 +88,7 @@ describe("adminWindowMutation", () => {
     await WindowTodoModel.deleteMany({});
   });
 
-  const loadUser = async (type: "admin" | "notAdmin") => {
+  const loadUser = async (type: "admin" | "notAdmin"): Promise<User> => {
     const app = getBaseServer();
     setupAuth(app, UserModel as unknown as UserModelType);
     addAuthRoutes(app, UserModel as unknown as UserModelType);
@@ -96,7 +96,7 @@ describe("adminWindowMutation", () => {
     const email = type === "admin" ? "admin@example.com" : "notAdmin@example.com";
     const doc = await findOneOrNoneFor(UserModel, {email});
     expect(doc).toBeTruthy();
-    return doc as {admin?: boolean; id: string};
+    return doc as unknown as User;
   };
 
   it("returns undefined for product mutations without a marker", async () => {
@@ -398,6 +398,7 @@ describe("adminWindowMutation", () => {
     const options = buildAdminWindowExecutorOptions({
       productOptions: {
         maxLimit: 123,
+        permissions: {create: [], delete: [], list: [], read: [], update: []},
         preCreate: productPreCreate,
         preUpdate: productPreCreate,
       },

@@ -102,7 +102,12 @@ describe("AIRequestsScreenWidget", () => {
 
   it("requests explorer data with the current page and filters", () => {
     const {getByText} = renderWithTheme(
-      <AIRequestsScreenWidget api={makeExplorerApi()} routeBase="/admin" />
+      <AIRequestsScreenWidget
+        api={makeExplorerApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="aiRequests"
+      />
     );
 
     expect(getByText("21 total requests")).toBeTruthy();
@@ -118,7 +123,14 @@ describe("AIRequestsScreenWidget", () => {
   });
 
   it("resets page to 1 when filters change and forwards updated query args", async () => {
-    renderWithTheme(<AIRequestsScreenWidget api={makeExplorerApi()} routeBase="/admin" />);
+    renderWithTheme(
+      <AIRequestsScreenWidget
+        api={makeExplorerApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="aiRequests"
+      />
+    );
     assert.isDefined(explorerProps);
 
     await act(async () => {
@@ -143,7 +155,12 @@ describe("AIRequestsScreenWidget", () => {
     explorerLoading = true;
     explorerData = {data: [], total: 45};
     const {getByText} = renderWithTheme(
-      <AIRequestsScreenWidget api={makeExplorerApi()} routeBase="/admin" />
+      <AIRequestsScreenWidget
+        api={makeExplorerApi()}
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="aiRequests"
+      />
     );
 
     assert.isTrue(explorerProps?.isLoading);

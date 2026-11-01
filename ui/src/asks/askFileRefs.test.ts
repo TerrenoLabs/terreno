@@ -57,7 +57,7 @@ describe("askFileRefs", () => {
     });
 
     assert.equal(ref.mimeType, "text/csv");
-    assert.isTrue(ref.url.startsWith("data:text/csv;base64,"));
+    assert.isTrue(ref.url?.startsWith("data:text/csv;base64,"));
   });
 
   it("reads a picked file into a data URL of its declared type, with its byte size", async () => {

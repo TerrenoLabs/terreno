@@ -28,7 +28,7 @@ describe("fresh import timing", () => {
   });
 });
 `;
-  const childEnv = {...process.env, TZ: "America/New_York"};
+  const childEnv: NodeJS.ProcessEnv = {...process.env, TZ: "America/New_York"};
   delete childEnv.BUN_OPTIONS;
   writeFileSync(PROBE_FILE, probeSource, "utf8");
 

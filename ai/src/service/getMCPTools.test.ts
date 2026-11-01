@@ -7,11 +7,15 @@ import {
   registerMCPTool,
   type User,
 } from "@terreno/api";
+import type {ToolExecutionOptions} from "ai";
 import {assert} from "chai";
 import mongoose, {Schema} from "mongoose";
 import {z} from "zod";
 
 import {getMCPTools} from "./getMCPTools";
+
+/** `execute` options as the AI SDK passes them; getMCPTools ignores them. */
+const callOptions: ToolExecutionOptions = {messages: [], toolCallId: "call-1"};
 
 interface NoteFields {
   _id: mongoose.Types.ObjectId;
@@ -67,7 +71,7 @@ describe("getMCPTools", () => {
 
     expect(Object.keys(tools).sort()).toEqual(["notes_create", "notes_list"]);
 
-    const created = await tools.notes_create.execute?.({title: "From AI tools"});
+    const created = await tools.notes_create.execute?.({title: "From AI tools"}, callOptions);
     expect(created).toEqual(
       expect.objectContaining({
         data: expect.objectContaining({title: "From AI tools"}),
@@ -88,7 +92,7 @@ describe("getMCPTools", () => {
     const tools = getMCPTools();
     assert.deepEqual(Object.keys(tools), ["echo_json"]);
     assert.equal(tools.echo_json.description, "Echoes structured json back to the caller");
-    assert.deepEqual(await tools.echo_json.execute?.({value: "hi"}), {echoed: "hi"});
+    assert.deepEqual(await tools.echo_json.execute?.({value: "hi"}, callOptions), {echoed: "hi"});
   });
 
   it("returns joined plain text when the tool response is not json", async () => {
@@ -105,7 +109,7 @@ describe("getMCPTools", () => {
     });
 
     const tools = getMCPTools();
-    assert.equal(await tools.prose.execute?.({}), "first line\nsecond line");
+    assert.equal(await tools.prose.execute?.({}, callOptions), "first line\nsecond line");
   });
 
   it("passes the authenticated user through to custom tool handlers", async () => {
@@ -121,8 +125,8 @@ describe("getMCPTools", () => {
     });
 
     const user = asUser();
-    await getMCPTools(user).whoami.execute?.({});
-    await getMCPTools().whoami.execute?.({});
+    await getMCPTools(user).whoami.execute?.({}, callOptions);
+    await getMCPTools().whoami.execute?.({}, callOptions);
     assert.deepEqual(seenUserIds, [user.id, undefined]);
   });
 });

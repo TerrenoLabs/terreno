@@ -271,4 +271,39 @@ describe("FilePickerButton", () => {
       globals.FileReader = originalFileReader;
     }
   });
+
+  it("resolves an empty selection when the browser file dialog is cancelled", async () => {
+    const listeners: Record<string, () => void> = {};
+    const input = {
+      accept: "",
+      addEventListener: (event: string, handler: () => void): void => {
+        listeners[event] = handler;
+      },
+      click: mock(() => {}),
+      files: [],
+      multiple: false,
+      remove: mock(() => {}),
+      style: {display: ""},
+      type: "",
+    };
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const originalDocument = globals.document;
+    const originalOS = Platform.OS;
+    const {files, getByText} = openModal();
+    globals.document = {
+      body: {appendChild: mock(() => {})},
+      createElement: (): typeof input => input,
+    };
+    Platform.OS = "web";
+    try {
+      fireEvent.press(getByText("Document"));
+      listeners.cancel?.();
+      expect(input.remove).toHaveBeenCalledTimes(1);
+      expect(files).toHaveLength(0);
+      expect(getDocumentAsync).not.toHaveBeenCalled();
+    } finally {
+      Platform.OS = originalOS;
+      globals.document = originalDocument;
+    }
+  });
 });

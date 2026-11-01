@@ -8,7 +8,7 @@ import mongoose from "mongoose";
 
 import {AIRequest} from "../../models/aiRequest";
 import {AIService} from "../../service/aiService";
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsExperiment} from "../local/models/obsExperiment";
 import {registerObsPrompt} from "../local/models/obsPrompt";
@@ -61,7 +61,7 @@ describe("observability prompt routes", () => {
     const model = createMockModel();
     doGenerate = model.doGenerate;
     aiService = new AIService({model: model as unknown as LanguageModel});
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           aiService,
@@ -134,7 +134,7 @@ describe("observability prompt routes", () => {
     const requestAiServiceFactory = mock(({apiKey}: {apiKey?: string}) => {
       return apiKey === "request-key" ? aiService : undefined;
     });
-    const requestServiceApp = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const requestServiceApp = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(
         new ObservabilityApp({
           plugins: [createLocalObservabilityPlugin()],

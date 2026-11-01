@@ -36,7 +36,10 @@ describe("rbac statements", () => {
       "disable",
     ]);
     expect(terrenoStatements.consentForm).toEqual(["create", "list", "read", "update", "delete"]);
-    expect(terrenoStatements.consentResponse).toEqual(["list", "read"]);
+    expect(terrenoStatements.consentResponse).toEqual(["list", "read", "signOnBehalf"]);
+    expect(terrenoStatementDescriptions.consentResponse.signOnBehalf).toBe(
+      "Record, view, and void provisional consent signatures for other users"
+    );
     assert.deepEqual(
       [...terrenoStatements.adminAnnouncementClickEvent],
       ["read", "write", "writeOwned"]

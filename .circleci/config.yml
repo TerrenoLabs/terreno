@@ -115,6 +115,7 @@ workflows:
             api/.* run-jobs true
             test/.* run-jobs true
             mcp-server/.* run-mcp-server true
+            ui/src/.* run-mcp-server true
             create-terreno-app/.* run-create-terreno-app true
             (admin-backend|admin-frontend|admin-spa|ai|announcements|api|api-health|blocks|cli|comms|create-terreno-app|demo|example-backend|example-frontend|feature-flags|jobs|mcp-server|rtk|syncdb|test|ui)/.* run-smoke true
             scripts/ci/smoke/.* run-smoke true

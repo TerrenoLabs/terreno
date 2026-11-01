@@ -1,0 +1,37 @@
+---
+title: "Boolean field"
+description: "Use the Boolean field for single cell options that can be turned on and off only. Also called 'toggle fields' and 'switch fields'."
+sidebar_label: "Boolean field"
+slug: /reference/components/boolean-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Boolean field
+
+Use the Boolean field for single cell options that can be turned on and off only. Also called 'toggle fields' and 'switch fields'.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `BooleanFieldProps`  
+**Story source:** [`demo/stories/Booleanfield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Booleanfield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Boolean field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `reflection` | Yes |  |
+| `value` | `boolean` | Yes |  |
+| `disabled` | `boolean` |  |  |
+| `disabledHelperText` | `string` |  |  |
+| `errorPosition` | `union` |  | Where  |
+| `errorText` | `string` |  |  |
+| `helperText` | `string` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `variant` | `union` |  |  |

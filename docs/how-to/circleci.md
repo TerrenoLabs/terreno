@@ -106,11 +106,14 @@ when the package imports them. Coverage-script unit tests run in the cheap
 Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 `admin-table`, `syncdb`) instead of one container per spec file. Each shard
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. Repository
+file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+which builds its own web bundle and backend (`playwright.config.ts` with
+`E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
-Require `repo-policies` in branch protection. Require `e2e-auth` /
+The `typecheck` job runs in the same workflow: it compiles every package, then
+runs `bun run typecheck`. Require `repo-policies` and `typecheck` in branch protection. Require `e2e-auth` /
 `e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
 as the smoke shard and do not run the other four. Do not require the old
 `no-barrel-imports` / `e2e-login` names.
@@ -294,6 +297,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 |----------------------------|--------------|
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
+| (none) — every package's `typecheck` (src + tests) | `typecheck` (runs with `run-repo-policies`) |
 | `dco` | `dco` |
 | (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |
@@ -317,6 +321,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 | (none) | `smoke` (every workspace `smoke` script; any package change) |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
+| _(cross-site bearer specs, not required)_ | `e2e-cross-site` (after `e2e-prepare`; also the explicit-linking pass) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |
@@ -369,10 +374,17 @@ To teach the agent from what reviewers actually say, run
 <file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
 path rules from the review comments since the last pass.
 
-Rollout: `approveLevels` is `[]`, so every PR gets a `COMMENT` review that says the
-risk level and why, and nothing approves. After a dozen PRs, compare the levels with
-how humans reviewed them, tune the path rules and rubric, then set
-`"approveLevels": ["low"]` in a one-line PR. The prompts and answers behind each
+Levels and human approvals (defined in `docs/approval-rubric.md`):
+
+| Level | Human approvals | Examples |
+| --- | --- | --- |
+| low | None once automated review and security checks are green | docs, copy, internal-only features, additive changes behind a flag |
+| medium | One person | ordinary product changes, and sensitive areas such as caching, app updates, and AI system prompts |
+| high | One person | security-related code: auth, permissions, secrets, crypto, PHI handling |
+
+`approveLevels` is `["low"]`, so the App's approval satisfies master's one-review rule
+for low PRs. Medium and high PRs get a `COMMENT` review that says the risk level and
+why, and a human approves. The prompts and answers behind each
 verdict are stored as the `brewery-approve` job artifact. Full reference:
 [brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
 
@@ -399,7 +411,9 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`publish-release` compiles the 16 lockstep packages once with
+`publish-release` first requires the tag to be on `master` with its assembled
+`CHANGELOG.md` section ([release automation](release-automation.md)), then
+compiles the lockstep packages once with
 `bun run --filter ... compile` (dependency order), then runs
 `scripts/ci/publish-package.sh` for all of them in parallel with
 `TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
@@ -418,8 +432,8 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
 
-The release skill pushes the tag and creates the GitHub release with
-`gh release create --draft`. The repository has immutable releases on: a
+The **Bot merge** workflow (or the release skill, when a human merges) pushes
+the tag and creates the GitHub release with `gh release create --draft`. The repository has immutable releases on: a
 published release cannot take new assets (GitHub answers `422`). So CI publishes
 the draft last with `scripts/ci/github-release.sh publish`.
 `archive-docs-version` does it right after the upload on `X.Y.0` tags.

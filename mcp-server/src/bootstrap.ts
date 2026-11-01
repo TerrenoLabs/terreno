@@ -17,7 +17,7 @@ interface BootstrapArgs {
 export const bootstrapTools: Tool[] = [
   {
     description:
-      "Bootstrap AI coding assistant rules for a Terreno project. Creates configuration files for Cursor, Windsurf, Claude Code, and GitHub Copilot with Terreno-specific guidelines adapted for the project.",
+      "Bootstrap AI coding assistant rules for a Terreno project. Creates rulesync sources that generate rules for Cursor, Claude Code, GitHub Copilot, and AGENTS.md readers (Codex, Windsurf, and others) with Terreno-specific guidelines adapted for the project.",
     inputSchema: {
       properties: {
         appDisplayName: {
@@ -51,15 +51,32 @@ export interface BootstrapAiRulesArgs extends BootstrapArgs {
   /** Optional `@terreno/*` package ids to include (e.g. `["api","ui"]`). Omits others from merged guidelines. */
   packages?: string[];
 }
+/**
+ * rulesync targets the generated config and root rule share. Every entry must be a target
+ * rulesync 9 accepts (it dropped `windsurf`; Windsurf reads the `agentsmd` output).
+ */
+export const RULESYNC_TARGETS = ["cursor", "claudecode", "copilot", "agentsmd"] as const;
+
+/**
+ * Warning shown before every `rulesync generate`: with `delete: true` rulesync overwrites the
+ * root files and deletes anything else in the rule directories it owns.
+ */
+export const RULESYNC_OVERWRITE_WARNING =
+  "`rulesync generate` overwrites the root `CLAUDE.md`, `AGENTS.md`, and `.github/copilot-instructions.md` and deletes every file under `.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, and `.agents/memories/` that it did not generate. Move any edits you made to those root files, and any hand-written files in those directories, into `.rulesync/rules/10-project.md` (or other `.rulesync/rules/*.md` sources) first, or they are lost.";
+
+/** Command that regenerates editor files; pinned to the rulesync major the output is tested on. */
+export const RULESYNC_GENERATE_COMMAND = "bunx rulesync@9 generate";
+
+const RULESYNC_TARGETS_FRONTMATTER = `[${RULESYNC_TARGETS.map((t) => `"${t}"`).join(", ")}]`;
+
 const generateRulesyncConfig = (): string => {
   return JSON.stringify(
     {
       $schema:
         "https://raw.githubusercontent.com/dyoshikawa/rulesync/refs/heads/main/config-schema.json",
-      baseDirs: ["."],
       delete: true,
       features: ["rules"],
-      targets: ["cursor", "windsurf", "claudecode", "copilot"],
+      targets: [...RULESYNC_TARGETS],
       verbose: false,
     },
     null,
@@ -109,13 +126,48 @@ ${appDescription}
 Uses [Bun](https://bun.sh/) as the package manager.
 
 \`\`\`bash
+# Install dependencies
+cd backend && bun install
+cd frontend && bun install
+
 # Backend
 cd backend && bun run dev    # Start backend on port 4000
 
 # Frontend
-cd frontend && bun run web   # Start web frontend
+cd frontend && bun run web   # Start web frontend on port 8082
 cd frontend && bun run sdk   # Regenerate SDK after backend changes
 \`\`\`
+
+## Adding Features
+
+1. Create model in \`backend/src/models/\`
+2. Create route in \`backend/src/api/\`
+3. Register route in \`backend/src/server.ts\`
+4. Regenerate SDK: \`cd frontend && bun run sdk\`
+5. Create screens in \`frontend/app/\`
+
+## Backend Conventions
+
+- Use \`modelRouter\` for CRUD endpoints
+- Use \`APIError\` for error responses
+- Use \`logger.info/warn/error/debug\` for logging
+- Use \`Model.findExactlyOne\` or \`Model.findOneOrNone\` (not \`Model.findOne\`)
+
+## Frontend Conventions
+
+- Use \`@terreno/syncdb/react\` hooks (\`useQuery\`, \`useMutate\`) for synced collection CRUD
+- Use generated SDK hooks from \`@/store/openApiSdk\` for non-synced routes only
+- Use @terreno/ui components (Box, Page, Button, TextField, etc.)
+- Never modify \`openApiSdk.ts\` manually - regenerate with \`bun run sdk\`
+- Use Redux Toolkit for state management (Better Auth session and the RTK Query SDK)
+
+## AI Assistance
+
+This project is configured to use the Terreno MCP server for AI-assisted development.
+Use the MCP tools and prompts for:
+- Generating new models and routes
+- Creating screens and forms
+- Following Terreno patterns and best practices
 
 ## Code Style
 
@@ -164,24 +216,8 @@ const generateRootRulesFile = (
   const body = buildSharedRootRulesMarkdownBody(args, filterGuidelineIdsForRootRules(packageIds));
   return `---
 root: true
-targets: ["cursor", "windsurf", "copilot"]
+targets: ${RULESYNC_TARGETS_FRONTMATTER}
 description: "${appDisplayName} root guidelines"
-globs: ["**/*"]
----
-
-${body}`;
-};
-
-const generateClaudeCodeRootRulesFile = (
-  args: BootstrapArgs,
-  packageIds: readonly GuidelinePackageId[]
-): string => {
-  const {appDisplayName} = args;
-  const body = buildSharedRootRulesMarkdownBody(args, filterGuidelineIdsForRootRules(packageIds));
-  return `---
-localRoot: true
-targets: ["claudecode"]
-description: "${appDisplayName} Claude Code guidelines"
 globs: ["**/*"]
 ---
 
@@ -211,8 +247,6 @@ const generateBackendRulesFile = (
   const {appDisplayName} = args;
   const admin = appendAdminBackendGuidelines(packageIds);
   return `---
-root: true
-targets: ["cursor", "windsurf", "copilot"]
 description: "${appDisplayName} backend guidelines"
 globs: ["**/*"]
 ---
@@ -253,46 +287,6 @@ Use \`AppConfig.updateConfig(updates)\` to write. All values are persisted in Mo
 `;
 };
 
-const _generateBackendClaudeRulesFile = (args: BootstrapArgs): string => {
-  const {appDisplayName} = args;
-  return `---
-localRoot: true
-targets: ["claudecode"]
-description: "${appDisplayName} backend Claude Code guidelines"
-globs: ["**/*"]
----
-
-# ${appDisplayName} Backend
-
-Express/Mongoose backend using @terreno/api.
-
-## Development
-
-\`\`\`bash
-bun run dev      # Start on port 4000
-bun run test     # Run tests
-bun run lint     # Lint code
-\`\`\`
-
-## Backend Conventions
-
-- Use \`modelRouter\` for CRUD endpoints
-- Use \`APIError\` for error responses: \`throw new APIError({status: 400, title: "Message"})\`
-- Use \`logger.info/warn/error/debug\` for logging
-- Use \`Model.findExactlyOne\` or \`Model.findOneOrNone\` (not \`Model.findOne\`)
-- All model types live in \`src/types/models/\`
-- In routes: \`req.user\` is \`UserDocument | undefined\`
-
-## Adding a New Model
-
-1. Create model in \`src/models/yourModel.ts\`
-2. Create types in \`src/types/models/yourModelTypes.ts\`
-3. Export from \`src/models/index.ts\` and \`src/types/models/index.ts\`
-4. Create route in \`src/api/yourModel.ts\`
-5. Register route in \`src/server.ts\`
-`;
-};
-
 const generateFrontendRulesFile = (
   args: BootstrapArgs,
   packageIds: readonly GuidelinePackageId[]
@@ -300,8 +294,6 @@ const generateFrontendRulesFile = (
   const {appDisplayName} = args;
   const admin = appendAdminFrontendGuidelines(packageIds);
   return `---
-root: true
-targets: ["cursor", "windsurf", "copilot"]
 description: "${appDisplayName} frontend guidelines"
 globs: ["**/*"]
 ---
@@ -347,45 +339,6 @@ ${admin}## Expo SDK upgrades
 `;
 };
 
-const _generateFrontendClaudeRulesFile = (args: BootstrapArgs): string => {
-  const {appDisplayName} = args;
-  return `---
-localRoot: true
-targets: ["claudecode"]
-description: "${appDisplayName} frontend Claude Code guidelines"
-globs: ["**/*"]
----
-
-# ${appDisplayName} Frontend
-
-Expo/React Native frontend using @terreno/ui, @terreno/syncdb, and @terreno/rtk.
-
-## Development
-
-\`\`\`bash
-bun run web      # Start web frontend on port 8082
-bun run sdk      # Regenerate SDK from backend OpenAPI spec
-bun run lint     # Lint code
-\`\`\`
-
-## Frontend Conventions
-
-- Use \`@terreno/syncdb/react\` hooks for synced collection CRUD
-- Use generated SDK hooks from \`@/store/openApiSdk\` for non-synced routes only
-- Use @terreno/ui components (Box, Page, Button, TextField, etc.)
-- Never modify \`openApiSdk.ts\` manually - regenerate with \`bun run sdk\`
-- Use Luxon for date operations
-- Better Auth session: \`generateBetterAuthSlice\` + \`lib/betterAuth.ts\`
-
-## Adding a New Screen
-
-1. Regenerate SDK if backend changed: \`bun run sdk\`
-2. Create screen in \`app/\` directory
-3. Use @terreno/ui components for layout
-4. Use SDK hooks for non-synced routes; use syncdb hooks for synced collections
-`;
-};
-
 interface AiRulesFile {
   path: string;
   content: string;
@@ -402,12 +355,8 @@ export const generateAiRulesFiles = (args: BootstrapAiRulesArgs): AiRulesFile[] 
   const frontendContent = stripFrontmatter(generateFrontendRulesFile(args, packageIds));
 
   return [
-    // .rulesync/rules/ source files (these are the source of truth for root)
+    // .rulesync/rules/ source file (the source of truth for root rules in every editor)
     {content: generateRootRulesFile(args, packageIds), path: ".rulesync/rules/00-root.md"},
-    {
-      content: generateClaudeCodeRootRulesFile(args, packageIds),
-      path: ".rulesync/rules/01-claudecode-root.md",
-    },
 
     // Direct output files for backend (AGENTS.md and CLAUDE.md in backend/)
     {content: backendContent, path: "backend/AGENTS.md"},
@@ -454,30 +403,35 @@ ${fileList}
 
 1. **Create all the files listed above.** Each file's content is provided below.
 
-2. **Install rulesync** (required for syncing root-level rules to all AI tools):
+2. **If \`.rulesync/rules/01-claudecode-root.md\` exists from an earlier bootstrap, delete it.** The root rule now covers Claude Code.
+
+3. **Before generating, move hand-written rules into \`.rulesync/rules/\`.** ${RULESYNC_OVERWRITE_WARNING}
+
+4. **Delete the stale \`.cursorrules\`** that \`create-terreno-app\` wrote. \`.cursor/rules/00-root.mdc\` supersedes it, and the root rule contains everything it said.
+
+5. **Generate the editor files with rulesync:**
    \`\`\`bash
-   npm install -g rulesync
+   ${RULESYNC_GENERATE_COMMAND}
    \`\`\`
 
-3. **Run rulesync to generate root-level AI tool configs:**
-   \`\`\`bash
-   rulesync sync
-   \`\`\`
-   
    This generates root-level files from \`.rulesync/rules/\`:
-   - \`.cursorrules\`, \`.windsurfrules\`, \`.github/copilot-instructions.md\`, \`.claude/CLAUDE.local.md\`, \`AGENTS.md\`
+   - \`.cursor/rules/00-root.mdc\` (Cursor)
+   - \`CLAUDE.md\` (Claude Code; replaces the one \`create-terreno-app\` wrote)
+   - \`.github/copilot-instructions.md\` (GitHub Copilot)
+   - \`AGENTS.md\` (Codex, Windsurf, and other AGENTS.md readers)
 
 ## How It Works
 
-- **\`.rulesync/rules/\`** - Source of truth for root-level AI coding guidelines
-- **\`rulesync.jsonc\`** - Configuration for rulesync tool (root only)
+- **\`.rulesync/rules/00-root.md\`** - Source of truth for root-level AI coding guidelines (Terreno-owned; regenerated on re-bootstrap)
+- **\`rulesync.jsonc\`** - rulesync config: \`rules\` feature, targets ${RULESYNC_TARGETS.map((t) => `\`${t}\``).join(", ")}, \`delete: true\`
 - **\`backend/AGENTS.md\` & \`backend/CLAUDE.md\`** - Direct context files for backend
 - **\`frontend/AGENTS.md\` & \`frontend/CLAUDE.md\`** - Direct context files for frontend
 
 ## Keeping Rules Updated
 
-- **Root rules**: Edit \`.rulesync/rules/\` and run \`rulesync sync\`
-- **Backend/Frontend rules**: Edit \`backend/AGENTS.md\` or \`frontend/AGENTS.md\` directly (and copy to CLAUDE.md)
+- **Project rules**: Add your own sources such as \`.rulesync/rules/10-project.md\` (scope with \`globs\`, e.g. \`["backend/**"]\`) and run \`${RULESYNC_GENERATE_COMMAND}\`. Re-bootstrapping never overwrites them.
+- **Terreno rules**: Re-run \`terreno_bootstrap_ai_rules\` to refresh \`00-root.md\` and the \`backend/\`/\`frontend/\` files, then run \`${RULESYNC_GENERATE_COMMAND}\`
+- Never hand-edit the root-level generated files (\`CLAUDE.md\`, \`AGENTS.md\`, \`.cursor/rules/\`, \`.github/copilot-instructions.md\`); rulesync replaces them
 
 ---
 
@@ -587,16 +541,16 @@ The application should include:
 - Cursor rules for AI assistance
 - MCP integration for development assistance
 
-**IMPORTANT: After the CLI writes the app, also run the \`terreno_bootstrap_ai_rules\` tool** with the same appName and appDisplayName to set up AI coding assistant rules for Cursor, Windsurf, Claude Code, and GitHub Copilot. This will create:
-- AGENTS.md files for each directory
-- .cursorrules and .windsurfrules files
-- GitHub Copilot instructions
-- Claude Code local rules
+**IMPORTANT: After the CLI writes the app, also run the \`terreno_bootstrap_ai_rules\` tool** with the same appName and appDisplayName to set up AI coding assistant rules for Cursor, Claude Code, GitHub Copilot, and AGENTS.md readers. This will create:
+- \`.rulesync/rules/00-root.md\`, the root rule source for every editor
+- AGENTS.md and CLAUDE.md files for \`backend/\` and \`frontend/\`
 - rulesync.jsonc for keeping rules in sync
 
-Then install rulesync to keep AI rules synchronized:
+Before generating, delete the stale root \`.cursorrules\` (\`.cursor/rules/00-root.mdc\` supersedes it). ${RULESYNC_OVERWRITE_WARNING}
+
+Then generate the editor files from the rulesync sources:
 \`\`\`bash
-npm install -g rulesync
+${RULESYNC_GENERATE_COMMAND}
 \`\`\``;
 
   return {

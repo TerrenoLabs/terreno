@@ -24,13 +24,18 @@ import {assert} from "chai";
 import type {CliIo} from "./io";
 import {runCli} from "./runCli";
 
+/** Bun's `typeof fetch` also carries `preconnect`; add a no-op so stubs satisfy it. */
+const stubFetch = (
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>
+): typeof fetch => Object.assign(handler, {preconnect: (): void => {}});
+
 const createIo = (cwd = "/tmp"): CliIo & {stderrLines: string[]; stdoutLines: string[]} => {
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   return {
     cwd,
     env: {},
-    fetch: (async () => new Response()) as typeof fetch,
+    fetch: stubFetch(async () => new Response()),
     stderr: (line: string) => {
       stderrLines.push(line);
     },
@@ -77,7 +82,7 @@ describe("mocked local tools and syncdb", () => {
     ).toBe(0);
     const output = io.stdoutLines.join("\n");
     expect(output).toContain('"sources":["backend","metro"]');
-    expect(output).toContain("get_rtk_state");
+    expect(output).toContain("get_client_state");
     expect(output).toContain("evaluate");
     expect(output).toContain("navigate");
     expect(output).toContain("database_query");

@@ -31,6 +31,7 @@ exports[`Avatar renders correctly with default props 1`] = `
       ],
       "props": {
         "aria-role": "button",
+        "focusable": false,
         "style": {
           "borderRadius": 1,
           "cursor": "auto",

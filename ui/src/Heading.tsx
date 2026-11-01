@@ -27,6 +27,7 @@ const HeadingComponent = ({
   align,
   children,
   color = "primary",
+  level,
   size,
   testID,
 }: HeadingProps): React.ReactElement => {
@@ -47,9 +48,13 @@ const HeadingComponent = ({
   }
   style.color = theme.text[color];
 
+  // react-native-web turns role="heading" plus aria-level into <h1>-<h6>; native maps the role
+  // to the header accessibility role. RN's TextProps don't declare aria-level, hence the spread.
+  const headingProps = level === undefined ? {} : {"aria-level": level, role: "heading" as const};
+
   const lines = 0;
   return (
-    <NativeText numberOfLines={lines} style={style} testID={testID}>
+    <NativeText numberOfLines={lines} style={style} testID={testID} {...headingProps}>
       {children}
     </NativeText>
   );

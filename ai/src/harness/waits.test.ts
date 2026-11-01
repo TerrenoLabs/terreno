@@ -6,7 +6,7 @@ import {createLocalObservabilityPlugin} from "../observability/local/localPlugin
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {harnessErrorMatching} from "../tests/harnessErrors";
-import type {HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
+import type {HarnessTaskDefinition, HarnessTaskDocument, HarnessTestHooks} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import {commitWaiting, type HarnessModels} from "./commit";
 import {errorMessage} from "./errors";
@@ -15,6 +15,9 @@ import {registerHarnessEvent, registerHarnessEventStream} from "./models/harness
 import {registerHarnessInboxEvent} from "./models/harnessInboxEvent";
 import {registerHarnessOwner} from "./models/harnessOwner";
 import {registerHarnessTask} from "./models/harnessTask";
+
+/** A task definition whose input is not checked, so tests can create it with any input. */
+type TestTaskDefinition = HarnessTaskDefinition<unknown, unknown, unknown>;
 
 const TaskModel = registerHarnessTask();
 const OwnerModel = registerHarnessOwner();
@@ -58,8 +61,7 @@ const findTask = (id: unknown): Promise<HarnessTaskDocument> => TaskModel.findEx
 const statusIs = (id: unknown, status: string) => async (): Promise<boolean> =>
   (await findTask(id)).status === status;
 
-const asAny = (definition: unknown): AnyHarnessTaskDefinition =>
-  definition as AnyHarnessTaskDefinition;
+const asAny = (definition: unknown): TestTaskDefinition => definition as TestTaskDefinition;
 
 /** One phase that waits on `event` (with `timeout`) and completes with what it got. */
 const waitsOnce = ({
@@ -72,7 +74,7 @@ const waitsOnce = ({
   name: string;
   runs: {count: number};
   timeout?: {minutes: number};
-}): AnyHarnessTaskDefinition =>
+}): TestTaskDefinition =>
   asAny(
     defineTask<unknown, unknown, unknown>({
       initial: () => ({phase: "await"}),

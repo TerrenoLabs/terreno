@@ -22,7 +22,6 @@ const dataset: DatasetRecord = {
 const item = (partial: Partial<DatasetItemRecord> & {id: string}): DatasetItemRecord => ({
   created: "2026-01-01T00:00:00.000Z",
   datasetId: "ds-1",
-  id: partial.id,
   input: {q: "hi"},
   origin: "manual",
   proofread: true,

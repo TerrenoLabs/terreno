@@ -79,6 +79,14 @@ consentResponseSchema.index({userId: 1, consentFormId: 1});
 addDefaultPlugins(consentResponseSchema);
 ```
 
+**Follow-up: provisional signing.** Staff can now record consent on a user's behalf. A
+provisional `ConsentResponse` sets `provisional`, `provisionalNote`, and
+`provisionalSignedBy`; it counts as consent but leaves the form in the user's pending list
+until they answer it themselves, and it can be voided (`voidedAt`, `voidedBy`,
+`voidReason`) without being deleted. That work is planned in
+[`docs/plans/2026-10-23-provisional-consent.md`](../plans/2026-10-23-provisional-consent.md)
+and explained in [`docs/explanation/consent-forms.md`](../explanation/consent-forms.md).
+
 ## **APIs**
 
 ### ConsentApp Plugin Routes

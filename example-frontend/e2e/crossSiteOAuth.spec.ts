@@ -4,9 +4,9 @@
  * playwright.config.ts runs this spec in the cross-site run beside crossSiteBearer.spec.ts: the
  * web app at localhost:8082 calls the API at 127.0.0.1:4000 (a different site), the backend has
  * the OAuth handoff on, and the mock OIDC provider (helpers/mockOidcProvider.ts) runs on
- * 127.0.0.1:4555. The mock provider's button starts the sign-in with signInSocialWithHandoff,
- * the callback returns to /login with a one-time token in the fragment, and app/_layout.tsx
- * exchanges it for the bearer.
+ * 127.0.0.1:4555. The login screen's mock provider button starts the sign-in with
+ * signInSocialWithHandoff, the callback returns to /login with a one-time token in the fragment,
+ * and lib/oauthHandoff.ts exchanges it for the bearer before the router starts.
  *
  * Cookies: every fetch and XHR response from the API loses `set-cookie` (stripApiCookies), the
  * way Safari treats third-party cookies. The OAuth start and callback are top-level navigations
@@ -76,7 +76,7 @@ test.describe("Cross-site social sign-in", () => {
   }, testInfo) => {
     await page.goto("/login");
     await page.getByTestId("login-screen").waitFor({state: "visible"});
-    await page.getByTestId("login-mock-oidc-button").click();
+    await page.getByTestId("login-screen-oauth-mock-oidc").click();
 
     // Back from the provider: the tabs root, or the consent navigator for a fresh user.
     await page
@@ -114,8 +114,10 @@ test.describe("Cross-site social sign-in", () => {
     }
 
     await page.goto("/profile");
+    // The reload loads the whole cross-site bundle again before the profile shows.
     await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(
-      MOCK_OIDC_USER.email
+      MOCK_OIDC_USER.email,
+      {timeout: 30_000}
     );
     expect(await betterAuthSessionCookies(context)).toEqual([]);
     const screenshot = testInfo.outputPath("cross-site-oauth-signed-in.png");

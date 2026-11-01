@@ -7,6 +7,7 @@ import {
   IconButton,
   MarkdownView,
   Page,
+  printConsentHtml,
   Spinner,
   Text,
 } from "@terreno/ui";
@@ -14,7 +15,9 @@ import {DateTime} from "luxon";
 import React, {useCallback, useState} from "react";
 import {Image, Pressable} from "react-native";
 
+import {consentHistoryPrintHtml} from "./consentPdfTemplates";
 import {generateConsentHistoryPdf} from "./generateConsentHistoryPdf";
+import {provisionalSignerName} from "./pdfUtils";
 import type {ConsentHistoryEntry} from "./useConsentHistory";
 import {useConsentHistory} from "./useConsentHistory";
 
@@ -54,6 +57,19 @@ const ConsentHistoryItem: React.FC<{entry: ConsentHistoryEntry}> = ({entry}) => 
     }
   }, [entry]);
 
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const handlePrint = useCallback(async () => {
+    setIsPrinting(true);
+    try {
+      await printConsentHtml({html: consentHistoryPrintHtml(entry)});
+    } catch (err) {
+      console.error("Failed to print consent record", err);
+    } finally {
+      setIsPrinting(false);
+    }
+  }, [entry]);
+
   const formTitle = entry.form?.title ?? "Unknown Form";
   const formType = entry.form?.type ?? "";
 
@@ -82,6 +98,20 @@ const ConsentHistoryItem: React.FC<{entry: ConsentHistoryEntry}> = ({entry}) => 
                 {formatDate(entry.agreedAt)}
               </Text>
             </Box>
+            {Boolean(entry.provisional) && (
+              <Box
+                alignItems="center"
+                direction="row"
+                gap={2}
+                testID={`consent-history-provisional-${entry._id}`}
+              >
+                <Badge status="info" value="Provisional" />
+                {entry.voidedAt ? <Badge status="error" value="Voided" /> : null}
+                <Text color="secondaryDark" size="sm">
+                  {`Signed on your behalf by ${provisionalSignerName(entry.provisionalSignedBy)}`}
+                </Text>
+              </Box>
+            )}
           </Box>
           <Box alignItems="center" justifyContent="center">
             <Icon
@@ -97,7 +127,15 @@ const ConsentHistoryItem: React.FC<{entry: ConsentHistoryEntry}> = ({entry}) => 
         <Box gap={3} padding={4} testID={`consent-history-item-details-${entry._id}`}>
           <Box alignItems="center" direction="row" justifyContent="between">
             <Box color="disabled" flex="grow" height={1} />
-            <Box marginLeft={2}>
+            <Box direction="row" gap={2} marginLeft={2}>
+              <IconButton
+                accessibilityLabel="Print"
+                iconName="print"
+                loading={isPrinting}
+                onClick={handlePrint}
+                testID={`consent-history-print-${entry._id}`}
+                tooltipText="Print"
+              />
               <IconButton
                 accessibilityLabel="Download PDF"
                 iconName="download"

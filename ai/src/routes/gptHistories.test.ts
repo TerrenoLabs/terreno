@@ -38,7 +38,13 @@ import {
   toolNamesOf,
   USER_PROMPT,
 } from "../tests/chatHarness";
-import {authAsUser, authAsUserWithCredentials, ensureTestUsers, UserModel} from "../tests/helpers";
+import {
+  authAsUser,
+  authAsUserWithCredentials,
+  ensureTestUsers,
+  historyRouterOptions,
+  terrenoUserModel,
+} from "../tests/helpers";
 import type {GptHistoryDocument} from "../types";
 import {addGptHistoryRoutes} from "./gptHistories";
 
@@ -799,10 +805,10 @@ describe("/gpt/histories headless turns", () => {
     const historyApp = (validation?: ModelRouterOptions<GptHistoryDocument>["validation"]) =>
       new TerrenoApp({
         configureApp: (router, options) => {
-          addGptHistoryRoutes(router, {...options, validation});
+          addGptHistoryRoutes(router, {...historyRouterOptions(options), validation});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
 
     afterEach(() => {
@@ -845,10 +851,10 @@ describe("/gpt/histories headless turns", () => {
     it("adds no headless actions without chat options", async () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
-          addGptHistoryRoutes(router, options);
+          addGptHistoryRoutes(router, historyRouterOptions(options));
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
 
@@ -865,12 +871,12 @@ describe("/gpt/histories headless turns", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             chat: {aiService: new AIService({model: model as unknown as LanguageModel})},
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const historyId = await createHistory(agent);
@@ -892,7 +898,7 @@ describe("/gpt/histories headless turns", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             chat: {
               aiService: new AIService({model: model as unknown as LanguageModel}),
               asks: true,
@@ -914,7 +920,7 @@ describe("/gpt/histories headless turns", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const historyId = await createHistory(agent);

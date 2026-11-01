@@ -1,8 +1,8 @@
 # Enable MCP OAuth for a JWT app
 
-Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1, when your app signs users in with Terreno JWTs. Terreno runs the authorization server; your app hosts one consent screen.
+Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1. Terreno runs the authorization server; your app hosts one consent screen. A Terreno JWT is the usual way to approve that screen. An app with its own session sets `req.user` first. See [Apps without a Terreno JWT](#apps-without-a-terreno-jwt).
 
-Use [a service token](connect-mcp-service-token.md) instead for clients that take a static Bearer key (Perplexity, Cursor, Claude Code).
+Use [a service token](connect-mcp-service-token.md) when the client can only hold a static Bearer key (Perplexity, Cursor, Claude Code). For a headless client that can perform a token request, use [client credentials](#headless-clients-client-credentials) instead.
 
 ## Prerequisites
 
@@ -46,6 +46,8 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   });
   ```
 
+  A loopback redirect (`localhost`, `127.0.0.1`, or `[::1]`) matches any port. Register one URI, for example `http://127.0.0.1:33418/callback`, and a native client can send `http://127.0.0.1:<ephemeral>/callback` with the same scheme, host, path, and query. The authorization code is sent to the port the client used. `localhost` and `127.0.0.1` do not match each other. Every other redirect URI must match exactly. There is no per-client opt-out. Another process on that host can listen on a different port and receive the code. PKCE `S256` is what stops that process from exchanging it.
+
 - **Registration on.** Turn it on only when clients you cannot pre-register must connect. Set `dynamicClientRegistration: true` and list `allowedRedirectHosts`, which limits where a registered client may send codes. Claude.ai redirects to `claude.ai`, ChatGPT to `chatgpt.com`. Use `*.example.com` for subdomains, and add `localhost` only if you want local clients with loopback `http://` redirects. Keep rate limiting on.
 
   ```typescript
@@ -88,6 +90,29 @@ The client sends the user's browser to `/oauth/authorize`. Terreno checks the cl
 
 The three endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`), so `bun run sdk` generates hooks for them. A request expires after 10 minutes (400 `Authorization request expired`), and a decided request cannot be decided again (409). The endpoints refuse `mcp_` and OAuth bearers, so an agent cannot approve itself.
 
+### Apps without a Terreno JWT
+
+`authenticateMiddleware()` calls `next()` when `req.user` is already set, so the consent routes do not require a JWT or a Better Auth session. Set the approving user in `addMiddleware`, which runs before these routes. Limit that to the consent paths. `GET /oauth/authorize` stays the unauthenticated redirect that starts the flow.
+
+The user object needs `_id`. Approve issues the grant to that id and records that user's `tokenEpoch`. `userForThisRequest` must resolve a session the app has already verified, such as a signed session cookie. Do not set `req.user` from an unverified header or query parameter. That user becomes the subject of the grant.
+
+```typescript
+new TerrenoApp({userModel: User, mcpOAuth: {consentUrl, enabled: true, issuer}})
+  .addMiddleware(async (req, _res, next) => {
+    if (!req.path.startsWith("/oauth/authorize/")) {
+      next();
+      return;
+    }
+    const user = await userForThisRequest(req);
+    if (user) {
+      req.user = user;
+    }
+    next();
+  });
+```
+
+Call `GET /oauth/authorize/<request>` and `POST .../approve` or `.../deny` with no `Authorization` header. `mcp_` and `mcpat_` bearers are still rejected on those routes.
+
 ## 3. Connect a client
 
 Give the client the MCP URL, `https://api.example.com/mcp`. It discovers the rest:
@@ -97,6 +122,32 @@ Give the client the MCP URL, `https://api.example.com/mcp`. It discovers the res
 3. It uses the `client_id` you gave it, or registers itself at `/oauth/register` when `dynamicClientRegistration` is on, then runs the browser flow through your consent screen, and exchanges the code at `/oauth/token` for an access token (`mcpat_…`, one hour) and a refresh token (`mcprt_…`, 30 days).
 
 For Claude.ai: **Settings → Connectors → Add custom connector**, paste the MCP URL, and connect. For ChatGPT: create a connector with the MCP URL and choose OAuth.
+
+## Headless clients (client credentials)
+
+A sandbox or another server has no browser, so it cannot run the authorization-code flow. Create a confidential client bound to a service-account user. The helper returns the secret once. Store it, then exchange it at `POST /oauth/token`. Dynamic registration stays public-only and still rejects client secrets.
+
+```typescript
+import {McpOAuthClient} from "@terreno/api";
+
+const {client, clientSecret} = await McpOAuthClient.issueConfidential({
+  clientName: "Sandbox agent",
+  tokenEndpointAuthMethod: "client_secret_basic", // or "client_secret_post"
+  userId: serviceAccount._id,
+});
+```
+
+`client_secret_basic` sends `Authorization: Basic` with the form-encoded `client_id:client_secret`. `client_secret_post` sends `client_id` and `client_secret` in the form body. The client must use the method it was created with.
+
+```bash
+# Form-encode the id and secret before base64. A raw colon join breaks when either value contains '%' or ':'.
+AUTH=$(node -e 'const [id, secret] = process.argv.slice(1); process.stdout.write(Buffer.from(`${encodeURIComponent(id)}:${encodeURIComponent(secret)}`).toString("base64"))' "$CLIENT_ID" "$CLIENT_SECRET")
+curl -X POST https://api.example.com/oauth/token \
+  -H "Authorization: Basic $AUTH" \
+  -d grant_type=client_credentials
+```
+
+The response is an `mcpat_…` access token and no refresh token. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` ends every token that client holds, and a revoked client cannot start a new authorization or token grant. `deleteOne`, `findOneAndDelete`, and `deleteMany` do the same. `bulkWrite` skips those hooks, so use `revoke` when a bulk write removes clients.
 
 ## 4. Check it
 
@@ -128,7 +179,7 @@ Refresh tokens rotate on every use. If an old refresh token comes back, Terreno 
 
 ## Security notes
 
-- Only public clients with PKCE `S256` are supported. `plain` PKCE and client secrets are rejected.
+- Public clients use PKCE `S256` only. `plain` PKCE is rejected. Confidential clients use `client_credentials` with `client_secret_basic` or `client_secret_post`. `private_key_jwt` is not supported. Dynamic registration cannot create a confidential client.
 - Tokens, codes, and refresh tokens are stored as SHA-256 hashes.
 - Registration, authorize, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
 - If a browser-based client (such as the MCP Inspector) runs discovery from another origin, allow that origin in `corsOrigin`.

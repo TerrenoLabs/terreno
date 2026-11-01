@@ -42,3 +42,4 @@ npm-debug.*
 # playwright artifacts
 /test-results
 /playwright-report
+dist-cross-site/

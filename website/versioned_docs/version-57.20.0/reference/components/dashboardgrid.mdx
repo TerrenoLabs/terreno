@@ -1,0 +1,30 @@
+---
+title: "DashboardGrid"
+description: "Responsive wrapping grid for dashboard tiles. Callers supply Card children; default columns are `{sm: 1, md: 2, lg: 3}`."
+sidebar_label: "DashboardGrid"
+slug: /reference/components/dashboardgrid
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# DashboardGrid
+
+Responsive wrapping grid for dashboard tiles. Callers supply Card children; default columns are `\{sm: 1, md: 2, lg: 3\}`.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `DashboardGridProps`  
+**Story source:** [`demo/stories/DashboardGrid.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/DashboardGrid.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="DashboardGrid" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `children` | `ReactNode` |  |  |
+| `columns` | `reflection` |  | Column counts by breakpoint. Defaults to  |
+| `gap` | `UnsignedUpTo12` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

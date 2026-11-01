@@ -1,8 +1,13 @@
-import {Accordion, Box, Heading, isNarrowViewport, Text} from "@terreno/ui";
+import {Accordion, Box, Heading, isSupportedDesktopWidth, Text} from "@terreno/ui";
 import React from "react";
-import {View} from "react-native";
+import {useWindowDimensions} from "react-native";
 
-export const AccordionDemo = () => {
+const useDemoIsMobile = (): boolean => {
+  const {width} = useWindowDimensions();
+  return !isSupportedDesktopWidth({width});
+};
+
+export const AccordionDemo = (): React.ReactElement => {
   return (
     <>
       <Accordion isCollapsed title="Accordion Title 1">
@@ -19,9 +24,9 @@ export const AccordionDemo = () => {
   );
 };
 
-export const AccordionDevDemo = () => {
-  const isMobile = isNarrowViewport();
-  const InfoChild = () => {
+export const AccordionDevDemo = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
+  const InfoChild = (): React.ReactElement => {
     return (
       <Box>
         <Text>Some children content</Text>
@@ -30,7 +35,7 @@ export const AccordionDevDemo = () => {
   };
   return (
     <Box color="base" width={isMobile ? "100%" : "50%"}>
-      <View style={{padding: 15, width: "100%"}}>
+      <Box padding={4} width="100%">
         <Accordion
           includeInfoModal
           infoModalChildren={<InfoChild />}
@@ -43,22 +48,32 @@ export const AccordionDevDemo = () => {
             <Text>Some more children content</Text>
           </Box>
         </Accordion>
-      </View>
+      </Box>
     </Box>
   );
 };
 
-export const AccordionOnToggleDemo = () => {
+export const AccordionOnToggleDemo = (): React.ReactElement => {
   const [isCollapsed, setIsCollapsed] = React.useState(true);
   const [title, setTitle] = React.useState("Sm Title");
-  const isMobile = isNarrowViewport();
+  const isMobile = useDemoIsMobile();
+  const [containerWidth, setContainerWidth] = React.useState<number | "100%">("100%");
+
+  // Width animation is client-only so static export SSR matches the first paint.
+  React.useEffect(() => {
+    if (isMobile) {
+      setContainerWidth("100%");
+      return;
+    }
+    setContainerWidth(isCollapsed ? 150 : 450);
+  }, [isCollapsed, isMobile]);
 
   return (
-    <Box color="base" width={isMobile ? "100%" : isCollapsed ? 150 : 450}>
-      <View style={{padding: 15, width: "100%"}}>
+    <Box color="base" width={containerWidth}>
+      <Box padding={4} width="100%">
         <Accordion
           isCollapsed={isCollapsed}
-          onToggle={(isCollapse: boolean) => {
+          onToggle={(isCollapse: boolean): void => {
             setIsCollapsed(isCollapse);
             setTitle(isCollapse ? "Sm T" : "Longer Title With On Toggle");
           }}
@@ -69,7 +84,7 @@ export const AccordionOnToggleDemo = () => {
             <Text>Allows dynamic width adjustment</Text>
           </Box>
         </Accordion>
-      </View>
+      </Box>
     </Box>
   );
 };

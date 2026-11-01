@@ -1353,6 +1353,17 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:tooling`, `type:feature`  
+**Project fields:** Area=`tooling`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`Planned`
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

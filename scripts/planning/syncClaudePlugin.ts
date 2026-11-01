@@ -66,41 +66,110 @@ export const CLAUDE_PLUGIN_TARGETS: ClaudePluginTarget[] = [
 
 const [PLANNING_TARGET] = CLAUDE_PLUGIN_TARGETS;
 
-const buildClaudePluginReadme = ({canonicalDirectory}: ClaudePluginTarget): string =>
-  `# Terreno Claude Code plugin
+const RELEASE_MARKETPLACE_URL =
+  "https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json";
 
-Generated. Do not hand-edit. Run \`bun run skills:sync\`.
+const buildInstallSection = (target: ClaudePluginTarget, firstCommand: string): string =>
+  `## Install
+
+Pick one channel and register only that one. Each channel provides a plugin named
+\`${target.claudeName}\`, so two channels give duplicate commands.
+
+Latest stable release, installed from npm as \`${target.npmPackage}\`:
+
+\`\`\`text
+/plugin marketplace add ${RELEASE_MARKETPLACE_URL}
+/plugin install ${target.claudeName}@${CLAUDE_RELEASE_MARKETPLACE_NAME}
+\`\`\`
+
+Every merge to \`master\`:
+
+\`\`\`text
+/plugin marketplace add TerrenoLabs/terreno
+/plugin install ${target.claudeName}@terreno-plugins
+\`\`\`
+
+One release, pinned: add \`TerrenoLabs/terreno#<version>\` as the marketplace instead.
+
+Then run \`${firstCommand}\`. Claude Code does not auto-update third-party marketplaces by
+default; run \`/plugin update ${target.claudeName}@<marketplace>\` to pick up a new release.
+`;
+
+const buildMaintainerSection = (target: ClaudePluginTarget, sources: string): string =>
+  `## Maintainers
+
+This directory is generated. Do not hand-edit it; run \`bun run skills:sync\`.
 
 Claude Code resolves a plugin skill's command from the frontmatter \`name\`, so the
-shortened stage names live here instead of in the shared stage files. This plugin is
-named \`terreno\`, so Grow is \`/terreno:1-grow\`.
+shortened names live here instead of in the shared skill files. Cursor, Codex, and
+\`npx skills\` keep the canonical names from \`${target.canonicalDirectory}/\`.
 
 | Source | Owns |
 | --- | --- |
-| \`${canonicalDirectory}/skills/\` | Lifecycle and Terreno app workflows |
-| \`${canonicalDirectory}/agents/\` | Reusable verification agents |
-| \`${canonicalDirectory}/references/\` | Shared lifecycle references |
-
-Cursor and \`npx skills\` keep the canonical \`terreno-*\` names.
+${sources}
 `;
 
-const buildScanPluginReadme = ({canonicalDirectory}: ClaudePluginTarget): string =>
-  `# Terreno Loop Claude Code plugin
+const buildClaudePluginReadme = (target: ClaudePluginTarget): string =>
+  `# Terreno plugin for Claude Code
 
-Generated. Do not hand-edit. Run \`bun run skills:sync\`.
+Terreno's agent lifecycle and app-building skills for Claude Code. Grow shapes a request
+into an approved plan, Pick and Roast build and prove it one task at a time, Brew opens the
+pull request, and Taste reacts to review and CI until it is mergeable. The plugin also ships
+Terreno backend, UI, data, admin, docs, upgrade, and deployment skills, plus the
+\`pre-commit\` and \`ui-verifier\` agents.
 
-Claude Code resolves a plugin skill's command from the frontmatter \`name\`, so the
-shortened scan-stage names live here instead of in the shared stage files. This plugin is
-named \`terreno-loop\`, so Aim is \`/terreno-loop:1-aim\`.
+Reference: https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/lifecycle-plugin.md
 
-| Source | Owns |
+${buildInstallSection(target, "/terreno:1-grow")}
+## What you get
+
+| Command | Does |
 | --- | --- |
-| \`${canonicalDirectory}/skills/\` | Aim, Sweep, Sift, Plot, Track, and the campaign loop |
-| \`${canonicalDirectory}/references/\` | Scan contract, map-reduce, goal tracking, schemas |
+| \`/terreno:1-grow\` | Research, clarify, and approve an implementation plan and task list |
+| \`/terreno:2-pick\` | Build one task test-first, then roast it and pick the next |
+| \`/terreno:3-roast\` | Independently prove or disprove the current task |
+| \`/terreno:4-brew\` | Final checks, commit, push, open the PR, wait for CI and review bots |
+| \`/terreno:5-taste\` | React to CI and review on the PR until it is mergeable |
+| \`/terreno:pick-roast-loop\` | Work an approved plan through every task |
 
-Requires the \`terreno\` lifecycle plugin: Plot hands each slice to Grow, Pick, Roast,
-Brew, and Taste. Cursor and \`npx skills\` keep the canonical \`terreno-loop-*\` names.
-`;
+${buildMaintainerSection(
+  target,
+  `| \`${target.canonicalDirectory}/skills/\` | Lifecycle and Terreno app workflows |
+| \`${target.canonicalDirectory}/agents/\` | Reusable verification agents |
+| \`${target.canonicalDirectory}/references/\` | Shared lifecycle references |`
+)}`;
+
+const buildScanPluginReadme = (target: ClaudePluginTarget): string =>
+  `# Terreno Loop plugin for Claude Code
+
+Goal-driven loops for Claude Code. Give it an outcome an agent can measure on its own,
+such as CI wall time, bundle size, or lint count, and it charters the goal, finds the work,
+slices it into pull requests, and re-measures after each one lands until the metric hits
+target or the budget runs out. Each slice goes through the \`terreno\` lifecycle plugin, so
+install that plugin too.
+
+Reference: https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/scan-plugin.md
+
+${buildInstallSection(target, "/terreno-loop:run <goal>")}
+## What you get
+
+| Command | Does |
+| --- | --- |
+| \`/terreno-loop:1-aim\` | Charter the goal: metric, baseline, rules, budget |
+| \`/terreno-loop:2-sweep\` | Run the rules and map parallel workers into candidate findings |
+| \`/terreno-loop:3-sift\` | Dedupe, verify, and rank findings |
+| \`/terreno-loop:4-plot\` | Slice findings into PR-sized plans |
+| \`/terreno-loop:5-track\` | Re-measure the metric and choose the next move |
+| \`/terreno-loop:campaign\` | Run bounded rounds, stopping at each gate |
+| \`/terreno-loop:run\` | Stay resident: keep the goal moving and tend every open PR |
+
+Loops can run for hours and use many tokens. Set a budget or stop condition in the charter.
+
+${buildMaintainerSection(
+  target,
+  `| \`${target.canonicalDirectory}/skills/\` | Aim, Sweep, Sift, Plot, Track, and the outer loops |
+| \`${target.canonicalDirectory}/references/\` | Scan contract, map-reduce, goal tracking, schemas |`
+)}`;
 
 const buildReadme = (target: ClaudePluginTarget): string =>
   target.claudeName === CLAUDE_PLUGIN_NAME

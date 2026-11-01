@@ -110,7 +110,7 @@ bun run compile      # compile the server plugin (src/ -> src/dist, CommonJS)
 bun run build:web    # produce the static export in dist/
 bun run dev          # expo start --web for local SPA development
 bun run test:ci      # serve-plugin unit tests (supertest)
-bun run smoke        # backend-free smoke over the built dist/
+bun run smoke        # backend-free smoke: compiled serve plugin + built dist/
 bun run test:e2e     # Playwright e2e (anonymous -> login) over the built dist/
 ```
 

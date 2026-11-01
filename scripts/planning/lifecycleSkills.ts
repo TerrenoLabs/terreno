@@ -75,6 +75,8 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
   "attach-pr-media",
   "backend-test-env",
+  "backfill-regression",
+  "backfill-user-guide",
   "building-admin-interfaces",
   "building-terreno-apps",
   "debug-syncdb-with-mcp",
@@ -146,7 +148,147 @@ const TASTE_UNBOUNDED_LOOP_PATTERNS = [
   /wait until all CI is green/i,
 ];
 
-const PORTABILITY_MARKERS = [
+interface RequiredPhrase {
+  error: string;
+  phrase: string;
+}
+
+const TESTING_PLAN_LINK = "../../references/testing-plan.md";
+
+/** Phrases each stage needs to carry its part of the testing-plan contract. */
+const TESTING_PLAN_STAGE_PHRASES: Record<(typeof LIFECYCLE_STAGES)[number], RequiredPhrase[]> = {
+  brew: [
+    {error: "Brew must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Brew must gate on planned ## E2E tests rows", phrase: "## E2E tests"},
+    {
+      error: "Brew must merge ## Regression cases rows into the suite",
+      phrase: "## Regression cases",
+    },
+    {error: "Brew must write cases to the resolved Regression suites", phrase: "Regression suites"},
+    {error: "Brew must assign each new case the next free ID", phrase: "next free ID"},
+  ],
+  grow: [
+    {error: "Grow must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Grow must require the IP section ## E2E tests", phrase: "## E2E tests"},
+    {error: "Grow must require the IP section ## Regression cases", phrase: "## Regression cases"},
+    {
+      error: "Grow must forbid omitting a testing-plan section",
+      phrase: "neither may be missing",
+    },
+  ],
+  pick: [
+    {error: "Pick must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Pick must write the task's planned ## E2E tests rows", phrase: "## E2E tests"},
+    {error: "Pick must follow the e2e guide for planned specs", phrase: "e2e guide"},
+    {error: "Pick must write the rows whose Written in names this task", phrase: "Written in"},
+    {error: "Pick must never skip a planned row silently", phrase: "skip a row silently"},
+  ],
+  roast: [
+    {error: "Roast must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Roast must run the task's planned ## E2E tests rows", phrase: "## E2E tests"},
+    {error: "Roast must check ## Regression cases rows", phrase: "## Regression cases"},
+    {error: "Roast must record unreachable rows as `deferred`", phrase: "`deferred`"},
+    {
+      error: "Roast must hold regression rows to the regression-step bar",
+      phrase: "regression-step bar",
+    },
+  ],
+  taste: [
+    {error: "Taste must load the testing-plan contract", phrase: TESTING_PLAN_LINK},
+    {error: "Taste must re-run affected ## E2E tests rows after fixes", phrase: "## E2E tests"},
+    {
+      error: "Taste must re-check both testing-plan sections after fixes",
+      phrase: "re-check both testing-plan sections",
+    },
+    {error: "Taste must renumber regression ID collisions", phrase: "renumber regression ID"},
+    {error: "Taste must run the declared Smoke command before push", phrase: "Smoke command"},
+  ],
+};
+
+const TESTING_PLAN_REQUIRED_PHRASES = [
+  "## Standardized spot",
+  "docs/testing/e2e.md",
+  "docs/regression/",
+  "## Testing conventions",
+  "`E2E guide`",
+  "`Regression suites`",
+  "`Smoke command`",
+  "| ID | Spec or flow | Layer | Proves | Written in |",
+  "| ID | Case | Steps | Expected | Platforms | Automated by | Added |",
+  "None — <reason>",
+  "<AREA>-new-<n>",
+  "Destination:",
+  "## Suite file format",
+  "Area:",
+  "Last full run:",
+  "<AREA>-NNN",
+  "next free ID",
+  "## Deferral rule",
+  "`deferred`",
+  "## Regression-step bar",
+  "## Legacy rule",
+  "predates contract",
+] as const;
+
+const USER_GUIDE_LINK = "../../references/user-guide.md";
+
+/** Phrases each stage needs to carry its part of the user-guide contract. */
+const USER_GUIDE_STAGE_PHRASES: Record<(typeof LIFECYCLE_STAGES)[number], RequiredPhrase[]> = {
+  brew: [
+    {error: "Brew must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Brew must gate on ## User guide rows", phrase: "## User guide"},
+    {error: "Brew must check the guide index", phrase: "guide index"},
+    {error: "Brew must skip the gate when the repository opts out", phrase: "opts out"},
+  ],
+  grow: [
+    {error: "Grow must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Grow must require the IP section ## User guide", phrase: "## User guide"},
+    {error: "Grow must summarize the guide in the brief", phrase: "`User guide:`"},
+    {error: "Grow must write the opt-out entry", phrase: "None — user guide off"},
+  ],
+  pick: [
+    {error: "Pick must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Pick must write the task's ## User guide pages", phrase: "## User guide"},
+    {error: "Pick must never skip a guide row silently", phrase: "skip a guide row silently"},
+    {error: "Pick must skip the guide when the repository opts out", phrase: "opts out"},
+  ],
+  roast: [
+    {error: "Roast must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Roast must check ## User guide pages", phrase: "## User guide"},
+    {error: "Roast must hold pages to the guide-entry bar", phrase: "guide-entry bar"},
+    {error: "Roast must check pages against the shipped screens", phrase: "shipped screens"},
+  ],
+  taste: [
+    {error: "Taste must load the user-guide contract", phrase: USER_GUIDE_LINK},
+    {error: "Taste must read the IP's ## User guide section", phrase: "## User guide"},
+    {error: "Taste must update guide pages after fixes", phrase: "user guide pages"},
+    {error: "Taste must hold guide edits to the guide-entry bar", phrase: "guide-entry bar"},
+  ],
+};
+
+const USER_GUIDE_REQUIRED_PHRASES = [
+  "## Standardized spot",
+  "docs/user-guide/",
+  "## User guide conventions",
+  "`User guide`",
+  "### Opting out",
+  "None — user guide off",
+  "## Page format",
+  "`audience`",
+  "`questions`",
+  "## What it does",
+  "## How to use it",
+  "## Intended use",
+  "## Guide-entry bar",
+  "| ID | Page | Change | Audience | Written in |",
+  "None — <reason>",
+  "## Index",
+  "## Legacy rule",
+  "predates contract",
+  "backfill-user-guide",
+] as const;
+
+export const PORTABILITY_MARKERS = [
   "@terreno/",
   "example-frontend",
   "admin-frontend",
@@ -449,6 +591,15 @@ export const validateStageContent = ({
     }
   }
 
+  for (const {error, phrase} of [
+    ...TESTING_PLAN_STAGE_PHRASES[definition.stage],
+    ...USER_GUIDE_STAGE_PHRASES[definition.stage],
+  ]) {
+    if (!content.includes(phrase)) {
+      errors.push(`${prefix}: ${error}`);
+    }
+  }
+
   return errors;
 };
 
@@ -480,7 +631,55 @@ const validateGrillingProcedure = (content: string): string[] => {
     errors.push("grilling: the Decisions table must stay unbounded");
   }
 
+  for (const label of ["E2E:", "Regression:", "User guide:"]) {
+    if (!content.includes(`${label} <`)) {
+      errors.push(`grilling: the approval brief plan must include the ${label} line`);
+    }
+  }
+
   return errors;
+};
+
+/** Validates the testing-plan reference; `undefined` means the file is missing. */
+export const validateTestingPlanContract = (content: string | undefined): string[] => {
+  if (content === undefined) {
+    return ["testing-plan contract is missing: references/testing-plan.md"];
+  }
+
+  return TESTING_PLAN_REQUIRED_PHRASES.filter((phrase) => !content.includes(phrase)).map(
+    (phrase) => `testing-plan contract must define ${phrase}`
+  );
+};
+
+interface ReadTestingPlanContractOptions {
+  pluginDirectory: string;
+}
+
+/** Reads the plugin's testing-plan reference, or `undefined` when the file is missing. */
+export const readTestingPlanContract = ({
+  pluginDirectory,
+}: ReadTestingPlanContractOptions): string | undefined => {
+  const path = join(pluginDirectory, "references/testing-plan.md");
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
+};
+
+/** Validates the user-guide reference; `undefined` means the file is missing. */
+export const validateUserGuideContract = (content: string | undefined): string[] => {
+  if (content === undefined) {
+    return ["user-guide contract is missing: references/user-guide.md"];
+  }
+
+  return USER_GUIDE_REQUIRED_PHRASES.filter((phrase) => !content.includes(phrase)).map(
+    (phrase) => `user-guide contract must define ${phrase}`
+  );
+};
+
+/** Reads the plugin's user-guide reference, or `undefined` when the file is missing. */
+export const readUserGuideContract = ({
+  pluginDirectory,
+}: ReadTestingPlanContractOptions): string | undefined => {
+  const path = join(pluginDirectory, "references/user-guide.md");
+  return existsSync(path) ? readFileSync(path, "utf8") : undefined;
 };
 
 export const validateDocumentationContract = (content: string): string[] => {
@@ -490,6 +689,7 @@ export const validateDocumentationContract = (content: string): string[] => {
     "Always update docs",
     "Diátaxis",
     "Missing docs for a user-visible or architectural change is `FAIL`",
+    "user-guide.md",
   ];
 
   for (const phrase of requiredPhrases) {
@@ -1007,6 +1207,9 @@ export const validateLifecyclePlugin = ({
     "utf8"
   );
   errors.push(...validateDocumentationContract(documentationContract));
+
+  errors.push(...validateTestingPlanContract(readTestingPlanContract({pluginDirectory})));
+  errors.push(...validateUserGuideContract(readUserGuideContract({pluginDirectory})));
 
   const productCi = readFileSync(join(pluginDirectory, "references/product-ci.md"), "utf8");
   errors.push(...validateProductCiContract(productCi));

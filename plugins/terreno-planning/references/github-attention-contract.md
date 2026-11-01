@@ -57,6 +57,7 @@ Implements `<plan path>` (T1–T3). Closes #<n>.
 | ✅ Tested | <behavior or risk> | `<command>` or artifact link |
 | 🧭 Test instructions | <feature or workflow> | <exact steps a reviewer can follow> |
 | ⚠️ Not tested | <remaining risk> | <exact reviewer test or action> |
+| ⚠️ Not tested | Regression cases `<AREA-NNN>`, `<AREA-NNN>` | Walk them in [`<suite file>`](<link>) |
 ```
 
 Rules:
@@ -83,6 +84,11 @@ Rules:
   changes. Do not regenerate the rest of the body from the latest turn.
 - Omit empty rows and optional sections. If nothing remains untested, omit the
   `Not tested` row.
+- When the PR adds or changes manual regression cases in the testing-plan suite
+  files, list every such case ID in one row that links its suite file. Use
+  `⚠️ Not tested`, with walking the cases as the reviewer action, until a person walks
+  every listed case on this branch; then use `✅ Tested`, naming who walked them and
+  the evidence. Omit the row when the PR adds or changes no case.
 - Put the most decision-relevant verification first.
 - Name what a check proves; a command alone is not evidence. Write the outcome next
   to the command (`` `bun test api` → 412 pass ``).

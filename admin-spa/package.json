@@ -38,6 +38,7 @@
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
     "@terreno/api": "workspace:*",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",

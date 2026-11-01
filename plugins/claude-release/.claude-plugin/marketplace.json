@@ -10,15 +10,15 @@
       "description": "Combined Terreno lifecycle, app-building, documentation, deployment, and verification workflows.",
       "name": "terreno",
       "source": {
-        "package": "@terreno/claude-plugin",
+        "package": "@terreno/agent-plugin",
         "source": "npm"
       }
     },
     {
       "description": "Goal-driven code scans: charter a measurable goal, map-reduce the repository into findings, and drive each slice through the lifecycle.",
-      "name": "terreno-scan",
+      "name": "terreno-loop",
       "source": {
-        "package": "@terreno/claude-plugin-scan",
+        "package": "@terreno/agent-plugin-loop",
         "source": "npm"
       }
     }

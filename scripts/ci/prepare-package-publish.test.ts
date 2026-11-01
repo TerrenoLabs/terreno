@@ -57,7 +57,7 @@ describe("prepare-package-publish", () => {
       writeFileSync(join(repoRoot, "CHANGELOG.md"), "# Changelog\n");
       writeFileSync(
         join(repoRoot, "plugins/terreno-claude/package.json"),
-        JSON.stringify({name: "@terreno/claude-plugin", version: "0.0.0"})
+        JSON.stringify({name: "@terreno/agent-plugin", version: "0.0.0"})
       );
       writeFileSync(
         join(repoRoot, "plugins/terreno-claude/.claude-plugin/plugin.json"),

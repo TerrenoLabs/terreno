@@ -19,12 +19,12 @@ takes a plugin skill's command from the frontmatter `name`.
 
 | Host | Plugin | Invoke Grow | Scan plugin | Invoke Aim |
 | --- | --- | --- | --- | --- |
-| Cursor | `terreno-planning` | `/terreno-1-grow` | `terreno-scan` | `/terreno-scan-1-aim` |
-| Codex | `terreno-planning` | `$terreno-1-grow` | `terreno-scan` | `$terreno-scan-1-aim` |
-| Claude Code | `terreno` | `/terreno:1-grow` | `terreno-scan` | `/terreno-scan:1-aim` |
+| Cursor | `terreno-planning` | `/terreno-1-grow` | `terreno-loop` | `/terreno-loop-1-aim` |
+| Codex | `terreno-planning` | `$terreno-1-grow` | `terreno-loop` | `$terreno-loop-1-aim` |
+| Claude Code | `terreno` | `/terreno:1-grow` | `terreno-loop` | `/terreno-loop:1-aim` |
 
-`terreno-scan` depends on the lifecycle plugin: Plot hands each slice to Grow. Its
-resident loop (`/terreno-scan:loop`, `/terreno-scan-loop`, `$terreno-scan-loop`) keeps a
+`terreno-loop` depends on the lifecycle plugin: Plot hands each slice to Grow. Its
+resident loop (`/terreno-loop:run`, `/terreno-loop-run`, `$terreno-loop-run`) keeps a
 goal running and heartbeats over the PRs it opens. See the
 [scan plugin reference](../reference/scan-plugin.md).
 
@@ -37,7 +37,7 @@ Install `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://gith
 ```text
 codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
-codex plugin install terreno-scan --source terreno-plugins
+codex plugin install terreno-loop --source terreno-plugins
 $terreno-1-grow
 ```
 
@@ -51,7 +51,7 @@ Codex installs the canonical plugin at
 ```text
 /plugin marketplace add TerrenoLabs/terreno
 /plugin install terreno@terreno-plugins
-/plugin install terreno-scan@terreno-plugins
+/plugin install terreno-loop@terreno-plugins
 /terreno:1-grow
 ```
 
@@ -59,11 +59,11 @@ Marketplace: [`.claude-plugin/marketplace.json`](https://github.com/TerrenoLabs/
 Claude Code stages, app skills, and agents come from the generated copy at
 [`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude);
 scan stages come from
-[`plugins/terreno-scan-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-scan-claude).
+[`plugins/terreno-loop-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-loop-claude).
 
 #### Pick a channel
 
-Register one channel. Each one provides plugins named `terreno` and `terreno-scan`, so
+Register one channel. Each one provides plugins named `terreno` and `terreno-loop`, so
 two channels give duplicate `/terreno:*` skills.
 
 | Channel | Tracks | Add the marketplace | Install |
@@ -72,7 +72,7 @@ two channels give duplicate `/terreno:*` skills.
 | Pinned release | One release tag, frozen | `/plugin marketplace add TerrenoLabs/terreno#<version>` | `/plugin install terreno@terreno-plugins` |
 | Latest release | The newest stable release, from npm | `/plugin marketplace add https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json` | `/plugin install terreno@terreno-releases` |
 
-The release channel installs `@terreno/claude-plugin` and `@terreno/claude-plugin-scan`
+The release channel installs `@terreno/agent-plugin` and `@terreno/agent-plugin-loop`
 from npm. Both are published in lockstep with every other `@terreno/*` package, and
 their plugin version is the Terreno release. To move a pinned install to another release, remove
 the marketplace and add it again at the new tag. Only tags from 57.21.0 on carry
@@ -92,7 +92,7 @@ Claude Code does not auto-update third-party marketplaces by default. Run
 | Testing | `terreno-test-setup` (bootstrap backend, frontend, mobile), `terreno-backend-tests`, `terreno-frontend-tests`, `terreno-mobile-tests`, `backend-test-env` |
 | Docs | `update-docs`, `update-agent-docs`, architecture skills |
 | GitHub | issues, review, UI verification, PR screenshots (`attach-pr-media`), release, dependency updates |
-| Code scans | `terreno-scan-1-aim` … `terreno-scan-5-track`, `terreno-scan-campaign`, `terreno-scan-loop` |
+| Code scans | `terreno-loop-1-aim` … `terreno-loop-5-track`, `terreno-loop-campaign`, `terreno-loop-run` |
 | Expo and native | `track-upstream-expo`, `upgrading-expo`, `store-assets`, deployment / EAS skills |
 | Plugin agents | `pre-commit`, `ui-verifier` |
 
@@ -106,12 +106,12 @@ Canonical sources:
 
 1. `plugins/terreno-planning/skills/` — lifecycle and reusable Terreno app workflows
 2. `plugins/terreno-planning/agents/` — reusable verification agents
-3. `plugins/terreno-scan/skills/` — scan stages and the campaign loop
+3. `plugins/terreno-loop/skills/` — scan stages and the campaign loop
 4. `.rulesync/skills/` — repository-only and optional Expo skills (`bun run rules` generates agent copies)
 5. `<package>/.ai/skills/` — package/MCP-specific copies; not installable overlays
 
 `plugins/terreno-claude/` is generated from sources 1 and 2, and
-`plugins/terreno-scan-claude/` from source 3, both with shortened skill names.
+`plugins/terreno-loop-claude/` from source 3, both with shortened skill names.
 Codex uses the canonical plugin plus committed `.codex-plugin/plugin.json` and
 `.agents/plugins/marketplace.json` — do not generate a third plugin tree.
 

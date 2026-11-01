@@ -1780,7 +1780,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: [plugins/terreno-claude, plugins/terreno-scan-claude]
+        directory: [plugins/terreno-claude, plugins/terreno-loop-claude]
     steps:
       - uses: actions/checkout@v6.0.3
 
@@ -2121,7 +2121,7 @@ jobs:
           add_status "@terreno/mcp" "${{ needs.publish-mcp.result }}"
           add_status "@terreno/syncdb" "${{ needs.publish-syncdb.result }}"
           add_status "@terreno/cli" "${{ needs.publish-cli.result }}"
-          add_status "@terreno/claude-plugin, @terreno/claude-plugin-scan" "${{ needs.publish-claude-plugins.result }}"
+          add_status "@terreno/agent-plugin, @terreno/agent-plugin-loop" "${{ needs.publish-claude-plugins.result }}"
           echo "message=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Zoom Chat Notification

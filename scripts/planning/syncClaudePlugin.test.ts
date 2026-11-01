@@ -83,7 +83,7 @@ describe("Claude plugin sync", (): void => {
     const packageJson = JSON.parse(
       files.find(({path}) => path === "package.json")?.contents ?? "{}"
     ) as {files: string[]; name: string; publishConfig: {access: string}};
-    assert.equal(packageJson.name, "@terreno/claude-plugin");
+    assert.equal(packageJson.name, "@terreno/agent-plugin");
     assert.equal(packageJson.publishConfig.access, "public");
     assert.includeMembers(packageJson.files, [
       ".claude-plugin/",
@@ -102,8 +102,8 @@ describe("Claude plugin sync", (): void => {
     assert.deepEqual(
       marketplace.plugins.map(({name, source}) => [name, source.source, source.package]),
       [
-        ["terreno", "npm", "@terreno/claude-plugin"],
-        ["terreno-scan", "npm", "@terreno/claude-plugin-scan"],
+        ["terreno", "npm", "@terreno/agent-plugin"],
+        ["terreno-loop", "npm", "@terreno/agent-plugin-loop"],
       ]
     );
     assert.isUndefined(

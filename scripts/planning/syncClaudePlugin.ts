@@ -29,7 +29,7 @@ export const CLAUDE_RELEASE_MARKETPLACE_NAME = "terreno-releases";
 
 const LONG_SKILL_NAME_PATTERN =
   /terreno-([1-5]-[a-z]+|pick-roast-loop|planning-loop|taste-sweep|prd)/g;
-const LONG_SCAN_SKILL_NAME_PATTERN = /terreno-scan-([1-5]-[a-z]+|campaign|loop)/g;
+const LONG_SCAN_SKILL_NAME_PATTERN = /terreno-loop-([1-5]-[a-z]+|campaign|run)/g;
 
 interface ClaudePluginTarget {
   /** Extra rewrites applied to markdown, in order, after the directory-name rewrite. */
@@ -51,16 +51,16 @@ export const CLAUDE_PLUGIN_TARGETS: ClaudePluginTarget[] = [
     contentPatterns: [],
     displayName: "Terreno",
     namePattern: LONG_SKILL_NAME_PATTERN,
-    npmPackage: "@terreno/claude-plugin",
+    npmPackage: "@terreno/agent-plugin",
   },
   {
-    canonicalDirectory: "plugins/terreno-scan",
-    claudeDirectory: "plugins/terreno-scan-claude",
-    claudeName: "terreno-scan",
+    canonicalDirectory: "plugins/terreno-loop",
+    claudeDirectory: "plugins/terreno-loop-claude",
+    claudeName: "terreno-loop",
     contentPatterns: [LONG_SKILL_NAME_PATTERN],
-    displayName: "Terreno Scan",
+    displayName: "Terreno Loop",
     namePattern: LONG_SCAN_SKILL_NAME_PATTERN,
-    npmPackage: "@terreno/claude-plugin-scan",
+    npmPackage: "@terreno/agent-plugin-loop",
   },
 ];
 
@@ -85,13 +85,13 @@ Cursor and \`npx skills\` keep the canonical \`terreno-*\` names.
 `;
 
 const buildScanPluginReadme = ({canonicalDirectory}: ClaudePluginTarget): string =>
-  `# Terreno Scan Claude Code plugin
+  `# Terreno Loop Claude Code plugin
 
 Generated. Do not hand-edit. Run \`bun run skills:sync\`.
 
 Claude Code resolves a plugin skill's command from the frontmatter \`name\`, so the
 shortened scan-stage names live here instead of in the shared stage files. This plugin is
-named \`terreno-scan\`, so Aim is \`/terreno-scan:1-aim\`.
+named \`terreno-loop\`, so Aim is \`/terreno-loop:1-aim\`.
 
 | Source | Owns |
 | --- | --- |
@@ -99,7 +99,7 @@ named \`terreno-scan\`, so Aim is \`/terreno-scan:1-aim\`.
 | \`${canonicalDirectory}/references/\` | Scan contract, map-reduce, goal tracking, schemas |
 
 Requires the \`terreno\` lifecycle plugin: Plot hands each slice to Grow, Pick, Roast,
-Brew, and Taste. Cursor and \`npx skills\` keep the canonical \`terreno-scan-*\` names.
+Brew, and Taste. Cursor and \`npx skills\` keep the canonical \`terreno-loop-*\` names.
 `;
 
 const buildReadme = (target: ClaudePluginTarget): string =>

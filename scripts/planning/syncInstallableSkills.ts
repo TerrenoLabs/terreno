@@ -24,7 +24,7 @@ interface SkillGroup {
 const SHARED_PLUGIN_REFERENCE_PREFIX = "../../references/";
 
 /** Plugin trees whose skills install through `npx skills add`; later entries win on name. */
-const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/terreno-scan"];
+const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/terreno-loop"];
 
 export const SKILL_GROUPS: SkillGroup[] = [
   {
@@ -122,13 +122,13 @@ export const SKILL_GROUPS: SkillGroup[] = [
     description:
       "Charter a measurable long-term goal, map-reduce the repository into findings, and drive each routed PR through the lifecycle.",
     skills: [
-      "terreno-scan-1-aim",
-      "terreno-scan-2-sweep",
-      "terreno-scan-3-sift",
-      "terreno-scan-4-plot",
-      "terreno-scan-5-track",
-      "terreno-scan-campaign",
-      "terreno-scan-loop",
+      "terreno-loop-1-aim",
+      "terreno-loop-2-sweep",
+      "terreno-loop-3-sift",
+      "terreno-loop-4-plot",
+      "terreno-loop-5-track",
+      "terreno-loop-campaign",
+      "terreno-loop-run",
     ],
     title: "Code scans",
   },

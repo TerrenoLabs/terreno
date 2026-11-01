@@ -18,10 +18,10 @@
       "description": "Combined Terreno lifecycle, app-building, documentation, deployment, and verification workflows."
     },
     {
-      "name": "terreno-scan",
+      "name": "terreno-loop",
       "source": {
         "source": "local",
-        "path": "./plugins/terreno-scan"
+        "path": "./plugins/terreno-loop"
       },
       "policy": {
         "installation": "AVAILABLE",

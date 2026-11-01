@@ -150,7 +150,7 @@ and `.codex-plugin/plugin.json` on the canonical plugin. Claude Code:
 ```
 
 That tracks `master`. For a pinned release or the latest release from npm
-(`@terreno/claude-plugin`, marketplace `terreno-releases`), see
+(`@terreno/agent-plugin`, marketplace `terreno-releases`), see
 [Install agent skills](../how-to/install-agent-skills.md#pick-a-channel).
 
 Claude Code resolves a plugin skill's command from the frontmatter `name`, so the short

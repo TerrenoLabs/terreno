@@ -26,6 +26,7 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
     ".ai/**/*"

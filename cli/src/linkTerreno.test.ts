@@ -64,7 +64,9 @@ test("published package files cover all entry points", async (): Promise<void> =
     "blocks",
     "jobs",
     "admin-frontend",
+    "syncdb",
     "test",
+    "ui",
   ];
   for (const directory of packageDirectories) {
     const manifest = JSON.parse(
@@ -80,7 +82,7 @@ test("published package files cover all entry points", async (): Promise<void> =
       ...binTargets,
       ...exportTargets(manifest.exports),
     ];
-    for (const target of targets) {
+    for (const target of targets.filter((entry): boolean => entry !== "./package.json")) {
       expect(isCoveredByFiles(target, files), `${directory} files do not cover ${target}`).toBe(
         true
       );

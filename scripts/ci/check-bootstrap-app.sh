@@ -20,7 +20,8 @@ bun cli/dist/bin.js bootstrap app --name bootstrap-check --display-name "Bootstr
 
 # Type-checking only reaches packages the app imports, so check transitive packs directly.
 for pack in "$app_dir"/vendor/terreno/*.tgz; do
-  if ! tar tzf "$pack" | grep -q "^package/dist/"; then
+  # Not grep -q: exiting at the first match kills tar with SIGPIPE, which pipefail reports as a failure.
+  if ! tar tzf "$pack" | grep "^package/dist/" > /dev/null; then
     echo "$(basename "$pack") has no dist. Add dist to the files list in its package.json." >&2
     exit 1
   fi

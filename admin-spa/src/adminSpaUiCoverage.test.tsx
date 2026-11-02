@@ -85,10 +85,7 @@ const registerAdminSpaShellMocks = ({
       basePath: "",
     }),
   }));
-  // Same export names as the sdk mock in oauthConsentScreen.test.tsx: bun keeps the first
-  // mock's names for a module, so both mocks must declare every export.
   mock.module(sdkPath, () => ({
-    openapi: {injectEndpoints: () => ({})},
     terrenoApi: mockTerrenoApi,
     useGetAdminSpaProfileQuery: () => ({data: profileState.data}),
   }));

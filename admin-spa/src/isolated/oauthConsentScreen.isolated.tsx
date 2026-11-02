@@ -3,7 +3,7 @@ import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {Provider} from "react-redux";
-import {renderWithTheme} from "../../ui/src/test-utils";
+import {renderWithTheme} from "../../../ui/src/test-utils";
 
 type MockableUseLocalSearchParams = typeof useLocalSearchParams & {
   mockImplementation?: (impl: typeof useLocalSearchParams) => void;
@@ -20,7 +20,7 @@ interface QueryState {
   isLoading: boolean;
 }
 
-const consentApiUrl = new URL("../store/mcpOAuthConsentApi.ts", import.meta.url);
+const consentApiUrl = new URL("../../store/mcpOAuthConsentApi.ts", import.meta.url);
 const sdkPath = new URL("./sdk.ts", consentApiUrl).pathname;
 const consentApiPath = consentApiUrl.pathname;
 
@@ -128,7 +128,7 @@ describe("OAuthConsentScreen", () => {
     (useLocalSearchParams as MockableUseLocalSearchParams).mockImplementation?.(
       () => searchParams as ReturnType<typeof useLocalSearchParams>
     );
-    ({default: OAuthConsentScreen} = await import("../app/oauth/consent"));
+    ({default: OAuthConsentScreen} = await import("../../app/oauth/consent"));
   });
 
   afterAll(() => {

@@ -1,16 +1,18 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import express from "express";
 import mongoose from "mongoose";
 import supertest from "supertest";
 import {z} from "zod";
 
 import type {UserModel as AuthUserModel} from "../auth";
+import {logger} from "../logger";
 import {McpRequestLog} from "../models/mcpRequestLog";
 import {McpServiceToken} from "../models/mcpServiceToken";
 import {McpToolSetting} from "../models/mcpToolSetting";
 import {TerrenoApp} from "../terrenoApp";
 import {setupDb, UserModel} from "../tests";
-import {resolveMcpRequestLogOption} from "./adminTracking";
+import type {McpRequestLogOutcome} from "../types/mcpAdmin";
+import {recordMcpToolCall, resolveMcpRequestLogOption} from "./adminTracking";
 import {clearMCPRegistry, registerMCPTool} from "./registry";
 import {mountMCPServer} from "./server";
 
@@ -161,6 +163,26 @@ describe("MCP request log", () => {
     await callTool(app, "echo_message", {message: "hi"});
 
     expect(await McpRequestLog.countDocuments({})).toBe(0);
+  });
+
+  it("drops a failed write with a debug log instead of failing the call", async () => {
+    const debug = spyOn(logger, "debug");
+    try {
+      // An outcome outside the schema enum makes the insert fail validation.
+      expect(() =>
+        recordMcpToolCall(
+          {durationMs: 1, outcome: "bogus" as McpRequestLogOutcome, toolName: "echo_message"},
+          {retentionDays: 1}
+        )
+      ).not.toThrow();
+      for (let attempt = 0; attempt < 50 && debug.mock.calls.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(String(debug.mock.calls[0]?.[0])).toContain("Request log write failed");
+      expect(await McpRequestLog.countDocuments({})).toBe(0);
+    } finally {
+      debug.mockRestore();
+    }
   });
 });
 

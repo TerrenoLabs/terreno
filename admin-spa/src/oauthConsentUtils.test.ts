@@ -4,7 +4,7 @@ import {
   consentErrorKind,
   parseConsentScopes,
   readConsentRequestId,
-} from "./oauthConsentUtils";
+} from "../components/oauthConsentUtils";
 
 describe("consentErrorKind", () => {
   it("maps the consent endpoint statuses to screen states", () => {

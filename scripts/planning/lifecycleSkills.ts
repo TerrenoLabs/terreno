@@ -74,6 +74,7 @@ const PRE_GROW_SKILL_DIRECTORIES = ["terreno-prd"] as const;
 const PLUGIN_APP_SKILL_DIRECTORIES = [
   "ai-prompt-governance",
   "attach-pr-media",
+  "bootstrap-mcp-server",
   "backend-test-env",
   "building-admin-interfaces",
   "building-terreno-apps",

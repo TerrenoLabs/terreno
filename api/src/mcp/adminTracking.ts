@@ -1,6 +1,7 @@
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
+import {APIError} from "../errors";
 import {logger} from "../logger";
 import {McpRequestLog} from "../models/mcpRequestLog";
 import {McpToolSetting} from "../models/mcpToolSetting";
@@ -29,7 +30,12 @@ export const resolveMcpRequestLogOption = (
   }
   const retentionDays = option.retentionDays ?? DEFAULT_REQUEST_LOG_RETENTION_DAYS;
   if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
-    throw new Error("mcpRequestLog.retentionDays must be a positive number");
+    throw new APIError({
+      code: "mcp-request-log-misconfigured",
+      detail: `mcpRequestLog.retentionDays must be a positive number, got ${retentionDays}`,
+      status: 500,
+      title: "MCP request log is misconfigured",
+    });
   }
   return {retentionDays};
 };

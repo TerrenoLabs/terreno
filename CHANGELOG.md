@@ -20,6 +20,56 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.21.0] - 2026-11-01
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.21.0.md`](mcp-server/src/docs/upgrades/57.21.0.md).
+
+### Breaking
+
+- The `terreno-scan` plugin is now `terreno-loop`, and its skills are renamed from `terreno-scan-*` to `terreno-loop-*`. The resident loop `terreno-scan-loop` is now `terreno-loop-run`: `/terreno-loop:run` in Claude Code, `/terreno-loop-run` in Cursor, `$terreno-loop-run` in Codex. Claude Code moves existing installs over through the marketplace `renames` entry. In Cursor and Codex, uninstall `terreno-scan` and install `terreno-loop`. Campaign state stays at `.terreno/scan/<goal>.json`, so campaigns already in progress resume.
+
+### Added
+
+- `@terreno/admin-spa` serves an MCP OAuth consent screen at `/console/oauth/consent`, so a backend with no product frontend can set `mcpOAuth.consentUrl` to `${issuer}/console/oauth/consent`. Any signed-in user can approve or deny a request with their Better Auth session; signed-out users sign in and return through the login screen's new `returnTo` parameter, which accepts only in-app paths.
+- Claude Code plugins now publish to npm with every release, as `@terreno/agent-plugin` and `@terreno/agent-plugin-loop`. A new `terreno-releases` marketplace installs them at the latest stable release. To pin one release, add `TerrenoLabs/terreno#<version>` instead. See [Install agent skills](docs/how-to/install-agent-skills.md#pick-a-channel).
+- The generated Claude plugin manifest no longer pins `version`. Before this change, plugins installed from the `TerrenoLabs/terreno` marketplace stayed on the `2.12.0` copy, because their version never changed. They now update on every commit. Run `/plugin update terreno@terreno-plugins` once to leave `2.12.0`.
+- The `terreno-planning` lifecycle plugin (2.13.0) plans e2e tests and manual regression cases in every IP:
+
+  - Grow requires `## E2E tests` and `## Regression cases` sections (either may be `None — <reason>`), read from the e2e guide at `docs/testing/e2e.md` or a `## Testing conventions` override in AGENTS.md or CLAUDE.md.
+  - Regression cases stay minimal: most features add none. A case is only for what a developer or QA must check by hand, such as push notifications, and Roast fails one that repeats an existing case.
+  - Pick writes each planned spec in the task that delivers it, and Roast runs it; a missing or failing row is `FAIL`.
+  - Brew gates on every planned spec and merges regression cases into `docs/regression/<area>.md` with the next free ID.
+  - Taste re-checks both sections after behaviour-changing fixes and renumbers regression ID collisions with `master`.
+  - `bun run check:lifecycle-skills` enforces these phrases in every stage.
+  - New `backfill-regression` skill proposes manual regression cases one area at a time and writes only the sets the human approves.
+  - A consumer opts out of manual regression suites with `Regression suites | none` in its `## Testing conventions` table.
+- The `terreno-planning` lifecycle plugin (2.14.0) grows an end-user guide with every feature:
+
+  - Every IP has a `## User guide` section listing the guide pages it adds, updates, or retires, or `None — <reason>`. Pages live in `docs/user-guide/<area>/<feature>.md`, one feature per page, with `title`, `audience`, `platforms`, and `questions` frontmatter that chat agents use to answer "how do I…" questions.
+  - Pick writes each page in the task that ships the feature, Roast checks it against the shipped screens, Brew gates on it and the index, and Taste keeps it current after fixes.
+  - A repo opts out with `| User guide | none — <reason> |` in a `## User guide conventions` table in AGENTS.md or CLAUDE.md.
+  - New `backfill-user-guide` skill drafts pages for features that shipped without one, one area at a time, and writes only the pages the human approves.
+  - `bun run check:user-guide` validates the pages and index (CI `repo-policies`); `--uncovered <app dir>` lists screens no page names.
+  - Terreno's own guide covers the example app's main features.
+- `@terreno/api`: opt-in `mcpRequestLog` on `TerrenoApp` records one metadata-only `McpRequestLog` row per MCP tool call (tool, user, credential, service token or OAuth client, duration, outcome, error class; never arguments, results, or error text), expiring after `retentionDays` (default 30).
+- `@terreno/api`: opt-in `mcpToolSettings` on `TerrenoApp` registers every MCP tool in `McpToolSetting` at startup; tools an admin switches off are hidden from `tools/list` and rejected by `tools/call`.
+- `@terreno/api`: deleting an `McpOAuthToken` row revokes its whole connection (token family) and keeps the rows. New `McpOAuthToken.revokeAllForUser` and `McpServiceToken.revokeAllForUser`.
+- `@terreno/admin-backend`: `mcpAdminModels()` adds MCP admin screens (service tokens, OAuth clients, OAuth connections, request log, tool switches), `mcpAdminStatements` for RBAC, and `mcpAdminScripts()` adds `mcp-sign-out-everywhere`. See [Manage MCP from the admin panel](docs/how-to/manage-mcp-in-admin.md).
+- Docs: [Expose an MCP server safely](docs/how-to/expose-mcp-server-safely.md) (OAuth, service tokens, Cloudflare Tunnel, Access) and the `bootstrap-mcp-server` skill for a single-binary MCP server with the admin console embedded.
+- Every workspace package has a real-process smoke test and an e2e page:
+
+  - Each package's `e2e/smoke.ts` (or `smoke.spec.ts` for browser packages) runs its built output through its public entry: a server on a real port, the compiled binary, or a page in Chromium. `bun run --cwd <package> smoke` runs one; `bun run smoke` runs them all and prints each package's time. The CircleCI `smoke` job runs them on every package change.
+  - `@terreno/test` adds the smoke helpers `smokeMongoUri()`, `spawnUntilReady()`, `spawnExampleBackend()`, `runBin()`, and `freePort()`.
+  - The [E2E testing guide](docs/testing/e2e.md) explains the test tiers and links one page per package under `docs/testing/e2e/`.
+  - Manual regression cases live in `docs/regression/<area>.md`, one file per area, and `bun run check:regression-suites` validates them.
+  - example-frontend's smoke serves a web export that `bun run --cwd example-frontend export:smoke` builds once with a placeholder API URL; the smoke swaps in a `freePort()` API URL as it serves the bundle, so the 30 s smoke no longer rebuilds the export. `spawnUntilReady()` takes `stopGraceMs`, and `spawnExampleBackend()` stops example-backend after 0.5 s instead of 5 s.
+- Every workspace package has a `typecheck` script that runs `tsc` over source and test files through a new `tsconfig.typecheck.json`. Root `bun run lint` ends with `bun run typecheck`, and CircleCI runs it in a new `typecheck` job. Test files that had type errors were fixed.
+
+### Changed
+
+- `@terreno/api`: deleting an `McpOAuthToken` row with document or query `deleteOne` now revokes that row's whole token family (the connection) and keeps the rows instead of removing one pair. `deleteMany` is unchanged.
+- `@terreno/ui`: new `theme.field` tokens (`background`, `backgroundDisabled`, `border`, `borderFocus`, `borderError`, `borderDisabled`) style form inputs. `TextField`, `SelectField`, `DateTimeField`, `HeightField`, and `OtpField` read them instead of `surface.base` and `border.dark`. Defaults equal the old colors, but overriding `surface` or `border` no longer recolors those fields; use `setTheme({field: ...})`.
+
 ## [57.20.0] - 2026-10-30
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.20.0.md`](mcp-server/src/docs/upgrades/57.20.0.md).

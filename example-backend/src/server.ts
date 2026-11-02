@@ -572,9 +572,22 @@ export const start = async (
       );
     }
 
-    await seedDefaultDataOnBoot({isDeployed});
+    const isPrPreviewDatabase = Boolean(
+      process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
+    );
+
+    // PR preview deploys smoke-test /health before Cloud Run's startup budget; seed after listen.
+    if (!isPrPreviewDatabase) {
+      await seedDefaultDataOnBoot({isDeployed});
+    }
 
     const app = terraApp.start();
+
+    if (isPrPreviewDatabase) {
+      void seedDefaultDataOnBoot({isDeployed}).catch((error: unknown) => {
+        logger.error("PR preview default seed failed", {error});
+      });
+    }
 
     // A host-owned server takes traffic as soon as this returns, so finish the sync
     // indexes and startup migrations first instead of racing the first requests.

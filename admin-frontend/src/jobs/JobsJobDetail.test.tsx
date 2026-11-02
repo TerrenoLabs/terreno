@@ -3,7 +3,7 @@ import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_href: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
 }));

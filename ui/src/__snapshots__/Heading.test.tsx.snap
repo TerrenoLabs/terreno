@@ -163,7 +163,7 @@ exports[`Heading applies secondary color 1`] = `
   "props": {
     "numberOfLines": 0,
     "style": {
-      "color": undefined,
+      "color": "#092E3A",
       "fontFamily": "heading-bold",
       "fontSize": 16,
     },

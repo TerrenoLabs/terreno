@@ -7,7 +7,7 @@ import {blocksJsonSchema} from "./jsonSchema";
 import {parseBlocks} from "./parse";
 import {blocksSchema} from "./schema";
 
-const fixturesDir = join(import.meta.dir, "fixtures");
+const fixturesDir = join(__dirname, "fixtures");
 
 describe("blocksJsonSchema", () => {
   it("accepts and rejects the same parsed fixtures as the Zod schema", () => {

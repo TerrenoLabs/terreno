@@ -217,7 +217,7 @@ describe("useAdminRpc", () => {
 
   it("loads GET data, surfaces errors, and refetches", async () => {
     let calls = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       calls += 1;
       if (calls === 1) {
         return new Response(JSON.stringify({ok: true}), {
@@ -266,7 +266,7 @@ describe("useAdminRpc", () => {
   it("drops the previous body and reports loading when the URL changes", async () => {
     let gets = 0;
     let resolveNext: ((response: Response) => void) | undefined;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       gets += 1;
       if (gets > 1) {
         return await new Promise<Response>((resolve) => {
@@ -391,7 +391,7 @@ describe("useAdminRpc", () => {
 
   it("reports loading when returning to a URL before the other one finishes", async () => {
     let gets = 0;
-    globalThis.fetch = (async () => {
+    globalThis.fetch = (async (_url: string) => {
       gets += 1;
       if (gets > 1) {
         return await new Promise<Response>(() => undefined);

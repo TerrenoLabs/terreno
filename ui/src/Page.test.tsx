@@ -194,7 +194,7 @@ describe("Page", () => {
 
   it("renders with custom color", () => {
     const {toJSON} = renderWithTheme(
-      <Page color="secondary" navigation={mockNavigation}>
+      <Page color="secondaryDark" navigation={mockNavigation}>
         <Text>Content</Text>
       </Page>
     );

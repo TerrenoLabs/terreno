@@ -30,6 +30,7 @@ import {
 import {type AddRoutes, type AuthOptions, logRequests} from "./expressServer";
 import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./githubAuth";
 import {type LoggingOptions, logger, setupLogging} from "./logger";
+import {type McpRequestLogAppOption, resolveMcpRequestLogOption} from "./mcp/adminTracking";
 import {addMcpOAuthRoutes} from "./mcp/oauth";
 import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
@@ -150,6 +151,17 @@ export interface TerrenoAppOptions {
    * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
    */
   mcpOAuth?: McpOAuthAppOption;
+  /**
+   * Opt-in log of MCP tool calls for the admin panel. `true` keeps rows 30 days. Rows hold
+   * metadata only (tool, user, credential ids, duration, outcome, error class), never tool
+   * arguments, results, or error text. See [Manage MCP from the admin panel](../how-to/manage-mcp-in-admin.md).
+   */
+  mcpRequestLog?: McpRequestLogAppOption;
+  /**
+   * Opt-in MCP tool registry. When true, every tool is recorded in `McpToolSetting` at startup,
+   * and tools an admin switches off are hidden from `tools/list` and rejected by `tools/call`.
+   */
+  mcpToolSettings?: boolean;
   /**
    * Versioned MongoDB migrations. `runOnStart` defaults to false. When true, wet `up`
    * runs after listen and `ensureSyncIndexes`. Production still requires
@@ -562,6 +574,8 @@ export class TerrenoApp {
       betterAuth,
       mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
+      requestLog: resolveMcpRequestLogOption(options.mcpRequestLog),
+      toolSettings: options.mcpToolSettings === true,
       userModel: options.userModel,
     });
 

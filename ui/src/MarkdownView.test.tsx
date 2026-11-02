@@ -251,7 +251,7 @@ describe("MarkdownView", () => {
     const originalGetSize = Image.getSize;
     Image.getSize = mock((_uri: string, success: (width: number, height: number) => void): void => {
       success(1200, 800);
-    });
+    }) as unknown as typeof Image.getSize;
     try {
       const {toJSON} = renderWithTheme(
         <MarkdownView>

@@ -12,14 +12,14 @@ import {generateMigration, lastSchemaAfter} from "./generate";
 import {checkMigrationFiles} from "./load";
 
 const fixtures = (...parts: string[]): string => {
-  return join(import.meta.dir, "fixtures", ...parts);
+  return join(__dirname, "fixtures", ...parts);
 };
 
 const register = (name: string, schema: mongoose.Schema): mongoose.Model<mongoose.Document> => {
   if (mongoose.models[name]) {
     mongoose.deleteModel(name);
   }
-  return mongoose.model(name, schema);
+  return mongoose.model<mongoose.Document>(name, schema);
 };
 
 const makeModels = ({

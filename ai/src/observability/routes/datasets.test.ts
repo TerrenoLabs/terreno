@@ -2,7 +2,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import type express from "express";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsDataset} from "../local/models/obsDataset";
 import {registerObsDatasetItem} from "../local/models/obsDatasetItem";
@@ -32,7 +32,7 @@ describe("observability dataset routes", () => {
     await registerObsPromptLabel().deleteMany({});
     promptStore = new LocalPromptStore();
     const plugin = createLocalObservabilityPlugin();
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [plugin]}))
       .build();
   });

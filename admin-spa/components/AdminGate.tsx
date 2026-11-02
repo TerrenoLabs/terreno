@@ -1,11 +1,16 @@
 import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Spinner} from "@terreno/ui";
-import {usePathname, useRouter} from "expo-router";
-import React, {useEffect} from "react";
+import {useGlobalSearchParams, usePathname, useRouter} from "expo-router";
+import React, {useEffect, useMemo} from "react";
 import {useAppConfig} from "./AppConfigGate";
 import {AdminGateConfigProvider} from "./adminGateConfig";
-import {isForbiddenAdminConfigError} from "./adminGateUtils";
+import {
+  type AdminGateDecision,
+  buildRoutePath,
+  isForbiddenAdminConfigError,
+  resolveAdminGate,
+} from "./adminGateUtils";
 
 interface AdminRequestError {
   status?: number;
@@ -36,6 +41,7 @@ const LoadingScreen: React.FC = () => (
 export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const {appConfig} = useAppConfig();
   const {isAuthenticated, isLoading: isAuthLoading} = useSession();
 
@@ -59,47 +65,50 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
 
+  const currentPath = buildRoutePath({params: searchParams, pathname});
+  const decision = useMemo(
+    (): AdminGateDecision =>
+      resolveAdminGate({
+        currentPath,
+        isAdmin,
+        isAuthenticated,
+        isAuthLoading,
+        isConfigLoading,
+        isForbidden,
+        pathname,
+        returnTo: searchParams.returnTo,
+        status,
+      }),
+    [
+      currentPath,
+      isAdmin,
+      isAuthenticated,
+      isAuthLoading,
+      isConfigLoading,
+      isForbidden,
+      pathname,
+      searchParams.returnTo,
+      status,
+    ]
+  );
+
   // Drive redirects from auth + authorization state.
   useEffect(() => {
-    if (isAuthLoading) {
-      return;
+    if (decision.kind === "redirect") {
+      router.replace(decision.target);
     }
-    if (!isAuthenticated || status === 401) {
-      if (pathname !== "/login") {
-        router.replace("/login");
-      }
-      return;
-    }
-    if (isForbidden) {
-      if (pathname !== "/forbidden") {
-        router.replace("/forbidden");
-      }
-      return;
-    }
-    if (isAdmin && (pathname === "/login" || pathname === "/forbidden")) {
-      router.replace("/");
-    }
-  }, [isAuthLoading, isAuthenticated, isForbidden, isAdmin, status, pathname, router]);
+  }, [decision, router]);
 
-  if (isAuthLoading) {
+  if (decision.kind === "loading") {
     return <LoadingScreen />;
   }
-  if (!isAuthenticated || status === 401) {
-    return pathname === "/login" ? (
-      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
-    ) : (
-      <LoadingScreen />
-    );
-  }
-  if (isForbidden) {
-    return pathname === "/forbidden" ? (
-      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
-    ) : (
-      <LoadingScreen />
-    );
-  }
-  if (isConfigLoading) {
+  if (decision.kind === "redirect" && !decision.render) {
     return <LoadingScreen />;
   }
-  return <AdminGateConfigProvider config={config ?? null}>{children}</AdminGateConfigProvider>;
+  // Only a loaded config is shared; login, forbidden, and signed-in-only routes get none.
+  return (
+    <AdminGateConfigProvider config={isAdmin ? (config ?? null) : null}>
+      {children}
+    </AdminGateConfigProvider>
+  );
 };

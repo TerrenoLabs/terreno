@@ -1,0 +1,26 @@
+{
+  "description": "Terreno plugins at the latest stable release, installed from npm. For master, add TerrenoLabs/terreno instead.",
+  "name": "terreno-releases",
+  "owner": {
+    "name": "Terreno",
+    "email": "terreno@flourish.health"
+  },
+  "plugins": [
+    {
+      "description": "Combined Terreno lifecycle, app-building, documentation, deployment, and verification workflows.",
+      "name": "terreno",
+      "source": {
+        "package": "@terreno/agent-plugin",
+        "source": "npm"
+      }
+    },
+    {
+      "description": "Goal-driven code scans: charter a measurable goal, map-reduce the repository into findings, and drive each slice through the lifecycle.",
+      "name": "terreno-loop",
+      "source": {
+        "package": "@terreno/agent-plugin-loop",
+        "source": "npm"
+      }
+    }
+  ]
+}

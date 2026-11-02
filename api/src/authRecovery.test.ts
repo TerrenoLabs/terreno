@@ -8,7 +8,7 @@ import {MAX_PASSWORD_LENGTH} from "./auth";
 import {changeUserPassword} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
-import {setupDb, UserModel} from "./tests";
+import {authUserModel, setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
@@ -41,7 +41,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
   });
 
@@ -171,7 +171,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noLegacyAliasApp).post("/resetPassword").send({}).expect(404);
@@ -185,7 +185,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noPasswordResetApp).post("/auth/forgotPassword").send({}).expect(404);
@@ -200,7 +200,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noEmailVerificationApp).post("/auth/sendVerification").send({}).expect(404);
@@ -220,7 +220,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(bridgedApp)
@@ -322,7 +322,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const before = await AuthToken.countDocuments({});
     await supertest(noUrlApp)
@@ -359,7 +359,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     await supertest(consoleApp)
       .post("/auth/forgotPassword")
@@ -376,7 +376,7 @@ describe("password reset routes", () => {
           publicAppUrl: "https://app.example.com",
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: authUserModel,
       }).build();
       await supertest(consoleApp)
         .post("/auth/forgotPassword")
@@ -402,7 +402,7 @@ describe("changeUserPassword", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(app)
       .post("/auth/login")

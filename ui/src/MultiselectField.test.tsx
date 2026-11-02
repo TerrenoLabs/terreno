@@ -13,21 +13,31 @@ describe("MultiselectField", () => {
 
   it("renders correctly with default props", () => {
     const {toJSON} = renderWithTheme(
-      <MultiselectField onChange={() => {}} options={defaultOptions} title="Select items" />
+      <MultiselectField
+        onChange={() => {}}
+        options={defaultOptions}
+        title="Select items"
+        value={[]}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders title correctly", () => {
     const {getByText} = renderWithTheme(
-      <MultiselectField onChange={() => {}} options={defaultOptions} title="Choose options" />
+      <MultiselectField
+        onChange={() => {}}
+        options={defaultOptions}
+        title="Choose options"
+        value={[]}
+      />
     );
     expect(getByText("Choose options")).toBeTruthy();
   });
 
   it("renders all options", () => {
     const {getByText} = renderWithTheme(
-      <MultiselectField onChange={() => {}} options={defaultOptions} title="Title" />
+      <MultiselectField onChange={() => {}} options={defaultOptions} title="Title" value={[]} />
     );
     expect(getByText("Option A")).toBeTruthy();
     expect(getByText("Option B")).toBeTruthy();
@@ -98,6 +108,7 @@ describe("MultiselectField", () => {
         onChange={() => {}}
         options={defaultOptions}
         title="Title"
+        value={[]}
         variant="leftText"
       />
     );
@@ -110,6 +121,7 @@ describe("MultiselectField", () => {
         onChange={() => {}}
         options={defaultOptions}
         title="Title"
+        value={[]}
         variant="rightText"
       />
     );
@@ -123,6 +135,7 @@ describe("MultiselectField", () => {
         onChange={() => {}}
         options={defaultOptions}
         title="Title"
+        value={[]}
       />
     );
     expect(getByText("Please select at least one option")).toBeTruthy();
@@ -135,6 +148,7 @@ describe("MultiselectField", () => {
         onChange={() => {}}
         options={defaultOptions}
         title="Title"
+        value={[]}
       />
     );
     expect(getByText("Select all that apply")).toBeTruthy();

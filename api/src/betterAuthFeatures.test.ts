@@ -2,6 +2,7 @@ import {afterAll, describe, expect, it} from "bun:test";
 import {createVerify, generateKeyPairSync} from "node:crypto";
 import type {BetterAuthPlugin} from "better-auth";
 import {twoFactor} from "better-auth/plugins";
+import type {GoogleProfile} from "better-auth/social-providers";
 import express from "express";
 import {DateTime} from "luxon";
 import mongoose, {Schema} from "mongoose";
@@ -325,8 +326,8 @@ describe("signUp: closed", () => {
         socialProviders: {
           google: {
             getUserInfo: async () => ({
-              data: {sub: "google-sub"},
-              user: {email, emailVerified: true, id: "google-sub", name: "Google User"},
+              data: {sub: "google-sub"} as GoogleProfile,
+              user: {email, emailVerified: true, name: "Google User"},
             }),
             verifyIdToken: async () => true,
           },

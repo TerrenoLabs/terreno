@@ -6,7 +6,7 @@ import {Permissions} from "../../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../../plugins";
 import {setupDb} from "../../tests";
 import {getCompactedThroughSeq, SyncCounter, SyncScopeMove} from "../models";
-import {clearSyncRegistry, registerSync} from "../registry";
+import {clearSyncRegistry, registerSync, type SyncRegistryEntry} from "../registry";
 import {syncPlugin} from "../syncSeqPlugin";
 import {
   compactEntryTombstones,
@@ -228,7 +228,7 @@ describe("compactTombstones (C7 retention)", () => {
 });
 
 // Helper: re-register and return the entry (retentionDays override) for compactEntryTombstones.
-const clearSyncRegistryAndReRegister = (retentionDays: number) => {
+const clearSyncRegistryAndReRegister = (retentionDays: number): SyncRegistryEntry => {
   clearSyncRegistry();
   registerSync({
     config: {retentionDays, scope: {type: "owner"}},
@@ -241,7 +241,8 @@ const clearSyncRegistryAndReRegister = (retentionDays: number) => {
     collectionTag: "compactStuff",
     config: {retentionDays, scope: {type: "owner"} as const},
     modelName: CompactStuffModel.modelName,
-    options,
+    // The registry stores entries type-erased, as registerSync does.
+    options: options as unknown as ModelRouterOptions<unknown>,
     routePath: "/compactStuff",
   };
 };

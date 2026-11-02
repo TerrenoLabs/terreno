@@ -3,23 +3,23 @@ import {Writable} from "node:stream";
 import * as Sentry from "@sentry/bun";
 import mongoose, {Schema} from "mongoose";
 import winston from "winston";
-
+import type {User} from "../auth";
 import {winstonLogger} from "../logger";
 import {Permissions} from "../permissions";
 import {getCurrentRequestContext, runWithRequestContext} from "../requestContext";
 import {generateAllTools, generateToolsForEntry} from "./toolGenerator";
 import type {MCPRegistryEntry} from "./types";
 
-const createTestModel = () => {
+const createTestModel = (): mongoose.Model<unknown> => {
   try {
-    return mongoose.model("MCPToolGenTest");
+    return mongoose.model<unknown>("MCPToolGenTest");
   } catch {
     const schema = new Schema({
       completed: {default: false, description: "Whether the item is complete", type: Boolean},
       name: {description: "The name", required: true, type: String},
       ownerId: {description: "Owner", ref: "User", type: Schema.Types.ObjectId},
     });
-    return mongoose.model("MCPToolGenTest", schema);
+    return mongoose.model<unknown>("MCPToolGenTest", schema);
   }
 };
 
@@ -264,7 +264,11 @@ describe("tool-call observability", () => {
       },
     });
     const [tool] = generateToolsForEntry(entry);
-    const user = {_id: new mongoose.Types.ObjectId(), admin: false, id: "user-123"};
+    const user: User = {
+      _id: new mongoose.Types.ObjectId() as unknown as User["_id"],
+      admin: false,
+      id: "user-123",
+    };
 
     await runWithRequestContext({}, async () => {
       const result = await tool.handler({}, user);

@@ -101,6 +101,8 @@ jobs:
           PORT: "4000"
           MONGO_URI: mongodb://127.0.0.1/terreno-admin-spa-e2e?replicaSet=rs0
           ADMIN_SPA_ENABLED: "true"
+          MCP_OAUTH_ENABLED: "true"
+          PUBLIC_API_URL: http://localhost:4000
           AUTH_PROVIDER: better-auth
           BETTER_AUTH_URL: http://localhost:4000
           BETTER_AUTH_SECRET: ${{ env.SESSION_SECRET }}

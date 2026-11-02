@@ -16,6 +16,7 @@ import {
   Membership,
   Organization,
   orgScopedPlugin,
+  type PermissionSet,
   Permissions,
   registerSync,
   SyncApp,
@@ -116,7 +117,7 @@ const buildHarness = ({
         if (productHookTracker) {
           productHookTracker.preCreateCalls++;
         }
-        return productSyncOptions.preCreate(body, req);
+        return productSyncOptions.preCreate(body as Record<string, unknown>, req);
       },
       preUpdate: (body, _req) => {
         if (productHookTracker) {
@@ -522,7 +523,7 @@ const buildOrgWindowHarness = (): express.Application => {
   const accessControl = createAccess({
     connection: mongoose.connection,
     organizations: true,
-    resolvePermissions: async ({user}) => {
+    resolvePermissions: async ({user}): Promise<PermissionSet> => {
       if (user?.admin) {
         return {admin: ["access"], adminWindowOrgTodo: ["read", "write"]};
       }

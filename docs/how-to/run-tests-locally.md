@@ -11,7 +11,7 @@ section).
 ## Do now — prepush mirrors CI
 
 ```bash
-bun run prepush            # lint, compile, then every CI job this branch triggers
+bun run prepush            # compile, lint + typecheck, then every CI job this branch triggers
 bun run prepush --dry-run  # print the plan only
 bun run prepush --all      # every check, regardless of changed files
 ```
@@ -28,6 +28,20 @@ Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, D
 are listed at the end with the command to run by hand. A test in
 `scripts/ci/prepush/plan.test.ts` fails when the mapping gains a parameter that
 `prepush` neither runs nor lists.
+
+## Typecheck
+
+Every package has a `typecheck` script that runs `tsc` with its
+`tsconfig.typecheck.json`. That config extends the build `tsconfig.json`, emits
+nothing, and includes the test files the build excludes (`*.test.ts(x)`,
+`*.isolated.ts(x)`, `src/tests/**`). Root `bun run lint` ends with `bun run typecheck`.
+CircleCI runs it in the `typecheck` job beside `repo-policies`.
+
+```bash
+bun run compile                # typecheck reads workspace packages' dist types
+bun run typecheck              # every package
+cd ui && bun run typecheck     # one package
+```
 
 ## Package tests
 
@@ -57,12 +71,42 @@ bun test --only-failures <path>
 | `create-terreno-app-ci` | `cd create-terreno-app && bun run test:ci` |
 | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) | `cd <package> && bun run test:ci` |
 | `example-backend-ci` | `cd example-backend && bun run test:ci` |
+| `smoke` | `bun run smoke` (see [Package smokes](#package-smokes-smoke)) |
 | `example-frontend-ci` | `bun run frontend:test` |
 | `ui-demo-ci` | `cd demo && bun run test:ci` then `bun run check:demo-coverage` |
 | `new-file-coverage` | `bun run check:new-file-coverage --base=origin/master --threshold=90` |
 | `repo-policies` | `bun run prepush` (runs every repo-policies step) |
 
 Coverage gate for a published package: `cd <package> && bun run test:coverage`.
+
+## Package smokes (`smoke`)
+
+The CircleCI `smoke` job runs on any package change. It compiles the workspace, builds
+the admin-spa, demo, and example-frontend smoke web exports, installs Playwright Chromium, then runs every
+workspace `smoke` script against the job's replica-set Mongo sidecar
+(`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
+running it.
+
+`bun run smoke:local` runs every step below in order. Run them yourself to reuse builds:
+
+```bash
+bun run compile
+(cd admin-spa && bun run build:web) && (cd demo && bun run export)
+(cd example-frontend && bun run export:smoke)
+bunx playwright install --with-deps chromium   # once
+bun run smoke              # every package; prints each one's time, flags any over 30 s
+bun run smoke api rtk      # only these workspaces
+```
+
+A package over 30 s is flagged, not failed: the CircleCI `smoke` job's table judges the budget
+([smoke conventions](../testing/e2e.md#smoke-conventions)). If a browser smoke fails with
+`Executable doesn't exist`, the preinstalled Playwright browsers do not match the locked
+version; install Chromium with `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` set and run
+`bun run smoke` with the same variable.
+
+Without `TERRENO_TEST_MONGODB_URI`, a smoke that needs Mongo starts its own in-memory
+replica set. To reuse a local replica-set `mongod`, export
+`TERRENO_TEST_MONGODB_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0"` first.
 
 ## Playwright (example-frontend e2e)
 
@@ -180,6 +224,10 @@ bunx playwright install --with-deps chromium
 bun run test:e2e
 bun run test:integration    # needs Mongo + example-backend; job `admin-spa-integration`
 ```
+
+For `test:integration`, start example-backend with `ADMIN_SPA_ENABLED=true`,
+`AUTH_PROVIDER=better-auth`, and, for the MCP OAuth consent spec, `MCP_OAUTH_ENABLED=true` and
+`PUBLIC_API_URL=http://localhost:4000`. Without the last two the consent spec is skipped.
 
 ## Maestro web e2e
 

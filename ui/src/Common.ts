@@ -260,6 +260,16 @@ export interface BorderThemeConfig {
   warning: keyof ThemePrimitiveColors;
 }
 
+/** Maps form field (TextField, TextArea, SelectField, etc.) colors to primitives. */
+export interface FieldThemeConfig {
+  background: keyof ThemePrimitiveColors;
+  backgroundDisabled: keyof ThemePrimitiveColors;
+  border: keyof ThemePrimitiveColors;
+  borderFocus: keyof ThemePrimitiveColors;
+  borderError: keyof ThemePrimitiveColors;
+  borderDisabled: keyof ThemePrimitiveColors;
+}
+
 export interface StatusThemeConfig {
   active: keyof ThemePrimitiveColors;
   doNotDisturb: keyof ThemePrimitiveColors;
@@ -334,6 +344,22 @@ export interface BorderTheme {
   warning: string;
 }
 
+/** Computed form field colors: the input box background and border in each state. */
+export interface FieldTheme {
+  /** Input background when enabled. */
+  background: string;
+  /** Input background when disabled. */
+  backgroundDisabled: string;
+  /** Input border at rest. */
+  border: string;
+  /** Input border while focused. */
+  borderFocus: string;
+  /** Input border when the field has an error. */
+  borderError: string;
+  /** Input border when disabled. */
+  borderDisabled: string;
+}
+
 export interface StatusTheme {
   active: string;
   doNotDisturb: string;
@@ -377,6 +403,7 @@ export interface TerrenoTheme {
   text: TextTheme;
   surface: SurfaceTheme;
   border: BorderTheme;
+  field: FieldTheme;
   status: StatusTheme;
   radius: RadiusTheme;
   spacing: SpacingTheme;
@@ -389,6 +416,7 @@ export interface TerrenoThemeConfig {
   text: TextThemeConfig;
   surface: SurfaceThemeConfig;
   border: BorderThemeConfig;
+  field: FieldThemeConfig;
   status: StatusThemeConfig;
   radius: RadiusThemeConfig;
   spacing: SpacingThemeConfig;
@@ -1317,7 +1345,7 @@ export interface MetaProps {
 
 export interface ImageProps {
   alt?: string;
-  color: BoxColor;
+  color?: BoxColor;
   naturalHeight?: number;
   naturalWidth?: number;
   maxWidth?: number;
@@ -1595,36 +1623,39 @@ export interface AddressAutocompleteProps extends WithTestID {
   googlePlacesMobileStyles?: Styles;
 }
 
+/** Imperative methods exposed by an ActionSheet ref. */
+export interface ActionSheetHandle {
+  /**
+   * Open or close the ActionSheet.
+   */
+  setModalVisible(visible?: boolean): void;
+
+  /**
+   * Open the Action Sheet.
+   */
+  show(): void;
+
+  /**
+   * Close the ActionSheet.
+   */
+  hide(): void;
+
+  /**
+   * Attach this to any child ScrollView Component's onScrollEndDrag,
+   * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
+   * closing and bouncing back properly.
+   */
+  handleChildScrollEnd(): void;
+
+  /**
+   * Snap ActionSheet to given offset
+   */
+  snapToOffset(offset: number): void;
+}
+
 export interface ActionSheetProps extends WithTestID {
   children?: React.ReactNode;
-  ref?: React.MutableRefObject<{
-    /**
-     * Open or close the ActionSheet.
-     */
-    setModalVisible(visible?: boolean): void;
-
-    /**
-     * Open the Action Sheet.
-     */
-    show(): void;
-
-    /**
-     * Close the ActionSheet.
-     */
-    hide(): void;
-
-    /**
-     * Attach this to any child ScrollView Component's onScrollEndDrag,
-     * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
-     * closing and bouncing back properly.
-     */
-    handleChildScrollEnd(): void;
-
-    /**
-     * Snap ActionSheet to given offset
-     */
-    snapToOffset(offset: number): void;
-  }>;
+  ref?: React.Ref<ActionSheetHandle>;
   /**
    * Animate the opening and closing of ActionSheet.
 
@@ -3983,7 +4014,7 @@ export interface TableNumberProps {
   /**
    * The number to display in the text field.
    */
-  value: string;
+  value: string | number;
   /**
    * Callback to save the text field value.
    */
@@ -3992,7 +4023,7 @@ export interface TableNumberProps {
    * Numbers generally should be right aligned for ease of scanability.
    * @default "right"
    */
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export interface SliderProps extends HelperTextProps, ErrorTextProps {

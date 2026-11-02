@@ -195,6 +195,7 @@ const handleAuthorize = (req: IncomingMessage, url: URL, res: ServerResponse): v
   if (
     url.searchParams.get("client_id") !== CLIENT_ID ||
     url.searchParams.get("response_type") !== "code" ||
+    !redirectUri ||
     redirectUri !== REDIRECT_URI ||
     !state ||
     !url.searchParams.get("code_challenge") ||

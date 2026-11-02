@@ -242,7 +242,7 @@ describe("rbacRouter role assignment against a partially resolved target", () =>
     const access = createAccess({
       connection: mongoose.connection,
       // The signed-in actor may assign roles but does not hold user:delete.
-      resolvePermissions: async ({user}) =>
+      resolvePermissions: async ({user}): Promise<PermissionSet> =>
         String(user.id) === target.id ? {} : {rbac: ["read", "assignRoles"]},
       sources: [
         {

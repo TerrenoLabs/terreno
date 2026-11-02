@@ -1,8 +1,9 @@
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Heading, SocialLoginButton, Text, TextField} from "@terreno/ui";
-import {useRouter} from "expo-router";
+import {useLocalSearchParams, useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
 import {useAppConfig} from "../components/AppConfigGate";
+import {sanitizeReturnTo} from "../components/adminGateUtils";
 import {useAuthClient} from "../components/StoreProvider";
 
 type SocialProvider = "google" | "github" | "apple";
@@ -12,6 +13,9 @@ const LoginScreen: React.FC = () => {
   const {appConfig} = useAppConfig();
   const authClient = useAuthClient();
   const {refresh} = useSession();
+  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
+  // Only an in-app path is honored; anything else falls back to the admin home.
+  const safeReturnTo = sanitizeReturnTo(returnTo);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,8 +25,8 @@ const LoginScreen: React.FC = () => {
   // Resolve the new session now rather than waiting for Better Auth's session signal.
   const onSuccess = useCallback(async (): Promise<void> => {
     await refresh();
-    router.replace("/");
-  }, [refresh, router]);
+    router.replace(safeReturnTo ?? "/");
+  }, [refresh, router, safeReturnTo]);
 
   const handleEmailLogin = useCallback(async (): Promise<void> => {
     setError(undefined);

@@ -4,7 +4,7 @@ import type {LanguageModel} from "ai";
 import type express from "express";
 
 import {GptHistory} from "../models/gptHistory";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../tests/helpers";
 
 type StreamPart = {type: string; [key: string]: unknown};
 
@@ -13,32 +13,37 @@ type StreamPart = {type: string; [key: string]: unknown};
 let streamParts: StreamPart[] = [];
 let streamFiles: Array<{base64: string; mediaType: string}> = [];
 
-// Mock langfuseVercelAi to avoid transitive langfuse SDK imports.
-const realLangfuseVercelAi = await import("../langfuseVercelAi");
-mock.module("../langfuseVercelAi", () => ({
-  ...realLangfuseVercelAi,
-  createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-  preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-}));
+let addGptRoutes: typeof import("../routes/gpt.js").addGptRoutes;
+let AIService: typeof import("../service/aiService.js").AIService;
 
-// Mock the AI SDK so we control exactly which fullStream parts the GPT prompt
-// handler iterates over. All other exports are preserved so AIService and the
-// route helpers keep working.
-const realAi = await import("ai");
-mock.module("ai", () => ({
-  ...realAi,
-  streamText: () => ({
-    files: Promise.resolve(streamFiles),
-    fullStream: (async function* fullStream(): AsyncGenerator<StreamPart> {
-      for (const part of streamParts) {
-        yield part;
-      }
-    })(),
-  }),
-}));
+beforeAll(async () => {
+  // Mock langfuseVercelAi to avoid transitive langfuse SDK imports.
+  const realLangfuseVercelAi = await import("../langfuseVercelAi.js");
+  mock.module("../langfuseVercelAi", () => ({
+    ...realLangfuseVercelAi,
+    createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
+    preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
+  }));
 
-const {addGptRoutes} = await import("../routes/gpt");
-const {AIService} = await import("../service/aiService");
+  // Mock the AI SDK so we control exactly which fullStream parts the GPT prompt
+  // handler iterates over. All other exports are preserved so AIService and the
+  // route helpers keep working.
+  const realAi = await import("ai");
+  mock.module("ai", () => ({
+    ...realAi,
+    streamText: () => ({
+      files: Promise.resolve(streamFiles),
+      fullStream: (async function* fullStream(): AsyncGenerator<StreamPart> {
+        for (const part of streamParts) {
+          yield part;
+        }
+      })(),
+    }),
+  }));
+
+  ({addGptRoutes} = await import("../routes/gpt.js"));
+  ({AIService} = await import("../service/aiService.js"));
+});
 
 const createMockModel = () => ({
   doGenerate: mock(async () => ({
@@ -87,7 +92,7 @@ describe("GPT prompt streaming edge cases", () => {
         addGptRoutes(router, {aiService, openApiOptions: options});
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
   });
 

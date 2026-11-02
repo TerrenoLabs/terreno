@@ -231,14 +231,14 @@ export const OtpField: FC<OtpFieldProps> = ({
 
   const renderCell = (index: number): ReactElement => {
     const isFocused = focusedIndex === index;
-    let borderColor = theme.border.dark;
+    let borderColor = theme.field.border;
     let borderWidth = 1;
     if (errorText || invalid) {
-      borderColor = theme.border.error;
+      borderColor = theme.field.borderError;
       borderWidth = 2;
     }
     if (isFocused) {
-      borderColor = theme.border.focus;
+      borderColor = theme.field.borderFocus;
       borderWidth = 3;
     }
     return (
@@ -267,7 +267,7 @@ export const OtpField: FC<OtpFieldProps> = ({
         selectTextOnFocus
         style={
           {
-            backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
+            backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
             borderColor,
             borderRadius: 4,
             borderWidth,

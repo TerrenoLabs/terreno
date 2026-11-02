@@ -7,11 +7,12 @@ import {addEvaluationRoutes} from "./langfuseRoutesEvaluations";
 import {addPlaygroundRoutes} from "./langfuseRoutesPlayground";
 import {addPromptRoutes} from "./langfuseRoutesPrompts";
 import {addTraceRoutes} from "./langfuseRoutesTraces";
+import type {FakeLangfusePrompt} from "./tests/fakeLangfusePrompt";
 import {
   authAsUserWithCredentials,
   ensureTestUsers,
   type StandardAiTestUserRole,
-  UserModel,
+  terrenoUserModel,
 } from "./tests/helpers";
 
 const LANGFUSE_TEST_USERS = [
@@ -26,15 +27,17 @@ const authAsUser = async (appInstance: express.Application, type: StandardAiTest
 
 const scoreCreate = mock(() => {});
 const promptCreate = mock(async (_params: Record<string, unknown>) => ({}));
-const promptGet = mock(async (name: string) => ({
-  config: {temperature: 0.5},
-  labels: ["production"],
-  name,
-  prompt: "Hello {{name}}, welcome to {{place}}",
-  tags: ["tag"],
-  type: "text",
-  version: 1,
-}));
+const promptGet = mock(
+  async (name: string): Promise<FakeLangfusePrompt> => ({
+    config: {temperature: 0.5},
+    labels: ["production"],
+    name,
+    prompt: "Hello {{name}}, welcome to {{place}}",
+    tags: ["tag"],
+    type: "text",
+    version: 1,
+  })
+);
 const promptsList = mock(async () => ({
   data: [{name: "p1", versions: [1]}],
   meta: {limit: 20, page: 1, total: 1, totalPages: 1},
@@ -77,13 +80,15 @@ describe("Langfuse routes", () => {
 
     app = new TerrenoApp({
       configureApp: (router) => {
-        addPromptRoutes(router, "/admin/langfuse");
-        addTraceRoutes(router, "/admin/langfuse");
-        addPlaygroundRoutes(router, "/admin/langfuse");
-        addEvaluationRoutes(router, "/admin/langfuse", []);
+        // The route helpers only register handlers, which a Router supports as well.
+        const routes = router as unknown as express.Application;
+        addPromptRoutes(routes, "/admin/langfuse");
+        addTraceRoutes(routes, "/admin/langfuse");
+        addPlaygroundRoutes(routes, "/admin/langfuse");
+        addEvaluationRoutes(routes, "/admin/langfuse", []);
       },
       skipListen: true,
-      userModel: UserModel as unknown as TerrenoAppOptions["userModel"],
+      userModel: terrenoUserModel as unknown as TerrenoAppOptions["userModel"],
     }).build();
   });
 

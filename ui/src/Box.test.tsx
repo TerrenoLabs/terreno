@@ -8,7 +8,7 @@ import {Box} from "./Box";
 import {sharedResponsiveBreakpointStore} from "./ResponsiveBreakpoint";
 import {Skeleton, SkeletonCircle} from "./Skeleton";
 import {Text} from "./Text";
-import {renderWithTheme} from "./test-utils";
+import {findByHostType, renderWithTheme} from "./test-utils";
 
 // Skeletons are hidden from assistive tech, so queries opt in to hidden elements.
 const HIDDEN = {includeHiddenElements: true};
@@ -44,7 +44,7 @@ describe("Box", () => {
   describe("layout props", () => {
     it("should apply direction prop", () => {
       const {root} = renderWithTheme(<Box direction="column" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         display: "flex",
         flexDirection: "column",
@@ -153,7 +153,7 @@ describe("Box", () => {
 
     it("should apply flex grow", () => {
       const {root} = renderWithTheme(<Box flex="grow" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         display: "flex",
         flexGrow: 1,
@@ -163,7 +163,7 @@ describe("Box", () => {
 
     it("should apply flex shrink", () => {
       const {root} = renderWithTheme(<Box flex="shrink" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         display: "flex",
         flexShrink: 1,
@@ -172,7 +172,7 @@ describe("Box", () => {
 
     it("should apply flex none", () => {
       const {root} = renderWithTheme(<Box flex="none" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         display: "flex",
         flex: 0,
@@ -181,7 +181,7 @@ describe("Box", () => {
 
     it("should apply justifyContent", () => {
       const {root} = renderWithTheme(<Box justifyContent="center" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         justifyContent: "center",
       });
@@ -189,7 +189,7 @@ describe("Box", () => {
 
     it("should apply alignItems", () => {
       const {root} = renderWithTheme(<Box alignItems="center" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         alignItems: "center",
       });
@@ -197,7 +197,7 @@ describe("Box", () => {
 
     it("should apply alignContent", () => {
       const {root} = renderWithTheme(<Box alignContent="center" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         alignContent: "center",
       });
@@ -205,7 +205,7 @@ describe("Box", () => {
 
     it("should apply alignSelf", () => {
       const {root} = renderWithTheme(<Box alignSelf="center" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         alignSelf: "center",
       });
@@ -213,7 +213,7 @@ describe("Box", () => {
 
     it("should apply wrap", () => {
       const {root} = renderWithTheme(<Box wrap />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         alignItems: "flex-start",
         flexWrap: "wrap",
@@ -222,7 +222,7 @@ describe("Box", () => {
 
     it("should apply gap", () => {
       const {root} = renderWithTheme(<Box gap={4} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         gap: 16,
       });
@@ -232,7 +232,7 @@ describe("Box", () => {
   describe("spacing props", () => {
     it("should apply padding", () => {
       const {root} = renderWithTheme(<Box padding={4} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         padding: 16,
       });
@@ -240,7 +240,7 @@ describe("Box", () => {
 
     it("should apply paddingX", () => {
       const {root} = renderWithTheme(<Box paddingX={2} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         paddingLeft: 8,
         paddingRight: 8,
@@ -249,7 +249,7 @@ describe("Box", () => {
 
     it("should apply paddingY", () => {
       const {root} = renderWithTheme(<Box paddingY={3} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         paddingBottom: 12,
         paddingTop: 12,
@@ -258,7 +258,7 @@ describe("Box", () => {
 
     it("should apply margin", () => {
       const {root} = renderWithTheme(<Box margin={4} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         margin: 16,
       });
@@ -266,7 +266,7 @@ describe("Box", () => {
 
     it("should apply marginTop", () => {
       const {root} = renderWithTheme(<Box marginTop={2} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         marginTop: 8,
       });
@@ -274,7 +274,7 @@ describe("Box", () => {
 
     it("should apply marginBottom", () => {
       const {root} = renderWithTheme(<Box marginBottom={2} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         marginBottom: 8,
       });
@@ -282,7 +282,7 @@ describe("Box", () => {
 
     it("should apply marginLeft", () => {
       const {root} = renderWithTheme(<Box marginLeft={2} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         marginLeft: 8,
       });
@@ -290,7 +290,7 @@ describe("Box", () => {
 
     it("should apply marginRight", () => {
       const {root} = renderWithTheme(<Box marginRight={2} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         marginRight: 8,
       });
@@ -300,7 +300,7 @@ describe("Box", () => {
   describe("sizing props", () => {
     it("should apply width", () => {
       const {root} = renderWithTheme(<Box width={100} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         width: 100,
       });
@@ -308,7 +308,7 @@ describe("Box", () => {
 
     it("should apply height", () => {
       const {root} = renderWithTheme(<Box height={100} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         height: 100,
       });
@@ -316,7 +316,7 @@ describe("Box", () => {
 
     it("should apply string width", () => {
       const {root} = renderWithTheme(<Box width="50%" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         width: "50%",
       });
@@ -324,7 +324,7 @@ describe("Box", () => {
 
     it("should apply string height", () => {
       const {root} = renderWithTheme(<Box height="50%" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         height: "50%",
       });
@@ -334,7 +334,7 @@ describe("Box", () => {
   describe("position props", () => {
     it("should apply position absolute", () => {
       const {root} = renderWithTheme(<Box position="absolute" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         position: "absolute",
       });
@@ -342,7 +342,7 @@ describe("Box", () => {
 
     it("should apply top", () => {
       const {root} = renderWithTheme(<Box top />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         top: 0,
       });
@@ -350,7 +350,7 @@ describe("Box", () => {
 
     it("should apply bottom", () => {
       const {root} = renderWithTheme(<Box bottom />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         bottom: 0,
       });
@@ -358,7 +358,7 @@ describe("Box", () => {
 
     it("should apply left", () => {
       const {root} = renderWithTheme(<Box left />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         left: 0,
       });
@@ -366,7 +366,7 @@ describe("Box", () => {
 
     it("should apply right", () => {
       const {root} = renderWithTheme(<Box right />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         right: 0,
       });
@@ -374,7 +374,7 @@ describe("Box", () => {
 
     it("should apply zIndex", () => {
       const {root} = renderWithTheme(<Box zIndex={10} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         zIndex: 10,
       });
@@ -384,7 +384,7 @@ describe("Box", () => {
   describe("color and surface props", () => {
     it("should apply background color", () => {
       const {root} = renderWithTheme(<Box color="primary" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.backgroundColor).toBeDefined();
     });
   });
@@ -392,48 +392,48 @@ describe("Box", () => {
   describe("border props", () => {
     it("should apply border", () => {
       const {root} = renderWithTheme(<Box border="default" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderColor).toBeDefined();
       expect(view.props.style.borderWidth).toBe(1);
     });
 
     it("should apply borderTop", () => {
       const {root} = renderWithTheme(<Box borderTop="default" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderTopColor).toBeDefined();
       expect(view.props.style.borderTopWidth).toBe(1);
     });
 
     it("should apply borderBottom", () => {
       const {root} = renderWithTheme(<Box borderBottom="default" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderBottomColor).toBeDefined();
       expect(view.props.style.borderBottomWidth).toBe(1);
     });
 
     it("should apply borderLeft", () => {
       const {root} = renderWithTheme(<Box borderLeft="default" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderLeftColor).toBeDefined();
       expect(view.props.style.borderLeftWidth).toBe(1);
     });
 
     it("should apply borderRight", () => {
       const {root} = renderWithTheme(<Box borderRight="default" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderRightColor).toBeDefined();
       expect(view.props.style.borderRightWidth).toBe(1);
     });
 
     it("should adjust width for border", () => {
       const {root} = renderWithTheme(<Box border="default" width={100} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.width).toBe(104); // 100 + 2*2 for border
     });
 
     it("should adjust height for border", () => {
       const {root} = renderWithTheme(<Box border="default" height={100} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.height).toBe(104); // 100 + 2*2 for border
     });
   });
@@ -441,19 +441,19 @@ describe("Box", () => {
   describe("rounding props", () => {
     it("should apply rounding", () => {
       const {root} = renderWithTheme(<Box rounding="md" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderRadius).toBe(4);
     });
 
     it("should apply circle rounding with width", () => {
       const {root} = renderWithTheme(<Box rounding="circle" width={50} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderRadius).toBe(50);
     });
 
     it("should apply circle rounding with height", () => {
       const {root} = renderWithTheme(<Box height={50} rounding="circle" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderRadius).toBe(50);
     });
 
@@ -470,7 +470,7 @@ describe("Box", () => {
   describe("display props", () => {
     it("should apply display none", () => {
       const {root} = renderWithTheme(<Box display="none" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         display: "none",
       });
@@ -478,7 +478,7 @@ describe("Box", () => {
 
     it("should apply display flex", () => {
       const {root} = renderWithTheme(<Box display="flex" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         flex: undefined,
       });
@@ -486,7 +486,7 @@ describe("Box", () => {
 
     it("should apply display block", () => {
       const {root} = renderWithTheme(<Box display="block" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         flex: 0,
         flexDirection: "row",
@@ -497,7 +497,7 @@ describe("Box", () => {
   describe("overflow props", () => {
     it("should apply overflow scroll", () => {
       const {root} = renderWithTheme(<Box overflow="scroll" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         overflow: "scroll",
       });
@@ -505,7 +505,7 @@ describe("Box", () => {
 
     it("should apply overflow scrollY", () => {
       const {root} = renderWithTheme(<Box overflow="scrollY" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         overflow: "scroll",
       });
@@ -513,7 +513,7 @@ describe("Box", () => {
 
     it("should apply overflow hidden", () => {
       const {root} = renderWithTheme(<Box overflow="hidden" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         overflow: "hidden",
       });
@@ -523,13 +523,13 @@ describe("Box", () => {
   describe("shadow props", () => {
     it("should apply shadow", () => {
       const {root} = renderWithTheme(<Box shadow />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toBeDefined();
     });
 
     it("applies no shadow style when shadow is false", () => {
       const {root} = renderWithTheme(<Box shadow={false} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.boxShadow).toBeUndefined();
       expect(view.props.style.elevation).toBeUndefined();
     });
@@ -761,7 +761,7 @@ describe("Box", () => {
       );
 
       // RN Testing Library resolves host ScrollView by display name, not the JS class.
-      const scrollView = root.findByType("ScrollView");
+      const scrollView = findByHostType(root, "ScrollView");
       expect(scrollView.props.style).not.toHaveProperty("scrollRef");
       expect(scrollView.props.style).not.toHaveProperty("scroll");
       expect(scrollView.props.style).not.toHaveProperty("onScroll");
@@ -773,7 +773,7 @@ describe("Box", () => {
         <Box avoidKeyboard keyboardOffset={12} onLayout={mock(() => {})} testID="behavior-box" />
       );
 
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).not.toHaveProperty("onLayout");
       expect(view.props.style).not.toHaveProperty("avoidKeyboard");
       expect(view.props.style).not.toHaveProperty("keyboardOffset");
@@ -829,7 +829,7 @@ describe("Box", () => {
       renderWithTheme(<Box ref={ref} scroll />);
 
       expect(ref.current).toBeTruthy();
-      expect(typeof ref.current.scrollToEnd).toBe("function");
+      expect(typeof ref.current!.scrollToEnd).toBe("function");
     });
 
     it("should expose scrollTo method", () => {
@@ -837,7 +837,7 @@ describe("Box", () => {
       renderWithTheme(<Box ref={ref} scroll />);
 
       expect(ref.current).toBeTruthy();
-      expect(typeof ref.current.scrollTo).toBe("function");
+      expect(typeof ref.current!.scrollTo).toBe("function");
     });
 
     it("scrollTo forwards to the underlying scroll ref after the delay", async () => {
@@ -855,8 +855,8 @@ describe("Box", () => {
         </Box>
       );
 
-      ref.current.scrollTo(42);
-      ref.current.scrollToEnd();
+      ref.current!.scrollTo(42);
+      ref.current!.scrollToEnd();
 
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 80));
@@ -872,7 +872,7 @@ describe("Box", () => {
       const {root} = renderWithTheme(
         <Box dangerouslySetInlineStyle={{__style: {backgroundColor: "red"}}} />
       );
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         backgroundColor: "red",
       });
@@ -912,7 +912,7 @@ describe("Box", () => {
 
     it("should handle zero values", () => {
       const {root} = renderWithTheme(<Box gap={0} margin={0} padding={0} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         gap: 0,
         margin: 0,
@@ -1026,25 +1026,25 @@ describe("Box", () => {
 
     it("applies a valid maxHeight value", () => {
       const {root} = renderWithTheme(<Box maxHeight={120} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({maxHeight: 120});
     });
 
     it("applies a valid minHeight value", () => {
       const {root} = renderWithTheme(<Box minHeight={"50%"} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({minHeight: "50%"});
     });
 
     it("applies a valid maxWidth value", () => {
       const {root} = renderWithTheme(<Box maxWidth={200} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({maxWidth: 200});
     });
 
     it("applies a valid minWidth value", () => {
       const {root} = renderWithTheme(<Box minWidth={"25%"} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({minWidth: "25%"});
     });
 
@@ -1064,19 +1064,19 @@ describe("Box", () => {
 
     it("applies width with border adds 4 pixels", () => {
       const {root} = renderWithTheme(<Box border="default" width={100} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.width).toBe(104);
     });
 
     it("applies height with border adds 4 pixels", () => {
       const {root} = renderWithTheme(<Box border="default" height={80} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.height).toBe(84);
     });
 
     it("keeps an explicit alignItems when combined with wrap", () => {
       const {root} = renderWithTheme(<Box alignItems="center" wrap />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style).toMatchObject({
         alignItems: "center",
         flexWrap: "wrap",
@@ -1087,13 +1087,13 @@ describe("Box", () => {
       const {root} = renderWithTheme(
         <Box dangerouslySetInlineStyle={{__style: {backgroundColor: "red"}}} />
       );
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.backgroundColor).toBe("red");
     });
 
     it("handles rounding='circle' with width/height", () => {
       const {root} = renderWithTheme(<Box height={40} rounding="circle" width={40} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.borderRadius).toBe(40);
     });
 
@@ -1106,37 +1106,37 @@ describe("Box", () => {
 
     it("applies shadow on ios/web", () => {
       const {root} = renderWithTheme(<Box shadow />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.boxShadow).toBeDefined();
     });
 
     it("applies overflow='scroll'", () => {
       const {root} = renderWithTheme(<Box overflow="scroll" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.overflow).toBe("scroll");
     });
 
     it("applies overflow='scrollY'", () => {
       const {root} = renderWithTheme(<Box overflow="scrollY" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.overflow).toBe("scroll");
     });
 
     it("applies position='absolute'", () => {
       const {root} = renderWithTheme(<Box position="absolute" />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.position).toBe("absolute");
     });
 
     it("applies zIndex", () => {
       const {root} = renderWithTheme(<Box zIndex={10} />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.zIndex).toBe(10);
     });
 
     it("applies top/left/right/bottom offsets", () => {
       const {root} = renderWithTheme(<Box bottom left position="absolute" right top />);
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       expect(view.props.style.top).toBe(0);
       expect(view.props.style.left).toBe(0);
       expect(view.props.style.right).toBe(0);
@@ -1150,7 +1150,7 @@ describe("Box", () => {
           <Text>Scrollable</Text>
         </Box>
       );
-      const scrollView = root.findByType("ScrollView");
+      const scrollView = findByHostType(root, "ScrollView");
       await act(async () => {
         scrollView.props.onScroll?.({nativeEvent: {contentOffset: {y: 100}}});
       });
@@ -1165,7 +1165,7 @@ describe("Box", () => {
           <Text>Hover</Text>
         </Box>
       );
-      const view = root.findByType("View");
+      const view = findByHostType(root, "View");
       await act(async () => {
         await view.props.onPointerEnter?.();
       });
@@ -1264,7 +1264,15 @@ describe("Box", () => {
 
     it("ignores presses on a clickable Box while loading", () => {
       const onClick = mock(() => {});
-      const {getByTestId} = renderWithTheme(<Box loading onClick={onClick} testID="box" />);
+      const {getByTestId} = renderWithTheme(
+        <Box
+          accessibilityHint="Runs the box action"
+          accessibilityLabel="Box action"
+          loading
+          onClick={onClick}
+          testID="box"
+        />
+      );
       fireEvent.press(getByTestId("box-clickable"));
       expect(onClick).not.toHaveBeenCalled();
     });

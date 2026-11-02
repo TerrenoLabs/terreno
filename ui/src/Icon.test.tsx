@@ -25,7 +25,7 @@ describe("Icon", () => {
   });
 
   it("renders with different colors", () => {
-    const colors = ["primary", "secondary", "accent", "inverted", "error"] as const;
+    const colors = ["primary", "secondaryDark", "accent", "inverted", "error"] as const;
     colors.forEach((color) => {
       const {toJSON} = renderWithTheme(<Icon color={color} iconName="star" />);
       expect(toJSON()).toMatchSnapshot();
@@ -53,7 +53,7 @@ describe("Icon", () => {
   });
 
   it("renders different icon names", () => {
-    const icons = ["check", "x", "star", "heart", "user", "search"] as const;
+    const icons = ["check", "x", "star", "heart", "user", "magnifying-glass"] as const;
     icons.forEach((iconName) => {
       const {toJSON} = renderWithTheme(<Icon iconName={iconName} />);
       expect(toJSON()).toMatchSnapshot();

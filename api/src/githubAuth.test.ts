@@ -314,7 +314,7 @@ const invokeGitHubVerify = (
   if (!strategy) {
     throw new Error("github strategy not registered");
   }
-  return new Promise<{err: VerifyError | null; user: VerifiedUser}>((resolve) => {
+  return new Promise<{err: VerifyError | null; user?: VerifiedUser}>((resolve) => {
     const done = (err: VerifyError | null, user?: VerifiedUser) => resolve({err, user});
     strategy._verify(req, accessToken, refreshToken, profile, done);
   });
@@ -399,9 +399,9 @@ describe("GitHub strategy verify callback", () => {
     const result = await invokeGitHubVerify({}, "access", "refresh", profile);
     expect(result.err).toBeNull();
     expect(result.user).toBeDefined();
-    expect(result.user.githubId).toBe("gh-new-1");
-    expect(result.user.githubUsername).toBe("newghuser");
-    expect(result.user.email).toBe("new@example.com");
+    expect(result.user?.githubId).toBe("gh-new-1");
+    expect(result.user?.githubUsername).toBe("newghuser");
+    expect(result.user?.email).toBe("new@example.com");
   });
 
   it("logs in existing GitHub user", async () => {
@@ -423,7 +423,7 @@ describe("GitHub strategy verify callback", () => {
       username: "ghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).toBe(existingUser._id.toString());
+    expect(result.user?._id.toString()).toBe(existingUser._id.toString());
   });
 
   it("links GitHub to authenticated user when allowAccountLinking=true", async () => {
@@ -447,9 +447,9 @@ describe("GitHub strategy verify callback", () => {
       username: "linkedghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).toBe(existingUser._id.toString());
-    expect(result.user.githubId).toBe("gh-link-1");
-    expect(result.user.githubUsername).toBe("linkedghuser");
+    expect(result.user?._id.toString()).toBe(existingUser._id.toString());
+    expect(result.user?.githubId).toBe("gh-link-1");
+    expect(result.user?.githubUsername).toBe("linkedghuser");
   });
 
   it("does not treat an ambient req.user as a link target", async () => {
@@ -467,7 +467,7 @@ describe("GitHub strategy verify callback", () => {
       id: "gh-ambient-1",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).not.toBe(ambientUser._id.toString());
+    expect(result.user?._id.toString()).not.toBe(ambientUser._id.toString());
     const ambientRow = await GitHubTestUserModel.findById(ambientUser._id);
     expect(ambientRow?.githubId).toBeUndefined();
   });
@@ -547,8 +547,8 @@ describe("GitHub strategy verify callback", () => {
       username: "emailuserghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user.githubId).toBe("gh-email-link-1");
-    expect(result.user.email).toBe("emailuser@example.com");
+    expect(result.user?.githubId).toBe("gh-email-link-1");
+    expect(result.user?.email).toBe("emailuser@example.com");
   });
 
   it("rejects email-link when allowAccountLinking=false", async () => {

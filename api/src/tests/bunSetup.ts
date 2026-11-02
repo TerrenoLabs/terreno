@@ -12,7 +12,7 @@ if (useFixtureCache) {
   registerBackendPreload({
     connectMongoInBeforeAll: true,
     loadTestDataFromCache: async () => {
-      const {loadTestDataFromCache} = await import("./mongoTestSetup");
+      const {loadTestDataFromCache} = await import("./mongoTestSetup.js");
       await loadTestDataFromCache();
     },
     mongo: {

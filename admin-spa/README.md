@@ -22,7 +22,37 @@ does) remains supported and unchanged.
 Boot flow: `AppConfigGate` fetches `app-config.json` → `StoreProvider` builds the
 Better-Auth client and a same-origin request client and mounts `SessionProvider` from
 `@terreno/syncdb/auth` → `AdminGate` reads `useSession()` and redirects
-anonymous users to `/login` and non-admins (admin API returns 403) to `/forbidden`.
+anonymous users to `/login` and non-admins (admin API returns 403) to `/forbidden`,
+except on the signed-in-only MCP OAuth consent route.
+
+## MCP OAuth consent screen
+
+The SPA ships a consent screen for `@terreno/api`'s MCP OAuth flow at
+`${basePath}/oauth/consent`. A backend with no product frontend can point `consentUrl`
+at it:
+
+```typescript
+const issuer = "https://api.acme.com";
+
+new TerrenoApp({
+  userModel: User,
+  mcpOAuth: {consentUrl: `${issuer}/console/oauth/consent`, enabled: true, issuer},
+})
+  .register(new BetterAuthApp({config: betterAuthConfig, userModel: User}))
+  .register(new AdminSpaServeApp({basePath: "/console"}));
+```
+
+- Any signed-in user can open it, not only admins. The admin gate and admin bootstrapping
+  (sync client, org context) are skipped on this route.
+- A signed-out user goes to `/login?returnTo=/oauth/consent?request=<id>` and comes back
+  after sign-in. `returnTo` must be an in-app path (`/` but not `//`, no `\`, no scheme,
+  no whitespace); anything else is ignored.
+- The screen calls `GET /oauth/authorize/:request` and `POST .../approve` or `.../deny`
+  with the same-origin Better Auth session cookie, then sends the browser to the returned
+  `redirectUrl`. It shows the client name, the redirect host, the requested scope, and the
+  signed-in email, plus states for a missing `request`, expired (400), already decided (409),
+  not found (404), and other errors.
+- Keep the `/console` part of `consentUrl` equal to `basePath`.
 
 ## Install
 
@@ -111,7 +141,7 @@ bun run compile      # compile the server plugin (src/ -> src/dist, CommonJS)
 bun run build:web    # produce the static export in dist/
 bun run dev          # expo start --web for local SPA development
 bun run test:ci      # serve-plugin unit tests (supertest)
-bun run smoke        # backend-free smoke over the built dist/
+bun run smoke        # backend-free smoke: compiled serve plugin + built dist/
 bun run test:e2e     # Playwright e2e (anonymous -> login) over the built dist/
 ```
 

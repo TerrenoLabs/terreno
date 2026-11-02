@@ -5,6 +5,14 @@ import type {AddressInterface} from "./Common";
 import {renderWithTheme} from "./test-utils";
 import {WebAddressAutocomplete} from "./WebAddressAutocomplete";
 
+interface PlaceResult {
+  address_components: {
+    long_name: string;
+    short_name: string;
+    types: string[];
+  }[];
+}
+
 describe("WebAddressAutocomplete", () => {
   const defaultProps = {
     handleAddressChange: () => {},
@@ -51,14 +59,6 @@ describe("WebAddressAutocomplete", () => {
   });
 
   describe("with Google Maps available", () => {
-    interface PlaceResult {
-      address_components: {
-        long_name: string;
-        short_name: string;
-        types: string[];
-      }[];
-    }
-
     interface GoogleMapsWindow {
       google?: {
         maps?: {
@@ -80,7 +80,7 @@ describe("WebAddressAutocomplete", () => {
       document?: MinimalDocument;
     }
 
-    const testGlobal = globalThis as TestGlobals;
+    const testGlobal = globalThis as unknown as TestGlobals;
     const originalWindow = testGlobal.window;
     const originalDocument = testGlobal.document;
 
@@ -207,7 +207,7 @@ describe("WebAddressAutocomplete", () => {
       document?: MinimalDocument;
     }
 
-    const testGlobal = globalThis as TestGlobals;
+    const testGlobal = globalThis as unknown as TestGlobals;
     const originalWindow = testGlobal.window;
     const originalDocument = testGlobal.document;
 
@@ -468,7 +468,7 @@ describe("WebAddressAutocomplete", () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
-      const win = (globalThis as Record<string, Record<string, unknown>>).window;
+      const win = (globalThis as unknown as Record<string, Record<string, unknown>>).window;
       expect(win.initAutocomplete).toBeDefined();
 
       unmount();
@@ -502,7 +502,7 @@ describe("WebAddressAutocomplete", () => {
         }),
       }));
 
-      const win = (globalThis as Record<string, Record<string, unknown>>).window;
+      const win = (globalThis as unknown as Record<string, Record<string, unknown>>).window;
       win.google = {
         maps: {places: {Autocomplete: autocompleteConstructor}},
       };

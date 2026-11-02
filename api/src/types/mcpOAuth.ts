@@ -154,6 +154,11 @@ interface McpOAuthTokenStatics
   /** Revoke every family issued to this client. */
   revokeClient: (this: McpOAuthTokenModel, clientId: string) => Promise<void>;
   revokeFamily: (this: McpOAuthTokenModel, familyId: string) => Promise<void>;
+  /** Revoke every active token family the user holds. Returns how many families were revoked. */
+  revokeAllForUser: (
+    this: McpOAuthTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ) => Promise<number>;
   verifyAccessToken: (
     this: McpOAuthTokenModel,
     token: string

@@ -5,7 +5,7 @@ import {join} from "node:path";
 import {BLOCK_ERROR_CODES, BLOCK_WARNING_CODES} from "./errors";
 
 const reference = readFileSync(
-  join(import.meta.dir, "..", "..", "docs", "reference", "blocks.md"),
+  join(__dirname, "..", "..", "docs", "reference", "blocks.md"),
   "utf8"
 );
 

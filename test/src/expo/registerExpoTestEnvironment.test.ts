@@ -56,9 +56,11 @@ const environment = registerExpoTestEnvironment({
 // The backend preload this package runs under resets TZ in its own hooks, so read it now.
 const envAtRegistration = {EXPO_OS: process.env.EXPO_OS, TZ: process.env.TZ};
 
+type StubEventEmitter = new () => {addListener: () => {remove: () => void}};
+
 const testGlobals = globalThis as typeof globalThis & {
   __DEV__?: boolean;
-  expo?: {EventEmitter: new () => {addListener: () => {remove: () => void}}};
+  expo?: {EventEmitter: StubEventEmitter};
   IS_REACT_ACT_ENVIRONMENT?: boolean;
 };
 
@@ -75,7 +77,9 @@ describe("registerExpoTestEnvironment", () => {
     expect(envAtRegistration).toEqual({EXPO_OS: "ios", TZ: "America/New_York"});
     expect(testGlobals.__DEV__).toBe(true);
     expect(testGlobals.IS_REACT_ACT_ENVIRONMENT).toBe(true);
-    const emitter = new (testGlobals.expo as NonNullable<typeof testGlobals.expo>).EventEmitter();
+    // Read through the stub's shape; the expo-modules-core global types EventEmitter differently.
+    const {EventEmitter} = testGlobals.expo as unknown as {EventEmitter: StubEventEmitter};
+    const emitter = new EventEmitter();
     expect(typeof emitter.addListener().remove).toBe("function");
   });
 
@@ -91,7 +95,10 @@ describe("registerExpoTestEnvironment", () => {
   });
 
   it("passes expoConfig and scheme to expo-constants and expo-linking", async () => {
-    const constants = (await import("expo-constants")).default;
+    // Under CommonJS interop the typed default is the module namespace, not the Constants object.
+    const constants = (
+      (await import("expo-constants")) as {default: {expoConfig?: {extra?: unknown}}}
+    ).default;
     expect(constants.expoConfig?.extra).toEqual({AUTH_DEBUG: true});
     const linking = await import("expo-linking");
     expect(linking.createURL("/todos", {queryParams: {id: "1"}})).toBe("terrenotest://todos?id=1");
@@ -114,9 +121,9 @@ describe("registerExpoTestEnvironment", () => {
   it("re-registers a default mock with restoreModuleMock", async () => {
     // isolation-safe: overrides this environment's own mock; restoreModuleMock puts it back below
     mock.module("expo-splash-screen", () => ({hideAsync: (): string => "suite mock"}));
-    expect((await import("expo-splash-screen")).hideAsync()).toBe("suite mock");
+    expect<unknown>((await import("expo-splash-screen")).hideAsync()).toBe("suite mock");
     environment.restoreModuleMock("expo-splash-screen");
-    expect(await (await import("expo-splash-screen")).hideAsync()).toBe(true);
+    expect<unknown>(await (await import("expo-splash-screen")).hideAsync()).toBe(true);
   });
 
   it("refuses to restore a module it does not mock", () => {
@@ -137,7 +144,7 @@ describe("registerExpoTestEnvironment", () => {
       // isolation-safe: overrides this environment's own mock; cleanup.restoreModules restores it
       mock.module("expo-clipboard", () => ({getStringAsync: (): string => "suite mock"}));
       expect(target.read()).toBe("spied");
-      expect((await import("expo-clipboard")).getStringAsync()).toBe("suite mock");
+      expect<unknown>((await import("expo-clipboard")).getStringAsync()).toBe("suite mock");
     });
 
     it("puts it back before the next test", async () => {

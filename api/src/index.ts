@@ -82,6 +82,11 @@ export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
 export {
+  type McpRequestLogAppOption,
+  type ResolvedMcpRequestLogOptions,
+  resolveMcpRequestLogOption,
+} from "./mcp/adminTracking";
+export {
   extractAuthFromHeaders,
   extractUserFromHeaders,
   type MCPAuthContext,
@@ -146,7 +151,9 @@ export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
 export {McpOAuthClient} from "./models/mcpOAuthClient";
 export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
 export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
+export {McpRequestLog} from "./models/mcpRequestLog";
 export * from "./models/mcpServiceToken";
+export {McpToolSetting} from "./models/mcpToolSetting";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
 export * from "./models/versionConfig";
@@ -325,6 +332,7 @@ export * from "./terrenoPlugin";
 export * from "./transformers";
 export * from "./types/consentForm";
 export * from "./types/consentResponse";
+export type * from "./types/mcpAdmin";
 export type {
   McpOAuthAuthorizationDocument,
   McpOAuthAuthorizationStatus,

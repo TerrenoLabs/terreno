@@ -26,6 +26,11 @@ export interface McpServiceTokenStatics
     this: McpServiceTokenModel,
     user: {_id: {toString(): string}; tokenEpoch?: number}
   ) => Promise<void>;
+  /** Revoke every active service token the user holds. Returns how many were revoked. */
+  revokeAllForUser: (
+    this: McpServiceTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ) => Promise<number>;
   revokeForUser: (
     this: McpServiceTokenModel,
     user: {_id: {toString(): string}},

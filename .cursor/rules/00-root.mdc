@@ -85,7 +85,8 @@ bun run bootstrap        # Install dependencies + compile all packages (dev-read
 bun run bootstrap:update # Reinstall + recompile after pulling changes or switching branches
 bun install              # Install dependencies
 bun run compile          # Compile all packages
-bun run lint             # Lint all packages
+bun run lint             # Lint all packages (ends with typecheck)
+bun run typecheck        # Typecheck all packages, src + tests (run compile first)
 bun run lint:fix         # Fix lint issues
 bun run test             # Run all workspace test suites
 bun run test:agent       # Run all tests with passing cases suppressed
@@ -124,6 +125,28 @@ Knip has no baseline: every finding must be fixed or documented as a narrow exce
 keeps a ratcheted baseline; run `bun run analyze:dependency-baseline` only after reviewing
 an intentional repository-wide dependency-graph change. See
 `docs/explanation/static-analysis.md`.
+
+## Testing conventions
+
+Lifecycle skills read this table to find the e2e guide, the manual regression suites,
+and the smoke command. Terreno uses the planning plugin's default paths and declares
+`bun run smoke:local` as its smoke command: it builds what the smokes test, then runs `bun run smoke`.
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke:local |
+
+## User guide conventions
+
+Lifecycle skills read this table to find the end-user guide that chat agents read to
+answer "how do I…" questions. Terreno keeps the guide for the example app at the planning
+plugin's default path. Set the value to `none — <reason>` to opt a repository out.
+
+| Key | Value |
+| --- | --- |
+| User guide | docs/user-guide/ |
 
 ## How the Packages Work Together
 

@@ -13,6 +13,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {AdminGate} from "../components/AdminGate";
 import {AppConfigGate, useAppConfig} from "../components/AppConfigGate";
 import {useAdminGateConfig} from "../components/adminGateConfig";
+import {isSignedInOnlyRoute} from "../components/adminGateUtils";
 import {StoreProvider, useAuthClient} from "../components/StoreProvider";
 import {
   createAdminSpaSyncDbConfig,
@@ -148,6 +149,18 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
 };
 
 /**
+ * Signed-in-only routes (MCP OAuth consent) render without the admin providers, so a
+ * non-admin never starts the admin sync client or the admin org context.
+ */
+const AdminChrome: React.FC<{children: React.ReactNode}> = ({children}) => {
+  const pathname = usePathname();
+  if (isSignedInOnlyRoute(pathname)) {
+    return children;
+  }
+  return <AdminProviderBridge>{children}</AdminProviderBridge>;
+};
+
+/**
  * Provider order:
  * - AppConfigGate (outermost): loads app-config.json before anything else, since the
  *   auth client is built from it.
@@ -156,9 +169,10 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
  * - TerrenoProvider: theme/toast context.
  * - AdminProvider (cookie-bound): the same-origin fetch client AdminGate uses for
  *   `/admin/config`. AdminProviderBridge nests a second AdminProvider with syncDb.
- * - AdminGate (innermost): session + admin authorization, gating the route Stack. It
- *   shares the loaded config with AdminProviderBridge, which picks the syncDb provider
- *   from it on first render so the Stack mounts once.
+ * - AdminGate: session + admin authorization, gating the route Stack. It shares the loaded
+ *   config with AdminProviderBridge, which picks the syncDb provider from it on first render
+ *   so the Stack mounts once.
+ * - AdminChrome (innermost): admin providers, skipped on signed-in-only routes.
  */
 const RootLayout: React.FC = () => {
   return (
@@ -167,9 +181,9 @@ const RootLayout: React.FC = () => {
         <TerrenoProvider>
           <AdminProvider credentials="same-origin" routeBase="">
             <AdminGate>
-              <AdminProviderBridge>
+              <AdminChrome>
                 <Stack screenOptions={{headerShown: false}} />
-              </AdminProviderBridge>
+              </AdminChrome>
             </AdminGate>
           </AdminProvider>
         </TerrenoProvider>

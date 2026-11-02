@@ -176,7 +176,7 @@ describe("stripAdminBodyFields", () => {
       {internal: "n", role: "admin", slug: "fixed", title: "x"},
       admin
     );
-    expect(result).toEqual({title: "x"});
+    expect<unknown>(result).toEqual({title: "x"});
   });
 
   it("strips keys from every object in an array body and leaves non-objects alone", () => {

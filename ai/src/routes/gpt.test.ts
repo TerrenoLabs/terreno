@@ -51,7 +51,13 @@ import {
   toolNamesOf,
   USER_PROMPT,
 } from "../tests/chatHarness";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {
+  authAsUser,
+  ensureTestUsers,
+  historyRouterOptions,
+  terrenoUserModel,
+  UserModel,
+} from "../tests/helpers";
 import type {GptHistoryDocument} from "../types";
 import {addGptRoutes} from "./gpt";
 import {addGptHistoryRoutes} from "./gptHistories";
@@ -2840,7 +2846,7 @@ describe("/gpt/prompt asks", () => {
             asks: true,
           };
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             chat,
             responseHandler: async (value) => {
               const history = (value as GptHistoryDocument).toObject();
@@ -2850,7 +2856,7 @@ describe("/gpt/prompt asks", () => {
           addGptRoutes(router, chat);
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const historyId = await pauseOnPlanAsk(agent);
@@ -2894,7 +2900,7 @@ describe("/gpt/prompt asks", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             openApiOverwrite: {
               create: {summary: "Start a conversation"},
               update: {requestBody: {description: "The fields to change"}},
@@ -2902,7 +2908,7 @@ describe("/gpt/prompt asks", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
 
@@ -2920,12 +2926,12 @@ describe("/gpt/prompt asks", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             preUpdate: (body) => ({...body, title: `${body.title} (edited)`}) as GptHistoryDocument,
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const created = await agent
@@ -2980,13 +2986,14 @@ const STEPPER_HOST_ACTIONS = {
   scaleStepper: {handles: "stepper" as const},
 };
 
-const blocksEventOf = (
-  events: Record<string, unknown>[]
-): {errors: {code: string; path: string}[]; ok: boolean} =>
-  events.find((event) => "blocks" in event)?.blocks as {
-    errors: {code: string; path: string}[];
-    ok: boolean;
-  };
+interface BlocksEvent {
+  errors: {code: string; path: string}[];
+  ok: boolean;
+  warnings?: unknown[];
+}
+
+const blocksEventOf = (events: Record<string, unknown>[]): BlocksEvent =>
+  events.find((event) => "blocks" in event)?.blocks as BlocksEvent;
 
 describe("/gpt/prompt uiBlocks", () => {
   beforeAll(async () => {

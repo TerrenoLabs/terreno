@@ -61,11 +61,11 @@ export interface TerrenoVertexProvider {
   /** Configured allow-list (`undefined` means all models are allowed). */
   allowedModels?: string[];
   /** Resolve an image model, enforcing the allow-list. Throws `APIError(400)` when disallowed. */
-  imageModel: (modelId: string) => ImageModel;
+  imageModel: (modelId: string) => ImageModel | ImageModelV4;
   /** Returns true when the model id is permitted by the configured allow-list. */
   isModelAllowed: (modelId: string) => boolean;
   /** Resolve a language model, enforcing the allow-list. Throws `APIError(400)` when disallowed. */
-  languageModel: (modelId: string) => LanguageModel;
+  languageModel: (modelId: string) => LanguageModel | LanguageModelV4;
   /** Configured Vertex location. */
   location: string;
   /** Configured GCP project id. */
@@ -232,9 +232,10 @@ export const createVertexProvider = (
 
   return {
     allowedModels,
-    imageModel: (modelId: string): ImageModel => raw.image(assertAllowed(modelId)),
+    imageModel: (modelId: string): ImageModel | ImageModelV4 => raw.image(assertAllowed(modelId)),
     isModelAllowed: (modelId: string): boolean => isVertexModelAllowed(modelId, allowedModels),
-    languageModel: (modelId: string): LanguageModel => raw(assertAllowed(modelId)),
+    languageModel: (modelId: string): LanguageModel | LanguageModelV4 =>
+      raw(assertAllowed(modelId)),
     location,
     project,
     raw,

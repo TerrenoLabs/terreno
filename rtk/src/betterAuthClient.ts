@@ -380,7 +380,7 @@ type FeaturePlugin<
  */
 export type BetterAuthFeaturePlugins<Features extends BetterAuthClientFeatures> = [
   ...FeaturePlugin<Features, "twoFactor", ReturnType<typeof twoFactorClient>>,
-  ...FeaturePlugin<Features, "passkey", ReturnType<typeof passkeyClient>>,
+  ...FeaturePlugin<Features, "passkey", BetterAuthClientPlugin>,
   ...FeaturePlugin<Features, "multiSession", ReturnType<typeof multiSessionClient>>,
   ...FeaturePlugin<Features, "lastLoginMethod", ReturnType<typeof lastLoginMethodClient>>,
   ...FeaturePlugin<Features, "oneTimeToken", ReturnType<typeof oneTimeTokenClient>>,
@@ -402,6 +402,10 @@ export type BetterAuthClient = ReactAuthClient<{
  *
  * The expo plugin is left out of the type: it is typed only as a generic plugin (see
  * createBetterAuthClient), which would widen every namespace to `any`. It adds only `getCookie`.
+ *
+ * Passkey is typed as {@link BetterAuthClientPlugin} because `@better-auth/passkey` client
+ * factories can lag `BetterAuthClientOptions` after Better Auth minor bumps; runtime uses the
+ * same cast as in {@link createBetterAuthClient}.
  */
 export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
   ReactAuthClient<{

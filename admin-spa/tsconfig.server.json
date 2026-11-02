@@ -13,5 +13,5 @@
     "types": ["node"]
   },
   "exclude": ["node_modules", "src/dist", "src/**/*.test.ts"],
-  "include": ["src/index.ts", "src/serve.ts", "src/appConfig.ts"]
+  "include": ["src/index.ts", "src/serve.ts", "src/appConfig.ts", "src/serverContext.ts", "src/routesManifest.ts"]
 }

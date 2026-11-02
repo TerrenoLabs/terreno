@@ -18,6 +18,7 @@
     "expo-network": "catalog:",
     "expo-router": "catalog:",
     "expo-secure-store": "catalog:",
+    "expo-server": "catalog:",
     "expo-splash-screen": "catalog:",
     "expo-status-bar": "catalog:",
     "express": "catalog:",

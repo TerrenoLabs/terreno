@@ -82,7 +82,12 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   }, [isAuthLoading, isAuthenticated, isForbidden, isAdmin, status, pathname, router]);
 
   if (isAuthLoading) {
-    return <LoadingScreen />;
+    // The server-rendered login form stays on screen while the session resolves.
+    return pathname === "/login" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (!isAuthenticated || status === 401) {
     return pathname === "/login" ? (

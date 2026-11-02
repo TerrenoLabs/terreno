@@ -221,7 +221,9 @@
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "e2e/serveTestApp.ts",
         "jspdf-native-stub.js",
-        "src/isolated/**/*.isolated.{ts,tsx}"
+        "src/isolated/**/*.isolated.{ts,tsx}",
+        // Test-only helper: writes a stub expo-server `dist/server` build for the SSR serve tests.
+        "src/testing/ssrStubBuild.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

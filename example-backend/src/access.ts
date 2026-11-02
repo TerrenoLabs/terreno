@@ -1,3 +1,4 @@
+import {mcpAdminStatements} from "@terreno/admin-backend";
 import {
   ADMIN_MODEL_ACCESS,
   createAccess,
@@ -14,7 +15,7 @@ export const appStatements = {
   ...terrenoStatements,
   adminAuditEvent: ["list", "read"],
   adminAuditLog: ["list", "read"],
-  adminMcpServiceToken: ADMIN_MODEL_ACCESS,
+  ...mcpAdminStatements,
   adminProject: ADMIN_MODEL_ACCESS,
   adminScreen: ["showcase", "syncLab"],
   adminTodo: ADMIN_MODEL_ACCESS,

@@ -64,6 +64,10 @@ Booting with an issuer that has a path, a consent URL that is not a URL, or regi
 
 ## 2. Host the consent screen
 
+If the backend serves `@terreno/admin-spa` (`AdminSpaServeApp`), it already has one: set `consentUrl` to `${issuer}/console/oauth/consent` (use your `basePath` if it is not `/console`) and skip to step 3. Any signed-in user can approve there, and the page uses the Better Auth session cookie. See [admin-spa reference](../reference/admin-spa.md#mcp-oauth-consent-route).
+
+To build your own page instead:
+
 The client sends the user's browser to `/oauth/authorize`. Terreno checks the client, redirect URI, and PKCE, stores a pending request, and redirects to `consentUrl?request=<id>`. Your page:
 
 1. Makes sure the user is signed in (send them through login and back if not, keeping `request`).
@@ -183,3 +187,5 @@ Refresh tokens rotate on every use. If an old refresh token comes back, Terreno 
 - Tokens, codes, and refresh tokens are stored as SHA-256 hashes.
 - Registration, authorize, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
 - If a browser-based client (such as the MCP Inspector) runs discovery from another origin, allow that origin in `corsOrigin`.
+
+To put `/mcp` on the public internet behind a Cloudflare Tunnel, see [Expose an MCP server safely](expose-mcp-server-safely.md).

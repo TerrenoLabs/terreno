@@ -263,7 +263,8 @@
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "e2e/serveTestApp.ts",
-        "jspdf-native-stub.js"
+        "jspdf-native-stub.js",
+        "src/isolated/**/*.isolated.{ts,tsx}"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

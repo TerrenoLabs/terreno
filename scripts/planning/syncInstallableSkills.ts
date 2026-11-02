@@ -103,6 +103,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "update-dependencies",
       "upgrading-terreno",
       "deploy-gcp",
+      "bootstrap-mcp-server",
       "deploy-vercel",
       "set-up-social-login",
     ],

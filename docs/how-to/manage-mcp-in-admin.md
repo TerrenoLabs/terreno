@@ -22,7 +22,7 @@ new TerrenoApp({
 ```
 
 - The request log stores one row per `tools/call`: tool, user, credential type, service token or OAuth client, duration, outcome, and the error class when the tool threw. It never stores tool arguments, results, or error messages, so it is safe for apps that handle personal data. Rows are deleted after `retentionDays`.
-- The tool registry records every tool at startup. An admin can switch a tool off; it then disappears from `tools/list` and `tools/call` rejects it, for every user and client, on the next request.
+- The tool registry records every tool at startup. An admin can switch a tool off; it then disappears from `tools/list` and `tools/call` rejects it, for every user and client. The process that saved the switch applies it on the next request; other server instances apply it within 5 seconds. If the settings read fails, the server keeps the last switches it read, and refuses MCP requests when it has none.
 
 ## 2. Register the screens and script
 
@@ -30,12 +30,12 @@ new TerrenoApp({
 import {AdminApp, mcpAdminModels, mcpAdminScripts} from "@terreno/admin-backend";
 
 new AdminApp({
-  models: [...appAdminModels, ...mcpAdminModels()],
+  models: [...appAdminModels, ...mcpAdminModels({requestLog: true, toolSettings: true})],
   scripts: [...appScripts, ...mcpAdminScripts()],
 });
 ```
 
-Pass `mcpAdminModels({requestLog: false, toolSettings: false})` if you left either option off in step 1.
+Set `requestLog` and `toolSettings` to match the `TerrenoApp` options from step 1. Both default to `false`, like the server options: a request log screen with logging off stays empty, and tool switches with `mcpToolSettings` off do nothing.
 
 With RBAC (`AdminApp({accessControl})`), add the statements and grant them to the roles that run MCP:
 

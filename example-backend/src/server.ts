@@ -511,7 +511,7 @@ export const start = async (
           ],
           home: exampleAdminHome,
           migrations: {dir: resolveExampleMigrationsDir()},
-          models: mcpAdminModels(),
+          models: mcpAdminModels({requestLog: true, toolSettings: true}),
           organizations: true,
           scripts: [...adminScripts, ...mcpAdminScripts()],
         })

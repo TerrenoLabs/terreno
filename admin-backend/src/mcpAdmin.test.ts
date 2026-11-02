@@ -24,9 +24,11 @@ const buildApp = (): express.Application => {
   const app = getBaseServer();
   setupAuth(app, UserModel as unknown as UserModelType);
   addAuthRoutes(app, UserModel as unknown as UserModelType);
-  new AdminApp({basePath: "/admin", models: mcpAdminModels(), scripts: mcpAdminScripts()}).register(
-    app
-  );
+  new AdminApp({
+    basePath: "/admin",
+    models: mcpAdminModels({requestLog: true, toolSettings: true}),
+    scripts: mcpAdminScripts(),
+  }).register(app);
   app.use(apiUnauthorizedMiddleware);
   app.use(apiErrorMiddleware);
   return app;
@@ -49,7 +51,7 @@ const issueOAuth = (userId: mongoose.Types.ObjectId) =>
 
 describe("mcpAdminModels", () => {
   it("returns every MCP screen in one group, without hash fields in any list", () => {
-    const models = mcpAdminModels();
+    const models = mcpAdminModels({requestLog: true, toolSettings: true});
 
     expect(models.map((model) => model.routePath)).toEqual([
       "/mcp-service-tokens",
@@ -65,7 +67,8 @@ describe("mcpAdminModels", () => {
     }
   });
 
-  it("leaves out the request log and tool screens when asked", () => {
+  it("leaves out the request log and tool screens unless their server options are on", () => {
+    expect(mcpAdminModels()).toHaveLength(3);
     const models = mcpAdminModels({group: "Platform", requestLog: false, toolSettings: false});
 
     expect(models).toHaveLength(3);
@@ -152,6 +155,16 @@ describe("mcpSignOutEverywhere", () => {
     expect(wet.success).toBe(true);
     expect(await McpServiceToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
     expect(await McpOAuthToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
+  });
+
+  it("looks up a 12-character email by email, not as an id", async () => {
+    await UserModel.updateOne({_id: notAdminId}, {$set: {email: "ab@gmail.com"}});
+    await McpServiceToken.issueFor({_id: notAdminId}, {name: "Laptop"});
+
+    const wet = await mcpSignOutEverywhere(true, scriptContext("ab@gmail.com"));
+
+    expect(wet.success).toBe(true);
+    expect(await McpServiceToken.countDocuments({revokedAt: {$exists: false}})).toBe(0);
   });
 
   it("fails without a user or with an unknown email", async () => {

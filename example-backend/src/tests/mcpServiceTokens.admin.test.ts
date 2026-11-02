@@ -21,7 +21,7 @@ const buildApp = (): ReturnType<TerrenoApp["build"]> => {
   })
     .register(
       new AdminApp({
-        models: mcpAdminModels(),
+        models: mcpAdminModels({requestLog: true, toolSettings: true}),
       })
     )
     .build();

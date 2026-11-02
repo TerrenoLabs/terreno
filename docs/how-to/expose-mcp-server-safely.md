@@ -117,7 +117,7 @@ Access is a second layer, not a replacement: the admin routes still require `adm
 - One service token: delete it on **MCP service tokens**, or the owner calls `DELETE /mcp/service-tokens/<id>`.
 - Every MCP credential one user holds: run the `mcp-sign-out-everywhere` admin script.
 - One OAuth connection: delete it on **MCP OAuth connections**, or have the client call `/oauth/revoke`.
-- Everything a user holds: disable the user, or reset their password or revoke their sessions (both bump `tokenEpoch`). Their OAuth grants stop working on the next request; revoke their service tokens separately. See [Enable MCP OAuth](enable-mcp-oauth.md#revoking-access).
+- Everything a user holds: disable the user, or reset their password or revoke their sessions (both bump `tokenEpoch`). Their OAuth grants and service tokens stop working on the next request. See [Enable MCP OAuth](enable-mcp-oauth.md#revoking-access).
 - Cut all traffic at once: stop the tunnel (`sudo systemctl stop cloudflared`).
 
 ## Security checklist

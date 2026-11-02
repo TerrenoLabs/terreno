@@ -64,7 +64,7 @@ import {AdminSpaServeApp} from "@terreno/admin-spa";
 terreno
   .register(
     new AdminApp({
-      models: [...appAdminModels, ...mcpAdminModels()],
+      models: [...appAdminModels, ...mcpAdminModels({requestLog: true, toolSettings: true})],
       scripts: mcpAdminScripts(),
     })
   )
@@ -78,8 +78,9 @@ terreno
   );
 ```
 
-`mcpAdminModels()` adds the **MCP** sidebar group (service tokens, OAuth clients, OAuth
-connections, request log, tools) and `mcpAdminScripts()` adds `mcp-sign-out-everywhere`. If the
+`mcpAdminModels({requestLog: true, toolSettings: true})` adds the **MCP** sidebar group (service
+tokens, OAuth clients, OAuth connections, request log, tools; keep the two flags matched to the
+`TerrenoApp` options) and `mcpAdminScripts()` adds `mcp-sign-out-everywhere`. If the
 app uses RBAC (`accessControl`), spread `mcpAdminStatements` into its statements. See
 `docs/how-to/manage-mcp-in-admin.md`. Check: `curl -I localhost:4000/console` returns 200 (the
 published package ships the prebuilt SPA).

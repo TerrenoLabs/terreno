@@ -1,6 +1,7 @@
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
+import {logger} from "../logger";
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone} from "../plugins";
 import type {McpToolSettingDocument, McpToolSettingModel, McpToolSource} from "../types/mcpAdmin";
 
@@ -44,6 +45,31 @@ const mcpToolSettingSchema = new mongoose.Schema<McpToolSettingDocument, McpTool
   {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
 );
 
+/** How long one process reuses the disabled-tool set before reading it again. */
+const DISABLED_NAMES_TTL_MS = 5000;
+
+// Per-process cache so /mcp does not query Mongo on every request. Writes through this model
+// clear it at once; other processes pick up a change within DISABLED_NAMES_TTL_MS.
+const disabledNamesCache: {expiresAt: number; names?: Set<string>} = {expiresAt: 0};
+
+const clearDisabledNamesCache = (): void => {
+  disabledNamesCache.expiresAt = 0;
+  disabledNamesCache.names = undefined;
+};
+
+for (const hook of [
+  "save",
+  "updateOne",
+  "updateMany",
+  "findOneAndUpdate",
+  "deleteOne",
+  "deleteMany",
+  "findOneAndDelete",
+] as const) {
+  mcpToolSettingSchema.post(hook, clearDisabledNamesCache);
+}
+mcpToolSettingSchema.post("bulkWrite", clearDisabledNamesCache);
+
 mcpToolSettingSchema.plugin(createdUpdatedPlugin);
 mcpToolSettingSchema.plugin(findOneOrNone);
 mcpToolSettingSchema.plugin(findExactlyOne);
@@ -51,8 +77,25 @@ mcpToolSettingSchema.plugin(findExactlyOne);
 mcpToolSettingSchema.statics = {
   ...mcpToolSettingSchema.statics,
   async disabledNames(this: McpToolSettingModel): Promise<Set<string>> {
-    const rows = await this.find({enabled: false}).select({name: 1}).lean();
-    return new Set(rows.map((row) => row.name));
+    const now = DateTime.now().toMillis();
+    if (disabledNamesCache.names && now < disabledNamesCache.expiresAt) {
+      return disabledNamesCache.names;
+    }
+    try {
+      const rows = await this.find({enabled: false}).select({name: 1}).lean();
+      const names = new Set(rows.map((row) => row.name));
+      disabledNamesCache.names = names;
+      disabledNamesCache.expiresAt = now + DISABLED_NAMES_TTL_MS;
+      return names;
+    } catch (error) {
+      // Keep enforcing the last known switches rather than re-enabling every tool. With no
+      // known state, fail the request (closed) instead of serving tools an admin turned off.
+      if (disabledNamesCache.names) {
+        logger.warn(`[mcp] Tool settings read failed; using last known: ${String(error)}`);
+        return disabledNamesCache.names;
+      }
+      throw error;
+    }
   },
   async syncRegistered(
     this: McpToolSettingModel,

@@ -125,13 +125,13 @@ When `JobsApp` is already registered, the run is enqueued as job `admin/script` 
 | `/mcp-request-log` | `McpRequestLog` | list, read | Needs `mcpRequestLog` on `TerrenoApp` |
 | `/mcp-tools` | `McpToolSetting` | list, read, update | Only `enabled` is writable. Needs `mcpToolSettings` on `TerrenoApp` |
 
-Options: `group` (default `"MCP"`), `requestLog: false` and `toolSettings: false` to leave those screens out. Hash fields are hidden. Each config sets `adminAccess.resource`; with `accessControl`, spread `mcpAdminStatements` into your `createAccess({statements})`.
+Options: `group` (default `"MCP"`); `requestLog: true` and `toolSettings: true` add those screens. Both default to `false`; set them to match `TerrenoApp`'s `mcpRequestLog` and `mcpToolSettings`. Hash fields are hidden. Each config sets `adminAccess.resource`; with `accessControl`, spread `mcpAdminStatements` into your `createAccess({statements})`.
 
 `mcpAdminScripts()` adds `mcp-sign-out-everywhere` (`--user <id or email>`), which revokes every OAuth connection and service token the user holds. A dry run reports the counts. Email lookup uses the model registered as `User`.
 
 ```typescript
 new AdminApp({
-  models: [...appModels, ...mcpAdminModels()],
+  models: [...appModels, ...mcpAdminModels({requestLog: true, toolSettings: true})],
   scripts: [...appScripts, ...mcpAdminScripts()],
 });
 ```

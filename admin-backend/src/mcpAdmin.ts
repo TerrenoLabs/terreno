@@ -29,9 +29,15 @@ export const MCP_ADMIN_GROUP = "MCP";
 export interface McpAdminModelsOptions {
   /** Sidebar group. Default `"MCP"`. */
   group?: string;
-  /** Include the request log screen. Set when `TerrenoApp` has `mcpRequestLog` on. Default true. */
+  /**
+   * Include the request log screen. Match `TerrenoApp`'s `mcpRequestLog`: the screen is empty
+   * without it. Default false, like the server option.
+   */
   requestLog?: boolean;
-  /** Include the tool registry screen. Set when `TerrenoApp` has `mcpToolSettings` on. Default true. */
+  /**
+   * Include the tool registry screen. Match `TerrenoApp`'s `mcpToolSettings`: without it the
+   * server ignores the switches. Default false, like the server option.
+   */
   toolSettings?: boolean;
 }
 
@@ -109,7 +115,7 @@ export const mcpAdminModels = (options: McpAdminModelsOptions = {}): AdminModelC
       sortableFields: ["created", "accessExpiresAt", "refreshExpiresAt", "revokedAt"],
     },
   ];
-  if (options.requestLog !== false) {
+  if (options.requestLog === true) {
     models.push({
       adminAccess: {resource: "adminMcpRequestLog"},
       defaultSort: "-created",
@@ -133,7 +139,7 @@ export const mcpAdminModels = (options: McpAdminModelsOptions = {}): AdminModelC
       sortableFields: ["created", "toolName", "durationMs", "outcome"],
     });
   }
-  if (options.toolSettings !== false) {
+  if (options.toolSettings === true) {
     models.push({
       adminAccess: {resource: "adminMcpTool"},
       defaultSort: "name",
@@ -152,10 +158,13 @@ export const mcpAdminModels = (options: McpAdminModelsOptions = {}): AdminModelC
 };
 
 const SIGN_OUT_SCRIPT_NAME = "mcp-sign-out-everywhere";
+const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
 
 /** Resolve the `user` argument (an id or an email) to a user id. */
 const resolveUserId = async (value: string): Promise<mongoose.Types.ObjectId | undefined> => {
-  if (mongoose.isValidObjectId(value)) {
+  // Only a 24-hex-character string is an id. isValidObjectId also accepts any 12-character
+  // string, which would read a short email like "ab@gmail.com" as an id.
+  if (OBJECT_ID_HEX.test(value)) {
     return new mongoose.Types.ObjectId(value);
   }
   const userModel = mongoose.models.User;

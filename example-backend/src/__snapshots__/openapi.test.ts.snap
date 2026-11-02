@@ -9773,13 +9773,13 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
               "oneOf": [
                 {
                   "description": "Service token used for the call, when the credential was a service token",
-                  "type": "schemaobjectid",
+                  "type": "string",
                 },
                 {
                   "properties": {
                     "$in": {
                       "items": {
-                        "type": "schemaobjectid",
+                        "type": "string",
                       },
                       "type": "array",
                     },
@@ -9893,7 +9893,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "serviceTokenId": {
                             "description": "Service token used for the call, when the credential was a service token",
-                            "format": "objectid",
                             "type": "string",
                           },
                           "toolName": {
@@ -10160,7 +10159,6 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     },
                     "serviceTokenId": {
                       "description": "Service token used for the call, when the credential was a service token",
-                      "format": "objectid",
                       "type": "string",
                     },
                     "toolName": {

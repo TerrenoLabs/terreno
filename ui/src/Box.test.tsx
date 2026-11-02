@@ -2,7 +2,7 @@ import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
-import {Platform, type ScrollView} from "react-native";
+import {Platform, type ScrollViewInstance} from "react-native";
 
 import {Box} from "./Box";
 import {sharedResponsiveBreakpointStore} from "./ResponsiveBreakpoint";
@@ -753,7 +753,7 @@ describe("Box", () => {
     // values: a ref object in style is cyclical (host instance points back at the
     // node) and gets dev-frozen, so React throws when detaching it on unmount.
     it("should keep behavior props out of the ScrollView style", () => {
-      const scrollRef = React.createRef<ScrollView>();
+      const scrollRef = React.createRef<ScrollViewInstance>();
       const {root} = renderWithTheme(
         <Box onScroll={mock(() => {})} scroll scrollRef={scrollRef}>
           <Text>Scrollable</Text>
@@ -845,7 +845,7 @@ describe("Box", () => {
       const scrollToEnd = mock(() => {});
       const scrollRef = {
         current: {scrollTo, scrollToEnd},
-      } as unknown as React.RefObject<ScrollView>;
+      } as unknown as React.RefObject<ScrollViewInstance>;
       const ref = React.createRef<BoxScrollHandle>();
       // Intentionally omit `scroll` so the ScrollView does not claim `scrollRef`
       // and overwrite `.current`; the imperative handle still reads it.

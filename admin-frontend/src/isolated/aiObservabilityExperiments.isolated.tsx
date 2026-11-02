@@ -848,7 +848,7 @@ describe("AiExperimentsListScreen", () => {
 
     it("hides create when the caller cannot create experiments", async () => {
       listState.isLoading = false;
-      statusData.permissions = {aiExperiment: {list: true, read: true}};
+      statusData.permissions = {aiExperiment: {create: false, list: true, read: true}};
       try {
         const view = await renderList();
         expect(view.queryByTestId("ai-experiments-table")).toBeTruthy();

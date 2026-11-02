@@ -7,6 +7,7 @@ import {Pressable} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminPrimitiveArrayField} from "./AdminPrimitiveArrayField";
+import type {RefFieldRendererProps} from "./types";
 
 const press = async (el: ReactTestInstance): Promise<void> => {
   await act(async () => {
@@ -314,7 +315,7 @@ describe("AdminPrimitiveArrayField", () => {
   });
 
   it("uses custom reference renderers with resolved routes", () => {
-    const CustomRenderer: React.FC<Record<string, unknown>> = (props) =>
+    const CustomRenderer: React.FC<RefFieldRendererProps> = (props) =>
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminPrimitiveArrayField
@@ -331,7 +332,7 @@ describe("AdminPrimitiveArrayField", () => {
         value={["user-1"]}
       />
     );
-    const custom = UNSAFE_root.findAll((node) => node.type === "CustomRenderer")[0];
+    const custom = UNSAFE_root.findAll((node) => (node.type as string) === "CustomRenderer")[0];
     expect(custom.props.routePath).toBe("/admin/users");
     expect(custom.props.autocomplete).toBe(true);
     expect(custom.props.readOnly).toBe(true);

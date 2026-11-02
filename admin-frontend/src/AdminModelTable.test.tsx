@@ -13,7 +13,7 @@ import {
 } from "./testing/useAdminModelApiDouble";
 import type {AdminConfigResponse} from "./types";
 
-const routerPush = mock(() => {});
+const routerPush = mock((_path: string): void => {});
 const setOptions = mock((_: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: routerPush},
@@ -43,10 +43,15 @@ const listState: {data: unknown; isLoading: boolean} = {
   isLoading: false,
 };
 const listQueryArgs: unknown[] = [];
-const deleteFn = mock(() => ({unwrap: async () => ({})}));
-const patchFn = mock(() => ({unwrap: async () => ({})}));
-const bulkPatchFn = mock(() => ({unwrap: async () => ({updated: 0})}));
-const enqueueBackgroundFn = mock(() => ({unwrap: async () => ({taskId: "t1"})}));
+interface UnwrapResult {
+  unwrap: () => Promise<unknown>;
+}
+const deleteFn = mock((_arg: unknown): UnwrapResult => ({unwrap: async () => ({})}));
+const patchFn = mock((_arg: unknown): UnwrapResult => ({unwrap: async () => ({})}));
+const bulkPatchFn = mock((_arg: unknown): UnwrapResult => ({unwrap: async () => ({updated: 0})}));
+const enqueueBackgroundFn = mock(
+  (_arg: unknown): UnwrapResult => ({unwrap: async () => ({taskId: "t1"})})
+);
 
 mock.module("./useAdminBackgroundTask", () => ({
   useAdminBackgroundTaskMutation: () => [enqueueBackgroundFn, {isLoading: false}],
@@ -238,6 +243,7 @@ describe("AdminModelTable", () => {
           listFields: ["email"],
         },
         {
+          defaultSort: undefined as unknown as string,
           displayName: "Groups",
           fields: {},
           listFields: ["name"],
@@ -248,7 +254,7 @@ describe("AdminModelTable", () => {
     };
     const {UNSAFE_root} = renderWithTheme(<AdminModelTable baseUrl="/admin" modelName="User" />);
     const [refFilter] = findDataTable(UNSAFE_root).props.additionalFilters;
-    const onChange = mock(() => {});
+    const onChange = mock((_value: string): void => {});
     const rendered = refFilter.renderFilter({
       field: "ownerId",
       onChange,
@@ -316,7 +322,7 @@ describe("AdminModelTable", () => {
       customScreens: [],
       models: [
         {
-          defaultSort: undefined,
+          defaultSort: undefined as unknown as string,
           displayName: "Plain",
           fields: {
             _id: {required: true, type: "string"},
@@ -746,7 +752,7 @@ describe("AdminModelTable", () => {
       const value = n.props?.cellData?.value as
         | {disabled?: boolean; onToggle?: () => void; value?: boolean}
         | undefined;
-      return (
+      return !!(
         value &&
         typeof value.onToggle === "function" &&
         typeof value.value === "boolean" &&
@@ -783,7 +789,7 @@ describe("AdminModelTable", () => {
 
     const linkCells = UNSAFE_root.findAll((n: ReactTestInstance) => {
       const value = n.props?.cellData?.value as {href?: string; text?: string} | undefined;
-      return value && typeof value.href === "string" && typeof value.text === "string";
+      return !!value && typeof value.href === "string" && typeof value.text === "string";
     });
     assert.isAtLeast(linkCells.length, 1);
     const linkCell = linkCells[0] as ReactTestInstance;

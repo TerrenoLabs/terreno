@@ -58,6 +58,9 @@ const model: AdminModelConfig = {
   routePath: "/admin/users",
 };
 
+const homeWidgetBase = {apiBase: "/admin", config: {models: [], scripts: []}};
+const screenWidgetBase = {config: {models: [], scripts: []}, screenName: "test"};
+
 describe("admin home and screen widgets", () => {
   beforeEach(() => {
     routerPush.mockClear();
@@ -80,13 +83,20 @@ describe("admin home and screen widgets", () => {
   });
 
   it("shows the empty recent-activity copy when no audit model is configured", () => {
-    const {getByText} = renderWithTheme(<RecentActivityWidget models={[]} routeBase="/admin" />);
+    const {getByText} = renderWithTheme(
+      <RecentActivityWidget models={[]} {...homeWidgetBase} routeBase="/admin" />
+    );
     expect(getByText(/Register AuditApp \(or an AdminAuditLog model\)/)).toBeDefined();
   });
 
   it("renders audit rows when an audit model is present", () => {
     const {getByText} = renderWithTheme(
-      <RecentActivityWidget auditModel={model} models={[model]} routeBase="/admin" />
+      <RecentActivityWidget
+        auditModel={model}
+        models={[model]}
+        {...homeWidgetBase}
+        routeBase="/admin"
+      />
     );
     expect(getByText(/update/)).toBeDefined();
   });
@@ -94,26 +104,46 @@ describe("admin home and screen widgets", () => {
   it("shows loading and error states for recent activity", () => {
     listState = {isError: false, isLoading: true};
     const loading = renderWithTheme(
-      <RecentActivityWidget auditModel={model} models={[model]} routeBase="/admin" />
+      <RecentActivityWidget
+        auditModel={model}
+        models={[model]}
+        {...homeWidgetBase}
+        routeBase="/admin"
+      />
     );
     expect(loading.toJSON()).toBeDefined();
 
     listState = {isError: true, isLoading: false};
     const errored = renderWithTheme(
-      <RecentActivityWidget auditModel={model} models={[model]} routeBase="/admin" />
+      <RecentActivityWidget
+        auditModel={model}
+        models={[model]}
+        {...homeWidgetBase}
+        routeBase="/admin"
+      />
     );
     expect(errored.getByText(/Could not load audit entries/)).toBeDefined();
 
     listState = {data: {data: []}, isError: false, isLoading: false};
     const empty = renderWithTheme(
-      <RecentActivityWidget auditModel={model} models={[model]} routeBase="/admin" />
+      <RecentActivityWidget
+        auditModel={model}
+        models={[model]}
+        {...homeWidgetBase}
+        routeBase="/admin"
+      />
     );
     expect(empty.getByText(/No audit entries yet/)).toBeDefined();
   });
 
   it("opens a feature-flag model from the home widget", async () => {
     const {getByText} = renderWithTheme(
-      <FeatureFlagsOverridesWidget featureFlagModel={model} models={[model]} routeBase="/admin/" />
+      <FeatureFlagsOverridesWidget
+        featureFlagModel={model}
+        models={[model]}
+        {...homeWidgetBase}
+        routeBase="/admin/"
+      />
     );
     await act(async () => {
       fireEvent.press(getByText("Open User"));
@@ -123,24 +153,28 @@ describe("admin home and screen widgets", () => {
 
   it("shows a missing feature-flag message", () => {
     const {getByText} = renderWithTheme(
-      <FeatureFlagsOverridesWidget models={[]} routeBase="/admin" />
+      <FeatureFlagsOverridesWidget models={[]} {...homeWidgetBase} routeBase="/admin" />
     );
     expect(getByText(/No FeatureFlag model/)).toBeDefined();
   });
 
   it("renders the documents screen widget", () => {
-    const {getByTestId} = renderWithTheme(<DocumentsScreenWidget routeBase="/admin" />);
+    const {getByTestId} = renderWithTheme(
+      <DocumentsScreenWidget {...screenWidgetBase} routeBase="/admin" />
+    );
     expect(getByTestId("documents-browser")).toBeDefined();
   });
 
   it("renders the AI explorer", () => {
-    const {toJSON} = renderWithTheme(<AIRequestsScreenWidget routeBase="/admin" />);
+    const {toJSON} = renderWithTheme(
+      <AIRequestsScreenWidget {...screenWidgetBase} routeBase="/admin" />
+    );
     expect(toJSON()).toBeDefined();
   });
 
   it("navigates from the models grid", async () => {
     const {getByText, getByTestId} = renderWithTheme(
-      <ModelsGridWidget models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} {...homeWidgetBase} routeBase="/admin/" />
     );
     expect(getByText("User")).toBeDefined();
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeDefined();

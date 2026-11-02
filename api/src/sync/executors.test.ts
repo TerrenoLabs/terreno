@@ -471,7 +471,7 @@ describe("executeUpdate", () => {
     const options = baseOptions({
       preUpdate: (body, req) => {
         seenIds.push(req.params.id);
-        return body;
+        return body as ExecStuff;
       },
     });
     await executeUpdate<ExecStuff>({

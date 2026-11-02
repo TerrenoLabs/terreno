@@ -40,7 +40,7 @@ describe("useAiObservabilityEvaluatorsApi", () => {
       "GET /ai/observability/evaluators",
       "GET /ai/observability/evaluators/eval%2F1",
     ]);
-    expect(result.current.detail.data).toEqual({_id: "eval-1"});
+    expect(result.current.detail.data as unknown).toEqual({_id: "eval-1"});
   });
 
   it("creates an evaluator and refetches the list", async () => {

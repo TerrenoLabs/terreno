@@ -320,7 +320,7 @@ describe("File Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(runtimeApp, "notAdmin");
 

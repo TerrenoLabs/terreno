@@ -233,7 +233,7 @@ describe("AnnouncementsApp OpenAPI", () => {
     }
     const agent = await authAsUser(app, "notAdmin");
 
-    const pages = [];
+    const pages: {count: number; more: boolean; total: number}[] = [];
     for (const page of [1, 2, 3]) {
       const res = await agent.get(`/announcements/feed?platform=web&limit=2&page=${page}`);
       pages.push({count: res.body.data.length, more: res.body.more, total: res.body.total});

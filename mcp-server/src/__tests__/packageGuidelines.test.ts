@@ -6,11 +6,18 @@ import {join} from "node:path";
 import {
   composePackageGuidelinesForRules,
   filterGuidelineIdsForRootRules,
+  type GuidelinePackageId,
   loadPackageGuidelineMarkdown,
   resolveBootstrapGuidelinePackages,
 } from "../packageGuidelines.js";
 
-const ALL_PACKAGES = ["api", "ui", "syncdb", "admin-backend", "admin-frontend"];
+const ALL_PACKAGES: GuidelinePackageId[] = [
+  "api",
+  "ui",
+  "syncdb",
+  "admin-backend",
+  "admin-frontend",
+];
 
 describe("resolveBootstrapGuidelinePackages", () => {
   it("returns every package when nothing is requested", (): void => {

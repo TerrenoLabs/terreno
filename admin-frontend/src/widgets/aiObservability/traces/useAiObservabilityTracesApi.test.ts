@@ -91,7 +91,7 @@ describe("useAiObservabilityTracesApi", () => {
       "GET /ai/observability/traces/trace-1",
       "GET /ai/observability/traces?limit=20&page=1",
     ]);
-    expect(result.current.detail.data).toEqual({traceId: "trace-1"});
+    expect(result.current.detail.data as unknown).toEqual({traceId: "trace-1"});
   });
 
   it("enqueues review and runs the multi-stage test trace", async () => {

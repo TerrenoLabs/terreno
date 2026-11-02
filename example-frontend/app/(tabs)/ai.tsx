@@ -115,11 +115,11 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   id: historyIdOf(history),
   prompts: history.prompts.map((p) => {
     const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
-    const blockNote = p.type === "assistant" ? componentCaption(p.text) : undefined;
+    const blockNote = p.type === "assistant" ? componentCaption(p.text ?? "") : undefined;
     return {
       ...(ask ? {ask} : {}),
       ...(blockNote ? {blockNote} : {}),
-      content: p.text,
+      content: p.text ?? "",
       contentParts: p.content?.map((c): MessageContentPart => {
         if (c.type === "text") {
           return {text: c.text ?? "", type: "text"};
@@ -232,7 +232,9 @@ const readSseEvents = async (
 /** The in-flight reply of a stored history, if /gpt/prompt is still streaming it. */
 const findStreamingReply = (history?: GptHistory): {text: string} | undefined => {
   const last = history?.prompts[history.prompts.length - 1];
-  return last?.type === "assistant" && last.status === "streaming" ? {text: last.text} : undefined;
+  return last?.type === "assistant" && last.status === "streaming"
+    ? {text: last.text ?? ""}
+    : undefined;
 };
 
 /**

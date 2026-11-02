@@ -177,7 +177,7 @@ describe("useAdminRpc", () => {
   });
 
   it("transforms mutation responses before unwrap resolves", async () => {
-    globalThis.fetch = (async () => jsonResponse({data: {_id: "new"}})) as typeof fetch;
+    globalThis.fetch = (async () => jsonResponse({data: {_id: "new"}})) as unknown as typeof fetch;
     let trigger:
       | ((args: {method: "POST"; url: string}) => {unwrap: () => Promise<unknown>})
       | undefined;
@@ -340,7 +340,7 @@ describe("useAdminRpc", () => {
         headers: {"Content-Type": "application/json"},
         status: 200,
       });
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
 
     let setUrl: ((next: string) => void) | undefined;
     let queryState: {data?: {page: number}; isFetching: boolean; isLoading: boolean} | undefined;

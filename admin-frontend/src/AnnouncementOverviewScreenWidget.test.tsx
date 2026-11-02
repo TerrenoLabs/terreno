@@ -26,6 +26,8 @@ import {
   AnnouncementOverviewScreenWidget,
 } from "./AnnouncementOverviewScreenWidget";
 
+const screenWidgetBase = {config: {models: [], scripts: []}, screenName: "test"};
+
 describe("AnnouncementOverviewScreenWidget", () => {
   beforeEach(() => {
     pushMock.mockClear();
@@ -37,7 +39,7 @@ describe("AnnouncementOverviewScreenWidget", () => {
   });
 
   it("routes create, edit, and analytics table actions through expo-router", () => {
-    renderWithTheme(<AnnouncementOverviewScreenWidget routeBase="/admin" />);
+    renderWithTheme(<AnnouncementOverviewScreenWidget {...screenWidgetBase} routeBase="/admin" />);
 
     assert.strictEqual(capturedOverviewProps?.routeBase, "/admin");
     assert.isFunction(capturedOverviewProps?.onCreate);

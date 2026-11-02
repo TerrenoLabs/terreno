@@ -328,7 +328,7 @@ describe("AdminMigrationsView", () => {
         models: [],
         platformTools: {runScripts: false},
         scripts: [],
-      } as AdminConfigResponse,
+      } as unknown as AdminConfigResponse,
     });
     expect(getByTestId("admin-migrations-dry-run").props.accessibilityState.disabled).toBe(true);
     expect(getByTestId("admin-migrations-apply").props.accessibilityState.disabled).toBe(true);
@@ -420,7 +420,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("disables apply while a queued task is in flight", async () => {
-    mockTask.data = {task: {status: "queued"}};
+    mockTask.data = {task: {status: "pending"} as BackgroundTask};
     const {getByTestId, getByText} = await renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));
@@ -430,7 +430,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("refetches status after a completed task", async () => {
-    mockTask.data = {task: {status: "completed"}};
+    mockTask.data = {task: {status: "completed"} as BackgroundTask};
     const {getByText} = await renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));
@@ -442,7 +442,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("keeps apply disabled while a task is running", async () => {
-    mockTask.data = {task: {status: "running"}};
+    mockTask.data = {task: {status: "running"} as BackgroundTask};
     const {getByTestId, getByText} = await renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));

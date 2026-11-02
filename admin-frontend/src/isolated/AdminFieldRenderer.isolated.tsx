@@ -22,7 +22,7 @@ mock.module("../LocaleContentEditor", () => ({
 }));
 
 import {AdminFieldRenderer} from "../AdminFieldRenderer";
-import type {AdminFieldConfig} from "../types";
+import type {AdminFieldConfig, RefFieldRendererProps} from "../types";
 
 const base = {baseUrl: "/admin", onChange: () => {}};
 
@@ -174,7 +174,7 @@ describe("AdminFieldRenderer", () => {
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
         {...base}
-        fieldConfig={{enum: [null, "a", "b"], required: false, type: "string"}}
+        fieldConfig={{enum: [null as unknown as string, "a", "b"], required: false, type: "string"}}
         fieldKey="status"
         onChange={(v) => changes.push(v)}
         value=""
@@ -318,7 +318,7 @@ describe("AdminFieldRenderer", () => {
   });
 
   it("renders single-value user targeting with a custom renderer", () => {
-    const CustomRenderer: React.FC<Record<string, unknown>> = (props) =>
+    const CustomRenderer: React.FC<RefFieldRendererProps> = (props) =>
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
@@ -332,7 +332,7 @@ describe("AdminFieldRenderer", () => {
         value="user-1"
       />
     );
-    const custom = UNSAFE_root.findAll((node) => node.type === "CustomRenderer")[0];
+    const custom = UNSAFE_root.findAll((node) => (node.type as string) === "CustomRenderer")[0];
     expect(custom.props.routePath).toBe("/admin/users");
     expect(custom.props.autocomplete).toBe(true);
   });
@@ -352,7 +352,7 @@ describe("AdminFieldRenderer", () => {
   });
 
   it("renders a configured reference with a custom renderer", () => {
-    const CustomRenderer: React.FC<Record<string, unknown>> = (props) =>
+    const CustomRenderer: React.FC<RefFieldRendererProps> = (props) =>
       React.createElement("CustomRenderer", props);
     const {UNSAFE_root} = renderWithTheme(
       <AdminFieldRenderer
@@ -364,7 +364,7 @@ describe("AdminFieldRenderer", () => {
         value="org-1"
       />
     );
-    const custom = UNSAFE_root.findAll((node) => node.type === "CustomRenderer")[0];
+    const custom = UNSAFE_root.findAll((node) => (node.type as string) === "CustomRenderer")[0];
     expect(custom.props.routePath).toBe("/admin/organizations");
     expect(custom.props.value).toBe("org-1");
   });

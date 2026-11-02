@@ -357,7 +357,7 @@ describe("AiApp", () => {
     expect(servers.status).not.toBe(404);
   });
   it("documents its routes with the OpenAPI instance TerrenoApp passes to register", async () => {
-    const {AIService} = await import("./service/aiService");
+    const {AIService} = await import("./service/aiService.js");
     const aiService = new AIService({model: createMockModel() as unknown as LanguageModel});
     const fileStorageService = {
       delete: mock(async () => {}),
@@ -366,7 +366,7 @@ describe("AiApp", () => {
         throw new Error("not called");
       }),
     } as unknown as FileStorageService;
-    const app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    const app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new AiApp({aiService, fileStorageService, gcsBucket: "bucket"}))
       .build();
 

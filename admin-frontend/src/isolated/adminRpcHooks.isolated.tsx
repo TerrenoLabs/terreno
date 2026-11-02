@@ -37,6 +37,8 @@ const flushEffects = async (): Promise<void> => {
   });
 };
 
+const screenWidgetBase = {config: {models: [], scripts: []}, screenName: "test"};
+
 describe("admin fetch RPC hooks", () => {
   const originalFetch = globalThis.fetch;
   const captured: {method?: string; url: string}[] = [];
@@ -272,7 +274,7 @@ describe("admin fetch RPC hooks", () => {
     mockOkFetch();
     renderWithTheme(
       <AdminProvider apiBase="/admin" credentials="same-origin" getAuthHeaders={() => ({})}>
-        <AIRequestsScreenWidget routeBase="/admin" />
+        <AIRequestsScreenWidget {...screenWidgetBase} routeBase="/admin" />
       </AdminProvider>
     );
     await flushEffects();

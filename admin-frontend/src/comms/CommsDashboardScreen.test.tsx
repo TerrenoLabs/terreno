@@ -4,7 +4,7 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_path: unknown): void => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
   useLocalSearchParams: () => ({}),
@@ -186,7 +186,7 @@ describe("CommsDashboardScreen", () => {
 
   it("writes filter changes through onFiltersChange for URL persistence", async () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {getByTestId} = await renderScreen({
       filters: {channel: "mail", page: 2},
       onFiltersChange,
@@ -203,7 +203,7 @@ describe("CommsDashboardScreen", () => {
 
   it("keeps both default date bounds when search changes with empty URL dates", async () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {getByTestId} = await renderScreen({onFiltersChange});
     fireEvent.changeText(getByTestId("comms-filter-q"), "hello");
     const next = (onFiltersChange.mock.calls[0] as unknown as [Record<string, unknown>])[0];
@@ -215,7 +215,7 @@ describe("CommsDashboardScreen", () => {
 
   it("clears every active filter and returns to the first page", async () => {
     listState.data = {data: [], more: false, page: 3, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {getByTestId} = await renderScreen({
       filters: {channel: "mail", page: 3, q: "invoice", status: "failed"},
       onFiltersChange,
@@ -377,7 +377,7 @@ describe("CommsDashboardScreen", () => {
 
   it("pages through results without dropping the active filters", async () => {
     listState.data = {data: [failedRow], more: true, page: 1, total: 60};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {getByTestId} = await renderScreen({filters: {status: "failed"}, onFiltersChange});
     await act(async () => {
       fireEvent.press(

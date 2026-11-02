@@ -4,6 +4,12 @@ import mongoose from "mongoose";
 import type {GptHistoryDocument, GptHistoryPendingAsk, GptHistoryPrompt} from "../types/index";
 import {GptHistory} from "./gptHistory";
 
+// GptHistory ids are strings, but the driver types the raw collection with ObjectId ids.
+const stringIdCollection = (): mongoose.mongo.Collection<{_id: string} & mongoose.mongo.Document> =>
+  GptHistory.collection as unknown as mongoose.mongo.Collection<
+    {_id: string} & mongoose.mongo.Document
+  >;
+
 describe("GptHistory Model", () => {
   beforeEach(async () => {
     await GptHistory.collection.deleteMany({});
@@ -271,7 +277,7 @@ describe("GptHistory Model", () => {
 
     it("loads a history saved before asks existed", async () => {
       const userId = new mongoose.Types.ObjectId();
-      const {insertedId} = await GptHistory.collection.insertOne({
+      const {insertedId} = await stringIdCollection().insertOne({
         _id: new mongoose.Types.ObjectId().toHexString(),
         created: new Date("2026-01-05T09:00:00.000Z"),
         deleted: false,
@@ -304,7 +310,7 @@ describe("GptHistory Model", () => {
         userId,
       });
 
-      const stored = await GptHistory.collection.findOne({_id: history._id});
+      const stored = await stringIdCollection().findOne({_id: history._id});
 
       expect(stored?.pendingAsk).toEqual(pendingAsk);
       expect(stored?.prompts[1].ask).toEqual({kind: "choice", status: "pending"});
@@ -317,7 +323,7 @@ describe("GptHistory Model", () => {
       history.pendingAsk = pendingAsk;
       await history.save();
 
-      const stored = await GptHistory.collection.findOne({_id: history._id});
+      const stored = await stringIdCollection().findOne({_id: history._id});
       expect(stored?.pendingAsk.responseMessages[0].content[0]).toEqual({
         input: {},
         toolCallId: "call_lookup",

@@ -144,7 +144,11 @@ describe("useOrganizationsApi", () => {
       expect(hooks.current().members.isLoading).toBe(false);
       expect(hooks.current().read.isLoading).toBe(false);
     });
-    expect(hooks.current().list.data).toEqual({data: [{_id: "org-1"}], limit: 1, more: false});
+    expect(hooks.current().list.data as unknown).toEqual({
+      data: [{_id: "org-1"}],
+      limit: 1,
+      more: false,
+    });
     expect(hooks.current().mine.data).toEqual([{_id: "org-1"}]);
     expect(hooks.current().read.data).toEqual({_id: "org-1", name: "Acme"});
     expect(hooks.current().members.data).toEqual([{_id: "membership-1"}]);

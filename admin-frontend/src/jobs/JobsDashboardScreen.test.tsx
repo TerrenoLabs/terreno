@@ -4,7 +4,7 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_path: unknown): void => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
   useLocalSearchParams: () => ({}),
@@ -223,7 +223,7 @@ describe("JobsDashboardScreen", () => {
     schedulesState.data = [
       {cron: "0 0 * * *", enabled: true, id: "sched-1", name: "nightly", timezone: "UTC"},
     ];
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {UNSAFE_root, getByTestId} = await renderScreen({
       filters: {
         end: "2026-01-02T00:00:00.000Z",
@@ -261,7 +261,7 @@ describe("JobsDashboardScreen", () => {
 
   it("pages through results without dropping the active filters", async () => {
     listState.data = {data: [deadRow], more: true, page: 1, total: 60};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown): void => {});
     const {getByTestId} = await renderScreen({
       filters: {scheduleId: "sched-1", status: "dead"},
       onFiltersChange,

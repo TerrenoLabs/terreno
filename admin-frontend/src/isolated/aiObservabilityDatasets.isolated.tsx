@@ -440,7 +440,9 @@ describe("AiDatasetsListScreen", () => {
     it("hides import when the caller cannot update datasets", async () => {
       listState.isLoading = false;
       listState.data = datasets;
-      statusData.permissions = {aiDataset: {list: true, read: true}};
+      statusData.permissions = {
+        aiDataset: {create: false, list: true, read: true, update: false},
+      };
       const view = renderWithTheme(
         <AiDatasetsScreenWidget server={createServer()} {...widgetProps} />
       );
@@ -828,7 +830,7 @@ describe("AiDatasetsListView", () => {
     it("renders create and import modals with handlers wired", async () => {
       const onCreate = mock(() => undefined);
       const onImportSubmit = mock(() => undefined);
-      const onFilePicked = mock(() => undefined);
+      const onFilePicked = mock((_args: {content: string; filename: string}): void => undefined);
       const onRetry = mock(() => undefined);
       const view = renderWithTheme(
         <AiDatasetsListView
@@ -890,7 +892,7 @@ describe("AiDatasetsListView", () => {
     it("wires create prompt binding and file pick handler", () => {
       const onCreateNameChange = mock(() => undefined);
       const onCreatePromptBindingChange = mock(() => undefined);
-      const onFilePicked = mock(() => undefined);
+      const onFilePicked = mock((_args: {content: string; filename: string}): void => undefined);
       const onImportPasteChange = mock(() => undefined);
       const view = renderWithTheme(
         <AiDatasetsListView
@@ -978,7 +980,7 @@ describe("AiDatasetsListView", () => {
     });
 
     it("ignores empty file selection and failed file reads", async () => {
-      const onFilePicked = mock(() => undefined);
+      const onFilePicked = mock((_args: {content: string; filename: string}): void => undefined);
       const originalFetch = globalThis.fetch;
       globalThis.fetch = mock(async () => {
         throw new Error("read failed");

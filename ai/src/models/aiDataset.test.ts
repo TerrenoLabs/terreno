@@ -12,7 +12,7 @@ describe("AIDataset model", () => {
     const userId = new mongoose.Types.ObjectId();
     const dataset = await AIDataset.create({
       columns: [{name: "count", type: "number"}],
-      historyId: new mongoose.Types.ObjectId(),
+      historyId: new mongoose.Types.ObjectId().toString(),
       rowCount: 1,
       rows: [[3]],
       userId,

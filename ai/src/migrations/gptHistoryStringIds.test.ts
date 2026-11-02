@@ -158,10 +158,11 @@ describe("gpt-history-string-ids migration", () => {
 
   it("rewrites refs left as ObjectIds when a run stopped after moving their history", async () => {
     const orphanedHistory = new mongoose.Types.ObjectId();
-    await historiesCollection().insertOne({
+    const movedHistory: mongoose.mongo.Document = {
       ...legacyHistory("moved"),
       _id: orphanedHistory.toHexString(),
-    });
+    };
+    await historiesCollection().insertOne(movedHistory);
     await datasetsCollection().insertOne(legacyDataset(orphanedHistory));
 
     const result = await migrateGptHistoryStringIds({

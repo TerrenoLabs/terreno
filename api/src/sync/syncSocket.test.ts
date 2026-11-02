@@ -1333,7 +1333,7 @@ describe("emitSyncDeltaForChange", () => {
     const deltas = io.emissions.filter((e) => e.event === "sync:delta");
     expect(deltas).toHaveLength(1);
     const receiver = io.sockets.sockets.get(deltas[0].socketId);
-    expect(receiver.decodedToken.id).toBe("user1");
+    expect(receiver?.decodedToken.id).toBe("user1");
   });
 
   it("C7: soft delete emits a delete delta with deleted true and NO data (tombstone stripped)", async () => {

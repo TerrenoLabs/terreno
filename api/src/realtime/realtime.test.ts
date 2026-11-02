@@ -697,7 +697,7 @@ describe("startChangeStreamWatcher", () => {
   afterEach(async () => {
     setConnectionDb(originalDb);
     // Ensure the watcher is stopped between tests
-    const {stopChangeStreamWatcher: stop} = await import("./changeStreamWatcher");
+    const {stopChangeStreamWatcher: stop} = await import("./changeStreamWatcher.js");
     await stop();
   });
 
@@ -751,7 +751,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -766,7 +766,7 @@ describe("startChangeStreamWatcher", () => {
   it("throws when mongoose connection db is unavailable", async () => {
     setConnectionDb(undefined);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     expect(() => startChangeStreamWatcher(io)).toThrow(
@@ -780,7 +780,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     expect(() => startChangeStreamWatcher(io)).toThrow("Failed to create change stream watcher");
@@ -793,7 +793,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -814,7 +814,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {ignoredCollections: ["audit_logs"]}, true);
@@ -836,7 +836,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {ignoredOperations: ["insert"]}, true);
@@ -857,7 +857,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -885,7 +885,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -911,7 +911,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -929,7 +929,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -987,7 +987,7 @@ describe("startChangeStreamWatcher", () => {
       const mockDb = {watch: mock(() => streams.shift() ?? thirdStream)};
       setConnectionDb(mockDb);
 
-      const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+      const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
       const {io} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
 
@@ -1024,7 +1024,9 @@ describe("startChangeStreamWatcher", () => {
       const mockDb = {watch: mock(() => streams.shift() ?? secondStream)};
       setConnectionDb(mockDb);
 
-      const {SYNC_RESYNC_EVENT, startChangeStreamWatcher} = await import("./changeStreamWatcher");
+      const {SYNC_RESYNC_EVENT, startChangeStreamWatcher} = await import(
+        "./changeStreamWatcher.js"
+      );
       const {io, serverEmissions} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
 
@@ -1058,7 +1060,7 @@ describe("startChangeStreamWatcher", () => {
       setConnectionDb(mockDb);
 
       const {startChangeStreamWatcher, stopChangeStreamWatcher: stop} = await import(
-        "./changeStreamWatcher"
+        "./changeStreamWatcher.js"
       );
       const {io} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
@@ -1077,7 +1079,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {batchSize: 100, fullDocument: "whenAvailable"}, true);
@@ -1104,7 +1106,7 @@ describe("stopChangeStreamWatcher", () => {
     setConnectionDb(mockDb);
 
     const {startChangeStreamWatcher, stopChangeStreamWatcher} = await import(
-      "./changeStreamWatcher"
+      "./changeStreamWatcher.js"
     );
     const io = {
       sockets: {

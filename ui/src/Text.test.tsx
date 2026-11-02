@@ -1,7 +1,7 @@
 import {describe, expect, it, spyOn} from "bun:test";
 import {render} from "@testing-library/react-native";
 import {createRef} from "react";
-import type {Text as NativeText, TextProps} from "react-native";
+import type {TextInstance as NativeText, TextProps} from "react-native";
 
 import {Text} from "./Text";
 import {ThemeProvider} from "./Theme";

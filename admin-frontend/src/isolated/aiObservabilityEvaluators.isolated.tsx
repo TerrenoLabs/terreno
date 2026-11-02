@@ -778,7 +778,7 @@ describe("AiEvaluatorsListScreen", () => {
 
     it("hides create when the caller cannot create evaluators", async () => {
       listState.isLoading = false;
-      statusData.permissions = {aiEvaluator: {list: true, read: true}};
+      statusData.permissions = {aiEvaluator: {create: false, list: true, read: true}};
       const view = renderWithTheme(
         <AiEvaluatorsScreenWidget
           config={emptyConfig}
@@ -801,14 +801,13 @@ describe("AiEvaluatorsListView", () => {
   });
   const evaluators: EvaluatorRecord[] = [
     {
-      created: "2026-01-01T00:00:00.000Z",
+      confidenceAlertBelow: 0.5,
       dimensions: [{dataType: "boolean", key: "correct", required: true}],
       id: "eval-1",
       name: "quality",
       runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
       target: "full trace",
       type: "llm-judge",
-      updated: "2026-01-01T00:00:00.000Z",
     },
   ];
 

@@ -9,6 +9,8 @@ import {
   authAsUser,
   authAsUserWithCredentials,
   ensureTestUsers,
+  historyRouterOptions,
+  terrenoUserModel,
   UserModel,
 } from "../tests/helpers";
 import {addGptHistoryRoutes} from "./gptHistories";
@@ -40,10 +42,10 @@ const idOf = (user: AiTestUserDoc): string =>
 const buildSyncApp = (): express.Application =>
   new TerrenoApp({
     configureApp: (router, options) => {
-      addGptHistoryRoutes(router, options);
+      addGptHistoryRoutes(router, historyRouterOptions(options));
     },
     skipListen: true,
-    userModel: UserModel,
+    userModel: terrenoUserModel,
   })
     .register(new SyncApp())
     .build();

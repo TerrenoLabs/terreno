@@ -32,6 +32,12 @@ if (process.argv.some((arg) => CROSS_SITE_SPECS.test(arg))) {
   process.env.E2E_CROSS_SITE_BEARER = "true";
 }
 const isCrossSiteBearerRun = process.env.E2E_CROSS_SITE_BEARER === "true";
+
+/**
+ * The package smoke (e2e/smoke.spec.ts) drives its own web export and backend through
+ * `bun run smoke`, so the main suite never collects it.
+ */
+const PACKAGE_SMOKE = /e2e\/smoke\.spec\.ts$/;
 /**
  * `E2E_ACCOUNT_LINKING=explicit` (or `never`) starts the backend with that
  * `AUTH_ACCOUNT_LINKING` mode, for account-linking.spec.ts's backend-mode cases, which skip
@@ -91,6 +97,7 @@ const localProjects: Project[] = [
       /provisionalConsent\.spec\.ts/,
       /syncdb-.*\.spec\.ts/,
       CROSS_SITE_SPECS,
+      PACKAGE_SMOKE,
     ],
     use: chromium,
   },
@@ -119,7 +126,7 @@ const ciProjects: Project[] = [
   {
     dependencies: ["setup"],
     name: "chromium",
-    testIgnore: CROSS_SITE_SPECS,
+    testIgnore: [CROSS_SITE_SPECS, PACKAGE_SMOKE],
     use: chromium,
   },
 ];

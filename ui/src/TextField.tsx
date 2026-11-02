@@ -213,11 +213,11 @@ export const TextField: FC<TextFieldProps> = ({
   const visibilityToggleWebProps =
     Platform.OS === "web" ? {onMouseDown: preventVisibilityToggleBlur} : {};
 
-  let borderColor = focused ? theme.border.focus : theme.border.dark;
+  let borderColor = focused ? theme.field.borderFocus : theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (errorText && !focused) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
   const borderWidth = focused ? 3 : errorText ? 2 : 1;
 
@@ -327,7 +327,7 @@ export const TextField: FC<TextFieldProps> = ({
       )}
       <View
         style={{
-          backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
+          backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
           borderColor,
           borderRadius: 4,
           borderWidth,

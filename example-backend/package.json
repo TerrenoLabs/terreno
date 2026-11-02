@@ -68,6 +68,7 @@
     "photos:generate": "bun run src/scripts/generatePhotoLibrary.ts",
     "script": "bun run src/scripts/runAdminScript.ts",
     "seed": "bun run src/scripts/seed-test-data.ts",
+    "smoke": "bun e2e/smoke.ts",
     "start": "bun run src/index.ts",
     "start:prod": "bun run dist/index.js",
     "sync-consents": "bun run src/scripts/syncConsents.ts",

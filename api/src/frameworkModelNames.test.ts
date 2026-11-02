@@ -5,7 +5,11 @@ import mongoose from "mongoose";
 import {createAuditEventModel} from "./audit/auditEventModel";
 import {AuthToken} from "./authTokens";
 import {FRAMEWORK_MODEL_PUBLIC_NAMES, publicFrameworkModelName} from "./frameworkModelNames";
+import {McpOAuthClient} from "./models/mcpOAuthClient";
+import {McpOAuthToken} from "./models/mcpOAuthToken";
+import {McpRequestLog} from "./models/mcpRequestLog";
 import {McpServiceToken} from "./models/mcpServiceToken";
+import {McpToolSetting} from "./models/mcpToolSetting";
 import {Notification} from "./models/notification";
 import {NotificationPreference} from "./models/notificationPreference";
 import {getMembershipModel, getOrganizationModel} from "./orgs/organizationModel";
@@ -35,7 +39,11 @@ describe("framework model names", () => {
     const models = [
       [createAuditEventModel(mongoose.connection), "TerrenoAuditEvent", "auditevents"],
       [AuthToken, "TerrenoAuthToken", "authtokens"],
+      [McpOAuthClient, "TerrenoMcpOAuthClient", "mcpoauthclients"],
+      [McpOAuthToken, "TerrenoMcpOAuthToken", "mcpoauthtokens"],
+      [McpRequestLog, "TerrenoMcpRequestLog", "mcprequestlogs"],
       [McpServiceToken, "TerrenoMcpServiceToken", "mcpservicetokens"],
+      [McpToolSetting, "TerrenoMcpToolSetting", "mcptoolsettings"],
       [getMembershipModel(), "TerrenoMembership", "memberships"],
       [Notification, "TerrenoInboxNotification", "notifications"],
       [NotificationPreference, "TerrenoNotificationPreference", "notificationpreferences"],

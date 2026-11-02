@@ -73,6 +73,7 @@
         "update-dependencies",
         "upgrading-terreno",
         "deploy-gcp",
+        "bootstrap-mcp-server",
         "deploy-vercel",
         "set-up-social-login"
       ],

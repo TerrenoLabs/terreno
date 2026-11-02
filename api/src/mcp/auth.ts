@@ -20,6 +20,12 @@ export interface MCPAuthContext {
 /** The authenticated user plus the credential type that proved it. */
 export interface MCPAuthResult {
   credential: RequestCredential;
+  /** OAuth client id for an MCP OAuth access token. Never a secret. */
+  oauthClientId?: string;
+  /** OAuth rotation-chain id for an MCP OAuth access token. Never a secret. */
+  oauthFamilyId?: string;
+  /** `McpServiceToken` document id for a service token. Never the token or its hash. */
+  serviceTokenId?: string;
   /** Scopes granted to an MCP OAuth access token; unset for other credentials. */
   scopes?: string[];
   user: User;
@@ -97,7 +103,11 @@ const authenticateServiceToken = async (
   ).catch((error) => {
     logger.debug(`MCP service token last-used update failed: ${error}`);
   });
-  return {credential: "mcp-service-token", user: activeUser};
+  return {
+    credential: "mcp-service-token",
+    serviceTokenId: String(serviceToken._id),
+    user: activeUser,
+  };
 };
 
 const authenticateOAuthAccessToken = async (
@@ -121,7 +131,13 @@ const authenticateOAuthAccessToken = async (
     return undefined;
   }
   const scopes = (accessToken.scope ?? "").split(" ").filter((scope) => scope.length > 0);
-  return {credential: "oauth", scopes, user: activeUser};
+  return {
+    credential: "oauth",
+    oauthClientId: accessToken.clientId,
+    oauthFamilyId: accessToken.familyId,
+    scopes,
+    user: activeUser,
+  };
 };
 
 /**

@@ -1949,6 +1949,8 @@ jobs:
             export PORT=4000
             export MONGO_URI="mongodb://127.0.0.1/terreno-admin-spa-e2e?replicaSet=rs0"
             export ADMIN_SPA_ENABLED=true
+            export MCP_OAUTH_ENABLED=true
+            export PUBLIC_API_URL=http://localhost:4000
             export AUTH_PROVIDER=better-auth
             export BETTER_AUTH_URL=http://localhost:4000
             export BETTER_AUTH_SECRET="${SESSION_SECRET}"

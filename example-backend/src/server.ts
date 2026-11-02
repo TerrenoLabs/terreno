@@ -1,6 +1,11 @@
 import type http from "node:http";
 import * as Sentry from "@sentry/bun";
-import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
+import {
+  AdminApp,
+  DocumentStorageApp,
+  mcpAdminModels,
+  mcpAdminScripts,
+} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
 import {
   AIAdminApp,
@@ -62,7 +67,6 @@ import {
 } from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
-import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -213,10 +217,23 @@ export const start = async (
         level: Configuration.get<string>("LOGGING_LEVEL") as "debug" | "info" | "warn" | "error",
         logRequests: Boolean(!isDeployed),
       },
+      // Opt-in OAuth for remote MCP clients; consent runs on the admin SPA's built-in screen.
+      mcpOAuth:
+        process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
+          ? {
+              allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost", "127.0.0.1"],
+              consentUrl: `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
+              dynamicClientRegistration: true,
+              enabled: true,
+              issuer: process.env.PUBLIC_API_URL,
+            }
+          : undefined,
+      mcpRequestLog: {enabled: true, retentionDays: 30},
       mcpServiceTokens: {
         enabled: true,
         publicMcpUrl: process.env.PUBLIC_API_URL ?? process.env.BETTER_AUTH_URL,
       },
+      mcpToolSettings: true,
       migrations: {dir: resolveExampleMigrationsDir()},
       organizations: {
         settingsSchema: organizationSettingsSchema,
@@ -494,9 +511,9 @@ export const start = async (
           ],
           home: exampleAdminHome,
           migrations: {dir: resolveExampleMigrationsDir()},
-          models: [mcpServiceTokenAdminModel],
+          models: mcpAdminModels(),
           organizations: true,
-          scripts: adminScripts,
+          scripts: [...adminScripts, ...mcpAdminScripts()],
         })
       )
       .register(

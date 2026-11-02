@@ -196,6 +196,10 @@ bun run test:e2e
 bun run test:integration    # needs Mongo + example-backend; job `admin-spa-integration`
 ```
 
+For `test:integration`, start example-backend with `ADMIN_SPA_ENABLED=true`,
+`AUTH_PROVIDER=better-auth`, and, for the MCP OAuth consent spec, `MCP_OAUTH_ENABLED=true` and
+`PUBLIC_API_URL=http://localhost:4000`. Without the last two the consent spec is skipped.
+
 ## Maestro web e2e
 
 Install CLI if missing: `curl -fsSL "https://get.maestro.mobile.dev" | bash`, then put

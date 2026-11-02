@@ -1,10 +1,8 @@
 import {beforeEach, describe, it} from "bun:test";
-import {AdminApp} from "@terreno/admin-backend";
+import {AdminApp, mcpAdminModels} from "@terreno/admin-backend";
 import {generateTokens, McpServiceToken, TerrenoApp} from "@terreno/api";
 import {assert} from "chai";
 import supertest from "supertest";
-
-import {mcpServiceTokenAdminModel} from "../api/mcpServiceTokensAdmin";
 import {User as UserModel} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 
@@ -23,7 +21,7 @@ const buildApp = (): ReturnType<TerrenoApp["build"]> => {
   })
     .register(
       new AdminApp({
-        models: [mcpServiceTokenAdminModel],
+        models: mcpAdminModels(),
       })
     )
     .build();

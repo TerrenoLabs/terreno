@@ -1,8 +1,9 @@
 import {Box, Button, Heading, SocialLoginButton, Text, TextField} from "@terreno/ui";
-import {useRouter} from "expo-router";
+import {useLocalSearchParams, useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
 import {useDispatch} from "react-redux";
 import {useAppConfig} from "../components/AppConfigGate";
+import {sanitizeReturnTo} from "../components/adminGateUtils";
 import {useAuth} from "../components/StoreProvider";
 
 type SocialProvider = "google" | "github" | "apple";
@@ -12,6 +13,9 @@ const LoginScreen: React.FC = () => {
   const dispatch = useDispatch();
   const {appConfig} = useAppConfig();
   const {authClient, syncSession} = useAuth();
+  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
+  // Only an in-app path is honored; anything else falls back to the admin home.
+  const safeReturnTo = sanitizeReturnTo(returnTo);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,8 +24,8 @@ const LoginScreen: React.FC = () => {
 
   const onSuccess = useCallback(async (): Promise<void> => {
     await syncSession(dispatch);
-    router.replace("/");
-  }, [dispatch, router, syncSession]);
+    router.replace(safeReturnTo ?? "/");
+  }, [dispatch, router, safeReturnTo, syncSession]);
 
   const handleEmailLogin = useCallback(async (): Promise<void> => {
     setError(undefined);

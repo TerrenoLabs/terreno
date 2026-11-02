@@ -1285,7 +1285,9 @@ const generateFrontendPackageJson = (args: BootstrapArgs): string => {
     {
       dependencies: {
         "@better-auth/expo": BETTER_AUTH_VERSION,
+        "@better-auth/passkey": BETTER_AUTH_VERSION,
         "@expo/vector-icons": "^15.1.1",
+        "@modelcontextprotocol/client": "^2.0.0",
         "@react-native-async-storage/async-storage": "2.2.0",
         "@sentry/react": "^10.29.0",
         "@terreno/admin-frontend": TERRENO_DEP_VERSION,

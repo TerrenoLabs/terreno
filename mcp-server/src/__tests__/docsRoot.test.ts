@@ -56,7 +56,23 @@ describe("getDocsRoot", () => {
     expect(resolved).toBe(execDocs);
   });
 
-  test("returns bundled path when neither bundled nor exec docs exist", () => {
+  test("falls back to checkout source docs after bundled and exec-adjacent checks", (): void => {
+    const sourceDocsPath = join(dirname(docsRootModulePath), "..", "src", "docs");
+    const execDocsPath = join(execFallbackTmp, "docs");
+    const checkedPaths: string[] = [];
+    const resolved = getDocsRoot({
+      execPath: join(execFallbackTmp, "bun"),
+      existsSyncFn: (path): boolean => {
+        checkedPaths.push(path);
+        return checkedPaths.length === 3 && path === sourceDocsPath;
+      },
+    });
+
+    expect(checkedPaths).toEqual([bundledDocsPath, execDocsPath, sourceDocsPath]);
+    expect(resolved).toBe(sourceDocsPath);
+  });
+
+  test("returns bundled path when no docs directories exist", () => {
     const resolved = getDocsRoot({
       execPath: null,
       existsSyncFn: () => false,

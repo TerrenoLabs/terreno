@@ -24,6 +24,12 @@
     "supertest": "catalog:",
     "typescript": "catalog:"
   },
+  "files": [
+    "LICENSE",
+    "dist/**/*",
+    "src/**/*",
+    ".ai/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "admin",

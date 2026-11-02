@@ -30,10 +30,31 @@ publish-feature-flags:
     expect(parsePublishWorkingDirectories(yaml)).toEqual(["api", "feature-flags", "ui"]);
   });
 
+  it("parses agent plugin directories from a publish matrix", () => {
+    const yaml = `
+    strategy:
+      matrix:
+        directory: [plugins/terreno-claude, plugins/terreno-loop-claude]
+    steps:
+      - name: Publish to npm
+        working-directory: \${{ matrix.directory }}
+`;
+    expect(parsePublishWorkingDirectories(yaml)).toEqual([
+      "plugins/terreno-claude",
+      "plugins/terreno-loop-claude",
+    ]);
+  });
+
   it("maps rtk and mcp-server to their reference pages", () => {
     expect(referencePageForPackage("rtk")).toBe("docs/reference/legacy/rtk.md");
     expect(referencePageForPackage("mcp-server")).toBe("docs/reference/mcp-server.md");
     expect(referencePageForPackage("feature-flags")).toBe("docs/reference/feature-flags.md");
+    expect(referencePageForPackage("plugins/terreno-claude")).toBe(
+      "docs/reference/lifecycle-plugin.md"
+    );
+    expect(referencePageForPackage("plugins/terreno-loop-claude")).toBe(
+      "docs/reference/scan-plugin.md"
+    );
   });
 
   it("rejects stub READMEs without ## Install", () => {

@@ -9,8 +9,8 @@
  *
  * rtk targets React Native, so the native modules its package root loads are shimmed with the
  * same `mock.module` shims its unit tests use (`test-preload.ts`), plus two the package root
- * also loads: `@terreno/ui` (`socket.ts` imports a hook this smoke never calls) and
- * `expo-linking` (imported by the Better Auth Expo plugin).
+ * also loads: `@terreno/ui` (`socket.ts` and the auth screens import a hook and components this
+ * smoke never calls) and `expo-linking` (imported by the Better Auth Expo plugin).
  */
 import {mock} from "bun:test";
 import type {BetterAuthClientInterface} from "@terreno/rtk";
@@ -34,7 +34,16 @@ interface MeResponse {
 /** Loads the compiled package behind the shims. Shims must be in place before the import. */
 const loadRtk = async (): Promise<typeof import("@terreno/rtk")> => {
   await import("../test-preload");
-  mock.module("@terreno/ui", () => ({useToast: () => ({})}));
+  // The package root re-exports screens built on @terreno/ui components; the smoke never renders them.
+  const NoopComponent = (): null => null;
+  mock.module("@terreno/ui", () => ({
+    AccountSecurityScreen: NoopComponent,
+    Box: NoopComponent,
+    LoginScreen: NoopComponent,
+    Spinner: NoopComponent,
+    TwoFactorChallengeScreen: NoopComponent,
+    useToast: () => ({}),
+  }));
   // The unit tests replace `@better-auth/expo/client` whole; the smoke runs the real plugin,
   // which imports expo-linking for deep-link URLs (social sign-in only).
   mock.module("expo-linking", () => ({

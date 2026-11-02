@@ -12,10 +12,7 @@ trap 'rm -rf "$work_dir"' EXIT
 export BUN_INSTALL_CACHE_DIR="$work_dir/bun-cache"
 
 cd "$repo_root"
-bun run --filter '@terreno/api' --filter '@terreno/test' --filter '@terreno/blocks' \
-  --filter '@terreno/jobs' --filter '@terreno/api-health' --filter '@terreno/admin-backend' \
-  --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/admin-frontend' \
-  --filter '@terreno/cli' compile
+bun run compile
 
 app_dir="$work_dir/app"
 bun cli/dist/bin.js bootstrap app --name bootstrap-check --display-name "Bootstrap Check" \

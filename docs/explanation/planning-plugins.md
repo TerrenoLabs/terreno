@@ -5,7 +5,7 @@ the lifecycle plugin knows *how to build one approved thing correctly*, and the 
 plugin knows *what is worth building next and whether it worked*.
 
 ```text
-terreno-scan                            terreno (lifecycle)
+terreno-loop                            terreno (lifecycle)
 ------------                            -------------------
 Aim     charter a measurable goal
 Sweep   shard + map the repository
@@ -58,10 +58,10 @@ feature keeps it true; a guide written once at the end drifts from the app the f
 a label changes. A repository with no end users opts out in its agent instructions. See
 [User guide](../reference/lifecycle-plugin.md#user-guide).
 
-## terreno-scan (scan plugin)
+## terreno-loop (scan plugin)
 
-Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-scan/`;
-Claude Code consumes the generated `plugins/terreno-scan-claude/`. It depends on the
+Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-loop/`;
+Claude Code consumes the generated `plugins/terreno-loop-claude/`. It depends on the
 lifecycle plugin — Plot hands every slice to Grow.
 
 | Stage | Owns | PASS next |
@@ -122,9 +122,9 @@ Three properties fall out of keeping discovery and delivery in separate plugins:
 
 | Host | Lifecycle | Scan |
 | --- | --- | --- |
-| Cursor | `terreno-planning`, `/terreno-1-grow` | `terreno-scan`, `/terreno-scan-1-aim` |
-| Codex | `terreno-planning`, `$terreno-1-grow` | `terreno-scan`, `$terreno-scan-1-aim` |
-| Claude Code | `terreno`, `/terreno:1-grow` | `terreno-scan`, `/terreno-scan:1-aim` |
+| Cursor | `terreno-planning`, `/terreno-1-grow` | `terreno-loop`, `/terreno-loop-1-aim` |
+| Codex | `terreno-planning`, `$terreno-1-grow` | `terreno-loop`, `$terreno-loop-1-aim` |
+| Claude Code | `terreno`, `/terreno:1-grow` | `terreno-loop`, `/terreno-loop:1-aim` |
 
 Install both from the marketplaces described in
 [install agent skills](../how-to/install-agent-skills.md). Claude Code resolves a plugin

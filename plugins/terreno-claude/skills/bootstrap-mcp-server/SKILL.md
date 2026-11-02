@@ -1,6 +1,6 @@
 ---
 name: bootstrap-mcp-server
-description: Bootstrap a backend-only Terreno MCP server that ships as a single Bun executable with the admin console embedded. Scaffolds the backend with create-terreno-app, drops the frontend, registers MCP tools, service tokens, optional MCP OAuth using the admin console's consent screen, a request log, tool on/off switches, and the MCP admin screens, then compiles everything (admin SPA included) into one binary. Trigger with "bootstrap an MCP server", "new Terreno MCP server", "MCP-only backend", or "ship the MCP server as a binary". Not for a full Expo app (use the terreno_bootstrap prompt / create-terreno-app) or for adding MCP tools to an existing app (see docs/how-to/expose-mcp-tools.md).
+description: Bootstrap a backend-only Terreno MCP server that ships as a single Bun executable with the admin console embedded. Scaffolds the backend with create-terreno-app, drops the frontend, registers MCP tools, service tokens, optional MCP OAuth using the admin console's consent screen, a request log, tool on/off switches, and the MCP admin screens, then compiles everything (admin SPA included) into one binary. Trigger with "bootstrap an MCP server", "new Terreno MCP server", "MCP-only backend", or "ship the MCP server as a binary". Not for a full Expo app (use the terreno_bootstrap prompt / create-terreno-app) or for adding MCP tools to an existing app (see https://terreno-docs.netlify.app/how-to/expose-mcp-tools).
 targets: ['*']
 ---
 
@@ -82,7 +82,7 @@ terreno
 tokens, OAuth clients, OAuth connections, request log, tools; keep the two flags matched to the
 `TerrenoApp` options) and `mcpAdminScripts()` adds `mcp-sign-out-everywhere`. If the
 app uses RBAC (`accessControl`), spread `mcpAdminStatements` into its statements. See
-`docs/how-to/manage-mcp-in-admin.md`. Check: `curl -I localhost:4000/console` returns 200 (the
+https://terreno-docs.netlify.app/how-to/manage-mcp-in-admin. Check: `curl -I localhost:4000/console` returns 200 (the
 published package ships the prebuilt SPA).
 
 ### 3. Turn on the MCP surface
@@ -106,7 +106,7 @@ rateLimit: {store: "memory", trustProxy: "loopback"},   // registration and toke
 ```
 
 Expose tools with `mcp: {methods: ["list", "read"]}` on `modelRouter` and custom tools with
-`registerMCPTool` (see `docs/how-to/expose-mcp-tools.md`). Ship at least one tool, or `/mcp` is
+`registerMCPTool` (see https://terreno-docs.netlify.app/how-to/expose-mcp-tools). Ship at least one tool, or `/mcp` is
 not mounted.
 
 **Consent screen (OAuth only).** `consentUrl` points at the admin console's built-in consent
@@ -219,7 +219,7 @@ group to `/opt/cursor/artifacts/` when that directory exists.
 ### 8. Expose it
 
 Never put `localhost:4000` on the internet by port-forwarding. Follow
-`docs/how-to/expose-mcp-server-safely.md`: a named Cloudflare Tunnel, Cloudflare Access on
+https://terreno-docs.netlify.app/how-to/expose-mcp-server-safely: a named Cloudflare Tunnel, Cloudflare Access on
 `/admin`, plus `/console` and `/api/auth` when every OAuth approver is in the Access policy
 (never `/mcp`, `/.well-known`, or `/oauth/*`), OAuth `issuer`
 equal to the tunnel hostname, rate limiting on with `trustProxy` set for the proxy in front.

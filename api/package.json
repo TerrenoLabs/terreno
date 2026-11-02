@@ -86,6 +86,13 @@
       "types": "./dist/tests/openApiResponseSchema.d.ts"
     }
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "src/**/*",
+    ".ai/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "rest",

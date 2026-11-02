@@ -35,6 +35,12 @@
       "types": "./dist/runners/vercelQueues.d.ts"
     }
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "src/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "background-jobs",

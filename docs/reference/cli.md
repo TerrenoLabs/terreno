@@ -25,7 +25,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `generate screen` | UI screen (`--name`, `--type list\|detail\|form\|empty`) |
 | `generate form` | Form fields (`--field name:type:required:label=Label`) |
 | `generate admin` | Admin install snippets (`--model Model:/path:Display:field,field`) |
-| `bootstrap app` | Full-stack app files (`--name`, `--display-name`, `--dir`, `--description`, `--mcp-url`) |
+| `bootstrap app` | Full-stack app files (`--name`, `--display-name`, `--dir`, `--description`, `--mcp-url`, `--terreno-path <checkout>`) |
 | `bootstrap rules` | Editor AI rules only (`--packages api,ui`) |
 | `validate schema --file` | Check a Mongoose schema against conventions |
 | `api list` | List operations from `--schema` or `TERRENO_OPENAPI` |
@@ -40,6 +40,13 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `db query` | Read-only Mongo (`--collection`, `--operation`, `--filter`, `--pipeline`, `--field`, `--limit`) |
 
 Global flags: `--json`, `--help` / `-h`, `--version` / `-v`.
+
+Use `bootstrap app --terreno-path <checkout>` for unpublished Terreno versions. Run
+`bun run compile` in that checkout first. The command packs the app's Terreno dependencies
+and their transitive Terreno dependencies into `vendor/terreno`, then sets relative `file:`
+dependencies and overrides in both app manifests. JSON and text output list the linked packages;
+the generated files do not record the checkout path. The generated Dockerfile copies only
+`backend/`, so it cannot install `file:` dependencies from `vendor/` without being changed.
 
 ## Web app automation
 

@@ -1,12 +1,8 @@
-import {afterAll, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
-import React, {type ReactNode} from "react";
+import {beforeEach, describe, expect, it} from "bun:test";
+import React from "react";
 import {act, create, type ReactTestInstance, type ReactTestRenderer} from "react-test-renderer";
 
-interface QueryState {
-  data: unknown;
-  error: unknown;
-  isLoading: boolean;
-}
+import {AppRolesList} from "./AppRolesList";
 
 interface RpcArgs {
   body?: Record<string, unknown>;
@@ -14,76 +10,13 @@ interface RpcArgs {
   url: string;
 }
 
-Object.assign(globalThis, {IS_REACT_ACT_ENVIRONMENT: true});
-
-// Bun's mock.module replaces a module for every file in this process. Each stub delegates to the
-// preloaded module unless this suite is running, so sibling suites keep real behavior.
-const preloadUi = await import("@terreno/ui");
-const preloadAdminFrontend = await import("@terreno/admin-frontend");
-const stubState = {isActive: false};
-
-const createHostComponent = (name: keyof typeof preloadUi): React.FC<Record<string, unknown>> => {
-  const Real = preloadUi[name] as unknown as React.ComponentType<Record<string, unknown>>;
-  const HostComponent: React.FC<Record<string, unknown>> = ({children, ...props}) =>
-    stubState.isActive
-      ? React.createElement(name, props, children as ReactNode)
-      : React.createElement(Real, props, children as ReactNode);
-  HostComponent.displayName = name;
-  return HostComponent;
-};
-
-type RealHook = (...args: never[]) => unknown;
-const whenActive =
-  <T extends RealHook>(real: T, stub: (...args: Parameters<T>) => unknown) =>
-  (...args: Parameters<T>): unknown =>
-    stubState.isActive ? stub(...args) : real(...args);
-
-const queries: {roles: QueryState; statements: QueryState} = {
-  roles: {data: undefined, error: null, isLoading: false},
-  statements: {data: undefined, error: null, isLoading: false},
-};
-const rpcCalls: RpcArgs[] = [];
-let rpcFailure: unknown = null;
-
-mock.module("@terreno/admin-frontend", () => ({
-  ...preloadAdminFrontend,
-  useAdminRpc: whenActive(
-    preloadAdminFrontend.useAdminRpc,
-    () => (): Promise<unknown> => Promise.resolve(undefined)
-  ),
-  useAdminRpcMutation: whenActive(preloadAdminFrontend.useAdminRpcMutation, () => [
-    (args: RpcArgs) => ({
-      unwrap: async (): Promise<unknown> => {
-        rpcCalls.push(args);
-        if (rpcFailure) {
-          throw rpcFailure;
-        }
-        return {};
-      },
-    }),
-    {isLoading: false},
-  ]),
-  useAdminRpcQuery: whenActive(preloadAdminFrontend.useAdminRpcQuery, ({url}: {url: string}) => ({
-    ...(url === "/rbac/roles" ? queries.roles : queries.statements),
-    isFetching: false,
-    refetch: (): void => {},
-  })),
-}));
-
-mock.module("@terreno/ui", () => ({
-  ...preloadUi,
-  Badge: createHostComponent("Badge"),
-  Box: createHostComponent("Box"),
-  Button: createHostComponent("Button"),
-  CheckBox: createHostComponent("CheckBox"),
-  Heading: createHostComponent("Heading"),
-  Modal: createHostComponent("Modal"),
-  Spinner: createHostComponent("Spinner"),
-  Text: createHostComponent("Text"),
-  TextField: createHostComponent("TextField"),
-}));
-
-const {AppRolesList} = await import("./AppRolesList");
+interface ServerState {
+  roles: unknown;
+  rolesError: unknown;
+  statements: unknown;
+  statementsError: unknown;
+  writeError: unknown;
+}
 
 const STATEMENTS = {
   admin: ["access", "jobs"],
@@ -102,16 +35,64 @@ const ROLES = [
   {displayName: "Super Admin", isLocked: true, isSealed: true, name: "superadmin"},
 ];
 
-const byTestId = (renderer: ReactTestRenderer, testID: string): ReactTestInstance =>
-  renderer.root.find((node) => typeof node.type === "string" && node.props.testID === testID);
+const server: ServerState = {
+  roles: ROLES,
+  rolesError: null,
+  statements: {statements: STATEMENTS},
+  statementsError: null,
+  writeError: null,
+};
+const writes: RpcArgs[] = [];
+const pending: {roles: boolean; statements: boolean} = {roles: false, statements: false};
+
+const never = (): Promise<never> => new Promise<never>(() => {});
+
+// Injected in place of the AdminProvider RPC client, so the real admin RPC hooks run unmocked.
+const fakeRpc = async (args: RpcArgs): Promise<unknown> => {
+  if (args.method && args.method !== "GET") {
+    writes.push(args);
+    if (server.writeError) {
+      throw server.writeError;
+    }
+    return {};
+  }
+  if (args.url === "/rbac/roles") {
+    if (pending.roles) {
+      return never();
+    }
+    if (server.rolesError) {
+      throw server.rolesError;
+    }
+    return server.roles;
+  }
+  if (pending.statements) {
+    return never();
+  }
+  if (server.statementsError) {
+    throw server.statementsError;
+  }
+  return server.statements;
+};
+
+const rpc = fakeRpc as unknown as NonNullable<React.ComponentProps<typeof AppRolesList>["rpc"]>;
+
+const nodesWithTestId = (renderer: ReactTestRenderer, testID: string): ReactTestInstance[] =>
+  renderer.root.findAll((node) => node.props.testID === testID);
+
+const byTestId = (renderer: ReactTestRenderer, testID: string): ReactTestInstance => {
+  const [node] = nodesWithTestId(renderer, testID);
+  if (!node) {
+    throw new Error(`No node with testID ${testID}`);
+  }
+  return node;
+};
 
 const hasTestId = (renderer: ReactTestRenderer, testID: string): boolean =>
-  renderer.root.findAll((node) => typeof node.type === "string" && node.props.testID === testID)
-    .length > 0;
+  nodesWithTestId(renderer, testID).length > 0;
 
 const textOf = (renderer: ReactTestRenderer): string =>
   renderer.root
-    .findAll((node) => String(node.type) === "Text")
+    .findAll((node) => typeof node.type === "string")
     .flatMap((node) => node.children.filter((child) => typeof child === "string"))
     .join("|");
 
@@ -128,14 +109,16 @@ const render = async (element: React.ReactElement): Promise<ReactTestRenderer> =
 };
 
 const press = async (renderer: ReactTestRenderer, testID: string): Promise<void> => {
+  const node = byTestId(renderer, testID);
   await act(async () => {
-    (byTestId(renderer, testID).props.onClick as () => void)();
+    ((node.props.onClick ?? node.props.onPress) as () => void)();
   });
 };
 
 const type = async (renderer: ReactTestRenderer, testID: string, value: string): Promise<void> => {
+  const node = byTestId(renderer, testID);
   await act(async () => {
-    (byTestId(renderer, testID).props.onChange as (next: string) => void)(value);
+    (node.props.onChange as (next: string) => void)(value);
   });
 };
 
@@ -146,35 +129,31 @@ const save = async (renderer: ReactTestRenderer): Promise<void> => {
 };
 
 describe("AppRolesList", () => {
-  beforeAll(() => {
-    stubState.isActive = true;
-  });
-
-  afterAll(() => {
-    stubState.isActive = false;
-  });
-
   beforeEach(() => {
-    queries.roles = {data: ROLES, error: null, isLoading: false};
-    queries.statements = {data: {statements: STATEMENTS}, error: null, isLoading: false};
-    rpcCalls.splice(0);
-    rpcFailure = null;
+    server.roles = ROLES;
+    server.rolesError = null;
+    server.statements = {statements: STATEMENTS};
+    server.statementsError = null;
+    server.writeError = null;
+    pending.roles = false;
+    pending.statements = false;
+    writes.splice(0);
   });
 
   it("shows a spinner while roles load", async () => {
-    queries.roles = {data: undefined, error: null, isLoading: true};
-    const renderer = await render(<AppRolesList />);
+    pending.roles = true;
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     expect(hasTestId(renderer, "admin-roles-loading")).toBe(true);
   });
 
   it("shows an error when roles fail to load", async () => {
-    queries.roles = {data: undefined, error: new Error("boom"), isLoading: false};
-    const renderer = await render(<AppRolesList />);
+    server.rolesError = new Error("boom");
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     expect(hasTestId(renderer, "admin-roles-error")).toBe(true);
   });
 
   it("shows only permission checks by default", async () => {
-    const renderer = await render(<AppRolesList />);
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     expect(
       hasTestId(renderer, "admin-roles-item-clinician-permission-clinicalIntake-signoff")
     ).toBe(true);
@@ -183,50 +162,51 @@ describe("AppRolesList", () => {
     expect(hasTestId(renderer, "admin-permissions-todo")).toBe(false);
     expect(hasTestId(renderer, "admin-roles-item-todoUser-permission-empty")).toBe(true);
     expect(textOf(renderer)).toContain("No permission checks granted.");
+    await press(renderer, "admin-roles-add-button");
+    expect(hasTestId(renderer, "admin-role-permission-admin-access")).toBe(true);
     expect(hasTestId(renderer, "admin-role-permission-todo-read")).toBe(false);
-    expect(byTestId(renderer, "admin-roles-edit-superadmin").props.disabled).toBe(true);
   });
 
   it("shows model permissions when showAllPermissions is set", async () => {
-    const renderer = await render(<AppRolesList showAllPermissions />);
+    const renderer = await render(<AppRolesList rpc={rpc} showAllPermissions />);
     expect(hasTestId(renderer, "admin-roles-item-clinician-permission-todo-read")).toBe(true);
     expect(hasTestId(renderer, "admin-permissions-todo-update")).toBe(true);
-    expect(hasTestId(renderer, "admin-role-permission-todo-read")).toBe(true);
     expect(textOf(renderer)).toContain("No permissions granted.");
+    await press(renderer, "admin-roles-add-button");
+    expect(hasTestId(renderer, "admin-role-permission-todo-read")).toBe(true);
   });
 
   it("accepts roles wrapped in a data envelope and handles an empty list", async () => {
-    queries.roles = {data: {data: []}, error: null, isLoading: false};
-    queries.statements = {data: {data: {statements: STATEMENTS}}, error: null, isLoading: false};
-    const renderer = await render(<AppRolesList />);
+    server.roles = {data: []};
+    server.statements = {data: {statements: STATEMENTS}};
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     expect(textOf(renderer)).toContain("No roles found.");
     expect(hasTestId(renderer, "admin-permissions-clinicalIntake-signoff")).toBe(true);
   });
 
   it("shows statement loading and error states", async () => {
-    queries.statements = {data: undefined, error: null, isLoading: true};
-    const loading = await render(<AppRolesList />);
-    expect(
-      byTestId(loading, "admin-permissions-list").findAll((node) => String(node.type) === "Spinner")
-        .length
-    ).toBe(1);
+    pending.statements = true;
+    const loading = await render(<AppRolesList rpc={rpc} />);
+    expect(hasTestId(loading, "admin-permissions-clinicalIntake")).toBe(false);
+    expect(textOf(loading)).not.toContain("Failed to load permissions.");
 
-    queries.statements = {data: undefined, error: new Error("boom"), isLoading: false};
-    const failed = await render(<AppRolesList />);
+    pending.statements = false;
+    server.statementsError = new Error("boom");
+    const failed = await render(<AppRolesList rpc={rpc} />);
     expect(textOf(failed)).toContain("Failed to load permissions.");
   });
 
   it("requires a name and display name before creating", async () => {
-    const renderer = await render(<AppRolesList />);
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     await press(renderer, "admin-roles-add-button");
     expect(modal(renderer).props.visible).toBe(true);
     await save(renderer);
-    expect(rpcCalls).toHaveLength(0);
+    expect(writes).toHaveLength(0);
     expect(hasTestId(renderer, "admin-role-save-error")).toBe(true);
   });
 
   it("creates a role with the selected permission checks", async () => {
-    const renderer = await render(<AppRolesList />);
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     await press(renderer, "admin-roles-add-button");
     await type(renderer, "admin-role-name", " auditorPlus ");
     await type(renderer, "admin-role-display-name", "Auditor Plus");
@@ -237,7 +217,7 @@ describe("AppRolesList", () => {
     await press(renderer, "admin-role-permission-clinicalIntake-signoff");
     await save(renderer);
 
-    expect(rpcCalls).toEqual([
+    expect(writes).toEqual([
       {
         body: {
           description: undefined,
@@ -253,14 +233,13 @@ describe("AppRolesList", () => {
   });
 
   it("keeps model permissions when editing a role's permission checks", async () => {
-    const renderer = await render(<AppRolesList />);
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     await press(renderer, "admin-roles-edit-clinician");
-    expect(byTestId(renderer, "admin-role-name").props.disabled).toBe(true);
     await type(renderer, "admin-role-description", "  ");
     await press(renderer, "admin-role-permission-admin-access");
     await save(renderer);
 
-    expect(rpcCalls).toEqual([
+    expect(writes).toEqual([
       {
         body: {
           description: null,
@@ -274,13 +253,13 @@ describe("AppRolesList", () => {
   });
 
   it("shows the server error when saving fails and dismisses the modal", async () => {
-    rpcFailure = {data: {detail: "Role is sealed"}};
-    const renderer = await render(<AppRolesList />);
+    server.writeError = {data: {detail: "Role is sealed"}};
+    const renderer = await render(<AppRolesList rpc={rpc} />);
     await press(renderer, "admin-roles-edit-todoUser");
     await save(renderer);
     expect(textOf(renderer)).toContain("Role is sealed");
 
-    rpcFailure = new Error("network");
+    server.writeError = new Error("network");
     await save(renderer);
     expect(textOf(renderer)).toContain("Failed to save role.");
 

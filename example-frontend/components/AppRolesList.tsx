@@ -10,7 +10,11 @@ import React, {useCallback, useMemo, useState} from "react";
  * permissions.
  */
 
+type AdminRpc = NonNullable<ReturnType<typeof useAdminRpc>>;
+
 interface AppRolesListProps {
+  /** Admin RPC client for the RBAC endpoints. Defaults to the one `AdminProvider` supplies. */
+  rpc?: AdminRpc;
   /** Show model (CRUD) permissions alongside permission checks. Defaults to false. */
   showAllPermissions?: boolean;
 }
@@ -150,8 +154,12 @@ const PermissionCheckRows: React.FC<{
   );
 };
 
-export const AppRolesList: React.FC<AppRolesListProps> = ({showAllPermissions = false}) => {
-  const rpc = useAdminRpc();
+export const AppRolesList: React.FC<AppRolesListProps> = ({
+  rpc: rpcOverride,
+  showAllPermissions = false,
+}) => {
+  const contextRpc = useAdminRpc();
+  const rpc = rpcOverride ?? contextRpc;
   const rolesQuery = useAdminRpcQuery<RolesResponse>({
     providesTags: [ROLES_TAG],
     rpc,

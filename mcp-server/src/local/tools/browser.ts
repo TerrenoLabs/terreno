@@ -116,12 +116,12 @@ const CURSOR_ARTIFACTS_ROOT = "/opt/cursor/artifacts";
  * Wraps a Bun WebView so it satisfies {@link BrowserView} when Bun types omit `back`/`forward`.
  *
  * @param webview - Native Bun WebView instance created for browser automation.
- * @returns A view that delegates to the WebView and implements history navigation via `evaluate`.
+ * @returns A view that delegates to the WebView and uses native history navigation.
  */
 const wrapWebViewAsBrowserView = (webview: Bun.WebView): BrowserView => {
   return {
-    back: async (): Promise<void> => {
-      await webview.evaluate("history.back()");
+    back: (): Promise<void> => {
+      return webview.goBack();
     },
     click: (selector: string, options?: Bun.WebView.ClickSelectorOptions): Promise<void> => {
       return webview.click(selector, options);
@@ -132,8 +132,8 @@ const wrapWebViewAsBrowserView = (webview: Bun.WebView): BrowserView => {
     evaluate: <T = unknown>(code: string): Promise<T> => {
       return webview.evaluate(code);
     },
-    forward: async (): Promise<void> => {
-      await webview.evaluate("history.forward()");
+    forward: (): Promise<void> => {
+      return webview.goForward();
     },
     navigate: (url: string): Promise<void> => {
       return webview.navigate(url);

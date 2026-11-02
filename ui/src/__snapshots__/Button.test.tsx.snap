@@ -55,7 +55,7 @@ exports[`Button renders correctly with default props 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -127,7 +127,7 @@ exports[`Button renders primary variant 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -654,7 +654,7 @@ exports[`Button renders loading state 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -726,7 +726,7 @@ exports[`Button renders fullWidth button 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "stretch",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -811,7 +811,7 @@ exports[`Button renders with icon on left 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -896,7 +896,7 @@ exports[`Button renders with icon on right 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -968,7 +968,7 @@ exports[`Button renders with confirmation modal props 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -1040,7 +1040,7 @@ exports[`Button renders with tooltip on desktop (wrapped in Tooltip) 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -1112,7 +1112,7 @@ exports[`Button renders with custom confirmationText and modalSubTitle 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,
@@ -1207,7 +1207,7 @@ exports[`Button shows loading indicator when loading prop is true 1`] = `
     "style": {
       "alignItems": "center",
       "alignSelf": "flex-start",
-      "backgroundColor": "#0E9DCD",
+      "backgroundColor": "#0C80A7",
       "borderColor": undefined,
       "borderRadius": 360,
       "borderWidth": undefined,

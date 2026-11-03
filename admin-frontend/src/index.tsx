@@ -54,6 +54,7 @@ export {
   bindAdminRequest,
   DEFAULT_ADMIN_REQUEST_TIMEOUT_MS,
 } from "./adminRequest";
+export {AdminRpcSeed, type AdminRpcSeedProps, adminRpcSeedKey} from "./adminRpcSeed";
 export {buildAdminSidebarGroups, groupAdminModelsByGroup} from "./adminShellNav";
 export {CheckboxListEditor} from "./CheckboxListEditor";
 export {ConfigurationScreen} from "./ConfigurationScreen";

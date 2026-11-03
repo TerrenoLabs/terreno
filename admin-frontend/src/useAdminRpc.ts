@@ -3,6 +3,7 @@ import {useCallback, useEffect, useRef, useState} from "react";
 import {useAdminContext} from "./adminContext";
 import {type AdminRequestArgs, adminRequest} from "./adminRequest";
 import type {AdminRpc} from "./adminRpc";
+import {adminRpcSeedKey, useAdminRpcSeedMatch} from "./adminRpcSeed";
 
 const invalidationListeners = new WeakMap<AdminRpc, Map<string, Set<() => void>>>();
 
@@ -122,24 +123,46 @@ export const useAdminRpcQuery = <T = unknown>({
   transformResponse,
   url,
 }: AdminRpcQueryOptions): AdminRpcQueryState<T> => {
-  const [data, setData] = useState<T | undefined>(undefined);
+  const requestKey = adminRpcSeedKey(url, headers);
+  const seed = useAdminRpcSeedMatch(requestKey);
+  const isSeeded = seed.found && !skip;
+  const [data, setData] = useState<T | undefined>(() => {
+    if (!isSeeded) {
+      return undefined;
+    }
+    return (transformResponse ? transformResponse(seed.value) : seed.value) as T;
+  });
   const [error, setError] = useState<unknown>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(rpc) && !skip);
-  const [isFetching, setIsFetching] = useState(Boolean(rpc) && !skip);
+  const [isLoading, setIsLoading] = useState(!isSeeded && Boolean(rpc) && !skip);
+  const [isFetching, setIsFetching] = useState(!isSeeded && Boolean(rpc) && !skip);
   const [generation, setGeneration] = useState(0);
-  const [requestUrl, setRequestUrl] = useState(url);
-  const loadedUrlRef = useRef<string | null>(null);
+  const [activeRequestKey, setActiveRequestKey] = useState(requestKey);
+  // The organization part of the key alone; paging with keepPreviousData keeps rows only while it
+  // stays the same.
+  const organizationKey = adminRpcSeedKey("", headers);
+  const [activeOrganizationKey, setActiveOrganizationKey] = useState(organizationKey);
+  // Request key (url + organization header) of the body on screen. An organization change on the
+  // same url counts as a new request, so one organization's body never shows under another.
+  const loadedKeyRef = useRef<string | null>(isSeeded ? requestKey : null);
+  // The request key whose first fetch the seed replaces. Cleared once any other request runs, so
+  // returning to it loads again; a refetch or invalidation bumps `generation` and fetches as usual.
+  const seededKeyRef = useRef<string | null>(isSeeded ? requestKey : null);
   const pendingRefetchesRef = useRef<Array<(result: AdminRpcRefetchResult<T>) => void>>([]);
   const transformRef = useRef(transformResponse);
   transformRef.current = transformResponse;
   const tagsKey = providesTags.join("\u0000");
   const headersKey = headers ? JSON.stringify(headers) : "";
 
-  // Drop the previous URL's body before paint so a route change cannot show it, unless the
-  // caller pages through one list and wants the rows to stay until the next page arrives.
-  if (url !== requestUrl) {
-    setRequestUrl(url);
-    if (!keepPreviousData) {
+  // Drop the previous request's body before paint so a route or organization change cannot show
+  // it, unless the caller pages through one list in one organization and wants the rows to stay
+  // until the next page arrives.
+  if (requestKey !== activeRequestKey) {
+    const isSameOrganization = organizationKey === activeOrganizationKey;
+    setActiveRequestKey(requestKey);
+    setActiveOrganizationKey(organizationKey);
+    seededKeyRef.current = null;
+    if (!(keepPreviousData && isSameOrganization)) {
+      loadedKeyRef.current = null;
       setData(undefined);
       setError(null);
       setIsLoading(Boolean(rpc) && !skip);
@@ -170,27 +193,32 @@ export const useAdminRpcQuery = <T = unknown>({
       settleRefetches({isError: false});
       return;
     }
-    let cancelled = false;
-    const isNewUrl = loadedUrlRef.current !== url;
-    // With keepPreviousData, only the first load of all shows as loading.
-    setIsLoading(keepPreviousData ? loadedUrlRef.current === null : isNewUrl);
-    setIsFetching(true);
-    if (isNewUrl && !keepPreviousData) {
-      // The body on screen is gone, so returning to the old URL must load it again.
-      loadedUrlRef.current = null;
-      setData(undefined);
-    }
-    setError(null);
     const requestHeaders = headersKey
       ? (JSON.parse(headersKey) as Record<string, string>)
       : undefined;
+    const key = adminRpcSeedKey(url, requestHeaders);
+    if (generation === 0 && seededKeyRef.current === key) {
+      return;
+    }
+    seededKeyRef.current = null;
+    let cancelled = false;
+    const isNewRequest = loadedKeyRef.current !== key;
+    // With keepPreviousData, only the first load of all shows as loading.
+    setIsLoading(keepPreviousData ? loadedKeyRef.current === null : isNewRequest);
+    setIsFetching(true);
+    if (isNewRequest && !keepPreviousData) {
+      // The body on screen is gone, so returning to the old request must load it again.
+      loadedKeyRef.current = null;
+      setData(undefined);
+    }
+    setError(null);
     rpc({headers: requestHeaders, method: "GET", url})
       .then((raw) => {
         if (cancelled) {
           return;
         }
         const result = (transformRef.current ? transformRef.current(raw) : raw) as T;
-        loadedUrlRef.current = url;
+        loadedKeyRef.current = key;
         setData(result);
         setIsLoading(false);
         setIsFetching(false);

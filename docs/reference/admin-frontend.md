@@ -561,6 +561,34 @@ client is `adminRequest`, built on `apiFetch` from `@terreno/syncdb/api` (timeou
 `FormData`, `credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the
 same way the syncdb request client does.
 
+### AdminRpcSeed and adminRpcSeedKey
+
+`<AdminRpcSeed data={...}>` gives `useAdminRpcQuery` initial data, such as response bodies a
+server render already fetched. Key each body with `adminRpcSeedKey(url, headers?)`: the exact
+`url` the hook receives (query string included) plus its `X-Organization-Id` header, when it
+sends one. Other headers do not change the key, so a body fetched for one organization, or for
+none, never answers a hook that asks for another.
+
+```tsx
+import {AdminRpcSeed, adminRpcSeedKey} from "@terreno/admin-frontend";
+
+<AdminRpcSeed data={{[adminRpcSeedKey("/admin/roles")]: roles}}>
+  <AdminRolesList />
+</AdminRpcSeed>
+```
+
+A query with a matching seed returns it as `data` (after `transformResponse`) with
+`isLoading: false` on its first render, and skips its first fetch. It fetches again on
+`refetch()`, when its `url` or `X-Organization-Id` changes, and when a mutation invalidates its
+`providesTags`. `skip: true` wins over a seed. Seeds nest, and inner seeds override outer ones
+for the same key. `AdminRpcSeed` does not need `AdminProvider`.
+
+Seeded or not, `useAdminRpcQuery` treats a change of `url` or `X-Organization-Id` as a new
+request and clears the previous body before the next render is shown, so one organization's data
+never appears under another. `keepPreviousData` keeps rows across a `url` change only while the
+organization stays the same. In earlier releases, an organization change on the same `url` kept
+the old body on screen until the new one arrived.
+
 ## Expo Router Setup
 
 ``````typescript

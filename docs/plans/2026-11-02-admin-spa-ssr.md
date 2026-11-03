@@ -238,7 +238,7 @@ None — no new or changed screens.
   - Test skills: terreno:verify-ui-changes
   - Docs: docs/explanation/admin-spa-ssr.md (hydration section); docs/reference/syncdb.md (`initialSession`, `primeQuery`)
 
-- [ ] **T5** — Initial data for useAdminRpcQuery: the AdminRpcSeed context
+- [x] **T5** — Initial data for useAdminRpcQuery: the AdminRpcSeed context
   - Depends on: T1
   - Files: admin-frontend/src/adminRpcSeed.tsx, admin-frontend/src/useAdminRpc.ts, admin-frontend/src/useAdminRpc.test.tsx, admin-frontend/src/index.tsx, docs/reference/admin-frontend.md
   - Criteria:

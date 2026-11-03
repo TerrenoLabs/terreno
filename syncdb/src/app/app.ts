@@ -1,18 +1,14 @@
 /**
  * `@terreno/syncdb/app` — app-shell utilities that sit beside the data layer:
- * the upgrade check (on the request client), RBAC helpers, the dev console log
- * bridge, and MCP tool discovery (on the shared auth provider).
+ * the upgrade check (on the request client), RBAC helpers, and the dev console log
+ * bridge.
  *
- * Needs `react`, `react-native`, and `expo-constants`; `useMCPTools` also needs
- * `@modelcontextprotocol/client` (all optional peer dependencies).
+ * Needs `react`, `react-native`, and `expo-constants` (optional peer dependencies).
+ * MCP tool discovery (`useMCPTools`) lives in `@terreno/syncdb/mcp`, because it imports
+ * the optional `@modelcontextprotocol/client` peer at the top level: exporting it here
+ * would break every app that imports this entry point without that package installed.
  */
 export {type InstallDevConsoleLoggerOptions, installDevConsoleLogger} from "./devConsoleLogger";
-export {
-  type MCPToolInfo,
-  type UseMCPToolsOptions,
-  type UseMCPToolsResult,
-  useMCPTools,
-} from "./mcpTools";
 export {
   ADMIN_PAGE_ACTION,
   ADMIN_PAGE_PERMISSION,

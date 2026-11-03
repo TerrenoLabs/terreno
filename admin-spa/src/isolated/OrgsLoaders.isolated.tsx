@@ -19,6 +19,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {orgsSsrRequests} from "../../server/orgsRoutes";
 import {AdminSpaServeApp} from "../serve";
@@ -36,9 +37,9 @@ mock.module("../../components/AppConfigGate", () => ({useAppConfig: () => ({appC
 interface LoaderData {
   rpc: Record<string, unknown>;
 }
-type LoaderModule = {
-  loader: (request: Request, params: Record<string, string>) => Promise<LoaderData>;
-};
+interface LoaderModule {
+  loader: LoaderFunction<LoaderData>;
+}
 
 const OPERATOR = {roles: ["operator"]};
 
@@ -106,15 +107,14 @@ describe("orgs route loaders", () => {
       basePath: "/console",
       profile,
     };
-    return runInAdminSpaRequest(scope, () => mod.loader(request, params));
+    return runInAdminSpaRequest(scope, async () =>
+      mod.loader(request as unknown as ImmutableRequest, params)
+    );
   };
 
-  const loadDirectory = (): Promise<LoaderModule> =>
-    import("../../app/orgs/index") as Promise<LoaderModule>;
-  const loadSettings = (): Promise<LoaderModule> =>
-    import("../../app/orgs/[orgId]/index") as Promise<LoaderModule>;
-  const loadMembers = (): Promise<LoaderModule> =>
-    import("../../app/orgs/[orgId]/members") as Promise<LoaderModule>;
+  const loadDirectory = (): Promise<LoaderModule> => import("../../app/orgs/index");
+  const loadSettings = (): Promise<LoaderModule> => import("../../app/orgs/[orgId]/index");
+  const loadMembers = (): Promise<LoaderModule> => import("../../app/orgs/[orgId]/members");
 
   const seenPaths = (): string[] =>
     seen.map((entry) => entry.path).filter((path) => path !== "/orgs/mine");

@@ -16,6 +16,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
 import {type AdminSpaRequestScope, runInAdminSpaRequest} from "../serverContext";
@@ -43,34 +44,34 @@ const adminConfig = {
   scripts: [],
 };
 
-type LoaderModule = {
-  loader: (request: Request, params: Record<string, string>) => Promise<{rpc: unknown}>;
-};
+interface LoaderModule {
+  loader: LoaderFunction<{rpc: Record<string, unknown>}>;
+}
 
 const ROUTES: {file: string; load: () => Promise<LoaderModule>; urls: string[]}[] = [
   {
     file: "configuration",
-    load: () => import("../../app/configuration") as Promise<LoaderModule>,
+    load: () => import("../../app/configuration"),
     urls: ["/configuration/meta", "/configuration"],
   },
   {
     file: "roles",
-    load: () => import("../../app/roles/index") as Promise<LoaderModule>,
+    load: () => import("../../app/roles/index"),
     urls: ["/rbac/roles", "/rbac/statements"],
   },
   {
     file: "scripts",
-    load: () => import("../../app/scripts") as Promise<LoaderModule>,
+    load: () => import("../../app/scripts"),
     urls: ["/admin/scripts/runs?page=1&limit=25"],
   },
   {
     file: "version-config",
-    load: () => import("../../app/version-config") as Promise<LoaderModule>,
+    load: () => import("../../app/version-config"),
     urls: ["/admin/version-config"],
   },
   {
     file: "index (home)",
-    load: () => import("../../app/index") as Promise<LoaderModule>,
+    load: () => import("../../app/index"),
     urls: ["/admin/users?limit=1&page=1", "/jobs/stats"],
   },
 ];
@@ -137,8 +138,12 @@ describe("rpc route loaders", () => {
       headers: cookie ? {Cookie: cookie} : {},
     });
     return runInAdminSpaRequest(
-      {appConfig: appConfig as AdminSpaRequestScope["appConfig"], basePath: "/console", ...scope},
-      () => loader(request, {}) as Promise<{rpc: Record<string, unknown>}>
+      {
+        appConfig: appConfig as unknown as AdminSpaRequestScope["appConfig"],
+        basePath: "/console",
+        ...scope,
+      },
+      async () => loader(request as unknown as ImmutableRequest, {})
     );
   };
 

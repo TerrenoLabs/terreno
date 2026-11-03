@@ -18,7 +18,7 @@ import {orgsSsrRequests} from "../../server/orgsRoutes";
  */
 const ORG_HEADER = "X-Organization-Id";
 const urlsOf = (requests: {url: string}[]): string[] => requests.map((request) => request.url);
-const withoutMine = (requests: {url: string}[]): {url: string}[] =>
+const withoutMine = <T extends {url: string}>(requests: T[]): T[] =>
   requests.filter((request) => request.url !== "/orgs/mine");
 
 describe("orgsSsrRequests /orgs", () => {

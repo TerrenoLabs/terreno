@@ -3,6 +3,7 @@ import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {Text} from "react-native";
 import {renderWithTheme} from "../../../ui/src/test-utils";
+import type {AdminSpaAppConfig} from "../appConfig";
 import {publishAdminSpaServerContext} from "../serverContext";
 
 // Isolated file: it registers module mocks that would leak into other suites. It renders the
@@ -65,7 +66,11 @@ const WINDOWED_CONFIG = {
 
 const ME = {data: {_id: "u1", admin: true, roles: ["admin"]}};
 
-const APP_CONFIG = {brandName: "Hydrated Brand", primaryColor: "#2563EB", providers: ["email"]};
+const APP_CONFIG: AdminSpaAppConfig = {
+  brandName: "Hydrated Brand",
+  primaryColor: "#2563EB",
+  providers: ["email"],
+};
 
 interface ShellPayload {
   adminConfig: unknown;

@@ -15,6 +15,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import type {ImmutableRequest} from "expo-server";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
 import {type AdminSpaRequestScope, runInAdminSpaRequest} from "../serverContext";
@@ -103,7 +104,8 @@ describe("[model]/[id] detail loader", () => {
     });
     return runInAdminSpaRequest(
       {appConfig: {} as AdminSpaRequestScope["appConfig"], basePath: "/console", ...scope},
-      () => loader(request, {id, model}) as Promise<DetailLoaderData>
+      async () =>
+        (await loader(request as unknown as ImmutableRequest, {id, model})) as DetailLoaderData
     );
   };
 

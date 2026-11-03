@@ -42,7 +42,10 @@ beforeAll(async () => {
   createPendingStore = (): unknown =>
     auth.createSessionStore({
       pollIntervalMs: 0,
-      source: {getSession: () => new Promise(() => {}), signOut: async (): Promise<void> => {}},
+      source: {
+        getSession: () => new Promise<null>(() => {}),
+        signOut: async (): Promise<void> => {},
+      },
     });
   ({AdminGate} = await import("../../components/AdminGate"));
   ({AppConfigGate} = await import("../../components/AppConfigGate"));
@@ -104,13 +107,13 @@ describe("AdminGate for an admin on /login", () => {
   ): Promise<{replace: ReturnType<typeof mock>}> => {
     const replace = mock(() => {});
     const expoRouter = (await import("expo-router")) as unknown as {
-      useLocalSearchParams: {mockReturnValue: (value: unknown) => void};
+      useGlobalSearchParams: {mockReturnValue: (value: unknown) => void};
       useRouter: {mockReturnValue: (value: unknown) => void};
       usePathname: {mockReturnValue: (value: string) => void};
     };
     expoRouter.usePathname.mockReturnValue("/login");
     expoRouter.useRouter.mockReturnValue({replace});
-    expoRouter.useLocalSearchParams.mockReturnValue({returnTo});
+    expoRouter.useGlobalSearchParams.mockReturnValue({returnTo});
     const auth = await import("@terreno/syncdb/auth");
     const store = auth.createSessionStore({
       pollIntervalMs: 0,

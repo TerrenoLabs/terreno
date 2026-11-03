@@ -17,6 +17,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {DateTime, Settings} from "luxon";
 import {commsSsrUrls, jobsSsrUrls} from "../../server/jobsCommsRoutes";
@@ -35,9 +36,9 @@ interface LoaderData {
   notFound?: boolean;
   rpc: Record<string, unknown>;
 }
-type LoaderModule = {
-  loader: (request: Request, params: Record<string, string>) => Promise<LoaderData>;
-};
+interface LoaderModule {
+  loader: LoaderFunction<LoaderData>;
+}
 
 /** Luxon reads its own clock; the test preload pins `Date.now`, so pin `Settings.now`. */
 const setClock = (iso: string): void => {
@@ -56,12 +57,12 @@ interface ListCase {
 const LISTS: ListCase[] = [
   {
     file: "jobs/index",
-    load: () => import("../../app/jobs/index") as Promise<LoaderModule>,
+    load: () => import("../../app/jobs/index"),
     urls: () => jobsSsrUrls("/jobs", {}),
   },
   {
     file: "comms/index",
-    load: () => import("../../app/comms/index") as Promise<LoaderModule>,
+    load: () => import("../../app/comms/index"),
     urls: () => commsSsrUrls("/comms", {}),
   },
 ];
@@ -76,12 +77,12 @@ interface DetailCase {
 const DETAILS: DetailCase[] = [
   {
     file: "jobs/[id]",
-    load: () => import("../../app/jobs/[id]") as Promise<LoaderModule>,
+    load: () => import("../../app/jobs/[id]"),
     urlFor: (id) => `/jobs/${id}`,
   },
   {
     file: "comms/[id]",
-    load: () => import("../../app/comms/[id]") as Promise<LoaderModule>,
+    load: () => import("../../app/comms/[id]"),
     urlFor: (id) => `/comms/messages/${id}`,
   },
 ];
@@ -150,10 +151,10 @@ describe("jobs and comms route loaders", () => {
     return runInAdminSpaRequest(
       {
         adminConfig: {customScreens: [], models: [], scripts: []},
-        appConfig: appConfig as AdminSpaRequestScope["appConfig"],
+        appConfig: appConfig as unknown as AdminSpaRequestScope["appConfig"],
         basePath: "/console",
       },
-      () => mod.loader(request, params)
+      async () => mod.loader(request as unknown as ImmutableRequest, params)
     );
   };
 

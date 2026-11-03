@@ -32,7 +32,7 @@ beforeEach(() => {
     return new Response(JSON.stringify({brandName: "Fetched Brand"}), {
       headers: {"content-type": "application/json"},
     });
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 });
 
 afterEach(() => {
@@ -182,7 +182,7 @@ describe("AppConfigGate failures and edge cases", () => {
         return new Response(JSON.stringify({brandName: "Recovered"}), {
           headers: {"content-type": "application/json"},
         });
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const {getByTestId, getByText, queryByTestId} = renderWithTheme(
         <AppConfigGate>
           <Probe />
@@ -206,7 +206,7 @@ describe("AppConfigGate failures and edge cases", () => {
       globalState.window = {};
       globalState.fetch = (async (): Promise<Response> => {
         throw new Error("offline");
-      }) as typeof fetch;
+      }) as unknown as typeof fetch;
       const {queryByTestId} = renderWithTheme(
         <AppConfigGate>
           <Probe />
@@ -227,7 +227,7 @@ describe("AppConfigGate failures and edge cases", () => {
     globalState.fetch = (async (): Promise<Response> => {
       await gate;
       return new Response(JSON.stringify({brandName: "Late"}));
-    }) as typeof fetch;
+    }) as unknown as typeof fetch;
     const {unmount} = renderWithTheme(
       <AppConfigGate>
         <Probe />

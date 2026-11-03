@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import type {AdminConfigResponse, AdminModelConfig} from "../types";
 import {homeWidgetUrls} from "./homeWidgetUrls";
 
 /**
@@ -12,7 +13,12 @@ import {homeWidgetUrls} from "./homeWidgetUrls";
  * - `versionConfig`: `AdminVersionConfig.tsx:50-53` asks `{apiBase}/version-config`.
  * - `jobs`: `JobsHomeWidget.tsx` asks `useStatsQuery` -> `/jobs/stats` (never under apiBase).
  */
-const model = (name: string, routePath: string, extra: Record<string, unknown> = {}) => ({
+const model = (
+  name: string,
+  routePath: string,
+  extra: Partial<AdminModelConfig> = {}
+): AdminModelConfig => ({
+  defaultSort: "-created",
   displayName: name,
   fields: {_id: {required: true, type: "string"}},
   listFields: ["_id"],
@@ -25,8 +31,8 @@ const auditModel = model("AdminAuditLog", "/admin/audit-logs");
 
 const configWith = (
   slots: Record<string, string[]>,
-  models: unknown[] = [model("User", "/admin/users")]
-) => ({
+  models: AdminModelConfig[] = [model("User", "/admin/users")]
+): AdminConfigResponse => ({
   customScreens: [],
   home: {slots, title: "Admin"},
   models,
@@ -46,7 +52,12 @@ describe("homeWidgetUrls", () => {
   it.each([null, undefined, {}, {home: "x"}, {home: {slots: null}}, "str", 7])(
     "returns [] for a malformed config (%p)",
     (adminConfig) => {
-      expect(homeWidgetUrls({adminConfig, apiBase: "/admin"})).toEqual([]);
+      expect(
+        homeWidgetUrls({
+          adminConfig: adminConfig as unknown as AdminConfigResponse,
+          apiBase: "/admin",
+        })
+      ).toEqual([]);
     }
   );
 

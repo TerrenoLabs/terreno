@@ -42,6 +42,7 @@ const exampleConfig: AdminConfigResponse = {
       routePath: "/admin/users",
     },
     {
+      defaultSort: "-created",
       displayName: "Audit log",
       fields: {_id: {required: true, type: "string"}},
       listFields: ["_id"],

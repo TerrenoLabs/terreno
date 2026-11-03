@@ -1,7 +1,7 @@
 import {sanitizeReturnTo} from "../src/returnTo";
 import {isSignedInOnlyRoute} from "../src/signedInOnlyRoutes";
 
-export {isSignedInOnlyRoute, sanitizeReturnTo};
+export {isSignedInOnlyRoute};
 
 interface IsForbiddenAdminConfigErrorOptions {
   error: unknown;

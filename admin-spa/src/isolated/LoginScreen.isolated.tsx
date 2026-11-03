@@ -7,7 +7,13 @@ import {renderWithTheme} from "../../../ui/src/test-utils";
 // that would leak into other suites.
 const replace = mock((_href: string) => {});
 const refresh = mock(async (): Promise<void> => {});
-const signInEmail = mock(async (_args: unknown) => ({data: {}, error: null}));
+interface SignInResult {
+  data: Record<string, unknown> | null;
+  error: {message?: string} | null;
+}
+const signInEmail = mock(
+  async (_args: unknown): Promise<SignInResult> => ({data: {}, error: null})
+);
 const searchParams: {current: Record<string, string | string[] | undefined>} = {current: {}};
 
 const socialSignIn = mock(async (_args: unknown): Promise<unknown> => ({}));

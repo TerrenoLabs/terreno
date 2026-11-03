@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import type {AdminConfigResponse, AdminModelConfig} from "@terreno/admin-frontend";
 import {rpcUrlsForRoute} from "../../server/rpcRoutes";
 
 /**
@@ -13,7 +14,12 @@ import {rpcUrlsForRoute} from "../../server/rpcRoutes";
  *   page size 25. The "latest runs" and "history" queries share this one URL.
  * - `/version-config`: `AdminVersionConfig.tsx:50-53`.
  */
-const model = (name: string, routePath: string, extra: Record<string, unknown> = {}) => ({
+const model = (
+  name: string,
+  routePath: string,
+  extra: Partial<AdminModelConfig> = {}
+): AdminModelConfig => ({
+  defaultSort: "-created",
   displayName: name,
   fields: {_id: {required: true, type: "string"}},
   listFields: ["_id"],
@@ -22,9 +28,9 @@ const model = (name: string, routePath: string, extra: Record<string, unknown> =
   ...extra,
 });
 
-const emptyConfig = {customScreens: [], models: [], scripts: []};
+const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
-const exampleConfig = {
+const exampleConfig: AdminConfigResponse = {
   customScreens: [],
   home: {
     slots: {
@@ -85,7 +91,7 @@ describe("rpcUrlsForRoute", () => {
   it("/ with a recentActivity slot requests the audit-log list the widget asks for", () => {
     // The widget reads the audit-log model (name AdminAuditLog / AuditEvent, or an audit route
     // path), not an arbitrary model: `RecentActivityWidget.tsx:14-15` with `{limit: 8, page: 1}`.
-    const adminConfig = {
+    const adminConfig: AdminConfigResponse = {
       customScreens: [],
       home: {slots: {sidebar: ["recentActivity"]}, title: "Admin"},
       models: [model("User", "/admin/users"), model("AdminAuditLog", "/admin/audit-logs")],

@@ -3,6 +3,7 @@ import {assert} from "chai";
 import {
   durationBarPercent,
   emptyTraceFilters,
+  filterValuesToTraceFilters,
   flattenSpans,
   formatCost,
   formatLatency,
@@ -12,6 +13,7 @@ import {
   stringifyIo,
   type TraceListItem,
   type TraceSpanNode,
+  traceFiltersToFilterValues,
   unwrapEvaluators,
   unwrapTraceDetail,
   unwrapTraceList,
@@ -108,7 +110,7 @@ describe("traceTypes helpers", () => {
     assert.include(stringifyIo({a: 1}), "a");
     assert.deepEqual(emptyTraceFilters(), {
       from: "",
-      prompt: "",
+      prompts: [],
       sessionId: "",
       status: "",
       to: "",
@@ -121,5 +123,54 @@ describe("traceTypes helpers", () => {
     const listed = unwrapTraceList(rows);
     assert.equal(listed.total, 1);
     assert.equal(listed.data[0]?.id, "a");
+  });
+
+  it("maps list filters to DataTable filter values and back", () => {
+    assert.deepEqual(traceFiltersToFilterValues(emptyTraceFilters()), {});
+    const filters = {
+      flaggedForDataset: true,
+      from: "2026-09-01T00:00:00.000Z",
+      hasScore: false,
+      prompts: ["summarize", "title"],
+      sensitive: true,
+      sessionId: "sess-1",
+      status: "error" as const,
+      to: "2026-09-02T23:59:59.999Z",
+      userId: "user-1",
+    };
+    const values = traceFiltersToFilterValues(filters);
+    assert.deepEqual(values, {
+      hasScore: false,
+      prompt: ["summarize", "title"],
+      sensitive: true,
+      sessionId: "sess-1",
+      startedAt_gte: "2026-09-01T00:00:00.000Z",
+      startedAt_lte: "2026-09-02T23:59:59.999Z",
+      status: ["error"],
+      userId: "user-1",
+    });
+    assert.deepEqual(filterValuesToTraceFilters(values, filters), filters);
+  });
+
+  it("treats both statuses as no status filter and ignores unknown values", () => {
+    const filters = filterValuesToTraceFilters({
+      hasScore: "true",
+      prompt: "summarize",
+      sensitive: "maybe",
+      sessionId: "  ",
+      status: ["ok", "error"],
+      userId: 42,
+    });
+    assert.deepEqual(filters, {
+      from: "",
+      hasScore: true,
+      prompts: ["summarize"],
+      sessionId: "",
+      status: "",
+      to: "",
+      userId: "",
+    });
+    assert.equal(filterValuesToTraceFilters({status: ["ok", "bogus"]}).status, "ok");
+    assert.equal(filterValuesToTraceFilters({hasScore: "false"}).hasScore, false);
   });
 });

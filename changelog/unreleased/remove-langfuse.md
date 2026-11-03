@@ -1,0 +1,8 @@
+---
+category: Breaking
+---
+
+- `@terreno/ai` no longer integrates with Langfuse. The built-in observability prompt registry, traces, and review queue (`ObservabilityApp` with `createLocalObservabilityPlugin()`) replace it. Removed exports: `LangfuseApp`, `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`, `initLangfuseClient`, `getLangfuseClient`, `isLangfuseInitialized`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `invalidatePromptCache`, `initTracing`, `shutdownTracing`, `createTelemetryConfig`, `preparePromptForAI`, and the types `ChatMessage`, `GetPromptOptions`, `LangfuseAppOptions`, `LangfuseCachedPrompt`, `PaginatedResult`, `PreparePromptResult`, `PromptListItem`, `ScoreSubmission`, `ScoringFunction`, `TelemetrySettings`, `TraceListItem`. The `@terreno/ai/langfuseApp` and `@terreno/ai/langfuseClient` subpath exports are gone, along with the `@langfuse/client`, `@langfuse/otel`, and `@opentelemetry/*` dependencies of `@terreno/ai`.
+- `addGptRoutes` drops `langfuseSystemPromptName`; use `systemPromptName` (a registry prompt) instead. Chat turns no longer set `experimental_telemetry`.
+- `ControlPrimary` is now only `"local"`.
+- The example backend no longer reads `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_ORGANIZATION`, `LANGFUSE_PROJECT`, or `LANGFUSE_PROJECT_ID`. Deploys (`.github/workflows/cd.yml`, `scripts/ci/gcp-deploy.sh`) no longer mount the Langfuse secrets, and `infra/flourish/main.tf` drops the `backend_secret_langfuse_secret_key` and `backend_secret_langfuse_public_key` modules, so the next `terraform apply` deletes those two Secret Manager secrets. Deploy a revision without the mounts before applying.

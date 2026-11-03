@@ -152,9 +152,10 @@ const findByRequestId = async ({
 };
 
 /**
- * Prompt refs as stored on `ObsTrace.prompts` (`{label?, name, version}`; a registry
- * `body` is dropped), once each. Throws `invalidRequest` for a ref without a name, with a
- * non-string label, or without a positive integer version.
+ * Prompt refs as stored on `ObsTrace.prompts` (`{includedBy?, label?, name, version}`; a
+ * registry `body` is dropped and its `includes` follow it), once each. Throws
+ * `invalidRequest` for a ref without a name, with a non-string label or includedBy, with
+ * non-array includes, or without a positive integer version.
  */
 export const tracePromptRefs = (refs: HarnessPromptRef[] | undefined): HarnessPromptRef[] => {
   if (refs === undefined) {
@@ -164,7 +165,19 @@ export const tracePromptRefs = (refs: HarnessPromptRef[] | undefined): HarnessPr
     throw harnessError({detail: "prompts must be an array", kind: "invalidRequest"});
   }
   const unique = new Map<string, HarnessPromptRef>();
-  for (const ref of refs) {
+  const expanded = refs.flatMap((ref) => {
+    if (ref?.includes !== undefined && !Array.isArray(ref.includes)) {
+      throw harnessError({
+        detail:
+          typeof ref.name === "string" && ref.name.trim()
+            ? `Prompt ref "${ref.name}" includes must be an array`
+            : "Prompt ref includes must be an array",
+        kind: "invalidRequest",
+      });
+    }
+    return [ref, ...(ref?.includes ?? [])];
+  });
+  for (const ref of expanded) {
     if (typeof ref?.name !== "string" || !ref.name.trim()) {
       throw harnessError({detail: "Each prompt ref needs a name", kind: "invalidRequest"});
     }
@@ -180,7 +193,14 @@ export const tracePromptRefs = (refs: HarnessPromptRef[] | undefined): HarnessPr
         kind: "invalidRequest",
       });
     }
+    if (ref.includedBy !== undefined && typeof ref.includedBy !== "string") {
+      throw harnessError({
+        detail: `Prompt ref "${ref.name}" includedBy must be a string`,
+        kind: "invalidRequest",
+      });
+    }
     const normalized = {
+      ...(ref.includedBy !== undefined ? {includedBy: ref.includedBy} : {}),
       ...(ref.label !== undefined ? {label: ref.label} : {}),
       name: ref.name,
       version: ref.version,

@@ -1,3 +1,4 @@
+import {Button} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -8,6 +9,9 @@ import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiEvaluatorsListView} from "./AiEvaluatorsListView";
 import {unwrapEvaluatorList} from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
+
+const EVALUATORS_DESCRIPTION =
+  "Rules that score AI outputs: questions people answer, LLM judges that answer the same questions, and JSON checks.";
 
 export const AiEvaluatorsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {api, routeBase} = props;
@@ -36,10 +40,25 @@ export const AiEvaluatorsScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     router.push(`${prefix}/ai-evaluator-new`);
   }, [prefix]);
 
-  const loadError = isError ? "Failed to load evaluators." : undefined;
+  const loadError = isError ? "Could not load evaluators." : undefined;
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-evaluators">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        canCreate ? (
+          <Button
+            iconName="plus"
+            onClick={handleCreate}
+            testID="ai-evaluators-create"
+            text="New evaluator"
+            variant="primary"
+          />
+        ) : undefined
+      }
+      description={EVALUATORS_DESCRIPTION}
+      screenName="ai-evaluators"
+    >
       <AiEvaluatorsListView
         canCreate={canCreate}
         evaluators={evaluators}

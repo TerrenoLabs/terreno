@@ -1,9 +1,10 @@
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
 import express from "express";
-import {AdminSpaServeApp} from "../src/serve";
-import {removeStubSsrBuild, writeStubSsrBuild} from "../src/testing/ssrStubBuild";
-import {loadSsrPayload, serializeForHtml} from "./loadSsrPayload";
+import {loadSsrPayload} from "../../server/loadSsrPayload";
+import {AdminSpaServeApp} from "../serve";
+import {serializeForHtml} from "../serverContext";
+import {removeStubSsrBuild, writeStubSsrBuild} from "../testing/ssrStubBuild";
 
 interface SeenRequest {
   path: string;

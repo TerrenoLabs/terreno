@@ -561,6 +561,18 @@ client is `adminRequest`, built on `apiFetch` from `@terreno/syncdb/api` (timeou
 `FormData`, `credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the
 same way the syncdb request client does.
 
+### buildAdminReadUrl, buildAdminListQueryParams, buildAdminApiListQueryRequest
+
+The URL builders the model hooks use, exported so a server render can request exactly what a
+screen will request and seed it under the same key:
+
+- `buildAdminReadUrl(routePath, id)`: `GET {routePath}/:id`, with `id` encoded by
+  `encodeURIComponent`. `useReadQuery` uses it.
+- `buildAdminListQueryParams({filterState, limit, modelConfig, page, searchDebounced, sort?})`:
+  the list params `AdminModelTable` sends for its current state.
+- `buildAdminApiListQueryRequest(routePath, params)`: `{method: "GET", url}` for a list
+  request, with the params serialized as `useListQuery` serializes them.
+
 ### AdminRpcSeed and adminRpcSeedKey
 
 `<AdminRpcSeed data={...}>` gives `useAdminRpcQuery` initial data, such as response bodies a

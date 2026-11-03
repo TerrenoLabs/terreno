@@ -1,8 +1,6 @@
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
 import {getAdminSpaServerContext} from "../src/serverContext";
 
-export {serializeForHtml} from "../src/serverContext";
-
 /** Request headers a loader may forward, lowercase. The admin hooks send only this one. */
 const ALLOWED_SSR_HEADERS = new Set(["x-organization-id"]);
 

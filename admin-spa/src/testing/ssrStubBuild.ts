@@ -105,7 +105,7 @@ const ssrMod = require(${JSON.stringify(mods.loadSsrPayload)});
     : "";
   const modsHtml = mods
     ? `+ "<i data-scope=" + JSON.stringify(JSON.stringify(ctxMod.getAdminSpaRequest() ?? null)) + "></i>" +
-    '<script type="application/json" id="loader-blob">' + ssrMod.serializeForHtml(options.loader ? options.loader.data : null) + "</script>"`
+    '<script type="application/json" id="loader-blob">' + ctxMod.serializeForHtml(options.loader ? options.loader.data : null) + "</script>"`
     : "";
   fs.writeFileSync(
     path.join(serverExpo, "server", "render.js"),

@@ -2,7 +2,7 @@ import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {render} from "@testing-library/react-native";
 import React from "react";
 import {Text} from "react-native";
-import {runInAdminSpaRequest, serializeForHtml} from "../src/serverContext";
+import {runInAdminSpaRequest, serializeForHtml} from "../serverContext";
 
 const SCRIPT_ID = "admin-spa-ssr";
 const LOADER_DATA_KEY = "__EXPO_ROUTER_LOADER_DATA__";
@@ -87,7 +87,7 @@ const installBrowser = (textContent: string | null): void => {
 let importCount = 0;
 const freshHook = async (): Promise<() => unknown> => {
   importCount += 1;
-  const mod = await import(`./ssrPayload.ts?case=${importCount}`);
+  const mod = await import(`../../components/ssrPayload.ts?case=${importCount}`);
   return mod.useSsrPayload as () => unknown;
 };
 

@@ -1,5 +1,6 @@
 import {useMemo} from "react";
 import {buildAdminApiListQueryRequest} from "./adminApiQueryParams";
+import {buildAdminReadUrl} from "./adminModelUrls";
 import {asJsonBody} from "./adminRpc";
 import {adminOrganizationHeaders} from "./orgs/organizationHeaders";
 import {useOptionalOrgContext} from "./orgs/useOrgContext";
@@ -136,7 +137,7 @@ export const useAdminModelApi = (routePath: string, modelName: string): AdminMod
           rpc,
           skip: Boolean(options?.skip) || routePath.length === 0 || !id,
           transformResponse: unwrapAdminEnvelope,
-          url: `${routePath}/${id}`,
+          url: buildAdminReadUrl(routePath, id),
         }),
       useUpdateMutation: () => {
         const [trigger, meta] = useAdminRpcMutation(rpc, mutationOptions);

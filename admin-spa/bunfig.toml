@@ -9,5 +9,7 @@ coveragePathIgnorePatterns = [
   "../api/**",
   "../ui/**",
   "../syncdb/**",
+  "../admin-frontend/**",
+  "**/admin-spa-ssr-dist-*/**",
 ]
 coverageThreshold = { line = 95, function = 95 }

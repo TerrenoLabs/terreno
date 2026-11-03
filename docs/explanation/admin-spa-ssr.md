@@ -141,6 +141,23 @@ inline script) is deleted once every route has read its entry, or after 5 s. Loa
 hold PHI, so they do not stay on `window` or in the DOM, and a later client navigation fetches
 loader JSON instead.
 
+## Server-rendered data
+
+Route loaders render a screen's data into the first HTML. Each one asks for the same URLs the
+screen's hooks request, through `loadSsrPayload`, and the route wraps its screen in
+`<AdminRpcSeed data={rpc}>`, so the hooks render the seeded bodies and skip their first fetch.
+
+- **Model list** (`/console/<Model>`): the loader resolves the model by name from the gate's
+  admin config with `resolveModelListUrl` and fetches its first page: page 1, the model's page
+  size, its default sort. It builds the URL with the table's own builders
+  (`buildAdminListQueryParams`, `buildAdminApiListQueryRequest`), so the key matches the
+  table's request. An unknown name or a screen that is not a model list loads nothing.
+- **Read URLs:** `useReadQuery` builds them with `buildAdminReadUrl(routePath, id)`, which
+  encodes the id, so a server render that uses the same builder seeds the same key.
+- **Windowed sync models** render the seeded REST page first. The admin provider binds the
+  syncdb client only after `start()` resolves, and the table then switches to its window,
+  so live updates reach it.
+
 ## Related
 
 - [Admin SPA reference](../reference/admin-spa.md)

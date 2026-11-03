@@ -8,6 +8,7 @@ import {act, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {AdminProvider} from "../AdminProvider";
+import {AdminRpcSeed, adminRpcSeedKey} from "../adminRpcSeed";
 import {OrgContextProvider, useOrgContext} from "../orgs/useOrgContext";
 import {type AdminModelApi, useAdminModelApi} from "../useAdminModelApi";
 import {normalizeRoles, normalizeStatements} from "../useAdminRoles";
@@ -260,6 +261,94 @@ describe("useAdminModelApi", () => {
     expect(captured).toEqual([]);
     expect(state.list?.isLoading).toBe(false);
     expect(state.read?.isLoading).toBe(false);
+  });
+});
+
+describe("useAdminModelApi read URLs and seeds", () => {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  const readUrlFor = async (id: string): Promise<string | undefined> => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    renderModelApi({readId: id, skipList: true});
+    await flush();
+    return captured.find((request) => request.method === "GET")?.url;
+  };
+
+  it("requests an ObjectId read at the same URL as before", async () => {
+    expect(await readUrlFor("65f1a2b3c4d5e6f708192a3b")).toBe(
+      "/admin/users/65f1a2b3c4d5e6f708192a3b"
+    );
+  });
+
+  it("requests a plain id read at the same URL as before", async () => {
+    expect(await readUrlFor("user-1")).toBe("/admin/users/user-1");
+  });
+
+  it("encodes an id containing a slash", async () => {
+    expect(await readUrlFor("a/b")).toBe("/admin/users/a%2Fb");
+  });
+
+  it("encodes query, hash and space characters in an id", async () => {
+    const url = await readUrlFor("a b?c#d");
+    expect(url).toBe("/admin/users/a%20b%3Fc%23d");
+  });
+
+  it("returns a read seeded under the encoded URL on the first render without fetching", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const seedKey = adminRpcSeedKey("/admin/users/a%2Fb");
+    let latest: ReturnType<AdminModelApi["useReadQuery"]> | undefined;
+    const Probe: React.FC = () => {
+      latest = useAdminModelApi("/admin/users", "User").useReadQuery("a/b");
+      return null;
+    };
+    renderWithTheme(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <AdminRpcSeed data={{[seedKey]: {data: {_id: "a/b", email: "slash@example.com"}}}}>
+          <Probe />
+        </AdminRpcSeed>
+      </AdminProvider>
+    );
+    expect(latest?.isLoading).toBe(false);
+    expect(latest?.data).toEqual({_id: "a/b", email: "slash@example.com"});
+    await flush();
+    expect(captured).toEqual([]);
+  });
+
+  it("refetches a seeded list exactly once after a delete invalidates the model tag", async () => {
+    const captured: CapturedRequest[] = [];
+    stubFetch(captured);
+    const listKey = adminRpcSeedKey("/admin/users?limit=20&page=1");
+    let remove: ReturnType<AdminModelApi["useDeleteMutation"]>[0] | undefined;
+    let latest: ReturnType<AdminModelApi["useListQuery"]> | undefined;
+    const Probe: React.FC = () => {
+      const api = useAdminModelApi("/admin/users", "User");
+      latest = api.useListQuery({limit: 20, page: 1});
+      [remove] = api.useDeleteMutation();
+      return null;
+    };
+    renderWithTheme(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <AdminRpcSeed data={{[listKey]: listEnvelope}}>
+          <Probe />
+        </AdminRpcSeed>
+      </AdminProvider>
+    );
+    expect(latest?.data).toEqual(listEnvelope);
+    await flush();
+    expect(captured).toEqual([]);
+
+    await act(async () => {
+      await remove?.("u1").unwrap();
+    });
+    await flush();
+    expect(captured.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "DELETE /admin/users/u1",
+      "GET /admin/users?limit=20&page=1",
+    ]);
   });
 });
 

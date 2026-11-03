@@ -760,6 +760,8 @@ mock.module("expo-router", () => ({
   ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
   useGlobalSearchParams: mock(() => ({})),
+  // Route loader data is absent in unit tests; a screen falls back to fetching on the client.
+  useLoaderData: mock(() => undefined),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),

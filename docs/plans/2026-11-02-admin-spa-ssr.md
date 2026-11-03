@@ -268,7 +268,7 @@ None — no new or changed screens.
   - Test skills: none (follow existing admin-frontend hook tests)
   - Docs: docs/reference/admin-frontend.md (`AdminRpcSeed`)
 
-- [ ] **T6** — Server-render the model list
+- [x] **T6** — Server-render the model list
   - Depends on: T4
   - Files: admin-frontend/src/useAdminModelApi.ts, admin-frontend/src/adminModelUrls.ts, admin-frontend/src/adminModelUrls.test.ts, admin-frontend/src/index.tsx, admin-spa/app/[model]/index.tsx, admin-spa/server/modelRoutes.ts, admin-spa/server/modelRoutes.test.ts, admin-spa/e2e/integration/adminSpa.ssr.list.integration.spec.ts, docs/explanation/admin-spa-ssr.md
   - Criteria:

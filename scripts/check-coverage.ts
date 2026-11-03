@@ -57,6 +57,7 @@ const REAL_API_ISOLATED_FILES = new Set([
   "././src/isolated/adminModelTable.windowedSeed.isolated.tsx",
   "././src/isolated/adminRouteSeeds.ssr.isolated.tsx",
   "././src/isolated/jobsCommsRouteSeeds.ssr.isolated.tsx",
+  "././src/isolated/orgsRouteSeeds.ssr.isolated.tsx",
 ]);
 
 const ESC = String.fromCharCode(27);

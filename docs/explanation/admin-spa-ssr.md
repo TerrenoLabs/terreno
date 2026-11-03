@@ -180,6 +180,17 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   job or message renders "Not found" with HTTP 200. The comms dashboard's default 7-day range
   ends at the next whole minute, so the server render and the hydrating browser build the same
   URL within that minute.
+- **Organizations** (`/console/orgs` and an organization's settings and members): the loaders
+  build their requests with `orgsSsrRequests`. Organization-scoped reads carry the hooks'
+  `X-Organization-Id`, which is part of the seed key. The directory is fetched only for an
+  operator (`operator` or `superadmin` role on the gate's profile); an organization admin gets
+  no directory data, as on the client. An organization id that is not one path segment seeds
+  nothing.
+- **Selected organization (limitation):** once the client selects an organization (from
+  `/orgs/mine`), its model reads carry `X-Organization-Id`. A server render has no selected
+  organization, so for a visitor who belongs to one, the model list and detail seeds do not
+  match and those screens refetch after hydration. The first HTML still shows the visitor's
+  own data; nothing crosses organizations, since every read uses the visitor's session.
 - **Windowed sync models** render the seeded REST page first. The admin provider binds the
   syncdb client only after `start()` resolves, and the table then switches to its window,
   so live updates reach it. On that switch the table refetches its REST page once, so a change

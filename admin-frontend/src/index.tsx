@@ -118,6 +118,7 @@ export {
 export {OrgMembersScreen, type OrgMembersScreenProps} from "./orgs/OrgMembersScreen";
 export {OrgSettingsScreen, type OrgSettingsScreenProps} from "./orgs/OrgSettingsScreen";
 export {OrgSwitcher, type OrgSwitcherProps} from "./orgs/OrgSwitcher";
+export {adminOrganizationHeaders} from "./orgs/organizationHeaders";
 export {
   type OrganizationSettings,
   organizationSettingsOf,

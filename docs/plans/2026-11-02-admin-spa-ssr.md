@@ -375,7 +375,7 @@ None — no new or changed screens.
   - Test skills: terreno:verify-ui-changes
   - Docs: none beyond T6's section
 
-- [ ] **T11** — Server-render the orgs directory, settings, and members
+- [x] **T11** — Server-render the orgs directory, settings, and members
   - Depends on: T4
   - Files: admin-spa/app/orgs/index.tsx, admin-spa/app/orgs/[orgId]/index.tsx, admin-spa/app/orgs/[orgId]/members.tsx, admin-spa/server/orgsRoutes.ts, admin-spa/server/orgsRoutes.test.ts, admin-spa/e2e/integration/adminSpa.ssr.orgs.integration.spec.ts
   - Criteria:
@@ -457,6 +457,8 @@ None — no new or changed screens.
 | Q5 | Should forbidden users get a 302 to `/forbidden` or a 403 status page at the same URL? | 302 to `/forbidden` | Keeps today's URLs and `forbidden.tsx` | Render 403 in place; the gate's Cases change | T3 |
 
 ## Expansions (follow up later)
+
+- Selected organization on the server: carry the client's selected organization (for example in a cookie) so model list and detail seeds match for visitors who belong to an organization; today those screens refetch after hydration (found in T11's Roast).
 
 - Upstream: report the Expo 58 loader-data key mismatch for percent-encoded route params (server keys by raw pathname, `useLoaderData` by decoded params) and drop the client recovery once it is fixed.
 

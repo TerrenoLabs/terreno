@@ -1,5 +1,5 @@
-import type {HarnessModelRef, HarnessModelResolver} from "@terreno/ai/harness";
 import {toAiSdkLanguageModel} from "@terreno/ai";
+import type {HarnessModelRef, HarnessModelResolver} from "@terreno/ai/harness";
 import {APIError} from "@terreno/api";
 import type {LanguageModel} from "ai";
 

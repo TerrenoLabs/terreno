@@ -1,14 +1,7 @@
 import {randomUUID} from "node:crypto";
 import {APIError, logger} from "@terreno/api";
 import {type BlocksDocument, blocksJsonSchema, validateBlocks} from "@terreno/blocks";
-import type {
-  DataContent,
-  JSONValue,
-  LanguageModel,
-  ModelMessage,
-  ToolCallPart,
-  ToolResultPart,
-} from "ai";
+import type {DataContent, JSONValue, ModelMessage, ToolCallPart, ToolResultPart} from "ai";
 import {
   generateText as aiGenerateText,
   jsonSchema,

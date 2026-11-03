@@ -104,7 +104,7 @@ type TurnOutcome =
   | {fields: AskErrors[string]; kind: "invalidAnswer"}
   | {detail: string; kind: "conflict"};
 
-/** The synced row's id: the entity key, which is the string `_id`. */
+/** The synced row's id: the entity key, which is the ObjectId `_id` as a hex string. */
 const historyIdOf = (history: GptHistory): string => history._id;
 
 /** Bearer header for the SSE and rating requests, from the same session the sync client uses. */

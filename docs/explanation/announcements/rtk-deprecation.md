@@ -15,11 +15,11 @@ Terreno **58.0.0** deletes `@terreno/rtk` and every Redux dependency. [`@terreno
 - **Session:** `SessionProvider` + `useSession()` from `@terreno/syncdb/auth` (Better Auth, or `jwtAuthAdapter` for JWT backends).
 - **Flags and pushes:** ride the syncdb socket (`@terreno/syncdb/flags`, `useSocketEvent`). One socket per app.
 - **App utilities:** base URLs in `@terreno/syncdb/config`; upgrade check, permissions, dev logger, and MCP tools in `@terreno/syncdb/app`.
-- **Backend:** `GptHistory` and `McpServiceToken` are synced collections with String ids. Two data migrations ship with 58.
+- **Backend:** `GptHistory` and `McpServiceToken` are synced collections. `GptHistory` keeps its ObjectId ids; `McpServiceToken` moves to String ids with a data migration.
 
 ### What you need to do
 
-1. Run the `GptHistory` and `McpServiceToken` migrations before deploying 58 frontends.
+1. Run the `McpServiceToken` migration before deploying 58 frontends.
 2. Follow the [upgrade guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md). It maps every removed export to its replacement.
 3. Remove `@terreno/rtk`, `@reduxjs/toolkit`, `react-redux`, `redux-persist`, and `@rtk-query/codegen-openapi` from the app.
 

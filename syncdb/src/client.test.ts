@@ -375,6 +375,42 @@ describe("createSyncDb", () => {
       await client.stop();
     });
 
+    it("mints UUIDs by default and ObjectIds for collections configured with idFormats objectId", async () => {
+      const harness = makeHarness({
+        collections: ["todos", "notes"],
+        idFormats: {notes: "objectId"},
+      });
+      harness.transport.setDefaultResponder(async () => {
+        await flush();
+        throw new Error("offline");
+      });
+      const client = createSyncDb(harness.config);
+      await client.start();
+
+      const todo = client.mutate({collection: "todos", data: {title: "t"}, operation: "create"});
+      assert.match(todo.id, /^[0-9a-f]{8}-[0-9a-f]{4}-/);
+
+      const note = client.mutate({collection: "notes", data: {body: "n"}, operation: "create"});
+      assert.match(note.id, /^[0-9a-f]{24}$/);
+      assert.deepEqual(client.store.getEntity({collection: "notes", id: note.id})?.data, {
+        body: "n",
+      });
+
+      // An explicit id is kept when it is a valid ObjectId and refused before queuing when not.
+      const explicit = "65f0c0ffee0000000000abcd";
+      assert.equal(
+        client.mutate({collection: "notes", data: {}, id: explicit, operation: "create"}).id,
+        explicit
+      );
+      const queuedBefore = client.getSyncStatus().queuedCount;
+      expect(() =>
+        client.mutate({collection: "notes", data: {}, id: "not-hex", operation: "create"})
+      ).toThrow("24-character hex ObjectId for notes");
+      assert.equal(client.getSyncStatus().queuedCount, queuedBefore);
+      assert.isUndefined(client.store.getEntity({collection: "notes", id: "not-hex"}));
+      await client.stop();
+    });
+
     it("applies creates optimistically and immediately", async () => {
       const harness = makeHarness();
       // Hold replies so the pre-ack state is observable.

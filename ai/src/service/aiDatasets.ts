@@ -133,8 +133,7 @@ export const registerAiDataset = async ({
   assertRows(columns, rows);
   const created = await AIDataset.create({
     columns,
-    // GptHistory ids are Strings; an ObjectId from an older caller is stored as its hex string.
-    historyId: String(historyId),
+    historyId,
     rowCount: rows.length,
     rows,
     userId,

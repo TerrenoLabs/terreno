@@ -137,6 +137,37 @@ const todoRouter = modelRouter("/todos", Todo, {
 });
 ```
 
+### Entity ids
+
+Offline creates need an id before the server answers, so the client mints it and the sync
+mutation writes it through as `_id`. Pick the id type per model:
+
+| Model `_id` | Client config | Client mints |
+|-------------|---------------|--------------|
+| `String` (`_id: {type: String}`) | nothing (default) | UUID |
+| Default ObjectId | `idFormats: {collection: "objectId"}` | 24-hex ObjectId |
+
+Use the ObjectId path to sync an existing ObjectId model without migrating its ids, or when
+the server creates most rows. A collection whose rows only the server creates (such as
+`gpt/histories`) needs no client config, but setting it guards any later client create.
+
+#### Client-minted ObjectIds
+
+With `idFormats: {notes: "objectId"}`, `mutate({operation: "create"})` on `notes` mints
+4 bytes of Unix seconds plus 8 random bytes (`generateObjectId` from `@terreno/syncdb`). An
+explicit `id` that is not 24 hex characters throws before anything is queued. The server
+enforces the same rule and answers a non-hex id for an ObjectId model with a `validation`
+nack, `reason: "invalid_id"`, without claiming the mutation.
+
+The timestamp comes from the device clock, so sort and display by `created`, never by the
+id or `_id.getTimestamp()`.
+
+**Collisions.** 64 random bits per second make two clients minting the same id a non-event in
+practice. If it happens, the unique `_id` index stops the create from touching the existing
+document. The create is nacked `validation` with `reason: "id_collision"` and the generic
+message `Entity id already exists` (it never names the holder), recorded so a redelivery gets
+the same nack, and the client marks it failed. A UUID collision gets the same nack.
+
 ### SyncApp and RealtimeApp
 
 ```typescript
@@ -239,6 +270,7 @@ before anything else has confirmed one.
 |--------|------|---------|-------------|
 | `name` | `string` | — (required) | Persisted database name |
 | `collections` | `string[]` | — (required) | Collection names to sync (local tables + subscriptions) |
+| `idFormats` | `Record<string, "uuid" \| "objectId">` | `uuid` for every collection | Id minted for creates. `objectId` for a collection whose model keeps the default ObjectId `_id` ([entity ids](#entity-ids)) |
 | `windowCollections` | `string[]` | `[]` | Collections that join `{collection}\|admin`, skip snapshots/reconcile, and hydrate only known REST membership ids |
 | `queryCollections` | `Array<string \| {collection, path?, fullSync?}>` | `[]` | Collections too large to sync whole (or `fullSync: true` to keep snapshot sync and add windows). No snapshot/reconcile paging; rows arrive through [query windows](#query-windows) against the `modelRouter` list endpoint (`path`, default `/{collection}`) plus live deltas on the user's normal streams. Each entry must also be in `collections` and not in `windowCollections`. |
 | `organizationIdProvider` | `() => string \| undefined` | — | Read at send time: sets `X-Organization-Id` on HTTP sync calls and `organizationId` on socket mutate payloads |
@@ -1083,7 +1115,7 @@ is 2 requests (`GET /sync/streams` plus one batch) instead of 101.
 | `GET /sync/snapshot?collection=&stream=&cursor=&limit=` | Bootstrap + catch-up for one stream (`limit` max 100). Soft-deleted documents, including pre-sync rows paged by `legacyCursor` (seq 0), arrive as tombstones with `data: null` |
 | `POST /sync/snapshot/batch` | Bootstrap + catch-up for many streams in one round trip. Body `{streams: [{stream, cursor?, legacyCursor?}], limit?}`, at most 500 streams, no repeats. `limit` (default 5,000, max 10,000) is the entity budget for the whole response, split evenly across the streams. Returns `{pages}`, one `GET /sync/snapshot`-shaped page per stream in request order. Any stream the caller may not read fails the whole request |
 | `GET /sync/streams` | Current stream membership for the user |
-| `GET /sync/entities` | Point lookup for entity repair and admin window hydrate. Admin-window callers (`admin:access` with RBAC, else `user.admin`) on `adminBroadcast` collections receive requested ids across product streams. When AdminApp registered a scope, list/read/`queryFilter` still apply; unknown or out-of-scope ids are omitted |
+| `GET /sync/entities` | Point lookup for entity repair and admin window hydrate. Admin-window callers (`admin:access` with RBAC, else `user.admin`) on `adminBroadcast` collections receive requested ids across product streams. When AdminApp registered a scope, list/read/`queryFilter` still apply; unknown or out-of-scope ids are omitted, as are non-hex ids for an ObjectId model (they cannot exist) |
 | `POST /sync/mutate` | Single mutation (HTTP fallback). Optional `mutationMode: "adminWindow"` validates `adminBroadcast`, admin-window access, and a registered AdminApp write scope, then runs the shared sync executor with **AdminApp** pre/post hooks (not product `modelRouter` hooks), plus the same permission (including org membership), stripping, and audit semantics as `/admin` REST. HTTP mutate binds `X-Organization-Id` into org context |
 | `POST /sync/mutate/batch` | Batched mutations (max 100, strict order, stop at first non-ack). Each mutation may carry `mutationMode: "adminWindow"` under the same AdminApp executor hook path as single mutate |
 | `GET /sync/key` | Per-user encryption key material (web) |
@@ -1182,7 +1214,7 @@ Backend sync requires a MongoDB replica set (`MONGO_URI` with `replicaSet=`) for
 ## Conventions
 
 - **Local-first only** — there is no server-first mode. The local store is always the read source.
-- **Synced models need `String` `_id`** — offline creates mint client ids (UUIDs); default ObjectId `_id` cast-fails.
+- **Match the client id format to the model `_id`** — String `_id` takes the default UUIDs; a default ObjectId `_id` needs `idFormats: {collection: "objectId"}`, or client creates are nacked `invalid_id` ([entity ids](#entity-ids)).
 - **Soft delete only** on synced models — `isDeletedPlugin` required; hard deletes break tombstone catch-up.
 - **No `bulkWrite` / `updateMany` / `deleteMany`** on synced models — use per-document loops.
 - **Do not write reserved tables** (`_outbox`, `_cursors`, `_conflicts`) directly — use `client.mutate`, hooks, and `resolveConflict`.

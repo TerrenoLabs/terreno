@@ -27,8 +27,9 @@ installDevConsoleLogger({baseUrl});
 ```
 
 
-`GptHistory` and `McpServiceToken` now have String `_id`s and sync. Run both data migrations
-**before** deploying 58 frontends. See the
+`GptHistory` and `McpServiceToken` now sync. `GptHistory` keeps its ObjectId `_id` (no
+migration). `McpServiceToken` has a String `_id`; run its data migration **before** deploying
+58 frontends. See the
 [58.0.0 upgrade note](https://github.com/TerrenoLabs/terreno/blob/master/mcp-server/src/docs/upgrades/58.0.0.md#gpt-histories-are-a-synced-collection).
 
 Every collection the app reads or writes as a list needs the sync backend: `syncPlugin` +

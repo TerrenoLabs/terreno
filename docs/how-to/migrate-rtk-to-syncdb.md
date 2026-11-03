@@ -398,7 +398,7 @@ Every export of `@terreno/rtk` 57.x and its 58 replacement. Paths: `api` =
 | `installTerrenoDevConsoleLogger` | `installDevConsoleLogger` (app) |
 | `resetTerrenoDevConsoleLoggerForTests` | Removed from the public API |
 | `registerTerrenoDevStore` | Removed. `createSyncDb({debug})` registers the client for terreno-mcp-local (`get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`). |
-| `useMCPTools`, `MCPToolInfo`, `UseMCPToolsOptions`, `UseMCPToolsResult` | Same names (app); pass `authProvider` |
+| `useMCPTools`, `MCPToolInfo`, `UseMCPToolsOptions`, `UseMCPToolsResult` | Same names, from `@terreno/syncdb/mcp`; pass `authProvider` |
 | `useTerrenoChat`, `UseTerrenoChatOptions` | Removed (no consumers). Use `useChat` from `@ai-sdk/react` with a bearer header from `authProvider.getToken()`, or `GPTChat` from `@terreno/ui`. |
 | `@terreno/rtk/buildNumber`: `coerceBuildNumber`, `resolveBuildNumber` | `@terreno/syncdb/buildNumber` (node-only) |
 

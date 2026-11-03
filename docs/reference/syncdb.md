@@ -36,7 +36,8 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - API client (`@terreno/syncdb/api`): `createApiClient`, `ApiClient`, `ApiError`, `isApiError`, `apiFetch`, `unwrapEnvelope`, `serializeParams`
 - Config (`@terreno/syncdb/config`): `baseUrl`, `baseWebsocketsUrl`, `baseTasksUrl`, `appHeaders`, `isWeb`, `resolveBaseUrls`, `resolveDevApiPort`, `SAME_ORIGIN_SENTINEL`
 - Auth (`@terreno/syncdb/auth`): `createBetterAuthClient`, `createStorageAdapter`, `repairCookieJar`, `withCookieJarRepair`, `SessionProvider`, `useSession`, `useSessionStore`, `createSessionStore`, `betterAuthSessionSource`, `betterAuthAdapter`, `bridgeBetterAuthReactClient`, Better Auth types; JWT (legacy): `jwtAuthAdapter`, `useJwtAuth`, `getTokenExpirationTimes`, `shouldShowStillThereModal`, `createJwtTokenStorage`, `readJwtTokens`, `decodeJwtClaims`
-- App (`@terreno/syncdb/app`): `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `ADMIN_PAGE_PERMISSION`, `installDevConsoleLogger`, `useMCPTools`
+- App (`@terreno/syncdb/app`): `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `ADMIN_PAGE_PERMISSION`, `installDevConsoleLogger`
+- MCP (`@terreno/syncdb/mcp`): `useMCPTools`
 - Flags (`@terreno/syncdb/flags`): `useFeatureFlags`, `useTerrenoFeatureFlags`, `TerrenoFlagConfiguration`
 - Build number (`@terreno/syncdb/buildNumber`, node-only): `resolveBuildNumber`, `coerceBuildNumber`
 - CLI: `terreno-syncdb-codegen` (generates `SYNC_COLLECTIONS` + friendly hooks from OpenAPI)
@@ -779,16 +780,13 @@ Token helpers (all take an optional `{storage, now}`):
 ## App utilities
 
 `@terreno/syncdb/app` holds app-shell helpers that replace their `@terreno/rtk`
-versions. It needs `react`, `react-native`, and `expo-constants`; `useMCPTools` also
-needs `@modelcontextprotocol/client`. All are optional peer dependencies.
+versions. It needs `react`, `react-native`, and `expo-constants`, all optional peer
+dependencies. `useMCPTools` lives in `@terreno/syncdb/mcp` because it also needs the optional
+`@modelcontextprotocol/client` peer, which it imports at the top level.
 
 ```typescript
-import {
-  canOpenAdminPage,
-  installDevConsoleLogger,
-  useMCPTools,
-  useUpgradeCheck,
-} from "@terreno/syncdb/app";
+import {canOpenAdminPage, installDevConsoleLogger, useUpgradeCheck} from "@terreno/syncdb/app";
+import {useMCPTools} from "@terreno/syncdb/mcp";
 
 installDevConsoleLogger(); // module scope; no-op outside __DEV__
 
@@ -803,7 +801,7 @@ const {tools} = useMCPTools({authProvider}); // the provider passed to createSyn
 | `hasPermission(permissions, request)` | True when the `/auth/me` `permissions` map grants every requested action |
 | `canOpenAdminPage({admin, permissions})` | With RBAC, only `admin:access` opens the admin UI; without it, falls back to `user.admin` |
 | `installDevConsoleLogger({baseUrl})` | In `__DEV__`, batches `console.error` / `console.warn` and global errors to `POST /__terreno/browser-logs`. Safe to call more than once. |
-| `useMCPTools({authProvider, baseURL})` | Lists the backend's `/mcp` tools with the official MCP client. The token comes from `authProvider.getToken()` on each fetch, so Better Auth and JWT sessions both work. Returns `{tools, isLoading, error, refetch}`. |
+| `useMCPTools({authProvider, baseURL})` (`@terreno/syncdb/mcp`) | Lists the backend's `/mcp` tools with the official MCP client. The token comes from `authProvider.getToken()` on each fetch, so Better Auth and JWT sessions both work. Returns `{tools, isLoading, error, refetch}`. |
 
 `@terreno/syncdb/buildNumber` is node-only (it runs `git`). Import it from
 `app.config.ts`, never from app code:

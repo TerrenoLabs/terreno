@@ -61,6 +61,15 @@ export const getAdminSpaServerContext = (): AdminSpaServerContext | undefined =>
 };
 
 /**
+ * True while rendering on the server: there is no browser `window`, and the serve plugin has
+ * published its context in this process. A server render reads what it was given and never
+ * starts watchers, sockets or requests of its own.
+ */
+export const isAdminSpaServerRender = (): boolean => {
+  return !("window" in globalThis) && getAdminSpaServerContext() !== undefined;
+};
+
+/**
  * The process-wide request store, created on first use. `process.getBuiltinModule` keeps
  * `node:async_hooks` out of the static import graph, because this module is also bundled for
  * the browser, where there is no request store.

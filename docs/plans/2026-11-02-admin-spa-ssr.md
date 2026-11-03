@@ -196,7 +196,7 @@ None — no new or changed screens.
   - Test skills: none
   - Docs: docs/reference/admin-spa.md (gate table), via T12
 
-- [ ] **T4** — Hydrate the shell: app config, session, admin config, profile
+- [x] **T4** — Hydrate the shell: app config, session, admin config, profile
   - Depends on: T3, T5
   - Files: admin-spa/app/_layout.tsx, admin-spa/app/+html.tsx, admin-spa/components/AppConfigGate.tsx, admin-spa/components/StoreProvider.tsx, admin-spa/components/ssrPayload.ts, admin-spa/components/ssrPayload.test.tsx, syncdb/src/auth/session.ts, syncdb/src/auth/session.test.ts, syncdb/src/api/client.ts, syncdb/src/api/client.test.ts, docs/reference/syncdb.md, admin-spa/e2e/shell.ssr.spec.ts, admin-spa/e2e/serveTestApp.ts, docs/explanation/admin-spa-ssr.md
   - Criteria:

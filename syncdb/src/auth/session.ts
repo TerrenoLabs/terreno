@@ -99,6 +99,12 @@ export interface SessionStoreConfig<TUser = BetterAuthUser> {
    * @default 10000
    */
   signOutTimeoutMs?: number;
+  /**
+   * The session a server render already read, as the source would report it (`null` for signed
+   * out). The store starts settled on it, `isLoading: false`, and `start()` re-checks silently,
+   * so a matching session causes no state change and the state never flips back to loading.
+   */
+  initialSession?: SessionSnapshot<TUser> | null;
   /** Extra app cleanup run on logout after the auth and syncdb sign-outs. */
   onLogout?: () => void | Promise<void>;
   /**
@@ -297,8 +303,25 @@ export const createSessionStore = <TUser = BetterAuthUser>(
     config.clearIntervalFn ??
     ((handle: unknown): void => clearInterval(handle as ReturnType<typeof setInterval>));
 
+  const initialSession = config.initialSession;
   let state: SessionState<TUser> = {...INITIAL_STATE};
   let currentKey: string | undefined;
+  // A seeded store's first read only confirms what the server already read.
+  let isFirstReadSilent = initialSession !== undefined;
+  if (initialSession === null) {
+    state = {...SIGNED_OUT_STATE};
+    currentKey = snapshotKey(null);
+  } else if (initialSession) {
+    state = {
+      error: null,
+      isAuthenticated: true,
+      isLoading: false,
+      isSigningOut: false,
+      user: initialSession.user,
+      userId: initialSession.userId,
+    };
+    currentKey = snapshotKey(initialSession);
+  }
   const listeners = new Set<() => void>();
   let isStarted = false;
   let unsubscribeSource: (() => void) | undefined;
@@ -404,7 +427,9 @@ export const createSessionStore = <TUser = BetterAuthUser>(
         void readSession({silent: true});
       }, pollIntervalMs);
     }
-    void readSession({silent: false});
+    const silent = isFirstReadSilent;
+    isFirstReadSilent = false;
+    void readSession({silent});
   };
 
   const stop = (): void => {

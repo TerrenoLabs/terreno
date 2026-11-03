@@ -111,6 +111,36 @@ redirects as a fallback for a session that ends after the page has loaded. While
 session is still loading, it renders `/login` as is, so the server-rendered form stays on
 screen, and shows a spinner on other routes.
 
+## Hydrating the shell
+
+The server render hands the browser what the gate already read, so the shell renders on its
+first client render with no spinner and no repeated requests:
+
+- `+html.tsx` writes the request scope into `<script id="admin-spa-ssr" type="application/json">`
+  with `serializeForHtml`. `useSsrPayload()` returns that scope on the server and, in the
+  browser, reads the script once and removes it.
+- `StoreProvider` passes the payload's session to the session store as `initialSession`, so
+  `useSession()` is settled from the first render, and primes the request client's
+  `GET /auth/me` entry with the profile (`primeQuery`).
+- The layout wraps `AdminGate` in `<AdminRpcSeed>` with the payload's admin config, so every
+  `/admin/config` reader renders from it. The config is filtered per user, so it seeds only
+  while the payload's session is the live one; after another sign-in, readers fetch their own.
+  Likewise, a payload with `adminConfigStatus: 403` sends the session to `/forbidden` without
+  probing the config again, but only while the live session is the payload's.
+- With a payload, the sync provider renders the shell at once and starts syncdb behind it; a
+  failed start shows an error above the shell. Without one (dev proxy), it keeps the spinner.
+- On the server, clients are built on `internalOrigin`, and nothing starts: no session watch,
+  no socket, no request.
+- The server lays out for a 1280×800 viewport (`Dimensions.set` in `+html.tsx`), so a desktop
+  browser hydrates into the same tree. A narrower browser re-renders once after hydration.
+
+The payload describes only the page the server rendered. After the first client commit,
+`useSsrPayload()` returns `undefined` to anything that mounts later, so a sign-in, sign-out
+or navigation reads live state. Route loader data (`__EXPO_ROUTER_LOADER_DATA__` and its
+inline script) is deleted once every route has read its entry, or after 5 s. Loader rows can
+hold PHI, so they do not stay on `window` or in the DOM, and a later client navigation fetches
+loader JSON instead.
+
 ## Related
 
 - [Admin SPA reference](../reference/admin-spa.md)

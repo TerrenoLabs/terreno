@@ -796,6 +796,30 @@ describe("useAdminRpcQuery with AdminRpcSeed", () => {
     assert.lengthOf(t.getCalls(), 0);
   });
 
+  it("fetches when a seeded query is skipped (sign-out) and then unskipped again", async () => {
+    const CONFIG = {models: []};
+    const t = await setup({
+      options: {skip: false, url: "/admin/config"},
+      respond: () => ({models: ["fresh"]}),
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/config")]: CONFIG}],
+    });
+    assert.strictEqual(t.renders[0]?.data, CONFIG);
+    assert.lengthOf(t.getCalls(), 0);
+
+    await act(async () => {
+      t.setOptions({skip: true, url: "/admin/config"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 0);
+
+    await act(async () => {
+      t.setOptions({skip: false, url: "/admin/config"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.renders.at(-1)?.data, {models: ["fresh"]});
+  });
+
   it("applies transformResponse to the seed", async () => {
     const items = [{id: 1}, {id: 2}];
     const t = await setup({

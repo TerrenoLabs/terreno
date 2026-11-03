@@ -188,6 +188,9 @@ export const useAdminRpcQuery = <T = unknown>({
   // Fetch whenever the bound client, URL, headers, or skip flag changes.
   useEffect(() => {
     if (!rpc || skip) {
+      // A seed answers only the first request it was rendered for. After a skip (for example
+      // a sign-out), the next request must fetch: the seed may belong to another session.
+      seededKeyRef.current = null;
       setIsLoading(false);
       setIsFetching(false);
       settleRefetches({isError: false});

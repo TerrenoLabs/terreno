@@ -5,6 +5,8 @@ import {AdminSpaServeApp} from "../src/serve";
 import {
   E2E_ADMIN_EMAIL,
   E2E_ADMIN_PASSWORD,
+  E2E_ADMIN_SESSION_COOKIE,
+  E2E_ADMIN_SESSION_TOKEN,
   E2E_MEMBER_EMAIL,
   E2E_MEMBER_PASSWORD,
 } from "./credentials";
@@ -13,8 +15,8 @@ import {
 // the plugin's compiled-location default) so the e2e works when run from TS source.
 const DIST_DIR = path.resolve(__dirname, "../dist");
 
-const SESSION_COOKIE = "admin_spa_e2e_session";
-const SESSION_TOKEN = "admin-spa-e2e-session-token";
+const SESSION_COOKIE = E2E_ADMIN_SESSION_COOKIE;
+const SESSION_TOKEN = E2E_ADMIN_SESSION_TOKEN;
 
 const MEMBER_SESSION_COOKIE = "admin_spa_e2e_member_session";
 const MEMBER_SESSION_TOKEN = "admin-spa-e2e-member-session-token";
@@ -48,6 +50,21 @@ const ADMIN_CONFIG = {
     title: "Admin",
   },
   models: [
+    // A windowed sync model (string `_id`, `adminBroadcast`, a sync collection): the SPA
+    // starts a syncdb client for it, which the shell must not wait on for its first render.
+    {
+      adminBroadcast: true,
+      defaultSort: "-created",
+      displayName: "Notes",
+      fields: {
+        _id: {required: false, type: "string"},
+        body: {required: false, type: "string"},
+      },
+      listFields: ["body"],
+      name: "Note",
+      routePath: "/admin/notes",
+      syncCollection: "notes",
+    },
     {
       defaultSort: "-created",
       displayName: "Todos",

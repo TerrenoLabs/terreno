@@ -709,3 +709,76 @@ describe("tag invalidation failures", () => {
     client.reset();
   });
 });
+
+describe("createApiClient.primeQuery (server-rendered first state)", () => {
+  const ME = {_id: "u1", roles: ["admin"]};
+  const ARGS = {method: "GET" as const, url: "/auth/me"};
+
+  it("makes getQueryState fulfilled with the data and never calls fetch", () => {
+    const {calls, fetchImpl} = scriptedFetch([]);
+    const client = createApiClient({fetchImpl});
+
+    client.primeQuery(ARGS, ME);
+
+    expect(client.getQueryState(ARGS)).toMatchObject({
+      data: ME,
+      isFetching: false,
+      status: "fulfilled",
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("fetchQuery for a primed entry returns the data without a request", async () => {
+    const {calls, fetchImpl} = scriptedFetch([]);
+    const client = createApiClient({fetchImpl});
+    client.primeQuery(ARGS, ME);
+
+    const data = await client.fetchQuery(ARGS);
+
+    expect(data).toEqual(ME);
+    expect(calls).toEqual([]);
+  });
+
+  it("invalidateTags refetches a primed entry a subscriber tagged", async () => {
+    const {calls, fetchImpl} = scriptedFetch([() => jsonResponse({data: {_id: "u1", roles: []}})]);
+    const client = createApiClient({baseUrl: "http://api.test", fetchImpl});
+    client.primeQuery(ARGS, ME);
+    const unsubscribe = client.subscribeQuery(ARGS, () => {}, {providesTags: ["profile"]});
+
+    client.invalidateTags(["profile"]);
+    await client.fetchQuery(ARGS);
+
+    expect(calls).toHaveLength(1);
+    expect(client.getQueryState(ARGS).data).toEqual({_id: "u1", roles: []});
+    unsubscribe();
+  });
+
+  it("reset() drops a primed entry", () => {
+    const client = createApiClient({fetchImpl: scriptedFetch([]).fetchImpl});
+    client.primeQuery(ARGS, ME);
+
+    client.reset();
+
+    expect(client.getQueryState(ARGS).status).toBe("uninitialized");
+  });
+
+  it("primes only the args given: a different URL or org header stays uninitialized", () => {
+    const client = createApiClient({fetchImpl: scriptedFetch([]).fetchImpl});
+
+    client.primeQuery(ARGS, ME);
+
+    expect(client.getQueryState({url: "/auth/other"}).status).toBe("uninitialized");
+    expect(
+      client.getQueryState({headers: {"X-Organization-Id": "o1"}, url: "/auth/me"}).status
+    ).toBe("uninitialized");
+  });
+
+  it("two clients built for two server requests share no state", () => {
+    const first = createApiClient({fetchImpl: scriptedFetch([]).fetchImpl});
+    const second = createApiClient({fetchImpl: scriptedFetch([]).fetchImpl});
+
+    first.primeQuery(ARGS, ME);
+
+    expect(second.getQueryState(ARGS).status).toBe("uninitialized");
+  });
+});

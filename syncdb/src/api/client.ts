@@ -87,6 +87,12 @@ export interface ApiClient {
   invalidateTags: (tags: readonly string[]) => void;
   /** Drop every cache entry (call on logout / user switch). */
   reset: () => void;
+  /**
+   * Store `data` as the fulfilled result for `args` without a request, for example a response
+   * a server render already fetched. Hooks for the same args render it on their first render;
+   * tag invalidation and `reset()` treat it like any fetched entry.
+   */
+  primeQuery: (args: ApiRequestArgs, data: unknown) => void;
 }
 
 interface CacheEntry {
@@ -294,6 +300,14 @@ export const createApiClient = (config: ApiClientConfig = {}): ApiClient => {
     return runQuery(key, entry) as Promise<T>;
   };
 
+  const primeQuery = (args: ApiRequestArgs, data: unknown): void => {
+    const [key, entry] = ensureEntry(args);
+    entry.generation += 1;
+    entry.inFlight = undefined;
+    setState(entry, {data, error: undefined, isFetching: false, status: "fulfilled"});
+    scheduleGc(key, entry);
+  };
+
   const getQueryState = <T = unknown>(args: ApiRequestArgs): ApiQueryState<T> =>
     (entries.get(apiQueryKey(args))?.state ?? UNINITIALIZED) as ApiQueryState<T>;
 
@@ -360,6 +374,7 @@ export const createApiClient = (config: ApiClientConfig = {}): ApiClient => {
     fetchQuery,
     getQueryState,
     invalidateTags,
+    primeQuery,
     request,
     reset,
     subscribeQuery,

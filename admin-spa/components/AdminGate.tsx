@@ -7,6 +7,7 @@ import {sanitizeReturnTo} from "../src/returnTo";
 import {useAppConfig} from "./AppConfigGate";
 import {AdminGateConfigProvider} from "./adminGateConfig";
 import {isForbiddenAdminConfigError} from "./adminGateUtils";
+import {useSsrPayload} from "./ssrPayload";
 
 interface AdminRequestError {
   status?: number;
@@ -40,26 +41,36 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   const pathname = usePathname();
   const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
   const {appConfig} = useAppConfig();
-  const {isAuthenticated, isLoading: isAuthLoading} = useSession();
+  const {isAuthenticated, isLoading: isAuthLoading, userId} = useSession();
+  const payload = useSsrPayload();
+  // The server already found this session forbidden: no need to probe `/admin/config` again.
+  const isForbiddenByServer =
+    isAuthenticated &&
+    payload?.adminConfigStatus === 403 &&
+    payload.session?.userId !== undefined &&
+    payload.session.userId === userId;
 
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
   const rpc = useAdminRpc();
   // Probe `/admin/config` only with a session so signing in starts a fresh request.
   const configQuery = useAdminRpcQuery<AdminConfigResponse>({
     rpc,
-    skip: !isAuthenticated,
+    skip: !isAuthenticated || isForbiddenByServer,
     url: `${apiBase}/config`,
   });
   const {data: config, error} = configQuery;
   // A signed-in session has no answer yet until the probe resolves or fails.
-  const isConfigLoading = configQuery.isLoading || (isAuthenticated && !config && !error);
+  const isConfigLoading =
+    !isForbiddenByServer && (configQuery.isLoading || (isAuthenticated && !config && !error));
   const status = (error as AdminRequestError | null | undefined)?.status;
-  const isForbidden = isForbiddenAdminConfigError({
-    error,
-    isAuthenticated,
-    isConfigLoading,
-    status,
-  });
+  const isForbidden =
+    isForbiddenByServer ||
+    isForbiddenAdminConfigError({
+      error,
+      isAuthenticated,
+      isConfigLoading,
+      status,
+    });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
 
   // Drive redirects from auth + authorization state.

@@ -974,3 +974,180 @@ describe("betterAuthSessionSource", () => {
     expect(() => unsubscribe?.()).not.toThrow();
   });
 });
+
+describe("createSessionStore initialSession (server-rendered first state)", () => {
+  const ADMIN: User = {id: "ba1", name: "Admin"};
+
+  /** Records `isLoading` after every state change, so a test can prove it never flips to true. */
+  const trackLoading = (
+    store: ReturnType<typeof createSessionStore<User>>
+  ): {changes: () => number; loadingSeen: () => boolean} => {
+    let changes = 0;
+    let loadingSeen = false;
+    store.subscribe(() => {
+      changes += 1;
+      if (store.getState().isLoading) {
+        loadingSeen = true;
+      }
+    });
+    return {changes: (): number => changes, loadingSeen: (): boolean => loadingSeen};
+  };
+
+  it("starts authenticated and not loading, before start(), for a signed-in snapshot", () => {
+    const {source} = makeSource(snapshot("ba1"));
+    const store = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source,
+    });
+
+    expect(store.getState()).toMatchObject({
+      isAuthenticated: true,
+      isLoading: false,
+      user: ADMIN,
+      userId: "ba1",
+    });
+  });
+
+  it("start() with a matching snapshot makes its first read silently, with no state change", async () => {
+    const {reads, source} = makeSource({user: ADMIN, userId: "ba1"});
+    const store = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source,
+    });
+    const tracker = trackLoading(store);
+    const before = store.getState();
+
+    store.start();
+    await flush();
+
+    expect(reads()).toBe(1);
+    expect(tracker.changes()).toBe(0);
+    expect(tracker.loadingSeen()).toBe(false);
+    expect(store.getState()).toBe(before);
+    store.stop();
+  });
+
+  it("start() with a source that reports signed out flips to unauthenticated without loading", async () => {
+    const {source} = makeSource(null);
+    const store = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source,
+    });
+    expect(store.getState().isLoading).toBe(false);
+    const tracker = trackLoading(store);
+
+    store.start();
+    await flush();
+
+    expect(store.getState()).toMatchObject({isAuthenticated: false, isLoading: false, user: null});
+    expect(tracker.loadingSeen()).toBe(false);
+    store.stop();
+  });
+
+  it("start() with a different user applies the new user without loading", async () => {
+    const {source} = makeSource(snapshot("ba2", "Other"));
+    const store = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source,
+    });
+    expect(store.getState().isLoading).toBe(false);
+    const tracker = trackLoading(store);
+
+    store.start();
+    await flush();
+
+    expect(store.getState().userId).toBe("ba2");
+    expect(tracker.loadingSeen()).toBe(false);
+    store.stop();
+  });
+
+  it("initialSession null starts signed out and not loading", () => {
+    const {source} = makeSource(null);
+    const store = createSessionStore<User>({initialSession: null, pollIntervalMs: 0, source});
+
+    expect(store.getState()).toMatchObject({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+      userId: null,
+    });
+  });
+
+  it("initialSession null, then start() finds a session: authenticated without loading", async () => {
+    const {source} = makeSource(snapshot("ba1"));
+    const store = createSessionStore<User>({initialSession: null, pollIntervalMs: 0, source});
+    expect(store.getState().isLoading).toBe(false);
+    const tracker = trackLoading(store);
+
+    store.start();
+    await flush();
+
+    expect(store.getState().isAuthenticated).toBe(true);
+    expect(tracker.loadingSeen()).toBe(false);
+    store.stop();
+  });
+
+  it("without initialSession the first state is still loading (unchanged)", () => {
+    const {source} = makeSource(snapshot("ba1"));
+    const store = createSessionStore<User>({pollIntervalMs: 0, source});
+
+    expect(store.getState()).toMatchObject({isAuthenticated: false, isLoading: true});
+  });
+
+  it("keeps the seeded session when the silent first read fails", async () => {
+    const restore = silenceConsole();
+    try {
+      const {source} = makeSource(new Error("offline") as never);
+      const store = createSessionStore<User>({
+        initialSession: {user: ADMIN, userId: "ba1"},
+        pollIntervalMs: 0,
+        source,
+      });
+
+      store.start();
+      await flush();
+
+      expect(store.getState()).toMatchObject({error: null, isAuthenticated: true, userId: "ba1"});
+      store.stop();
+    } finally {
+      restore();
+    }
+  });
+
+  it("refresh() after a seeded start is still a loud read (marks loading)", async () => {
+    const {source} = makeSource(snapshot("ba1"));
+    const store = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source,
+    });
+    store.start();
+    await flush();
+    const tracker = trackLoading(store);
+
+    await store.refresh();
+
+    expect(tracker.loadingSeen()).toBe(true);
+    store.stop();
+  });
+
+  it("two stores built for two server requests share no state", () => {
+    const first = createSessionStore<User>({
+      initialSession: {user: ADMIN, userId: "ba1"},
+      pollIntervalMs: 0,
+      source: makeSource(null).source,
+    });
+    const second = createSessionStore<User>({
+      initialSession: null,
+      pollIntervalMs: 0,
+      source: makeSource(null).source,
+    });
+
+    expect(first.getState().userId).toBe("ba1");
+    expect(second.getState().userId).toBeNull();
+  });
+});

@@ -437,6 +437,17 @@ describe("AdminSpaServeApp internalOrigin and ssrApiPrefixes options", () => {
       "/rbac",
     ]);
   });
+
+  it("adds the derived RBAC root to the default ssrApiPrefixes for a configured admin base", () => {
+    const app = express();
+    new AdminSpaServeApp({
+      appConfig: {adminApiBasePath: "/internal/admin"},
+      distDir,
+    }).register(app);
+    const prefixes = getAdminSpaServerContext()?.ssrApiPrefixes;
+    expect(prefixes).toContain("/internal/admin");
+    expect(prefixes).toContain("/internal/rbac");
+  });
 });
 
 const SENTINEL = "PHI-SENTINEL";

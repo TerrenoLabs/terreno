@@ -334,7 +334,7 @@ None — no new or changed screens.
   - Test skills: none
   - Docs: docs/explanation/admin-spa-ssr.md (syncdb note)
 
-- [ ] **T9** — Server-render home, configuration, roles, scripts, and version-config
+- [x] **T9** — Server-render home, configuration, roles, scripts, and version-config
   - Depends on: T4, T6 (both edit `admin-frontend/src/index.tsx`; the home `recentActivity` widget reuses T6's list URL)
   - Files: admin-spa/app/index.tsx, admin-frontend/src/widgets/homeWidgetUrls.ts, admin-frontend/src/index.tsx, admin-spa/app/configuration.tsx, admin-spa/app/roles/index.tsx, admin-spa/app/scripts.tsx, admin-spa/app/version-config.tsx, admin-spa/server/rpcRoutes.ts, admin-spa/server/rpcRoutes.test.ts, admin-spa/e2e/integration/adminSpa.ssr.rpc.integration.spec.ts
   - Criteria:

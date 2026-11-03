@@ -573,6 +573,15 @@ screen will request and seed it under the same key:
 - `buildAdminApiListQueryRequest(routePath, params)`: `{method: "GET", url}` for a list
   request, with the params serialized as `useListQuery` serializes them.
 
+### homeWidgetUrls
+
+`homeWidgetUrls({adminConfig, apiBase})` returns the URLs the home dashboard's built-in widgets
+request on mount, for the widgets in `adminConfig.home.slots`: one `limit=1` count per model for
+`modelStats` / `modelsGrid`, the audit log's first 8 rows for `recentActivity`,
+`{apiBase}/version-config` for `versionConfig`, and `/jobs/stats` for `jobs`. Each URL appears
+once. Custom widgets and organization-scoped models contribute nothing: a server render seeds
+what this returns, and the rest loads on the client.
+
 ### AdminRpcSeed and adminRpcSeedKey
 
 `<AdminRpcSeed data={...}>` gives `useAdminRpcQuery` initial data, such as response bodies a

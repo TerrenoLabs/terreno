@@ -167,6 +167,14 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   from the path, so for such an id it fetches another path's loader data; the form then falls
   back to its own read, and a missing record shows an empty form rather than "Not found".
   ObjectIds and UUIDs never need encoding.
+- **RPC screens** (home, configuration, roles, scripts, version config): each route's loader
+  fetches `rpcUrlsForRoute(route)`, the exact URLs its screen's `useAdminRpcQuery` calls request
+  on mount, and wraps the screen in `RouteSeed`. A read that fails, or a URL outside the SSR
+  allowlist, is left out and loads on the client.
+- **Home widgets:** `homeWidgetUrls` derives the home page's URLs from `adminConfig.home.slots`
+  for the built-in widgets (`modelStats` / `modelsGrid`, `recentActivity`, `versionConfig`,
+  `jobs`). Custom app widgets are not seeded and load on the client, as are organization-scoped
+  models, because a server render has no organization selected.
 - **Windowed sync models** render the seeded REST page first. The admin provider binds the
   syncdb client only after `start()` resolves, and the table then switches to its window,
   so live updates reach it. On that switch the table refetches its REST page once, so a change

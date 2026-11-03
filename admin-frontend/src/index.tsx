@@ -234,6 +234,7 @@ export {
   HarnessApprovalsScreenWidget,
 } from "./widgets/harness/HarnessApprovalsScreenWidget";
 export type {HarnessApprovalRow} from "./widgets/harness/harnessApprovalTypes";
+export {homeWidgetUrls} from "./widgets/homeWidgetUrls";
 export {ModelsGridWidget} from "./widgets/ModelsGridWidget";
 export {RecentActivityWidget} from "./widgets/RecentActivityWidget";
 export {ScriptRunnerWidget} from "./widgets/ScriptRunnerWidget";

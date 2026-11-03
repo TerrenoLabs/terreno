@@ -207,8 +207,7 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
   const toast = useToast();
 
   const configMeta = meta as ConfigurationMetaResponse | undefined;
-  // The baseQuery in emptyApi.ts unwraps {data: ...} responses, so valuesResponse
-  // is already the config document — not a wrapper object.
+  // `useValuesQuery` unwraps the API's `{data: ...}` envelope, so this is the config document.
   const configValues = valuesResponse as Record<string, ConfigValue> | undefined;
 
   // Derived synchronously so the form is never blank when data is already cached.

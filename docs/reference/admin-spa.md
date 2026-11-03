@@ -108,7 +108,7 @@ new TerrenoApp({userModel: User})
 | `distDir` | `<package>/dist` | Directory containing the pre-built static export (tests/custom builds). |
 | `devProxyTarget` | — | When set, proxy all SPA paths to a running `expo start --web` server (e.g. `http://localhost:8083`). `app-config.json` is still served by the plugin. |
 | `internalOrigin` | `http://127.0.0.1:${PORT ?? 4000}` | Origin server renders fetch API data from, with the visitor's cookie. Never derived from `Host` or `X-Forwarded-*`. |
-| `ssrApiPrefixes` | admin API base path, `/auth/me`, `/orgs`, `/jobs`, `/comms`, `/configuration`, `/rbac` | API path prefixes a server render may fetch; any other path is rejected before a request is sent. |
+| `ssrApiPrefixes` | admin API base path, `/auth/me`, `/orgs`, `/jobs`, `/comms`, `/configuration`, `/rbac`, and the RBAC root for a nested admin base (`/internal/admin` adds `/internal/rbac`) | API path prefixes a server render may fetch; any other path is rejected before a request is sent, and that screen loads its data on the client. |
 
 ### Utility exports
 

@@ -31,6 +31,16 @@ const DEFAULT_SSR_API_PREFIXES = [
   "/rbac",
 ];
 
+/**
+ * The default SSR allowlist: the admin API base, the fixed API roots, and the RBAC root, which
+ * mounts at the API root (`/internal/admin` puts it at `/internal/rbac`, as `useAdminRoles` does).
+ */
+const defaultSsrApiPrefixes = (adminApiBasePath = "/admin"): string[] => {
+  const rbacPrefix = `${adminApiBasePath.replace(/\/admin\/?$/, "")}/rbac`;
+  const prefixes = [adminApiBasePath, ...DEFAULT_SSR_API_PREFIXES];
+  return prefixes.includes(rbacPrefix) ? prefixes : [...prefixes, rbacPrefix];
+};
+
 export interface AdminSpaServeOptions {
   /** Path the SPA is mounted at. Default: "/console". Non-breaking with the AdminApp `/admin` API. */
   basePath?: string;
@@ -145,10 +155,7 @@ export class AdminSpaServeApp implements TerrenoPlugin {
       appConfig,
       basePath,
       internalOrigin: this.opts.internalOrigin ?? `http://127.0.0.1:${process.env.PORT ?? 4000}`,
-      ssrApiPrefixes: this.opts.ssrApiPrefixes ?? [
-        appConfig.adminApiBasePath ?? "/admin",
-        ...DEFAULT_SSR_API_PREFIXES,
-      ],
+      ssrApiPrefixes: this.opts.ssrApiPrefixes ?? defaultSsrApiPrefixes(appConfig.adminApiBasePath),
     };
     publishAdminSpaServerContext(context);
 

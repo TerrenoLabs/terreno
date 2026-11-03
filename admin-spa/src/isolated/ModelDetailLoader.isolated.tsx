@@ -3,7 +3,17 @@
  * `[model]/[id]` route's server `loader` seeds the record read through `loadSsrPayload`, reports
  * a backend 404 as `notFound` (the page still answers 200), and never treats `create` as an id (create.tsx, a static sibling, has no loader).
  */
-import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
@@ -84,11 +94,12 @@ describe("[model]/[id] detail loader", () => {
   const runLoader = async (
     model: string,
     id: string,
-    scope: Partial<AdminSpaRequestScope> = {adminConfig}
+    scope: Partial<AdminSpaRequestScope> = {adminConfig},
+    cookie = "session=1"
   ): Promise<DetailLoaderData> => {
     const {loader} = await import("../../app/[model]/[id]");
     const request = new Request(`http://public.example/console/${model}/${id}`, {
-      headers: {Cookie: "session=1"},
+      headers: {Cookie: cookie},
     });
     return runInAdminSpaRequest(
       {appConfig: {} as AdminSpaRequestScope["appConfig"], basePath: "/console", ...scope},
@@ -179,5 +190,47 @@ describe("[model]/[id] detail loader", () => {
     const result = await runLoader("User", "create");
     expect(result).toEqual({rpc: {}});
     expect(seen).toEqual([]);
+  });
+
+  describe("when the SSR fetch cannot be served", () => {
+    const SECRET = "session=SECRET-COOKIE-VALUE";
+    let warn: ReturnType<typeof spyOn>;
+
+    beforeEach(() => {
+      warn = spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it("returns {rpc: {}} and warns without the cookie when ssrApiPrefixes omits the admin base", async () => {
+      new AdminSpaServeApp({
+        distDir,
+        internalOrigin: `http://127.0.0.1:${stub.port}`,
+        ssrApiPrefixes: ["/auth/me"],
+      }).register(express());
+      const result = await runLoader("User", "u1", {adminConfig}, SECRET);
+      expect(result).toEqual({rpc: {}});
+      expect(result.notFound).toBeFalsy();
+      expect(seen).toEqual([]);
+      expect(warn).toHaveBeenCalled();
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).toMatch(/users|User|\[model\]/);
+      expect(logged).not.toContain("SECRET-COOKIE-VALUE");
+    });
+
+    it("returns {rpc: {}} without throwing when the internal fetch fails", async () => {
+      const deadPort = stub.port;
+      stub.stop(true);
+      new AdminSpaServeApp({
+        distDir,
+        internalOrigin: `http://127.0.0.1:${deadPort}`,
+      }).register(express());
+      const result = await runLoader("User", "u1", {adminConfig}, SECRET);
+      expect(result).toEqual({rpc: {}});
+      expect(result.notFound).toBeFalsy();
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("SECRET-COOKIE-VALUE");
+    });
   });
 });

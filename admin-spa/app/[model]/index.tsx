@@ -27,9 +27,17 @@ export const loader: LoaderFunction<ModelListLoaderData> = async (
   if (!request || !url) {
     return {rpc: {}};
   }
-  // expo-server hands loaders a read-only Request; loadSsrPayload only reads its headers.
-  const {rpc} = await loadSsrPayload(request as unknown as Request, {requests: [{url}]});
-  return {rpc};
+  try {
+    // expo-server hands loaders a read-only Request; loadSsrPayload only reads its headers.
+    const {rpc} = await loadSsrPayload(request as unknown as Request, {requests: [{url}]});
+    return {rpc};
+  } catch (error) {
+    // A URL outside the SSR allowlist or a failed read: the table loads on the client.
+    console.warn(`Admin SPA /${modelName} rendered without its data`, {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return {rpc: {}};
+  }
 };
 
 const ModelTableScreen: React.FC = () => {

@@ -42,12 +42,22 @@ export const loader: LoaderFunction<ModelDetailLoaderData> = async (
   if (!request || !url) {
     return {rpc: {}};
   }
-  // expo-server hands loaders a read-only Request; loadSsrPayload only reads its headers.
-  const {rpc, status} = await loadSsrPayload(request as unknown as Request, {requests: [{url}]});
-  if (status[adminRpcSeedKey(url)] === 404) {
-    return {notFound: true, rpc: {}};
+  try {
+    // expo-server hands loaders a read-only Request; loadSsrPayload only reads its headers.
+    const {rpc, status} = await loadSsrPayload(request as unknown as Request, {
+      requests: [{url}],
+    });
+    if (status[adminRpcSeedKey(url)] === 404) {
+      return {notFound: true, rpc: {}};
+    }
+    return {rpc};
+  } catch (error) {
+    // A URL outside the SSR allowlist or a failed read: the form loads on the client.
+    console.warn(`Admin SPA /${modelName}/[id] rendered without its data`, {
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return {rpc: {}};
   }
-  return {rpc};
 };
 
 const ModelEditScreen: React.FC = () => {

@@ -3,7 +3,6 @@ import {
   withDefaultCommsDashboardDates,
   withQueryString,
 } from "@terreno/admin-frontend";
-import {logger} from "@terreno/api";
 import type {LoaderFunction} from "expo-server";
 import {loadSsrPayload} from "./loadSsrPayload";
 import {decodeRouteParam} from "./modelRoutes";
@@ -90,7 +89,7 @@ export const createJobsCommsLoader = (
       }
       return {rpc};
     } catch (error) {
-      logger.warn(`Admin SPA ${route} rendered without its data`, {
+      console.warn(`Admin SPA ${route} rendered without its data`, {
         reason: error instanceof Error ? error.message : String(error),
       });
       return {rpc: {}};

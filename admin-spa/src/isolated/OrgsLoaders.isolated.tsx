@@ -19,7 +19,6 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
-import {logger} from "@terreno/api";
 import express from "express";
 import {orgsSsrRequests} from "../../server/orgsRoutes";
 import {AdminSpaServeApp} from "../serve";
@@ -172,7 +171,7 @@ describe("orgs route loaders", () => {
 
     it("returns an empty seed and warns, without the cookie, when ssrApiPrefixes omits /orgs", async () => {
       register({ssrApiPrefixes: ["/admin"]});
-      const warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+      const warn = spyOn(console, "warn").mockImplementation(() => {});
       try {
         const result = await runLoader(loadDirectory, {cookie: "session=SECRET-COOKIE-VALUE"});
         expect(result).toEqual({rpc: {}});

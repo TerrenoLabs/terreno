@@ -17,7 +17,6 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
-import {logger} from "@terreno/api";
 import express from "express";
 import {DateTime, Settings} from "luxon";
 import {commsSsrUrls, jobsSsrUrls} from "../../server/jobsCommsRoutes";
@@ -206,7 +205,7 @@ describe("jobs and comms route loaders", () => {
 
     it("returns an empty seed and warns, without the cookie, when ssrApiPrefixes omits the route", async () => {
       register({ssrApiPrefixes: ["/admin"]});
-      const warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+      const warn = spyOn(console, "warn").mockImplementation(() => {});
       try {
         const result = await runLoader(load, {cookie: "session=SECRET-COOKIE-VALUE"});
         expect(result).toEqual({rpc: {}});

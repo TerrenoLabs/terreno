@@ -2,7 +2,17 @@
  * Isolated: `mock.module` for the Expo screens would leak into the shared suite. Proves the
  * `[model]` route's server `loader` seeds the default list read through `loadSsrPayload`.
  */
-import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
@@ -107,11 +117,12 @@ describe("[model] list loader", () => {
 
   const runLoader = async (
     model: string,
-    scope: Partial<AdminSpaRequestScope> = {adminConfig}
+    scope: Partial<AdminSpaRequestScope> = {adminConfig},
+    cookie = "session=1"
   ): Promise<{rpc: Record<string, unknown>}> => {
     const {loader} = await import("../../app/[model]/index");
     const request = new Request(`http://public.example/console/${model}`, {
-      headers: {Cookie: "session=1"},
+      headers: {Cookie: cookie},
     });
     return runInAdminSpaRequest(
       {appConfig: {} as AdminSpaRequestScope["appConfig"], basePath: "/console", ...scope},
@@ -157,5 +168,45 @@ describe("[model] list loader", () => {
   it("sends no X-Organization-Id for an unscoped model list", async () => {
     await runLoader("User");
     expect(seen[0]?.headers["x-organization-id"]).toBeUndefined();
+  });
+
+  describe("when the SSR fetch cannot be served", () => {
+    const SECRET = "session=SECRET-COOKIE-VALUE";
+    let warn: ReturnType<typeof spyOn>;
+
+    beforeEach(() => {
+      warn = spyOn(console, "warn").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it("returns {rpc: {}} and warns without the cookie when ssrApiPrefixes omits the admin base", async () => {
+      new AdminSpaServeApp({
+        distDir,
+        internalOrigin: `http://127.0.0.1:${stub.port}`,
+        ssrApiPrefixes: ["/auth/me"],
+      }).register(express());
+      const result = await runLoader("Todo", {adminConfig}, SECRET);
+      expect(result).toEqual({rpc: {}});
+      expect(seen).toEqual([]);
+      expect(warn).toHaveBeenCalled();
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).toMatch(/todos|Todo|\[model\]/);
+      expect(logged).not.toContain("SECRET-COOKIE-VALUE");
+    });
+
+    it("returns {rpc: {}} without throwing when the internal fetch fails", async () => {
+      const deadPort = stub.port;
+      stub.stop(true);
+      new AdminSpaServeApp({
+        distDir,
+        internalOrigin: `http://127.0.0.1:${deadPort}`,
+      }).register(express());
+      const result = await runLoader("User", {adminConfig}, SECRET);
+      expect(result).toEqual({rpc: {}});
+      expect(JSON.stringify(warn.mock.calls)).not.toContain("SECRET-COOKIE-VALUE");
+    });
   });
 });

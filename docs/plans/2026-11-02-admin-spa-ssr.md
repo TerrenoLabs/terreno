@@ -396,7 +396,7 @@ None — no new or changed screens.
   - Test skills: terreno:verify-ui-changes
   - Docs: none beyond T6's section
 
-- [ ] **T12** — Update docs, changelog, and smoke for SSR serving
+- [x] **T12** — Update docs, changelog, and smoke for SSR serving
   - Depends on: T3, T4, T13
   - Files: docs/reference/admin-spa.md, docs/how-to/upgrade-admin-spa-ssr.md, admin-spa/README.md, admin-spa/e2e/smoke.ts, docs/testing/e2e/admin-spa.md, changelog/unreleased/admin-spa-ssr.md, docs/how-to/deploy-cloud-run.md (only if it names the `ADMIN_SPA_DIST_DIR` layout)
   - Criteria:
@@ -405,7 +405,7 @@ None — no new or changed screens.
       - the gate table, and `no-store, private` on HTML and loaders;
       - the root `/_expo/loaders/*` claim, and why (SDK 58 ignores baseUrl);
       - the mount-path constraint;
-      - the loopback rate-limit multiplier (D7): up to about 7 loopback calls per signed-in page.
+      - the loopback rate-limit multiplier (D7): 3 gate calls plus the loader's calls per signed-in page (the home page grows with the number of models).
     - `docs/how-to/upgrade-admin-spa-ssr.md` gives consumers the upgrade path, and the changelog links it. It covers:
       - rebuild with `experiments.baseUrl` set in `app.json` for a non-`/console` mount;
       - the new `dist/client` + `dist/server` layout and the Dockerfile `COPY`;
@@ -442,8 +442,8 @@ None — no new or changed screens.
 
 - `TerrenoApp`'s Better Auth session middleware sets `req.user` before plugins (`api/src/terrenoApp.ts:433` vs `:527`). Consumers that use `BetterAuthApp` as a plugin must register it before `AdminSpaServeApp`, as the README already shows. T12 documents this.
 - The admin check stays authoritative on the backend: the gate and loaders ask `/admin/config` instead of reading `user.admin`, matching `AdminGate` today (`adminGateUtils.ts:8-23`).
-- Loaders fetch over loopback HTTP with the forwarded cookie, because `AdminApp` has no in-process query API (`admin-backend/src/adminApp.ts:1019` is a closure). Each signed-in page request costs 3 gate calls (`/admin/config`, `get-session`, `/auth/me`) plus 0 to 4 loader calls (jobs is the most: list, stats, schedules), so up to about 7. Anonymous requests make none.
-- Dev mode (`devProxyTarget`) keeps proxying to `expo start`, which does its own SSR. The gate still runs in Express ahead of the proxy, but the dev server runs in another process and cannot read the request scope. In dev the shell therefore renders without a payload (today's client fetches).
+- Loaders fetch over loopback HTTP with the forwarded cookie, because `AdminApp` has no in-process query API (`admin-backend/src/adminApp.ts:1019` is a closure). Each signed-in page request costs 3 gate calls (`/admin/config`, `get-session`, `/auth/me`) plus the loader's calls: 1 to 3 on most screens (jobs: list, stats, schedules), and on the home page one per readable model for `modelStats` plus up to 3 (corrected in T12's Roast; the home page has no fixed ceiling). Anonymous requests make none.
+- Dev mode (`devProxyTarget`) keeps proxying to `expo start`, which does its own SSR. As built, the plugin returns before mounting the gate and the root loader route in this mode, so dev has no server-side gate; the client `AdminGate` still guards it, and the shell renders without a payload (today's client fetches).
 - `expo-server` 58.0.5 is already in `node_modules` (release-58) and moves to the root catalog.
 - `AsyncLocalStorage` context set by Express survives into `render.js`, through the adapter's own `AsyncLocalStorage` scope (T2 proves it; Node and the Bun binary both implement it).
 - Better Auth reads the forwarded session cookie, including a `__Secure-` cookie, on a plain-HTTP loopback request. The cookie name is fixed by server config, not by the request scheme. A T3 case proves it.
@@ -466,7 +466,7 @@ None — no new or changed screens.
 | --- | --- | --- | --- | --- |
 | X1 | ~~Expo SDK 58 upgrade~~: done. This plan now builds on `release-58.0.0` (D11) | — | — | — |
 | X2 | Standalone SSR'd auth app (login, signup, reset, verify, MCP consent) served by Express | The "login app" scope question; MCP OAuth needs an app-hosted `consentUrl` | L | none |
-| X3 | In-process admin query API on `AdminApp` (config + list/read without loopback HTTP) | Loaders make 2 to 4 loopback calls per page | M | T6 |
+| X3 | In-process admin query API on `AdminApp` (config + list/read without loopback HTTP) | Loaders make 1 to 3 loopback calls per page, more on the home page | M | T6 |
 | X4 | Server-render the example-frontend auth screens | Considered at question time | M | none |
 | X5 | Move the SSR auth gate from Express into `admin-spa/app/+middleware.ts` | D6: middleware is the target home once it is stable | S | T3 |
 

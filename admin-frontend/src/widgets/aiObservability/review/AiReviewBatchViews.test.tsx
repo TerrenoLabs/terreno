@@ -137,14 +137,15 @@ describe("ReviewQuestionList", () => {
     expect(style("ai-review-answer-faithful")).toContain("220");
   });
 
-  it("labels non-boolean dimensions without a question by their humanized key, full width", () => {
+  it("labels non-boolean dimensions without a question by their humanized key, full width", async () => {
+    const onAnswer = mock((_key: string, _value: boolean | number | string) => {});
     const view = renderWithTheme(
       <ReviewQuestionList
         dimensions={[
           {dataType: "categorical", key: "toneRating", range: "safe|unsafe", required: true},
           {dataType: "numeric", key: "detail_score", range: "1-5", required: false},
         ]}
-        onAnswer={() => {}}
+        onAnswer={onAnswer}
         scores={{}}
       />
     );
@@ -156,6 +157,8 @@ describe("ReviewQuestionList", () => {
     expect(
       JSON.stringify(view.getByTestId("ai-review-question-toneRating").props.style)
     ).not.toContain("220");
+    await press(view.getByTestId("ai-review-score-toneRating-unsafe"));
+    expect(onAnswer).toHaveBeenCalledWith("toneRating", "unsafe");
   });
 
   it("answers non-boolean questions through the score field in the left column", async () => {

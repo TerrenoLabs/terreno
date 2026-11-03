@@ -30,7 +30,8 @@ import {addGptHistoryRoutes} from "./gptHistories";
 
 type SseResponse = supertest.Response & {body: string};
 
-const realAi = await import("ai");
+// The package compiles as CommonJS, so modules load with require instead of top-level await.
+const realAi: typeof import("ai") = require("ai");
 type StreamTextOptions = Parameters<typeof realAi.streamText>[0];
 type StreamTextResult = ReturnType<typeof realAi.streamText>;
 const realStreamText = realAi.streamText;
@@ -395,7 +396,7 @@ describe("AI Routes", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
 
       const agent = await authAsUser(registryApp, "notAdmin");
@@ -407,7 +408,7 @@ describe("AI Routes", () => {
 
       assert.equal(res.status, 200);
       assert.deepEqual(lookups, [{label: "staging", name: "chat-assistant"}]);
-      const callOptions = model.doStream.mock.calls[0]?.[0] as unknown as {
+      const callOptions = (model.doStream.mock.calls[0] as unknown[] | undefined)?.[0] as {
         prompt: Array<{content: unknown; role: string}>;
       };
       const system = callOptions.prompt.find((message) => message.role === "system");
@@ -441,7 +442,7 @@ describe("AI Routes", () => {
           addGptRoutes(router, {aiService, openApiOptions: options, systemPromptName: "absent"});
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
 
       const agent = await authAsUser(registryApp, "notAdmin");

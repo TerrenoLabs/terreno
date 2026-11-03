@@ -107,7 +107,6 @@ const viewProps = (overrides: Partial<AiTracesListViewProps> = {}): AiTracesList
   onOpenReview: () => undefined,
   onOpenTrace: () => undefined,
   onPageChange: () => undefined,
-  onRunTestMultiStage: () => undefined,
   onSortChange: () => undefined,
   onToggleSelect: () => undefined,
   page: 1,

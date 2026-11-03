@@ -3,7 +3,7 @@ import {TerrenoApp} from "@terreno/api";
 import type express from "express";
 import {DateTime} from "luxon";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {LocalEvaluatorStore} from "../local/evaluatorStore";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsDataset} from "../local/models/obsDataset";
@@ -25,7 +25,7 @@ const judgeClient: ObservabilityGenerateClient = {
 };
 
 const buildApp = (aiService?: ObservabilityGenerateClient): express.Application => {
-  return new TerrenoApp({skipListen: true, userModel: UserModel})
+  return new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
     .register(new ObservabilityApp({aiService, plugins: [createLocalObservabilityPlugin()]}))
     .build();
 };

@@ -3227,6 +3227,7 @@ describe("AiPromptEditorScreen", () => {
     name: "summarize",
     relationships: emptyPromptRelationships,
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {temperature: 0.3},
@@ -3533,6 +3534,7 @@ describe("AiPromptEditorView", () => {
     name: "summarize",
     relationships: emptyPromptRelationships,
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {temperature: 0.3},
@@ -3742,6 +3744,7 @@ describe("AiPromptPlaygroundView", () => {
       traces: {items: [], limit: 20, total: 0},
     },
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {},
@@ -5792,7 +5795,6 @@ describe("AiTracesListView", () => {
     onOpenReview: () => undefined,
     onOpenTrace: () => undefined,
     onPageChange: () => undefined,
-    onRunTestMultiStage: () => undefined,
     onSortChange: () => undefined,
     onToggleSelect: () => undefined,
   };
@@ -6008,7 +6010,7 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
-          onRunTestMultiStage={() => undefined}
+          onSortChange={() => undefined}
           onToggleSelect={onToggleSelect}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -6096,7 +6098,6 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
-          onRunTestMultiStage={() => undefined}
           onSortChange={() => undefined}
           onToggleSelect={() => undefined}
           page={1}

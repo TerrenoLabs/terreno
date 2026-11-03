@@ -57,7 +57,7 @@ describe("batchTypes", () => {
     const pending = {id: "a", status: "pending" as const};
     const active = {id: "b", status: "in_progress" as const};
     const done = {id: "c", status: "done" as const};
-    expect(openBatchItems([pending, active, done] as never)).toEqual([pending, active]);
+    expect(openBatchItems([pending, active, done] as never)).toEqual([pending, active] as never);
   });
 
   it("unwraps list and detail payloads", () => {

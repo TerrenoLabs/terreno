@@ -141,7 +141,7 @@ describe("useAiObservabilityReviewApi", () => {
       headers: {"x-ai-api-key": "k"},
       method: "POST",
       url: "/ai/observability/review/batches/b1/judgeRuns",
-    });
+    } as never);
     expect(endpoints.runAiObservabilityReviewBatchJudge.invalidatesTags).toEqual([
       "aiObservabilityReview",
     ]);

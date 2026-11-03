@@ -34,6 +34,7 @@ const partialJudge: EvaluatorRecord = {
     passed: false,
     rate: 0.4,
     stale: true,
+    version: 1,
   },
   confidenceAlertBelow: 0.5,
   dimensions: [{dataType: "boolean", key: "correct", required: true}],
@@ -53,6 +54,7 @@ const fullJudge: EvaluatorRecord = {
     passed: true,
     rate: 0.95,
     stale: false,
+    version: 2,
   },
   confidenceAlertBelow: 0.5,
   dimensions: [

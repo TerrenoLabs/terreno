@@ -305,10 +305,11 @@ describe("AiEvaluatorDetailView", () => {
   });
 
   it("opens the experiment from a usage row", async () => {
-    const onOpenExperiment = mock(() => undefined);
+    const onOpenExperiment = mock((_experimentId: string) => undefined);
     const {getByTestId} = renderWithTheme(
       <AiEvaluatorDetailView
         evaluator={{
+          confidenceAlertBelow: 0.5,
           dimensions: [{dataType: "numeric", key: "helpfulness", range: "0-1", required: true}],
           id: "eval-help",
           judgePromptName: "eval-judge-helpfulness",
@@ -515,6 +516,7 @@ describe("AiEvaluatorNewView footer", () => {
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath=""
+        description=""
         dimensions={[{dataType: "boolean", key: "pass", required: true}]}
         instructions=""
         isCreating={false}

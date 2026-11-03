@@ -36,6 +36,7 @@ const promptDetail: PromptDetail = {
     traces: {items: [], limit: 20, total: 0},
   },
   tags: [],
+  usedBy: {items: [], limit: 20, total: 0},
   versions: [
     {sensitive: false, template: "v1", type: "chat", variables: [], version: 1},
     {sensitive: false, template: "v2", type: "chat", variables: [], version: 2},

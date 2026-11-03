@@ -42,7 +42,7 @@ const evaluator = (overrides: Partial<EvaluatorRecord>): EvaluatorRecord => ({
   dimensions: QUESTIONS,
   id: "qs",
   name: "summary-questions",
-  runModes: {eval: false, online: false, review: true},
+  runModes: {allowManualRun: true, availableInExperiments: false, liveSampleRate: 0},
   target: "full trace",
   type: "human",
   ...overrides,

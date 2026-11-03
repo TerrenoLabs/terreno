@@ -16,8 +16,9 @@ export interface ApplyDeltaResult {
 /**
  * Apply a server delta to the local store, idempotently:
  *
- * - a delta at or below the entity's applied seq is skipped (duplicate /
- *   out-of-order delivery);
+ * - a delta below the entity's applied seq is skipped (out-of-order delivery),
+ *   and so is one at that seq once the row came from a stream (duplicate);
+ *   a row whose seq was stamped by its own ACK takes the equal-seq delta;
  * - an entity with a pending outbox mutation is never overwritten — its
  *   optimistic state is protected until conflict resolution decides;
  * - create/update writes data + seq; tombstones set `deleted: true` (keeping
@@ -53,7 +54,15 @@ export const applyDelta = ({
     };
 
     const existing = store.getEntity({collection: delta.collection, id: delta.id});
-    if (existing && delta.seq <= existing.seq) {
+    // An equal-seq delta is a duplicate only for a row that already came from a stream.
+    // A row with no stream got its seq from its own mutation's ACK (releaseEntity), and
+    // the delta at that seq is the server's canonical doc for it. Skipping it would leave
+    // the row without server-added fields such as `_id`, and the cursor advance below
+    // means it is never fetched again.
+    if (
+      existing &&
+      (delta.seq < existing.seq || (delta.seq === existing.seq && Boolean(existing.stream)))
+    ) {
       advanceCursor();
       return {applied: false, seqJump};
     }

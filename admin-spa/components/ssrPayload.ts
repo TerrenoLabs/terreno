@@ -30,6 +30,16 @@ let clientPayload: {value: AdminSpaShellPayload | undefined} | undefined;
  */
 let hasHydrated = false;
 
+/**
+ * @public Test seam: forget the payload read from the page and the hydration mark, as a fresh
+ * page load would. Tests use it instead of re-importing the module, whose copies Bun's coverage
+ * would count apart.
+ */
+export const resetSsrPayloadForTests = (): void => {
+  clientPayload = undefined;
+  hasHydrated = false;
+};
+
 const browserDocument = (): DocumentLike | undefined => {
   return typeof document === "undefined" ? undefined : (document as unknown as DocumentLike);
 };

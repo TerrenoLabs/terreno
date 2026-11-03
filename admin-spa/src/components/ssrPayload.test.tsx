@@ -2,6 +2,7 @@ import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {render} from "@testing-library/react-native";
 import React from "react";
 import {Text} from "react-native";
+import {resetSsrPayloadForTests, useSsrPayload} from "../../components/ssrPayload";
 import {runInAdminSpaRequest, serializeForHtml} from "../serverContext";
 
 const SCRIPT_ID = "admin-spa-ssr";
@@ -83,12 +84,10 @@ const installBrowser = (textContent: string | null): void => {
   });
 };
 
-/** Load a fresh copy of the module: it may keep the payload it read from the page. */
-let importCount = 0;
+/** The hook as a fresh page load sees it: the module keeps the payload it read from the page. */
 const freshHook = async (): Promise<() => unknown> => {
-  importCount += 1;
-  const mod = await import(`../../components/ssrPayload.ts?case=${importCount}`);
-  return mod.useSsrPayload as () => unknown;
+  resetSsrPayloadForTests();
+  return useSsrPayload as () => unknown;
 };
 
 const Probe: React.FC<{useHook: () => unknown; out: unknown[]}> = ({out, useHook}) => {

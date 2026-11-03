@@ -70,16 +70,62 @@ const prepareRequest = (request: SsrPayloadRequest, prefixes: string[]): Prepare
   };
 };
 
+/** Longest a server render waits on one loopback read, as the gate waits on its own. */
+const SSR_FETCH_TIMEOUT_MS = 5000;
+
+/**
+ * One loopback read. A network error, a timeout or a body that is not JSON leaves the read out
+ * (the screen loads it on the client) and warns with the path only: never the query string,
+ * the cookie or the body, which can hold PHI.
+ */
+const readOne = async (
+  {headers, key, path, pathname}: PreparedRequest,
+  {
+    cookie,
+    internalOrigin,
+    payload,
+    timeoutMs,
+  }: {
+    cookie: string;
+    internalOrigin: string;
+    payload: SsrPayload;
+    timeoutMs: number;
+  }
+): Promise<void> => {
+  let response: Response;
+  try {
+    response = await fetch(`${internalOrigin}${path}`, {
+      headers: {...headers, Accept: "application/json", Cookie: cookie},
+      redirect: "manual",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.name : "unknown error";
+    console.warn(`[adminSpaSsr] SSR fetch failed for ${pathname}: ${reason}`);
+    return;
+  }
+  payload.status[key] = response.status;
+  if (!response.ok) {
+    return;
+  }
+  try {
+    payload.rpc[key] = await response.json();
+  } catch {
+    delete payload.status[key];
+    console.warn(`[adminSpaSsr] SSR response for ${pathname} is not JSON`);
+  }
+};
+
 /**
  * Fetch the API reads a server render needs, in parallel, from the backend's own internal
  * origin with the incoming request's session cookie. Every request is checked before any is
- * sent. An anonymous request (no cookie) fetches nothing, so anonymous traffic never shares
- * the loopback address's rate-limit bucket. Errors name the path, never the query string,
- * the cookie or the response body.
+ * sent, and a rejected request throws before anything is fetched. An anonymous request (no
+ * cookie) fetches nothing, so anonymous traffic never shares the loopback address's rate-limit
+ * bucket. Each read fails on its own (see `readOne`): its siblings still seed.
  */
 export const loadSsrPayload = async (
   request: Request,
-  {requests}: {requests: SsrPayloadRequest[]}
+  {requests, timeoutMs = SSR_FETCH_TIMEOUT_MS}: {requests: SsrPayloadRequest[]; timeoutMs?: number}
 ): Promise<SsrPayload> => {
   const context = getAdminSpaServerContext();
   if (!context) {
@@ -91,31 +137,9 @@ export const loadSsrPayload = async (
   if (!cookie) {
     return payload;
   }
-
+  const {internalOrigin} = context;
   await Promise.all(
-    prepared.map(async ({headers, key, path, pathname}): Promise<void> => {
-      let response: Response;
-      try {
-        response = await fetch(`${context.internalOrigin}${path}`, {
-          headers: {...headers, Accept: "application/json", Cookie: cookie},
-          redirect: "manual",
-        });
-      } catch (error) {
-        // No `cause`: the fetch error's message and fields carry the full URL with its query.
-        const reason = error instanceof Error ? error.name : "unknown error";
-        throw new Error(`SSR fetch failed for ${pathname}: ${reason}`);
-      }
-      payload.status[key] = response.status;
-      if (!response.ok) {
-        return;
-      }
-      try {
-        payload.rpc[key] = await response.json();
-      } catch {
-        // The parser's message quotes the body, which can hold PHI: name the path only.
-        throw new Error(`SSR response for ${pathname} is not JSON`);
-      }
-    })
+    prepared.map((entry) => readOne(entry, {cookie, internalOrigin, payload, timeoutMs}))
   );
   return payload;
 };

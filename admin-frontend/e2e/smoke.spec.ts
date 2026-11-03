@@ -19,7 +19,8 @@ const BASE_URL_ENV = "ADMIN_FRONTEND_SMOKE_BASE_URL";
 const ADMIN_EMAIL = "admin-frontend-smoke@example.com";
 const ADMIN_PASSWORD = "admin-frontend-smoke-password";
 const PACKAGE_DIR = path.resolve(__dirname, "..");
-const ADMIN_SPA_INDEX = path.resolve(PACKAGE_DIR, "../admin-spa/dist/index.html");
+// The admin SPA exports with `output: "server"`: the route manifest marks a finished export.
+const ADMIN_SPA_INDEX = path.resolve(PACKAGE_DIR, "../admin-spa/dist/server/_expo/routes.json");
 // example-backend's superadmin role (src/rbacRoles.ts), which the admin API requires.
 const SUPERADMIN_ROLE = "superadmin";
 const BROWSER_TIMEOUT_MS = 30000;

@@ -1,4 +1,4 @@
-import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
+import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
 import express from "express";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
@@ -98,6 +98,22 @@ const publish = (opts: {internalOrigin?: string; ssrApiPrefixes?: string[]} = {}
 
 const makeRequest = (headers: Record<string, string> = {Cookie: "a=1"}): Request =>
   new Request("http://public.example/console/User", {headers});
+
+/** Run `loadSsrPayload` and collect what it warned, so tests can check what a log would show. */
+const loadWithWarnings = async (
+  ...args: Parameters<typeof loadSsrPayload>
+): Promise<{payload: Awaited<ReturnType<typeof loadSsrPayload>>; warnings: string}> => {
+  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const payload = await loadSsrPayload(...args);
+    return {
+      payload,
+      warnings: warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n"),
+    };
+  } finally {
+    warn.mockRestore();
+  }
+};
 
 describe("loadSsrPayload", () => {
   it("forwards the Cookie to internalOrigin and never builds an origin from Host", async () => {
@@ -262,7 +278,7 @@ describe("loadSsrPayload", () => {
     expect(stub.seen).toHaveLength(0);
   });
 
-  it("names the path but never the body when the internal response is not JSON", async () => {
+  it("leaves out a read whose body is not JSON, warning with the path but never the body", async () => {
     const plain = Bun.serve({
       fetch: () =>
         new Response("PHISENTINEL not json", {
@@ -273,16 +289,12 @@ describe("loadSsrPayload", () => {
     });
     try {
       publish({internalOrigin: `http://127.0.0.1:${plain.port}`});
-      const error = await loadSsrPayload(makeRequest(), {
+      const {payload, warnings} = await loadWithWarnings(makeRequest(), {
         requests: [{url: "/admin/users"}],
-      }).then(
-        () => undefined,
-        (caught: unknown) => caught as Error
-      );
-      expect(error).toBeInstanceOf(Error);
-      expect(error?.message).toContain("/admin/users");
-      expect(error?.message).not.toContain("PHISENTINEL");
-      expect(String(error?.stack)).not.toContain("PHISENTINEL");
+      });
+      expect(payload).toEqual({rpc: {}, status: {}});
+      expect(warnings).toContain("/admin/users");
+      expect(warnings).not.toContain("PHISENTINEL");
     } finally {
       plain.stop(true);
     }
@@ -307,21 +319,55 @@ describe("loadSsrPayload", () => {
     expect(stub.seen).toHaveLength(0);
   });
 
-  it("names the path but not the cookie value when the internal fetch fails", async () => {
+  it("leaves out a read whose fetch fails, warning with the path but not the cookie value", async () => {
     const dead = startStub();
     const deadOrigin = dead.origin;
     dead.stop();
     publish({internalOrigin: deadOrigin});
-    const error = await loadSsrPayload(makeRequest({Cookie: "session=SECRET-COOKIE-VALUE"}), {
-      requests: [{url: "/admin/users"}],
-    }).then(
-      () => undefined,
-      (caught: unknown) => caught as Error
+    const {payload, warnings} = await loadWithWarnings(
+      makeRequest({Cookie: "session=SECRET-COOKIE-VALUE"}),
+      {requests: [{url: "/admin/users"}]}
     );
-    expect(error).toBeInstanceOf(Error);
-    expect(error?.message).toContain("/admin/users");
-    expect(error?.message).not.toContain("SECRET-COOKIE-VALUE");
-    expect(String(error?.stack)).not.toContain("SECRET-COOKIE-VALUE");
+    expect(payload).toEqual({rpc: {}, status: {}});
+    expect(warnings).toContain("/admin/users");
+    expect(warnings).not.toContain("SECRET-COOKIE-VALUE");
+  });
+
+  it("keeps the sibling seeds when one read fails", async () => {
+    const mixed = Bun.serve({
+      fetch: (req) =>
+        new URL(req.url).pathname === "/admin/roles"
+          ? new Response("not json", {headers: {"content-type": "text/plain"}, status: 200})
+          : Response.json({ok: true}),
+      port: 0,
+    });
+    try {
+      publish({internalOrigin: `http://127.0.0.1:${mixed.port}`});
+      const {payload} = await loadWithWarnings(makeRequest(), {
+        requests: [{url: "/admin/users"}, {url: "/admin/roles"}],
+      });
+      expect(payload.rpc[adminRpcSeedKey("/admin/users")]).toEqual({ok: true});
+      expect(payload.rpc[adminRpcSeedKey("/admin/roles")]).toBeUndefined();
+    } finally {
+      mixed.stop(true);
+    }
+  });
+
+  it("gives up on a read that does not answer within timeoutMs", async () => {
+    const hung = Bun.serve({fetch: () => new Promise<Response>(() => {}), port: 0});
+    try {
+      publish({internalOrigin: `http://127.0.0.1:${hung.port}`});
+      const startedAt = performance.now();
+      const {payload, warnings} = await loadWithWarnings(makeRequest(), {
+        requests: [{url: "/admin/users"}],
+        timeoutMs: 50,
+      });
+      expect(performance.now() - startedAt).toBeLessThan(2000);
+      expect(payload).toEqual({rpc: {}, status: {}});
+      expect(warnings).toContain("SSR fetch failed for /admin/users: TimeoutError");
+    } finally {
+      hung.stop(true);
+    }
   });
 
   it("makes zero loopback fetches when the request has no Cookie", async () => {
@@ -343,55 +389,29 @@ describe("loadSsrPayload", () => {
   });
 });
 
-/** Every rendering of an error a logger could print: message, stack, String, inspect, causes. */
-const renderErrorChain = (error: unknown): string => {
-  const parts: string[] = [String(error), Bun.inspect(error)];
-  let current: unknown = error;
-  const seen = new Set<unknown>();
-  while (current && !seen.has(current)) {
-    seen.add(current);
-    if (current instanceof Error) {
-      parts.push(current.message, String(current.stack), String(current), Bun.inspect(current));
-      current = current.cause;
-    } else {
-      parts.push(String(current), Bun.inspect(current));
-      current = undefined;
-    }
-  }
-  return parts.join("\n");
-};
-
-describe("loadSsrPayload keeps the API query string out of errors", () => {
+describe("loadSsrPayload keeps the API query string out of its warnings", () => {
   const PHI_URL = "/admin/users?search=PHI-SENTINEL";
 
-  it("names /admin/users but never the query string, in message, stack or cause chain, when the fetch fails", async () => {
+  it("warns with /admin/users but never the query string when the fetch fails", async () => {
     const dead = startStub();
     const deadOrigin = dead.origin;
     dead.stop();
     publish({internalOrigin: deadOrigin});
-    const error = await loadSsrPayload(makeRequest(), {requests: [{url: PHI_URL}]}).then(
-      () => undefined,
-      (caught: unknown) => caught as Error
-    );
-    expect(error).toBeInstanceOf(Error);
-    expect(error?.message).toContain("/admin/users");
-    expect(renderErrorChain(error)).not.toContain("PHI-SENTINEL");
+    const {warnings} = await loadWithWarnings(makeRequest(), {requests: [{url: PHI_URL}]});
+    expect(warnings).toContain("/admin/users");
+    expect(warnings).not.toContain("PHI-SENTINEL");
   });
 
-  it("names /admin/users but never the query string, in message, stack or cause chain, when the body is not JSON", async () => {
+  it("warns with /admin/users but never the query string when the body is not JSON", async () => {
     const plain = Bun.serve({
       fetch: () => new Response("not json", {headers: {"content-type": "text/plain"}, status: 200}),
       port: 0,
     });
     try {
       publish({internalOrigin: `http://127.0.0.1:${plain.port}`});
-      const error = await loadSsrPayload(makeRequest(), {requests: [{url: PHI_URL}]}).then(
-        () => undefined,
-        (caught: unknown) => caught as Error
-      );
-      expect(error).toBeInstanceOf(Error);
-      expect(error?.message).toContain("/admin/users");
-      expect(renderErrorChain(error)).not.toContain("PHI-SENTINEL");
+      const {warnings} = await loadWithWarnings(makeRequest(), {requests: [{url: PHI_URL}]});
+      expect(warnings).toContain("/admin/users");
+      expect(warnings).not.toContain("PHI-SENTINEL");
     } finally {
       plain.stop(true);
     }

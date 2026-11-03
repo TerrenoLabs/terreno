@@ -75,9 +75,12 @@ Rendered pages and loader data can hold PHI, so:
 - JSON written into HTML goes through `serializeForHtml`, which escapes `<`, `>`, `&`, U+2028
   and U+2029, so a stored value such as `</script><script>` cannot end the script.
 - A failed render or loader logs `Admin SPA render failed for <route path>` with the error
-  message only. The page's query string is never logged, and `loadSsrPayload` errors leave out
-  the API query string, the cookie and response data. A loader that throws its own error owns
-  what that message says.
+  message only. The page's query string is never logged. A loader that throws its own error
+  owns what that message says.
+- Each `loadSsrPayload` read has a 5 s timeout and fails on its own: a network error, a timeout
+  or a body that is not JSON leaves that read out (the screen loads it on the client) and warns
+  with the API path only, never its query string, the cookie or the body. The other reads still
+  seed the page. A request outside the SSR allowlist still throws before anything is fetched.
 
 ## Access is decided before rendering
 

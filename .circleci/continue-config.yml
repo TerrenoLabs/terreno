@@ -2120,7 +2120,8 @@ jobs:
           command: |
             set -euo pipefail
             curl -sf http://localhost:4000/console/app-config.json
-            curl -sf http://localhost:4000/console/ | grep -q "__ADMIN_SPA_BASE__"
+            # The server gate redirects an anonymous /console/ to login; the login page is server-rendered.
+            curl -sf http://localhost:4000/console/login | grep -q "__ADMIN_SPA_BASE__"
       - run:
           name: Install Playwright Chromium
           working_directory: ~/project/admin-spa

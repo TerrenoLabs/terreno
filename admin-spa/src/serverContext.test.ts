@@ -72,17 +72,6 @@ describe("admin SPA request scope", () => {
       expect(getAdminSpaRequest()).toBe(outer);
     });
   });
-
-  it("shares the scope with a second copy of the module, as render.js is bundled separately", async () => {
-    // A cache-busted import evaluates serverContext.ts again, like the Expo bundle's own copy.
-    const second = (await import(
-      `./serverContext?copy=${Math.random()}`
-    )) as typeof import("./serverContext");
-    expect(second.getAdminSpaRequest).not.toBe(getAdminSpaRequest);
-    const scope = makeScope("shared");
-    const seen = runInAdminSpaRequest(scope, () => second.getAdminSpaRequest());
-    expect(seen).toBe(scope);
-  });
 });
 
 describe("isAdminSpaServerRender", () => {

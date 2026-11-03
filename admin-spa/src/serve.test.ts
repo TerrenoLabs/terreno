@@ -594,17 +594,25 @@ describe("AdminSpaServeApp when the internal origin returns a non-JSON body", ()
     const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
     const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    const consoleWarnSpy = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const app = makeAdminApp({distDir: ssrDir, internalOrigin: internal.origin});
       const res = await request(app).get("/console/badjson").set("Cookie", ADMIN_COOKIE);
+      // The read is left out and the page still renders; the warning names the API path only.
+      expect(res.status).toBe(200);
       expect(res.text).not.toContain(SENTINEL);
       expect(res.text).not.toContain("PHISENTINEL");
-      expect(errorSpy).toHaveBeenCalled();
+      expect(consoleWarnSpy.mock.calls.flat().join(" ")).toContain("/admin/users");
       const dump = (calls: unknown[][]): string =>
         JSON.stringify(calls, (_key, value) =>
           value instanceof Error ? `${value.message}\n${value.stack}` : value
         );
-      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+      for (const calls of [
+        errorSpy.mock.calls,
+        warnSpy.mock.calls,
+        consoleSpy.mock.calls,
+        consoleWarnSpy.mock.calls,
+      ]) {
         expect(dump(calls)).not.toContain(SENTINEL);
         expect(dump(calls)).not.toContain("PHISENTINEL");
       }
@@ -612,6 +620,7 @@ describe("AdminSpaServeApp when the internal origin returns a non-JSON body", ()
       errorSpy.mockRestore();
       warnSpy.mockRestore();
       consoleSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     }
   });
 });
@@ -651,23 +660,29 @@ describe("AdminSpaServeApp keeps a loader's API query string out of logs", () =>
     const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
     const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    const consoleWarnSpy = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const app = makeAdminApp({distDir: ssrDir, internalOrigin});
       const res = await request(app).get("/console/phiquery").set("Cookie", ADMIN_COOKIE);
       expect(res.text).not.toContain(SENTINEL);
-      expect(errorSpy).toHaveBeenCalled();
-      expect(dump(errorSpy.mock.calls)).toContain("/phiquery");
-      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+      expect(dump(consoleWarnSpy.mock.calls)).toContain("/admin/users");
+      for (const calls of [
+        errorSpy.mock.calls,
+        warnSpy.mock.calls,
+        consoleSpy.mock.calls,
+        consoleWarnSpy.mock.calls,
+      ]) {
         expect(dump(calls)).not.toContain(SENTINEL);
       }
     } finally {
       errorSpy.mockRestore();
       warnSpy.mockRestore();
       consoleSpy.mockRestore();
+      consoleWarnSpy.mockRestore();
     }
   };
 
-  it("logs the route path, never the API query string, when the loader's API read fails to connect", async () => {
+  it("warns with the API path, never its query string, when the loader's API read fails to connect", async () => {
     // The gate and the loader share one origin, so only the loader's path drops the connection.
     const stub = await startAdminStub((req) => {
       req.socket.destroy();
@@ -679,7 +694,7 @@ describe("AdminSpaServeApp keeps a loader's API query string out of logs", () =>
     }
   });
 
-  it("logs the route path, never the API query string, when the internal origin returns non-JSON", async () => {
+  it("warns with the API path, never its query string, when the internal origin returns non-JSON", async () => {
     const stub = await startAdminStub((_req, res) => {
       res.writeHead(200, {"content-type": "text/plain"});
       res.end("not json");

@@ -1,7 +1,12 @@
 {
   "approve": {
     "approveLevels": ["low"],
-    "selfChecks": ["terreno/approve", "ci/circleci: approve", "approve"],
+    "selfChecks": [
+      "terreno/approve",
+      "ci/circleci: approve",
+      "approve",
+      "Merge release notes or roadmap"
+    ],
     "rubric": "docs/approval-rubric.md",
     "planDirs": ["docs/implementationPlans", "docs/tasks"],
     "skipAuthors": ["dependabot[bot]"],

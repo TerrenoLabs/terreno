@@ -201,9 +201,29 @@ describe("AiExperimentResultsView gates", () => {
     expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(/v2 fails 3 gates/);
   });
 
-  it("offers a version picker only when more than one version passes", () => {
+  it("offers a version picker once gates exist and a version passes", () => {
+    const ungated = renderWithTheme(
+      <AiExperimentResultsView
+        experiment={{
+          ...gatedExperiment,
+          results: {
+            ...(gatedExperiment.results as NonNullable<ExperimentRecord["results"]>),
+            gates: [],
+          },
+        }}
+        isPromoting={false}
+        onDismissPromoteConfirm={() => {}}
+        onPromote={() => {}}
+        onSelectVersion={() => {}}
+        promoteConfirmOpen={false}
+        promoteVersion={2}
+      />
+    );
+    assert.isNull(ungated.queryByTestId("ai-experiment-promote-version"));
+    ungated.unmount();
+
     const single = renderGated(2);
-    assert.isNull(single.queryByTestId("ai-experiment-promote-version"));
+    assert.exists(single.queryByTestId("ai-experiment-promote-version"));
     single.unmount();
 
     const bothPass: ExperimentRecord = {

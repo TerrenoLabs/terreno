@@ -108,6 +108,25 @@ export const unwrapExperimentList = (raw: unknown): ExperimentRecord[] => {
   });
 };
 
+/** Newest version that passes every gate, else the newest compared version (0 when none). */
+export const defaultPromoteVersion = (experiment: ExperimentRecord): number => {
+  const passing = summarizeGatesByVersion(experiment).filter((summary) => summary.passed);
+  return (
+    passing[passing.length - 1]?.version ?? experiment.versions[experiment.versions.length - 1] ?? 0
+  );
+};
+
+/** Largest page the experiments list route returns. */
+export const EXPERIMENT_LIST_MAX_LIMIT = 100;
+
+/** True when a paginated experiments list response says more rows exist past this page. */
+export const experimentListHasMore = (raw: unknown): boolean => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return false;
+  }
+  return (raw as {more?: unknown}).more === true;
+};
+
 export const unwrapExperimentRecord = (raw: unknown): ExperimentRecord | undefined => {
   const payload = unwrapObservabilityPayload<ExperimentRecord>(raw);
   if (!payload || typeof payload.id !== "string") {

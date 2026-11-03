@@ -63,6 +63,8 @@ export type ExperimentEstimateBody = JudgeExperimentEstimateBody | PromptExperim
 
 export interface ExperimentListArgs {
   kind?: ExperimentKind;
+  /** Page size; the server caps it at EXPERIMENT_LIST_MAX_LIMIT. */
+  limit?: number;
 }
 
 interface QueryOptions {
@@ -78,11 +80,17 @@ const createExperimentsApi = (api: AdminApi) => {
     endpoints: (build: EndpointBuilder) => ({
       [LIST_KEY]: build.query({
         providesTags: ["aiObservabilityExperiments"],
-        query: (args?: ExperimentListArgs) => ({
-          method: "GET",
-          ...(args?.kind ? {params: {kind: args.kind}} : {}),
-          url: "/ai/observability/experiments",
-        }),
+        query: (args?: ExperimentListArgs) => {
+          const params = {
+            ...(args?.kind ? {kind: args.kind} : {}),
+            ...(args?.limit ? {limit: args.limit} : {}),
+          };
+          return {
+            method: "GET",
+            ...(Object.keys(params).length > 0 ? {params} : {}),
+            url: "/ai/observability/experiments",
+          };
+        },
       }),
       [DETAIL_KEY]: build.query({
         providesTags: (_result: unknown, _error: unknown, id: string) => [
@@ -148,7 +156,7 @@ export const useAiObservabilityExperimentsApi = (api: AdminApi) => {
       {error?: unknown; isError: boolean; isLoading: boolean},
     ],
     useListQuery: hooks.useAiObservabilityExperimentsQuery as (args?: ExperimentListArgs) => {
-      data?: ExperimentRecord[] | {data: ExperimentRecord[]};
+      data?: ExperimentRecord[] | {data: ExperimentRecord[]; more?: boolean};
       error?: unknown;
       isError: boolean;
       isLoading: boolean;

@@ -268,10 +268,51 @@ export const variableNamesFromVersion = (version: PromptVersionDetail): string[]
   return templateVariableKeys(version.template ?? "");
 };
 
+const JSON_SCHEMA_OBJECT_KEYWORDS = new Set([
+  "$schema",
+  "additionalProperties",
+  "description",
+  "properties",
+  "required",
+  "title",
+]);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+// Output field names: a JSON Schema's `properties` (with types when given), else a field map's keys.
+const outputFieldNames = (schema?: Record<string, unknown>): string[] => {
+  if (!schema) {
+    return [];
+  }
+  const {properties} = schema;
+  // A field map may have a field named "properties"; only treat it as JSON Schema when the
+  // object says so or holds nothing but object-schema keywords.
+  const isJsonSchema =
+    isPlainObject(properties) &&
+    Object.values(properties).every(isPlainObject) &&
+    (schema.type === "object" ||
+      Object.keys(schema).every((key) => JSON_SCHEMA_OBJECT_KEYWORDS.has(key)));
+  if (!isJsonSchema) {
+    return Object.keys(schema);
+  }
+  return Object.entries(properties).map(([name, property]) => {
+    const type = isPlainObject(property) ? property.type : undefined;
+    if (typeof type === "string") {
+      return `${name} (${type})`;
+    }
+    if (Array.isArray(type) && type.length > 0) {
+      return `${name} (${type.join(" | ")})`;
+    }
+    return name;
+  });
+};
+
 export const schemaSummary = (version: PromptVersionDetail): string => {
   const variableKeys = version.variables.map((entry) => entry.key);
   const input = variableKeys.length > 0 ? variableKeys.join(", ") : "none";
-  const outputKeys = version.outputSchema ? Object.keys(version.outputSchema) : [];
+  const outputKeys = outputFieldNames(version.outputSchema);
   const output = outputKeys.length > 0 ? outputKeys.join(", ") : "none";
   return `Variables: ${input}. Output: ${output}.`;
 };

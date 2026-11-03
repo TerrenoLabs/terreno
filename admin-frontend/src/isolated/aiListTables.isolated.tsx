@@ -294,6 +294,53 @@ describe("AiExperimentsScreenWidget dataset names", () => {
   });
 });
 
+describe("AiExperimentsScreenWidget truncation", () => {
+  const renderScreen = (listResponse: unknown, listArgs: unknown[]): View => {
+    const api = {
+      enhanceEndpoints: () => api,
+      injectEndpoints: () => ({
+        useAiObservabilityDatasetsQuery: () => ({data: [], isError: false, isLoading: false}),
+        useAiObservabilityExperimentsQuery: (args: unknown) => {
+          listArgs.push(args);
+          return {data: listResponse, isError: false, isLoading: false, refetch: () => undefined};
+        },
+        useAiObservabilityStatusQuery: () => ({
+          data: operatorObservabilityStatus,
+          isError: false,
+          isLoading: false,
+        }),
+      }),
+    };
+    const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+    return renderWithTheme(
+      <AiExperimentsScreenWidget
+        api={api as unknown as AdminApi}
+        config={config}
+        routeBase="/admin"
+        screenName="ai-experiments"
+      />
+    );
+  };
+
+  it("requests the newest 100 experiments and notes when more exist", () => {
+    const listArgs: unknown[] = [];
+    const view = renderScreen(
+      {data: EXPERIMENTS, limit: 100, more: true, page: 1, total: 240},
+      listArgs
+    );
+    expect(listArgs[0]).toEqual({limit: 100});
+    expect(view.getByTestId("ai-experiments-truncated-note")).toBeTruthy();
+    expect(
+      view.getByText("Showing the newest 100 experiments; filters and sorting apply to these.")
+    ).toBeTruthy();
+  });
+
+  it("hides the note when every experiment fits", () => {
+    const view = renderScreen({data: EXPERIMENTS, limit: 100, more: false, page: 1, total: 3}, []);
+    expect(view.queryByTestId("ai-experiments-truncated-note")).toBeNull();
+  });
+});
+
 const dataset = (overrides: Partial<DatasetRecord>): DatasetRecord => ({
   counts: {auto: 0, human: 0, needsReview: 0, total: 0},
   created: "2026-01-01T00:00:00.000Z",
@@ -369,6 +416,76 @@ describe("AiDatasetsListView table", () => {
 
     filterBy(view, "ai-datasets-table", {provenance: {$gte: 95}});
     expect(rowOrder(view, "ai-datasets-open-")).toEqual(["d3"]);
+  });
+});
+
+describe("AiDatasetsListView People's answers", () => {
+  const judgment = (
+    overrides: Partial<NonNullable<DatasetRecord["judgments"]>[number]>
+  ): NonNullable<DatasetRecord["judgments"]>[number] => ({
+    answered: 4,
+    current: 4,
+    evaluatorId: "qs-1",
+    evaluatorName: "summary-review-questions",
+    stale: 0,
+    total: 4,
+    ...overrides,
+  });
+
+  it("summarizes answers from judgments, not the proofread count", () => {
+    const view = renderWithTheme(
+      <AiDatasetsListView
+        createName=""
+        createOpen={false}
+        createPromptBinding=""
+        datasets={[
+          // Every item answered, but none proofread: the cell must not ask for proofreading.
+          dataset({
+            counts: {auto: 4, human: 0, needsReview: 4, total: 4},
+            id: "all",
+            judgments: [judgment({})],
+            name: "all-answered",
+          }),
+          // Reworded questions left two stale answers.
+          dataset({
+            counts: {auto: 0, human: 4, needsReview: 0, total: 4},
+            id: "stale",
+            judgments: [judgment({current: 2, stale: 2})],
+            name: "stale-answers",
+          }),
+          // Half answered, nothing stale.
+          dataset({
+            counts: {auto: 0, human: 4, needsReview: 0, total: 4},
+            id: "partial",
+            judgments: [judgment({answered: 2, current: 2})],
+            name: "partial",
+          }),
+        ]}
+        importOpen={false}
+        importPaste=""
+        isCreating={false}
+        isImporting={false}
+        isLoading={false}
+        onCreate={() => undefined}
+        onCreateNameChange={() => undefined}
+        onCreatePromptBindingChange={() => undefined}
+        onDismissCreate={() => undefined}
+        onDismissImport={() => undefined}
+        onFilePicked={() => undefined}
+        onImportPasteChange={() => undefined}
+        onImportSubmit={() => undefined}
+        onOpenCreate={() => undefined}
+        onOpenDetail={() => undefined}
+        onOpenImport={() => undefined}
+        onRetry={() => undefined}
+      />
+    );
+    expect(view.queryByText(/need proofreading/)).toBeNull();
+    expect(view.getByTestId("ai-datasets-answers-all")).toHaveTextContent("All answered");
+    expect(view.getByTestId("ai-datasets-answers-stale")).toHaveTextContent(
+      "2 answers out of date"
+    );
+    expect(view.getByTestId("ai-datasets-answers-partial")).toHaveTextContent("2 of 4 answered");
   });
 });
 

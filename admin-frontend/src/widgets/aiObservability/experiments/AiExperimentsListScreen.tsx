@@ -9,7 +9,11 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiExperimentsListView} from "./AiExperimentsListView";
-import {unwrapExperimentList} from "./experimentTypes";
+import {
+  EXPERIMENT_LIST_MAX_LIMIT,
+  experimentListHasMore,
+  unwrapExperimentList,
+} from "./experimentTypes";
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
@@ -17,7 +21,8 @@ export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
   const {useListQuery} = useAiObservabilityExperimentsApi(api);
   const {useStatusQuery} = useAiObservabilityPromptsApi(api);
   const {useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
-  const {data, isError, isLoading, refetch} = useListQuery();
+  // Sorting and filtering run on the client, so load the largest page the server allows.
+  const {data, isError, isLoading, refetch} = useListQuery({limit: EXPERIMENT_LIST_MAX_LIMIT});
   const datasetsQuery = useDatasetsQuery();
   const statusQuery = useStatusQuery();
   const canCreate = observabilityActionAllowed({
@@ -69,6 +74,7 @@ export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
         datasetNames={datasetNames}
         experiments={experiments}
         isLoading={isLoading}
+        isTruncated={experimentListHasMore(data)}
         loadError={loadError}
         onCreate={handleCreate}
         onOpenResults={handleOpenResults}

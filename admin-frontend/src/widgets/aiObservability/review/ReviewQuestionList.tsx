@@ -23,6 +23,26 @@ const QuestionRow: React.FC<{
   onAnswer: (key: string, value: boolean | number | string) => void;
   value?: boolean | number | string;
 }> = ({dimension, index, isNext, onAnswer, value}) => {
+  // A score with no question text: the field's humanized label names it, across the full row.
+  if (dimension.dataType !== "boolean" && !dimension.question?.trim()) {
+    return (
+      <Box
+        border={isNext ? "focus" : "default"}
+        padding={2}
+        rounding="md"
+        testID={`ai-review-question-${dimension.key}`}
+        width="100%"
+      >
+        <ReviewScoreField
+          dimension={dimension}
+          onChange={(next) => {
+            onAnswer(dimension.key, next);
+          }}
+          value={value}
+        />
+      </Box>
+    );
+  }
   const answer =
     dimension.dataType === "boolean" ? (
       <YesNoControl

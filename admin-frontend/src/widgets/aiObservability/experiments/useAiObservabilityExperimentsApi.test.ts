@@ -59,6 +59,18 @@ describe("useAiObservabilityExperimentsApi", () => {
       params: {kind: "judge"},
       url: "/ai/observability/experiments",
     } as never);
+    expect(
+      endpoints.aiObservabilityExperiments.query({kind: "judge", limit: 100} as never)
+    ).toEqual({
+      method: "GET",
+      params: {kind: "judge", limit: 100},
+      url: "/ai/observability/experiments",
+    } as never);
+    expect(endpoints.aiObservabilityExperiments.query({limit: 100} as never)).toEqual({
+      method: "GET",
+      params: {limit: 100},
+      url: "/ai/observability/experiments",
+    } as never);
     expect(endpoints.aiObservabilityExperiment.query("exp-1" as never)).toEqual({
       method: "GET",
       url: "/ai/observability/experiments/exp-1",

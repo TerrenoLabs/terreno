@@ -755,7 +755,9 @@ trimmed key is available. When `playgroundAi.source` is `server`, no key is requ
 `requestAiServiceFactory`. A stale playground **503** with the missing-key title is remapped to the
 same hint for `request-key` hosts so operators are not told to fix server configuration. The
 example admin supplies the Gemini key saved from Profile. **Save this run to dataset** stays
-disabled until phase 2.
+disabled until phase 2. The editor's schema line lists variables and output fields: for a JSON
+Schema `outputSchema` it names each entry in `properties` with its `type` (for example
+`faithful (boolean)`); for a plain field map it lists the keys.
 
 `ai-traces` lists traces in a `DataTable` sorted on the server (`sort` query param): Trace,
 Status, Started, Tokens, Latency, Cost, and Scores are sortable, newest first by default.
@@ -803,7 +805,8 @@ labels and values, and the model output card uses the `ai` surface.
 Long fields start collapsed with a word count; reviewer notes and a collapsed Raw JSON disclosure
 stay available. Every question is on one screen: the segmented **Yes** / **No** control (or a
 numeric slider or categorical pills) is a fixed-width column on the left and the question is on
-the right. On web, `Y` / `N` answer the highlighted question as soon as the item opens, including
+the right. A numeric or categorical score with no `question` spans the full row under its
+humanized key (for example `tone_rating` reads "Tone rating"). On web, `Y` / `N` answer the highlighted question as soon as the item opens, including
 when a Yes/No segment is focused, `Enter`
 submits, and `S` skips. Actions are **Submit and open next**, **Assign to me**, and **Skip**;
 completion toasts report the remaining count or **Queue clear** (**Batch complete** inside a
@@ -832,7 +835,9 @@ judge details show loading or load-failed feedback while resolving the judge pro
 mismatches appear only after its production schema loads.
 
 `ai-datasets` lists datasets with item counts, provenance bar, input-schema binding, and updated
-time. The header **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
+time. When any dataset has human answers, a **People's answers** column summarizes each dataset's
+`judgments`: **N answers out of date** when questions were reworded since they were answered,
+**All answered** when every question set answered every item, otherwise **N of M answered**. The header **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
 `FilePickerButton` (local URI read) or paste, posting `{rows}` for JSON or `{format:'csv',content}`
 for CSV. `ai-dataset-detail?id=` shows counts, schema binding, tabs **All / Human / Auto / Needs
 review** (a `SegmentedControl`). Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
@@ -854,7 +859,9 @@ bordered shell shrink-wraps the rows inside flex/scroll parents so its bottom bo
 into the following section.
 
 `ai-experiments` lists experiments with a kind `SegmentedControl` (All / Judge calibration /
-Prompt comparison), status badge, running progress (`ProgressMeter`), result, and cost. The header
+Prompt comparison), status badge, running progress (`ProgressMeter`), result, and cost. The screen
+loads the newest 100 experiments (the route's maximum page); sorting and filters apply to those,
+and when the server reports more, a note under the table (`ai-experiments-truncated-note`) says so. The header
 **New experiment** opens `ai-experiment-new`, where a `SegmentedControl` picks **Calibrate a
 judge** or **Compare prompt versions**. Each pipeline is a four-step `EvalStepper` wizard with
 ghost **Back** and primary **Continue** (the last step shows the run button). Compare prompt
@@ -868,7 +875,9 @@ the wizard. `ai-experiment-results?id=` polls while pending/running (`ProgressMe
 verdict banner, one **Gates** table (Gate, Needs, one Pass / Fail column per version), outliers, a
 side-by-side per-item output table (failed rows first from the API), and header actions outline
 **Run again** and primary **Promote vN to production** with a confirm modal; promote is blocked
-when gates fail (409).
+when gates fail (409). The promoted version defaults to the newest version that passes every gate
+(the newest version while gates are pending) and follows the gates as they arrive, until the
+operator picks one in **Version to promote**, which appears once gates exist and a version passes.
 
 ### AI Harness approvals inbox
 

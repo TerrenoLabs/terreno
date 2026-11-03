@@ -76,8 +76,9 @@ const humanShare = (dataset: DatasetRecord): number | undefined => {
 };
 
 /** Items still to proofread across every question set that answered this dataset. */
-const answersToCheck = (dataset: DatasetRecord): number => {
-  return dataset.counts.needsReview;
+// Answers given to an older wording of the questions; they must be re-answered to count.
+const staleAnswerCount = (dataset: DatasetRecord): number => {
+  return (dataset.judgments ?? []).reduce((total, entry) => total + entry.stale, 0);
 };
 
 const datasetSearchText = (dataset: DatasetRecord): string => dataset.name;
@@ -189,20 +190,23 @@ const AnswersCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
       </Box>
     );
   }
-  const toCheck = answersToCheck(dataset);
+  const stale = staleAnswerCount(dataset);
   const allAnswered = judgments.every((entry) => entry.current >= entry.total);
+  const leastAnswered = Math.min(...judgments.map((entry) => entry.current));
+  const total = Math.max(...judgments.map((entry) => entry.total));
   return (
-    <Box alignItems="start" justifyContent="center">
-      {toCheck > 0 ? (
-        <Badge iconName="pen" secondary status="warning" value={`${toCheck} need proofreading`} />
+    <Box alignItems="start" justifyContent="center" testID={`ai-datasets-answers-${dataset.id}`}>
+      {stale > 0 ? (
+        <Badge
+          iconName="pen"
+          secondary
+          status="warning"
+          value={`${stale} ${stale === 1 ? "answer" : "answers"} out of date`}
+        />
       ) : allAnswered ? (
         <Badge iconName="check" secondary status="success" value="All answered" />
       ) : (
-        <Badge
-          secondary
-          status="neutral"
-          value={`${Math.min(...judgments.map((entry) => entry.current))} of ${dataset.counts.total} answered`}
-        />
+        <Badge secondary status="neutral" value={`${leastAnswered} of ${total} answered`} />
       )}
     </Box>
   );

@@ -332,7 +332,7 @@ export const AiExperimentResultsView: React.FC<AiExperimentResultsViewProps> = (
           {blockedReason}
         </Text>
       ) : null}
-      {passing.length > 1 ? (
+      {hasGates && passing.length > 0 && experiment.versions.length > 1 ? (
         <Box maxWidth={240} testID="ai-experiment-promote-version">
           <SelectField
             onChange={(value) => {

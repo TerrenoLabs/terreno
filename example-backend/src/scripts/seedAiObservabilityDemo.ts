@@ -1120,7 +1120,7 @@ const ensureEvaluators = async (
     const existing = await evaluatorStore.getByName(questionSet.name);
     const drifted = existing ? questionSetDrifted(existing, questionSet) : false;
     output.changes.push({
-      change: !existing ? "created" : drifted && !dryRun ? "updated" : "unchanged",
+      change: !existing ? "created" : drifted ? "updated" : "unchanged",
       count: 1,
       key: JSON.stringify({name: questionSet.name}),
       model: "ObsEvaluator",
@@ -1191,15 +1191,16 @@ const questionSetDrifted = (
   });
 };
 
-/** Point queue items that still use a one-score template at the three-question sets. */
+/**
+ * Point open queue items that still use a one-score template at the three-question sets. Done and
+ * skipped items keep their evaluator, since their scores answer its questions. A dry run reports
+ * the remaps it would make without writing them.
+ */
 const repairLegacyReviewQueue = async (
   dryRun: boolean,
   evaluatorStore: LocalEvaluatorStore,
   output: AiObservabilityDemoResult
 ): Promise<void> => {
-  if (dryRun) {
-    return;
-  }
   const evaluators = await evaluatorStore.list();
   const byName = new Map(evaluators.map((row) => [row.name, row]));
   await new LocalReviewStore().list();
@@ -1210,14 +1211,18 @@ const repairLegacyReviewQueue = async (
     if (!legacy || !next) {
       continue;
     }
-    const result = await ObsReviewItem.updateMany(
-      {
-        $or: [{batchId: {$exists: false}}, {batchId: null}],
-        evaluatorId: new mongoose.Types.ObjectId(legacy.id),
-      },
-      {$set: {evaluatorId: new mongoose.Types.ObjectId(next.id)}}
-    );
-    const modified = result.modifiedCount ?? 0;
+    const filter = {
+      $or: [{batchId: {$exists: false}}, {batchId: null}],
+      evaluatorId: new mongoose.Types.ObjectId(legacy.id),
+      status: {$in: ["pending", "in_progress"]},
+    };
+    const modified = dryRun
+      ? await ObsReviewItem.countDocuments(filter)
+      : ((
+          await ObsReviewItem.updateMany(filter, {
+            $set: {evaluatorId: new mongoose.Types.ObjectId(next.id)},
+          })
+        ).modifiedCount ?? 0);
     if (modified === 0) {
       continue;
     }
@@ -1228,7 +1233,7 @@ const repairLegacyReviewQueue = async (
       model: "ObsReviewItem",
     });
     output.results.push(
-      `Pointed ${modified} review queue ${modified === 1 ? "item" : "items"} from ${legacyName} to ${nextName}`
+      `${dryRun ? "Would point" : "Pointed"} ${modified} review queue ${modified === 1 ? "item" : "items"} from ${legacyName} to ${nextName}`
     );
   }
 };

@@ -1,13 +1,14 @@
 import {Box, Button, Spinner, Text} from "@terreno/ui";
 import {router, useLocalSearchParams} from "expo-router";
 import {DateTime} from "luxon";
-import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {AiExperimentResultsView} from "./AiExperimentResultsView";
 import {
+  defaultPromoteVersion,
   type ExperimentRecord,
   experimentKind,
   formatExperimentCost,
@@ -57,27 +58,17 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-experiments`;
 
-  const [promoteVersion, setPromoteVersion] = useState(0);
+  // The version the operator picked; unset follows the gates as they arrive and change.
+  const [pickedVersion, setPickedVersion] = useState<{experimentId: string; version: number}>();
   const [promoteConfirmOpen, setPromoteConfirmOpen] = useState(false);
   const [promoteError, setPromoteError] = useState("");
-  const initializedExperimentId = useRef<string | undefined>(undefined);
-
-  // Default promote version to the highest compared version once results load.
-  useEffect(() => {
-    if (!experiment || experiment.versions.length === 0) {
-      return;
-    }
-    if (initializedExperimentId.current === experiment.id) {
-      return;
-    }
-    const passing = summarizeGatesByVersion(experiment).filter((summary) => summary.passed);
-    const latest =
-      passing[passing.length - 1]?.version ??
-      experiment.versions[experiment.versions.length - 1] ??
-      0;
-    initializedExperimentId.current = experiment.id;
-    setPromoteVersion(latest);
+  const derivedVersion = useMemo(() => {
+    return experiment ? defaultPromoteVersion(experiment) : 0;
   }, [experiment]);
+  const promoteVersion =
+    pickedVersion && pickedVersion.experimentId === experiment?.id
+      ? pickedVersion.version
+      : derivedVersion;
 
   // Poll while the experiment is still pending or running so progress and gates stay current.
   useEffect(() => {
@@ -193,7 +184,7 @@ export const AiExperimentResultsScreenWidget: React.FC<AdminScreenWidgetProps> =
         }}
         onPromote={handlePromote}
         onSelectVersion={(version) => {
-          setPromoteVersion(version);
+          setPickedVersion({experimentId: experiment.id, version});
           setPromoteError("");
         }}
         promoteConfirmOpen={promoteConfirmOpen}

@@ -9,7 +9,7 @@ import type {
   ObsReviewBatchDocument,
   ObsReviewItemDocument,
 } from "../../types/observability";
-import {type EvaluatorAiClient, runLlmJudgeEvaluator} from "../evaluate";
+import type {EvaluatorAiClient} from "../evaluate";
 import {
   agreementAnswerKey,
   computeJudgeAgreement,
@@ -18,6 +18,7 @@ import {
 } from "../judgeAgreement";
 import {questionSetFingerprint} from "../questionFingerprint";
 import {loadDatasetItemSubjects} from "./humanAnswers";
+import {runJudgeAgainstHumans} from "./judgeRun";
 import {registerObsDataset} from "./models/obsDataset";
 import {registerObsDatasetItem} from "./models/obsDatasetItem";
 import {registerObsEvaluator} from "./models/obsEvaluator";
@@ -30,7 +31,6 @@ import {LocalReviewStore, type ReviewStatus} from "./reviewStore";
 
 export const DEFAULT_REVIEW_BATCH_SIZE = 10;
 export const MAX_REVIEW_BATCH_SIZE = 50;
-const JUDGE_CONCURRENCY = 5;
 
 export interface ReviewBatchCounts {
   done: number;
@@ -107,25 +107,6 @@ const objectId = (value: string, label: string): mongoose.Types.ObjectId => {
 
 const toIso = (value?: Date): string => {
   return value ? (DateTime.fromJSDate(value).toUTC().toISO() ?? "") : "";
-};
-
-// Run async work over items with a fixed number in flight, keeping input order in the result.
-const mapWithConcurrency = async <T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> => {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  const workers = Array.from({length: Math.min(limit, items.length)}, async () => {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await fn(items[index] as T);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 };
 
 /**
@@ -454,35 +435,31 @@ export class LocalReviewBatchStore {
     for (const subject of (await this.loadSubjects(reviewItems)).values()) {
       subjectByKey.set(subject.key, subject);
     }
-    const results = await mapWithConcurrency(
-      [...subjectByKey.values()],
-      JUDGE_CONCURRENCY,
-      async (subject) => {
-        const result = await runLlmJudgeEvaluator(
-          {
-            evaluator: {
-              dimensions: judge.dimensions,
-              judgePromptName: judge.judgePromptName,
-              name: judge.name,
-              type: judge.type,
-            },
-            input: subject.input,
-            output: subject.output,
-          },
-          params.ai,
-          judgeVersion.outputSchema as Record<string, unknown>
-        );
-        return {
-          confidence: result.confidence,
-          error: result.error,
-          scores: result.scores,
-          ...(subject.datasetItemId
-            ? {datasetItemId: new mongoose.Types.ObjectId(subject.datasetItemId)}
-            : {}),
-          ...(subject.traceId ? {traceId: new mongoose.Types.ObjectId(subject.traceId)} : {}),
-        };
-      }
-    );
+    // Done answers pair with the judge's, exactly as summarizeJudges compares them later.
+    const humanAnswers = reviewItems
+      .filter((item) => item.status === "done")
+      .map((item) => {
+        return {...this.answerIds(item), scores: item.scores};
+      });
+    const run = await runJudgeAgainstHumans({
+      ai: params.ai,
+      dimensions: questionSet?.dimensions ?? [],
+      humanAnswers,
+      judge,
+      prompt: {outputSchema: judgeVersion.outputSchema as Record<string, unknown>},
+      subjects: [...subjectByKey.values()],
+    });
+    const results = run.results.map((result) => {
+      return {
+        confidence: result.confidence,
+        error: result.error,
+        scores: result.scores,
+        ...(result.datasetItemId
+          ? {datasetItemId: new mongoose.Types.ObjectId(result.datasetItemId)}
+          : {}),
+        ...(result.traceId ? {traceId: new mongoose.Types.ObjectId(result.traceId)} : {}),
+      };
+    });
     await registerObsJudgeRun().create({
       batchId: batch._id,
       completedAt: DateTime.utc().toJSDate(),

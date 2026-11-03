@@ -4,7 +4,7 @@ import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {AiReviewBatchesView} from "./AiReviewBatchesView";
 import {AiReviewBatchView} from "./AiReviewBatchView";
-import type {ReviewBatchDetail} from "./batchTypes";
+import {humanizeKey, type ReviewBatchDetail} from "./batchTypes";
 import {ReviewQuestionList} from "./ReviewQuestionList";
 
 const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {
@@ -135,6 +135,27 @@ describe("ReviewQuestionList", () => {
     expect(style("ai-review-answer-concise")).toContain("220");
     expect(style("ai-review-answer-concise")).not.toContain('"flex":0');
     expect(style("ai-review-answer-faithful")).toContain("220");
+  });
+
+  it("labels non-boolean dimensions without a question by their humanized key, full width", () => {
+    const view = renderWithTheme(
+      <ReviewQuestionList
+        dimensions={[
+          {dataType: "categorical", key: "toneRating", range: "safe|unsafe", required: true},
+          {dataType: "numeric", key: "detail_score", range: "1-5", required: false},
+        ]}
+        onAnswer={() => {}}
+        scores={{}}
+      />
+    );
+    expect(view.getByText(humanizeKey("toneRating"))).toBeTruthy();
+    expect(view.getByText(humanizeKey("detail_score"))).toBeTruthy();
+    expect(view.queryByText(/toneRating/)).toBeNull();
+    expect(view.queryByText(/detail_score/)).toBeNull();
+    expect(view.queryByTestId("ai-review-answer-toneRating")).toBeNull();
+    expect(
+      JSON.stringify(view.getByTestId("ai-review-question-toneRating").props.style)
+    ).not.toContain("220");
   });
 
   it("answers non-boolean questions through the score field in the left column", async () => {

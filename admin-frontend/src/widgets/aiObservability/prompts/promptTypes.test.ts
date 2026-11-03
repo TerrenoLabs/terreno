@@ -145,6 +145,35 @@ describe("promptTypes helpers", () => {
     ).toEqual(["topic"]);
   });
 
+  it("summarizes a JSON Schema output by its properties, not its keywords", () => {
+    const summary = schemaSummary(
+      version({
+        outputSchema: {
+          properties: {
+            confidence: {type: "number"},
+            faithful: {type: "boolean"},
+            notes: {description: "free text"},
+          },
+          required: ["faithful"],
+          type: "object",
+        },
+        version: 1,
+      })
+    );
+    expect(summary).toBe(
+      "Variables: name. Output: confidence (number), faithful (boolean), notes."
+    );
+    expect(schemaSummary(version({outputSchema: {summary: {type: "string"}}, version: 1}))).toBe(
+      "Variables: name. Output: summary."
+    );
+    // A field map with a field named "properties" stays a field map.
+    expect(
+      schemaSummary(
+        version({outputSchema: {properties: {type: "string"}, title: {type: "string"}}, version: 1})
+      )
+    ).toBe("Variables: name. Output: properties, title.");
+  });
+
   it("summarizes schema and playground metrics", () => {
     expect(
       schemaSummary(version({outputSchema: {summary: {type: "string"}}, version: 1})).includes(

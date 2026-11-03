@@ -16,6 +16,7 @@ import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {getObservabilityStatusStyle} from "../shell/observabilityStatus";
 import {
   EXPERIMENT_KIND_LABELS,
+  EXPERIMENT_LIST_MAX_LIMIT,
   type ExperimentKind,
   type ExperimentRecord,
   experimentKind,
@@ -31,6 +32,8 @@ export interface AiExperimentsListViewProps {
   datasetNames?: Record<string, string>;
   experiments: ExperimentRecord[];
   isLoading: boolean;
+  /** True when the server has more experiments than the loaded page. */
+  isTruncated?: boolean;
   loadError?: string;
   onCreate: () => void;
   onOpenResults: (id: string) => void;
@@ -181,6 +184,7 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   datasetNames,
   experiments,
   isLoading,
+  isTruncated,
   loadError,
   onCreate,
   onOpenResults,
@@ -334,6 +338,13 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
           rowHeight={ROW_HEIGHT}
           testID="ai-experiments-table"
         />
+        {isTruncated ? (
+          <Box testID="ai-experiments-truncated-note">
+            <Text color="secondaryLight" size="sm">
+              {`Showing the newest ${EXPERIMENT_LIST_MAX_LIMIT} experiments; filters and sorting apply to these.`}
+            </Text>
+          </Box>
+        ) : null}
       </Box>
     );
   };

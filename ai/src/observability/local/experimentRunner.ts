@@ -13,14 +13,8 @@ import type {
   ScoreThreshold,
 } from "../../types/observability";
 import {compileTemplate} from "../compileTemplate";
-import {runEvaluator, runLlmJudgeEvaluator} from "../evaluate";
-import {
-  type AgreementAnswerSet,
-  answersAgree,
-  computeJudgeAgreement,
-  type JudgeAgreement,
-  type JudgeAnswerSet,
-} from "../judgeAgreement";
+import {runEvaluator} from "../evaluate";
+import type {AgreementAnswerSet, JudgeAgreement} from "../judgeAgreement";
 import {questionSetFingerprint} from "../questionFingerprint";
 import {SOP_DEFAULT_THRESHOLDS} from "../sopThresholds";
 import type {
@@ -31,6 +25,12 @@ import type {
 import type {LocalDatasetStore} from "./datasetStore";
 import type {LocalEvaluatorStore} from "./evaluatorStore";
 import {loadCurrentHumanAnswers, loadDatasetItemSubjects} from "./humanAnswers";
+import {
+  agreementForResults,
+  DEFAULT_JUDGE_CONCURRENCY,
+  type JudgeRunItemResult,
+  runJudgeAgainstHumans,
+} from "./judgeRun";
 import {registerObsDataset} from "./models/obsDataset";
 import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsExperiment} from "./models/obsExperiment";
@@ -856,25 +856,40 @@ export class LocalExperimentRunner {
       });
     }
     const judgeId = String(judge._id);
-    const judgeKeys = judge.dimensions.map((dimension) => dimension.key);
-    const comparedDimensions = current.questionSet.dimensions.filter((dimension) => {
-      return judgeKeys.includes(dimension.key);
+    const subjectRows = current.items.map(({item}) => {
+      const datasetItemId = String(item._id);
+      const subject = subjects.get(datasetItemId);
+      return {
+        datasetItemId,
+        input: subject?.input,
+        output: subject?.output,
+        ...(subject?.traceId ? {traceId: subject.traceId} : {}),
+      };
     });
-    const humanAnswers: AgreementAnswerSet[] = [];
-    const judgeAnswers = new Map<number, JudgeAnswerSet[]>(
+    const humanAnswers: AgreementAnswerSet[] = current.items.map(({answer}, index) => {
+      const {datasetItemId, traceId} = subjectRows[index] ?? {};
+      return {datasetItemId, scores: answer.scores, ...(traceId ? {traceId} : {})};
+    });
+    const total = current.items.length;
+    const judgeForRun = {
+      dimensions: judge.dimensions,
+      judgePromptName,
+      name: judge.name,
+      type: judge.type,
+    };
+    const versionRuns = new Map<number, JudgeRunItemResult[]>(
       experiment.versions.map((version) => [version, []])
     );
     const lowConfidenceItemIds: string[] = [];
     const outlierItemIds: string[] = [];
-    const total = current.items.length;
     const aggregate = (completed: number): ExperimentAggregates => {
       const agreement: Record<string, JudgeAgreement> = {};
       for (const version of experiment.versions) {
-        agreement[String(version)] = computeJudgeAgreement({
+        agreement[String(version)] = agreementForResults({
           dimensions: current.questionSet.dimensions,
           humanAnswers,
-          judgeAnswers: judgeAnswers.get(version) ?? [],
-          judgeKeys,
+          judge: judgeForRun,
+          results: versionRuns.get(version) ?? [],
         });
       }
       const target = experiment.targetAgreement ?? DEFAULT_TARGET_AGREEMENT;
@@ -900,40 +915,34 @@ export class LocalExperimentRunner {
       };
     };
 
+    // Every version runs through the shared judge pipeline at once; an item's row is written
+    // (and progress saved) as soon as all versions have judged it. Writes are serialized.
+    const runnable = experiment.versions.filter((version) => versionPrompts.has(version));
+    const pending = new Map<number, Map<number, JudgeRunItemResult>>();
     let completed = 0;
-    for (const {answer, item} of current.items) {
-      const datasetItemId = String(item._id);
-      const subject = subjects.get(datasetItemId);
-      const ids = {datasetItemId, ...(subject?.traceId ? {traceId: subject.traceId} : {})};
-      humanAnswers.push({...ids, scores: answer.scores});
+    let writes: Promise<void> = Promise.resolve();
+    const writeRow = async (
+      index: number,
+      byVersion: Map<number, JudgeRunItemResult>
+    ): Promise<void> => {
+      const row = current.items[index];
+      if (!row) {
+        return;
+      }
+      const datasetItemId = String(row.item._id);
       const versionResults: Record<string, ExperimentVersionResult> = {};
       let rowFailed = false;
       for (const versionNumber of experiment.versions) {
-        const prompt = versionPrompts.get(versionNumber);
-        if (!prompt) {
+        const result = byVersion.get(versionNumber);
+        if (!result) {
           continue;
         }
-        const result = await runLlmJudgeEvaluator(
-          {
-            evaluator: {
-              dimensions: judge.dimensions,
-              judgePromptName,
-              name: judge.name,
-              type: judge.type,
-            },
-            input: subject?.input,
-            output: subject?.output,
-          },
-          aiService,
-          prompt.schema,
-          {judgeSystemPrompt: prompt.system}
-        );
         versionResults[String(versionNumber)] = {
           evaluatorScores: {
             [judgeId]: {confidence: result.confidence, error: result.error, scores: result.scores},
           },
         };
-        judgeAnswers.get(versionNumber)?.push({...ids, error: result.error, scores: result.scores});
+        versionRuns.get(versionNumber)?.push(result);
         if (result.error) {
           rowFailed = true;
           outlierItemIds.push(datasetItemId);
@@ -942,27 +951,54 @@ export class LocalExperimentRunner {
           lowConfidenceItemIds.push(datasetItemId);
         }
         // A row fails when any version disagrees with the reviewers on any compared question.
-        const disagrees = comparedDimensions.some((dimension) => {
-          const human = answer.scores[dimension.key];
-          return (
-            human !== undefined && !answersAgree(dimension, human, result.scores?.[dimension.key])
-          );
-        });
-        if (disagrees) {
+        if (result.disagrees) {
           rowFailed = true;
         }
       }
       await registerObsExperimentItem().create({
-        datasetItemId: item._id,
+        datasetItemId: row.item._id,
         experimentId: experiment._id,
         failed: rowFailed,
-        humanScores: answer.scores,
+        humanScores: row.answer.scores,
         versionResults,
       });
       completed += 1;
       experiment.results = aggregate(completed);
       await experiment.save();
-    }
+    };
+    const concurrency = Math.max(
+      1,
+      Math.ceil(DEFAULT_JUDGE_CONCURRENCY / Math.max(runnable.length, 1))
+    );
+    await Promise.all(
+      runnable.map(async (versionNumber) => {
+        const prompt = versionPrompts.get(versionNumber);
+        if (!prompt) {
+          return;
+        }
+        await runJudgeAgainstHumans({
+          ai: aiService,
+          concurrency,
+          dimensions: current.questionSet.dimensions,
+          humanAnswers,
+          judge: judgeForRun,
+          onResult: async (result) => {
+            const byVersion = pending.get(result.index) ?? new Map<number, JudgeRunItemResult>();
+            byVersion.set(versionNumber, result);
+            pending.set(result.index, byVersion);
+            if (byVersion.size < runnable.length) {
+              return;
+            }
+            pending.delete(result.index);
+            writes = writes.then(() => writeRow(result.index, byVersion));
+            await writes;
+          },
+          prompt: {outputSchema: prompt.schema, system: prompt.system},
+          subjects: subjectRows,
+        });
+      })
+    );
+    await writes;
     experiment.questionsFingerprint = current.fingerprint;
     experiment.results = aggregate(total);
     experiment.status = "completed";

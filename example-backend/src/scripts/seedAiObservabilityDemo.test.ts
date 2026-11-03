@@ -263,6 +263,78 @@ describe("seedAiObservabilityDemo", () => {
   );
 
   it(
+    "previews drift repairs on a dry run and leaves finished reviews on their evaluator",
+    async () => {
+      await seedDefaultData();
+      await seedAiObservabilityDemo({dryRun: false});
+      const evaluatorStore = new LocalEvaluatorStore();
+      const evaluators = await evaluatorStore.list();
+      const legacy = evaluators.find((row) => row.name === "correctness-human");
+      const quality = evaluators.find((row) => row.name === OUTPUT_QUALITY_QUESTIONS);
+      const [pendingItem, doneItem, skippedItem] = (await new LocalReviewStore().list()).data
+        .filter((item) => !item.batchId)
+        .slice(0, 3);
+      if (!legacy || !quality || !pendingItem || !doneItem || !skippedItem) {
+        assert.fail("Seeded queue evaluators or items are missing");
+      }
+      const ObsReviewItem = mongoose.model("ObsReviewItem");
+      const legacyId = new mongoose.Types.ObjectId(legacy.id);
+      const legacyRows = [
+        {id: pendingItem.id, scores: undefined, status: "pending"},
+        {id: doneItem.id, scores: {correct: true}, status: "done"},
+        {id: skippedItem.id, scores: undefined, status: "skipped"},
+      ];
+      for (const row of legacyRows) {
+        await ObsReviewItem.updateOne(
+          {_id: row.id},
+          {
+            $set: {
+              evaluatorId: legacyId,
+              status: row.status,
+              ...(row.scores ? {scores: row.scores} : {}),
+            },
+          }
+        );
+      }
+      await evaluatorStore.update(quality.id, {
+        dimensions: [{dataType: "boolean", key: "correct", required: true}],
+        instructions: "old single question",
+      });
+      const evaluatorOf = async (id: string): Promise<string> => {
+        const row = await ObsReviewItem.findById(id).lean<{evaluatorId: unknown}>();
+        return String(row?.evaluatorId);
+      };
+
+      const preview = await seedAiObservabilityDemo({dryRun: true});
+      assert.deepInclude(preview.changes, {
+        change: "updated",
+        count: 1,
+        key: JSON.stringify({name: OUTPUT_QUALITY_QUESTIONS}),
+        model: "ObsEvaluator",
+      });
+      assert.deepInclude(preview.changes, {
+        change: "updated",
+        count: 1,
+        key: JSON.stringify({from: "correctness-human", to: OUTPUT_QUALITY_QUESTIONS}),
+        model: "ObsReviewItem",
+      });
+      // Nothing was written.
+      assert.lengthOf((await evaluatorStore.get(quality.id)).dimensions, 1);
+      assert.equal(await evaluatorOf(pendingItem.id), legacy.id);
+
+      await seedAiObservabilityDemo({dryRun: false});
+      assert.lengthOf((await evaluatorStore.get(quality.id)).dimensions, 3);
+      assert.equal(await evaluatorOf(pendingItem.id), quality.id);
+      // Finished reviews keep the evaluator their scores answer.
+      assert.equal(await evaluatorOf(doneItem.id), legacy.id);
+      assert.equal(await evaluatorOf(skippedItem.id), legacy.id);
+      const done = await ObsReviewItem.findById(doneItem.id).lean<{scores?: unknown}>();
+      assert.deepEqual(done?.scores, {correct: true});
+    },
+    SEED_TEST_TIMEOUT_MS
+  );
+
+  it(
     "answers summaries and judge calls deterministically",
     async () => {
       const client = createSeedFixtureClient();

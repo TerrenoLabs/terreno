@@ -2629,6 +2629,44 @@ describe("AiExperimentResultsScreen", () => {
       expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v1 to production");
     });
 
+    it("re-picks the promote version when gates arrive after the run finishes", () => {
+      // While running there are no gates yet, so the default is the newest version.
+      detailData = {
+        ...baseExperiment,
+        results: {
+          ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+          gates: [],
+          progress: {completed: 1, total: 2},
+        },
+        status: "running",
+      };
+      const view = renderWithTheme(<AiExperimentResultsScreenWidget {...widgetProps} />);
+      expect(view.getByTestId("ai-experiment-promote")).toHaveTextContent(
+        "Promote v2 to production"
+      );
+      expect(view.queryByTestId("ai-experiment-promote-version")).toBeNull();
+
+      // The run finishes and only the earlier version passes.
+      detailData = {
+        ...baseExperiment,
+        results: {
+          ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+          gates: (baseExperiment.results?.gates ?? []).map((gate) => {
+            return {...gate, passed: gate.version === 1};
+          }),
+          progress: {completed: 2, total: 2},
+        },
+        status: "completed",
+        updated: "2026-01-01T00:06:00.000Z",
+      };
+      view.rerender(<AiExperimentResultsScreenWidget {...widgetProps} />);
+      expect(view.getByTestId("ai-experiment-promote")).toHaveTextContent(
+        "Promote v1 to production"
+      );
+      expect(view.getByTestId("ai-experiment-promote")).not.toBeDisabled();
+      expect(view.getByTestId("ai-experiment-promote-version")).toBeTruthy();
+    });
+
     it("blocks promote when gates fail and surfaces API errors", async () => {
       detailData = {
         ...baseExperiment,
@@ -4812,7 +4850,9 @@ describe("AiReviewItemView", () => {
           scores={{correct: true, helpfulness: 0.7}}
         />
       );
-      expect(getByText("2. helpfulness")).toBeTruthy();
+      // Scores without question text are labelled by their humanized key, not "2. helpfulness".
+      expect(getByText("Helpfulness")).toBeTruthy();
+      expect(queryByText("2. helpfulness")).toBeNull();
       expect(queryByText("Mark correct only when grounded.")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-score-tone-safe"));

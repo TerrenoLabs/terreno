@@ -553,6 +553,18 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     };
   }, [adminContext?.syncDb, isWindowed, syncCollection]);
 
+  // A table that started on the REST list (rendered from a server seed before sync was ready)
+  // refetches it once when it switches to its window, so a change made before sync started is
+  // not hidden behind the rows it first rendered. A table that starts windowed never does.
+  const wasWindowedRef = useRef(isWindowed);
+  useEffect(() => {
+    if (isWindowed && !wasWindowedRef.current) {
+      // Refetch errors surface through the list query state; nothing awaits this promise.
+      void Promise.resolve(refetch()).catch(() => {});
+    }
+    wasWindowedRef.current = isWindowed;
+  }, [isWindowed, refetch]);
+
   // Upsert the REST membership page into TinyBase for windowed admin lists.
   useEffect(() => {
     if (!isWindowed || !adminContext?.syncDb || !syncCollection) {

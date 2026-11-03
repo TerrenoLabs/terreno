@@ -169,7 +169,8 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   ObjectIds and UUIDs never need encoding.
 - **Windowed sync models** render the seeded REST page first. The admin provider binds the
   syncdb client only after `start()` resolves, and the table then switches to its window,
-  so live updates reach it.
+  so live updates reach it. On that switch the table refetches its REST page once, so a change
+  made between the server render and the sync start shows up without a manual refresh.
 
 ## Related
 

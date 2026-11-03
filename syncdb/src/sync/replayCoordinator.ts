@@ -701,8 +701,9 @@ export const createReplayCoordinator = ({
     return {authPaused: false, haltDrain: haltQueueOnConflict, progressed: false};
   };
 
-  const applyValidation = (mutation: OutboxMutation): OutcomeDecision => {
-    handleTerminalFailure(mutation, "validation");
+  const applyValidation = (mutation: OutboxMutation, nack: SyncNack): OutcomeDecision => {
+    // An id-caused rejection (`id_collision`, `invalid_id`) names itself in the debug log.
+    handleTerminalFailure(mutation, nack.reason ?? "validation");
     // B4: the entity's queued successors are skipped-and-surfaced until the
     // user calls retryFailed({entityId}) or resolves the underlying issue —
     // other entities keep draining.
@@ -818,7 +819,7 @@ export const createReplayCoordinator = ({
       return applyUnauthorized(mutation);
     }
     if (nack.code === "validation") {
-      return applyValidation(mutation);
+      return applyValidation(mutation, nack);
     }
     if (nack.code === "rate_limited") {
       return applyRateLimited(mutation, nack);

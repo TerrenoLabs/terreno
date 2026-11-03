@@ -415,9 +415,10 @@ const loadHistory = async ({
   if (!historyId) {
     return new GptHistory({prompts: [], userId, ...(projectId ? {projectId} : {})});
   }
-  // History ids are Strings (synced collection); an object here would be read as a query operator.
-  if (typeof historyId !== "string") {
-    throw new APIError({status: 400, title: "historyId must be a string"});
+  // The id arrives as the ObjectId's hex string. An object here would be read as a query
+  // operator, and any other string would surface as a CastError 500.
+  if (typeof historyId !== "string" || !/^[0-9a-fA-F]{24}$/.test(historyId)) {
+    throw new APIError({status: 400, title: "historyId is not valid"});
   }
   const history = await GptHistory.findById(historyId);
   if (!history) {

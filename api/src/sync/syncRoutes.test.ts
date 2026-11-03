@@ -1021,12 +1021,16 @@ describe("sync routes", () => {
   // Task 9.27(b): bad caller input on the repair-fetch endpoint used to come back as a 500
   // (CastError) or, worse, a truncated 200 the client read as "those entities are gone".
   describe("GET /sync/entities input validation (Task 9.27)", () => {
-    it("400s (not 500s) for ids that cannot be cast to the model's _id type", async () => {
+    it("returns ids that cannot be cast to the model's _id type as absent (not a 500)", async () => {
       const doc = await RouteStuffModel.create({name: "real", ownerId: notAdminId});
+      // A rejected client-minted UUID create is queued for repair under that id; it must not
+      // fail the rest of the repair batch.
       const res = await agent
-        .get(`/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id`)
-        .expect(400);
-      expect(res.body.title).toMatch(/not-an-object-id/);
+        .get(
+          `/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id,${crypto.randomUUID()},abcdefghijkl`
+        )
+        .expect(200);
+      expect(res.body.entities.map((e: SnapshotEntity) => e.id)).toEqual([String(doc._id)]);
     });
 
     it("400s instead of silently truncating an over-cap id list", async () => {

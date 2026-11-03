@@ -198,7 +198,7 @@ describe("POST /gpt/actions", () => {
     expect(res.body.meta.fields["blocks[0].color"]).toEqual(expect.stringContaining("UNKNOWN_KEY"));
   });
 
-  it("rejects a missing body and a history that does not exist, by any string id", async () => {
+  it("rejects a missing body, a bad history id, and a history that does not exist", async () => {
     await ensureTestUsers();
     const app = buildApp({
       model,
@@ -215,10 +215,9 @@ describe("POST /gpt/actions", () => {
       messageId: "m1",
       name: "export_csv",
     };
-    // History ids are Strings (UUIDs or migrated ObjectId hex), so any string is looked up.
-    const unknownId = await agent.post("/gpt/actions").send(body);
-    expect(unknownId.status).toBe(404);
-    expect(unknownId.body.title).toBe("History not found");
+    const badId = await agent.post("/gpt/actions").send(body);
+    expect(badId.status).toBe(400);
+    expect(badId.body.title).toBe("historyId is not valid");
 
     const missing = await agent.post("/gpt/actions").send({
       ...body,

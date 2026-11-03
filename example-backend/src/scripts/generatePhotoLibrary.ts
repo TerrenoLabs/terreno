@@ -25,7 +25,7 @@
  * owner is bookkeeping only.
  */
 import {createVertex} from "@ai-sdk/google-vertex";
-import {createVertexProvider, FileStorageService} from "@terreno/ai";
+import {createVertexProvider, FileStorageService, toAiSdkImageModel} from "@terreno/ai";
 import {APIError, logger} from "@terreno/api";
 import {generateImage, type ImageModel} from "ai";
 import {GoogleAuth} from "google-auth-library";
@@ -221,7 +221,7 @@ export const createPhotoImageModel = ({
       title: "Vertex AI provider could not be created; check GOOGLE_VERTEX_PROJECT.",
     });
   }
-  return provider.imageModel(config.imageModelId);
+  return toAiSdkImageModel(provider.imageModel(config.imageModelId));
 };
 
 /** The part of `GoogleAuth` the credentials check needs, so tests can stand in for ADC. */

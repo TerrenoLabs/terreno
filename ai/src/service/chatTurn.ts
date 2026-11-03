@@ -41,6 +41,7 @@ import type {
   MessageContentPart,
   UiBlocksOptions,
 } from "../types";
+import {toAiSdkLanguageModel} from "../types";
 import {AIService} from "./aiService";
 import {
   askFilesModelOutput,
@@ -2049,7 +2050,7 @@ export const runChatTurn = async ({
     const result = streamText({
       experimental_telemetry: telemetry,
       messages,
-      model: aiService.model,
+      model: toAiSdkLanguageModel(aiService.model),
       providerOptions: !supportsTools
         ? {
             google: {responseModalities: ["TEXT", "IMAGE"]},

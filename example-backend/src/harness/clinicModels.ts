@@ -1,3 +1,4 @@
+import {toAiSdkLanguageModel} from "@terreno/ai";
 import type {HarnessModelRef, HarnessModelResolver} from "@terreno/ai/harness";
 import {APIError} from "@terreno/api";
 import type {LanguageModel} from "ai";
@@ -45,7 +46,7 @@ export const resolveExampleModel: HarnessModelResolver = (ref): LanguageModel =>
   if (ref.provider === CLINIC_SERVER_MODEL.provider) {
     const model = createServerModel(ref.modelId);
     if (model) {
-      return model;
+      return toAiSdkLanguageModel(model);
     }
     throw new APIError({
       code: "clinic-model-credentials-missing",

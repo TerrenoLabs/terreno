@@ -380,7 +380,7 @@ type FeaturePlugin<
  */
 export type BetterAuthFeaturePlugins<Features extends BetterAuthClientFeatures> = [
   ...FeaturePlugin<Features, "twoFactor", ReturnType<typeof twoFactorClient>>,
-  ...FeaturePlugin<Features, "passkey", BetterAuthClientPlugin>,
+  ...FeaturePlugin<Features, "passkey", ReturnType<typeof passkeyClient>>,
   ...FeaturePlugin<Features, "multiSession", ReturnType<typeof multiSessionClient>>,
   ...FeaturePlugin<Features, "lastLoginMethod", ReturnType<typeof lastLoginMethodClient>>,
   ...FeaturePlugin<Features, "oneTimeToken", ReturnType<typeof oneTimeTokenClient>>,
@@ -396,6 +396,20 @@ export type BetterAuthClient = ReactAuthClient<{
   plugins: BetterAuthClientPlugin[];
 }>;
 
+type BetterAuthBaseClientMethods = Pick<
+  BetterAuthClient,
+  | "getSession"
+  | "signOut"
+  | "signIn"
+  | "listAccounts"
+  | "unlinkAccount"
+  | "linkSocial"
+  | "listSessions"
+  | "revokeSession"
+  | "revokeOtherSessions"
+  | "getLastUsedLoginMethod"
+>;
+
 /**
  * Type of the Better Auth client returned by createBetterAuthClient with `features`, such as
  * `BetterAuthClientWithFeatures<{twoFactor: true}>`. Every enabled feature's namespace is typed.
@@ -403,16 +417,18 @@ export type BetterAuthClient = ReactAuthClient<{
  * The expo plugin is left out of the type: it is typed only as a generic plugin (see
  * createBetterAuthClient), which would widen every namespace to `any`. It adds only `getCookie`.
  *
- * Passkey is typed as {@link BetterAuthClientPlugin} because `@better-auth/passkey` client
- * factories can lag `BetterAuthClientOptions` after Better Auth minor bumps; runtime uses the
- * same cast as in {@link createBetterAuthClient}.
+ * Passkey plugin options can fail Better Auth's structural `BetterAuthClientOptions` check while
+ * still inferring namespaces correctly; intersect base auth APIs so controllers and the Redux
+ * slice accept feature clients without widening disabled feature namespaces.
  */
 export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
+  // @ts-expect-error Passkey plugin typings can exceed BetterAuthClientOptions; runtime uses cast.
   ReactAuthClient<{
     baseURL: string;
     fetchOptions?: BetterAuthFetchOptions;
     plugins: BetterAuthFeaturePlugins<Features>;
-  }>;
+  }> &
+    BetterAuthBaseClientMethods;
 
 /**
  * What the OAuth handoff helpers need from a client: any client createBetterAuthClient returns,

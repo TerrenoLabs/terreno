@@ -36,8 +36,10 @@ import type {
   GptHistoryPrompt,
   RemixOptions,
   SummaryOptions,
+  TerrenoLanguageModel,
   TranslateOptions,
 } from "../types";
+import {toAiSdkLanguageModel} from "../types";
 import {withStrippedJsonFencesModel} from "./jsonFenceModel";
 import {
   CONTENT_SUMMARY_PROMPT,
@@ -83,7 +85,7 @@ const collectAskResults = (prompts: GptHistoryPrompt[]): Map<string, GptHistoryP
   );
 };
 
-const getModelId = (model: LanguageModel): string => {
+const getModelId = (model: TerrenoLanguageModel): string => {
   if (typeof model === "string") {
     return model;
   }
@@ -141,9 +143,9 @@ interface ResolvedObservability {
 }
 
 export class AIService {
-  readonly model: LanguageModel;
+  readonly model: TerrenoLanguageModel;
   readonly defaultTemperature: number;
-  private structuredJsonModel?: LanguageModel;
+  private structuredJsonModel?: TerrenoLanguageModel;
 
   constructor({model, defaultTemperature = TemperaturePresets.DEFAULT}: AIServiceOptions) {
     this.model = model;
@@ -154,9 +156,9 @@ export class AIService {
     return getModelId(this.model);
   }
 
-  private getModelForStructuredJson(): LanguageModel {
+  private getModelForStructuredJson(): TerrenoLanguageModel {
     if (!this.structuredJsonModel) {
-      this.structuredJsonModel = withStrippedJsonFencesModel(this.model);
+      this.structuredJsonModel = withStrippedJsonFencesModel(toAiSdkLanguageModel(this.model));
     }
     return this.structuredJsonModel;
   }
@@ -505,7 +507,7 @@ export class AIService {
       const result = await aiGenerateText({
         experimental_telemetry: {functionId: "generate-text", isEnabled: true},
         maxOutputTokens,
-        model: this.model,
+        model: toAiSdkLanguageModel(this.model),
         prompt,
         system: observability.systemPrompt,
         temperature: temperature ?? this.defaultTemperature,
@@ -562,7 +564,7 @@ export class AIService {
       try {
         const result = await aiGenerateText({
           experimental_telemetry: {functionId: "generate-blocks", isEnabled: true},
-          model: this.getModelForStructuredJson(),
+          model: toAiSdkLanguageModel(this.getModelForStructuredJson()),
           output: Output.object({
             schema: jsonSchema<BlocksDocument>(blocksJsonSchema as never),
           }),
@@ -671,7 +673,7 @@ export class AIService {
       const result = await aiGenerateText({
         experimental_telemetry: {functionId: "generate-json-value", isEnabled: true},
         maxOutputTokens,
-        model: this.getModelForStructuredJson(),
+        model: toAiSdkLanguageModel(this.getModelForStructuredJson()),
         output: Output.json({description: outputDescription, name: outputName}),
         prompt,
         system,
@@ -725,7 +727,7 @@ export class AIService {
       const result = await aiGenerateText({
         experimental_telemetry: {functionId: "generate-json-object", isEnabled: true},
         maxOutputTokens,
-        model: this.getModelForStructuredJson(),
+        model: toAiSdkLanguageModel(this.getModelForStructuredJson()),
         output: Output.object({
           description: schemaDescription,
           name: schemaName,
@@ -788,7 +790,7 @@ export class AIService {
       const result = await aiGenerateText({
         experimental_telemetry: {functionId: "generate-json-array", isEnabled: true},
         maxOutputTokens,
-        model: this.getModelForStructuredJson(),
+        model: toAiSdkLanguageModel(this.getModelForStructuredJson()),
         output: Output.array({
           description: outputDescription,
           element,
@@ -841,7 +843,7 @@ export class AIService {
       const result = streamText({
         experimental_telemetry: {functionId: "generate-text-stream", isEnabled: true},
         maxOutputTokens,
-        model: this.model,
+        model: toAiSdkLanguageModel(this.model),
         prompt,
         system: observability.systemPrompt,
         temperature: temperature ?? this.defaultTemperature,
@@ -1029,7 +1031,7 @@ export class AIService {
       const result = streamText({
         experimental_telemetry: {functionId: "generate-chat-stream", isEnabled: true},
         messages: messages.map((m) => ({content: m.content, role: m.role})),
-        model: this.model,
+        model: toAiSdkLanguageModel(this.model),
         stopWhen: stopWhen ?? stepCountIs(1),
         system: observability.systemPrompt ?? DEFAULT_GPT_MEMORY,
         temperature: this.defaultTemperature,

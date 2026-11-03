@@ -1,7 +1,20 @@
+import type {ImageModelV4, LanguageModelV4} from "@ai-sdk/provider";
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
 import type {Ask, AskKind, ConfirmAskInput, DatasetColumn, SimpleCard} from "@terreno/blocks";
-import type {LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
+import type {ImageModel, LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
 import type mongoose from "mongoose";
+
+/** Vertex and newer AI SDK providers may return v4 models while `ai` still types v2/v3 only. */
+export type TerrenoLanguageModel = LanguageModel | LanguageModelV4;
+export type TerrenoImageModel = ImageModel | ImageModelV4;
+
+/** Bridges v4 provider models into `ai` APIs still typed for v2/v3 `LanguageModel`. */
+export const toAiSdkLanguageModel = (model: TerrenoLanguageModel): LanguageModel =>
+  model as unknown as LanguageModel;
+
+/** Bridges v4 provider image models into `ai` APIs still typed for v2/v3 `ImageModel`. */
+export const toAiSdkImageModel = (model: TerrenoImageModel): ImageModel =>
+  model as unknown as ImageModel;
 
 // ============================================================
 // AIRequest Types
@@ -205,7 +218,7 @@ export interface ProjectModel extends mongoose.Model<ProjectDocument>, ProjectSt
 
 export interface AIServiceOptions {
   defaultTemperature?: number;
-  model: LanguageModel;
+  model: TerrenoLanguageModel;
 }
 
 export interface GenerateObservabilityOptions {
@@ -421,9 +434,9 @@ export interface GptRouteOptions {
    */
   asks?: boolean | AsksOptions;
   /** Factory to create a LanguageModel from a per-request API key (x-ai-api-key header). */
-  createModelFn?: (apiKey: string, modelId?: string) => import("ai").LanguageModel;
+  createModelFn?: (apiKey: string, modelId?: string) => TerrenoLanguageModel;
   /** Factory to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Used for model switching when no x-ai-api-key header is present. Returns undefined if no provider is configured (falls through to demo mode). */
-  createServerModelFn?: (modelId?: string) => import("ai").LanguageModel | undefined;
+  createServerModelFn?: (modelId?: string) => TerrenoLanguageModel | undefined;
   /** Factory to create per-request tools (e.g. tools that need the request's API key). Merged with static tools. */
   createRequestTools?: (req: import("express").Request) => Record<string, import("ai").Tool>;
   /** Not read: the routes send a canned demo reply whenever no AI service resolves. */

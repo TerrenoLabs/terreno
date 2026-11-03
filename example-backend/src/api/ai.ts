@@ -15,6 +15,7 @@ import {
   preparePromptForAI,
   TemperaturePresets,
   type TerrenoVertexProvider,
+  toAiSdkImageModel,
   verifyVertexModelsEnabled,
 } from "@terreno/ai";
 import type {ModelRouterOptions, User} from "@terreno/api";
@@ -574,7 +575,7 @@ const createImageTool = (apiKey?: string): Tool => {
     execute: async ({prompt}: {prompt: string}) => {
       const imageModel = createImageModel(apiKey);
       const result = await generateImage({
-        model: imageModel,
+        model: toAiSdkImageModel(imageModel),
         prompt,
       });
 

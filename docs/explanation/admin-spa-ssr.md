@@ -98,7 +98,7 @@ of them means anonymous. Anything else (a 5xx, a network error, no answer within
 | Visitor | Page | Loader data |
 | --- | --- | --- |
 | Anonymous | `/login` renders; any other page redirects to `/login?returnTo=<path>` | 401 JSON, except `login` and `forbidden` |
-| Not an admin | `/login` and `/forbidden` render; any other page redirects to `/forbidden` | 403 JSON, except `login` and `forbidden` |
+| Not an admin | `/login`, `/forbidden` and the signed-in-only `/oauth/consent` render; any other page redirects to `/forbidden` | 403 JSON, except `login`, `forbidden` and `oauth/consent` |
 | Admin | `/login` redirects to `returnTo` (or `/`); `/forbidden` redirects to `/`; every other page renders | runs |
 
 `returnTo` is an in-app path. `sanitizeReturnTo` accepts it only when it starts with a single

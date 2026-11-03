@@ -151,7 +151,8 @@ None — no new or changed screens.
   - Test skills: terreno:backend-test-env (process.env PORT default)
   - Docs: docs/explanation/admin-spa-ssr.md (payload, request scope + PHI headers section)
 
-- [ ] **T3** — Express gate: redirects plus the shell payload in the request scope
+- [x] **T3** — Express gate: redirects plus the shell payload in the request scope
+  - Built note: `sanitizeReturnTo` lives in `admin-spa/src/returnTo.ts` (`tsconfig.server.json` compiles only `src/`), and the AdminGate and login cases live in `src/isolated/*.isolated.tsx`.
   - Depends on: T2
   - Files: admin-spa/src/serve.ts, admin-spa/src/gate.ts, admin-spa/src/gate.test.ts, admin-spa/components/returnTo.ts, admin-spa/components/returnTo.test.ts, admin-spa/app/login.tsx, admin-spa/components/AdminGate.tsx, admin-spa/components/AdminGate.test.ts, admin-spa/e2e/serveTestApp.ts, admin-spa/e2e/login.spec.ts, admin-spa/e2e/ssr.spec.ts
   - Criteria:

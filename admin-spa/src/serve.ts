@@ -4,6 +4,7 @@ import {logger} from "@terreno/api";
 import {createRequestHandler, type RequestHandlerParams} from "expo-server/adapter/express";
 import express from "express";
 import {type AdminSpaAppConfig, resolveAppConfig} from "./appConfig";
+import {createAdminSpaGate} from "./gate";
 import {bakedBaseUrlOf, prepareRoutesManifest, readRoutesManifest} from "./routesManifest";
 import {
   getAdminSpaRequest,
@@ -29,9 +30,6 @@ const DEFAULT_SSR_API_PREFIXES = [
   "/configuration",
   "/rbac",
 ];
-
-/** Where Expo's client fetches route loader data: the site root, whatever the baseUrl. */
-const ROOT_LOADERS_PATH = "/_expo/loaders";
 
 export interface AdminSpaServeOptions {
   /** Path the SPA is mounted at. Default: "/console". Non-breaking with the AdminApp `/admin` API. */
@@ -143,7 +141,7 @@ export class AdminSpaServeApp implements TerrenoPlugin {
       return;
     }
 
-    publishAdminSpaServerContext({
+    const context = {
       appConfig,
       basePath,
       internalOrigin: this.opts.internalOrigin ?? `http://127.0.0.1:${process.env.PORT ?? 4000}`,
@@ -151,7 +149,8 @@ export class AdminSpaServeApp implements TerrenoPlugin {
         appConfig.adminApiBasePath ?? "/admin",
         ...DEFAULT_SSR_API_PREFIXES,
       ],
-    });
+    };
+    publishAdminSpaServerContext(context);
 
     // 1. Hashed client asset directories: long cache, immutable.
     const clientDir = path.join(distDir, "client");
@@ -198,17 +197,9 @@ export class AdminSpaServeApp implements TerrenoPlugin {
     );
     // Every server render runs in a request scope, so a render reads only its own request's
     // data. Middleware that set a richer scope earlier (the auth gate) keeps it.
-    const noStorePrivate: express.RequestHandler = (_req, res, next) => {
-      res.set("Cache-Control", NO_STORE_PRIVATE);
-      if (getAdminSpaRequest()) {
-        next();
-        return;
-      }
-      runInAdminSpaRequest({appConfig, basePath}, next);
-    };
     // A failed render or loader logs the route path and the error only: never the query string
     // or response data, which can hold PHI.
-    const renderError: express.ErrorRequestHandler = (error, req, res, _next) => {
+    const renderError = (error: unknown, req: express.Request, res: express.Response): void => {
       logger.error(`Admin SPA render failed for ${req.path}`, {
         error: error instanceof Error ? error.message : String(error),
         path: req.path,
@@ -219,14 +210,43 @@ export class AdminSpaServeApp implements TerrenoPlugin {
       }
       res.status(500).set("Cache-Control", NO_STORE_PRIVATE).type("text").send("Admin SPA error");
     };
-    app.use(basePath, noStorePrivate, handler, renderError);
-    // Expo 58's client fetches loader data from the site root, ignoring the baked baseUrl,
-    // so the root loader path reaches the same handler (D11 in the SSR plan).
-    const rootLoaders: express.RequestHandler = (req, res, next) => {
-      req.url = `${ROOT_LOADERS_PATH}${req.url}`;
-      return handler(req, res, next);
+    const mountPrefix = basePath === "/" ? "" : basePath;
+    // Runs Expo's handler in a request scope (the gate's, or a base one) and catches its errors
+    // here rather than in a root error middleware, which would also see the API's errors.
+    const renderPage: express.RequestHandler = (req, res, next) => {
+      res.set("Cache-Control", NO_STORE_PRIVATE);
+      // Expo matches routes without the mount path; root loader requests have none to strip.
+      if (mountPrefix && (req.path === mountPrefix || req.path.startsWith(`${mountPrefix}/`))) {
+        const rest = req.url.slice(mountPrefix.length);
+        req.url = rest.startsWith("/") ? rest : `/${rest}`;
+      }
+      const run = (): void => {
+        handler(req, res, (error?: unknown) => {
+          if (error) {
+            renderError(error, req, res);
+            return;
+          }
+          next();
+        });
+      };
+      if (getAdminSpaRequest()) {
+        run();
+        return;
+      }
+      runInAdminSpaRequest({appConfig, basePath}, run);
     };
-    app.use(ROOT_LOADERS_PATH, noStorePrivate, rootLoaders, renderError);
+    // The gate decides access before anything renders, for pages under basePath and for loader
+    // data, which Expo 58's client fetches from the site root regardless of the baked baseUrl
+    // (D11 in the SSR plan).
+    app.use(
+      createAdminSpaGate({
+        adminApiBasePath: appConfig.adminApiBasePath ?? "/admin",
+        appConfig,
+        basePath,
+        handler: renderPage,
+        internalOrigin: context.internalOrigin,
+      })
+    );
 
     logger.info(`Admin SPA mounted at ${basePath}/`);
   }

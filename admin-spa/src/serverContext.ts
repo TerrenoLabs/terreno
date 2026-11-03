@@ -29,6 +29,20 @@ export interface AdminSpaServerContext {
 export interface AdminSpaRequestScope {
   appConfig: AdminSpaAppConfig;
   basePath: string;
+  /** The Better Auth session snapshot, or null for an anonymous visitor. Set by the gate. */
+  session?: AdminSpaSessionSnapshot | null;
+  /** The visitor's `GET /auth/me` body, or null when anonymous. Set by the gate. */
+  profile?: unknown;
+  /** The `GET {adminApiBasePath}/config` body for an admin, else null. Set by the gate. */
+  adminConfig?: unknown;
+  /** Status of the admin config read (200 admin, 403 forbidden), or null when not read. */
+  adminConfigStatus?: number | null;
+}
+
+/** The Better Auth session as the client's session source reads it. */
+export interface AdminSpaSessionSnapshot {
+  userId: string;
+  user: unknown;
 }
 
 type GlobalWithContext = typeof globalThis & {

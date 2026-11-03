@@ -1,8 +1,9 @@
 import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Spinner} from "@terreno/ui";
-import {usePathname, useRouter} from "expo-router";
+import {useLocalSearchParams, usePathname, useRouter} from "expo-router";
 import React, {useEffect} from "react";
+import {sanitizeReturnTo} from "../src/returnTo";
 import {useAppConfig} from "./AppConfigGate";
 import {AdminGateConfigProvider} from "./adminGateConfig";
 import {isForbiddenAdminConfigError} from "./adminGateUtils";
@@ -27,7 +28,8 @@ const LoadingScreen: React.FC = () => (
  * syncs it on mount and whenever Better Auth's session signal fires), then:
  * - unauthenticated → redirect to /login
  * - authenticated but NOT an admin (admin API returns 403) → redirect to /forbidden
- * - authenticated admin sitting on /login or /forbidden → redirect to /
+ * - authenticated admin sitting on /login → redirect to a safe `returnTo`, or /
+ * - authenticated admin sitting on /forbidden → redirect to /
  *
  * Admin status is determined by the backend's own authorization on `${adminApiBase}/config`
  * (200 = admin, 403 = forbidden), since the better-auth session does not carry the
@@ -36,6 +38,7 @@ const LoadingScreen: React.FC = () => (
 export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
   const router = useRouter();
   const pathname = usePathname();
+  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
   const {appConfig} = useAppConfig();
   const {isAuthenticated, isLoading: isAuthLoading} = useSession();
 
@@ -76,10 +79,14 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
       }
       return;
     }
-    if (isAdmin && (pathname === "/login" || pathname === "/forbidden")) {
+    if (isAdmin && pathname === "/login") {
+      router.replace(sanitizeReturnTo(returnTo) ?? "/");
+      return;
+    }
+    if (isAdmin && pathname === "/forbidden") {
       router.replace("/");
     }
-  }, [isAuthLoading, isAuthenticated, isForbidden, isAdmin, status, pathname, router]);
+  }, [isAuthLoading, isAuthenticated, isForbidden, isAdmin, status, pathname, returnTo, router]);
 
   if (isAuthLoading) {
     // The server-rendered login form stays on screen while the session resolves.

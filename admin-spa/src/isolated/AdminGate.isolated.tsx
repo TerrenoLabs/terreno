@@ -1,5 +1,6 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 import {Text} from "@terreno/ui";
+import {waitFor} from "@testing-library/react-native";
 import {usePathname} from "expo-router";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
@@ -18,6 +19,17 @@ let SessionProvider: React.FC<{children: React.ReactNode; store: unknown}>;
 let createPendingStore: () => unknown;
 
 beforeAll(async () => {
+  // The admin probe resolves as a 200 (admin) once there is a session; the real hook would
+  // fetch `/admin/config`, and a relative URL has no origin in the test runtime.
+  const realAdminFrontend = await import("@terreno/admin-frontend");
+  mock.module("@terreno/admin-frontend", () => ({
+    ...realAdminFrontend,
+    useAdminRpcQuery: ({skip}: {skip?: boolean}) => ({
+      data: skip ? undefined : {models: []},
+      error: null,
+      isLoading: false,
+    }),
+  }));
   mock.module("expo-secure-store", () => ({
     deleteItemAsync: async (): Promise<void> => {},
     getItem: (): null => null,
@@ -82,5 +94,56 @@ describe("AdminGate while the session is loading", () => {
     const {queryByTestId} = renderGate("/forbidden");
     expect(queryByTestId("admin-spa-admin-gate-loading")).not.toBeNull();
     expect(queryByTestId("gate-child")).toBeNull();
+  });
+});
+
+describe("AdminGate for an admin on /login", () => {
+  // Fake session + admin config so the gate resolves to "admin" on first render.
+  const renderAdminOnLogin = async (
+    returnTo: string | string[] | undefined
+  ): Promise<{replace: ReturnType<typeof mock>}> => {
+    const replace = mock(() => {});
+    const expoRouter = (await import("expo-router")) as unknown as {
+      useLocalSearchParams: {mockReturnValue: (value: unknown) => void};
+      useRouter: {mockReturnValue: (value: unknown) => void};
+      usePathname: {mockReturnValue: (value: string) => void};
+    };
+    expoRouter.usePathname.mockReturnValue("/login");
+    expoRouter.useRouter.mockReturnValue({replace});
+    expoRouter.useLocalSearchParams.mockReturnValue({returnTo});
+    const auth = await import("@terreno/syncdb/auth");
+    const store = auth.createSessionStore({
+      pollIntervalMs: 0,
+      source: {
+        getSession: async () => ({user: {id: "ba1"}, userId: "ba1"}),
+        signOut: async (): Promise<void> => {},
+      },
+    } as never);
+    renderWithTheme(
+      <AppConfigGate>
+        <SessionProvider store={store}>
+          <AdminGate>
+            <Text testID="gate-child">child</Text>
+          </AdminGate>
+        </SessionProvider>
+      </AppConfigGate>
+    );
+    await waitFor(() => expect(replace).toHaveBeenCalled());
+    return {replace};
+  };
+
+  it("sends the admin to a valid returnTo", async () => {
+    const {replace} = await renderAdminOnLogin("/todos");
+    expect(replace).toHaveBeenCalledWith("/todos");
+  });
+
+  it("sends the admin to / when returnTo is unsafe", async () => {
+    const {replace} = await renderAdminOnLogin("//evil.example");
+    expect(replace).toHaveBeenCalledWith("/");
+  });
+
+  it("sends the admin to / when there is no returnTo", async () => {
+    const {replace} = await renderAdminOnLogin(undefined);
+    expect(replace).toHaveBeenCalledWith("/");
   });
 });

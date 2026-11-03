@@ -79,11 +79,37 @@ Rendered pages and loader data can hold PHI, so:
   the API query string, the cookie and response data. A loader that throws its own error owns
   what that message says.
 
-## Gates while rendering
+## Access is decided before rendering
 
-`AdminGate` still decides access on the client. While the session is loading it renders
-`/login` instead of a spinner, so the server-rendered login form stays on screen. Every other
-route shows the spinner until the session resolves.
+`createAdminSpaGate` runs in Express before any page or loader renders. It gates `GET`
+requests under `basePath` (except `_expo/static`, `assets` and `app-config.json`) and loader
+requests at the root `/_expo/loaders/*`. It decides on the normalized path (dot segments,
+including encoded ones, resolved) and hands Expo that same path, so a path such as
+`/console/assets/../Todo` cannot pass as an asset and then render as `/Todo`. A request under
+`_expo/static`, `assets` or `app-config.json` that is not a real file gets a 404: it never
+reaches the page renderer, which would otherwise render `/assets/Todo` as a model page.
+
+For a visitor with `req.user`, it reads three things over loopback, in parallel, with the
+visitor's cookie: `{authBasePath}/get-session`, `/auth/me` and `{adminApiBasePath}/config`.
+A 200 from the config means admin, a 403 means signed in but not an admin, and a 401 from any
+of them means anonymous. Anything else (a 5xx, a network error, no answer within 5 s) answers
+503 without rendering: the gate fails closed.
+
+| Visitor | Page | Loader data |
+| --- | --- | --- |
+| Anonymous | `/login` renders; any other page redirects to `/login?returnTo=<path>` | 401 JSON, except `login` and `forbidden` |
+| Not an admin | `/login` and `/forbidden` render; any other page redirects to `/forbidden` | 403 JSON, except `login` and `forbidden` |
+| Admin | `/login` redirects to `returnTo` (or `/`); `/forbidden` redirects to `/`; every other page renders | runs |
+
+`returnTo` is an in-app path. `sanitizeReturnTo` accepts it only when it starts with a single
+`/` and has no scheme and no backslash, so it cannot send anyone to another site. The gate and
+the login screen use the same function.
+
+An admin's render runs in a request scope that holds the session snapshot `{userId, user}`, the
+profile, and the admin config, so the shell can render from them. `AdminGate` keeps its client
+redirects as a fallback for a session that ends after the page has loaded. While the client
+session is still loading, it renders `/login` as is, so the server-rendered form stays on
+screen, and shows a spinner on other routes.
 
 ## Related
 

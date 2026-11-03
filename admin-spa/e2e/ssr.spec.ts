@@ -1,4 +1,5 @@
 import {expect, type Page, test} from "@playwright/test";
+import {E2E_MEMBER_EMAIL, E2E_MEMBER_PASSWORD} from "./credentials";
 
 // Brand name configured in e2e/serveTestApp.ts.
 const E2E_BRAND = "Terreno Admin (e2e)";
@@ -74,20 +75,33 @@ test.describe("admin SPA server rendering", () => {
     }
   });
 
-  test("anonymous visit to a protected route client-redirects to login, loads loader data, and hydrates cleanly", async ({
-    page,
-  }) => {
+  test("anonymous visit to a protected route gets a server 302 to login", async ({page}) => {
+    const response = await page.request.get("/console/forbidden", {maxRedirects: 0});
+    expect(response.status()).toBe(302);
+    expect(response.headers().location).toBe("/console/login?returnTo=%2Fforbidden");
+  });
+
+  test("client-side navigation to login loads loader data and hydrates cleanly", async ({page}) => {
     await recordHydrationErrors(page);
+
+    const hydrated = waitForHydration(page);
+    await page.goto("/console/login");
+    await hydrated;
+
+    await page.getByTestId("admin-spa-login-email").fill(E2E_MEMBER_EMAIL);
+    await page.getByTestId("admin-spa-login-password").fill(E2E_MEMBER_PASSWORD);
+    await page.getByTestId("admin-spa-login-submit").click();
+
+    await expect(page).toHaveURL(/\/console\/forbidden$/);
+    await expect(page.getByTestId("admin-spa-forbidden-screen")).toBeVisible();
 
     // Expo's client requests loader data from the site root, not from /console.
     const loaderResponse = page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/_expo/loaders/login"
     );
-    const hydrated = waitForHydration(page);
-    await page.goto("/console/forbidden");
-    await hydrated;
+    await page.getByTestId("admin-spa-forbidden-signout").click();
 
-    await page.waitForURL(/\/console\/login/);
+    await expect(page).toHaveURL(/\/console\/login/);
     expect((await loaderResponse).status()).toBe(200);
     await expect(page.getByText(E2E_BRAND)).toBeVisible();
     await expect(page.getByTestId("admin-spa-login-email")).toBeVisible();

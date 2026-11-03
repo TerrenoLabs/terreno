@@ -1,4 +1,5 @@
 import {afterAll, afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
+import http from "node:http";
 import path from "node:path";
 import {logger} from "@terreno/api";
 import express from "express";
@@ -43,6 +44,71 @@ const makeApp = (opts?: {
   app.use((_req, res) => res.status(404).send("not found"));
   return app;
 };
+
+interface AdminStub {
+  close: () => Promise<void>;
+  origin: string;
+}
+
+/**
+ * Loopback stand-in for the backend. It answers the gate's three reads as a signed-in admin
+ * (the user id comes from a `sid=<id>` cookie, default `ba1`) and hands every other path
+ * (the loader's own API reads) to `onOther`, so a test can make only the loader's path misbehave.
+ */
+const startAdminStub = async (
+  onOther: (req: http.IncomingMessage, res: http.ServerResponse) => void
+): Promise<AdminStub> => {
+  const server = http.createServer((req, res) => {
+    const pathname = new URL(req.url ?? "/", "http://stub").pathname;
+    const sid = /(?:^|;\s*)sid=([^;]+)/.exec(req.headers.cookie ?? "")?.[1] ?? "ba1";
+    const json = (body: unknown): void => {
+      res.writeHead(200, {"content-type": "application/json"});
+      res.end(JSON.stringify(body));
+    };
+    if (pathname === "/api/auth/get-session") {
+      json({session: {id: "s1", userId: sid}, user: {email: "a@b.c", id: sid}});
+      return;
+    }
+    if (pathname === "/auth/me") {
+      json({_id: "u1", admin: true});
+      return;
+    }
+    if (pathname === "/admin/config") {
+      json({models: []});
+      return;
+    }
+    onOther(req, res);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const {port} = server.address() as {port: number};
+  return {
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections();
+      }),
+    origin: `http://127.0.0.1:${port}`,
+  };
+};
+
+const sentinelRows = (_req: http.IncomingMessage, res: http.ServerResponse): void => {
+  res.writeHead(200, {"content-type": "application/json"});
+  res.end(JSON.stringify({rows: [{email: "PHI-SENTINEL"}]}));
+};
+
+/** An app whose requests are signed-in admins (stands in for the session middleware). */
+const makeAdminApp = (opts: {distDir: string; internalOrigin: string}): express.Application => {
+  const app = express();
+  app.use((req, _res, next) => {
+    (req as unknown as {user: unknown}).user = {_id: "u1", admin: true};
+    next();
+  });
+  new AdminSpaServeApp({distDir: opts.distDir, internalOrigin: opts.internalOrigin}).register(app);
+  app.use((_req, res) => res.status(404).send("not found"));
+  return app;
+};
+
+const ADMIN_COOKIE = "sid=ba1";
 
 describe("AdminSpaServeApp server rendering", () => {
   it("renders /console/login on the server with the default brand name", async () => {
@@ -100,8 +166,18 @@ describe("AdminSpaServeApp server rendering", () => {
   });
 
   it("does not claim a root loader path for a route without a loader", async () => {
-    const res = await request(makeApp()).get("/_expo/loaders/nonexistent");
-    expect(res.status).toBe(404);
+    // Anonymous visitors are stopped by the gate; an admin proves the plugin itself unclaims it.
+    const anonymous = await request(makeApp()).get("/_expo/loaders/nonexistent");
+    expect(anonymous.status).toBe(401);
+    const stub = await startAdminStub(sentinelRows);
+    try {
+      const res = await request(makeAdminApp({distDir, internalOrigin: stub.origin}))
+        .get("/_expo/loaders/nonexistent")
+        .set("Cookie", ADMIN_COOKIE);
+      expect(res.status).toBe(404);
+    } finally {
+      await stub.close();
+    }
   });
 
   it("does not claim other root paths", async () => {
@@ -371,13 +447,10 @@ const SERVER_MODULES = {
 
 describe("AdminSpaServeApp request scope and escaping through the Expo handler", () => {
   let ssrDir: string;
-  let internal: ReturnType<typeof Bun.serve>;
+  let internal: AdminStub;
 
-  beforeAll(() => {
-    internal = Bun.serve({
-      fetch: () => Response.json({rows: [{email: SENTINEL}]}),
-      port: 0,
-    });
+  beforeAll(async () => {
+    internal = await startAdminStub(sentinelRows);
     ssrDir = writeStubSsrBuild({
       extraRoutes: [
         {
@@ -397,32 +470,13 @@ describe("AdminSpaServeApp request scope and escaping through the Expo handler",
     });
   });
 
-  afterAll(() => {
-    internal.stop(true);
+  afterAll(async () => {
+    await internal.close();
     removeStubSsrBuild(ssrDir);
   });
 
-  const makeScopedApp = async (): Promise<express.Application> => {
-    // Loaded lazily so the pre-existing cases in this file still run while the export is missing.
-    const {runInAdminSpaRequest} = await import("./serverContext");
-    const app = express();
-    // Stands in for the T3 gate: sets the per-request scope before the Expo handler runs.
-    app.use((req, _res, next) => {
-      runInAdminSpaRequest(
-        {
-          appConfig: DEFAULT_APP_CONFIG,
-          basePath: "/console",
-          session: {userId: String(req.headers["x-user"] ?? "none")},
-        } as unknown as Parameters<typeof runInAdminSpaRequest>[0],
-        next
-      );
-    });
-    new AdminSpaServeApp({
-      distDir: ssrDir,
-      internalOrigin: `http://127.0.0.1:${internal.port}`,
-    }).register(app);
-    return app;
-  };
+  const makeScopedApp = async (): Promise<express.Application> =>
+    makeAdminApp({distDir: ssrDir, internalOrigin: internal.origin});
 
   it("escapes a loader row containing </script><script>x() in the server-rendered HTML", async () => {
     const res = await request(await makeScopedApp()).get("/console/phi");
@@ -431,11 +485,12 @@ describe("AdminSpaServeApp request scope and escaping through the Expo handler",
     expect(res.text).not.toContain("</script><script>x()");
   });
 
-  it("exposes a value set before the handler inside render.js, and not across requests", async () => {
+  it("exposes the signed-in admin of the request inside render.js, and not across requests", async () => {
     const app = await makeScopedApp();
+    // The gate builds each request's scope from get-session; the stub keys the user on the cookie.
     const [a, b] = await Promise.all([
-      request(app).get("/console/phi").set("x-user", "user-A"),
-      request(app).get("/console/phi").set("x-user", "user-B"),
+      request(app).get("/console/phi").set("Cookie", "sid=user-A"),
+      request(app).get("/console/phi").set("Cookie", "sid=user-B"),
     ]);
     expect(a.text).toContain("user-A");
     expect(a.text).not.toContain("user-B");
@@ -450,7 +505,7 @@ describe("AdminSpaServeApp request scope and escaping through the Expo handler",
     try {
       const res = await request(await makeScopedApp())
         .get("/console/boom")
-        .set("Cookie", "sid=1");
+        .set("Cookie", ADMIN_COOKIE);
       expect(res.text).not.toContain(SENTINEL);
       const dump = (calls: unknown[][]): string =>
         JSON.stringify(calls, (_key, value) =>
@@ -477,7 +532,7 @@ describe("AdminSpaServeApp request scope and escaping through the Expo handler",
     try {
       await request(await makeScopedApp())
         .get(`/console/boom?q=${SENTINEL}`)
-        .set("Cookie", "sid=1");
+        .set("Cookie", ADMIN_COOKIE);
       const dump = (calls: unknown[][]): string =>
         JSON.stringify(calls, (_key, value) =>
           value instanceof Error ? `${value.message}\n${value.stack}` : value
@@ -497,16 +552,13 @@ describe("AdminSpaServeApp request scope and escaping through the Expo handler",
 
 describe("AdminSpaServeApp when the internal origin returns a non-JSON body", () => {
   let ssrDir: string;
-  let internal: ReturnType<typeof Bun.serve>;
+  let internal: AdminStub;
 
-  beforeAll(() => {
-    internal = Bun.serve({
-      fetch: () =>
-        new Response(`PHISENTINEL not json ${SENTINEL}`, {
-          headers: {"content-type": "text/plain"},
-          status: 200,
-        }),
-      port: 0,
+  beforeAll(async () => {
+    // Gate endpoints answer normally; only the loader's /admin/users read returns non-JSON.
+    internal = await startAdminStub((_req, res) => {
+      res.writeHead(200, {"content-type": "text/plain"});
+      res.end(`PHISENTINEL not json ${SENTINEL}`);
     });
     ssrDir = writeStubSsrBuild({
       extraRoutes: [
@@ -522,8 +574,8 @@ describe("AdminSpaServeApp when the internal origin returns a non-JSON body", ()
     });
   });
 
-  afterAll(() => {
-    internal.stop(true);
+  afterAll(async () => {
+    await internal.close();
     removeStubSsrBuild(ssrDir);
   });
 
@@ -532,12 +584,8 @@ describe("AdminSpaServeApp when the internal origin returns a non-JSON body", ()
     const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
     try {
-      const app = express();
-      new AdminSpaServeApp({
-        distDir: ssrDir,
-        internalOrigin: `http://127.0.0.1:${internal.port}`,
-      }).register(app);
-      const res = await request(app).get("/console/badjson").set("Cookie", "sid=1");
+      const app = makeAdminApp({distDir: ssrDir, internalOrigin: internal.origin});
+      const res = await request(app).get("/console/badjson").set("Cookie", ADMIN_COOKIE);
       expect(res.text).not.toContain(SENTINEL);
       expect(res.text).not.toContain("PHISENTINEL");
       expect(errorSpy).toHaveBeenCalled();
@@ -593,9 +641,8 @@ describe("AdminSpaServeApp keeps a loader's API query string out of logs", () =>
     const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
     try {
-      const app = express();
-      new AdminSpaServeApp({distDir: ssrDir, internalOrigin}).register(app);
-      const res = await request(app).get("/console/phiquery").set("Cookie", "sid=1");
+      const app = makeAdminApp({distDir: ssrDir, internalOrigin});
+      const res = await request(app).get("/console/phiquery").set("Cookie", ADMIN_COOKIE);
       expect(res.text).not.toContain(SENTINEL);
       expect(errorSpy).toHaveBeenCalled();
       expect(dump(errorSpy.mock.calls)).toContain("/phiquery");
@@ -609,22 +656,27 @@ describe("AdminSpaServeApp keeps a loader's API query string out of logs", () =>
     }
   };
 
-  it("logs the route path, never the API query string, when the internal origin is down", async () => {
-    const dead = Bun.serve({fetch: () => new Response("unused"), port: 0});
-    const deadOrigin = `http://127.0.0.1:${dead.port}`;
-    dead.stop(true);
-    await expectNoQueryInLogs(deadOrigin);
+  it("logs the route path, never the API query string, when the loader's API read fails to connect", async () => {
+    // The gate and the loader share one origin, so only the loader's path drops the connection.
+    const stub = await startAdminStub((req) => {
+      req.socket.destroy();
+    });
+    try {
+      await expectNoQueryInLogs(stub.origin);
+    } finally {
+      await stub.close();
+    }
   });
 
   it("logs the route path, never the API query string, when the internal origin returns non-JSON", async () => {
-    const plain = Bun.serve({
-      fetch: () => new Response("not json", {headers: {"content-type": "text/plain"}, status: 200}),
-      port: 0,
+    const stub = await startAdminStub((_req, res) => {
+      res.writeHead(200, {"content-type": "text/plain"});
+      res.end("not json");
     });
     try {
-      await expectNoQueryInLogs(`http://127.0.0.1:${plain.port}`);
+      await expectNoQueryInLogs(stub.origin);
     } finally {
-      plain.stop(true);
+      await stub.close();
     }
   });
 });

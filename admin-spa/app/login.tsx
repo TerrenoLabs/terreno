@@ -1,10 +1,11 @@
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Heading, SocialLoginButton, Text, TextField} from "@terreno/ui";
-import {useLoaderData, useRouter} from "expo-router";
+import {useLoaderData, useLocalSearchParams, useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
 import {useAppConfig} from "../components/AppConfigGate";
 import {useAuthClient} from "../components/StoreProvider";
 import type {AdminSpaAppConfig} from "../src/appConfig";
+import {sanitizeReturnTo} from "../src/returnTo";
 import {getAdminSpaServerContext} from "../src/serverContext";
 
 type SocialProvider = "google" | "github" | "apple";
@@ -23,6 +24,7 @@ export const loader = (): LoginLoaderData => ({
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
+  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
   const {appConfig} = useAppConfig();
   const loaderData = useLoaderData<typeof loader>();
   const brandName = loaderData?.appConfig?.brandName ?? appConfig.brandName;
@@ -34,11 +36,12 @@ const LoginScreen: React.FC = () => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Resolve the new session now rather than waiting for Better Auth's session signal.
+  // Resolve the new session now rather than waiting for Better Auth's session signal, then
+  // go where the visitor was headed when the gate sent them here.
   const onSuccess = useCallback(async (): Promise<void> => {
     await refresh();
-    router.replace("/");
-  }, [refresh, router]);
+    router.replace(sanitizeReturnTo(returnTo) ?? "/");
+  }, [refresh, returnTo, router]);
 
   const handleEmailLogin = useCallback(async (): Promise<void> => {
     setError(undefined);

@@ -675,6 +675,25 @@ describe("createAdminSpaGate edge cases that guard surviving mutations", () => {
     expect(res.body.scope.adminConfigStatus).toBe(403);
   });
 
+  it("sends a forbidden user on /login to a safe signed-in-only returnTo", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app, handlerCalls} = await makeGateApp();
+    const returnTo = encodeURIComponent("/oauth/consent?client_id=abc");
+    const res = await asUser(request(app).get(`/console/login?returnTo=${returnTo}`).redirects(0));
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/console/oauth/consent?client_id=abc");
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("renders /login for a forbidden user when returnTo is unsafe", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app} = await makeGateApp();
+    const res = await asUser(
+      request(app).get("/console/login?returnTo=%2F%2Fevil.example").redirects(0)
+    );
+    expect(res.status).toBe(200);
+  });
+
   it("answers 503 when /admin/config returns 200 with a non-JSON body", async () => {
     const {createAdminSpaGate} = await import("./gate");
     const textOrigin = Bun.serve({

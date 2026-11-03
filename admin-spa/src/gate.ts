@@ -196,7 +196,8 @@ const loadShellPayload = async (
  * - Anonymous: pages other than `/login` redirect to `{basePath}/login?returnTo=<path>`;
  *   loaders answer 401 JSON (the `login` and `forbidden` loaders run).
  * - Signed in but not an admin (`/admin/config` 403): signed-in-only routes (`/oauth/consent`)
- *   render; other pages redirect to `{basePath}/forbidden`;
+ *   render, `/login` with a safe `returnTo` redirects there; other pages redirect to
+ *   `{basePath}/forbidden`;
  *   loaders answer 403 JSON.
  * - Admin: `/login` redirects to a safe `returnTo` (or `{basePath}/`); everything else renders
  *   inside a request scope holding the session, profile and admin config, so the page renders
@@ -276,6 +277,16 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
         return;
       }
       if (payload.access === "forbidden") {
+        // Like the client gate: a signed-in user on /login goes to a safe returnTo, which
+        // renders when signed-in-only (the MCP consent flow) and otherwise redirects again.
+        const forbiddenTarget =
+          route === "/login"
+            ? sanitizeReturnTo(req.query.returnTo as string | string[] | undefined)
+            : null;
+        if (forbiddenTarget) {
+          res.redirect(302, `${basePath}${forbiddenTarget}`);
+          return;
+        }
         if (isOpenToVisitor) {
           render(req, res, next, payload);
           return;

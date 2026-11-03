@@ -190,7 +190,7 @@ visitor without `req.user` is anonymous and costs no loopback call.
 | Visitor | Page | Loader data |
 | --- | --- | --- |
 | Anonymous (no session, or a 401 from any read) | `/login` renders; any other page answers 302 to `${basePath}/login?returnTo=<path>` | 401 JSON, except `login` and `forbidden` |
-| Forbidden (`/admin/config` answers 403) | `/login`, `/forbidden` and the signed-in-only `/oauth/consent` render; any other page answers 302 to `${basePath}/forbidden` | 403 JSON, except `login`, `forbidden` and `oauth/consent` |
+| Forbidden (`/admin/config` answers 403) | `/login` answers 302 to a safe `returnTo` when there is one; `/login`, `/forbidden` and the signed-in-only `/oauth/consent` render; any other page answers 302 to `${basePath}/forbidden` | 403 JSON, except `login`, `forbidden` and `oauth/consent` |
 | Admin (`/admin/config` answers 200) | `/login` answers 302 to a safe `returnTo` (or `${basePath}/`); `/forbidden` answers 302 to `${basePath}/`; every other page renders | renders |
 | Any, when a read answers another status, fails, or takes over 5 s | 503 `Admin SPA unavailable`, nothing rendered (fails closed) | 503 |
 

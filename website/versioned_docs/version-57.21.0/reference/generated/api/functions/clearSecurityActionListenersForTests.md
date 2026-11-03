@@ -1,0 +1,5 @@
+> **clearSecurityActionListenersForTests**(): `void`
+
+## Returns
+
+`void`

@@ -181,6 +181,15 @@ bun run test:e2e
 bun run test:integration    # needs Mongo + example-backend; job `admin-spa-integration`
 ```
 
+Job `admin-spa-image-smoke` builds `example-backend/Dockerfile` and checks the image's
+server-rendered admin SPA. Locally, with Docker, or against any running backend:
+
+```bash
+docker build --file example-backend/Dockerfile --tag terreno-example-backend:admin-spa-smoke .
+# run it with ADMIN_SPA_ENABLED=true and a Mongo replica set (see the job), then:
+ADMIN_SPA_SMOKE_BRAND="Terreno Example" bash scripts/admin-spa-image-smoke.sh http://localhost:4000
+```
+
 ## Maestro web e2e
 
 Install CLI if missing: `curl -fsSL "https://get.maestro.mobile.dev" | bash`, then put

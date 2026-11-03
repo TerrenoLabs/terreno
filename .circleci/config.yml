@@ -134,6 +134,8 @@ workflows:
             scripts/check-coverage\.test.ts run-new-file-coverage true
             scripts/upload-codecov\.sh run-new-file-coverage true
             scripts/upload-codecov\.test.ts run-new-file-coverage true
+            scripts/admin-spa-image-smoke\.sh run-new-file-coverage true
+            scripts/admin-spa-image-smoke\.test\.ts run-new-file-coverage true
             codecov\.yml run-new-file-coverage true
             scripts/check-package-coverage-ci\.ts run-new-file-coverage true
             scripts/check-package-coverage-ci\.test.ts run-new-file-coverage true
@@ -158,6 +160,9 @@ workflows:
             admin-spa/.* run-example-backend-script true
             admin-spa/.* run-admin-spa true
             admin-spa/.* run-admin-spa-integration true
+            admin-spa/.* run-admin-spa-image-smoke true
+            example-backend/Dockerfile run-admin-spa-image-smoke true
+            scripts/admin-spa-image-smoke\.sh run-admin-spa-image-smoke true
             admin-frontend/.* run-admin-spa true
             api-health/.* run-example-backend true
             api-health/.* run-example-backend-script true

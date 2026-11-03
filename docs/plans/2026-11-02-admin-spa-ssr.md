@@ -423,7 +423,7 @@ None — no new or changed screens.
   - Test skills: terreno:update-docs
   - Docs: this task is docs.
 
-- [ ] **T13** — CI job: prove SSR inside the built example-backend image
+- [x] **T13** — CI job: prove SSR inside the built example-backend image
   - Depends on: T1, T2
   - Files: .circleci/continue-config.yml (new `admin-spa-image-smoke` job beside `admin-spa-integration` at :1891), .circleci/config.yml (path filters: `example-backend/Dockerfile`, `scripts/admin-spa-image-smoke.sh`, `admin-spa/.*` → the job's parameter), scripts/admin-spa-image-smoke.sh
   - Criteria:

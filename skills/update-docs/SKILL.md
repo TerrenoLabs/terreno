@@ -34,6 +34,18 @@ skip. Missing docs for a user-visible or architectural change is a failed slice.
    | Why the system is shaped this way | `docs/explanation/` |
    | UI component | generated `docs/reference/components/` plus a demo story |
 
+   The one exception to this layout is the
+   [`testing plan`](references/testing-plan.md) spots. The e2e guide stays at
+   `docs/testing/e2e.md` (with any pages it links) and the manual
+   regression suites stay in `docs/regression/<area>.md`, or wherever the repository's
+   `## Testing conventions` table points. Never move them into a Diátaxis directory.
+
+   The [`user guide`](references/user-guide.md) is the other exception. It is
+   written for the app's end users, not developers: one page per feature under
+   `docs/user-guide/<area>/<feature>.md`, or wherever the repository's
+   `## User guide conventions` table points. When a change alters what a user sees or
+   does, update its guide page with the Diátaxis pages, in the user-guide page format.
+
 3. **Write the page**
    - Update the existing section in place.
    - Lead with the next action or canonical fact.

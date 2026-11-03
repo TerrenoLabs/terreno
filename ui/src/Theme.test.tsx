@@ -352,6 +352,55 @@ describe("Theme", () => {
       expect(theme?.border?.default).toBeDefined();
     });
 
+    it("maps field tokens to the colors fields used before field theming", () => {
+      const captureTheme = (colorScheme: ThemeColorScheme): ThemeValue | undefined => {
+        let theme: ThemeValue | undefined;
+        const Capture = () => {
+          theme = useTheme().theme;
+          return null;
+        };
+        render(
+          <ThemeProvider colorScheme={colorScheme}>
+            <Capture />
+          </ThemeProvider>
+        );
+        return theme;
+      };
+
+      for (const colorScheme of ["light", "dark"] as const) {
+        const theme = captureTheme(colorScheme);
+        assert.deepEqual(theme?.field, {
+          background: theme?.surface.base,
+          backgroundDisabled: theme?.surface.neutralLight,
+          border: theme?.border.dark,
+          borderDisabled: theme?.border.activeNeutral,
+          borderError: theme?.border.error,
+          borderFocus: theme?.border.focus,
+        });
+      }
+    });
+
+    it("overrides field tokens without changing surface or border tokens", () => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = () => {
+        captured = useTheme();
+        return null;
+      };
+      render(
+        <ThemeProvider>
+          <Capture />
+        </ThemeProvider>
+      );
+      act(() => {
+        captured?.setTheme({field: {background: "primary000", border: "primary500"}});
+      });
+      assert.equal(captured?.theme.field.background, defaultThemePrimitives.primary000);
+      assert.equal(captured?.theme.field.border, defaultThemePrimitives.primary500);
+      assert.equal(captured?.theme.field.borderFocus, defaultThemePrimitives.primary200);
+      assert.equal(captured?.theme.surface.base, defaultThemePrimitives.neutral000);
+      assert.equal(captured?.theme.border.dark, defaultThemePrimitives.neutral500);
+    });
+
     it("provides spacing values", () => {
       let theme: ThemeValue | undefined;
       const Capture = () => {

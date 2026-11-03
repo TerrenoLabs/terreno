@@ -112,6 +112,33 @@ Figma AI surface/border roles and the dark status ramps. Custom overrides set
 through `useTheme()` are layered over the active mode; `resetTheme()` removes
 those overrides without changing the provider's selected mode.
 
+### Field theme
+
+The `field` section colors the input box of `TextField` (and the fields built on it, such as
+`TextArea`, `EmailField`, `NumberField`, and `PasswordField`), `SelectField`, `DateTimeField`,
+`HeightField`, and `OtpField`. Each token maps to a primitive key:
+
+| Token | Used for | Light | Dark |
+|---|---|---|---|
+| `background` | Enabled input background | `neutral000` | `neutral800` |
+| `backgroundDisabled` | Disabled input background | `neutral300` | `neutral600` |
+| `border` | Border at rest | `neutral500` | `neutral300` |
+| `borderFocus` | Border while focused | `primary200` | `primary200` |
+| `borderError` | Border when the field has an error | `error100` | `error050` |
+| `borderDisabled` | Border when disabled | `neutral700` | `neutral100` |
+
+```tsx
+const {setTheme} = useTheme();
+setTheme({field: {background: "neutral050", border: "neutral300", borderFocus: "primary500"}});
+```
+
+The defaults equal the `surface` and `border` tokens fields used before, so fields look the
+same unless you set `field`. Fields no longer follow `surface.base`, `surface.neutralLight`,
+`border.dark`, `border.focus`, `border.error`, or `border.activeNeutral`; restyle them through
+`field` instead. `DateTimeField` keeps `surface.disabled` for its disabled time picker.
+`MarkdownEditorField` and the native address autocomplete keep their own `border.default`
+styling.
+
 ### DashboardGrid and DashboardGridItem
 
 Eager layout-only wrapping grid. Default columns `{sm: 1, md: 2, lg: 3}`. Children stay caller-supplied `Card`s. Cell width is `(rowWidth - gap × (columns - 1)) / columns` so flex `gap` does not wrap extra columns.

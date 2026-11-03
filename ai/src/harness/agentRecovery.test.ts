@@ -44,38 +44,41 @@ type Reply = {
 };
 
 /** LanguageModelV2 mock answering each request with the next reply; `hang` blocks it first. */
-const scriptedModel = (replies: Reply[]) =>
-  withGenerateStreaming({
-    doGenerate: mock(async () => {
-      const reply = replies.shift();
-      if (!reply) {
-        throw new Error("script exhausted");
-      }
-      reply.started?.release();
-      if (reply.hang) {
-        await reply.hang.promise;
-      }
-      return {
-        content: reply.toolCall
-          ? [
-              {
-                input: "{}",
-                toolCallId: reply.toolCall.id,
-                toolName: reply.toolCall.name,
-                type: "tool-call" as const,
-              },
-            ]
-          : [{text: reply.text ?? "", type: "text" as const}],
-        finishReason: reply.toolCall ? ("tool-calls" as const) : ("stop" as const),
-        usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
-        warnings: [],
-      };
-    }),
+const scriptedModel = (replies: Reply[]) => {
+  // Declared before the call so `withGenerateStreaming` infers the mock's own type.
+  const doGenerate = mock(async () => {
+    const reply = replies.shift();
+    if (!reply) {
+      throw new Error("script exhausted");
+    }
+    reply.started?.release();
+    if (reply.hang) {
+      await reply.hang.promise;
+    }
+    return {
+      content: reply.toolCall
+        ? [
+            {
+              input: "{}",
+              toolCallId: reply.toolCall.id,
+              toolName: reply.toolCall.name,
+              type: "tool-call" as const,
+            },
+          ]
+        : [{text: reply.text ?? "", type: "text" as const}],
+      finishReason: reply.toolCall ? ("tool-calls" as const) : ("stop" as const),
+      usage: {inputTokens: 1, outputTokens: 1, totalTokens: 2},
+      warnings: [],
+    };
+  });
+  return withGenerateStreaming({
+    doGenerate,
     modelId: "mock-model",
     provider: "mock",
     specificationVersion: "v2" as const,
     supportedUrls: {},
   });
+};
 
 interface ProcessHandle {
   die: () => void;
@@ -169,7 +172,7 @@ describe("Agent turns across a crash", () => {
   beforeAll(async () => {
     // The shared preload's beforeEach imports this lazily under a 5 s hook timeout; a
     // cold first import can exceed it, so load it here first.
-    await import("../langfuseClient");
+    await import("../langfuseClient.js");
     createLocalObservabilityPlugin();
     SpanModel = registerObsSpan();
     TraceModel = registerObsTrace();

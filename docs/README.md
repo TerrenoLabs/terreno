@@ -57,6 +57,18 @@ Canonical copy, language rules, and the Django/Rails comparison:
 
 **Migrating from RTK?** See [How to migrate from @terreno/rtk to @terreno/syncdb](how-to/migrate-rtk-to-syncdb.md).
 
+## Testing
+
+- [E2E testing guide](testing/e2e.md) — the test tiers, smoke conventions, Playwright and
+  Maestro specs, and one page per package on how it is e2e-tested
+- [Regression suites](regression/README.md) — the manual cases a person walks before a release,
+  one file per area
+
+## User guide
+
+- [User guide](user-guide/README.md) — one page per example-app feature, in end-user words,
+  for chat agents answering "how do I…" questions
+
 ## Quick links
 
 - [Getting started](tutorials/getting-started.md)

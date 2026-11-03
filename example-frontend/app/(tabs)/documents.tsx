@@ -9,7 +9,7 @@ import {useSelector} from "react-redux";
 
 import {DocumentsPdfSection} from "@/components/DocumentsPdfSection";
 import {fileUploadsEnabledFromFlags} from "@/lib/fileUploads";
-import {terrenoApi} from "@/store/sdk";
+import {adminApi, consentHistoryApi, flagsApi} from "@/store/sdk";
 
 // Section order drives both the segmented control labels and the `section` query param.
 const SECTIONS = [
@@ -32,7 +32,7 @@ const DocumentsScreen: React.FC = () => {
   const selectedIndex = sectionIndexFor(section);
   const selectedKey: SectionKey = SECTIONS[selectedIndex].key;
   const userId = useSelector(selectBetterAuthUserId);
-  const {flags, isLoading} = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  const {flags, isLoading} = useFeatureFlags(flagsApi, {skip: !userId, userId});
   const allowUpload = fileUploadsEnabledFromFlags({flags, isLoading});
 
   const handleSectionChange = useCallback((index: number): void => {
@@ -66,14 +66,14 @@ const DocumentsScreen: React.FC = () => {
         {selectedKey === "files" && (
           <DocumentStorageBrowser
             allowUpload={allowUpload}
-            api={terrenoApi}
+            api={adminApi}
             backButton={false}
             basePath="/documents"
             onSettingsPress={handleSettingsPress}
             title="Files"
           />
         )}
-        {selectedKey === "consents" && <ConsentHistory api={terrenoApi} />}
+        {selectedKey === "consents" && <ConsentHistory api={consentHistoryApi} />}
         {selectedKey === "pdf" && <DocumentsPdfSection />}
       </Box>
     </Box>

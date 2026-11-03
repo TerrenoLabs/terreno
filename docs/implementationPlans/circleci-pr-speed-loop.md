@@ -4,7 +4,7 @@
 **Owner:** Josh
 **Goal:** cut CircleCI wall-clock time for an **average PR** by **40% (≤ 5.7 min)**
 or to **under 4 min**, whichever comes first, without weakening any gate.
-**Driver:** run as a long-lived loop. `/terreno-scan:loop` with this document as
+**Driver:** run as a long-lived loop. `/terreno-loop:run` with this document as
 the charter fits. Each iteration ships one PR-sized change through Pick → Roast →
 Brew → Taste.
 

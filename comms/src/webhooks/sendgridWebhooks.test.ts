@@ -67,7 +67,7 @@ const buildSendGridCommsApp = ({
 } = {}): {
   app: Application;
   comms: CommsApp;
-  keyPair: crypto.KeyPairKeyObjectResult;
+  keyPair: {privateKey: crypto.KeyObject; publicKey: crypto.KeyObject};
 } => {
   const keyPair = crypto.generateKeyPairSync("ec", {namedCurve: "prime256v1"});
   const publicKey = keyPair.publicKey.export({format: "pem", type: "spki"}).toString();

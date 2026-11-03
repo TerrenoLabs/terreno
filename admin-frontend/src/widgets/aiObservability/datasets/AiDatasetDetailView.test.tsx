@@ -43,6 +43,8 @@ const items: DatasetItemRecord[] = [
   },
 ];
 
+type OnAddItem = React.ComponentProps<typeof AiDatasetDetailView>["onAddItem"];
+
 describe("AiDatasetDetailView items table", () => {
   it("opens complete item details from a row while keeping wide content readable", async () => {
     const baseItem = items[0];
@@ -127,7 +129,7 @@ describe("AiDatasetDetailView tabs", () => {
   it("shows needs review count badge and wires actions", async () => {
     const onOpenExperiment = mock(() => undefined);
     const onOpenTrace = mock(() => undefined);
-    const onAddItem = mock(async () => undefined);
+    const onAddItem = mock<OnAddItem>(async () => undefined);
     const view = renderWithTheme(
       <AiDatasetDetailView
         dataset={dataset}
@@ -177,7 +179,7 @@ describe("AiDatasetDetailView tabs", () => {
   });
 
   it("surfaces add-item errors and dismisses the modal on success", async () => {
-    const onAddItem = mock(async () => "Invalid JSON in input.");
+    const onAddItem = mock<OnAddItem>(async () => "Invalid JSON in input.");
     const view = renderWithTheme(
       <AiDatasetDetailView
         dataset={dataset}

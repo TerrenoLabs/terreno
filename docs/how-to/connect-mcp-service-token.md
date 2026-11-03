@@ -110,3 +110,5 @@ The token acts as the owning user on **MCP only**. It cannot mint or list tokens
 Revoked and expired keys fail `tools/call` immediately. Disabled user accounts are refused the same way as over HTTP.
 
 A password reset, Better Auth password change, or "sign out everywhere" (`revoke-sessions` / `revoke-other-sessions`) bumps the user's `tokenEpoch` and ends every key minted before it. The keys show as revoked in the list; mint a new one for each client you still use.
+
+To put `/mcp` on the public internet behind a Cloudflare Tunnel, see [Expose an MCP server safely](expose-mcp-server-safely.md).

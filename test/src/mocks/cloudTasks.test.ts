@@ -15,8 +15,12 @@ interface TasksModule {
   protos: {google: {cloud: {tasks: {v2: {HttpMethod: {GET: number; POST: number}}}}}};
 }
 
+// Not a dependency of this package: the specifier is a variable so tsc does not resolve it,
+// and the registered mock serves the import.
+const TASKS_MODULE: string = "@google-cloud/tasks";
+
 const loadTasksModule = async (): Promise<TasksModule> =>
-  (await import("@google-cloud/tasks")) as unknown as TasksModule;
+  (await import(TASKS_MODULE)) as TasksModule;
 
 const base64Json = (value: unknown): string =>
   Buffer.from(JSON.stringify(value)).toString("base64");

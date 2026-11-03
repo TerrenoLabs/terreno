@@ -31,7 +31,7 @@ import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {logout, useAppDispatch} from "@/store/index";
 import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {
-  terrenoApi,
+  flagsApi,
   useDeleteCommsPushTokensByIdMutation,
   useGetMeQuery,
   usePatchMeMutation,
@@ -62,7 +62,7 @@ const ProfileScreen: React.FC = () => {
     flags,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
-  } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  } = useFeatureFlags(flagsApi, {skip: !userId, userId});
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
@@ -446,7 +446,7 @@ const ProfileScreen: React.FC = () => {
               {String(darkModeFlagDetails.reason ?? "")})
             </Text>
             {isFeatureFlagsLoading && <Text color="secondaryLight">Loading feature flags...</Text>}
-            {!isFeatureFlagsLoading && featureFlagsError && (
+            {!isFeatureFlagsLoading && Boolean(featureFlagsError) && (
               <Text color="error">Failed to load feature flags</Text>
             )}
             {!isFeatureFlagsLoading && !featureFlagsError && featureFlagEntries.length === 0 && (

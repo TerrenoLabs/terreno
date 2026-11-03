@@ -1,7 +1,7 @@
 import {AnnouncementOverview} from "@terreno/admin-frontend";
 import {useRouter} from "expo-router";
 import React, {useCallback} from "react";
-import {terrenoApi} from "@/store/sdk";
+import {adminApi} from "@/store/sdk";
 
 const ADMIN_BASE_URL = "/admin";
 
@@ -33,7 +33,7 @@ const AnnouncementsScreen: React.FC = () => {
 
   return (
     <AnnouncementOverview
-      api={terrenoApi}
+      api={adminApi}
       baseUrl={ADMIN_BASE_URL}
       onCreate={handleCreate}
       onEdit={handleEdit}

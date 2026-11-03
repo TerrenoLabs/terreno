@@ -51,7 +51,8 @@
     "serve": "docusaurus serve",
     "start": "bun run generate && docusaurus start --port 3001",
     "test:agent": "AGENT=1 bun test --only-failures scripts/",
-    "test:ci": "bun test scripts/"
+    "test:ci": "bun test scripts/",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "version": "0.0.0"
 }

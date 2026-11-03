@@ -9,7 +9,7 @@ import {adminScriptsHarness} from "./adminScriptsHarness.test";
 import type {AdminApi, AdminConfigResponse} from "./types";
 
 // Mock useAdminConfig to control returned data
-const mockUseAdminConfig = mock(() => ({
+const mockUseAdminConfig = mock((..._args: unknown[]) => ({
   config: null as AdminConfigResponse | null,
   error: null as Error | null,
   isLoading: false,
@@ -342,7 +342,14 @@ describe("AdminScriptList", () => {
     mockUseAdminConfig.mockReturnValue({
       config: {
         models: [],
-        platformTools: {runScripts: false, viewScripts: false},
+        platformTools: {
+          configuration: true,
+          roles: true,
+          runScripts: false,
+          scripts: true,
+          version: true,
+          viewScripts: false,
+        },
         scripts: [{description: "Test script", name: "test-script"}],
       },
       error: null,

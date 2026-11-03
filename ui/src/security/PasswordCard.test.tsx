@@ -2,7 +2,7 @@ import {describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent, render, waitFor} from "@testing-library/react-native";
 import type {ReactElement} from "react";
 import {ThemeProvider} from "../Theme";
-import {renderWithTheme} from "../test-utils";
+import {elementProps, renderWithTheme} from "../test-utils";
 import {PasswordCard} from "./PasswordCard";
 import type {PasswordCardSubmission} from "./securityTypes";
 
@@ -18,11 +18,11 @@ const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<vo
 const renderTrackingFocus = (ui: ReactElement): ReturnType<typeof render> & {focused: string[]} => {
   const focused: string[] = [];
   const result = render(ui, {
-    createNodeMock: (element: ReactElement<{testID?: string}>) => ({
+    createNodeMock: (element: ReactElement) => ({
       blur: (): void => {},
       clear: (): void => {},
       focus: (): void => {
-        focused.push(element.props.testID ?? "");
+        focused.push(elementProps<{testID?: string}>(element).testID ?? "");
       },
       isFocused: (): boolean => false,
     }),

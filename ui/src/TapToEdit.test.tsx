@@ -8,14 +8,14 @@ import {renderWithTheme} from "./test-utils";
 describe("TapToEdit", () => {
   it("renders correctly with text value", () => {
     const {toJSON} = renderWithTheme(
-      <TapToEdit setValue={() => {}} title="Name" value="John Doe" />
+      <TapToEdit setValue={() => {}} title="Name" type="text" value="John Doe" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("displays title and value", () => {
     const {getByText} = renderWithTheme(
-      <TapToEdit setValue={() => {}} title="Email" value="test@example.com" />
+      <TapToEdit setValue={() => {}} title="Email" type="text" value="test@example.com" />
     );
     expect(getByText("Email")).toBeTruthy();
     expect(getByText("test@example.com")).toBeTruthy();
@@ -23,21 +23,27 @@ describe("TapToEdit", () => {
 
   it("renders non-editable when editable is false", () => {
     const {toJSON} = renderWithTheme(
-      <TapToEdit editable={false} title="Read Only" value="Cannot edit this" />
+      <TapToEdit editable={false} title="Read Only" type="text" value="Cannot edit this" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders edit icon when editable", () => {
     const {toJSON} = renderWithTheme(
-      <TapToEdit editable setValue={() => {}} title="Editable Field" value="Click to edit" />
+      <TapToEdit
+        editable
+        setValue={() => {}}
+        title="Editable Field"
+        type="text"
+        value="Click to edit"
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("shows editing mode when isEditing is true", () => {
     const {toJSON} = renderWithTheme(
-      <TapToEdit isEditing setValue={() => {}} title="Field" value="Editing..." />
+      <TapToEdit isEditing setValue={() => {}} title="Field" type="text" value="Editing..." />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -49,6 +55,7 @@ describe("TapToEdit", () => {
         onlyShowHelperTextWhileEditing={false}
         setValue={() => {}}
         title="Name"
+        type="text"
         value=""
       />
     );
@@ -75,6 +82,7 @@ describe("TapToEdit", () => {
         editable={false}
         title="Custom"
         transform={(val) => `Transformed: ${val}`}
+        type="text"
         value="data"
       />
     );
@@ -95,7 +103,13 @@ describe("TapToEdit", () => {
 
   it("renders multiselect type as comma-joined string", () => {
     const {getByText} = renderWithTheme(
-      <TapToEdit editable={false} title="Tags" type="multiselect" value={["a", "b", "c"]} />
+      <TapToEdit
+        editable={false}
+        options={[]}
+        title="Tags"
+        type="multiselect"
+        value={["a", "b", "c"]}
+      />
     );
     expect(getByText("a, b, c")).toBeTruthy();
   });
@@ -177,14 +191,14 @@ describe("TapToEdit", () => {
 
   it("throws when editable is true and setValue is not provided", () => {
     expect(() =>
-      renderWithTheme(<TapToEdit editable title="Required Save" value="foo" />)
+      renderWithTheme(<TapToEdit editable title="Required Save" type="text" value="foo" />)
     ).toThrow();
   });
 
   it("enters editing mode when Edit button is pressed", async () => {
     const setValue = mock(() => {});
     const {getByLabelText, queryByText} = renderWithTheme(
-      <TapToEdit setValue={setValue} title="Name" value="Jane" />
+      <TapToEdit setValue={setValue} title="Name" type="text" value="Jane" />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -196,7 +210,7 @@ describe("TapToEdit", () => {
   it("calls setValue with initial value and exits editing on Cancel", async () => {
     const setValue = mock(() => {});
     const {getByLabelText, getByText} = renderWithTheme(
-      <TapToEdit setValue={setValue} title="Name" value="Jane" />
+      <TapToEdit setValue={setValue} title="Name" type="text" value="Jane" />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -210,7 +224,7 @@ describe("TapToEdit", () => {
   it("reverts to original value (not edited value) when Cancel is pressed", async () => {
     const setValue = mock((_v: unknown) => {});
     const {getByLabelText, getByText} = renderWithTheme(
-      <TapToEdit setValue={setValue} title="Name" value="Jane" />
+      <TapToEdit setValue={setValue} title="Name" type="text" value="Jane" />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -227,7 +241,14 @@ describe("TapToEdit", () => {
     const setValue = mock(() => {});
     const onSave = mock(() => Promise.resolve());
     const {getByLabelText, getByText} = renderWithTheme(
-      <TapToEdit onSave={onSave} setValue={setValue} showClearButton title="Name" value="Jane" />
+      <TapToEdit
+        onSave={onSave}
+        setValue={setValue}
+        showClearButton
+        title="Name"
+        type="text"
+        value="Jane"
+      />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -243,7 +264,7 @@ describe("TapToEdit", () => {
     const setValue = mock(() => {});
     const onSave = mock(() => Promise.resolve());
     const {getByLabelText, getByText} = renderWithTheme(
-      <TapToEdit onSave={onSave} setValue={setValue} title="Name" value="Jane" />
+      <TapToEdit onSave={onSave} setValue={setValue} title="Name" type="text" value="Jane" />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -261,7 +282,7 @@ describe("TapToEdit", () => {
     console.error = errorMock;
 
     const {getByLabelText, getByText} = renderWithTheme(
-      <TapToEdit setValue={setValue} title="Name" value="Jane" />
+      <TapToEdit setValue={setValue} title="Name" type="text" value="Jane" />
     );
     await act(async () => {
       fireEvent.press(getByLabelText("Edit"));
@@ -389,6 +410,7 @@ describe("TapToEdit - additional function coverage", () => {
         editable={false}
         helperText="Should be hidden in title"
         title="Field"
+        type="text"
         value="val"
       />
     );
@@ -406,7 +428,7 @@ describe("TapToEdit - additional function coverage", () => {
 
   it("forwards testID to the edit control", () => {
     const {getByTestId} = renderWithTheme(
-      <TapToEdit setValue={() => {}} testID="profile.name" title="Name" value="Jane" />
+      <TapToEdit setValue={() => {}} testID="profile.name" title="Name" type="text" value="Jane" />
     );
     expect(getByTestId("profile.name.edit-clickable")).toBeTruthy();
   });
@@ -419,6 +441,7 @@ describe("TapToEdit - additional function coverage", () => {
         showClearButton
         testID="profile.name"
         title="Name"
+        type="text"
         value="Jane"
       />
     );
@@ -435,7 +458,7 @@ describe("TapToEdit - additional function coverage", () => {
 
   it("does not set action testIDs when testID is omitted", async () => {
     const {getByLabelText, queryByTestId} = renderWithTheme(
-      <TapToEdit setValue={() => {}} showClearButton title="Name" value="Jane" />
+      <TapToEdit setValue={() => {}} showClearButton title="Name" type="text" value="Jane" />
     );
 
     expect(queryByTestId("undefined.edit-clickable")).toBeNull();

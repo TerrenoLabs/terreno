@@ -65,7 +65,7 @@ describe("registerGoogleAuthMock", () => {
   });
 
   it("verifies ID tokens with the configured payload and audience", async (): Promise<void> => {
-    const {OAuth2Client} = createRequire(import.meta.url)("google-auth-library") as AuthModule;
+    const {OAuth2Client} = createRequire(__filename)("google-auth-library") as AuthModule;
     const verifier = new OAuth2Client();
 
     const ticket = await verifier.verifyIdToken({audience: "https://api/jobs", idToken: "t"});

@@ -145,7 +145,9 @@ describe("ConsentFormScreen", () => {
   });
 
   it("invokes onAgree with signature and checkbox values", () => {
-    const onAgree = mock(() => {});
+    const onAgree = mock(
+      (_data: {checkboxValues: Record<string, boolean>; signature?: string}) => {}
+    );
     const form: ConsentFormPublic = {
       ...baseForm,
       captureSignature: false,

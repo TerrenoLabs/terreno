@@ -26,11 +26,19 @@ mock.module("@terreno/ui", () => {
       {onPress: onClick, testID: testID ?? `btn-${iconName ?? text}`},
       ReactMod.createElement(RN.Text, {}, text)
     );
-  const DataTable = ({data, customColumnComponentMap, columns}: Record<string, unknown>) => {
-    const rows = ((data as unknown[]) ?? []).map((row: unknown[], rowIdx: number) => {
-      const cells = row.map((cell: unknown, cellIdx: number) => {
+  const DataTable = ({
+    data,
+    customColumnComponentMap,
+    columns,
+  }: {
+    columns: Array<{columnType?: string}>;
+    customColumnComponentMap?: Record<string, unknown>;
+    data?: Array<Array<{value?: unknown}>>;
+  }) => {
+    const rows = (data ?? []).map((row, rowIdx) => {
+      const cells = row.map((cell, cellIdx) => {
         const col = columns[cellIdx];
-        const CustomComp = customColumnComponentMap?.[col.columnType];
+        const CustomComp = col.columnType ? customColumnComponentMap?.[col.columnType] : undefined;
         if (CustomComp) {
           return ReactMod.createElement(CustomComp, {
             cellData: cell,
@@ -371,8 +379,8 @@ describe("DocumentStorageBrowser (isolated)", () => {
     };
     const createObjectURL = mock(() => "blob:123");
     const revokeObjectURL = mock(() => undefined);
-    (globalThis as Record<string, unknown>).URL.createObjectURL = createObjectURL;
-    (globalThis as Record<string, unknown>).URL.revokeObjectURL = revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
     const appendChild = mock(() => undefined);
     const removeChild = mock(() => undefined);
     (globalThis as Record<string, unknown>).document = {
@@ -669,8 +677,8 @@ describe("DocumentStorageBrowser (isolated)", () => {
     downloadImpl = async () => blob;
     const createObjectURL = mock(() => "blob:img-123");
     const revokeObjectURL = mock(() => undefined);
-    (globalThis as Record<string, unknown>).URL.createObjectURL = createObjectURL;
-    (globalThis as Record<string, unknown>).URL.revokeObjectURL = revokeObjectURL;
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
     listState.data = {
       files: [
         {

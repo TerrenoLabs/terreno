@@ -13,6 +13,8 @@ export interface VersionConfigDocument extends mongoose.Document {
   updateUrl?: string;
   /** How often clients should poll for version updates, in minutes. Defaults to 1440 (24 hours). */
   pollingIntervalMinutes: number;
+  /** Singleton sentinel backing the unique index; not selected by default. */
+  _singleton?: "config";
   created?: Date;
   updated?: Date;
 }

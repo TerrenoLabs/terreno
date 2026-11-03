@@ -69,6 +69,8 @@ mock.module("@terreno/ui", () => {
 
 import {AdminNestedArrayField} from "../AdminNestedArrayField";
 
+type NestedOnChange = React.ComponentProps<typeof AdminNestedArrayField>["onChange"];
+
 const baseItems = {
   active: {default: true, required: false, type: "boolean"},
   count: {required: false, type: "number"},
@@ -126,7 +128,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("adds a new item using buildDefaultItem for all supported types", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}
@@ -148,7 +150,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("builds default item for string type without default value", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}
@@ -169,7 +171,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("builds default item for boolean/number/array types without default values", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const items = {
       enabled: {required: false, type: "boolean"},
       qty: {required: false, type: "number"},
@@ -189,12 +191,11 @@ describe("AdminNestedArrayField", () => {
     const added = onChange.mock.calls[0][0][0];
     expect(added.enabled).toBe(false);
     expect(added.qty).toBe(0);
-    expect(Array.isArray(added.tags)).toBe(true);
-    expect(added.tags.length).toBe(0);
+    expect(added.tags).toEqual([]);
   });
 
   it("removes an item via IconButton", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}
@@ -217,7 +218,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("updates a sub-field value via AdminFieldRenderer onChange", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}
@@ -240,7 +241,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("reorders items via DraggableList callback", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}
@@ -262,7 +263,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("supports re-render with longer value array (grows itemIds)", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {rerender, toJSON} = renderWithTheme(
       <AdminNestedArrayField
         api={{} as unknown as AdminApi}

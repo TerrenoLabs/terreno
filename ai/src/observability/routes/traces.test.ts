@@ -3,7 +3,7 @@ import {TerrenoApp} from "@terreno/api";
 import type express from "express";
 import {DateTime} from "luxon";
 
-import {authAsUser, ensureTestUsers, UserModel} from "../../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel} from "../../tests/helpers";
 import {createLocalObservabilityPlugin} from "../local/localPlugin";
 import {registerObsScore} from "../local/models/obsScore";
 import {registerObsSpan} from "../local/models/obsSpan";
@@ -32,7 +32,7 @@ describe("observability trace routes", () => {
       plugin.traceSink && "store" in plugin.traceSink
         ? (plugin.traceSink as {store: LocalTraceStore}).store
         : new LocalTraceStore();
-    app = new TerrenoApp({skipListen: true, userModel: UserModel})
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
       .register(new ObservabilityApp({plugins: [plugin]}))
       .build();
   });

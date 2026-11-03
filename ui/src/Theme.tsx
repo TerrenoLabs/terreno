@@ -103,6 +103,14 @@ export const lightThemeConfig: TerrenoThemeConfig = {
     warning: "warning100",
   },
 
+  field: {
+    background: "neutral000",
+    backgroundDisabled: "neutral300",
+    border: "neutral500",
+    borderDisabled: "neutral700",
+    borderError: "error100",
+    borderFocus: "primary200",
+  },
   // These will continue to throw errors until we have a proper font system in place.
   // TODO: currently to use these, you need to set fontFamily to "text" or "heading",
   // not theme.font.primary or theme.font.title.
@@ -183,6 +191,14 @@ export const darkThemeConfig: TerrenoThemeConfig = {
     hover: "neutral600",
     success: "success050",
     warning: "warning050",
+  },
+  field: {
+    background: "neutral800",
+    backgroundDisabled: "neutral600",
+    border: "neutral300",
+    borderDisabled: "neutral100",
+    borderError: "error050",
+    borderFocus: "primary200",
   },
   status: {
     active: "success050",

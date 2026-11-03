@@ -214,6 +214,10 @@ const mockTask: {data: {task?: BackgroundTask} | undefined; error: unknown} = {
   error: null,
 };
 
+// The view reads only a task's status.
+const taskWithStatus = (status: BackgroundTask["status"]): BackgroundTask =>
+  ({status}) as BackgroundTask;
+
 const createApiDouble = (): AdminApi => {
   const api = {
     enhanceEndpoints: () => api,
@@ -314,9 +318,15 @@ describe("AdminMigrationsView", () => {
       config: {
         migrations: {enabled: true},
         models: [],
-        platformTools: {runScripts: false},
+        platformTools: {
+          configuration: true,
+          roles: true,
+          runScripts: false,
+          scripts: true,
+          version: true,
+        },
         scripts: [],
-      } as AdminConfigResponse,
+      },
     });
     expect(getByTestId("admin-migrations-dry-run").props.accessibilityState.disabled).toBe(true);
     expect(getByTestId("admin-migrations-apply").props.accessibilityState.disabled).toBe(true);
@@ -408,7 +418,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("disables apply while a queued task is in flight", async () => {
-    mockTask.data = {task: {status: "queued"}};
+    mockTask.data = {task: taskWithStatus("pending")};
     const {getByTestId, getByText} = renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));
@@ -418,7 +428,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("refetches status after a completed task", async () => {
-    mockTask.data = {task: {status: "completed"}};
+    mockTask.data = {task: taskWithStatus("completed")};
     const {getByText} = renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));
@@ -427,7 +437,7 @@ describe("AdminMigrationsView", () => {
   });
 
   it("keeps apply disabled while a task is running", async () => {
-    mockTask.data = {task: {status: "running"}};
+    mockTask.data = {task: taskWithStatus("running")};
     const {getByTestId, getByText} = renderView();
     await act(async () => {
       fireEvent.press(getByText("Dry run"));

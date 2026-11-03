@@ -1,6 +1,5 @@
 import {describe, expect, it, mock} from "bun:test";
 import {configureStore, type UnknownAction} from "@reduxjs/toolkit";
-import type {Api} from "@reduxjs/toolkit/query/react";
 import {assert} from "chai";
 
 import {
@@ -62,9 +61,10 @@ const initialTestApiState: TestApiState = {
 
 const testApiReducer = (state: TestApiState = initialTestApiState): TestApiState => state;
 
-// noExplicitAny: Test double covers only fields used by offline middleware.
-// biome-ignore lint/suspicious/noExplicitAny: Test double covers only fields used by offline middleware.
-const createTestApi = (): Api<any, any, any, any> => {
+type OfflineApi = Parameters<typeof createOfflineMiddleware>[0]["api"];
+
+// Test double: covers only the fields the offline middleware reads.
+const createTestApi = (): OfflineApi => {
   return {
     endpoints: {
       getTodos: {
@@ -82,9 +82,7 @@ const createTestApi = (): Api<any, any, any, any> => {
       invalidateTags: () => ({type: "testApi/invalidateTags"}),
       updateQueryData: () => ({type: "testApi/updateQueryData"}),
     },
-    // noExplicitAny: Test double covers only fields used by offline middleware.
-    // biome-ignore lint/suspicious/noExplicitAny: Test double covers only fields used by offline middleware.
-  } as unknown as Api<any, any, any, any>;
+  } as unknown as OfflineApi;
 };
 
 describe("isNetworkFetchError", () => {

@@ -1,7 +1,7 @@
 import {describe, test} from "bun:test";
 import {assert} from "chai";
-import rootPackageJson from "../../../package.json";
-import packageJson from "../../package.json";
+import rootPackageJson from "../../../package.json" with {type: "json"};
+import packageJson from "../../package.json" with {type: "json"};
 import {
   BSON_VERSION,
   generateAllFiles,

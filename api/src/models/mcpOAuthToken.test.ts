@@ -80,3 +80,45 @@ describe("McpOAuthToken family revocation", () => {
     expect(DateTime.fromJSDate(tombstone.expiresAt).diffNow("minutes").minutes).toBeGreaterThan(59);
   });
 });
+
+describe("McpOAuthToken admin revocation", () => {
+  beforeEach(async () => {
+    await McpOAuthToken.deleteMany({});
+    await McpOAuthRevokedFamily.deleteMany({});
+  });
+
+  it("revokes the whole family and keeps the rows when a token row is deleted", async () => {
+    const first = await McpOAuthToken.issue(issueOptions());
+    const {familyId} = first.mcpOAuthToken;
+    await McpOAuthToken.issue({...issueOptions(familyId), userId: first.mcpOAuthToken.userId});
+
+    await McpOAuthToken.deleteOne({_id: first.mcpOAuthToken._id});
+
+    expect(await McpOAuthToken.countDocuments({familyId})).toBe(2);
+    expect(await activePairs(familyId)).toBe(0);
+    expect(await McpOAuthRevokedFamily.countDocuments({familyId})).toBe(1);
+  });
+
+  it("revokes the family through the document deleteOne method", async () => {
+    const {mcpOAuthToken} = await McpOAuthToken.issue(issueOptions());
+
+    await mcpOAuthToken.deleteOne();
+
+    expect(await McpOAuthToken.countDocuments({familyId: mcpOAuthToken.familyId})).toBe(1);
+    expect(await activePairs(mcpOAuthToken.familyId)).toBe(0);
+  });
+
+  it("revokes every family a user holds and leaves other users alone", async () => {
+    const userId = new mongoose.Types.ObjectId();
+    const a = await McpOAuthToken.issue({...issueOptions(), userId});
+    const b = await McpOAuthToken.issue({...issueOptions(), userId});
+    const other = await McpOAuthToken.issue(issueOptions());
+
+    const revoked = await McpOAuthToken.revokeAllForUser(userId);
+
+    expect(revoked).toBe(2);
+    expect(await activePairs(a.mcpOAuthToken.familyId)).toBe(0);
+    expect(await activePairs(b.mcpOAuthToken.familyId)).toBe(0);
+    expect(await activePairs(other.mcpOAuthToken.familyId)).toBe(1);
+  });
+});

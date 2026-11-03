@@ -1,4 +1,4 @@
-import type {mock} from "bun:test";
+import {describe, it, type mock} from "bun:test";
 import {useFonts as useTextFonts} from "@expo-google-fonts/nunito";
 import {useFonts as useHeadingFonts} from "@expo-google-fonts/titillium-web";
 import {render} from "@testing-library/react-native";

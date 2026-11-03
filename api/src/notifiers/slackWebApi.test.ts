@@ -22,13 +22,35 @@ describe("normalizeSlackChannelName", () => {
   });
 });
 
+/** The request body fields the Slack helpers send. */
+interface SlackRequestBody {
+  blocks?: unknown[];
+  channel?: string;
+  force?: boolean;
+  name?: string;
+  text?: string;
+  users?: string;
+}
+
+/** Slack doubles return `data`, `status`, and sometimes `headers`, not a whole AxiosResponse. */
+interface SlackResponseDouble {
+  data: unknown;
+  headers?: {get: (name: string) => string | undefined};
+  status: number;
+}
+type AxiosPostDouble = (url: string, body: SlackRequestBody) => Promise<SlackResponseDouble>;
+type AxiosGetDouble = (
+  url: string,
+  config?: {params?: {types?: string}}
+) => Promise<SlackResponseDouble>;
+
 describe("Slack Web API", () => {
-  let mockAxiosPost: Mock<typeof axios.post>;
-  let mockAxiosGet: Mock<typeof axios.get>;
+  let mockAxiosPost: Mock<AxiosPostDouble>;
+  let mockAxiosGet: Mock<AxiosGetDouble>;
 
   beforeEach(() => {
-    mockAxiosPost = spyOn(axios, "post");
-    mockAxiosGet = spyOn(axios, "get");
+    mockAxiosPost = spyOn(axios, "post") as unknown as Mock<AxiosPostDouble>;
+    mockAxiosGet = spyOn(axios, "get") as unknown as Mock<AxiosGetDouble>;
     process.env.SLACK_BOT_TOKEN = "xoxb-test";
     (Sentry.captureException as Mock<typeof Sentry.captureException>).mockClear();
   });
@@ -40,7 +62,7 @@ describe("Slack Web API", () => {
   });
 
   it("creates a private channel, invites members, and posts the first message", async () => {
-    mockAxiosPost.mockImplementation(async (url: string, body: {name?: string; text?: string}) => {
+    mockAxiosPost.mockImplementation(async (url: string, body: SlackRequestBody) => {
       if (String(url).endsWith("conversations.create")) {
         return {
           data: {channel: {id: "C012345678", is_private: true, name: body.name}, ok: true},
@@ -120,7 +142,7 @@ describe("Slack Web API", () => {
 
     expect(result.alreadyMemberUserIds).toEqual(["U012ABCDEF"]);
     expect(result.invitedUserIds).toEqual([]);
-    const body = mockAxiosPost.mock.calls[0]?.[1] as {channel?: string; users?: string};
+    const body = mockAxiosPost.mock.calls[0]?.[1];
     expect(body).toEqual({channel: "C012345678", force: true, users: "U012ABCDEF"});
   });
 
@@ -211,8 +233,8 @@ describe("Slack Web API", () => {
 
     const found = await findSlackChannelByName({name: "case-123"});
     expect(found).toEqual({channelId: "C012345678", isPrivate: true, name: "case-123"});
-    const firstParams = mockAxiosGet.mock.calls[0]?.[1] as {params?: {types?: string}};
-    expect(firstParams.params?.types).toBe("public_channel,private_channel");
+    const firstParams = mockAxiosGet.mock.calls[0]?.[1];
+    expect(firstParams?.params?.types).toBe("public_channel,private_channel");
   });
 
   it("returns undefined when no visible channel has that name", async () => {

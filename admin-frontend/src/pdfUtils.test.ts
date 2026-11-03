@@ -1,7 +1,7 @@
 import {describe, expect, it, mock} from "bun:test";
 import {DateTime} from "luxon";
 
-import {ensureSpace, formatDate} from "./pdfUtils";
+import {ensureSpace, formatDate, provisionalPdfSignature, provisionalSignerName} from "./pdfUtils";
 
 describe("formatDate", () => {
   it("returns an empty string for missing values", () => {
@@ -33,5 +33,28 @@ describe("ensureSpace", () => {
     const addPage = mock(() => {});
     expect(ensureSpace({addPage} as never, 40, 8)).toBe(40);
     expect(addPage).not.toHaveBeenCalled();
+  });
+});
+
+describe("provisionalSignerName", () => {
+  it("uses the name, then the email, then Staff", () => {
+    expect(provisionalSignerName({email: "dana@example.com", name: "Dana"})).toBe("Dana");
+    expect(provisionalSignerName({email: "dana@example.com"})).toBe("dana@example.com");
+    expect(provisionalSignerName("staff-1")).toBe("Staff");
+    expect(provisionalSignerName(null)).toBe("Staff");
+  });
+});
+
+describe("provisionalPdfSignature", () => {
+  it("returns undefined without a section", () => {
+    expect(provisionalPdfSignature(undefined)).toBeUndefined();
+  });
+
+  it("keeps the section and defaults a missing signedAt to an empty string", () => {
+    expect(provisionalPdfSignature({note: "Phone", signedByName: "Dana"})).toEqual({
+      note: "Phone",
+      signedAt: "",
+      signedByName: "Dana",
+    });
   });
 });

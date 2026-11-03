@@ -1,16 +1,73 @@
-import {describe, expect, it, mock} from "bun:test";
-import {fireEvent} from "@testing-library/react-native";
+import {describe, expect, it, jest, mock} from "bun:test";
+import {act, fireEvent} from "@testing-library/react-native";
 
 import {SyncStatusBanner} from "./SyncStatusBanner";
 import {renderWithTheme} from "./test-utils";
 
 describe("SyncStatusBanner", () => {
-  it("renders the offline indicator when offline", () => {
+  it("renders the offline indicator immediately when the grace period is 0", () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <SyncStatusBanner conflictCount={0} isOnline={false} isSyncing={false} queuedCount={0} />
+      <SyncStatusBanner
+        conflictCount={0}
+        isOnline={false}
+        isSyncing={false}
+        offlineGraceMs={0}
+        queuedCount={0}
+      />
     );
     expect(getByTestId("sync-offline-indicator")).toBeTruthy();
     expect(queryByTestId("sync-syncing-indicator")).toBeNull();
+  });
+
+  it("waits out the grace period before showing the offline indicator", () => {
+    jest.useFakeTimers();
+    try {
+      const {queryByTestId} = renderWithTheme(
+        <SyncStatusBanner conflictCount={0} isOnline={false} queuedCount={0} />
+      );
+      expect(queryByTestId("sync-offline-indicator")).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(2999);
+      });
+      expect(queryByTestId("sync-offline-indicator")).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(1);
+      });
+      expect(queryByTestId("sync-offline-indicator")).toBeTruthy();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not flash offline for a drop shorter than the grace period", () => {
+    jest.useFakeTimers();
+    try {
+      const view = renderWithTheme(
+        <SyncStatusBanner conflictCount={0} isOnline={true} queuedCount={0} />
+      );
+      view.rerender(<SyncStatusBanner conflictCount={0} isOnline={false} queuedCount={0} />);
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      view.rerender(<SyncStatusBanner conflictCount={0} isOnline={true} queuedCount={0} />);
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+      expect(view.queryByTestId("sync-offline-indicator")).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("hides the offline indicator as soon as connectivity returns", () => {
+    const view = renderWithTheme(
+      <SyncStatusBanner conflictCount={0} isOnline={false} offlineGraceMs={0} queuedCount={0} />
+    );
+    expect(view.queryByTestId("sync-offline-indicator")).toBeTruthy();
+    view.rerender(
+      <SyncStatusBanner conflictCount={0} isOnline={true} offlineGraceMs={0} queuedCount={0} />
+    );
+    expect(view.queryByTestId("sync-offline-indicator")).toBeNull();
   });
 
   it("hides the offline indicator when online", () => {

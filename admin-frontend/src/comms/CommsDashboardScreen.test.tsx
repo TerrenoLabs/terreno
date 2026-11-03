@@ -5,7 +5,7 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import type {AdminApi} from "../types";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_href: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
   useLocalSearchParams: () => ({}),
@@ -119,7 +119,7 @@ describe("CommsDashboardScreen", () => {
 
   it("writes filter changes through onFiltersChange for URL persistence", () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {getByTestId} = renderWithTheme(
       <CommsDashboardScreen
         api={createCommsApi()}
@@ -139,7 +139,7 @@ describe("CommsDashboardScreen", () => {
 
   it("keeps both default date bounds when search changes with empty URL dates", () => {
     listState.data = {data: [], more: false, page: 1, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {getByTestId} = renderWithTheme(
       <CommsDashboardScreen api={createCommsApi()} filters={{}} onFiltersChange={onFiltersChange} />
     );
@@ -153,7 +153,7 @@ describe("CommsDashboardScreen", () => {
 
   it("clears every active filter and returns to the first page", async () => {
     listState.data = {data: [], more: false, page: 3, total: 0};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {getByTestId} = renderWithTheme(
       <CommsDashboardScreen
         api={createCommsApi()}
@@ -333,7 +333,7 @@ describe("CommsDashboardScreen", () => {
 
   it("pages through results without dropping the active filters", async () => {
     listState.data = {data: [failedRow], more: true, page: 1, total: 60};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {getByTestId} = renderWithTheme(
       <CommsDashboardScreen
         api={createCommsApi()}

@@ -77,11 +77,17 @@ const renderDesktopChildColumn = ({
   );
 };
 
-// A component for rendering a list on one side and a details view on the right for large screens,
-// and a scrollable list where clicking an item takes you the details view.
-// On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
-// on the narrow viewport. `narrowBelowWidth` chooses that viewport from the window width;
-// otherwise it follows `isNarrowViewport()`. The native SplitPage ignores those props.
+/**
+ * A component for rendering a list on one side and a details view on the right for large screens,
+ * and a scrollable list where clicking an item takes you the details view.
+ * On web, opt in to minimum widths for the desktop side-by-side children, or a labeled pager
+ * on the narrow viewport. `narrowBelowWidth` chooses that viewport from the window width;
+ * otherwise it follows `isNarrowViewport()`. The native SplitPage ignores those props.
+ *
+ * Prefer `ListDetailLayout` for new list/detail screens. It keeps the selected item in the
+ * route, so deep links and back navigation work, and splits on native tablets too. SplitPage
+ * remains supported for list/detail views that do not have their own routes.
+ */
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   tabs = [],

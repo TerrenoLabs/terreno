@@ -1,0 +1,35 @@
+---
+title: "MobileAddressAutocomplete"
+description: "Native Places autocomplete. Without a key, stories show the fallback field."
+sidebar_label: "MobileAddressAutocomplete"
+slug: /reference/components/mobileaddressautocomplete
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# MobileAddressAutocomplete
+
+Native Places autocomplete. Without a key, stories show the fallback field.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `AddressAutocompleteProps`  
+**Story source:** [`demo/stories/MobileAddressAutocomplete.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/MobileAddressAutocomplete.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="MobileAddressAutocomplete" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `handleAddressChange` | `OnChangeCallback` | Yes |  |
+| `handleAutoCompleteChange` | `reflection` | Yes |  |
+| `inputValue` | `string` | Yes |  |
+| `disabled` | `boolean` |  |  |
+| `googleMapsApiKey` | `string` |  |  |
+| `googlePlacesMobileStyles` | `Styles` |  |  |
+| `includeCounty` | `boolean` |  |  |
+| `styles` | `Styles` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

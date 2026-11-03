@@ -26,6 +26,27 @@ export class AuthRequiredError extends Error {
   }
 }
 
+/**
+ * Thrown instead of sending a request whose caller was superseded while the token was being
+ * read, for example a reconcile that a stop() overtook. Nothing reached the server.
+ */
+export class RequestSupersededError extends Error {
+  constructor(message = "Request superseded before it was sent") {
+    super(message);
+    this.name = "RequestSupersededError";
+  }
+}
+
+/** Options for a request a caller may abandon while it waits for a token. */
+export interface SupersedableRequestOptions {
+  /**
+   * Checked after the token resolves and before the request is sent. When it returns true the
+   * request is not sent and the call rejects with {@link RequestSupersededError}, so a request
+   * started under a session the app has since stopped syncing for never reaches the server.
+   */
+  isSuperseded?: () => boolean;
+}
+
 export interface FetchSnapshotPageArgs {
   /** C2: the stream key to page (e.g. "todos|owner:123"), not a collection. */
   stream: string;
@@ -64,9 +85,10 @@ export interface HttpChannel {
    * C2: the authoritative set of streams the caller currently belongs to
    * (`GET /sync/streams`). Drives join-backfill / leave-purge diffs; 401 rejects with
    * {@link AuthRequiredError} so a transport/auth error is never mistaken for a
-   * membership change (INV-2).
+   * membership change (INV-2). `isSuperseded` drops the request before it is sent
+   * ({@link RequestSupersededError}).
    */
-  fetchStreams: () => Promise<SyncStreamInfo[]>;
+  fetchStreams: (options?: SupersedableRequestOptions) => Promise<SyncStreamInfo[]>;
   /**
    * `GET {path}?{params}` against a `modelRouter` list endpoint, for query windows.
    * Params are qs-encoded so Mongo operators (`$in`, `$gte`, …) survive.
@@ -244,8 +266,15 @@ export const createHttpChannel = ({
 }: HttpChannelConfig): HttpChannel => {
   const fetcher: FetchLike = fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
 
-  const request = async (path: string, init?: RequestInit): Promise<Response> => {
+  const request = async (
+    path: string,
+    init?: RequestInit,
+    {isSuperseded}: SupersedableRequestOptions = {}
+  ): Promise<Response> => {
     const token = await authProvider.getToken();
+    if (isSuperseded?.()) {
+      throw new RequestSupersededError(`${path} superseded before it was sent`);
+    }
     const organizationId = organizationIdProvider?.()?.trim();
     const headers: Record<string, string> = {
       Accept: "application/json",
@@ -339,8 +368,10 @@ export const createHttpChannel = ({
     return (await response.json()) as ListResponse;
   };
 
-  const fetchStreams = async (): Promise<SyncStreamInfo[]> => {
-    const response = await request("/sync/streams");
+  const fetchStreams = async (
+    options: SupersedableRequestOptions = {}
+  ): Promise<SyncStreamInfo[]> => {
+    const response = await request("/sync/streams", undefined, options);
     if (!response.ok) {
       throw new Error(`Sync streams request failed with status ${response.status}`);
     }

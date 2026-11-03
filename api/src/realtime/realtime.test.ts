@@ -635,7 +635,9 @@ describe("realtimeRegistry", () => {
   describe("updateRealtimeRegistryOptions", () => {
     it("replaces options on an existing entry by route path", () => {
       registerRealtime(makeEntry({routePath: "/todos"}));
-      const updatedOptions = {permissions: {list: []}} as ModelRouterOptions<unknown>;
+      const updatedOptions: ModelRouterOptions<unknown> = {
+        permissions: {create: [], delete: [], list: [], read: [], update: []},
+      };
       updateRealtimeRegistryOptions("/todos", updatedOptions);
 
       expect(getRealtimeRegistry()[0]?.options).toBe(updatedOptions);
@@ -1449,32 +1451,32 @@ describe("resolveRooms", () => {
   };
 
   it("returns user-specific room for owner strategy with ownerId", () => {
-    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner"}};
+    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner" as const}};
     const rooms = resolveRooms(entry, {ownerId: "user-1"}, "create");
     expect(rooms).toEqual(["user:user-1"]);
   });
 
   it("converts ObjectId-like ownerId to string", () => {
-    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner"}};
+    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner" as const}};
     const ownerId = {toString: (): string => "owner-from-obj"};
     const rooms = resolveRooms(entry, {ownerId}, "create");
     expect(rooms).toEqual(["user:owner-from-obj"]);
   });
 
   it("falls back to model room when owner strategy has no ownerId", () => {
-    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner"}};
+    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "owner" as const}};
     const rooms = resolveRooms(entry, {}, "create");
     expect(rooms).toEqual(["model:todos"]);
   });
 
   it("returns model room for model strategy", () => {
-    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "model"}};
+    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "model" as const}};
     const rooms = resolveRooms(entry, {}, "create");
     expect(rooms).toEqual(["model:todos"]);
   });
 
   it("returns authenticated room for broadcast strategy", () => {
-    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "broadcast"}};
+    const entry = {...baseEntry, config: {...baseEntry.config, roomStrategy: "broadcast" as const}};
     const rooms = resolveRooms(entry, {}, "create");
     expect(rooms).toEqual(["authenticated"]);
   });
@@ -1841,7 +1843,7 @@ describe("emitToDocumentAndQueryRooms", () => {
           }
 
           return {
-            ...(doc as Record<string, unknown>),
+            ...(doc as unknown as Record<string, unknown>),
             visibleTo: req.user?.id,
           } as unknown as JSONValue;
         },
@@ -2168,7 +2170,7 @@ describe("startChangeStreamWatcher", () => {
     setConnectionDb(originalDb);
     clearRealtimeRegistry();
     // Ensure the watcher is stopped between tests
-    const {stopChangeStreamWatcher: stop} = await import("./changeStreamWatcher");
+    const {stopChangeStreamWatcher: stop} = await import("./changeStreamWatcher.js");
     await stop();
   });
 
@@ -2222,7 +2224,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2237,7 +2239,7 @@ describe("startChangeStreamWatcher", () => {
   it("throws when mongoose connection db is unavailable", async () => {
     setConnectionDb(undefined);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     expect(() => startChangeStreamWatcher(io)).toThrow(
@@ -2251,7 +2253,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     expect(() => startChangeStreamWatcher(io)).toThrow("Failed to create change stream watcher");
@@ -2283,7 +2285,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2304,7 +2306,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2344,7 +2346,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2385,7 +2387,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2424,7 +2426,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/broadcasts",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2494,7 +2496,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const {emissions, io} = createRecordingIo("model:todos");
 
     startChangeStreamWatcher(io, {}, true);
@@ -2535,7 +2537,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const roomLookup = mock(() => {
       throw new Error("adapter unavailable");
     });
@@ -2583,7 +2585,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2604,7 +2606,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {ignoredCollections: ["audit_logs"]}, true);
@@ -2645,7 +2647,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {ignoredOperations: ["insert"]}, true);
@@ -2666,7 +2668,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2692,7 +2694,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2721,7 +2723,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const {emissions, io} = createRecordingIo("model:todos");
     let operationTypeReads = 0;
     startChangeStreamWatcher(io, {}, true);
@@ -2747,7 +2749,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {}, true);
@@ -2833,7 +2835,7 @@ describe("startChangeStreamWatcher", () => {
       setConnectionDb(mockDb);
       registerTodos();
 
-      const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+      const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
       const {deliveries, io} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
 
@@ -2873,7 +2875,9 @@ describe("startChangeStreamWatcher", () => {
       const mockDb = {watch: mock(() => streams.shift() ?? secondStream)};
       setConnectionDb(mockDb);
 
-      const {SYNC_RESYNC_EVENT, startChangeStreamWatcher} = await import("./changeStreamWatcher");
+      const {SYNC_RESYNC_EVENT, startChangeStreamWatcher} = await import(
+        "./changeStreamWatcher.js"
+      );
       const {io, serverEmissions} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
 
@@ -2907,7 +2911,7 @@ describe("startChangeStreamWatcher", () => {
       setConnectionDb(mockDb);
 
       const {startChangeStreamWatcher, stopChangeStreamWatcher: stop} = await import(
-        "./changeStreamWatcher"
+        "./changeStreamWatcher.js"
       );
       const {io} = createRecordingIo();
       startChangeStreamWatcher(io, {}, true);
@@ -2926,7 +2930,7 @@ describe("startChangeStreamWatcher", () => {
     };
     setConnectionDb(mockDb);
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
     const io = createMockIo();
 
     startChangeStreamWatcher(io, {batchSize: 100, fullDocument: "whenAvailable"}, true);
@@ -2970,7 +2974,7 @@ describe("startChangeStreamWatcher", () => {
       routePath: "/todos",
     });
 
-    const {startChangeStreamWatcher} = await import("./changeStreamWatcher");
+    const {startChangeStreamWatcher} = await import("./changeStreamWatcher.js");
 
     // Create an IO with a socket in the target room
     const emissions: Array<{_data: unknown; _event: string}> = [];
@@ -3018,7 +3022,7 @@ describe("stopChangeStreamWatcher", () => {
     setConnectionDb(mockDb);
 
     const {startChangeStreamWatcher, stopChangeStreamWatcher} = await import(
-      "./changeStreamWatcher"
+      "./changeStreamWatcher.js"
     );
     const io = {
       sockets: {

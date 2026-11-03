@@ -1,0 +1,5 @@
+> **clearAdminWindowMutationScopes**(): `void`
+
+## Returns
+
+`void`

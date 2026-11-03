@@ -14,10 +14,11 @@ const closeMock = mock(() => {});
 mock.module("react-native-modalize", () => ({
   Modalize: forwardRef<React.ElementRef<typeof View>, {children: React.ReactNode}>(
     ({children}, ref) => {
-      useImperativeHandle(ref, () => ({
-        close: closeMock,
-        open: openMock,
-      }));
+      // The Modalize double exposes only the open/close handle ModalSheet calls.
+      useImperativeHandle(
+        ref,
+        () => ({close: closeMock, open: openMock}) as unknown as React.ElementRef<typeof View>
+      );
       return (
         <View ref={ref} testID="modalize">
           {children}

@@ -18,7 +18,7 @@ import {
   type SseClient,
   type SseFrame,
 } from "../tests/harnessStreaming";
-import {ensureTestUsers, UserModel} from "../tests/helpers";
+import {ensureTestUsers, terrenoUserModel, UserModel} from "../tests/helpers";
 import type {HarnessStreamingOptions} from "../types/harness";
 import type {ObsSpanModel, ObsTraceModel} from "../types/observability";
 import type {HarnessModels} from "./commit";
@@ -102,7 +102,9 @@ const serve = async (
   harness: Harness
 ): Promise<{app: express.Application; plugin: HarnessApp; url: string}> => {
   const plugin = new HarnessApp({harness, heartbeatInterval: {milliseconds: 50}});
-  const app = new TerrenoApp({skipListen: true, userModel: UserModel}).register(plugin).build();
+  const app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
+    .register(plugin)
+    .build();
   const {stop, url} = await listen(app);
   cleanups.push(stop);
   return {app, plugin, url};
@@ -111,7 +113,8 @@ const serve = async (
 /** Open change-stream cursors on the server, idle ones included. */
 const openChangeStreamOps = async (): Promise<Array<Record<string, unknown>>> => {
   const dbName = mongoose.connection.db?.databaseName;
-  return mongoose.connection.client
+  return mongoose.connection
+    .getClient()
     .db("admin")
     .aggregate([
       {$currentOp: {allUsers: true, idleCursors: true}},
@@ -168,10 +171,11 @@ const sse = async (
 /** Status and body of a request that must fail before streaming starts. */
 const refused = async (url: string, headers: Record<string, string> = {}) => {
   const response = await fetch(url, {headers});
-  return {body: await response.json(), status: response.status};
+  return {body: (await response.json()) as {title?: string}, status: response.status};
 };
 
-const storedEvents = (streamId: unknown) => EventModel.find({streamId}).sort({seq: 1}).lean();
+const storedEvents = (streamId: mongoose.Types.ObjectId | string) =>
+  EventModel.find({streamId}).sort({seq: 1}).lean();
 
 const deltaText = (frames: ReadonlyArray<SseFrame>): string =>
   frames
@@ -372,7 +376,7 @@ describe("Harness event stream", () => {
     });
 
     it("rejects a heartbeat interval that is not positive", () => {
-      const app = new TerrenoApp({skipListen: true, userModel: UserModel});
+      const app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel});
       expect(() =>
         app
           .register(new HarnessApp({harness: {} as Harness, heartbeatInterval: {seconds: 0}}))

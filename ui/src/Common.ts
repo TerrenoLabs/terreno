@@ -1,7 +1,8 @@
 import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
+import type {Href, Stack} from "expo-router";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
-import type {FC, ReactElement, ReactNode} from "react";
+import type {ComponentProps, FC, ReactElement, ReactNode} from "react";
 import type {
   ImageStyle,
   ListRenderItemInfo,
@@ -259,6 +260,16 @@ export interface BorderThemeConfig {
   warning: keyof ThemePrimitiveColors;
 }
 
+/** Maps form field (TextField, TextArea, SelectField, etc.) colors to primitives. */
+export interface FieldThemeConfig {
+  background: keyof ThemePrimitiveColors;
+  backgroundDisabled: keyof ThemePrimitiveColors;
+  border: keyof ThemePrimitiveColors;
+  borderFocus: keyof ThemePrimitiveColors;
+  borderError: keyof ThemePrimitiveColors;
+  borderDisabled: keyof ThemePrimitiveColors;
+}
+
 export interface StatusThemeConfig {
   active: keyof ThemePrimitiveColors;
   doNotDisturb: keyof ThemePrimitiveColors;
@@ -333,6 +344,22 @@ export interface BorderTheme {
   warning: string;
 }
 
+/** Computed form field colors: the input box background and border in each state. */
+export interface FieldTheme {
+  /** Input background when enabled. */
+  background: string;
+  /** Input background when disabled. */
+  backgroundDisabled: string;
+  /** Input border at rest. */
+  border: string;
+  /** Input border while focused. */
+  borderFocus: string;
+  /** Input border when the field has an error. */
+  borderError: string;
+  /** Input border when disabled. */
+  borderDisabled: string;
+}
+
 export interface StatusTheme {
   active: string;
   doNotDisturb: string;
@@ -376,6 +403,7 @@ export interface TerrenoTheme {
   text: TextTheme;
   surface: SurfaceTheme;
   border: BorderTheme;
+  field: FieldTheme;
   status: StatusTheme;
   radius: RadiusTheme;
   spacing: SpacingTheme;
@@ -388,6 +416,7 @@ export interface TerrenoThemeConfig {
   text: TextThemeConfig;
   surface: SurfaceThemeConfig;
   border: BorderThemeConfig;
+  field: FieldThemeConfig;
   status: StatusThemeConfig;
   radius: RadiusThemeConfig;
   spacing: SpacingThemeConfig;
@@ -683,12 +712,13 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
-/** Checked and disabled state a `Box` reports to screen readers. */
+/** Checked, disabled, and selected state a `Box` reports to screen readers. */
 export interface BoxAccessibilityState {
   /** Set automatically while `loading` is true; sent as `aria-busy` on web. */
   busy?: boolean;
   checked?: boolean;
   disabled?: boolean;
+  selected?: boolean;
 }
 
 /** How skeleton placeholders animate. `none` renders a static block. */
@@ -802,8 +832,12 @@ export interface SkeletonGroupProps {
 
 export interface BoxPropsBase extends WithTestID, LoadingProps {
   /**
-   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
-   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   * Checked, disabled, and selected state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. `selected` is sent as `aria-selected` on a selectable
+   * `accessibilityRole` (`tab`, `option`, `row`, ...) and as `aria-current="true"` on any other Box,
+   * such as a clickable list row. On web that row does not also keep `selected` in
+   * `accessibilityState`, because react-native-web would emit `aria-selected` on the button.
+   * On a clickable Box, `disabled: true` also stops presses.
    */
   accessibilityState?: BoxAccessibilityState;
   /**
@@ -1098,6 +1132,11 @@ export interface HelperTextProps {
 
 export interface ErrorTextProps {
   errorText?: string;
+  /**
+   * Where `errorText` sits relative to the control.
+   * @default "above"
+   */
+  errorPosition?: "above" | "below";
 }
 
 export interface AiSuggestionProps {
@@ -1130,7 +1169,24 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
    */
   showVisibilityToggle?: boolean;
 
-  autoComplete?: "current-password" | "on" | "off" | "username";
+  /**
+   * Autofill hint. On web it is set as the input's `autocomplete` attribute; `"username webauthn"`
+   * asks the browser to offer saved passkeys in the field's autofill. On native it is sent as
+   * React Native's `autoComplete` (Android's autofill hint) and as the matching iOS
+   * `textContentType`: `username` → `username`, `email` → `emailAddress`, `current-password` →
+   * `password`, `new-password` → `newPassword` (iOS offers a strong password), `one-time-code` →
+   * `oneTimeCode`, `off` → `none`. Without it (or with `"on"`) the field's `type` picks the iOS
+   * hint.
+   */
+  autoComplete?:
+    | "current-password"
+    | "email"
+    | "new-password"
+    | "on"
+    | "off"
+    | "one-time-code"
+    | "username"
+    | "username webauthn";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
@@ -1144,8 +1200,15 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
 
   inputRef?: (ref: TextInput | null) => void;
   trimOnBlur?: boolean;
+  /** Renders the value in a monospace face with tracking, for codes such as backup codes. */
+  mono?: boolean;
 
   aiSuggestion?: AiSuggestionProps;
+
+  /**
+   * Accessible name for the input. Screen readers otherwise announce "Text input field".
+   */
+  accessibilityLabel?: string;
 }
 
 export interface TextAreaProps extends Omit<TextFieldProps, "multiline" | "type"> {}
@@ -1254,6 +1317,12 @@ export interface HeadingProps extends WithTestID {
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   color?: TextColor;
+  /**
+   * Outline level, 1 for the page title. When set, the heading is exposed to assistive
+   * technology as a heading: `role="heading"` with `aria-level` (an `<h1>`–`<h6>` on web, the
+   * header accessibility role on native). When omitted, the heading is plain text.
+   */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false
@@ -1279,7 +1348,7 @@ export interface MetaProps {
 
 export interface ImageProps {
   alt?: string;
-  color: BoxColor;
+  color?: BoxColor;
   naturalHeight?: number;
   naturalWidth?: number;
   maxWidth?: number;
@@ -1428,6 +1497,79 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   childColumnRounding?: Rounding;
 }
 
+/**
+ * Props for ListDetailLayout, the route-driven list/detail layout used as a route group's
+ * `_layout.tsx`. The group's `index.tsx` renders `ListDetailIndex`, and a dynamic child route
+ * (default `[id].tsx`) renders the detail.
+ */
+export interface ListDetailLayoutProps {
+  /**
+   * The list. Rendered in the left pane when split, and by `ListDetailIndex` when not split.
+   */
+  list: ReactElement;
+  /**
+   * Where selecting an item navigates, e.g. `(id) => \`/mail/${id}\``.
+   */
+  detailHref: (id: string) => Href;
+  /**
+   * The group's own path, e.g. `/mail`. `clear()` returns here, and `selectedId` is only read
+   * from routes directly below it.
+   */
+  indexHref: string;
+  /**
+   * Shown in the detail pane when split and no item is open.
+   */
+  emptyDetail?: ReactElement;
+  /**
+   * Split into list and detail panes when the layout's measured width is at least this many
+   * pixels. Defaults to 768.
+   */
+  splitAtWidth?: number;
+  /**
+   * Width in pixels of the list pane when split. Defaults to 360.
+   */
+  listWidth?: number;
+  /**
+   * The child route name that holds the detail. Defaults to `"[id]"`.
+   */
+  detailRoute?: string;
+  /**
+   * The route param that holds the item id. Defaults to `"id"`.
+   */
+  paramName?: string;
+  /**
+   * Screen options passed through to the underlying expo-router Stack.
+   */
+  screenOptions?: ComponentProps<typeof Stack>["screenOptions"];
+  /**
+   * Optional `Stack.Screen` definitions passed through to the underlying expo-router Stack.
+   */
+  children?: React.ReactNode;
+}
+
+/**
+ * The value returned by `useListDetail()` inside a ListDetailLayout.
+ */
+export interface ListDetailState {
+  /**
+   * True when the list and detail panes are shown side by side.
+   */
+  isSplit: boolean;
+  /**
+   * The id of the open item, read from the detail route. Undefined on the index route.
+   */
+  selectedId?: string;
+  /**
+   * Open an item. Pushes the detail route, or replaces the open detail when split, so back
+   * always returns to the list.
+   */
+  select: (id: string) => void;
+  /**
+   * Close the open item and return to the group's index route.
+   */
+  clear: () => void;
+}
+
 export type PermissionKind =
   | "location"
   | "locationAlways"
@@ -1484,36 +1626,39 @@ export interface AddressAutocompleteProps extends WithTestID {
   googlePlacesMobileStyles?: Styles;
 }
 
+/** Imperative methods exposed by an ActionSheet ref. */
+export interface ActionSheetHandle {
+  /**
+   * Open or close the ActionSheet.
+   */
+  setModalVisible(visible?: boolean): void;
+
+  /**
+   * Open the Action Sheet.
+   */
+  show(): void;
+
+  /**
+   * Close the ActionSheet.
+   */
+  hide(): void;
+
+  /**
+   * Attach this to any child ScrollView Component's onScrollEndDrag,
+   * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
+   * closing and bouncing back properly.
+   */
+  handleChildScrollEnd(): void;
+
+  /**
+   * Snap ActionSheet to given offset
+   */
+  snapToOffset(offset: number): void;
+}
+
 export interface ActionSheetProps extends WithTestID {
   children?: React.ReactNode;
-  ref?: React.MutableRefObject<{
-    /**
-     * Open or close the ActionSheet.
-     */
-    setModalVisible(visible?: boolean): void;
-
-    /**
-     * Open the Action Sheet.
-     */
-    show(): void;
-
-    /**
-     * Close the ActionSheet.
-     */
-    hide(): void;
-
-    /**
-     * Attach this to any child ScrollView Component's onScrollEndDrag,
-     * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
-     * closing and bouncing back properly.
-     */
-    handleChildScrollEnd(): void;
-
-    /**
-     * Snap ActionSheet to given offset
-     */
-    snapToOffset(offset: number): void;
-  }>;
+  ref?: React.Ref<ActionSheetHandle>;
   /**
    * Animate the opening and closing of ActionSheet.
 
@@ -2298,6 +2443,11 @@ export interface ButtonProps extends WithTestID {
  */
 export interface SocialLoginButtonProps extends WithTestID {
   /**
+   * Accessible name. Defaults to the button text.
+   */
+  accessibilityLabel?: string;
+
+  /**
    * The OAuth provider for the social login.
    */
   provider: "google" | "github" | "apple";
@@ -2316,10 +2466,18 @@ export interface SocialLoginButtonProps extends WithTestID {
   /**
    * The visual variant of the button.
    * - "primary": Uses the provider's brand colors
-   * - "outline": Uses an outline style with neutral colors
+   * - "outline": Neutral outline pill, matching the other sign-in methods
    * @default "primary"
    */
   variant?: "primary" | "outline";
+
+  /**
+   * When set on the outline variant, highlights the pill and shows this label inside it.
+   */
+  lastUsedLabel?: string;
+
+  /** Test ID of the last-used label. Requires `lastUsedLabel`. */
+  lastUsedTestID?: string;
 
   /**
    * If true, the button will be disabled.
@@ -3860,7 +4018,7 @@ export interface TableNumberProps {
   /**
    * The number to display in the text field.
    */
-  value: string;
+  value: string | number;
   /**
    * Callback to save the text field value.
    */
@@ -3869,7 +4027,7 @@ export interface TableNumberProps {
    * Numbers generally should be right aligned for ease of scanability.
    * @default "right"
    */
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export interface SliderProps extends HelperTextProps, ErrorTextProps {

@@ -24,8 +24,10 @@ mock.module("../useAdminApi", () => ({
 import {RecentActivityWidget} from "../widgets/RecentActivityWidget";
 
 const auditModel: AdminModelConfig = {
+  defaultSort: "-created",
   displayName: "Audit logs",
   fields: {},
+  listFields: [],
   name: "AdminAuditLog",
   routePath: "/admin/audit-logs",
 };

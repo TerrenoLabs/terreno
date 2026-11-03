@@ -1,11 +1,17 @@
 import type http from "node:http";
 import * as Sentry from "@sentry/bun";
-import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
+import {
+  AdminApp,
+  DocumentStorageApp,
+  mcpAdminModels,
+  mcpAdminScripts,
+} from "@terreno/admin-backend";
 import {AdminSpaServeApp} from "@terreno/admin-spa";
 import {AIAdminApp, AIService, createLocalObservabilityPlugin, ObservabilityApp} from "@terreno/ai";
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
+  AccountSecurityApp,
   AuditApp,
   BetterAuthApp,
   backfillAdmins,
@@ -55,7 +61,6 @@ import {
 } from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
-import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -82,7 +87,12 @@ import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
-import {buildBetterAuthConfig, getAuthProvider, getCorsOrigins} from "./utils/betterAuthConfig";
+import {
+  buildBetterAuthConfig,
+  getAuthProvider,
+  getCorsOrigins,
+  getFrontendUrl,
+} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
@@ -184,7 +194,7 @@ export const start = async (
     const terraApp = new TerrenoApp({
       accessControl: access,
       authOptions: {
-        publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+        publicAppUrl: getFrontendUrl(),
         sendMail: async (message) => {
           await getCommsService().sendMail(message);
         },
@@ -201,10 +211,23 @@ export const start = async (
         level: Configuration.get<string>("LOGGING_LEVEL") as "debug" | "info" | "warn" | "error",
         logRequests: Boolean(!isDeployed),
       },
+      // Opt-in OAuth for remote MCP clients; consent runs on the admin SPA's built-in screen.
+      mcpOAuth:
+        process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
+          ? {
+              allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost", "127.0.0.1"],
+              consentUrl: `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
+              dynamicClientRegistration: true,
+              enabled: true,
+              issuer: process.env.PUBLIC_API_URL,
+            }
+          : undefined,
+      mcpRequestLog: {enabled: true, retentionDays: 30},
       mcpServiceTokens: {
         enabled: true,
         publicMcpUrl: process.env.PUBLIC_API_URL ?? process.env.BETTER_AUTH_URL,
       },
+      mcpToolSettings: true,
       migrations: {dir: resolveExampleMigrationsDir()},
       organizations: {
         settingsSchema: organizationSettingsSchema,
@@ -432,6 +455,9 @@ export const start = async (
         })
       )
       .register(new AuditApp())
+      // Platform account recovery at /users/:id/security/* (operators and superadmins).
+      // Needs AuditApp: every recovery action writes a security AuditEvent.
+      .register(new AccountSecurityApp({accessControl: access}))
       .register(new AIAdminApp());
 
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
@@ -479,13 +505,15 @@ export const start = async (
           ],
           home: exampleAdminHome,
           migrations: {dir: resolveExampleMigrationsDir()},
-          models: [mcpServiceTokenAdminModel],
+          models: mcpAdminModels({requestLog: true, toolSettings: true}),
           organizations: true,
-          scripts: adminScripts,
+          scripts: [...adminScripts, ...mcpAdminScripts()],
         })
       )
       .register(
         new ConsentApp({
+          // Staff whose roles grant consentResponse:signOnBehalf may sign consent for others.
+          accessControl: access,
           auditTrail: true,
           resolveConsentForms: (user, forms) => (user.admin ? [] : forms),
           supportedLocales: ["en", "es"],

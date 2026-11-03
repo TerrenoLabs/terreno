@@ -1,0 +1,730 @@
+# Add agent asks to a chat
+
+Pass `asks: true` to the GPT routes, then show and answer asks with `GPTChat`. The example app
+does both: `example-backend/src/api/ai.ts` and `example-frontend/app/(tabs)/ai.tsx`. Fields, events,
+and errors are in the [reference](../reference/agent-ui-asks.md).
+
+To answer asks from a watch or another client that does not read server-sent events, see
+[Answer asks from an Apple Watch or another small client](#answer-asks-from-an-apple-watch-or-another-small-client).
+
+## Try it without an API key
+
+The example backend uses a scripted demo agent, `terreno-demo-agent`, when no model is configured.
+
+1. Start `example-backend` without `GEMINI_API_KEY` or `GOOGLE_VERTEX_PROJECT`. The log says
+   chat uses the scripted Terreno demo agent.
+2. Start `example-frontend`, log in, and open the AI tab. Leave the Gemini API key empty: a saved
+   key is sent as `x-ai-api-key` and switches chat to that model.
+3. Send "Help me pick a plan" (a suggested prompt).
+4. Tap a plan. The agent replies with your pick, and the card collapses to "You chose: Team".
+5. Reload the page and open the conversation again. The summary is still there.
+6. Send "Pick toppings for my pizza". Check up to three toppings, type your own in "Another
+   topping", and press "Add toppings". The agent names every topping you picked, and the card
+   collapses to "You chose: Extra cheese, Olives. Another topping: Basil".
+7. Send "Archive old chats" (a suggested prompt). The card shows a red "Archive 12 chats" button
+   first and "Keep them" last, with no Skip. Press "Keep them": the agent says it kept your chats,
+   and the card collapses to "You declined: Keep them".
+8. Send "Send the weekly report" and press "Send report". The card collapses to "You confirmed:
+   Send report". Reload the page: both summaries are still there.
+9. Send "Draft an announcement" (a suggested prompt). The card shows a markdown editor with the agent's draft and a
+   length hint. Add a line and press "Post it": the agent quotes your text, and the card
+   collapses to "You edited the draft (N characters)" with the text under it. Press "Post it"
+   without editing and the summary says "You approved the draft as is".
+10. Send "Fill in the invoice details" (a suggested prompt). The card shows eight fields, most
+    filled in from defaults. Pick a start date, type "900" in Seats (it says "Enter a number from
+    1 to 500." and Send details stays disabled), change it to "12", and press "Send details". The
+    agent lists the details you sent, and the card collapses to "You sent the form (N fields)"
+    with each field's label and value under it.
+11. Send "Upload a receipt" (a suggested prompt). Press "Choose files", pick an image and a text
+    or CSV file, and press "Send receipt". The agent names each file with its type and size, and
+    the first line of each text or CSV file. The card collapses to "You sent 2 files: …". Without
+    `GCS_BUCKET`, the files travel as data URLs; see
+    [Accept uploads with or without GCS](#accept-uploads-with-or-without-gcs).
+12. On the Todos tab, add two todos and check both. On the AI tab, send "Delete my completed
+    todos". The agent calls the real `deleteCompletedTodos` tool, and the server pauses on an
+    approval card: a red "Delete" button first and "Keep them" last. Press "Keep them": the agent
+    says it kept your todos, and the Todos tab still shows them. Send the message again and press
+    "Delete": the agent names the deleted todos, and they are gone from the Todos tab. See
+    [Require approval before a tool runs](#require-approval-before-a-tool-runs).
+
+| You send | The demo agent |
+| --- | --- |
+| A message with the word topping or toppings, such as "pick toppings" or "pick several toppings" | Asks "Which toppings should I add? Pick up to three." with `select: "many"`, six toppings (Extra cheese and Mushrooms preselected), `maxSelected: 3`, and an Other field titled "Another topping" |
+| A message with "weekly report", such as "send the weekly report" | Asks `ask_confirm` "Send the weekly report to the team now? It goes to 8 people." with "Send report" (primary) and "Not now" |
+| A message with the word archive, such as "archive old chats" | Asks `ask_confirm` "Archive the 12 chats older than 90 days? You can't undo this." with `destructive: true`, "Archive 12 chats" (destructive) and "Keep them" |
+| A message with the word announcement, such as "draft an announcement" | Asks `ask_markdown` with a launch announcement draft as `initial`, `minLength: 40`, `maxLength: 2000`, and "Post it" as `submitLabel` |
+| A message with the word invoice or form, such as "invoice details" or "fill out a form" | Asks `ask_form` "Invoice details" with eight fields: company name and billing email (required, with defaults), callback phone, seats (a whole number from 1 to 500, default 5), start date, region (select, default United States), "Email me the invoice" (default on), and notes |
+| A message with the word receipt or receipts, or "upload" followed by file, document, photo, or image (optionally after a, an, my, some, or the), such as "upload a receipt" or "upload a file". "I uploaded the slides" does not match. | Asks `ask_files` "Upload a receipt" for up to 3 images, PDFs, text, or CSV files, with "Send receipt" as `submitLabel` |
+| "delete", "clear", or "remove", then "completed" later in the same sentence, such as "delete my completed todos" or "clear the completed ones". "I completed the report, please delete the draft" does not match. | Calls the host tool `deleteCompletedTodos` (`needsApproval: true`). The server asks "Delete all of your completed todos? You can't undo this." with "Delete" (destructive) and "Keep them". After Delete, the agent names the deleted todos; after Keep them or a cancel, it says it kept them. Without the tool, or with asks off, it says why it did nothing. |
+| Any other message with a word like pick, choose, or plan, such as "choose between several plans" | Asks "Which plan should I set up for your workspace?" with Starter, Team (the default), and Enterprise |
+| The same kind of message, on routes without `asks` | Says asks are turned off and how to turn them on |
+| An answer, or Skip | Replies with the plan or the toppings you picked, including the topping you typed, says whether it would send the report or archive the chats, quotes an edited draft or says you approved it, lists the invoice details you sent, names the files you sent, or says it skipped the question |
+| Anything else, with or without `asks` | Explains that it follows a script and how to use a real model |
+| Any of these with `surface: "compact"` | Asks the same plan and confirm questions, which already fit a watch, and replies in one or two short sentences without markdown. The compact surface offers only select one for `choice` and no `markdown`, `form`, or `files`, so a toppings, announcement, invoice, or receipt message gets a text reply that says to open the chat on a phone. |
+
+To script another exchange, add an entry to `DEMO_SCENARIOS` in
+`example-backend/src/api/demoAgent.ts`: a trigger pattern, one ask input, and a reply for the
+answer. Scenarios match in order, so put one with narrower trigger words first. Set
+`compactFallback` when the input does not fit the compact surface.
+
+## Confirm before a destructive tool
+
+With asks on, the model can call `ask_confirm` before a tool that deletes data, sends something on
+the user's behalf, spends money, or cannot be undone. The asks system prompt tells it to, and to
+take the action only after `{"confirmed": true}`. `ask_confirm` has no `execute`, so the turn
+pauses until the user presses a button.
+
+1. Say in the tool's description what it changes and that it needs a confirm first:
+
+   ```typescript
+   const deleteCompletedTodos = tool({
+     description:
+       "Deletes the user's completed todos. Cannot be undone. Call ask_confirm with " +
+       "destructive: true first, and call this only after {confirmed: true}.",
+     execute: async () => ({deleted: await removeCompletedTodos(userId)}),
+     inputSchema: z.object({}),
+   });
+
+   addGptRoutes(router, {aiService, asks: true, tools: {deleteCompletedTodos}});
+   ```
+
+2. Check the rule in the tool too. The model decides when to ask, so a tool that must never run
+   unconfirmed should refuse on its own, or let the server enforce it with `needsApproval`; see
+   [Require approval before a tool runs](#require-approval-before-a-tool-runs).
+
+The card shows `confirmLabel` first and `denyLabel` last. With `destructive: true` the approve
+button uses the destructive style, and a watch never makes it the Double Tap button. A deny sends
+`{"confirmed": false}`, so the model hears "no" and skips the action. Skip appears only when the
+ask sets `allowDecline: true`. See [confirm](../reference/agent-ui-asks.md#confirm).
+
+## Require approval before a tool runs
+
+`ask_confirm` relies on the model to ask first. When a tool must never run without the user's
+yes, set the AI SDK's `needsApproval: true` on it. The server then pauses the turn on a `confirm`
+card of its own before the tool runs, whatever the model does. The example backend does this in
+`example-backend/src/api/todoTools.ts`.
+
+1. Build the tool per request, so it acts only on the caller's data, and mark it
+   `needsApproval`:
+
+   ```typescript
+   import {tool, zodSchema} from "ai";
+
+   export const createTodoTools = ({userId}) => ({
+     deleteCompletedTodos: tool({
+       description: "Delete all of the signed-in user's completed todos.",
+       execute: async () => {
+         const todos = await Todo.find({completed: true, ownerId: userId});
+         for (const todo of todos) {
+           todo.deleted = true;
+           await todo.save();
+         }
+         return {deleted: todos.length, titles: todos.map((todo) => todo.title)};
+       },
+       inputSchema: zodSchema(z.object({}).strict()),
+       needsApproval: true,
+     }),
+   });
+   ```
+
+   `Todo` is synced, and `syncPlugin` refuses bulk writes, so the tool saves each soft delete.
+   Each save reaches open Todos screens through sync.
+
+2. Word the card with `asks.approvals`, and pass the tool with `createRequestTools`:
+
+   ```typescript
+   addGptRoutes(router, {
+     aiService,
+     asks: {
+       approvals: {
+         deleteCompletedTodos: () => ({
+           confirmLabel: "Delete",
+           denyLabel: "Keep them",
+           destructive: true,
+           prompt: "Delete all of your completed todos? You can't undo this.",
+           title: "Delete completed todos",
+         }),
+       },
+     },
+     createRequestTools: (req) => createTodoTools({userId: req.user?._id}),
+   });
+   ```
+
+   The function gets the call's input, so the prompt can name what the call changes. Without an
+   entry the card says "Allow deleteCompletedTodos?" with the tool's description and Allow / Deny
+   buttons. Set `destructive: true` for a tool that deletes data, so the approve button is red and a
+   watch never makes it the Double Tap button.
+
+3. Show the card like any ask. `GPTChat` renders it as a `confirm`; the `{ask}` event adds
+   `origin: "approval"` and the host `toolName`. A watch answers it with the `approve` or `deny`
+   button through `turn`.
+
+Approve runs the tool once and the model gets its result. Deny or a cancel never runs it, and the
+model gets a denial with a reason such as `user_denied`. A new message also cancels the approval
+without running the tool; the model then sees only the new message. Asks must be on: with
+them off, the tool never runs. When the model calls two approval tools in one step, the user
+approves the first, and the second is denied with `one_ask_at_a_time`. See
+[Approval asks](../reference/agent-ui-asks.md#approval-asks).
+
+## Have the user edit a draft
+
+With asks on, the model can call `ask_markdown` with a draft in `initial`, such as an email or
+release notes, before it sends or saves the text. The chat shows a markdown editor on the draft.
+The answer is `{markdown, changed}`: `changed: false` means the user approved the draft as is,
+and the server rejects a `changed` flag that does not match the text (`CHANGED_MISMATCH`). Set
+`minLength` and `maxLength` to bound the answer; an `initial` outside them makes the user edit
+before Submit is enabled. A phone or watch that shows only the simple card gets "Approve draft"
+(when the draft fits the bounds) and Cancel, with "Edit on your phone". See
+[markdown](../reference/agent-ui-asks.md#markdown).
+
+## Collect a few details in one form
+
+With asks on, the model can call `ask_form` when it needs several values together, such as the
+details for an invoice or a booking. Each of the 1–8 fields has an `id`, a `label`, and a `type`:
+`text`, `textarea`, `email`, `url`, `phone`, `number`, `date`, `time`, `datetime`, `boolean`,
+`select`, or `multiselect`. The chat shows the matching `@terreno/ui` control for each field and
+answers `{values}`, keyed by field id. Dates come back as `YYYY-MM-DD`, times as 24-hour `HH:mm`,
+and datetimes with an offset. The server checks every value against its field, so a 400 names
+each bad field (`REQUIRED_FIELD`, `FIELD_TYPE_MISMATCH`, `OUT_OF_RANGE`, `INVALID_DATE`) at
+`content.values.<id>`, and the card shows each error on its field. Give required fields a
+`default` when you know the likely answer: a phone or watch that shows only the simple card then
+gets "Submit defaults" and Cancel, with "Fill it in on your phone". See
+[form](../reference/agent-ui-asks.md#form).
+
+## Accept uploads with or without GCS
+
+With asks on, the model can call `ask_files` to have the user send a receipt, a screenshot, or an
+export. Each file in the answer names its bytes one of two ways, and the host picks which:
+
+| Host | Ref | Setup |
+| --- | --- | --- |
+| No file storage | `{url}`: a base64 `data:` URL | Nothing. `GPTChat` sends data URLs by default. |
+| A GCS bucket | `{fileId}`: the id `POST /files/upload` returns | Give the server a `FileStorageService`, and pass `GPTChat` a `resolveAskFiles` that uploads |
+
+Either way the server checks each file's bytes against its declared type before the model sees it
+(`MIME_MISMATCH`), caps each file at 10 MB (`FILE_TOO_LARGE`), and stores only
+`{fileId?, filename, mimeType, size}` in the history. Data URLs are not saved, so a long
+conversation does not grow by the size of its files. See [files](../reference/agent-ui-asks.md#files).
+
+### Without GCS
+
+1. Turn asks on: `addGptRoutes(router, {aiService, asks: true})`.
+2. Render `GPTChat` with `onAskSubmit`. Leave `resolveAskFiles` unset.
+
+The answer's request body carries each file as a data URL, about a third larger than the file.
+`TerrenoApp` parses JSON bodies up to 50 MB, so one answer fits about three 10 MB files. For more,
+use uploads, or lower the per-file cap with `asks: {maxFileSizeBytes: 5_000_000}`.
+
+### With GCS
+
+1. Create the storage service and pass it to both the file routes and the chat. With `AiApp`,
+   set both options and it does this for you:
+
+   ```typescript
+   const fileStorageService = new FileStorageService({bucketName: process.env.GCS_BUCKET});
+
+   new AiApp({aiService, asks: true, fileStorageService, gcsBucket: process.env.GCS_BUCKET});
+   ```
+
+   With the route functions, pass the same service to `addFileRoutes` and, as
+   `fileStorageService`, to the chat options you give `addGptRoutes` and `addGptHistoryRoutes`.
+   Without it, the chat cannot read uploads, and every `fileId` fails with `FILE_NOT_OWNED`.
+2. Pass `GPTChat` a resolver that uploads each file and returns its id. The example app's
+   `createAskFilesResolver` in `example-frontend/lib/gptAsks.ts` does this, and falls back to data
+   URLs when `/files/upload` answers 404, so the same app works with and without a bucket:
+
+   ```tsx
+   const [postFilesUpload] = usePostFilesUploadMutation();
+   const resolveAskFiles = useMemo(
+     () =>
+       createAskFilesResolver({
+         upload: createAskFileUploader({
+           send: async (file) => postFilesUpload(await uploadFormData(file)),
+         }),
+       }),
+     [postFilesUpload]
+   );
+
+   <GPTChat resolveAskFiles={resolveAskFiles} {...chatProps} />;
+   ```
+
+   `postFilesUpload` is an RTK Query mutation in `example-frontend/store/sdk.ts` whose body is a
+   `FormData` with a `file` part; the base query sends it with the session token. The generated
+   SDK has no file endpoints, because `/files/*` exists only on a server with a bucket.
+   `createAskFileUploader` (in `gptAsks.ts`) returns `undefined` on 404, the upload's `id` and
+   `size` on success, and throws with the server's detail otherwise (such as 401 when the session
+   has ended), so the ask stays open. See `example-frontend/app/(tabs)/ai.tsx`.
+
+A resolver that throws keeps the ask open, and the card says the files could not be sent. A
+`fileId` must name an upload of the user who answers, so one user cannot send another's files.
+
+## 1. Enable asks on the backend
+
+```typescript
+addGptRoutes(router, {aiService, asks: true});
+```
+
+`new AiApp({aiService, asks: true})` takes the same option. A real model decides when to ask; the
+system prompt that asks add tells it how. See [Enable asks](../reference/agent-ui-asks.md#enable-asks).
+
+## 2. Show asks from the stream
+
+`POST /gpt/prompt` adds three events. Map them onto `GPTChat` messages:
+
+| Event | Transcript change |
+| --- | --- |
+| `{ask: {toolCallId, kind, input, simple}, historyId}` | Append a `tool-call` message with `ask: {kind, input, simple, status: "pending", toolCallId}`, and remember `historyId` for the ask so it can be answered before `{done}` |
+| `{askResolved: {toolCallId, action}}` | Mark the ask `answered` (`cancelled` for `cancel`), set its `response`, and insert a `tool-result` message right after it |
+| `{done: true, historyId, pendingAsk?}` | The turn ended, also after `{error}`. `pendingAsk.toolCallId` names the ask the conversation waits on. |
+
+```typescript
+if (data.ask) {
+  askHistoryIdsRef.current.set(data.ask.toolCallId, data.historyId);
+  setCurrentMessages((prev) => [...withoutEmptyAssistant(prev), askMessage(data.ask)]);
+} else if (data.askResolved) {
+  const {action, toolCallId} = data.askResolved;
+  setCurrentMessages((prev) => withResolvedAsk({action, messages: prev, submitted, toolCallId}));
+}
+```
+
+Copy `askMessage`, `withResolvedAsk`, `withoutEmptyAssistant`, and `answerHistoryId` from
+`example-frontend/lib/gptAsks.ts`. `submitted` is the answer this turn sent, so the summary can
+name the chosen option. `withoutEmptyAssistant` drops the empty assistant placeholder but keeps a
+reply that holds only an image or a file. `askHistoryIdsRef` is a `useRef(new Map<string, string>())`.
+
+Insert the `tool-result` message even though `GPTChat` hides it. The server stores the ask and its
+answer as two rows, and ratings are sent by message index.
+
+A turn can stream only `{done}`, for example when the server cancels a second ask because one is
+already pending. Reload the conversation with `GET /gpt/histories/:id` when a turn streamed nothing
+visible, or when `done.pendingAsk` names an ask the stream did not send. The `@terreno/rtk` base
+query returns the `data` of single-document responses, so an RTK query for that route resolves to
+the history itself, not `{data}` (see [emptyApi](../reference/legacy/rtk.md#emptyapi--emptysplitapi)).
+
+Refetch the history list after a turn that streams ask events or reloads the conversation. The
+example app reopens a conversation from the list's cached rows, which still hold the pending ask.
+
+## 3. Show asks in saved conversations
+
+An ask's `tool-call` row has `ask: {kind, status}` and the ask input in `args`.
+`GptHistory.pendingAsk` holds the ask the conversation waits on, with its simple card.
+
+```typescript
+const prompts = history.prompts.map((p): GPTChatMessage => {
+  const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
+  return {
+    ...(ask ? {ask} : {}),
+    content: p.text,
+    role: p.type,
+    ...(p.toolCallId && p.type === "tool-call"
+      ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
+      : {}),
+    ...(p.toolCallId && p.type === "tool-result"
+      ? {toolResult: {result: p.result, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
+      : {}),
+  };
+});
+```
+
+`askFromHistoryPrompt` is in `example-frontend/lib/gptAsks.ts`. Keep `tool-result` rows as
+`tool-result` messages: `GPTChat` hides the ones that answer an ask and reads the summary from them.
+
+## 4. Send answers
+
+```tsx
+const handleAskSubmit = useCallback(
+  async ({response, toolCallId}: AskSubmission): Promise<void> => {
+    // A new chat's ask can be answered before `{done}` sets currentHistoryId.
+    const historyId = answerHistoryId({
+      askHistoryIds: askHistoryIdsRef.current,
+      currentHistoryId,
+      toolCallId,
+    });
+    if (!historyId) {
+      return;
+    }
+    await runTurn({
+      body: {askResponse: {...response, toolCallId}, historyId},
+      submitted: {response, toolCallId},
+    });
+  },
+  [currentHistoryId, runTurn]
+);
+
+return (
+  <GPTChat
+    askErrors={askErrors}
+    currentMessages={currentMessages}
+    histories={histories}
+    onAskSubmit={handleAskSubmit}
+    onCreateHistory={handleCreateHistory}
+    onDeleteHistory={handleDeleteHistory}
+    onSelectHistory={handleSelectHistory}
+    onSubmit={handleSubmit}
+  />
+);
+```
+
+`runTurn` is the function that already posts prompts and reads the SSE stream. An answer's turn
+starts with `{askResolved}`, then streams the continuation. Return the promise: the pressed button
+shows a loading state until it settles.
+
+## 5. Handle errors
+
+| Response | Handling |
+| --- | --- |
+| 400 `Invalid askResponse` with `fields` | Set `askErrors[toolCallId]` to `fields`. The card shows each `message`. Clear the entry when the user answers again. |
+| 409 `This ask is no longer pending` on an answer | Another tab or device resolved the ask first. Reload the conversation and the history list so the card shows how it ended. |
+| A `prompt` sent while the transcript shows a pending ask, with no `{askResolved}` for it | Another tab or device resolved the ask first, and the message went ahead as a normal prompt. Reload the conversation so the card shows how the ask ended. A `prompt` never gets 409. |
+
+## Answer asks from an Apple Watch or another small client
+
+A client that does not read server-sent events, such as a watch app, a notification action, or a
+chat bot, uses two JSON endpoints on `/gpt/histories`:
+
+| Endpoint | Use |
+| --- | --- |
+| `GET /gpt/histories/pendingAsks` | List the asks waiting on the user, newest first, each with its simple card |
+| `POST /gpt/histories/:id/turn` | Send a message or a pressed button, and get the reply once the turn finishes |
+
+The client needs no knowledge of ask kinds. It shows the card's text and buttons and sends back the
+pressed button's `id`. React Native does not run on watchOS, so a watch client is a native SwiftUI
+target. [`@bacons/apple-targets`](https://github.com/evanbacon/expo-apple-targets) adds one to an
+Expo app. Terreno does not ship a watch app; the steps below sketch one. Fields and errors are in
+[Headless endpoints](../reference/agent-ui-asks.md#headless-endpoints).
+
+### 1. Register the endpoints
+
+Both endpoints exist only with asks on. `new AiApp({aiService, asks: true})` registers both. With
+the route functions, pass `addGptHistoryRoutes` the options you give `addGptRoutes`, as `chat`, so
+`turn` runs the same chat as `/gpt/prompt`. Without `chat`, or with `asks` off in it, it adds
+neither endpoint:
+
+```typescript
+const chat = {aiService, asks: true};
+addGptHistoryRoutes(router, {chat});
+addGptRoutes(router, chat);
+```
+
+### 2. Try them with curl
+
+Run the example backend as in [Try it without an API key](#try-it-without-an-api-key) and seed
+it with `bun run backend:seed`. This script signs in, asks the demo agent to pick a plan from a
+small screen, lists the pending ask's buttons, and presses Starter. It needs `jq`.
+
+```bash
+API=http://localhost:4000
+JSON="Content-Type: application/json"
+
+TOKEN=$(curl -s -X POST $API/api/auth/sign-in/email -H "$JSON" \
+  -d '{"email": "test@example.com", "password": "testpassword123"}' | jq -r .token)
+AUTH="Authorization: Bearer $TOKEN"
+
+HISTORY=$(curl -s -X POST $API/gpt/histories -H "$AUTH" -H "$JSON" -d '{}' | jq -r .data._id)
+ASK=$(curl -s -X POST $API/gpt/histories/$HISTORY/turn -H "$AUTH" -H "$JSON" \
+  -d '{"prompt": "Help me pick a plan", "surface": "compact"}' | jq -r .data.pendingAsk.toolCallId)
+curl -s $API/gpt/histories/pendingAsks -H "$AUTH" | jq -c '[.data[0].simple.buttons[].id]'
+curl -s -X POST $API/gpt/histories/$HISTORY/turn -H "$AUTH" -H "$JSON" \
+  -d "{\"toolCallId\": \"$ASK\", \"buttonId\": \"option:starter\", \"surface\": \"compact\"}" |
+  jq -r .data.text
+```
+
+It prints the card's button ids, the default plan first, then the demo agent's compact reply:
+
+```text
+["option:team","option:starter","option:enterprise"]
+You picked the Starter plan. A real agent would set it up now.
+```
+
+### 3. Hand the session token to the watch
+
+The watch signs its requests with the phone's Better Auth session token, sent as
+`Authorization: Bearer <token>`, the header the example app sends on every request. On the phone,
+the token is `session.token` from `authClient.getSession()`, which `getSessionToken()` in
+`example-frontend/lib/betterAuth.ts` reads.
+
+Send the token to the watch in the WatchConnectivity application context. From JavaScript,
+`react-native-watch-connectivity` wraps `WCSession`. It needs a development build and works only
+on iOS:
+
+```typescript
+import {Platform} from "react-native";
+import {updateApplicationContext} from "react-native-watch-connectivity";
+
+import {getSessionToken} from "@/lib/betterAuth";
+
+/** Call after sign-in and after sign-out: an empty token tells the watch to forget it. */
+export const shareSessionWithWatch = async (): Promise<void> => {
+  if (Platform.OS !== "ios") {
+    return;
+  }
+  updateApplicationContext({sessionToken: (await getSessionToken()) ?? ""});
+};
+```
+
+The application context holds only the latest value, and the watch receives it the next time the
+watch app runs. On the watch, keep the token in the keychain, never in `UserDefaults`:
+
+```swift
+import WatchConnectivity
+
+/// Keeps the session token the phone sends. Call `start()` when the watch app launches.
+final class SessionTokenReceiver: NSObject, WCSessionDelegate {
+    static let shared = SessionTokenReceiver()
+
+    func start() {
+        WCSession.default.delegate = self
+        WCSession.default.activate()
+    }
+
+    func session(
+        _ session: WCSession,
+        activationDidCompleteWith activationState: WCSessionActivationState,
+        error: Error?
+    ) {
+        store(session.receivedApplicationContext)
+    }
+
+    func session(_ session: WCSession, didReceiveApplicationContext context: [String: Any]) {
+        store(context)
+    }
+
+    private func store(_ context: [String: Any]) {
+        guard let token = context["sessionToken"] as? String else {
+            return
+        }
+        if token.isEmpty {
+            TokenKeychain.delete()
+        } else {
+            TokenKeychain.save(token)
+        }
+    }
+}
+```
+
+`TokenKeychain` stands for your keychain wrapper: one generic password item written with
+`SecItemAdd` and `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, read with
+`SecItemCopyMatching`, and removed with `SecItemDelete`. The token has the same access as the phone
+app. It stops working when the session expires or the user signs out.
+
+### 4. Call the endpoints with URLSession
+
+```swift
+import Foundation
+
+struct SimpleCardButton: Decodable, Identifiable {
+    let id: String
+    let label: String
+    /// "default", "primary", "destructive", or "cancel"
+    let style: String
+}
+
+struct SimpleCard: Decodable {
+    let title: String?
+    let text: String
+    let buttons: [SimpleCardButton]
+    let handoff: Bool
+}
+
+struct PendingAsk: Decodable, Identifiable {
+    let historyId: String
+    let toolCallId: String
+    let title: String?
+    let simple: SimpleCard
+
+    var id: String { toolCallId }
+}
+
+struct TurnResult: Decodable {
+    let text: String
+    let error: String?
+}
+
+enum AskClientError: Error {
+    case signedOut
+    case noLongerPending
+    case failed(status: Int)
+}
+
+struct AskClient {
+    let baseURL: URL
+    let token: String
+
+    func pendingAsks() async throws -> [PendingAsk] {
+        try await send("GET", "gpt/histories/pendingAsks")
+    }
+
+    func press(_ button: SimpleCardButton, on ask: PendingAsk) async throws -> TurnResult {
+        try await send("POST", "gpt/histories/\(ask.historyId)/turn", body: [
+            "buttonId": button.id,
+            "surface": "compact",
+            "toolCallId": ask.toolCallId,
+        ])
+    }
+
+    func say(_ prompt: String, in historyId: String) async throws -> TurnResult {
+        try await send("POST", "gpt/histories/\(historyId)/turn", body: [
+            "prompt": prompt,
+            "surface": "compact",
+        ])
+    }
+
+    private struct Envelope<Value: Decodable>: Decodable {
+        let data: Value
+    }
+
+    private func send<Value: Decodable>(
+        _ method: String, _ path: String, body: [String: String]? = nil
+    ) async throws -> Value {
+        var request = URLRequest(url: baseURL.appending(path: path))
+        request.httpMethod = method
+        // A turn responds only when the agent is done, which can take longer than the 60 s default.
+        request.timeoutInterval = 120
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONEncoder().encode(body)
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        switch status {
+        case 200..<300:
+            return try JSONDecoder().decode(Envelope<Value>.self, from: data).data
+        case 401:
+            TokenKeychain.delete()
+            throw AskClientError.signedOut
+        case 409:
+            throw AskClientError.noLongerPending
+        default:
+            throw AskClientError.failed(status: status)
+        }
+    }
+}
+```
+
+`JSONDecoder` ignores fields the structs leave out, such as each button's `response`: the server
+answers with the stored `response` of the button whose `id` the watch sends. `turn` also returns
+`pendingAsk` when the reply ends in a new ask. This sketch reloads `pendingAsks` after every turn
+instead, which also picks up asks from other devices. To start a conversation from the watch, send
+`POST /gpt/histories` with the body `{}` and use `data._id` as the `historyId`. The
+[JSON Schemas](../reference/agent-ui-asks.md#json-schemas-and-fixtures) in
+`@terreno/blocks/schemas/` describe every field, if you would rather generate `Codable` types.
+
+The watch sends `surface: "compact"` on every turn, answers included:
+
+- **Every ask fits the watch.** On a compact turn the agent can ask only a `choice` with 2–3
+  options whose labels fit a button uncut and differ from each other, or a `confirm`. Its card
+  has `handoff: false`, so the user can answer it from the watch. `markdown`, `form`, and `files`
+  are never offered.
+- **Replies fit the screen.** The system prompt asks for at most two short sentences.
+- **The surface covers one turn.** The server does not store it. An answer starts a turn that can
+  end in a new ask, so the answer sends `compact` too. The phone's chat sends no `surface`, so its
+  turns in the same conversation use `full` and offer every ask kind.
+
+`pendingAsks` also lists asks the agent made in the phone's chat, whose cards can set `handoff`.
+Show the buttons such a card has, such as `Use "Team"` and Skip, with its "Continue on your phone"
+line. A `markdown` card offers "Approve draft" and Cancel; say "Edit on your phone" for it. A
+`form` card offers "Submit defaults", when every required field has a default, and Cancel; say
+"Fill it in on your phone" for it. A `files` card offers only Skip, when the ask allows it; say
+"Upload on your phone" for it.
+
+### 5. Show the card in SwiftUI
+
+```swift
+import SwiftUI
+
+struct PendingAskView: View {
+    let ask: PendingAsk
+    let client: AskClient
+    /// Shows the reply, then reloads `pendingAsks`. `nil` when the answer did not go through.
+    let onFinish: (TurnResult?) -> Void
+
+    @State private var pressedButtonId: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                if let title = ask.simple.title {
+                    Text(title).font(.headline)
+                }
+                Text(ask.simple.text)
+                if ask.simple.handoff {
+                    Text("Continue on your phone")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(ask.simple.buttons) { button in
+                    Button(button.label, role: role(for: button.style)) {
+                        press(button)
+                    }
+                    .tint(button.style == "primary" ? .accentColor : nil)
+                    .disabled(pressedButtonId != nil)
+                    .handGestureShortcut(.primaryAction, isEnabled: button.id == doubleTapButtonId)
+                }
+            }
+        }
+    }
+
+    /// The first button that is not destructive, so Double Tap never approves a destructive action.
+    private var doubleTapButtonId: String? {
+        ask.simple.buttons.first { $0.style != "destructive" }?.id
+    }
+
+    private func role(for style: String) -> ButtonRole? {
+        switch style {
+        case "destructive":
+            return .destructive
+        case "cancel":
+            return .cancel
+        default:
+            return nil
+        }
+    }
+
+    private func press(_ button: SimpleCardButton) {
+        pressedButtonId = button.id
+        Task {
+            let result = try? await client.press(button, on: ask)
+            pressedButtonId = nil
+            onFinish(result)
+        }
+    }
+}
+```
+
+Keep the buttons in the card's order. When the ask suggests an answer, its button comes first with
+style `primary`, and Skip comes last with style `cancel`. A `confirm` card has the approve button
+first and the deny button last. Give Double Tap (`handGestureShortcut`, watchOS 11 and later) to the
+first button that is not `destructive`: on a destructive confirm that is the deny button, so the
+gesture cannot approve an action that cannot be undone. Disable every button while one answer is
+sending, so a double tap sends one answer instead of a second one that gets 409. `SimpleAskCard`
+in `@terreno/ui` draws the same card in React Native ([props](../reference/ui.md#simpleaskcard)).
+
+### 6. Handle errors
+
+| Response | Handling |
+| --- | --- |
+| 401 | The session ended or the user signed out. The client above deletes the token. Ask the user to open the phone app, which sends a new token after sign-in. |
+| 409 `This ask is no longer pending` | Another device answered or cancelled the ask first. Reload `pendingAsks`. |
+| 400 `UNKNOWN_BUTTON` | The `buttonId` is not on the card. Send only ids from `simple.buttons`; the error's `fix` lists them. |
+| 200 with `error` in `data` | The agent failed after the turn started. The message or answer is kept, with what the agent did before it failed. Show a short error; the next message continues the conversation. |
+| A timeout or a lost connection | The turn still finishes and is saved. Reload `pendingAsks`, or read the conversation with `GET /gpt/histories/:id`. |
+
+## Verify
+
+| Test | Covers |
+| --- | --- |
+| `example-frontend/e2e/ai-chat.spec.ts` | Against a mocked stream: a quick-reply answer, a radio answer after a rejected one, an answer another tab sent first, a turn that streams only `{done}`, a message that goes through after another tab answered the ask, an ask on a new chat answered before `{done}`, the result card of a tool an approval ran shown live, and a receipt sent as data URLs after a rejected answer and as uploads |
+| `example-frontend/lib/gptAsks.test.ts` | Stream events and saved rows mapped to messages, tool results placed with and without a streamed tool call, image-only replies kept, the conversation an answer goes to, and the upload resolver with its data URL fallback |
+| `example-backend/src/api/demoAgent.test.ts` | The demo agent's ask, answers, and replies on both surfaces, a plan ask answered over HTTP with a button of its simple card, an announcement draft edited in chat and approved as is with its card's Approve draft button, and a receipt upload rejected for a wrong file and then named file by file |
+| `ai/src/routes/gptApprovals.test.ts` | Approval asks: the pause without running the tool, the host and default approval inputs, the compact surface, approve running the tool once, deny, decline, and cancel never running it, a prompt that cancels it, extra approvals denied with `one_ask_at_a_time`, `turn` buttons, and crafted answers refused |
+| `example-backend/src/api/todoTools.test.ts`, `demoAgent.test.ts` (cleanup) | `deleteCompletedTodos` soft-deletes only the caller's completed todos, and the demo agent's approval flow over `/gpt/prompt` and `turn` |
+| `ai/src/routes/gptFiles.test.ts` | `ask_files` answers with data URLs and with uploads: the bytes the model gets, the metadata-only stored answer, and each error code |
+| `ui/src/GPTChat.test.tsx`, `ui/src/asks/AskCard.test.tsx` | Rendering, focus, answers, errors, and summaries |
+| `ai/src/routes/gptHistories.test.ts`, `ai/src/aiApp.test.ts` | `turn` and `pendingAsks`: a pressed button, a full answer, a prompt that cancels the ask, a failed turn, a stream that fails mid-reply, a client that disconnects, the 400, 403, 404, and 409 responses, response bodies that match the published JSON Schemas, and neither endpoint when asks are off |
+| `ai/src/routes/gpt.test.ts` (compact surface) | A compact turn offers only the narrowed `ask_choice` and adds the compact line to the system prompt |
+| `ai/src/routes/gpt.test.ts` (failures and races) | `{error}` then `{done}` when the model fails before its first chunk, mid-reply, or during a resume; a prompt that goes through after an answer resolved the ask; two turns and a rating on one conversation keeping every row |
+| `ui/src/asks/SimpleAskCard.test.tsx`, `demo/stories/SimpleAskCard.stories.test.tsx` | Every fixture's card, button presses, the sending state, and the compact `turn` body the watch-sized demo sends |
+
+Related: [UI reference for `GPTChat` asks and `AskCard`](../reference/ui.md#asks),
+[Agent UI Asks explained](../explanation/agent-ui-asks.md).

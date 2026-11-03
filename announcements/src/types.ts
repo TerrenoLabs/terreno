@@ -1,4 +1,4 @@
-import type {PermissionMethod} from "@terreno/api";
+import type {FindExactlyOnePlugin, FindOneOrNonePlugin, PermissionMethod} from "@terreno/api";
 import type {Model, Types} from "mongoose";
 
 export type AnnouncementStatus = "draft" | "published" | "archived";
@@ -44,7 +44,9 @@ export interface AnnouncementDocument {
   updated: Date;
 }
 
-export type AnnouncementModel = Model<AnnouncementDocument>;
+export type AnnouncementModel = Model<AnnouncementDocument> &
+  FindExactlyOnePlugin<AnnouncementDocument> &
+  FindOneOrNonePlugin<AnnouncementDocument>;
 
 export interface AnnouncementAcknowledgementDocument {
   _id: Types.ObjectId;

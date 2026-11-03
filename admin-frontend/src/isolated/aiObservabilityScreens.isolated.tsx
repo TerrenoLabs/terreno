@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeEach, describe, expect, it, type Mock, mock} from "bun:test";
 import SliderComponent from "@react-native-community/slider";
 import {Modal, SelectField, Text} from "@terreno/ui";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
@@ -407,7 +407,7 @@ describe("AiDatasetsListScreen", () => {
     data?: DatasetRecord[];
     isError: boolean;
     isLoading: boolean;
-    refetch: () => void;
+    refetch: Mock<() => void>;
   }
 
   const listState: ListState = {
@@ -475,7 +475,9 @@ describe("AiDatasetsListScreen", () => {
     it("hides import when the caller cannot update datasets", () => {
       listState.isLoading = false;
       listState.data = datasets;
-      statusData.permissions = {aiDataset: {list: true, read: true}};
+      statusData.permissions = {
+        aiDataset: {create: false, list: true, read: true, update: false},
+      };
       const view = renderWithTheme(<AiDatasetsScreenWidget api={createApi()} {...widgetProps} />);
       expect(view.queryByTestId("ai-datasets-import-ds-1")).toBeNull();
       statusData.permissions = {
@@ -868,7 +870,7 @@ describe("AiDatasetsListView", () => {
     it("wires create prompt binding and file pick handler", () => {
       const onCreateNameChange = mock(() => undefined);
       const onCreatePromptBindingChange = mock(() => undefined);
-      const onFilePicked = mock(() => undefined);
+      const onFilePicked = mock((_file: {content: string; filename: string}) => undefined);
       const onImportPasteChange = mock(() => undefined);
       const view = renderWithTheme(
         <AiDatasetsListView
@@ -1750,7 +1752,7 @@ describe("AiEvaluatorsListScreen", () => {
 
     it("hides create when the caller cannot create evaluators", () => {
       listState.isLoading = false;
-      statusData.permissions = {aiEvaluator: {list: true, read: true}};
+      statusData.permissions = {aiEvaluator: {create: false, list: true, read: true}};
       const view = renderWithTheme(
         <AiEvaluatorsScreenWidget
           api={createApi()}
@@ -1772,14 +1774,13 @@ describe("AiEvaluatorsListView", () => {
   });
   const evaluators: EvaluatorRecord[] = [
     {
-      created: "2026-01-01T00:00:00.000Z",
+      confidenceAlertBelow: 0,
       dimensions: [{dataType: "boolean", key: "correct", required: true}],
       id: "eval-1",
       name: "quality",
       runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
       target: "full trace",
       type: "llm-judge",
-      updated: "2026-01-01T00:00:00.000Z",
     },
   ];
 
@@ -2874,7 +2875,7 @@ describe("AiExperimentsListScreen", () => {
 
     it("hides create when the caller cannot create experiments", () => {
       listState.isLoading = false;
-      statusData.permissions = {aiExperiment: {list: true, read: true}};
+      statusData.permissions = {aiExperiment: {create: false, list: true, read: true}};
       const view = renderWithTheme(
         <AiExperimentsScreenWidget
           api={createApi()}
@@ -3261,7 +3262,7 @@ describe("AiPromptEditorScreen", () => {
     isLoading: false,
   };
 
-  const runPlayground = mock(() => ({
+  const runPlayground = mock((_body: unknown) => ({
     unwrap: async () => {
       playgroundMutationState.data = playgroundResult;
       return playgroundResult;
@@ -3736,6 +3737,10 @@ describe("AiPromptPlaygroundView", () => {
     folder: "examples",
     labels: [{label: "latest", version: 1}],
     name: "summarize",
+    relationships: {
+      experiments: {items: [], limit: 20, total: 0},
+      traces: {items: [], limit: 20, total: 0},
+    },
     tags: [],
     versions: [
       {
@@ -6003,6 +6008,7 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
+          onRunTestMultiStage={() => undefined}
           onToggleSelect={onToggleSelect}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -6090,6 +6096,7 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
+          onRunTestMultiStage={() => undefined}
           onSortChange={() => undefined}
           onToggleSelect={() => undefined}
           page={1}
@@ -6133,10 +6140,12 @@ describe("AiTracesListView", () => {
           onClearSelection={() => undefined}
           onDatasetChange={() => undefined}
           onDismissDatasetModal={() => undefined}
+          onDismissReviewModal={() => undefined}
           onEnqueueReview={() => undefined}
           onEvaluatorChange={() => undefined}
           onFilterValuesChange={onFilterValuesChange}
           onOpenAddToDataset={() => undefined}
+          onOpenReview={() => undefined}
           onOpenTrace={onOpenTrace}
           onPageChange={() => undefined}
           onSortChange={onSortChange}

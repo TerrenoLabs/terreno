@@ -36,7 +36,7 @@ describe("@terreno/ai public exports", () => {
     "runBufferedChatTurn",
     "validateObservabilityConfig",
     "verifyVertexModelsEnabled",
-  ] as const;
+  ];
 
   const expectedClasses = [
     "AIRequest",
@@ -50,7 +50,7 @@ describe("@terreno/ai public exports", () => {
     "MemoryTraceSink",
     "ObservabilityApp",
     "Project",
-  ] as const;
+  ];
 
   const expectedConstants = [
     "COMPACT_SURFACE_SYSTEM_PROMPT",
@@ -68,7 +68,7 @@ describe("@terreno/ai public exports", () => {
     "toggleChecklistHostAction",
     "TRANSLATION_PROMPT",
     "TemperaturePresets",
-  ] as const;
+  ];
 
   it.each(expectedFunctions)("exports %s as a function", (name) => {
     expect(typeof exported[name]).toBe("function");

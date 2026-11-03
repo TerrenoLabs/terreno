@@ -62,6 +62,11 @@ const mcpOAuthTokenSchema = new mongoose.Schema<McpOAuthTokenDocument, McpOAuthT
       required: true,
       type: String,
     },
+    hasRefreshToken: {
+      description:
+        "False when this document is an access-only client_credentials token. The refresh hash is then of a discarded secret and cannot be exchanged",
+      type: Boolean,
+    },
     refreshExpiresAt: {
       description: "When the refresh token stops being exchangeable; the document is removed then",
       required: true,
@@ -116,21 +121,30 @@ mcpOAuthTokenSchema.statics = {
   async issue(
     this: McpOAuthTokenModel,
     options: McpOAuthTokenIssueOptions
-  ): Promise<{accessToken: string; mcpOAuthToken: McpOAuthTokenDocument; refreshToken: string}> {
+  ): Promise<{accessToken: string; mcpOAuthToken: McpOAuthTokenDocument; refreshToken?: string}> {
     const familyId = options.familyId ?? randomUUID();
     if (await isFamilyRevoked(familyId)) {
       throw new McpOAuthFamilyRevokedError(familyId);
     }
+    const includeRefreshToken = options.includeRefreshToken !== false;
     const accessToken = generateMcpOAuthSecret(MCP_OAUTH_ACCESS_TOKEN_PREFIX);
-    const refreshToken = generateMcpOAuthSecret(MCP_OAUTH_REFRESH_TOKEN_PREFIX);
+    // Access-only grants still store a unique hash so the refreshTokenHash index stays unique.
+    // The preimage is discarded, and hasRefreshToken false makes it unusable for refresh.
+    const refreshSecret = includeRefreshToken
+      ? generateMcpOAuthSecret(MCP_OAUTH_REFRESH_TOKEN_PREFIX)
+      : generateMcpOAuthSecret("discarded_");
     const now = DateTime.now();
+    const refreshTtlSeconds = includeRefreshToken
+      ? options.refreshTokenTtlSeconds
+      : options.accessTokenTtlSeconds;
     const mcpOAuthToken = await this.create({
       accessExpiresAt: now.plus({seconds: options.accessTokenTtlSeconds}).toJSDate(),
       accessTokenHash: hashMcpOAuthSecret(accessToken),
       clientId: options.clientId,
       familyId,
-      refreshExpiresAt: now.plus({seconds: options.refreshTokenTtlSeconds}).toJSDate(),
-      refreshTokenHash: hashMcpOAuthSecret(refreshToken),
+      hasRefreshToken: includeRefreshToken,
+      refreshExpiresAt: now.plus({seconds: refreshTtlSeconds}).toJSDate(),
+      refreshTokenHash: hashMcpOAuthSecret(refreshSecret),
       resource: options.resource,
       scope: options.scope,
       tokenEpoch: options.tokenEpoch ?? 0,
@@ -145,7 +159,32 @@ mcpOAuthTokenSchema.statics = {
       );
       throw new McpOAuthFamilyRevokedError(familyId);
     }
-    return {accessToken, mcpOAuthToken, refreshToken};
+    return {
+      accessToken,
+      mcpOAuthToken,
+      refreshToken: includeRefreshToken ? refreshSecret : undefined,
+    };
+  },
+  async revokeAllForUser(
+    this: McpOAuthTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<number> {
+    const tokens = await this.find({
+      revokedAt: {$exists: false},
+      userId: new mongoose.Types.ObjectId(String(userId)),
+    }).select({familyId: 1});
+    const familyIds = new Set(tokens.map((token) => token.familyId));
+    for (const familyId of familyIds) {
+      await this.revokeFamily(familyId);
+    }
+    return familyIds.size;
+  },
+  async revokeClient(this: McpOAuthTokenModel, clientId: string): Promise<void> {
+    const tokens = await this.find({clientId, revokedAt: {$exists: false}}).select({familyId: 1});
+    const familyIds = new Set(tokens.map((token) => token.familyId));
+    for (const familyId of familyIds) {
+      await this.revokeFamily(familyId);
+    }
   },
   async revokeFamily(this: McpOAuthTokenModel, familyId: string): Promise<void> {
     const now = DateTime.now();
@@ -185,6 +224,24 @@ mcpOAuthTokenSchema.statics = {
     });
   },
 };
+
+// Deleting a token row (for example from the admin panel) revokes its whole rotation chain and
+// keeps the rows, so the connection ends and its history stays visible.
+mcpOAuthTokenSchema.methods = {
+  ...mcpOAuthTokenSchema.methods,
+  async deleteOne(this: McpOAuthTokenDocument): Promise<McpOAuthTokenDocument> {
+    await (this.constructor as McpOAuthTokenModel).revokeFamily(this.familyId);
+    return this;
+  },
+};
+
+mcpOAuthTokenSchema.pre("deleteOne", {document: false, query: true}, async function () {
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({familyId: 1});
+  if (existing) {
+    await (this.model as McpOAuthTokenModel).revokeFamily(existing.familyId);
+  }
+  this.setQuery({_id: {$exists: false}});
+});
 
 export const McpOAuthToken =
   (mongoose.models.TerrenoMcpOAuthToken as McpOAuthTokenModel | undefined) ??

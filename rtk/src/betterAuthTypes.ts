@@ -6,9 +6,65 @@
  */
 
 /**
+ * What Better Auth hands `onTwoFactorRedirect` when a sign-in needs a second factor.
+ */
+export interface BetterAuthTwoFactorRedirectContext {
+  /** The user's enabled second factors, such as `["totp", "otp"]`. */
+  twoFactorMethods?: string[];
+}
+
+/**
+ * Options for `features.twoFactor`.
+ */
+export interface BetterAuthTwoFactorFeature {
+  /**
+   * Called when a sign-in answers `twoFactorRedirect` instead of a session. Show the 2FA
+   * challenge here; on native the challenge cookie is already stored when it runs.
+   */
+  onTwoFactorRedirect?: (context: BetterAuthTwoFactorRedirectContext) => void | Promise<void>;
+}
+
+/**
+ * Better Auth client plugins `createBetterAuthClient` adds, matching the server features
+ * `BetterAuthConfig` turns on. Each enabled feature adds its typed namespace to the client.
+ */
+export interface BetterAuthClientFeatures {
+  /**
+   * `twoFactorClient`: `client.twoFactor.*` (enable, disable, getTotpUri, verifyTotp, sendOtp,
+   * verifyOtp, generateBackupCodes, verifyBackupCode). Pass an object to set
+   * `onTwoFactorRedirect`.
+   */
+  twoFactor?: boolean | BetterAuthTwoFactorFeature;
+  /**
+   * `passkeyClient` from `@better-auth/passkey/client`: `client.passkey.*` (addPasskey,
+   * listUserPasskeys, deletePasskey, updatePasskey) and `client.signIn.passkey`. WebAuthn needs
+   * a browser, so passkey calls work on web only.
+   */
+  passkey?: boolean;
+  /**
+   * `multiSessionClient`: `client.multiSession.*` (listDeviceSessions, setActive, revoke).
+   */
+  multiSession?: boolean;
+  /**
+   * `lastLoginMethodClient`: `client.getLastUsedLoginMethod()`,
+   * `client.isLastUsedLoginMethod(method)` and `client.clearLastUsedLoginMethod()`. They read
+   * the server's `last_used_login_method` cookie, so they return null on native and when the
+   * API is on another site.
+   */
+  lastLoginMethod?: boolean;
+  /**
+   * `oneTimeTokenClient`: `client.oneTimeToken.generate` and `client.oneTimeToken.verify`.
+   * The OAuth handoff verifies its token without this plugin.
+   */
+  oneTimeToken?: boolean;
+}
+
+/**
  * Configuration options for the Better Auth client.
  */
-export interface BetterAuthClientConfig {
+export interface BetterAuthClientConfig<
+  Features extends BetterAuthClientFeatures = BetterAuthClientFeatures,
+> {
   /**
    * Base URL of the auth server (e.g., "http://localhost:3000").
    */
@@ -45,6 +101,21 @@ export interface BetterAuthClientConfig {
    * @default window.localStorage
    */
   bearerStorage?: BetterAuthBearerStorage;
+
+  /**
+   * Client plugins for the Better Auth features the server enables. Omit it and the client is
+   * exactly what it was before features existed.
+   *
+   * @example
+   * ```typescript
+   * createBetterAuthClient({
+   *   baseURL,
+   *   features: {multiSession: true, passkey: true, twoFactor: {onTwoFactorRedirect}},
+   *   scheme: "myapp",
+   * });
+   * ```
+   */
+  features?: Features;
 }
 
 /**
@@ -97,9 +168,10 @@ export interface BetterAuthSessionData {
 }
 
 /**
- * OAuth provider types supported by Better Auth.
+ * OAuth provider ids: the branded ones Better Auth knows, or any generic OAuth provider id the
+ * server registers (such as `"mock-oidc"`).
  */
-export type BetterAuthOAuthProvider = "google" | "github" | "apple";
+export type BetterAuthOAuthProvider = "google" | "github" | "apple" | (string & {});
 
 /**
  * Minimal interface for the Better Auth client used by the Redux slice.
@@ -107,11 +179,13 @@ export type BetterAuthOAuthProvider = "google" | "github" | "apple";
  * tests to use mock clients without importing React Native.
  */
 export interface BetterAuthClientInterface {
+  // Loose enough for a client with `features`, whose inferred user and session mark nullable
+  // fields optional and whose responses carry `data: null` on error.
   getSession: () => Promise<{
     data?: {
-      user?: BetterAuthUser;
-      session?: BetterAuthSession;
-    };
+      user?: Omit<BetterAuthUser, "image"> & {image?: string | null};
+      session?: Partial<BetterAuthSession>;
+    } | null;
   }>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<unknown>;
 }

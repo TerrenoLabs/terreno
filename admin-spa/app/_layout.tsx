@@ -13,6 +13,7 @@ import {Stack, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
 import {AdminGate} from "../components/AdminGate";
 import {AppConfigGate, useAppConfig} from "../components/AppConfigGate";
+import {isSignedInOnlyRoute} from "../components/adminGateUtils";
 import {StoreProvider, useAuth} from "../components/StoreProvider";
 import {
   createAdminSpaSyncDbConfig,
@@ -156,12 +157,25 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
 };
 
 /**
+ * Signed-in-only routes (MCP OAuth consent) render without the admin providers, so a
+ * non-admin never starts the admin sync client or the admin org context.
+ */
+const AdminChrome: React.FC<{children: React.ReactNode}> = ({children}) => {
+  const pathname = usePathname();
+  if (isSignedInOnlyRoute(pathname)) {
+    return children;
+  }
+  return <AdminProviderBridge>{children}</AdminProviderBridge>;
+};
+
+/**
  * Provider order:
  * - AppConfigGate (outermost): loads app-config.json before anything else, since the
  *   store + auth client are built from it.
  * - StoreProvider: builds the better-auth client + Redux store, mounts <Provider>.
  * - TerrenoProvider: theme/toast context (inside Provider so theme hooks work).
- * - AdminGate (innermost): session + admin authorization, gating the route Stack.
+ * - AdminGate: session + admin authorization, gating the route Stack.
+ * - AdminChrome (innermost): admin providers, skipped on signed-in-only routes.
  */
 const RootLayout: React.FC = () => {
   return (
@@ -169,9 +183,9 @@ const RootLayout: React.FC = () => {
       <StoreProvider>
         <TerrenoProvider>
           <AdminGate>
-            <AdminProviderBridge>
+            <AdminChrome>
               <Stack screenOptions={{headerShown: false}} />
-            </AdminProviderBridge>
+            </AdminChrome>
           </AdminGate>
         </TerrenoProvider>
       </StoreProvider>

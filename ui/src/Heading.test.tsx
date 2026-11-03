@@ -50,7 +50,7 @@ describe("Heading", () => {
   });
 
   it("applies secondary color", () => {
-    const {toJSON} = renderWithTheme(<Heading color="secondary">Secondary</Heading>);
+    const {toJSON} = renderWithTheme(<Heading color="secondaryDark">Secondary</Heading>);
     expect(toJSON()).toMatchSnapshot();
   });
 
@@ -62,5 +62,19 @@ describe("Heading", () => {
   it("renders with testID", () => {
     const {getByTestId} = renderWithTheme(<Heading testID="test-heading">Test</Heading>);
     expect(getByTestId("test-heading")).toBeTruthy();
+  });
+
+  it("is plain text without a level", () => {
+    const {getByText} = renderWithTheme(<Heading>Plain</Heading>);
+    const heading = getByText("Plain");
+    expect(heading.props.role).toBeUndefined();
+    expect(heading.props["aria-level"]).toBeUndefined();
+  });
+
+  it("exposes a heading role and level when level is set", () => {
+    const {getByRole} = renderWithTheme(<Heading level={2}>Section</Heading>);
+    const heading = getByRole("heading", {name: "Section"});
+    expect(heading.props.role).toBe("heading");
+    expect(heading.props["aria-level"]).toBe(2);
   });
 });

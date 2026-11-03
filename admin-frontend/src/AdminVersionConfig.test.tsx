@@ -26,7 +26,7 @@ const apiState: ApiState = {
   updateImpl: async () => ({}),
 };
 
-const updateCalls: unknown[] = [];
+const updateCalls: Record<string, unknown>[] = [];
 const querySpecs: unknown[] = [];
 const mutationSpecs: unknown[] = [];
 const makeApi = () => ({
@@ -55,7 +55,7 @@ const makeApi = () => ({
         isLoading: apiState.isLoading,
       }),
       useUpdateVersionConfigMutation: () => [
-        (body: unknown) => ({
+        (body: Record<string, unknown>) => ({
           unwrap: async () => {
             updateCalls.push(body);
             return apiState.updateImpl(body);
@@ -171,7 +171,7 @@ describe("AdminVersionConfig", () => {
       await new Promise((r) => setTimeout(r, 150));
     });
     expect(updateCalls.length).toBe(1);
-    expect((updateCalls[0] as Record<string, unknown>).updateUrl).toBe("https://x.com");
+    expect(updateCalls[0].updateUrl).toBe("https://x.com");
     expect(updateCalls[0].pollingIntervalMinutes).toBe(120);
   });
 
@@ -217,6 +217,6 @@ describe("AdminVersionConfig", () => {
       fireEvent.press(getByText("Save"));
       await new Promise((r) => setTimeout(r, 150));
     });
-    expect((updateCalls[0] as Record<string, unknown>).updateUrl).toBeNull();
+    expect(updateCalls[0].updateUrl).toBeNull();
   });
 });

@@ -36,7 +36,6 @@ export const SyncLabRateControls: React.FC = () => {
           onChange={handleRemoteChange}
           options={SYNC_LAB_RATE_OPTIONS}
           requireValue
-          searchable={false}
           testID="sync-lab-remote-rate"
           title="Other clients"
           value={String(remoteRate)}
@@ -50,7 +49,6 @@ export const SyncLabRateControls: React.FC = () => {
           onChange={handleLocalChange}
           options={SYNC_LAB_RATE_OPTIONS}
           requireValue
-          searchable={false}
           testID="sync-lab-local-rate"
           title="This client"
           value={String(localRate)}

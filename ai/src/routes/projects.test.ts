@@ -4,7 +4,7 @@ import type express from "express";
 import mongoose from "mongoose";
 
 import {Project} from "../models/project";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel, UserModel} from "../tests/helpers";
 import {addProjectRoutes} from "./projects";
 
 describe("Project Routes", () => {
@@ -24,7 +24,7 @@ describe("Project Routes", () => {
         addProjectRoutes(router, {openApiOptions: options});
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
   });
 
@@ -77,7 +77,9 @@ describe("Project Routes", () => {
 
     it("exposes ownerId virtual aliased to userId", async () => {
       const project = await Project.create({name: "With Owner", userId: notAdminId});
-      expect(project.toObject({virtuals: true}).ownerId.toString()).toBe(notAdminId.toString());
+      expect(
+        project.toObject<{ownerId: mongoose.Types.ObjectId}>({virtuals: true}).ownerId.toString()
+      ).toBe(notAdminId.toString());
     });
   });
 

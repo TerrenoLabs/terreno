@@ -18,6 +18,8 @@ exports[`EmailField renders correctly with default props 1`] = `
                 "accessibilityState": {
                   "disabled": undefined,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": false,
                 "aria-label": "Text input field",
                 "autoCapitalize": "none",
                 "autoCorrect": false,
@@ -44,6 +46,7 @@ exports[`EmailField renders correctly with default props 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },
@@ -111,6 +114,8 @@ exports[`EmailField renders with icon 1`] = `
                 "accessibilityState": {
                   "disabled": undefined,
                 },
+                "aria-describedby": undefined,
+                "aria-invalid": false,
                 "aria-label": "Text input field",
                 "autoCapitalize": "none",
                 "autoCorrect": false,
@@ -137,6 +142,7 @@ exports[`EmailField renders with icon 1`] = `
                   "fontSize": 16,
                   "gap": 10,
                   "height": 24,
+                  "letterSpacing": undefined,
                   "paddingVertical": 0,
                   "width": "100%",
                 },

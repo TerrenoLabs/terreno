@@ -1,6 +1,14 @@
 import {describe, expect, it} from "bun:test";
 import {ASK_LIMITS, type AskKind, type AskResponse, askPromptSection} from "@terreno/blocks";
-import {asSchema, jsonSchema, type ModelMessage, type Tool, tool} from "ai";
+import {
+  asSchema,
+  type JSONValue,
+  jsonSchema,
+  type ModelMessage,
+  type Tool,
+  type ToolResultPart,
+  tool,
+} from "ai";
 
 import {
   approvalAskInput,
@@ -24,7 +32,7 @@ const PLAN_ASK_INPUT = {
     {id: "team", label: "Team"},
   ],
   prompt: "Which plan should I set up?",
-  select: "one",
+  select: "one" as const,
 };
 
 const TEAM_ANSWER = {action: "accept" as const, content: {selected: ["team"]}};
@@ -57,8 +65,8 @@ const lookupResult = {
   type: "tool-result" as const,
 };
 
-const answerResult = (toolCallId: string, value: unknown) => ({
-  output: {type: "json", value},
+const answerResult = (toolCallId: string, value: unknown): ToolResultPart => ({
+  output: {type: "json", value: value as JSONValue},
   toolCallId,
   toolName: "ask_choice",
   type: "tool-result",
@@ -76,14 +84,14 @@ describe("asks", () => {
         expected: ["confirm"],
         label: '{kinds: ["confirm"]}',
       },
-      {asks: {kinds: []}, expected: [], label: "{kinds: []}"},
+      {asks: {kinds: [] as AskKind[]}, expected: [], label: "{kinds: []}"},
       {
         asks: {kinds: ["choice", "choice"] as AskKind[]},
         expected: ["choice"],
         label: '{kinds: ["choice", "choice"]}',
       },
     ])("resolves $label", ({asks, expected}) => {
-      expect(resolveAskKinds(asks)).toEqual(expected);
+      expect(resolveAskKinds(asks)).toEqual([...expected]);
     });
 
     it("throws on an unknown kind and names the known kinds", () => {

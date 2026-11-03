@@ -113,6 +113,29 @@ When `JobsApp` is already registered, the run is enqueued as job `admin/script` 
 `defineAdminScriptJob` on the worker process with the same script list. The CLI
 (`runScriptCli`) does not enqueue.
 
+## MCP screens
+
+`mcpAdminModels(options?)` returns model configs for an MCP server's admin screens, in the `MCP` sidebar group:
+
+| Route | Model | Allowed | Notes |
+| --- | --- | --- | --- |
+| `/mcp-service-tokens` | `McpServiceToken` | list, read, delete | Delete sets `revokedAt` |
+| `/mcp-oauth-clients` | `McpOAuthClient` | list, read, delete | Delete removes the registration and revokes every token issued to it |
+| `/mcp-oauth-connections` | `McpOAuthToken` | list, read, delete | One row per token pair; delete revokes the whole family (connection) and keeps the rows |
+| `/mcp-request-log` | `McpRequestLog` | list, read | Needs `mcpRequestLog` on `TerrenoApp` |
+| `/mcp-tools` | `McpToolSetting` | list, read, update | Only `enabled` is writable. Needs `mcpToolSettings` on `TerrenoApp` |
+
+Options: `group` (default `"MCP"`); `requestLog: true` and `toolSettings: true` add those screens. Both default to `false`; set them to match `TerrenoApp`'s `mcpRequestLog` and `mcpToolSettings`. Hash fields are hidden. Each config sets `adminAccess.resource`; with `accessControl`, spread `mcpAdminStatements` into your `createAccess({statements})`.
+
+`mcpAdminScripts()` adds `mcp-sign-out-everywhere` (`--user <id or email>`), which revokes every OAuth connection and service token the user holds. A dry run reports the counts. Email lookup uses the model registered as `User`.
+
+```typescript
+new AdminApp({
+  models: [...appModels, ...mcpAdminModels({requestLog: true, toolSettings: true})],
+  scripts: [...appScripts, ...mcpAdminScripts()],
+});
+```
+
 ## Config Endpoint
 
 `GET {basePath}/config` returns metadata for all registered models:
@@ -293,7 +316,9 @@ assigned after the write through `access.roles.assign`, which requires `rbac:ass
 Admin update, bulk-patch, delete, and admin-window sync writes to another user also require the
 actor to hold every permission the target user holds (the RoleManager target-privilege rule).
 A delegate with `user:update` gets 403 `Cannot modify a user with permissions you do not hold` for
-a superadmin target; bulk-patch reports that target under `failures` and patches the rest. Legacy
+a superadmin target; bulk-patch reports that target under `failures` and patches the rest. When a
+permission source is down and the target's grants from it are unknown, the check answers 503
+`Permission source unavailable` instead of comparing against a partial set. Legacy
 `admin: true` actors and writes to the actor's own record are not checked.
 
 Changing another user's `email`, `disabled`, `betterAuthId`, `githubId`, or `emailVerified`

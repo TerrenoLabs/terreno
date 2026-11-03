@@ -10,7 +10,7 @@ import {
   readOnlyPromptObservabilityStatus,
 } from "./observabilityStatusFixtures.isolated";
 
-const routerPush = mock(() => undefined);
+const routerPush = mock((..._args: unknown[]) => undefined);
 
 mock.module("expo-router", () => ({
   router: {push: (...args: unknown[]) => routerPush(...args)},

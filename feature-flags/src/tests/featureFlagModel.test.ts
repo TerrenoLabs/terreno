@@ -1,5 +1,6 @@
 import {afterEach, describe, expect, it} from "bun:test";
 import {FeatureFlag, featureFlagAdminConfig} from "../featureFlagModel";
+import type {FeatureFlagRule} from "../types";
 
 describe("FeatureFlag model", () => {
   afterEach(async () => {
@@ -151,7 +152,15 @@ describe("FeatureFlag model", () => {
       FeatureFlag.create({
         key: "bad-op",
         name: "Bad Operator",
-        rules: [{enabled: true, field: "plan", operator: "bogus", value: "pro"}],
+        // An operator outside the enum, to prove the schema rejects it.
+        rules: [
+          {
+            enabled: true,
+            field: "plan",
+            operator: "bogus" as unknown as FeatureFlagRule["operator"],
+            value: "pro",
+          },
+        ],
       })
     ).rejects.toBeDefined();
   });

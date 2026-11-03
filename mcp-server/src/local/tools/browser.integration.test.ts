@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {assert} from "chai";
 
-import {BrowserSession} from "./browser";
+import {BrowserSession} from "./browser.js";
 
 const CHROME_PATHS = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",

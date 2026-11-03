@@ -4,7 +4,7 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import type {AdminApi} from "../types";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_href: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
 }));

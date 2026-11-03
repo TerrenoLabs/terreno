@@ -13,11 +13,13 @@
   "description": "Local-first data layer with TinyBase, durable outbox, and delta sync — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
     "@types/luxon": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
+    "chai": "catalog:",
     "expo-sqlite": "catalog:",
     "fake-indexeddb": "^6.0.0",
     "react": "catalog:",
@@ -34,6 +36,10 @@
       "bun": "./src/codegen/generate.ts",
       "default": "./dist/codegen/generate.js",
       "types": "./dist/codegen/generate.d.ts"
+    },
+    "./devConsoleLogger": {
+      "default": "./dist/devConsoleLogger.js",
+      "types": "./dist/devConsoleLogger.d.ts"
     },
     "./react": {
       "default": "./dist/react/index.js",
@@ -87,11 +93,13 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun test",
     "test:agent": "AGENT=1 bun test --only-failures",
     "test:ci": "bun test",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
-  "version": "57.19.2"
+  "version": "57.21.0"
 }

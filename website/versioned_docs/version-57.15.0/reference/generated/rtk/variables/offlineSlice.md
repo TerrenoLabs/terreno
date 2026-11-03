@@ -1,1 +1,0 @@
-> `const` **offlineSlice**: `Slice`\<[`OfflineState`](../interfaces/OfflineState.md), \{ `addConflict`: `void`; `clearConflicts`: `void`; `clearQueue`: `void`; `dequeue`: `void`; `dismissConflict`: `void`; `enqueue`: `void`; `setOnlineStatus`: `void`; `setSyncing`: `void`; \}, `"offline"`, `"offline"`, `SliceSelectors`\<[`OfflineState`](../interfaces/OfflineState.md)\>\>

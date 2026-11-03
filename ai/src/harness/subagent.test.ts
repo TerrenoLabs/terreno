@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 import {z} from "@terreno/api";
 import type {LanguageModel} from "ai";
+import type mongoose from "mongoose";
 import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
 import {registerObsSpan} from "../observability/local/models/obsSpan";
 import {registerObsTrace} from "../observability/local/models/obsTrace";
@@ -677,7 +678,7 @@ describe("rt.runAgent (subagents)", () => {
     expect(await TaskModel.countDocuments({name: AGENT_TURN_TASK_NAME})).toBe(2);
     // The first child is found again, not re-run, when the phase resumes for the second.
     expect(calls).toHaveLength(2);
-    const firstMessages = async (conversationId: unknown) =>
+    const firstMessages = async (conversationId: mongoose.Types.ObjectId | string) =>
       (await MessageModel.find({conversationId}).sort({seq: 1})).map(
         ({parts}) => (parts[0] as {text: string}).text
       );

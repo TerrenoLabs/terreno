@@ -5,7 +5,7 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import type {AdminApi} from "../types";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_href: unknown) => {});
 mock.module("expo-router", () => ({
   router: {push: pushMock, replace: mock(() => {})},
   useLocalSearchParams: () => ({}),
@@ -162,7 +162,7 @@ describe("JobsDashboardScreen", () => {
     schedulesState.data = [
       {cron: "0 0 * * *", enabled: true, id: "sched-1", name: "nightly", timezone: "UTC"},
     ];
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {UNSAFE_root, getByTestId} = renderWithTheme(
       <JobsDashboardScreen
         api={createJobsApi()}
@@ -203,7 +203,7 @@ describe("JobsDashboardScreen", () => {
 
   it("pages through results without dropping the active filters", async () => {
     listState.data = {data: [deadRow], more: true, page: 1, total: 60};
-    const onFiltersChange = mock(() => {});
+    const onFiltersChange = mock((_next: unknown) => {});
     const {getByTestId} = renderWithTheme(
       <JobsDashboardScreen
         api={createJobsApi()}

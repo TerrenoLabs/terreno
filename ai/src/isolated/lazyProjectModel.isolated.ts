@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 
 describe("@terreno/ai root entry", () => {
   it("does not register the Project model until it is used", async () => {
-    const ai = await import("../index");
+    const ai = await import("../index.js");
     expect(mongoose.models.Project).toBeUndefined();
 
     expect(ai.Project.modelName).toBe("Project");
@@ -11,7 +11,7 @@ describe("@terreno/ai root entry", () => {
   });
 
   it("forwards statics, construction and instanceof through the deprecated Project export", async () => {
-    const {Project} = await import("../index");
+    const {Project} = await import("../index.js");
     const userId = new mongoose.Types.ObjectId();
 
     const project = new Project({name: "Roadmap", userId});

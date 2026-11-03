@@ -31,6 +31,10 @@ const promptDetail: PromptDetail = {
     {label: "production", version: 1},
   ],
   name: "summarize",
+  relationships: {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  },
   tags: [],
   versions: [
     {sensitive: false, template: "v1", type: "chat", variables: [], version: 1},

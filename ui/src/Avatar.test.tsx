@@ -74,6 +74,14 @@ describe("Avatar", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("takes keyboard focus only when the avatar is editable", () => {
+    const {UNSAFE_getAllByProps, rerender} = renderWithTheme(<Avatar name="John Doe" />);
+    expect(UNSAFE_getAllByProps({"aria-role": "button"})[0].props.focusable).toBe(false);
+
+    rerender(<Avatar name="John Doe" status="imagePicker" />);
+    expect(UNSAFE_getAllByProps({"aria-role": "button"})[0].props.focusable).toBe(true);
+  });
+
   it("renders initials when no image is provided", () => {
     const {getByText} = renderWithTheme(<Avatar name="John Doe" testID="avatar" />);
     expect(getByText("JD")).toBeTruthy();

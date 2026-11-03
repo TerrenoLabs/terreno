@@ -18,7 +18,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
 import {getAdminAuthHeaders} from "@/store/adminAuthHeaders";
-import {terrenoApi, useGetMeQuery} from "@/store/sdk";
+import {adminApi, useGetMeQuery} from "@/store/sdk";
 import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
@@ -173,7 +173,7 @@ const AdminLayoutContent: React.FC = () => {
 
   return (
     <AdminProvider
-      api={terrenoApi}
+      api={adminApi}
       apiBase={ADMIN_ROUTE}
       apiOrigin={baseUrl}
       getAuthHeaders={getAdminAuthHeaders}
@@ -192,12 +192,12 @@ const AdminLayoutContent: React.FC = () => {
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindAdminSyncOrganization />
         <AdminShellLayout
-          api={terrenoApi}
+          api={adminApi}
           apiBase={ADMIN_ROUTE}
           configurationPath="/admin/configuration"
           isOrganizationOperator={isOrganizationOperator}
           organizationDirectoryPath="/orgs"
-          organizationSwitcher={<OrgSwitcher api={terrenoApi} routeBase={ADMIN_ROUTE} />}
+          organizationSwitcher={<OrgSwitcher api={adminApi} routeBase={ADMIN_ROUTE} />}
           rolesPath="/roles"
           routeBase={ADMIN_ROUTE}
           versionConfigPath="/version-config"
@@ -219,6 +219,7 @@ const AdminLayoutContent: React.FC = () => {
               <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
               <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
               <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
+              <Stack.Screen name="users/[id]/security" options={{title: "User security"}} />
               <Stack.Screen name="[model]" options={{title: "Model"}} />
             </Stack>
           </ThemeProvider>

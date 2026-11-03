@@ -2,14 +2,18 @@ import {
   Box,
   Heading,
   IconButton,
-  isNarrowViewport,
+  isSupportedDesktopWidth,
   Text,
   Tooltip,
   type TooltipProps,
 } from "@terreno/ui";
 import type React from "react";
+import {useWindowDimensions} from "react-native";
 
-const isMobile = isNarrowViewport();
+const useDemoIsMobile = (): boolean => {
+  const {width} = useWindowDimensions();
+  return !isSupportedDesktopWidth({width});
+};
 export const TooltipDemo = (props: Partial<TooltipProps>) => {
   return (
     <Box alignItems="center" justifyContent="center">
@@ -62,7 +66,8 @@ const FiveTooltips = ({
   </Box>
 );
 
-export const ToolTipPositions = () => {
+export const ToolTipPositions = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
   return (
     <Box direction="column" display="flex" padding={4}>
       <Box
@@ -90,7 +95,8 @@ export const ToolTipPositions = () => {
   );
 };
 
-export const IncludesArrow = () => {
+export const IncludesArrow = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
   return (
     <Box direction="column" display="flex" padding={4}>
       <Box
@@ -110,7 +116,8 @@ export const IncludesArrow = () => {
   );
 };
 
-export const TooltipOverText = () => {
+export const TooltipOverText = (): React.ReactElement => {
+  const isMobile = useDemoIsMobile();
   return (
     <Box direction="column" display="flex" padding={4}>
       <Box

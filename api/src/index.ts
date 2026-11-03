@@ -1,8 +1,24 @@
+export {ISSUE_SIGN_IN_LINK_PERMISSION} from "./accountSecurity/accessActions";
+export * from "./accountSecurity/accountSecurityApp";
+export * from "./accountSecurity/accountSecurityService";
+export {suspendMembershipAction} from "./accountSecurity/membershipActions";
+export {
+  createOrgSecurityAuthorizer,
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "./accountSecurity/orgSecurityRoutes";
+export {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
+export * from "./accountSecurity/securityEvents";
+export * from "./accountSecurity/securityNotifications";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";
 export {AuditApp, type AuditAppOptions} from "./audit/auditApp";
 export {
+  AUDIT_EVENT_SOURCES,
   type AuditEventDocument,
   type AuditEventModel,
   type AuditEventOperation,
@@ -35,12 +51,24 @@ export * from "./authRecovery";
 export * from "./authTokens";
 export * from "./betterAuth";
 export * from "./betterAuthApp";
+export * from "./betterAuthChallengeHeaders";
+export * from "./betterAuthFeatures";
+export * from "./betterAuthMethods";
 export * from "./betterAuthSetup";
 export * from "./browserLogsRoute";
 export * from "./config";
 export * from "./configurationApp";
 export * from "./configurationPlugin";
 export * from "./consentApp";
+export {
+  type ConsentStatus,
+  type ConsentStatusForm,
+  type ConsentStatusProvisional,
+  type ConsentStatusRow,
+  type ConsentStatusSigner,
+  getConsentStatuses,
+  type ResolveConsentForms,
+} from "./consentStatus";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";
@@ -53,6 +81,11 @@ export {
 export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
+export {
+  type McpRequestLogAppOption,
+  type ResolvedMcpRequestLogOptions,
+  resolveMcpRequestLogOption,
+} from "./mcp/adminTracking";
 export {
   extractAuthFromHeaders,
   extractUserFromHeaders,
@@ -113,7 +146,9 @@ export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
 export {McpOAuthClient} from "./models/mcpOAuthClient";
 export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
 export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
+export {McpRequestLog} from "./models/mcpRequestLog";
 export * from "./models/mcpServiceToken";
+export {McpToolSetting} from "./models/mcpToolSetting";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
 export * from "./models/versionConfig";
@@ -319,12 +354,15 @@ export * from "./terrenoPlugin";
 export * from "./transformers";
 export * from "./types/consentForm";
 export * from "./types/consentResponse";
+export type * from "./types/mcpAdmin";
 export type {
   McpOAuthAuthorizationDocument,
   McpOAuthAuthorizationStatus,
   McpOAuthClientDocument,
+  McpOAuthConfidentialClientOptions,
   McpOAuthRevokedFamilyDocument,
   McpOAuthTokenDocument,
+  McpOAuthTokenEndpointAuthMethod,
 } from "./types/mcpOAuth";
 export * from "./utils";
 export * from "./versionCheckPlugin";

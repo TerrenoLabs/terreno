@@ -6,7 +6,7 @@ import supertest from "supertest";
 
 import {FileAttachment} from "../models/fileAttachment";
 import type {FileStorageService, UploadFileParams, UploadFileResult} from "../service/fileStorage";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {authAsUser, ensureTestUsers, terrenoUserModel, UserModel} from "../tests/helpers";
 import {addFileRoutes} from "./files";
 
 type MockFileStorageService = Pick<FileStorageService, "upload" | "delete" | "getSignedUrl">;
@@ -45,11 +45,12 @@ describe("File Routes", () => {
       configureApp: (router, options) => {
         addFileRoutes(router, {
           fileStorageService: fileStorageService as FileStorageService,
+          gcsBucket: "test-bucket",
           openApiOptions: options,
         });
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: terrenoUserModel,
     }).build();
   });
 
@@ -76,11 +77,12 @@ describe("File Routes", () => {
           addFileRoutes(router, {
             fileStorageService: fileStorageService as FileStorageService,
             fileUploadsEnabled: async () => false,
+            gcsBucket: "test-bucket",
             openApiOptions: options,
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(gated, "notAdmin");
       const res = await agent

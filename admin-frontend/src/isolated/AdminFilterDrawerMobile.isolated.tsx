@@ -91,6 +91,8 @@ mock.module("../AdminRefField", () => ({
 
 import {AdminFilterDrawer} from "../AdminFilterDrawer";
 
+type OnApply = React.ComponentProps<typeof AdminFilterDrawer>["onApply"];
+
 const findWithCallback = (
   root: ReactTestInstance,
   testID: string,
@@ -105,7 +107,7 @@ const findWithCallback = (
 };
 
 describe("AdminFilterDrawer mobile", () => {
-  const onApply = mock(() => {});
+  const onApply = mock<OnApply>(() => {});
 
   beforeEach(() => {
     onApply.mockClear();

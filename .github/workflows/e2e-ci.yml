@@ -65,6 +65,7 @@ jobs:
           - harness-approvals
           - harness-intake
           - consents
+          - provisionalConsent
           - forgot-password
           - reset-password
           - verify-email

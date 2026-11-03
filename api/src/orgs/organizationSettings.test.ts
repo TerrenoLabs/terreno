@@ -56,7 +56,7 @@ describe("organization settings schema", () => {
     assert.instanceOf(extraKeyError, ValidationError);
     assert.equal((extraKeyError as ValidationError).title, "Organization settings are invalid");
     assert.match(
-      String((extraKeyError as ValidationError).meta?.fields?.settings),
+      String(((extraKeyError as ValidationError).meta?.fields as {settings?: unknown})?.settings),
       /Unknown settings field: plan/
     );
 

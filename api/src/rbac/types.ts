@@ -187,7 +187,12 @@ export interface TerrenoAccess<S extends Statements> {
   readonly statements: S;
   readonly ac: ReturnType<typeof createAccessControl<S>>;
   can: (args: AccessCheckArgs<S>) => Promise<AccessResult>;
-  getPermissions: (args: {user: User}) => Promise<PermissionSet>;
+  /**
+   * The user's effective permissions. With `requireComplete`, a permission source that failed and
+   * whose grants are unknown throws 503 instead of leaving its grants out; use it for a user whose
+   * missing permissions would loosen a check (the target of "may the actor act on this user?").
+   */
+  getPermissions: (args: {user: User; requireComplete?: boolean}) => Promise<PermissionSet>;
   queryFilter: (args: {
     user?: User;
     resource: string;

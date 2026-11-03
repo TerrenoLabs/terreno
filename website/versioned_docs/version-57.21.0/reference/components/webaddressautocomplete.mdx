@@ -1,0 +1,35 @@
+---
+title: "WebAddressAutocomplete"
+description: "Web Places autocomplete. Without a key, stories show the fallback field."
+sidebar_label: "WebAddressAutocomplete"
+slug: /reference/components/webaddressautocomplete
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# WebAddressAutocomplete
+
+Web Places autocomplete. Without a key, stories show the fallback field.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `AddressAutocompleteProps`  
+**Story source:** [`demo/stories/WebAddressAutocomplete.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/WebAddressAutocomplete.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="WebAddressAutocomplete" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `handleAddressChange` | `OnChangeCallback` | Yes |  |
+| `handleAutoCompleteChange` | `reflection` | Yes |  |
+| `inputValue` | `string` | Yes |  |
+| `disabled` | `boolean` |  |  |
+| `googleMapsApiKey` | `string` |  |  |
+| `googlePlacesMobileStyles` | `Styles` |  |  |
+| `includeCounty` | `boolean` |  |  |
+| `styles` | `Styles` |  |  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

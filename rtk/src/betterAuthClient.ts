@@ -6,17 +6,39 @@
  */
 
 import {expoClient} from "@better-auth/expo/client";
+import {passkeyClient} from "@better-auth/passkey/client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {BetterAuthClientPlugin} from "better-auth/client";
-import {createAuthClient} from "better-auth/react";
+import {
+  lastLoginMethodClient,
+  multiSessionClient,
+  oneTimeTokenClient,
+  twoFactorClient,
+} from "better-auth/client/plugins";
+import {createAuthClient, type ReactAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
-import type {BetterAuthBearerStorage, BetterAuthClientConfig} from "./betterAuthTypes";
+import {
+  bearerTokenKey,
+  DEFAULT_STORAGE_PREFIX,
+  getBetterAuthBearerToken,
+  type HandoffClientConfig,
+  handoffClients,
+  resolveBearerStorage,
+} from "./betterAuthClientRegistry";
+import type {
+  BetterAuthBearerStorage,
+  BetterAuthClientConfig,
+  BetterAuthClientFeatures,
+} from "./betterAuthTypes";
 import {IsWeb} from "./platform";
+
+export {getBetterAuthBearerToken, getBetterAuthClientWebAuth} from "./betterAuthClientRegistry";
 
 // Re-export types for convenience
 export type {
   BetterAuthBearerStorage,
   BetterAuthClientConfig,
+  BetterAuthClientFeatures,
   BetterAuthOAuthProvider,
   BetterAuthSession,
   BetterAuthSessionData,
@@ -82,8 +104,6 @@ export const createStorageAdapter = (isWeb: boolean = IsWeb): StorageAdapter => 
     setItem: (key: string, value: string) => SecureStore.setItem(key, value),
   };
 };
-
-const DEFAULT_STORAGE_PREFIX = "terreno";
 
 /**
  * Drops cookie-jar entries that `@better-auth/expo` cannot read.
@@ -157,55 +177,43 @@ type BetterAuthFetchOptions = NonNullable<
 >;
 type BetterAuthRequestHook = NonNullable<BetterAuthFetchOptions["onRequest"]>;
 type BetterAuthSuccessHook = NonNullable<BetterAuthFetchOptions["onSuccess"]>;
-
-// Signed-out fallback for environments with no usable localStorage (SSR, blocked storage).
-const NO_BEARER_STORAGE: BetterAuthBearerStorage = {
-  getItem: () => null,
-  removeItem: () => {},
-  setItem: () => {},
-};
-
-const resolveBearerStorage = (bearerStorage?: BetterAuthBearerStorage): BetterAuthBearerStorage => {
-  if (bearerStorage) {
-    return bearerStorage;
-  }
-  if (typeof window === "undefined") {
-    return NO_BEARER_STORAGE;
-  }
-  try {
-    // Reading `window.localStorage` throws when the browser blocks site storage.
-    return window.localStorage ?? NO_BEARER_STORAGE;
-  } catch {
-    return NO_BEARER_STORAGE;
-  }
-};
-
-const bearerTokenKey = (storagePrefix?: string): string => {
-  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_bearer_token`;
-};
-
-/**
- * Reads the bearer token that `createBetterAuthClient({webAuth: "bearer"})` stored, without a
- * network call. Pass the same `storagePrefix` and `bearerStorage` the client was created with.
- * Returns `null` when signed out or when no storage is available.
- *
- * @example
- * ```typescript
- * const token = getBetterAuthBearerToken({storagePrefix: "myapp"});
- * ```
- */
-export const getBetterAuthBearerToken = ({
-  bearerStorage,
-  storagePrefix,
-}: {
-  bearerStorage?: BetterAuthBearerStorage;
-  storagePrefix?: string;
-} = {}): string | null => {
-  return resolveBearerStorage(bearerStorage).getItem(bearerTokenKey(storagePrefix));
-};
+type BetterAuthResponseHook = NonNullable<BetterAuthFetchOptions["onResponse"]>;
 
 const isAuthEndpoint = (url: string | URL, endpoint: string): boolean => {
   return new URL(url.toString(), "http://localhost").pathname.endsWith(endpoint);
+};
+
+/**
+ * The header `@terreno/api` uses to carry Better Auth's signed challenge cookies (two-factor,
+ * trust-device, passkey) to and from clients that send no cookies.
+ */
+const AUTH_CHALLENGE_HEADER = "X-Terreno-Auth-Challenge";
+
+// Sent when nothing is held, so the server still knows to answer with the header.
+const AUTH_CHALLENGE_EMPTY = "-";
+
+// Better Auth paths whose requests read challenge cookies (a trusted device is checked at sign-in).
+const AUTH_CHALLENGE_PATHS = ["/two-factor/", "/passkey/", "/sign-in/"];
+
+// Successful calls to these end the two-factor challenge.
+const TWO_FACTOR_VERIFY_PATHS = [
+  "/two-factor/verify-totp",
+  "/two-factor/verify-otp",
+  "/two-factor/verify-backup-code",
+];
+
+const authChallengeKey = (storagePrefix?: string): string => {
+  return `${storagePrefix ?? DEFAULT_STORAGE_PREFIX}_auth_challenge`;
+};
+
+const isChallengeEndpoint = (url: string | URL): boolean => {
+  const {pathname} = new URL(url.toString(), "http://localhost");
+  return AUTH_CHALLENGE_PATHS.some((path) => pathname.includes(path));
+};
+
+// Cookie names carry Better Auth's prefix (`better-auth.trust_device`, maybe `__Secure-`).
+const isCookieNamed = (name: string, cookie: string): boolean => {
+  return name === cookie || name.endsWith(`.${cookie}`);
 };
 
 const sentBearerToken = (headers: Headers): string | null => {
@@ -233,23 +241,87 @@ const createWebBearerFetchOptions = ({
   const tokenKey = bearerTokenKey(storagePrefix);
   const readToken = (): string | null => storage().getItem(tokenKey);
 
+  // The challenge cookies the server handed over, as `name=value` pairs, beside the bearer.
+  const challengeKey = authChallengeKey(storagePrefix);
+  const readChallenge = (): URLSearchParams => {
+    const stored = storage().getItem(challengeKey);
+    return new URLSearchParams(stored && stored !== AUTH_CHALLENGE_EMPTY ? stored : "");
+  };
+  const writeChallenge = (pairs: URLSearchParams): void => {
+    if (pairs.size === 0) {
+      storage().removeItem(challengeKey);
+      return;
+    }
+    storage().setItem(challengeKey, pairs.toString());
+  };
+  // Keeps only the entries `keep` accepts.
+  const filterChallenge = (keep: (name: string) => boolean): void => {
+    const pairs = readChallenge();
+    for (const name of Array.from(pairs.keys())) {
+      if (!keep(name)) {
+        pairs.delete(name);
+      }
+    }
+    writeChallenge(pairs);
+  };
+
   // Counts sign-outs, so a token issued by a request that was in flight across one is dropped.
   let signOutCount = 0;
   const signOutCountAtRequest = new WeakMap<object, number>();
 
   // Runs after the request headers are built and before fetch, so the sign-out request still
   // carries the token for the server to revoke while the device forgets it whatever happens next.
+  // Challenge calls carry the held challenge cookies; nothing else ever sees them.
   const onRequest: BetterAuthRequestHook = (context) => {
     if (isAuthEndpoint(context.url, "/sign-out")) {
       signOutCount += 1;
       storage().removeItem(tokenKey);
+      // A trusted device stays trusted across sign-outs; pending challenges do not.
+      filterChallenge((name) => isCookieNamed(name, "trust_device"));
     }
     signOutCountAtRequest.set(context, signOutCount);
+    if (isChallengeEndpoint(context.url)) {
+      const held = readChallenge();
+      context.headers.set(
+        AUTH_CHALLENGE_HEADER,
+        held.size > 0 ? held.toString() : AUTH_CHALLENGE_EMPTY
+      );
+    }
+  };
+
+  // Runs for every status before onSuccess (so before onTwoFactorRedirect), since a refused
+  // verify can also expire a challenge. An empty value means the server expired that cookie.
+  const onResponse: BetterAuthResponseHook = (context) => {
+    const header = context.response.headers.get(AUTH_CHALLENGE_HEADER);
+    if (header) {
+      const pairs = readChallenge();
+      for (const [name, value] of new URLSearchParams(header)) {
+        if (value) {
+          pairs.set(name, value);
+        } else {
+          pairs.delete(name);
+        }
+      }
+      writeChallenge(pairs);
+    }
+    const isVerified =
+      context.response.ok &&
+      TWO_FACTOR_VERIFY_PATHS.some((path) => isAuthEndpoint(context.request.url, path));
+    // The challenge and the sign-in's "don't remember me" belong to the finished sign-in.
+    if (isVerified) {
+      filterChallenge(
+        (name) => !isCookieNamed(name, "two_factor") && !isCookieNamed(name, "dont_remember")
+      );
+    }
   };
 
   // Only 2xx responses reach onSuccess, so a failed or 5xx get-session never clears the token.
   const onSuccess: BetterAuthSuccessHook = (context) => {
     const issuedToken = context.response.headers.get("set-auth-token");
+    // A sign-in waiting on a second factor has no session yet; any token it carries is dead.
+    if ((context.data as {twoFactorRedirect?: boolean} | null)?.twoFactorRedirect) {
+      return;
+    }
     if (issuedToken) {
       // better-fetch hands onSuccess the same context object that onRequest saw.
       const countAtRequest = signOutCountAtRequest.get(context.request) ?? signOutCount;
@@ -275,22 +347,10 @@ const createWebBearerFetchOptions = ({
     auth: {token: (): string | undefined => readToken() ?? undefined, type: "Bearer"},
     credentials: "omit",
     onRequest,
+    onResponse,
     onSuccess,
   };
 };
-
-/** What the OAuth handoff needs to know about a client `createBetterAuthClient` made. */
-interface HandoffClientConfig {
-  /** Better Auth's base URL with its path, as the client resolved it, without a trailing slash. */
-  authBaseURL: string;
-  bearerStorage?: BetterAuthBearerStorage;
-  isWebBearer: boolean;
-  storagePrefix: string;
-}
-
-// Keyed by the client itself: Better Auth's client is a route proxy, so nothing can be added to
-// it, and bearer mode only exists on clients this factory made.
-const handoffClients = new WeakMap<object, HandoffClientConfig>();
 
 // Better Auth appends `/api/auth` to a baseURL that has no path of its own.
 const resolveAuthBaseURL = (baseURL: string): string => {
@@ -305,6 +365,98 @@ const resolveAuthBaseURL = (baseURL: string): string => {
   return `${trimmed}/api/auth`;
 };
 
+// The client plugin a feature adds when it is on. A feature set to `false`, or left out, adds
+// nothing; a widened `boolean` (read from env, say) is typed as on.
+type FeaturePlugin<
+  Features extends BetterAuthClientFeatures,
+  Key extends keyof BetterAuthClientFeatures,
+  Plugin,
+> = Key extends keyof Features ? ([Features[Key]] extends [false | undefined] ? [] : [Plugin]) : [];
+
+/**
+ * The typed client plugins for a `features` object, in the order `createBetterAuthClient`
+ * registers them. Better Auth infers each namespace (`client.twoFactor`, `client.passkey`, ...)
+ * from this tuple.
+ */
+export type BetterAuthFeaturePlugins<Features extends BetterAuthClientFeatures> = [
+  ...FeaturePlugin<Features, "twoFactor", ReturnType<typeof twoFactorClient>>,
+  ...FeaturePlugin<Features, "passkey", ReturnType<typeof passkeyClient>>,
+  ...FeaturePlugin<Features, "multiSession", ReturnType<typeof multiSessionClient>>,
+  ...FeaturePlugin<Features, "lastLoginMethod", ReturnType<typeof lastLoginMethodClient>>,
+  ...FeaturePlugin<Features, "oneTimeToken", ReturnType<typeof oneTimeTokenClient>>,
+];
+
+/**
+ * Type of the Better Auth client returned by createBetterAuthClient without `features`. Its
+ * plugins are typed as a generic list, so plugin namespaces are untyped.
+ */
+export type BetterAuthClient = ReactAuthClient<{
+  baseURL: string;
+  fetchOptions?: BetterAuthFetchOptions;
+  plugins: BetterAuthClientPlugin[];
+}>;
+
+/**
+ * Type of the Better Auth client returned by createBetterAuthClient with `features`, such as
+ * `BetterAuthClientWithFeatures<{twoFactor: true}>`. Every enabled feature's namespace is typed.
+ *
+ * The expo plugin is left out of the type: it is typed only as a generic plugin (see
+ * createBetterAuthClient), which would widen every namespace to `any`. It adds only `getCookie`.
+ */
+export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
+  ReactAuthClient<{
+    baseURL: string;
+    fetchOptions?: BetterAuthFetchOptions;
+    plugins: BetterAuthFeaturePlugins<Features>;
+  }>;
+
+/**
+ * What the OAuth handoff helpers need from a client: any client createBetterAuthClient returns,
+ * with or without features.
+ */
+export type BetterAuthHandoffClient = Pick<BetterAuthClient, "$fetch" | "$store">;
+
+/**
+ * The client createBetterAuthClient returns for a `features` type. When the features are not
+ * known at compile time (no `features`, or a config typed as `BetterAuthClientConfig`), it is
+ * `BetterAuthClient`, exactly the client it always returned. When they are written out, every
+ * enabled feature's namespace is typed.
+ */
+export type BetterAuthClientFor<Features extends BetterAuthClientFeatures> =
+  BetterAuthClientFeatures extends Features
+    ? BetterAuthClient
+    : BetterAuthClientWithFeatures<Features>;
+
+/**
+ * Builds the client plugins for the enabled features, in BetterAuthFeaturePlugins order. They go
+ * after the expo plugin: better-fetch runs plugin hooks in order, so on native the expo plugin
+ * stores the 2FA challenge cookie before `onTwoFactorRedirect` runs, and its request hook adds the
+ * stored cookies to every feature call.
+ */
+const createFeaturePlugins = (features?: BetterAuthClientFeatures): BetterAuthClientPlugin[] => {
+  if (!features) {
+    return [];
+  }
+  const plugins: BetterAuthClientPlugin[] = [];
+  if (features.twoFactor) {
+    plugins.push(twoFactorClient(features.twoFactor === true ? undefined : features.twoFactor));
+  }
+  if (features.passkey) {
+    // Same declared-vs-structural mismatch as expoClient below.
+    plugins.push(passkeyClient() as unknown as BetterAuthClientPlugin);
+  }
+  if (features.multiSession) {
+    plugins.push(multiSessionClient());
+  }
+  if (features.lastLoginMethod) {
+    plugins.push(lastLoginMethodClient());
+  }
+  if (features.oneTimeToken) {
+    plugins.push(oneTimeTokenClient());
+  }
+  return plugins;
+};
+
 /**
  * Creates a Better Auth client configured for Expo/React Native.
  *
@@ -312,10 +464,15 @@ const resolveAuthBaseURL = (baseURL: string): string => {
  * client then authenticates with a stored bearer token instead of cookies. Read that token
  * elsewhere with `getBetterAuthBearerToken`.
  *
+ * Pass `features` to add the client plugins for the Better Auth features the server enables.
+ * Each one adds a typed namespace: `client.twoFactor`, `client.passkey`, `client.multiSession`,
+ * `client.oneTimeToken`, and `client.getLastUsedLoginMethod`.
+ *
  * @example
  * ```typescript
  * const authClient = createBetterAuthClient({
  *   baseURL: "http://localhost:3000",
+ *   features: {passkey: true, twoFactor: {onTwoFactorRedirect: () => router.push("/2fa")}},
  *   scheme: "terreno",
  * });
  *
@@ -326,9 +483,16 @@ const resolveAuthBaseURL = (baseURL: string): string => {
  *
  * // Get current session
  * const session = await authClient.getSession();
+ *
+ * // Feature namespaces are typed
+ * await authClient.twoFactor.enable({password});
  * ```
  */
-export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
+export const createBetterAuthClient = <
+  const Features extends BetterAuthClientFeatures = BetterAuthClientFeatures,
+>(
+  config: BetterAuthClientConfig<Features>
+): BetterAuthClientFor<Features> => {
   const storagePrefix = config.storagePrefix ?? DEFAULT_STORAGE_PREFIX;
   // Mirrors the plugin's own `cookieName = `${storagePrefix}_cookie``.
   const storage = withCookieJarRepair({
@@ -353,7 +517,7 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
 
   const client = createAuthClient({
     baseURL: config.baseURL,
-    plugins: [expoAuthPlugin],
+    plugins: [expoAuthPlugin, ...createFeaturePlugins(config.features)],
     ...(isWebBearer
       ? {
           fetchOptions: createWebBearerFetchOptions({
@@ -369,13 +533,9 @@ export const createBetterAuthClient = (config: BetterAuthClientConfig) => {
     isWebBearer,
     storagePrefix,
   });
-  return client;
+  // The plugins are built at runtime from `features`; BetterAuthClientFor is their type.
+  return client as unknown as BetterAuthClientFor<Features>;
 };
-
-/**
- * Type of the Better Auth client returned by createBetterAuthClient.
- */
-export type BetterAuthClient = ReturnType<typeof createBetterAuthClient>;
 
 // URL parameters of the OAuth handoff: T12's server puts the one-time token in the fragment as
 // `ott`, and the sign-in's nonce comes back in the callback query as `handoff`.
@@ -504,7 +664,7 @@ export const signInSocialWithHandoff = ({
   provider,
 }: {
   callbackURL?: string;
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
   errorCallbackURL?: string;
   provider: string;
 }): void => {
@@ -531,7 +691,7 @@ export const signInSocialWithHandoff = ({
  * finds a clean URL.
  */
 const takeHandoffToken = (
-  client: BetterAuthClient
+  client: BetterAuthHandoffClient
 ): {config: HandoffClientConfig; token: string} | null => {
   let current: URL;
   try {
@@ -581,7 +741,7 @@ const verifyHandoffToken = async ({
   config,
   token,
 }: {
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
   config: HandoffClientConfig;
   token: string;
 }): Promise<boolean> => {
@@ -649,7 +809,7 @@ const pendingHandoffs = new WeakMap<object, Promise<boolean>>();
 export const completeBetterAuthOAuthHandoff = ({
   client,
 }: {
-  client: BetterAuthClient;
+  client: BetterAuthHandoffClient;
 }): Promise<boolean> => {
   if (!IsWeb || typeof window === "undefined") {
     return Promise.resolve(false);
@@ -667,4 +827,144 @@ export const completeBetterAuthOAuthHandoff = ({
   });
   pendingHandoffs.set(client, result);
   return result;
+};
+
+/** The part of a typed client (one made with `features`) that linking calls. */
+interface LinkSocialClient extends Pick<BetterAuthClient, "$fetch"> {
+  // Method syntax, so each client's own `linkSocial` (whose `provider` may be a narrower union)
+  // still fits.
+  linkSocial(body: {
+    callbackURL: string;
+    errorCallbackURL?: string;
+    provider: string;
+  }): Promise<{error: {code?: string; message?: string; status: number} | null}>;
+}
+
+/**
+ * What linking needs from a client: any client createBetterAuthClient returns, with or without
+ * features. A client without `features` is typed loosely, so it is listed on its own.
+ */
+export type BetterAuthLinkClient = BetterAuthClient | LinkSocialClient;
+
+/** Why a link could not start; `null` when the browser is on its way to the provider. */
+export interface LinkSocialWithHandoffResult {
+  error: {code?: string; message?: string; status: number} | null;
+}
+
+interface LinkIntentResponse {
+  startURL: string;
+  token: string;
+}
+
+const toLinkError = (error: {
+  code?: string;
+  message?: string;
+  status: number;
+}): NonNullable<LinkSocialWithHandoffResult["error"]> => ({
+  status: error.status,
+  ...(error.code !== undefined ? {code: error.code} : {}),
+  ...(error.message !== undefined ? {message: error.message} : {}),
+});
+
+const isHttpURL = (url: unknown): url is string => {
+  if (typeof url !== "string") {
+    return false;
+  }
+  try {
+    const {protocol} = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+// Posts the token from a hidden form, a top-level navigation, so the token stays out of the
+// page URL, history, and access logs, and the API sets the state cookie first-party.
+const submitLinkForm = (startURL: string, token: string): void => {
+  const form = window.document.createElement("form");
+  form.method = "POST";
+  form.action = startURL;
+  form.style.display = "none";
+  const field = window.document.createElement("input");
+  field.type = "hidden";
+  field.name = "token";
+  field.value = token;
+  form.appendChild(field);
+  window.document.body.appendChild(form);
+  form.submit();
+};
+
+/**
+ * Links a social or generic OAuth provider to the signed-in user.
+ *
+ * On web in bearer mode (`createBetterAuthClient({webAuth: "bearer"})`), a `POST /link-social`
+ * fetch from another site cannot set Better Auth's OAuth state cookie on the API's origin. So
+ * this posts `{provider, callbackURL, errorCallbackURL}` to the server's
+ * `POST {basePath}/oauth-handoff/link-intent` with the bearer, then submits the single-use token
+ * it returns in a hidden form (method POST) to `startURL`, which redirects the page to the
+ * provider. The provider sends the page back to `callbackURL`, with no token: linking creates no
+ * session. A failure after the form comes back to `errorCallbackURL` with `?error=`.
+ *
+ * Both URLs are resolved against the current page and may be any page on one of the server's
+ * `oauthHandoff.webOrigins` that its `trustedOrigins` allows. `oauthHandoff.callbackPaths` do not
+ * apply, since no token travels on a link's return. `errorCallbackURL` defaults to
+ * `callbackURL`. The page must not be served with `Referrer-Policy: no-referrer` or
+ * `same-origin`: the form's `Origin` header is then `null`, and the server refuses the start.
+ *
+ * In cookie mode and on native it calls `client.linkSocial` as before.
+ *
+ * Resolves `{error: null}` once the browser is on its way (or `linkSocial` succeeded), and
+ * `{error}` when the server refused, such as 403 `LINKING_DISABLED` when linking is off. It never
+ * submits the form after a refusal.
+ *
+ * @example
+ * ```typescript
+ * const {error} = await linkSocialWithHandoff({
+ *   callbackURL: "/settings/security",
+ *   client: authClient,
+ *   errorCallbackURL: "/settings/security",
+ *   provider: "google",
+ * });
+ * ```
+ */
+export const linkSocialWithHandoff = async ({
+  callbackURL,
+  client,
+  errorCallbackURL,
+  provider,
+}: {
+  callbackURL: string;
+  client: BetterAuthLinkClient;
+  errorCallbackURL?: string;
+  provider: string;
+}): Promise<LinkSocialWithHandoffResult> => {
+  const config = handoffClients.get(client);
+  if (!IsWeb || typeof window === "undefined" || !config?.isWebBearer) {
+    const result = await (client as LinkSocialClient).linkSocial({
+      callbackURL,
+      provider,
+      ...(errorCallbackURL !== undefined ? {errorCallbackURL} : {}),
+    });
+    return {error: result.error ? toLinkError(result.error) : null};
+  }
+  const toAbsolute = (url: string): string => new URL(url, window.location.href).toString();
+  // Without an error page, Better Auth would send a failed link to its own page on the API.
+  const intent = await client.$fetch<LinkIntentResponse>("/oauth-handoff/link-intent", {
+    body: {
+      callbackURL: toAbsolute(callbackURL),
+      errorCallbackURL: toAbsolute(errorCallbackURL ?? callbackURL),
+      provider,
+    },
+    method: "POST",
+  });
+  if (intent.error) {
+    return {error: toLinkError(intent.error)};
+  }
+  const {startURL, token} = intent.data ?? {};
+  if (!token || !isHttpURL(startURL)) {
+    console.warn("[terreno/rtk] The link intent answered without a usable token or start URL");
+    return {error: {message: "The link intent answered without a token", status: 500}};
+  }
+  submitLinkForm(startURL, token);
+  return {error: null};
 };

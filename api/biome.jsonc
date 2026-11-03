@@ -1,5 +1,4 @@
 {
-  "root": true,
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["../biome.jsonc"],
   "files": {
@@ -7,6 +6,7 @@
       "package.json",
       "src/**/*.ts",
       "src/**/*.tsx",
+      "e2e/**/*.ts",
       "!!src/populate.ts",
       "!!**/node_modules",
       "!!node_modules",
@@ -17,5 +17,6 @@
       "!!**/coverage",
       "!!coverage"
     ]
-  }
+  },
+  "root": true
 }

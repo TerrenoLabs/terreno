@@ -1,0 +1,30 @@
+---
+title: "CheckBox"
+description: "CheckBox is used for multiple choice selection."
+sidebar_label: "CheckBox"
+slug: /reference/components/checkbox
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# CheckBox
+
+CheckBox is used for multiple choice selection. They are independent of each other in a list, and therefore, different from RadioButton, one selection does not affect other checkboxes in the same list.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `CheckBoxProps`  
+**Story source:** [`demo/stories/CheckBox.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/CheckBox.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="CheckBox" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `selected` | `boolean` | Yes | If true, the checkbox is selected. |
+| `bgColor` | `union` |  | The background color of the checkbox. |
+| `size` | `union` |  | The size of the checkbox. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

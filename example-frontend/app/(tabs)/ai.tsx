@@ -104,7 +104,7 @@ type TurnOutcome =
   | {fields: AskErrors[string]; kind: "invalidAnswer"}
   | {detail: string; kind: "conflict"};
 
-/** The synced row's id: the entity key, which is the string `_id`. */
+/** The synced row's id: the entity key, which is the ObjectId `_id` as a hex string. */
 const historyIdOf = (history: GptHistory): string => history._id;
 
 /** Bearer header for the SSE and rating requests, from the same session the sync client uses. */
@@ -115,11 +115,11 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
   id: historyIdOf(history),
   prompts: history.prompts.map((p) => {
     const ask = askFromHistoryPrompt({pendingAsk: history.pendingAsk, prompt: p});
-    const blockNote = p.type === "assistant" ? componentCaption(p.text) : undefined;
+    const blockNote = p.type === "assistant" ? componentCaption(p.text ?? "") : undefined;
     return {
       ...(ask ? {ask} : {}),
       ...(blockNote ? {blockNote} : {}),
-      content: p.text,
+      content: p.text ?? "",
       contentParts: p.content?.map((c): MessageContentPart => {
         if (c.type === "text") {
           return {text: c.text ?? "", type: "text"};
@@ -232,7 +232,9 @@ const readSseEvents = async (
 /** The in-flight reply of a stored history, if /gpt/prompt is still streaming it. */
 const findStreamingReply = (history?: GptHistory): {text: string} | undefined => {
   const last = history?.prompts[history.prompts.length - 1];
-  return last?.type === "assistant" && last.status === "streaming" ? {text: last.text} : undefined;
+  return last?.type === "assistant" && last.status === "streaming"
+    ? {text: last.text ?? ""}
+    : undefined;
 };
 
 /**

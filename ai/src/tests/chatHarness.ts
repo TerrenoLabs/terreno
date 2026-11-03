@@ -11,7 +11,7 @@ import {addGptRoutes} from "../routes/gpt";
 import {addGptHistoryRoutes} from "../routes/gptHistories";
 import {AIService} from "../service/aiService";
 import type {GptHistoryDocument, GptRouteOptions} from "../types";
-import {type authAsUser, UserModel} from "./helpers";
+import {type authAsUser, historyRouterOptions, terrenoUserModel} from "./helpers";
 
 type ModelStreamPart = {type: string; [key: string]: unknown};
 
@@ -232,7 +232,7 @@ export const createScriptedModel = ({
   const remaining = [...steps];
   let callCount = 0;
   return {
-    doGenerate: mock(async () => ({
+    doGenerate: mock(async (_options: ModelCallOptions) => ({
       content: [{text: "Workspace setup", type: "text" as const}],
       finishReason: "stop" as const,
       usage: USAGE,
@@ -348,11 +348,11 @@ export const buildApp = ({
         openApiOptions: options,
         ...routeOptions,
       };
-      addGptHistoryRoutes(router, {...options, chat});
+      addGptHistoryRoutes(router, {...historyRouterOptions(options), chat});
       addGptRoutes(router, chat);
     },
     skipListen: true,
-    userModel: UserModel,
+    userModel: terrenoUserModel,
   }).build();
 
 export interface ServedApp {

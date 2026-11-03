@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
-import {lastError, readLogs} from "../tools/readLogs";
-import {navigate} from "../tools/runtime";
+import {lastError, readLogs} from "../tools/readLogs.js";
+import {navigate} from "../tools/runtime.js";
 import {
   cdpRuntimeEvaluate,
   ensureCdpConnected,
@@ -10,7 +10,7 @@ import {
   resetMetroDevSessionForTests,
   snapshotCdpConsoleRing,
   snapshotMetroEventsRing,
-} from "./metroDevSession";
+} from "./metroDevSession.js";
 
 interface FakeMessageEvent {
   data: string;
@@ -91,7 +91,7 @@ describe("Metro development session", () => {
           },
         ]),
         {status: 200}
-      )) as typeof fetch;
+      )) as unknown as typeof fetch;
   });
 
   afterEach((): void => {
@@ -155,7 +155,7 @@ describe("Metro development session", () => {
 
   it("reports an unreachable Metro target", async (): Promise<void> => {
     globalThis.fetch = (async (): Promise<Response> =>
-      new Response("unavailable", {status: 503})) as typeof fetch;
+      new Response("unavailable", {status: 503})) as unknown as typeof fetch;
     const result = await ensureCdpConnected();
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("503");

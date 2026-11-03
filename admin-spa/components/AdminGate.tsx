@@ -1,12 +1,16 @@
 import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Spinner} from "@terreno/ui";
-import {useLocalSearchParams, usePathname, useRouter} from "expo-router";
-import React, {useEffect} from "react";
-import {sanitizeReturnTo} from "../src/returnTo";
+import {useGlobalSearchParams, usePathname, useRouter} from "expo-router";
+import React, {useEffect, useMemo} from "react";
 import {useAppConfig} from "./AppConfigGate";
 import {AdminGateConfigProvider} from "./adminGateConfig";
-import {isForbiddenAdminConfigError} from "./adminGateUtils";
+import {
+  type AdminGateDecision,
+  buildRoutePath,
+  isForbiddenAdminConfigError,
+  resolveAdminGate,
+} from "./adminGateUtils";
 import {useSsrPayload} from "./ssrPayload";
 
 interface AdminRequestError {
@@ -27,10 +31,10 @@ const LoadingScreen: React.FC = () => (
 /**
  * Auth + authorization gate. Reads the Better Auth session from `SessionProvider` (which
  * syncs it on mount and whenever Better Auth's session signal fires), then:
- * - unauthenticated → redirect to /login
+ * - unauthenticated → redirect to /login (signed-in-only routes keep a `returnTo`)
  * - authenticated but NOT an admin (admin API returns 403) → redirect to /forbidden
- * - authenticated admin sitting on /login → redirect to a safe `returnTo`, or /
- * - authenticated admin sitting on /forbidden → redirect to /
+ * - signed in on /login with a safe `returnTo` → go there; an admin otherwise → /
+ * - a server render that already found this session forbidden skips the probe
  *
  * Admin status is determined by the backend's own authorization on `${adminApiBase}/config`
  * (200 = admin, 403 = forbidden), since the better-auth session does not carry the
@@ -39,7 +43,7 @@ const LoadingScreen: React.FC = () => (
 export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
   const router = useRouter();
   const pathname = usePathname();
-  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
+  const searchParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const {appConfig} = useAppConfig();
   const {isAuthenticated, isLoading: isAuthLoading, userId} = useSession();
   const payload = useSsrPayload();
@@ -73,33 +77,41 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
     });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
 
+  const currentPath = buildRoutePath({params: searchParams, pathname});
+  const decision = useMemo(
+    (): AdminGateDecision =>
+      resolveAdminGate({
+        currentPath,
+        isAdmin,
+        isAuthenticated,
+        isAuthLoading,
+        isConfigLoading,
+        isForbidden,
+        pathname,
+        returnTo: searchParams.returnTo,
+        status,
+      }),
+    [
+      currentPath,
+      isAdmin,
+      isAuthenticated,
+      isAuthLoading,
+      isConfigLoading,
+      isForbidden,
+      pathname,
+      searchParams.returnTo,
+      status,
+    ]
+  );
+
   // Drive redirects from auth + authorization state.
   useEffect(() => {
-    if (isAuthLoading) {
-      return;
+    if (decision.kind === "redirect") {
+      router.replace(decision.target);
     }
-    if (!isAuthenticated || status === 401) {
-      if (pathname !== "/login") {
-        router.replace("/login");
-      }
-      return;
-    }
-    if (isForbidden) {
-      if (pathname !== "/forbidden") {
-        router.replace("/forbidden");
-      }
-      return;
-    }
-    if (isAdmin && pathname === "/login") {
-      router.replace(sanitizeReturnTo(returnTo) ?? "/");
-      return;
-    }
-    if (isAdmin && pathname === "/forbidden") {
-      router.replace("/");
-    }
-  }, [isAuthLoading, isAuthenticated, isForbidden, isAdmin, status, pathname, returnTo, router]);
+  }, [decision, router]);
 
-  if (isAuthLoading) {
+  if (decision.kind === "loading") {
     // The server-rendered login form stays on screen while the session resolves.
     return pathname === "/login" ? (
       <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
@@ -107,22 +119,13 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
       <LoadingScreen />
     );
   }
-  if (!isAuthenticated || status === 401) {
-    return pathname === "/login" ? (
-      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
-    ) : (
-      <LoadingScreen />
-    );
-  }
-  if (isForbidden) {
-    return pathname === "/forbidden" ? (
-      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
-    ) : (
-      <LoadingScreen />
-    );
-  }
-  if (isConfigLoading) {
+  if (decision.kind === "redirect" && !decision.render) {
     return <LoadingScreen />;
   }
-  return <AdminGateConfigProvider config={config ?? null}>{children}</AdminGateConfigProvider>;
+  // Only a loaded config is shared; login, forbidden, and signed-in-only routes get none.
+  return (
+    <AdminGateConfigProvider config={isAdmin ? (config ?? null) : null}>
+      {children}
+    </AdminGateConfigProvider>
+  );
 };

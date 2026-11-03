@@ -24,12 +24,14 @@ export const loader = (): LoginLoaderData => ({
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
-  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
   const {appConfig} = useAppConfig();
   const loaderData = useLoaderData<typeof loader>();
   const brandName = loaderData?.appConfig?.brandName ?? appConfig.brandName;
   const authClient = useAuthClient();
   const {refresh} = useSession();
+  const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
+  // Only an in-app path is honored; anything else falls back to the admin home.
+  const safeReturnTo = sanitizeReturnTo(returnTo);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,8 +42,8 @@ const LoginScreen: React.FC = () => {
   // go where the visitor was headed when the gate sent them here.
   const onSuccess = useCallback(async (): Promise<void> => {
     await refresh();
-    router.replace(sanitizeReturnTo(returnTo) ?? "/");
-  }, [refresh, returnTo, router]);
+    router.replace(safeReturnTo ?? "/");
+  }, [refresh, router, safeReturnTo]);
 
   const handleEmailLogin = useCallback(async (): Promise<void> => {
     setError(undefined);

@@ -39,8 +39,8 @@ const syncOptions = {
     read: [Permissions.IsAuthenticated],
     update: [Permissions.IsAuthenticated],
   },
-  sync: {scope: {type: "owner"}},
-} as const;
+  sync: {scope: {type: "owner" as const}},
+};
 
 const baseOptions = {
   permissions: {
@@ -66,7 +66,7 @@ describe("CollectionRegistry", () => {
 
     const record = getCollection("/food");
     expect(record?.routePath).toBe("/food");
-    expect(record?.model).toBe(FoodModel);
+    expect<unknown>(record?.model).toBe(FoodModel);
     expect(record?.options).toBe(baseOptions);
     expect(listCollections()).toHaveLength(1);
   });
@@ -158,7 +158,7 @@ describe("CollectionRegistry", () => {
       throw new Error("should not run");
     });
     clearCollectionRegistry();
-    const {ensureSyncIndexes} = await import("./sync/registrationSideEffects");
+    const {ensureSyncIndexes} = await import("./sync/registrationSideEffects.js");
     await expect(ensureSyncIndexes()).resolves.toBeUndefined();
   });
 });

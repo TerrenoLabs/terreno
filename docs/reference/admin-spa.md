@@ -216,6 +216,15 @@ by the visitor's user id, so they count against the visitor's own `api` bucket (
 The browser's own requests after hydration come on top. If admins hit 429s, raise
 `rateLimit.limits.apiMax` on `TerrenoApp`.
 
+## MCP OAuth consent route
+
+`${basePath}/oauth/consent?request=<id>` is the consent screen for `@terreno/api` MCP OAuth. Set `mcpOAuth.consentUrl` to `${issuer}${basePath}/oauth/consent` on a backend that serves the SPA from the same origin.
+
+- Any signed-in user can open it, not only admins. Admin providers (sync client, org context) do not start on this route.
+- A signed-out user is sent to `${basePath}/login?returnTo=<path>` and returned after sign-in. `returnTo` must start with a single `/` and contain no `\`, scheme, whitespace, or control characters; anything else is ignored.
+- The screen calls `GET /oauth/authorize/:request` and `POST /oauth/authorize/:request/approve` or `/deny` with the Better Auth session cookie, then follows `data.redirectUrl`.
+- States: loading, missing `request`, expired (400), already decided (409), not found, signed out, and error. Test ids start with `admin-spa-oauth-consent-`.
+
 ## Mount path constraint
 
 The bundle's mount path is baked in at build time from `experiments.baseUrl` in

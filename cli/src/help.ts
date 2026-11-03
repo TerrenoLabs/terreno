@@ -81,6 +81,7 @@ Options:
 Options:
   --description <text>
   --mcp-url <url>
+  --terreno-path <checkout>    Pack compiled checkout packages for unpublished Terreno versions (app only)
   --packages api,ui,syncdb     Guideline packages for rules
 `,
     db: `Usage: terreno db <schema|query> [options]

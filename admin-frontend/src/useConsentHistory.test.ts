@@ -27,11 +27,12 @@ const stubFetch = (respond: (url: string) => StubResult): string[] => {
 };
 
 const wrapper: React.FC<{children: React.ReactNode}> = ({children}) =>
-  React.createElement(
-    AdminProvider,
-    {apiBase: "/admin", credentials: "same-origin", routeBase: "/admin"},
-    children
-  );
+  React.createElement(AdminProvider, {
+    apiBase: "/admin",
+    children,
+    credentials: "same-origin",
+    routeBase: "/admin",
+  });
 
 describe("useConsentHistory", () => {
   afterEach(() => {

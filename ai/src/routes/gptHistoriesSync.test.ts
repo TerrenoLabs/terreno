@@ -1,7 +1,7 @@
 import {afterEach, beforeAll, describe, expect, it} from "bun:test";
 import {SyncApp, TerrenoApp} from "@terreno/api";
 import type express from "express";
-import type mongoose from "mongoose";
+import mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
 import {
@@ -9,7 +9,8 @@ import {
   authAsUser,
   authAsUserWithCredentials,
   ensureTestUsers,
-  UserModel,
+  historyRouterOptions,
+  terrenoUserModel,
 } from "../tests/helpers";
 import {addGptHistoryRoutes} from "./gptHistories";
 
@@ -20,7 +21,7 @@ const OTHER_USER = {
   password: "password",
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/;
 
 interface SnapshotEntity {
   data: Record<string, unknown>;
@@ -40,10 +41,10 @@ const idOf = (user: AiTestUserDoc): string =>
 const buildSyncApp = (): express.Application =>
   new TerrenoApp({
     configureApp: (router, options) => {
-      addGptHistoryRoutes(router, options);
+      addGptHistoryRoutes(router, historyRouterOptions(options));
     },
     skipListen: true,
-    userModel: UserModel,
+    userModel: terrenoUserModel,
   })
     .register(new SyncApp())
     .build();
@@ -64,12 +65,12 @@ describe("/gpt/histories over sync", () => {
     await GptHistory.collection.deleteMany({});
   });
 
-  it("gives new histories a UUID String id", async () => {
+  it("gives new histories a server-made ObjectId", async () => {
     const agent = await authAsUser(buildSyncApp(), "notAdmin");
 
     const res = await agent.post("/gpt/histories").send({title: "Fresh"}).expect(201);
 
-    expect(res.body.data._id).toMatch(UUID_PATTERN);
+    expect(res.body.data._id).toMatch(OBJECT_ID_PATTERN);
     const history = await GptHistory.findById(res.body.data._id);
     expect(history?.title).toBe("Fresh");
   });
@@ -117,7 +118,9 @@ describe("/gpt/histories over sync", () => {
 
     const res = await agent.get(snapshotPath(notAdminId)).expect(200);
 
-    const entity = (res.body.entities as SnapshotEntity[]).find((item) => item.id === history._id);
+    const entity = (res.body.entities as SnapshotEntity[]).find(
+      (item) => item.id === String(history._id)
+    );
     const pendingAsk = entity?.data.pendingAsk as Record<string, unknown>;
     expect(pendingAsk.toolCallId).toBe("call_confirm");
     expect(pendingAsk).not.toHaveProperty("promptIndex");
@@ -135,5 +138,93 @@ describe("/gpt/histories over sync", () => {
       (item) => item.id === created.body.data._id
     );
     expect(entity?.deleted).toBe(true);
+  });
+
+  it("creates a history through sync with a client-minted ObjectId and edits it by that id", async () => {
+    const agent = await authAsUser(buildSyncApp(), "notAdmin");
+    const id = new mongoose.Types.ObjectId().toHexString();
+
+    const created = await agent
+      .post("/sync/mutate")
+      .send({
+        collection: "gpt/histories",
+        data: {prompts: [], title: "Offline"},
+        id,
+        mutationId: `create-${id}`,
+        operation: "create",
+      })
+      .expect(200);
+    expect(created.body.ack.id).toBe(id);
+    const stored = await GptHistory.findById(id);
+    expect(stored?._id).toBeInstanceOf(mongoose.Types.ObjectId);
+    expect(String(stored?.userId)).toBe(notAdminId);
+
+    const renamed = await agent
+      .post("/sync/mutate")
+      .send({
+        baseVersion: created.body.ack.seq,
+        collection: "gpt/histories",
+        data: {title: "Renamed"},
+        id,
+        mutationId: `rename-${id}`,
+        operation: "update",
+      })
+      .expect(200);
+    expect((await GptHistory.findById(id))?.title).toBe("Renamed");
+
+    await agent
+      .post("/sync/mutate")
+      .send({
+        collection: "gpt/histories",
+        id,
+        mutationId: `delete-${id}`,
+        operation: "delete",
+      })
+      .expect(200);
+    const res = await agent.get(snapshotPath(notAdminId)).expect(200);
+    const entity = (res.body.entities as SnapshotEntity[]).find((item) => item.id === id);
+    expect(entity?.deleted).toBe(true);
+    expect(entity?.seq).toBeGreaterThan(renamed.body.ack.seq);
+  });
+
+  it("nacks a UUID history id as invalid_id without writing anything", async () => {
+    const agent = await authAsUser(buildSyncApp(), "notAdmin");
+
+    const res = await agent
+      .post("/sync/mutate")
+      .send({
+        collection: "gpt/histories",
+        data: {prompts: [], title: "UUID"},
+        id: crypto.randomUUID(),
+        mutationId: "create-uuid-history",
+        operation: "create",
+      })
+      .expect(422);
+
+    expect(res.body.nack.code).toBe("validation");
+    expect(res.body.nack.reason).toBe("invalid_id");
+    expect(await GptHistory.collection.countDocuments({})).toBe(0);
+  });
+
+  it("nacks id_collision when a client-minted id is another user's history", async () => {
+    const agent = await authAsUser(buildSyncApp(), "notAdmin");
+    const theirs = await GptHistory.create({prompts: [], title: "Theirs", userId: otherId});
+
+    const res = await agent
+      .post("/sync/mutate")
+      .send({
+        collection: "gpt/histories",
+        data: {prompts: [], title: "Mine"},
+        id: String(theirs._id),
+        mutationId: "create-colliding-history",
+        operation: "create",
+      })
+      .expect(422);
+
+    expect(res.body.nack.reason).toBe("id_collision");
+    expect(res.body.nack.message).toBe("Entity id already exists");
+    const stored = await GptHistory.findById(theirs._id);
+    expect(stored?.title).toBe("Theirs");
+    expect(String(stored?.userId)).toBe(otherId);
   });
 });

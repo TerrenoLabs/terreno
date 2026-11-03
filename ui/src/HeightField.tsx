@@ -99,11 +99,11 @@ const HeightSegment: FC<HeightSegmentProps> = ({
     [onChange, maxValue]
   );
 
-  let borderColor = focused ? theme.border.focus : theme.border.dark;
+  let borderColor = focused ? theme.field.borderFocus : theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (error) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
 
   return (
@@ -111,7 +111,7 @@ const HeightSegment: FC<HeightSegmentProps> = ({
       <View
         style={{
           alignItems: "center",
-          backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
+          backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
           borderColor,
           borderRadius: 4,
           borderWidth: focused ? 3 : 1,
@@ -251,11 +251,11 @@ export const HeightField: FC<HeightFieldProps> = ({
     []
   );
 
-  let borderColor = theme.border.dark;
+  let borderColor = theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (errorText) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
 
   if (isAndroid) {
@@ -306,7 +306,7 @@ export const HeightField: FC<HeightFieldProps> = ({
           <View
             style={{
               alignItems: "center",
-              backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
+              backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
               borderColor,
               borderRadius: 4,
               borderWidth: 1,

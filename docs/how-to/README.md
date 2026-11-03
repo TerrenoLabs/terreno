@@ -41,6 +41,8 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Debug with MCP](debug-with-mcp.md) — Follow a failure from symptom to verified fix with the local MCP tools
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
+- [Manage MCP from the admin panel](manage-mcp-in-admin.md) — Service tokens, OAuth clients and connections, request log, tool on/off switches, and sign-out-everywhere
+- [Expose an MCP server safely](expose-mcp-server-safely.md) — Put `/mcp` on the internet with OAuth, service tokens, a named Cloudflare Tunnel, and Access on the console
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
 - [Develop an AI feature](ai-feature-development.md) — Dataset → prompt → evaluators → experiment → production label → live traces (SOP)
 - [Observe LLM calls](observe-llm-calls.md) — Register ObservabilityApp, primaries, price map, sampleRate

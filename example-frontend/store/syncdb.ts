@@ -82,6 +82,9 @@ export const syncDb: SyncDb = createSyncDb({
   // package default) once your entities are truly independent and you want a
   // conflict on one to never stall unrelated ones.
   haltQueueOnConflict: true,
+  // GptHistory keeps Mongoose's default ObjectId `_id`, so any history this client creates
+  // gets a client-minted ObjectId instead of the default UUID.
+  idFormats: {[GPT_HISTORIES_COLLECTION]: "objectId"},
   name: SYNC_DB_NAME,
   // Todos stay fully synced; `fullSync` also enables server-filtered query windows
   // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.

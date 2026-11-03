@@ -40,7 +40,7 @@ describe("useAiObservabilityExperimentsApi", () => {
       "GET /ai/observability/experiments",
       "GET /ai/observability/experiments/exp%201",
     ]);
-    expect(result.current.detail.data).toEqual({_id: "exp-1"});
+    expect(result.current.detail.data as unknown).toEqual({_id: "exp-1"});
   });
 
   it("estimates, creates, and promotes experiments", async () => {

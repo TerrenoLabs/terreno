@@ -22,7 +22,7 @@ import type {LocalDatasetStore} from "./datasetStore";
 import type {LocalEvaluatorStore} from "./evaluatorStore";
 import {registerObsExperiment} from "./models/obsExperiment";
 import {registerObsExperimentItem} from "./models/obsExperimentItem";
-import type {LocalPromptStore} from "./promptStore";
+import type {LocalPromptStore, MoveLabelResult} from "./promptStore";
 
 export interface ExperimentCreateInput {
   datasetId: string;
@@ -354,7 +354,7 @@ export class LocalExperimentRunner {
     };
   }
 
-  async promote(id: string, version: number): Promise<{label: string; outgoingVersion?: number}> {
+  async promote(id: string, version: number): Promise<MoveLabelResult> {
     const experiment = await this.get(id);
     if (!experiment.results) {
       throw new APIError({status: 409, title: "Experiment has not finished running"});

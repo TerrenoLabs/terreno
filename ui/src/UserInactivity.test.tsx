@@ -148,6 +148,7 @@ describe("UserInactivity", () => {
     const addListenerSpy = spyOn(Keyboard, "addListener").mockImplementation(
       (event: string, callback: () => void) => {
         if (event === "keyboardDidHide") {
+          // UserInactivity's keyboard handler ignores the event payload.
           capturedHideCallback = callback;
         }
         return {remove: mock(() => {})} as unknown as EmitterSubscription;

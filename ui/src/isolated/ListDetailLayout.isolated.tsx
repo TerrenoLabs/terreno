@@ -5,7 +5,7 @@ import {useEffect} from "react";
 import {Text, useWindowDimensions} from "react-native";
 
 import type {ListDetailState} from "../Common";
-import {renderWithTheme} from "../test-utils";
+import {findAllByHostType, renderWithTheme} from "../test-utils";
 
 // This file runs in its own process (src/isolated), so it can install route and router doubles
 // for the hooks this layout reads without affecting other suites.
@@ -126,9 +126,7 @@ describe("ListDetailLayout", () => {
     const {getByTestId, queryByTestId} = renderLayout();
 
     expect(queryByTestId("list-detail-list-pane")).toBeNull();
-    expect(
-      getByTestId("list-detail-detail-pane").findAll((node) => node.type === "Stack")
-    ).toHaveLength(1);
+    expect(findAllByHostType(getByTestId("list-detail-detail-pane"), "Stack")).toHaveLength(1);
     expect(getByTestId("split-probe").props.children).toBe("stacked");
   });
 

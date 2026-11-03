@@ -8,13 +8,15 @@ describe("SegmentedControl", () => {
   const defaultItems = ["Tab 1", "Tab 2", "Tab 3"];
 
   it("renders correctly with default props", () => {
-    const {toJSON} = renderWithTheme(<SegmentedControl items={defaultItems} selectedIndex={0} />);
+    const {toJSON} = renderWithTheme(
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} />
+    );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders all items", () => {
     const {getByText} = renderWithTheme(
-      <SegmentedControl items={defaultItems} selectedIndex={0} />
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} />
     );
     expect(getByText("Tab 1")).toBeTruthy();
     expect(getByText("Tab 2")).toBeTruthy();
@@ -22,7 +24,9 @@ describe("SegmentedControl", () => {
   });
 
   it("highlights selected item", () => {
-    const {toJSON} = renderWithTheme(<SegmentedControl items={defaultItems} selectedIndex={1} />);
+    const {toJSON} = renderWithTheme(
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={1} />
+    );
     expect(toJSON()).toMatchSnapshot();
   });
 
@@ -38,21 +42,21 @@ describe("SegmentedControl", () => {
 
   it("renders with medium size (default)", () => {
     const {toJSON} = renderWithTheme(
-      <SegmentedControl items={defaultItems} selectedIndex={0} size="md" />
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} size="md" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders a compact control that hugs its labels", () => {
     const {toJSON} = renderWithTheme(
-      <SegmentedControl items={defaultItems} selectedIndex={0} size="sm" />
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} size="sm" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
 
   it("renders with large size", () => {
     const {toJSON} = renderWithTheme(
-      <SegmentedControl items={defaultItems} selectedIndex={0} size="lg" />
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} size="lg" />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -64,7 +68,12 @@ describe("SegmentedControl", () => {
       {count: 1, status: "error" as const},
     ];
     const {toJSON} = renderWithTheme(
-      <SegmentedControl badges={badges} items={defaultItems} selectedIndex={0} />
+      <SegmentedControl
+        badges={badges}
+        items={defaultItems}
+        onChange={() => {}}
+        selectedIndex={0}
+      />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -72,7 +81,7 @@ describe("SegmentedControl", () => {
   it("renders with maxItems and scroll buttons", () => {
     const manyItems = ["Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"];
     const {toJSON} = renderWithTheme(
-      <SegmentedControl items={manyItems} maxItems={3} selectedIndex={0} />
+      <SegmentedControl items={manyItems} maxItems={3} onChange={() => {}} selectedIndex={0} />
     );
     expect(toJSON()).toMatchSnapshot();
   });
@@ -80,7 +89,7 @@ describe("SegmentedControl", () => {
   it("handles scroll navigation", () => {
     const manyItems = ["Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"];
     const {getByText, toJSON} = renderWithTheme(
-      <SegmentedControl items={manyItems} maxItems={3} selectedIndex={0} />
+      <SegmentedControl items={manyItems} maxItems={3} onChange={() => {}} selectedIndex={0} />
     );
     // Initially shows first 3 items
     expect(getByText("Tab 1")).toBeTruthy();
@@ -92,7 +101,7 @@ describe("SegmentedControl", () => {
   it("invokes handleNext when next scroll button is pressed", () => {
     const manyItems = ["Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"];
     const {UNSAFE_getAllByProps, queryByText} = renderWithTheme(
-      <SegmentedControl items={manyItems} maxItems={3} selectedIndex={0} />
+      <SegmentedControl items={manyItems} maxItems={3} onChange={() => {}} selectedIndex={0} />
     );
     // Find the right chevron (next button) by its icon prop
     const nextIcons = UNSAFE_getAllByProps({iconName: "chevron-right"});
@@ -109,7 +118,7 @@ describe("SegmentedControl", () => {
 
   it("uses the default no-op onChange when none is provided", () => {
     const {getByText} = renderWithTheme(
-      <SegmentedControl items={defaultItems} selectedIndex={0} />
+      <SegmentedControl items={defaultItems} onChange={() => {}} selectedIndex={0} />
     );
 
     expect(() => fireEvent.press(getByText("Tab 2"))).not.toThrow();
@@ -118,7 +127,7 @@ describe("SegmentedControl", () => {
   it("invokes handlePrevious when previous scroll button is pressed", () => {
     const manyItems = ["Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab 6"];
     const {UNSAFE_getAllByProps, queryByText} = renderWithTheme(
-      <SegmentedControl items={manyItems} maxItems={3} selectedIndex={0} />
+      <SegmentedControl items={manyItems} maxItems={3} onChange={() => {}} selectedIndex={0} />
     );
     const nextIcons = UNSAFE_getAllByProps({iconName: "chevron-right"});
     const nextPressable = nextIcons[0].parent;

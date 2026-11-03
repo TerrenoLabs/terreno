@@ -43,7 +43,7 @@ describe("useAiObservabilityDatasetsApi", () => {
       "GET /ai/observability/datasets/ds%201",
       "GET /ai/observability/datasets/ds%201/items",
     ]);
-    expect(result.current.detail.data).toEqual({_id: "ds-1"});
+    expect(result.current.detail.data as unknown).toEqual({_id: "ds-1"});
   });
 
   it("creates datasets, items, imports, and trace copies", async () => {

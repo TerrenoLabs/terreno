@@ -272,7 +272,7 @@ describe("Slider", () => {
       const {getByText} = renderWithTheme(
         <Slider
           labels={{
-            custom: [{label: "Middle", value: 50}],
+            custom: [{index: 0.5, label: "Middle"}],
             max: "High",
             min: "Low",
           }}

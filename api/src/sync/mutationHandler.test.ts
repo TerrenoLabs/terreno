@@ -908,6 +908,90 @@ describe("applySyncMutation", () => {
       expect(nack.message).toContain("Unknown sync collection");
     });
 
+    it("nacks invalid_id for a non-hex id on an ObjectId-keyed collection, for every operation", async () => {
+      const doc = await MutStuffModel.create({name: "keyed", ownerId: owner.id});
+      const badIds = [crypto.randomUUID(), "abcdefghijkl", `${String(doc._id)}0`];
+      for (const [index, id] of badIds.entries()) {
+        for (const operation of ["create", "update", "delete"] as const) {
+          const mutationId = `m-bad-id-${operation}-${index}`;
+          const nack = expectNack(
+            await applySyncMutation({
+              mutation: {
+                baseVersion: 1,
+                collection: "mutStuff",
+                data: {name: "bad id", ownerId: owner.id},
+                id,
+                mutationId,
+                operation,
+              },
+              user: owner,
+            })
+          );
+          assert.equal(nack.code, "validation");
+          assert.equal(nack.reason, "invalid_id");
+          // Rejected before the claim: nothing to replay, nothing written.
+          assert.equal(await SyncMutation.countDocuments({mutationId}), 0);
+        }
+      }
+      assert.equal(await MutStuffModel.countDocuments({}), 1);
+    });
+
+    it("accepts any id shape on a String-keyed collection", async () => {
+      clearSyncRegistry();
+      registerSync({
+        config: {scope: {type: "owner"}},
+        model: MutOtherModel,
+        options: ownerOptions,
+        routePath: "/mutOther",
+      });
+      const id = crypto.randomUUID();
+      const ack = expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutOther",
+            data: {name: "uuid", ownerId: owner.id},
+            id,
+            mutationId: "m-uuid-ok",
+            operation: "create",
+          },
+          user: owner,
+        })
+      );
+      assert.equal(ack.id, id);
+      await MutOtherModel.collection.deleteMany({});
+    });
+
+    it("nacks id_collision when a create names an _id another document holds", async () => {
+      const taken = await MutStuffModel.create({name: "theirs", ownerId: stranger.id});
+      const create = (): Promise<SyncMutationOutcome> =>
+        applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "mine", ownerId: owner.id},
+            id: String(taken._id),
+            mutationId: "m-collision",
+            operation: "create",
+          },
+          user: owner,
+        });
+
+      const nack = expectNack(await create());
+      assert.equal(nack.code, "validation");
+      assert.equal(nack.reason, "id_collision");
+      assert.equal(nack.message, "Entity id already exists");
+      assert.notInclude(JSON.stringify(nack), stranger.id);
+      const stored = await MutStuffModel.findById(taken._id);
+      assert.equal(stored?.name, "theirs");
+      assert.equal(stored?.ownerId, stranger.id);
+
+      // A duplicate delivery replays the recorded nack, reason included.
+      const replayed = expectNack(await create());
+      assert.equal(replayed.reason, "id_collision");
+      const row = await SyncMutation.findOne({mutationId: "m-collision"});
+      assert.equal(row?.status, "failed");
+      assert.equal(row?.nackReason, "id_collision");
+    });
+
     it("nacks validation when an update omits baseVersion", async () => {
       const doc = await MutStuffModel.create({name: "no base", ownerId: owner.id});
       const nack = expectNack(

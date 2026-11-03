@@ -94,7 +94,7 @@ describe("UnifiedAddressAutoCompleteField", () => {
   });
 
   describe("web branch", () => {
-    const testGlobal = globalThis as MutableGlobal;
+    const testGlobal = globalThis as unknown as MutableGlobal;
     const originalDocument = testGlobal.document;
     const originalWindow = testGlobal.window;
 

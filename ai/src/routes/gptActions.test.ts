@@ -1,6 +1,5 @@
 import {afterEach, describe, expect, it} from "bun:test";
 import {z} from "@terreno/api";
-import type mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
@@ -47,7 +46,7 @@ describe("POST /gpt/actions", () => {
 
   it("rejects an unknown name, a bad payload, and a non-owner", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -89,7 +88,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns the handler document and logs ui_action", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -135,7 +134,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns 504 and logs the timeout", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -166,7 +165,7 @@ describe("POST /gpt/actions", () => {
 
   it("returns 500 when the handler's document is invalid", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -199,7 +198,7 @@ describe("POST /gpt/actions", () => {
     expect(res.body.meta.fields["blocks[0].color"]).toEqual(expect.stringContaining("UNKNOWN_KEY"));
   });
 
-  it("rejects a missing body and a history that does not exist, by any string id", async () => {
+  it("rejects a missing body, a bad history id, and a history that does not exist", async () => {
     await ensureTestUsers();
     const app = buildApp({
       model,
@@ -216,10 +215,9 @@ describe("POST /gpt/actions", () => {
       messageId: "m1",
       name: "export_csv",
     };
-    // History ids are Strings (UUIDs or migrated ObjectId hex), so any string is looked up.
-    const unknownId = await agent.post("/gpt/actions").send(body);
-    expect(unknownId.status).toBe(404);
-    expect(unknownId.body.title).toBe("History not found");
+    const badId = await agent.post("/gpt/actions").send(body);
+    expect(badId.status).toBe(400);
+    expect(badId.body.title).toBe("historyId is not valid");
 
     const missing = await agent.post("/gpt/actions").send({
       ...body,
@@ -231,7 +229,7 @@ describe("POST /gpt/actions", () => {
 
   it("rejects a replace value the client does not understand", async () => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [{text: "Hello", type: "user"}],
       userId,
@@ -292,7 +290,7 @@ describe("POST /gpt/actions with scaleStepperHostAction", () => {
     assistantPrompts: string[]
   ): Promise<{agent: Awaited<ReturnType<typeof authAsUser>>; historyId: string}> => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [
         {text: "Plan a roast", type: "user"},
@@ -404,7 +402,7 @@ describe("POST /gpt/actions with toggleChecklistHostAction", () => {
     assistantPrompts: string[]
   ): Promise<{agent: Awaited<ReturnType<typeof authAsUser>>; historyId: string}> => {
     const created = await ensureTestUsers();
-    const userId = (created[1] as {_id: mongoose.Types.ObjectId})._id;
+    const userId = created[1]._id;
     const history = await GptHistory.create({
       prompts: [
         {text: "Plan a roast", type: "user"},

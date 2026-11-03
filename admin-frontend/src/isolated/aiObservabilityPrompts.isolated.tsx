@@ -838,6 +838,10 @@ describe("AiPromptPlaygroundView", () => {
     folder: "examples",
     labels: [{label: "latest", version: 1}],
     name: "summarize",
+    relationships: {
+      experiments: {items: [], limit: 20, total: 0},
+      traces: {items: [], limit: 20, total: 0},
+    },
     tags: [],
     versions: [
       {

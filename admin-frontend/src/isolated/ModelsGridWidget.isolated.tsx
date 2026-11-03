@@ -41,6 +41,8 @@ const model: AdminModelConfig = {
   routePath: "/admin/users",
 };
 
+const homeWidgetBase = {apiBase: "/admin", config: {models: [], scripts: []}};
+
 describe("ModelsGridWidget", () => {
   beforeEach(() => {
     routerPush = spyOn(router, "push").mockImplementation(() => {}) as unknown as Mock<
@@ -57,7 +59,7 @@ describe("ModelsGridWidget", () => {
 
   it("renders model cards with field and row counts", () => {
     const {getByTestId, getByText} = renderWithTheme(
-      <ModelsGridWidget models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} {...homeWidgetBase} routeBase="/admin/" />
     );
 
     expect(getByTestId("admin-home-widget-modelsGrid")).toBeTruthy();
@@ -67,7 +69,7 @@ describe("ModelsGridWidget", () => {
 
   it("navigates to list and create routes from model actions", async () => {
     const {getByTestId} = renderWithTheme(
-      <ModelsGridWidget models={[model]} routeBase="/admin/" />
+      <ModelsGridWidget models={[model]} {...homeWidgetBase} routeBase="/admin/" />
     );
 
     await act(async () => {
@@ -90,7 +92,7 @@ describe("ModelsGridWidget", () => {
       permissions: {create: false},
     };
     const {queryByTestId, getByTestId} = renderWithTheme(
-      <ModelsGridWidget models={[readOnlyModel]} routeBase="/admin" />
+      <ModelsGridWidget models={[readOnlyModel]} {...homeWidgetBase} routeBase="/admin" />
     );
 
     expect(queryByTestId("admin-home-model-add-AuditLog")).toBeNull();

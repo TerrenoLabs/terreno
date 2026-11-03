@@ -17,20 +17,30 @@ const mockUseListRolesQuery = mock(
     isLoading: false,
   })
 );
-const mockRefetch = mock(() => {});
-const mockCreateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUpdateRole = mock(() => ({unwrap: async () => ({})}));
-const mockUseListStatementsQuery = mock(() => ({
-  data: {
-    statements: {
-      admin: ["access", "runScripts"],
-      adminTodo: ["read", "write", "writeOwned"],
-      todo: ["read", "update"],
+interface MockMutationResult {
+  unwrap: () => Promise<unknown>;
+}
+interface MockStatementsResult {
+  data?: {statements?: Record<string, string[]>};
+  error: unknown;
+  isLoading: boolean;
+}
+const mockRefetch = mock((): void => {});
+const mockCreateRole = mock((_input: unknown): MockMutationResult => ({unwrap: async () => ({})}));
+const mockUpdateRole = mock((_input: unknown): MockMutationResult => ({unwrap: async () => ({})}));
+const mockUseListStatementsQuery = mock(
+  (): MockStatementsResult => ({
+    data: {
+      statements: {
+        admin: ["access", "runScripts"],
+        adminTodo: ["read", "write", "writeOwned"],
+        todo: ["read", "update"],
+      },
     },
-  },
-  error: null,
-  isLoading: false,
-}));
+    error: null,
+    isLoading: false,
+  })
+);
 
 mock.module("./useAdminRoles", () => ({
   normalizeRoles,

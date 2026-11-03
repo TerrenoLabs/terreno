@@ -13,6 +13,7 @@ import {
   resolveAdminBroadcastQueryFilter,
 } from "./adminBroadcastScope";
 import {canUseAdminBroadcastWindow} from "./adminWindowAccess";
+import {isObjectIdHex, isObjectIdKeyed} from "./entityIds";
 import {
   computeStableFrontier,
   getCompactedThroughSeq,
@@ -256,7 +257,7 @@ const parseNonNegativeInt = (raw: unknown, name: string, fallback: number): numb
 
 /**
  * Task 9.14: the legacy cursor is a raw `_id` string, so it must be compared in the
- * model's OWN `_id` BSON type. Synced models are designed around client-minted string
+ * model's OWN `_id` BSON type. Synced models default to client-minted string
  * `_id`s: casting those to `ObjectId` either throws (non-hex ids) or — worse — silently
  * compares across BSON types and matches nothing, so the legacy stratum reported itself
  * exhausted after one page and the remaining documents were never bootstrapped.
@@ -269,11 +270,10 @@ const legacyCursorClause = ({
   model: SyncedModel;
   legacyCursorIn: string;
 }): Record<string, unknown> => {
-  const idInstance = (model.schema?.path("_id") as {instance?: string} | undefined)?.instance;
-  if (idInstance !== "ObjectId") {
+  if (!isObjectIdKeyed(model)) {
     return {_id: {$gt: legacyCursorIn}};
   }
-  if (!mongoose.isValidObjectId(legacyCursorIn)) {
+  if (!isObjectIdHex(legacyCursorIn)) {
     throw new APIError({status: 400, title: `Invalid legacyCursor: ${legacyCursorIn}`});
   }
   return {_id: {$gt: new mongoose.Types.ObjectId(legacyCursorIn)}};
@@ -473,9 +473,12 @@ export const MAX_ENTITY_FETCH = 100;
 
 /**
  * Task 9.27: `_id: {$in: ids}` leaves the cast to Mongoose, so one non-hex id against an
- * ObjectId-keyed model threw a CastError that surfaced as a 500 for what is purely bad
- * caller input. Validate up front and name the offending ids in a 400. Models with
- * client-minted string `_id`s (the syncdb default, see `legacyCursorClause`) take any shape.
+ * ObjectId-keyed model threw a CastError that surfaced as a 500. A non-hex id cannot name a
+ * document of such a model, so it is dropped and comes back absent, which is the true answer.
+ * Failing the whole request instead would wedge a client's repair batch: a create the server
+ * rejected for a bad id is queued for repair under that id, and every other id in the batch
+ * would never load. Models with client-minted string `_id`s (see `legacyCursorClause`) take
+ * any shape.
  */
 const castEntityIds = ({
   model,
@@ -484,18 +487,10 @@ const castEntityIds = ({
   ids: string[];
   model: SyncedModel;
 }): (string | mongoose.Types.ObjectId)[] => {
-  const idInstance = (model.schema?.path("_id") as {instance?: string} | undefined)?.instance;
-  if (idInstance !== "ObjectId") {
+  if (!isObjectIdKeyed(model)) {
     return ids;
   }
-  const invalid = ids.filter((id) => !mongoose.isValidObjectId(id));
-  if (invalid.length > 0) {
-    throw new APIError({
-      status: 400,
-      title: `Invalid ids for ${model.modelName}: ${invalid.join(",")}`,
-    });
-  }
-  return ids.map((id) => new mongoose.Types.ObjectId(id));
+  return ids.filter(isObjectIdHex).map((id) => new mongoose.Types.ObjectId(id));
 };
 
 /**

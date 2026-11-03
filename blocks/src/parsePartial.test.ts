@@ -4,7 +4,7 @@ import {join} from "node:path";
 
 import {parseBlocksPartial} from "./parsePartial";
 
-const partialDir = join(import.meta.dir, "fixtures", "partial");
+const partialDir = join(__dirname, "fixtures", "partial");
 
 describe("parseBlocksPartial", () => {
   it("returns every block of a finished document and pending false", () => {

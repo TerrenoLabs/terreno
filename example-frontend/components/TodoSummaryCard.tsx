@@ -11,7 +11,7 @@ import * as syncDbSdk from "@/store/syncDbSdk";
 
 interface TodoSummaryDependencies {
   useApiKey: () => string | undefined;
-  useSummarize: () => [
+  useSummarize: () => readonly [
     (body: {apiKey?: string; text: string}) => {
       unwrap: () => Promise<{output: string}>;
     },

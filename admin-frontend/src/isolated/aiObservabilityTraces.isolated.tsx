@@ -900,6 +900,7 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
+          onRunTestMultiStage={() => undefined}
           onToggleSelect={onToggleSelect}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -971,6 +972,7 @@ describe("AiTracesListView", () => {
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
+          onRunTestMultiStage={() => undefined}
           onToggleSelect={() => undefined}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -1004,6 +1006,8 @@ describe("AiTracesListView", () => {
       const onOpenTrace = mock(() => undefined);
       const {getByTestId, UNSAFE_root} = renderWithTheme(
         <AiTracesListView
+          onDismissReviewModal={() => undefined}
+          onOpenReview={() => undefined}
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}

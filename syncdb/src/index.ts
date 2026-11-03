@@ -61,6 +61,7 @@ export type {
   SyncMutationOperation,
   SyncNack,
   SyncNackCode,
+  SyncNackReason,
   SyncSnapshotEntity,
   SyncSnapshotResponse,
   SyncStatus,
@@ -91,6 +92,7 @@ export {compileWhere, type WhereFilter, type WhereOperators} from "./query/where
 // any reserved table is the client's job alone.
 
 export {listConflicts} from "./mutations/conflicts";
+export {generateObjectId, type SyncIdFormat} from "./mutations/entityIds";
 export {generateMutationId, type Outbox} from "./mutations/outbox";
 export type {SyncStore} from "./storage/store";
 export {OUTBOX_TABLE, type SyncEntity} from "./storage/types";

@@ -257,11 +257,54 @@ describe("createAdminSpaGate signed-in non-admins", () => {
     expect(res.body.scope.adminConfigStatus).toBe(403);
   });
 
+  it("renders the signed-in-only /oauth/consent page with its query", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app, handlerCalls} = await makeGateApp();
+    const res = await asUser(request(app).get("/console/oauth/consent?client_id=abc").redirects(0));
+    expect(res.status).toBe(200);
+    expect(res.body.scope.adminConfigStatus).toBe(403);
+    expect(handlerCalls()).toBe(1);
+  });
+
+  it("lets a forbidden user load the /oauth/consent loader", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app} = await makeGateApp();
+    const res = await asUser(request(app).get("/_expo/loaders/oauth/consent"));
+    expect(res.status).toBe(200);
+  });
+
+  it("still redirects a nested path under /oauth to /forbidden", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app} = await makeGateApp();
+    const res = await asUser(request(app).get("/console/oauth/other").redirects(0));
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/console/forbidden");
+  });
+
   it("lets a forbidden user load the login loader", async () => {
     stub.status["/admin/config"] = 403;
     const {app} = await makeGateApp();
     const res = await asUser(request(app).get("/console/_expo/loaders/login"));
     expect(res.status).toBe(200);
+  });
+});
+
+describe("createAdminSpaGate signed-in-only routes for anonymous visitors", () => {
+  it("redirects /oauth/consent to login with its returnTo", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const res = await request(app).get("/console/oauth/consent?client_id=abc").redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(
+      `/console/login?returnTo=${encodeURIComponent("/oauth/consent?client_id=abc")}`
+    );
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("answers 401 to the /oauth/consent loader", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const res = await request(app).get("/_expo/loaders/oauth/consent");
+    expect(res.status).toBe(401);
+    expect(handlerCalls()).toBe(0);
   });
 });
 

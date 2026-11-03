@@ -471,7 +471,7 @@ describe("executeUpdate", () => {
     const options = baseOptions({
       preUpdate: (body, req) => {
         seenIds.push(req.params.id);
-        return body;
+        return body as ExecStuff;
       },
     });
     await executeUpdate<ExecStuff>({
@@ -1321,7 +1321,7 @@ describe("soft-delete flag in client write bodies", () => {
       body: {name: "archived"},
       id: doc._id.toString(),
       model: ExecStuffModel,
-      options: baseOptions({preUpdate: (body) => ({...body, deleted: true})}),
+      options: baseOptions({preUpdate: (body) => ({...body, deleted: true}) as ExecStuff}),
       user: owner,
     });
     expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(0);

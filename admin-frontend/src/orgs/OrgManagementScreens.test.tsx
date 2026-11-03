@@ -4,7 +4,7 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
-const routerPush = mock(() => {});
+const routerPush = mock((_path: unknown): void => {});
 
 mock.module("expo-router", () => ({router: {push: routerPush}}));
 

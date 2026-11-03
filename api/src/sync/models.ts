@@ -440,6 +440,7 @@ export interface SyncMutationDocument {
   collectionTag?: string;
   status: SyncMutationStatus;
   nackCode?: string;
+  nackReason?: string;
   resultId?: string;
   resultSeq?: number;
   error?: string;
@@ -491,6 +492,11 @@ const syncMutationSchema = new Schema<SyncMutationDocument>(
     nackCode: {
       description:
         "Nack code recorded for rejected mutations (conflict/unauthorized/validation/error)",
+      type: String,
+    },
+    nackReason: {
+      description:
+        "Why a validation nack rejected the mutation's entity id (id_collision/invalid_id)",
       type: String,
     },
     resultId: {

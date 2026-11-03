@@ -257,7 +257,7 @@ describe("AnnouncementNavigator", () => {
         },
       }
     );
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator client={api} onError={onError}>
         <Box testID="app-content">
@@ -643,7 +643,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("still opens the primary action URL when click tracking fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
 
@@ -695,7 +695,7 @@ describe("AnnouncementNavigator", () => {
         },
       }
     );
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator client={api} onError={onError}>
         <Box testID="app-content">
@@ -722,7 +722,7 @@ describe("AnnouncementNavigator", () => {
         },
       }
     );
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator client={api} onError={onError}>
         <Box testID="app-content">
@@ -886,7 +886,7 @@ describe("AnnouncementNavigator", () => {
         },
       }
     );
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator client={api} onError={onError}>
         <Box testID="app-content">
@@ -937,7 +937,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("warns but keeps showing the announcement when recording an impression fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
 
@@ -973,7 +973,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("warns when opening the primary action URL fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
     const originalCanOpenURL = Linking.canOpenURL;

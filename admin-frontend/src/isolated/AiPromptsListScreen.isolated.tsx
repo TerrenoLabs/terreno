@@ -18,7 +18,7 @@ import {
 
 const AiPromptsScreenWidget = withObservabilityServer(AiPromptsScreenWidgetBase);
 
-const routerPush = mock(() => undefined);
+const routerPush = mock((..._args: unknown[]): void => undefined);
 
 mock.module("expo-router", () => ({
   router: {push: (...args: unknown[]) => routerPush(...args)},

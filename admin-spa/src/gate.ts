@@ -7,6 +7,7 @@ import {
   type AdminSpaSessionSnapshot,
   runInAdminSpaRequest,
 } from "./serverContext";
+import {isSignedInOnlyRoute} from "./signedInOnlyRoutes";
 
 /** Longest the gate waits on any of its loopback reads before failing closed. */
 const UPSTREAM_TIMEOUT_MS = 5000;
@@ -194,7 +195,8 @@ const loadShellPayload = async (
  *
  * - Anonymous: pages other than `/login` redirect to `{basePath}/login?returnTo=<path>`;
  *   loaders answer 401 JSON (the `login` and `forbidden` loaders run).
- * - Signed in but not an admin (`/admin/config` 403): pages redirect to `{basePath}/forbidden`;
+ * - Signed in but not an admin (`/admin/config` 403): signed-in-only routes (`/oauth/consent`)
+ *   render; other pages redirect to `{basePath}/forbidden`;
  *   loaders answer 403 JSON.
  * - Admin: `/login` redirects to a safe `returnTo` (or `{basePath}/`); everything else renders
  *   inside a request scope holding the session, profile and admin config, so the page renders
@@ -250,9 +252,12 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
       const payload = req.user ? await loadShellPayload(req, options) : ANONYMOUS;
       const {route} = classified;
       const isPublic = PUBLIC_ROUTES.has(route);
+      // Signed-in-only routes (MCP OAuth consent) render for any signed-in user.
+      const isOpenToVisitor =
+        isPublic || (payload.access !== "anonymous" && isSignedInOnlyRoute(route));
 
       if (classified.kind === "loader") {
-        if (payload.access === "admin" || isPublic) {
+        if (payload.access === "admin" || isOpenToVisitor) {
           render(req, res, next, payload);
           return;
         }
@@ -271,7 +276,7 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
         return;
       }
       if (payload.access === "forbidden") {
-        if (isPublic) {
+        if (isOpenToVisitor) {
           render(req, res, next, payload);
           return;
         }

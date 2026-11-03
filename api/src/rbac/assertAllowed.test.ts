@@ -203,7 +203,7 @@ describe("assertAllowed", () => {
     await expect(
       assertAllowed({
         method: "create",
-        options: {},
+        options: {} as Parameters<typeof assertAllowed>[0]["options"],
         user: createUser(),
       })
     ).rejects.toMatchObject({

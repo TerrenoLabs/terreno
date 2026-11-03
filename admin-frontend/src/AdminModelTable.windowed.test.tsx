@@ -32,7 +32,12 @@ mock.module("./useAdminConfig", () => ({
 const listState: {data: {data: Array<Record<string, unknown>>; total: number}} = {
   data: {data: [], total: 0},
 };
-const listRefetch = mock(async () => ({data: listState.data}));
+interface ListRefetchResult {
+  data?: unknown;
+  error?: {data: string; status: number};
+  isError?: boolean;
+}
+const listRefetch = mock(async (): Promise<ListRefetchResult> => ({data: listState.data}));
 const bulkPatchFn = mock(() => ({unwrap: async () => ({updated: 1})}));
 
 mock.module("./useAdminBackgroundTask", () => ({

@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeAll, beforeEach, describe, expect, it} from "bun:test";
 import {registerGcsMock} from "@terreno/test";
 import mongoose from "mongoose";
 
@@ -7,7 +7,10 @@ import {FileAttachment} from "../models/fileAttachment";
 // In-memory @google-cloud/storage so the service doesn't try to authenticate
 const gcs = registerGcsMock();
 
-const {FileStorageService} = await import("./fileStorage");
+let FileStorageService: typeof import("./fileStorage.js").FileStorageService;
+beforeAll(async () => {
+  ({FileStorageService} = await import("./fileStorage.js"));
+});
 
 describe("FileStorageService", () => {
   beforeEach(async () => {

@@ -149,6 +149,7 @@ export type {
   AdminConfigResponse,
   AdminCustomScreen,
   AdminFieldConfig,
+  AdminFieldValue,
   AdminFieldWidgetProps,
   AdminGetAuthHeaders,
   AdminHomeWidgetProps,

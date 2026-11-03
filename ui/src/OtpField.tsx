@@ -157,6 +157,8 @@ export const OtpField: FC<OtpFieldProps> = ({
   // Roving tab stop: only the cell that takes the next digit is in the tab order, so Tab and
   // Shift+Tab leave the field instead of landing on a cell that hands focus back.
   const activeIndex = Math.min(code.length, length - 1);
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
 
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
   const inputRefs = useRef<(TextInputInstance | null)[]>([]);
@@ -175,6 +177,7 @@ export const OtpField: FC<OtpFieldProps> = ({
 
   const commit = useCallback(
     (next: string): void => {
+      activeIndexRef.current = Math.min(next.length, length - 1);
       if (next === code) {
         return;
       }
@@ -216,13 +219,13 @@ export const OtpField: FC<OtpFieldProps> = ({
     (index: number): void => {
       // Digits fill left to right: a tap past the active cell lands on that cell instead. Keyboard
       // focus never needs this, because only the active cell is a tab stop.
-      if (index > activeIndex) {
-        focusCell(activeIndex);
+      if (index > activeIndexRef.current) {
+        focusCell(activeIndexRef.current);
         return;
       }
       setFocusedIndex(index);
     },
-    [activeIndex, focusCell]
+    [focusCell]
   );
 
   const handleBlur = useCallback((index: number): void => {
@@ -231,14 +234,14 @@ export const OtpField: FC<OtpFieldProps> = ({
 
   const renderCell = (index: number): ReactElement => {
     const isFocused = focusedIndex === index;
-    let borderColor = theme.border.dark;
+    let borderColor = theme.field.border;
     let borderWidth = 1;
     if (errorText || invalid) {
-      borderColor = theme.border.error;
+      borderColor = theme.field.borderError;
       borderWidth = 2;
     }
     if (isFocused) {
-      borderColor = theme.border.focus;
+      borderColor = theme.field.borderFocus;
       borderWidth = 3;
     }
     return (
@@ -267,7 +270,7 @@ export const OtpField: FC<OtpFieldProps> = ({
         selectTextOnFocus
         style={
           {
-            backgroundColor: disabled ? theme.surface.neutralLight : theme.surface.base,
+            backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
             borderColor,
             borderRadius: 4,
             borderWidth,

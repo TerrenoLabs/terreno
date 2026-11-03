@@ -450,7 +450,7 @@ describe("DataTableAdditionalFiltersWeb", () => {
   });
 
   it("keeps in-progress drafts when the filters array is recreated", async () => {
-    const onApply = mock(() => {});
+    const onApply = mock((_values: Record<string, unknown>) => {});
     const departmentFilter = {
       field: "department",
       kind: "choice" as const,

@@ -3607,7 +3607,9 @@ exports[`Field renders multiselect field 1`] = `
   "children": [
     {
       "$$typeof": Symbol(react.test.json),
-      "children": null,
+      "children": [
+        "Skills",
+      ],
       "props": {
         "numberOfLines": 0,
         "style": {
@@ -3830,7 +3832,7 @@ exports[`Field renders multiselect field 1`] = `
   ],
   "props": {
     "accessibilityHint": "Contains a prompt and list of options to select",
-    "aria-label": undefined,
+    "aria-label": "Skills",
     "aria-role": "combobox",
     "style": {
       "display": "flex",

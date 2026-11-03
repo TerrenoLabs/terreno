@@ -450,7 +450,7 @@ This writes `store/syncDbSdk.ts` with `SYNC_COLLECTIONS`, entity types, and hook
 
 ## Known limitations
 
-- **Synced models need a String `_id`** (or clients must mint ObjectId-format ids): offline clients generate entity ids (UUIDs) locally and the mutation channel writes them through as `_id`. A default ObjectId `_id` would cast-fail every client-side create. Declare `_id: {type: String, ...}` on synced schemas.
+- **Match the client id format to the model `_id`**: offline clients mint entity ids locally and the mutation channel writes them through as `_id`. The default is a UUID, which needs `_id: {type: String, ...}`. For a model that keeps the default ObjectId `_id`, pass `idFormats: {collection: "objectId"}` to `createSyncDb` so the client mints 24-hex ObjectIds; otherwise the server nacks client creates with `reason: "invalid_id"`.
 - **Multi-tab web**: two tabs of the same user share one IndexedDB blob; concurrent persister saves are last-writer-wins at the blob level and can drop the other tab's queued outbox rows. Single-writer coordination (Web Locks) is not implemented yet — avoid relying on offline writes from multiple simultaneous tabs.
 - **`Model.bulkWrite` is unavailable on synced models**: it skips Mongoose middleware, so it can never stamp seqs. `registerSync` replaces the static with one that throws — bulk updates to a synced collection have to loop per document.
 - **Native plaintext by design**: no SQLCipher; the OS sandbox is deemed sufficient.

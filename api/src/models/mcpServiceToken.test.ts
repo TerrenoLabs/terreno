@@ -174,3 +174,26 @@ describe("McpServiceToken", () => {
     assert.isNull(await McpServiceToken.verify(issued.token));
   });
 });
+
+describe("McpServiceToken.revokeAllForUser", () => {
+  beforeEach(async () => {
+    await McpServiceToken.deleteMany({});
+  });
+
+  it("revokes only that user's active tokens", async () => {
+    const userId = new mongoose.Types.ObjectId();
+    const otherId = new mongoose.Types.ObjectId();
+    await McpServiceToken.issueFor({_id: userId}, {name: "A"});
+    await McpServiceToken.issueFor({_id: userId}, {name: "B"});
+    await McpServiceToken.issueFor({_id: otherId}, {name: "Other"});
+
+    const revoked = await McpServiceToken.revokeAllForUser(userId);
+
+    assert.equal(revoked, 2);
+    assert.equal(await McpServiceToken.countDocuments({revokedAt: {$exists: false}, userId}), 0);
+    assert.equal(
+      await McpServiceToken.countDocuments({revokedAt: {$exists: false}, userId: otherId}),
+      1
+    );
+  });
+});

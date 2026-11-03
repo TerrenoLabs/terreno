@@ -237,7 +237,7 @@ exports[`Image renders with background color 1`] = `
     "onPointerEnter": [Function: AsyncFunction],
     "onPointerLeave": [Function: AsyncFunction],
     "style": {
-      "backgroundColor": undefined,
+      "backgroundColor": "#2B6072",
     },
     "testID": undefined,
   },

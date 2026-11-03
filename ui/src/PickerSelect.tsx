@@ -470,11 +470,11 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >
@@ -590,12 +590,12 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
             height: 40,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >
@@ -743,11 +743,11 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >

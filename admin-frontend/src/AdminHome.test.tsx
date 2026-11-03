@@ -60,6 +60,7 @@ const buildConfig = (overrides?: Partial<AdminConfigResponse>): AdminConfigRespo
       routePath: "/admin/widgets",
     },
     {
+      defaultSort: "-created",
       displayName: "Audit log",
       fields: {},
       listFields: ["verb"],
@@ -114,7 +115,7 @@ const setWindowWidth = (width: number): (() => void) => {
     useWindowDimensionsMock.mockImplementation(dimensionsImpl);
 
     return (): void => {
-      useWindowDimensionsMock.mockImplementation(getScaledSize(375));
+      useWindowDimensionsMock.mockImplementation?.(getScaledSize(375));
     };
   }
 

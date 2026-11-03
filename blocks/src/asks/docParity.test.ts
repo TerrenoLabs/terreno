@@ -4,15 +4,7 @@ import {join} from "node:path";
 import {ASK_ERROR_CODES} from "./errors";
 import {ASK_LIMITS} from "./limits";
 
-const REFERENCE_PATH = join(
-  import.meta.dir,
-  "..",
-  "..",
-  "..",
-  "docs",
-  "reference",
-  "agent-ui-asks.md"
-);
+const REFERENCE_PATH = join(__dirname, "..", "..", "..", "docs", "reference", "agent-ui-asks.md");
 
 const reference = readFileSync(REFERENCE_PATH, "utf8");
 

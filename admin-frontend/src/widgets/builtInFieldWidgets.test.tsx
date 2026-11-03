@@ -15,10 +15,9 @@ import {
 } from "./builtInFieldWidgets";
 
 const fieldConfig = {description: "Helper copy", required: false, type: "string"};
-
 describe("builtInFieldWidgets", () => {
   it("renders markdown and textarea widgets with labels and values", async () => {
-    const onChange = mock((_value: string) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const markdown = renderWithTheme(
       <MarkdownFieldWidget
         fieldConfig={fieldConfig}
@@ -99,7 +98,7 @@ describe("builtInFieldWidgets", () => {
   });
 
   it("renders locale content editor and read-only JSON fallback", () => {
-    const onChange = mock((_value: Record<string, string>) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const editable = renderWithTheme(
       <LocaleContentFieldWidget
         fieldConfig={fieldConfig}
@@ -124,7 +123,7 @@ describe("builtInFieldWidgets", () => {
   });
 
   it("enables locale default select only when parent content has locales", () => {
-    const onChange = mock((_value: string) => undefined);
+    const onChange = mock((_value: unknown) => undefined);
     const {UNSAFE_root, getByText} = renderWithTheme(
       <LocaleDefaultFieldWidget
         fieldConfig={fieldConfig}

@@ -1,6 +1,7 @@
 import {mock} from "bun:test";
 
-type HookFactory = (...args: unknown[]) => unknown;
+// `never[]` lets overrides declare the real hook argument types; the proxy only hands them out.
+type HookFactory = (...args: never[]) => unknown;
 
 const hookOverrides = new Map<string, HookFactory>();
 

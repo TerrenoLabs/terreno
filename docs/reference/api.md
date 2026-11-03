@@ -149,6 +149,24 @@ new TerrenoApp({
 
 `mcpServiceTokens: true` is `{enabled: true}`. When enabled, TerrenoApp mounts the self-serve routes (passing its OpenAPI bundle) and sets `mcpServiceTokens` on MCP auth. Operator steps: [Connect an MCP client with a service token](../how-to/connect-mcp-service-token.md).
 
+### MCP request log and tool settings
+
+Both are opt-in and off by default.
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  mcpRequestLog: {enabled: true, retentionDays: 30}, // `true` is {enabled: true, retentionDays: 30}
+  mcpToolSettings: true,
+});
+```
+
+- `mcpRequestLog` writes one `McpRequestLog` row per `tools/call`: `toolName`, `userId`, `credential`, `serviceTokenId` or `oauthClientId` + `oauthFamilyId`, `durationMs`, `outcome` (`ok`, `tool_error`, `exception`), `errorName` (the error class only), and `expiresAt` (TTL index). Tool arguments, results, and error messages are never stored. Writes are fire-and-forget: a failed write is logged at debug level and never fails or delays the tool call. `retentionDays` must be positive; it applies to rows written after a change.
+- `mcpToolSettings` upserts one `McpToolSetting` row per tool when `/mcp` mounts (`name`, `description`, `source`: `model` or `custom`, `registered`, `lastRegisteredAt`). `enabled` is set to `true` only on insert, so a restart never undoes an admin's switch. Tools no longer registered get `registered: false`; rows are never deleted. Each `/mcp` request leaves out tools with `enabled: false`, so they are missing from `tools/list` and `tools/call` answers with an unknown-tool error. A tool without a row is served. `McpToolSetting.disabledNames()` caches the disabled set per process for 5 seconds; any write through the model clears it, so other instances see a switch within 5 seconds. A failed read reuses the last known set, or fails the request when there is none.
+- `MCPAuthResult` carries `serviceTokenId`, `oauthClientId`, and `oauthFamilyId` (identifiers, never secrets) for these rows.
+
+Admin screens for both, plus service tokens and OAuth clients and connections: [Manage MCP from the admin panel](../how-to/manage-mcp-in-admin.md).
+
 ### Audit log (`AuditApp`)
 
 Opt-in append-only log. Register the plugin; importing `@terreno/api` does **not** compile `AuditEvent` onto the default mongoose connection. The compiled Mongoose name is `TerrenoAuditEvent` on collection `auditevents`. Admin UI and RBAC keep `AuditEvent` / `adminAuditEvent`.
@@ -387,7 +405,7 @@ const {mcpServiceToken, token} = await McpServiceToken.issueFor(
 // Store or show `token` once. Only its SHA-256 hash is persisted.
 ```
 
-The token begins with `mcp_` followed by 32 random bytes encoded as hex. `issueFor` records the user's `tokenEpoch` (pass it on the user argument; default 0). `/mcp` refuses a token whose recorded epoch differs from the user's current `tokenEpoch` and sets its `revokedAt`, so a password reset, Better Auth password change, or session revocation ends every key minted before it. A row stored without `tokenEpoch` counts as epoch 0. `revokeOutdatedForUser(user)` revokes the user's keys from earlier epochs; the list and create routes call it so the list shows them as revoked. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. A delete never removes or tombstones the row: document `deleteOne` and a soft delete (admin DELETE sets `deleted: true`) both set `revokedAt` and keep `deleted: false`, so the owner's synced row shows the revoke. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
+The token begins with `mcp_` followed by 32 random bytes encoded as hex. `issueFor` records the user's `tokenEpoch` (pass it on the user argument; default 0). `/mcp` refuses a token whose recorded epoch differs from the user's current `tokenEpoch` and sets its `revokedAt`, so a password reset, Better Auth password change, or session revocation ends every key minted before it. A row stored without `tokenEpoch` counts as epoch 0. `revokeOutdatedForUser(user)` revokes the user's keys from earlier epochs; the list and create routes call it so the list shows them as revoked. `verify(token)` returns `null` for unknown, expired, or revoked tokens. `revokeForUser(user, tokenId)` records `revokedAt`, and `countActiveForUser(userId)` excludes expired or revoked records. A delete never removes or tombstones the row: document `deleteOne` and a soft delete (admin DELETE sets `deleted: true`) both set `revokedAt` and keep `deleted: false`, so the owner's synced row shows the revoke. `revokeAllForUser(userId)` revokes every active token the user holds and returns the count. Never return or log `tokenHash` or the plaintext token outside the initial issue result.
 
 Self-serve routes are `modelRouter("/mcp/service-tokens", McpServiceToken, {sync: {scope: {type: "owner", field: "userId"}}})`. `TerrenoApp` mounts them when `mcpServiceTokens` is enabled, passing its OpenAPI bundle. You can also call `addMcpServiceTokenRoutes(app, {publicMcpUrl, openApi})` yourself, or build the registration with `createMcpServiceTokenRouter(options)`. They require session or JWT auth and **reject** `Authorization: Bearer mcp_…` so a service token cannot mint, list, or revoke tokens.
 
@@ -454,7 +472,7 @@ The consent endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequ
 
 Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256 hashes in `McpOAuthToken`. Each refresh rotates the pair; reusing a rotated refresh token revokes every pair issued from that authorization (its family). Codes are single-use: a failed exchange burns the code, and replaying a used code revokes the tokens it issued. The code exchange fixes the family id when it consumes the code, so a replay can revoke the family before its tokens exist. A `client_credentials` token has no refresh token. Its document still stores a unique hash of a discarded secret so the `refreshTokenHash` unique index is unchanged, and `hasRefreshToken: false` rejects that hash if it is ever presented. `McpOAuthClient.revoke(clientId)` revokes every family issued to that client. An authorization-code exchange, a refresh, or a client_credentials grant that loses a race with that revoke is discarded instead of returned. `deleteOne`, `findOneAndDelete`, and `deleteMany` revoke those families too. A query `deleteOne` or `findOneAndDelete` whose filter matches several clients deletes one of them and revokes that client's tokens. `bulkWrite` bypasses the hooks.
 
-`McpOAuthToken.revokeFamily(familyId)` first writes an `McpOAuthRevokedFamily` tombstone, then revokes every pair in the family. `McpOAuthToken.issue` refuses a tombstoned family with `McpOAuthFamilyRevokedError` (the token endpoint answers `invalid_grant`), and checks again after creating the pair, revoking it if a revoke landed meanwhile. A request that won a rotation or code exchange before a concurrent revoke therefore cannot leave a live pair behind. Tombstones expire after the family's last refresh expiry, and at least one hour after the revoke.
+`McpOAuthToken.revokeFamily(familyId)` first writes an `McpOAuthRevokedFamily` tombstone, then revokes every pair in the family. `McpOAuthToken.issue` refuses a tombstoned family with `McpOAuthFamilyRevokedError` (the token endpoint answers `invalid_grant`), and checks again after creating the pair, revoking it if a revoke landed meanwhile. A request that won a rotation or code exchange before a concurrent revoke therefore cannot leave a live pair behind. Tombstones expire after the family's last refresh expiry, and at least one hour after the revoke. Deleting an `McpOAuthToken` row (document `deleteOne` or query `deleteOne`, as the admin panel does) calls `revokeFamily` for that row's family and keeps every row, so the connection ends and its history stays. `deleteMany` and `bulkWrite` still remove rows without revoking. `McpOAuthToken.revokeAllForUser(userId)` revokes every active family the user holds and returns how many.
 
 Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
 

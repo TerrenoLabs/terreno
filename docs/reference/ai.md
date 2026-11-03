@@ -97,7 +97,6 @@ src/
   prompt, tools, and block checks as `/gpt/histories/:id/turn`; takes `{body: {historyId, prompt},
   options, req}` where `req` carries `user` and `headers`)
 - **Models:** `AIRequest`, `AIDataset`, `GptHistory`, `FileAttachment`, `Project` (lazy; prefer `getProjectModel()`)
-- **Migrations:** `gptHistoryStringIdsMigration` (`{slug, up}` for an app migration file), `migrateGptHistoryStringIds`, `GPT_HISTORY_STRING_IDS_MIGRATION`, type `GptHistoryStringIdsResult` ([GptHistory String ids](#gpthistory-string-ids))
 - **Routes:** `addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`, `addFileRoutes`, `addProjectRoutes`, `addMcpRoutes`
 - **Structured output:** `parseAiJson`, `normalizeLlmJsonTextForStructuredOutput`, re-exported `Output`, `jsonSchema`, `JSONValue`, `FlexibleSchema` from `ai`
 - **Langfuse:** `initLangfuseClient`, `getLangfuseClient`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `createTelemetryConfig`, `preparePromptForAI`, `initTracing`, `shutdownTracing`, `LangfuseCache`, cache helpers
@@ -230,7 +229,7 @@ user's histories to `@terreno/syncdb` clients (see [addGptHistoryRoutes](#addgpt
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `_id` | string | A UUID for new histories, so offline sync clients can mint ids. Histories saved before 58 keep their old ObjectId as a hex string after the [migration](#gpthistory-string-ids) |
+| `_id` | ObjectId | Server-generated, or client-minted by a syncdb client using `idFormats: {"gpt/histories": "objectId"}` ([ids](#gpthistory-ids)) |
 | `userId` | ObjectId | Owner (required) |
 | `title` | string? | Auto-generated on the first chat turn's reply (`/gpt/prompt` or `turn`) when empty |
 | `projectId` | ObjectId? | Optional project association |
@@ -243,27 +242,11 @@ Assistant replies from `/gpt/prompt` carry `streamId` and `status`: `streaming` 
 
 **Plugins:** `createdUpdatedPlugin`, `isDeletedPlugin`, `findOneOrNone`, `findExactlyOne`, `syncPlugin`. `syncPlugin` refuses `GptHistory.deleteMany`, `updateMany`, hard deletes, upserts, and query writes whose filter has no `_id`. Write one history at a time by `_id`; in tests, clear the collection with `GptHistory.collection.deleteMany({})`.
 
-`AIDataset.historyId` is the history's String `_id`. `registerAiDataset` still accepts an ObjectId and stores its hex string.
+`AIDataset.historyId` is the history's ObjectId `_id`.
 
-#### GptHistory String ids
+#### GptHistory ids
 
-Terreno 58 changed `GptHistory._id` from ObjectId to String. Histories saved before the upgrade still have ObjectId `_id`s, which the String schema cannot find. The `gpt-history-string-ids` migration moves them. Add it to the app's `migrations/` directory and apply it with `terreno-migrate` before deploying 58 frontends:
-
-```typescript
-// migrations/20261022130000-gpt-history-string-ids.ts
-import {gptHistoryStringIdsMigration} from "@terreno/ai";
-
-export const id = "20261022130000-gpt-history-string-ids";
-export const up = gptHistoryStringIdsMigration.up;
-```
-
-| Step | Effect |
-|------|--------|
-| 1 | Copy each ObjectId history (500 per batch) to `_id: oldId.toHexString()`, keeping every stored field. URLs and clients that hold the hex id keep working |
-| 2 | Rewrite `AIDataset.historyId` refs from the ObjectId to the hex string, including refs to histories that no longer exist |
-| 3 | Delete the ObjectId originals |
-
-A dry run (`terreno-migrate up --dry`) only counts the histories and refs it would change. The migration writes through the MongoDB driver, so it does not stamp sync seqs; moved histories reach sync clients as unstamped legacy rows on the next snapshot. Running it again changes nothing, and a run stopped partway finishes on the next run. It has no `down`: new histories get UUIDs, which have no ObjectId to go back to. `migrateGptHistoryStringIds({connection, dryRun, batchSize?, logger?, checkCancellation?})` runs the same steps without a migration file and returns `{historiesMigrated, datasetsUpdated}`.
+`GptHistory` keeps Mongoose's default ObjectId `_id`, so 57.x histories need no migration. The server makes the id for histories created by `/gpt/prompt` and REST. A syncdb client that creates histories through `useMutate("gpt/histories")` must mint ObjectIds: pass `idFormats: {"gpt/histories": "objectId"}` to `createSyncDb` (see [syncdb client-minted ObjectIds](syncdb.md#client-minted-objectids)). A non-hex id is rejected with an `invalid_id` validation nack. History ids reach clients as 24-character hex strings; `/gpt/prompt` and `/gpt/actions` answer 400 `historyId is not valid` for anything else.
 
 ### FileAttachment
 

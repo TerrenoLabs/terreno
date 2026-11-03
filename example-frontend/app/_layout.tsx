@@ -124,13 +124,8 @@ const RootLayout = (): React.ReactElement | null => {
 };
 
 const ThemedStatusBar: FC = () => {
-  const {colorScheme, theme} = useTheme();
-  return (
-    <StatusBar
-      backgroundColor={theme.surface.base}
-      barStyle={colorScheme === "dark" ? "light-content" : "dark-content"}
-    />
-  );
+  const {colorScheme} = useTheme();
+  return <StatusBar barStyle={colorScheme === "dark" ? "light-content" : "dark-content"} />;
 };
 
 const RootLayoutNav = (): React.ReactElement => {

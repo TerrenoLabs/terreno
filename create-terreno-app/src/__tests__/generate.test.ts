@@ -1,7 +1,7 @@
 import {describe, test} from "bun:test";
 import {assert} from "chai";
-import rootPackageJson from "../../../package.json";
-import packageJson from "../../package.json";
+import rootPackageJson from "../../../package.json" with {type: "json"};
+import packageJson from "../../package.json" with {type: "json"};
 import {
   API_SDK_SCRIPT,
   BETTER_AUTH_VERSION,
@@ -560,6 +560,8 @@ describe("generated frontend Terreno 58 compatibility", () => {
     }
     assert.equal(frontendPackageJson.dependencies["better-auth"], BETTER_AUTH_VERSION);
     assert.equal(frontendPackageJson.dependencies["@better-auth/expo"], BETTER_AUTH_VERSION);
+    assert.equal(frontendPackageJson.dependencies["@better-auth/passkey"], BETTER_AUTH_VERSION);
+    assert.equal(frontendPackageJson.dependencies["@modelcontextprotocol/client"], "^2.0.0");
     assert.property(frontendPackageJson.dependencies, "expo-secure-store");
 
     const forbidden =

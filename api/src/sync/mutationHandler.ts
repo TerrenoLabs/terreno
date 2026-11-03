@@ -15,6 +15,7 @@ import {
   prepareAdminWindowMutation,
   withAdminWindowMutationRequestContext,
 } from "./adminWindowMutation";
+import {isObjectIdHex, isObjectIdKeyed} from "./entityIds";
 import {
   executeCreate,
   executeDelete,
@@ -35,6 +36,7 @@ import type {
   SyncMutateRequest,
   SyncNack,
   SyncNackCode,
+  SyncNackReason,
 } from "./types";
 
 export type SyncMutationScopeResolver = (
@@ -314,6 +316,7 @@ const outcomeFromLedgerRow = async ({
       code: (row.nackCode as SyncNackCode) ?? "error",
       message: row.error,
       mutationId: row.mutationId,
+      ...(row.nackReason ? {reason: row.nackReason as SyncNackReason} : {}),
     });
   }
   return undefined;
@@ -431,6 +434,25 @@ const isE11000Error = (error: unknown): boolean => {
   return wrapped?.code === 11000;
 };
 
+/** The `APIError.code` a create gets when its client-minted `_id` already exists. */
+const ID_COLLISION_CODE = "sync-id-collision";
+
+/**
+ * True when an E11000 (raw, or wrapped by the executor) is on the `_id` index rather than
+ * some other unique index the model declares.
+ */
+const isIdDuplicateKeyError = (error: unknown): boolean => {
+  if (!isE11000Error(error)) {
+    return false;
+  }
+  const candidate = error as {cause?: unknown; error?: unknown; keyPattern?: unknown};
+  const raw = [candidate, candidate.error, candidate.cause].find(
+    (value) => (value as {code?: number} | undefined)?.code === 11000
+  ) as {keyPattern?: Record<string, unknown>; keyValue?: Record<string, unknown>} | undefined;
+  const keys = Object.keys(raw?.keyPattern ?? raw?.keyValue ?? {});
+  return keys.length === 1 && keys[0] === "_id";
+};
+
 /**
  * C5 (FIX 6): true when every key/value in `data` (the mutation's own
  * intended write) is already present on `doc` — used alongside the
@@ -535,6 +557,8 @@ const finalizeNack = async ({
 
   const code = nackCodeForError(error);
   const message = isAPIError(error) ? error.title : String(error);
+  const reason: SyncNackReason | undefined =
+    isAPIError(error) && error.code === ID_COLLISION_CODE ? "id_collision" : undefined;
   if (code === "error") {
     logger.warn("[sync] Mutation failed unexpectedly", {
       collection: mutation.collection,
@@ -553,9 +577,16 @@ const finalizeNack = async ({
   }
   await SyncMutation.updateOne(
     {_id: claimedId},
-    {$set: {error: message, nackCode: code, status: "failed"}}
+    {
+      $set: {
+        error: message,
+        nackCode: code,
+        status: "failed",
+        ...(reason ? {nackReason: reason} : {}),
+      },
+    }
   );
-  return makeNack({code, message, mutationId: mutation.mutationId});
+  return makeNack({code, message, mutationId: mutation.mutationId, ...(reason ? {reason} : {})});
 };
 
 /**
@@ -777,6 +808,18 @@ const applyClaimedMutationInContext = async ({
             return {ack: {id: resultId, mutationId, seq: resultSeq}, type: "ack"};
           }
         }
+        // Another document already holds the client-minted `_id`. The unique index kept it
+        // from being overwritten; reject the create for good (validation is terminal on the
+        // client) without naming the holder, which may belong to another user.
+        if (isIdDuplicateKeyError(createError)) {
+          throw new APIError({
+            cause: createError,
+            code: ID_COLLISION_CODE,
+            disableExternalErrorTracking: true,
+            status: 400,
+            title: "Entity id already exists",
+          });
+        }
         throw createError;
       }
     } else if (effectiveMutation.operation === "update") {
@@ -945,6 +988,18 @@ export const applySyncMutation = async ({
   const entry = findSyncEntryByCollectionTag(mutation.collection);
   if (!entry) {
     return validationNack(`Unknown sync collection: ${mutation.collection}`);
+  }
+  // An ObjectId-keyed collection can only hold 24-hex ids. Rejecting anything else here
+  // keeps a client-minted UUID from reaching Mongoose as a CastError, which would nack as a
+  // retryable `error` and replay forever.
+  const model = mongoose.models[entry.modelName];
+  if (mutation.id && model && isObjectIdKeyed(model) && !isObjectIdHex(mutation.id)) {
+    return makeNack({
+      code: "validation",
+      message: `${mutation.collection} ids must be 24-character hex ObjectIds`,
+      mutationId,
+      reason: "invalid_id",
+    });
   }
 
   const request = req ?? ({user} as unknown as express.Request);

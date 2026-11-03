@@ -20,6 +20,11 @@ export interface AdminSpaServerContext {
   internalOrigin: string;
   /** API path prefixes a server render may fetch; anything else is rejected. */
   ssrApiPrefixes: string[];
+  /**
+   * The host's warning logger (`logger.warn` from `@terreno/api`). The render bundle stubs
+   * `@terreno/api`, so server code reaches the host's log pipeline through this.
+   */
+  warn?: (message: string, meta?: Record<string, unknown>) => void;
 }
 
 /**
@@ -58,6 +63,24 @@ export const publishAdminSpaServerContext = (context: AdminSpaServerContext): vo
 /** Read the published server context, or undefined before the plugin registers. */
 export const getAdminSpaServerContext = (): AdminSpaServerContext | undefined => {
   return (globalThis as GlobalWithContext)[ADMIN_SPA_SERVER_CONTEXT_KEY];
+};
+
+/**
+ * Warn from server render code through the host's logger, or `console.warn` before the plugin
+ * has published one. Callers pass paths and reasons only: never a query string, a cookie or a
+ * response body.
+ */
+export const warnAdminSpaServer = (message: string, meta?: Record<string, unknown>): void => {
+  const warn = getAdminSpaServerContext()?.warn;
+  if (warn) {
+    warn(message, meta);
+    return;
+  }
+  if (meta) {
+    console.warn(message, meta);
+    return;
+  }
+  console.warn(message);
 };
 
 /**

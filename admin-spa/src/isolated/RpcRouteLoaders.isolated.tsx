@@ -4,6 +4,7 @@
  * the URLs `rpcUrlsForRoute` names through `loadSsrPayload`, with the visitor's cookie, and
  * returns the bodies keyed by the seed key.
  */
+
 import {
   afterAll,
   afterEach,
@@ -16,6 +17,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
@@ -221,7 +223,7 @@ describe("rpc route loaders", () => {
       internalOrigin: `http://127.0.0.1:${stub.port}`,
       ssrApiPrefixes: ["/admin"],
     }).register(express());
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    const warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     try {
       const result = await runLoader(ROUTES[1].load, {cookie: "session=SECRET-COOKIE-VALUE"});
       expect(result).toEqual({rpc: {}});

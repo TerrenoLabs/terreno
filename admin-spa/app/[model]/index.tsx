@@ -6,7 +6,7 @@ import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
 import {decodeRouteParam, resolveModelListUrl} from "../../server/modelRoutes";
-import {getAdminSpaRequest} from "../../src/serverContext";
+import {getAdminSpaRequest, warnAdminSpaServer} from "../../src/serverContext";
 
 interface ModelListLoaderData {
   /** List bodies keyed by `adminRpcSeedKey`, for `AdminRpcSeed`. */
@@ -33,7 +33,7 @@ export const loader: LoaderFunction<ModelListLoaderData> = async (
     return {rpc};
   } catch (error) {
     // A URL outside the SSR allowlist or a failed read: the table loads on the client.
-    console.warn(`Admin SPA /${modelName} rendered without its data`, {
+    warnAdminSpaServer(`Admin SPA /${modelName} rendered without its data`, {
       reason: error instanceof Error ? error.message : String(error),
     });
     return {rpc: {}};

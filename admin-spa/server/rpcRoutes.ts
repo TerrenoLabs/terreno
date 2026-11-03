@@ -1,6 +1,6 @@
 import {type AdminConfigResponse, homeWidgetUrls} from "@terreno/admin-frontend";
 import type {LoaderFunction} from "expo-server";
-import {getAdminSpaRequest} from "../src/serverContext";
+import {getAdminSpaRequest, warnAdminSpaServer} from "../src/serverContext";
 import {loadSsrPayload} from "./loadSsrPayload";
 
 /** Admin SPA routes whose screens read their data through `useAdminRpcQuery`. */
@@ -78,7 +78,7 @@ export const createRpcRouteLoader = (
     } catch (error) {
       // A URL outside the SSR allowlist (an `ssrApiPrefixes` override) or a failed read: the
       // screen renders without a seed and loads its data on the client, as it did before SSR.
-      console.warn(`Admin SPA ${route} rendered without its data`, {
+      warnAdminSpaServer(`Admin SPA ${route} rendered without its data`, {
         reason: error instanceof Error ? error.message : String(error),
       });
       return {rpc: {}};

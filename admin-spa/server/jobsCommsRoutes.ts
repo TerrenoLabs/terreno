@@ -4,6 +4,7 @@ import {
   withQueryString,
 } from "@terreno/admin-frontend";
 import type {LoaderFunction} from "expo-server";
+import {warnAdminSpaServer} from "../src/serverContext";
 import {loadSsrPayload} from "./loadSsrPayload";
 import {decodeRouteParam, isSinglePathSegment} from "./modelRoutes";
 
@@ -90,7 +91,7 @@ export const createJobsCommsLoader = (
       }
       return {rpc};
     } catch (error) {
-      console.warn(`Admin SPA ${route} rendered without its data`, {
+      warnAdminSpaServer(`Admin SPA ${route} rendered without its data`, {
         reason: error instanceof Error ? error.message : String(error),
       });
       return {rpc: {}};

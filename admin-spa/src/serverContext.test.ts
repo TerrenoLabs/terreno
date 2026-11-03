@@ -1,4 +1,4 @@
-import {afterEach, describe, expect, it} from "bun:test";
+import {afterEach, describe, expect, it, spyOn} from "bun:test";
 import {DEFAULT_APP_CONFIG} from "./appConfig";
 import {
   type AdminSpaRequestScope,
@@ -7,6 +7,7 @@ import {
   isAdminSpaServerRender,
   publishAdminSpaServerContext,
   runInAdminSpaRequest,
+  warnAdminSpaServer,
 } from "./serverContext";
 
 const makeScope = (userId: string): AdminSpaRequestScope =>
@@ -109,5 +110,45 @@ describe("isAdminSpaServerRender", () => {
       internalOrigin: "http://127.0.0.1:4000",
     } as Parameters<typeof publishAdminSpaServerContext>[0]);
     expect(isAdminSpaServerRender()).toBe(false);
+  });
+});
+
+describe("warnAdminSpaServer", () => {
+  const originalContext = getAdminSpaServerContext();
+
+  afterEach(() => {
+    if (originalContext) {
+      publishAdminSpaServerContext(originalContext);
+    } else {
+      delete (globalThis as unknown as Record<symbol, unknown>)[
+        Symbol.for("terreno.adminSpa.server")
+      ];
+    }
+  });
+
+  it("warns through the published host logger with its metadata", () => {
+    const calls: unknown[][] = [];
+    publishAdminSpaServerContext({
+      internalOrigin: "http://127.0.0.1:4000",
+      warn: (...args: unknown[]): void => {
+        calls.push(args);
+      },
+    } as Parameters<typeof publishAdminSpaServerContext>[0]);
+    warnAdminSpaServer("SSR fetch failed for /admin/users", {reason: "TimeoutError"});
+    expect(calls).toEqual([["SSR fetch failed for /admin/users", {reason: "TimeoutError"}]]);
+  });
+
+  it("falls back to console.warn before a host logger is published", () => {
+    delete (globalThis as unknown as Record<symbol, unknown>)[
+      Symbol.for("terreno.adminSpa.server")
+    ];
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      warnAdminSpaServer("plain");
+      warnAdminSpaServer("with meta", {reason: "x"});
+      expect(warn.mock.calls).toEqual([["plain"], ["with meta", {reason: "x"}]]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

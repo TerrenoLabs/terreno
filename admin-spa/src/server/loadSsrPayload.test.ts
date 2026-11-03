@@ -1,5 +1,6 @@
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import express from "express";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
 import {AdminSpaServeApp} from "../serve";
@@ -103,15 +104,16 @@ const makeRequest = (headers: Record<string, string> = {Cookie: "a=1"}): Request
 const loadWithWarnings = async (
   ...args: Parameters<typeof loadSsrPayload>
 ): Promise<{payload: Awaited<ReturnType<typeof loadSsrPayload>>; warnings: string}> => {
-  const warn = spyOn(console, "warn").mockImplementation(() => {});
+  // The plugin publishes the host's `logger.warn`; console.warn is the fallback before that.
+  const loggerWarn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+  const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
   try {
     const payload = await loadSsrPayload(...args);
-    return {
-      payload,
-      warnings: warn.mock.calls.map((call) => call.map(String).join(" ")).join("\n"),
-    };
+    const calls = [...loggerWarn.mock.calls, ...consoleWarn.mock.calls] as unknown[][];
+    return {payload, warnings: calls.map((call) => call.map(String).join(" ")).join("\n")};
   } finally {
-    warn.mockRestore();
+    loggerWarn.mockRestore();
+    consoleWarn.mockRestore();
   }
 };
 

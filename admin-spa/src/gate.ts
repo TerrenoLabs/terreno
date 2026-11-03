@@ -39,7 +39,7 @@ export interface AdminSpaGateOptions {
 type Classified =
   | {kind: "outside"}
   | {kind: "static"}
-  | {kind: "ungated"}
+  | {kind: "write"}
   | {kind: "page"; route: string}
   | {kind: "loader"; route: string};
 
@@ -99,13 +99,13 @@ const classify = (method: string, requestPath: string, basePath: string): Classi
   if (requestPath.startsWith(`${LOADERS_PATH}/`)) {
     return isRead
       ? {kind: "loader", route: requestPath.slice(LOADERS_PATH.length)}
-      : {kind: "ungated"};
+      : {kind: "write"};
   }
   if (requestPath !== basePath && !requestPath.startsWith(`${basePath}/`)) {
     return {kind: "outside"};
   }
   if (!isRead) {
-    return {kind: "ungated"};
+    return {kind: "write"};
   }
   const inner = requestPath.slice(basePath.length) || "/";
   if (inner.startsWith(`${LOADERS_PATH}/`)) {
@@ -250,8 +250,9 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
     }
     // Hand the renderer exactly the path the gate decided on.
     req.url = `${normalized.pathname}${normalized.search}`;
-    if (classified.kind === "ungated") {
-      handler(req, res, next);
+    // The admin SPA serves only reads: a write never reaches the renderer or a loader.
+    if (classified.kind === "write") {
+      next();
       return;
     }
     const decide = async (): Promise<void> => {

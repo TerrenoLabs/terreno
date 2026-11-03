@@ -602,7 +602,7 @@ describe("AdminSpaServeApp when the internal origin returns a non-JSON body", ()
       expect(res.status).toBe(200);
       expect(res.text).not.toContain(SENTINEL);
       expect(res.text).not.toContain("PHISENTINEL");
-      expect(consoleWarnSpy.mock.calls.flat().join(" ")).toContain("/admin/users");
+      expect(warnSpy.mock.calls.flat().join(" ")).toContain("/admin/users");
       const dump = (calls: unknown[][]): string =>
         JSON.stringify(calls, (_key, value) =>
           value instanceof Error ? `${value.message}\n${value.stack}` : value
@@ -665,7 +665,7 @@ describe("AdminSpaServeApp keeps a loader's API query string out of logs", () =>
       const app = makeAdminApp({distDir: ssrDir, internalOrigin});
       const res = await request(app).get("/console/phiquery").set("Cookie", ADMIN_COOKIE);
       expect(res.text).not.toContain(SENTINEL);
-      expect(dump(consoleWarnSpy.mock.calls)).toContain("/admin/users");
+      expect(dump(warnSpy.mock.calls)).toContain("/admin/users");
       for (const calls of [
         errorSpy.mock.calls,
         warnSpy.mock.calls,

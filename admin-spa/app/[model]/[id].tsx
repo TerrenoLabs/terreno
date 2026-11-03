@@ -12,7 +12,7 @@ import {useAppConfig} from "../../components/AppConfigGate";
 import {RecordNotFound} from "../../components/RecordNotFound";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
 import {decodeRouteParam, resolveModelReadUrl} from "../../server/modelRoutes";
-import {getAdminSpaRequest} from "../../src/serverContext";
+import {getAdminSpaRequest, warnAdminSpaServer} from "../../src/serverContext";
 
 /** The sibling static route Expo prefers over `[id]`; never read as a document id. */
 const CREATE_SEGMENT = "create";
@@ -53,7 +53,7 @@ export const loader: LoaderFunction<ModelDetailLoaderData> = async (
     return {rpc};
   } catch (error) {
     // A URL outside the SSR allowlist or a failed read: the form loads on the client.
-    console.warn(`Admin SPA /${modelName}/[id] rendered without its data`, {
+    warnAdminSpaServer(`Admin SPA /${modelName}/[id] rendered without its data`, {
       reason: error instanceof Error ? error.message : String(error),
     });
     return {rpc: {}};

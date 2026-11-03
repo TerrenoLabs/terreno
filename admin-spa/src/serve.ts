@@ -156,6 +156,9 @@ export class AdminSpaServeApp implements TerrenoPlugin {
       basePath,
       internalOrigin: this.opts.internalOrigin ?? `http://127.0.0.1:${process.env.PORT ?? 4000}`,
       ssrApiPrefixes: this.opts.ssrApiPrefixes ?? defaultSsrApiPrefixes(appConfig.adminApiBasePath),
+      warn: (message: string, meta?: Record<string, unknown>): void => {
+        logger.warn(message, meta);
+      },
     };
     publishAdminSpaServerContext(context);
 

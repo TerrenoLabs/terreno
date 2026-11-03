@@ -2,6 +2,7 @@
  * Isolated: `mock.module` for the Expo screens would leak into the shared suite. Proves the
  * `[model]` route's server `loader` seeds the default list read through `loadSsrPayload`.
  */
+
 import {
   afterAll,
   afterEach,
@@ -14,6 +15,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import type {ImmutableRequest} from "expo-server";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
@@ -176,7 +178,7 @@ describe("[model] list loader", () => {
     let warn: ReturnType<typeof spyOn>;
 
     beforeEach(() => {
-      warn = spyOn(console, "warn").mockImplementation(() => {});
+      warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     });
 
     afterEach(() => {

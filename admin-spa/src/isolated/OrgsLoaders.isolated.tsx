@@ -7,6 +7,7 @@
  * gate stores the raw `/auth/me` body, so the profile may arrive as `{data: {...}}` or bare. A
  * non-operator's directory route fetches nothing.
  */
+
 import {
   afterAll,
   afterEach,
@@ -19,6 +20,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {orgsSsrRequests} from "../../server/orgsRoutes";
@@ -171,7 +173,7 @@ describe("orgs route loaders", () => {
 
     it("returns an empty seed and warns, without the cookie, when ssrApiPrefixes omits /orgs", async () => {
       register({ssrApiPrefixes: ["/admin"]});
-      const warn = spyOn(console, "warn").mockImplementation(() => {});
+      const warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
       try {
         const result = await runLoader(loadDirectory, {cookie: "session=SECRET-COOKIE-VALUE"});
         expect(result).toEqual({rpc: {}});

@@ -1,5 +1,5 @@
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
-import {getAdminSpaServerContext} from "../src/serverContext";
+import {getAdminSpaServerContext, warnAdminSpaServer} from "../src/serverContext";
 
 /** Request headers a loader may forward, lowercase. The admin hooks send only this one. */
 const ALLOWED_SSR_HEADERS = new Set(["x-organization-id"]);
@@ -101,7 +101,7 @@ const readOne = async (
     });
   } catch (error) {
     const reason = error instanceof Error ? error.name : "unknown error";
-    console.warn(`[adminSpaSsr] SSR fetch failed for ${pathname}: ${reason}`);
+    warnAdminSpaServer(`[adminSpaSsr] SSR fetch failed for ${pathname}: ${reason}`);
     return;
   }
   payload.status[key] = response.status;
@@ -112,7 +112,7 @@ const readOne = async (
     payload.rpc[key] = await response.json();
   } catch {
     delete payload.status[key];
-    console.warn(`[adminSpaSsr] SSR response for ${pathname} is not JSON`);
+    warnAdminSpaServer(`[adminSpaSsr] SSR response for ${pathname} is not JSON`);
   }
 };
 

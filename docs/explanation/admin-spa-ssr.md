@@ -81,6 +81,9 @@ Rendered pages and loader data can hold PHI, so:
   or a body that is not JSON leaves that read out (the screen loads it on the client) and warns
   with the API path only, never its query string, the cookie or the body. The other reads still
   seed the page. A request outside the SSR allowlist still throws before anything is fetched.
+- Server render code warns through `warnAdminSpaServer`, which calls the host's `logger.warn`
+  (the plugin publishes it on the server context), so these warnings reach the backend's log
+  transports even though the render bundle stubs `@terreno/api`.
 
 ## Access is decided before rendering
 
@@ -91,6 +94,9 @@ including encoded ones, resolved) and hands Expo that same path, so a path such 
 `/console/assets/../Todo` cannot pass as an asset and then render as `/Todo`. A request under
 `_expo/static`, `assets` or `app-config.json` that is not a real file gets a 404: it never
 reaches the page renderer, which would otherwise render `/assets/Todo` as a model page.
+The admin SPA serves only reads: any other method under `basePath`, or at the root
+`/_expo/loaders/*`, passes on to the host app (a 404 unless the host handles it) and never
+reaches the renderer or a loader.
 
 For a visitor with `req.user`, it reads three things over loopback, in parallel, with the
 visitor's cookie: `{authBasePath}/get-session`, `/auth/me` and `{adminApiBasePath}/config`.

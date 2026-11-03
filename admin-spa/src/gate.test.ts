@@ -215,11 +215,18 @@ describe("createAdminSpaGate anonymous visitors", () => {
     expect(handlerCalls()).toBe(0);
   });
 
-  it("does not gate a non-GET request", async () => {
+  it("passes a non-GET request on without rendering it", async () => {
     const {app, handlerCalls} = await makeGateApp();
     const res = await request(app).post("/console/Todo").redirects(0);
-    expect(res.status).not.toBe(302);
-    expect(handlerCalls()).toBe(1);
+    expect(res.status).toBe(404);
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("passes a non-GET root loader request on without running the loader", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const res = await request(app).post("/_expo/loaders/Todo").redirects(0);
+    expect(res.status).toBe(404);
+    expect(handlerCalls()).toBe(0);
   });
 
   it("does not claim paths outside the base path", async () => {

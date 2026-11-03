@@ -3,6 +3,7 @@
  * `[model]/[id]` route's server `loader` seeds the record read through `loadSsrPayload`, reports
  * a backend 404 as `notFound` (the page still answers 200), and never treats `create` as an id (create.tsx, a static sibling, has no loader).
  */
+
 import {
   afterAll,
   afterEach,
@@ -15,6 +16,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import type {ImmutableRequest} from "expo-server";
 import express from "express";
 import {AdminSpaServeApp} from "../serve";
@@ -199,7 +201,7 @@ describe("[model]/[id] detail loader", () => {
     let warn: ReturnType<typeof spyOn>;
 
     beforeEach(() => {
-      warn = spyOn(console, "warn").mockImplementation(() => {});
+      warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
     });
 
     afterEach(() => {

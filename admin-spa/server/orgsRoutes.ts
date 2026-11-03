@@ -1,7 +1,7 @@
 import {adminOrganizationHeaders, unwrapAdminEnvelope} from "@terreno/admin-frontend";
 import type {LoaderFunction} from "expo-server";
 import {isOrganizationOperatorProfile} from "../components/adminSpaProfile";
-import {getAdminSpaRequest} from "../src/serverContext";
+import {getAdminSpaRequest, warnAdminSpaServer} from "../src/serverContext";
 import {loadSsrPayload, type SsrPayloadRequest} from "./loadSsrPayload";
 import {decodeRouteParam, isSinglePathSegment} from "./modelRoutes";
 
@@ -57,7 +57,7 @@ export const createOrgsLoader = (route: OrgsSsrRoute): LoaderFunction<OrgsLoader
       const {rpc} = await loadSsrPayload(request as unknown as Request, {requests});
       return {rpc};
     } catch (error) {
-      console.warn(`Admin SPA ${route} rendered without its data`, {
+      warnAdminSpaServer(`Admin SPA ${route} rendered without its data`, {
         reason: error instanceof Error ? error.message : String(error),
       });
       return {rpc: {}};

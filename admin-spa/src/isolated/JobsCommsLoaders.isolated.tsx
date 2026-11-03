@@ -5,6 +5,7 @@
  * keys; that detail routes decode the (still percent-encoded) route param; and that a backend 404
  * is `{rpc: {}, notFound: true}` (the page still answers 200).
  */
+
 import {
   afterAll,
   afterEach,
@@ -17,6 +18,7 @@ import {
   spyOn,
 } from "bun:test";
 import {adminRpcSeedKey} from "@terreno/admin-frontend";
+import {logger} from "@terreno/api";
 import type {ImmutableRequest, LoaderFunction} from "expo-server";
 import express from "express";
 import {DateTime, Settings} from "luxon";
@@ -206,7 +208,8 @@ describe("jobs and comms route loaders", () => {
 
     it("returns an empty seed and warns, without the cookie, when ssrApiPrefixes omits the route", async () => {
       register({ssrApiPrefixes: ["/admin"]});
-      const warn = spyOn(console, "warn").mockImplementation(() => {});
+      // The plugin publishes the host's logger.warn for server render code.
+      const warn = spyOn(logger, "warn").mockImplementation((() => logger) as never);
       try {
         const result = await runLoader(load, {cookie: "session=SECRET-COOKIE-VALUE"});
         expect(result).toEqual({rpc: {}});

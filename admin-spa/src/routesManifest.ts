@@ -82,15 +82,41 @@ const compareSpecificity = (a: RawRoute, b: RawRoute): number => {
 };
 
 /**
+ * Replace every `Cache-Control` in the manifest's `pageHeaders` rules. Expo exports a
+ * `no-store` rule for every loader response, and expo-server applies it after Express
+ * middleware, so the plugin's own header would be overwritten.
+ */
+const withCacheControl = (routes: RawRoute[], cacheControl: string): RawRoute[] => {
+  return routes.map((route) => {
+    const headers = route.headers as Record<string, string> | undefined;
+    if (!headers) {
+      return route;
+    }
+    const kept = Object.fromEntries(
+      Object.entries(headers).filter(([name]) => name.toLowerCase() !== "cache-control")
+    );
+    const hadCacheControl = Object.keys(kept).length !== Object.keys(headers).length;
+    return hadCacheControl ? {...route, headers: {...kept, "Cache-Control": cacheControl}} : route;
+  });
+};
+
+/**
  * Prepare the manifest the way expo-server's environment does (regex strings become
  * `RegExp`s), with HTML routes ordered by specificity. Expo 58 exports `routes.json`
  * unsorted, and expo-server takes the first regex match, so `/[model]` would shadow `/login`
  * and render it without its loader data. The router itself already prefers static routes.
  */
-export const prepareRoutesManifest = (raw: RawRoutesManifest): Record<string, unknown> => {
+export const prepareRoutesManifest = (
+  raw: RawRoutesManifest,
+  {pageCacheControl}: {pageCacheControl?: string} = {}
+): Record<string, unknown> => {
   const prepared: Record<string, unknown> = {...raw};
   for (const list of REGEX_LISTS) {
-    const routes = raw[list];
+    const exported = raw[list];
+    const routes =
+      list === "pageHeaders" && exported && pageCacheControl
+        ? withCacheControl(exported, pageCacheControl)
+        : exported;
     if (!routes) {
       // expo-server defaults every list except `pageHeaders` to empty.
       if (list !== "pageHeaders") {

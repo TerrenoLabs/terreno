@@ -5,13 +5,30 @@ import {createRequestHandler, type RequestHandlerParams} from "expo-server/adapt
 import express from "express";
 import {type AdminSpaAppConfig, resolveAppConfig} from "./appConfig";
 import {bakedBaseUrlOf, prepareRoutesManifest, readRoutesManifest} from "./routesManifest";
-import {publishAdminSpaServerContext} from "./serverContext";
+import {
+  getAdminSpaRequest,
+  publishAdminSpaServerContext,
+  runInAdminSpaRequest,
+} from "./serverContext";
 
 // Compiled (CommonJS) file lives at src/dist/serve.js; the export root (`client/` +
 // `server/`) lives at admin-spa/dist. `__dirname` is the CommonJS module-directory global.
 const DIST_DIR = path.resolve(__dirname, "../../dist");
 
 const NO_STORE = "no-store";
+
+/** Server-rendered pages and loader data can hold PHI: never cached, never shared. */
+const NO_STORE_PRIVATE = "no-store, private";
+
+/** API prefixes a server render may fetch, besides the admin API base path. */
+const DEFAULT_SSR_API_PREFIXES = [
+  "/auth/me",
+  "/orgs",
+  "/jobs",
+  "/comms",
+  "/configuration",
+  "/rbac",
+];
 
 /** Where Expo's client fetches route loader data: the site root, whatever the baseUrl. */
 const ROOT_LOADERS_PATH = "/_expo/loaders";
@@ -31,6 +48,17 @@ export interface AdminSpaServeOptions {
    * "http://localhost:8083". Avoids re-running `expo export` per change.
    */
   devProxyTarget?: string;
+  /**
+   * Origin the server render fetches API data from, with the visitor's cookie. Default:
+   * `http://127.0.0.1:${PORT ?? 4000}`, this process. Never derived from `Host` or
+   * `X-Forwarded-*`, so a request cannot point the render at another host.
+   */
+  internalOrigin?: string;
+  /**
+   * API path prefixes a server render may fetch. Default: the admin API base path plus
+   * `/auth/me`, `/orgs`, `/jobs`, `/comms`, `/configuration`, and `/rbac`.
+   */
+  ssrApiPrefixes?: string[];
 }
 
 /**
@@ -115,7 +143,15 @@ export class AdminSpaServeApp implements TerrenoPlugin {
       return;
     }
 
-    publishAdminSpaServerContext({appConfig, basePath});
+    publishAdminSpaServerContext({
+      appConfig,
+      basePath,
+      internalOrigin: this.opts.internalOrigin ?? `http://127.0.0.1:${process.env.PORT ?? 4000}`,
+      ssrApiPrefixes: this.opts.ssrApiPrefixes ?? [
+        appConfig.adminApiBasePath ?? "/admin",
+        ...DEFAULT_SSR_API_PREFIXES,
+      ],
+    });
 
     // 1. Hashed client asset directories: long cache, immutable.
     const clientDir = path.join(distDir, "client");
@@ -153,22 +189,44 @@ export class AdminSpaServeApp implements TerrenoPlugin {
     // Hand expo-server the manifest with HTML routes in match-priority order (see
     // prepareRoutesManifest); it would otherwise read routes.json as exported.
     type ExpoManifest = Awaited<ReturnType<NonNullable<RequestHandlerParams["getRoutesManifest"]>>>;
-    const manifest = prepareRoutesManifest(rawManifest) as unknown as ExpoManifest;
+    const manifest = prepareRoutesManifest(rawManifest, {
+      pageCacheControl: NO_STORE_PRIVATE,
+    }) as unknown as ExpoManifest;
     const handler = createRequestHandler(
       {build: serverDir},
       {getRoutesManifest: async (): Promise<ExpoManifest> => manifest}
     );
-    const noStore: express.RequestHandler = (_req, res, next) => {
-      res.set("Cache-Control", NO_STORE);
-      next();
+    // Every server render runs in a request scope, so a render reads only its own request's
+    // data. Middleware that set a richer scope earlier (the auth gate) keeps it.
+    const noStorePrivate: express.RequestHandler = (_req, res, next) => {
+      res.set("Cache-Control", NO_STORE_PRIVATE);
+      if (getAdminSpaRequest()) {
+        next();
+        return;
+      }
+      runInAdminSpaRequest({appConfig, basePath}, next);
     };
-    app.use(basePath, noStore, handler);
+    // A failed render or loader logs the route path and the error only: never the query string
+    // or response data, which can hold PHI.
+    const renderError: express.ErrorRequestHandler = (error, req, res, _next) => {
+      logger.error(`Admin SPA render failed for ${req.path}`, {
+        error: error instanceof Error ? error.message : String(error),
+        path: req.path,
+      });
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+      res.status(500).set("Cache-Control", NO_STORE_PRIVATE).type("text").send("Admin SPA error");
+    };
+    app.use(basePath, noStorePrivate, handler, renderError);
     // Expo 58's client fetches loader data from the site root, ignoring the baked baseUrl,
     // so the root loader path reaches the same handler (D11 in the SSR plan).
-    app.use(ROOT_LOADERS_PATH, noStore, (req, res, next) => {
+    const rootLoaders: express.RequestHandler = (req, res, next) => {
       req.url = `${ROOT_LOADERS_PATH}${req.url}`;
       return handler(req, res, next);
-    });
+    };
+    app.use(ROOT_LOADERS_PATH, noStorePrivate, rootLoaders, renderError);
 
     logger.info(`Admin SPA mounted at ${basePath}/`);
   }

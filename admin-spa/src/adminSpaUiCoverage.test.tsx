@@ -1,4 +1,5 @@
 import {beforeAll, beforeEach, describe, it, mock} from "bun:test";
+import * as realAdminFrontend from "@terreno/admin-frontend";
 import {type ApiClient, createApiClient, type FetchLike} from "@terreno/syncdb/api";
 import {ApiClientProvider} from "@terreno/syncdb/react";
 import {waitFor} from "@testing-library/react-native";
@@ -32,7 +33,10 @@ const registerSharedAdminFrontendMock = ({
   capturedOrgSwitcherProps: {current?: {api?: unknown; routeBase?: string}};
   capturedShellProps: {current?: Record<string, unknown>};
 }): void => {
+  // bun's module mock is process-wide: keep every real export so other test files that import
+  // the package (for example adminRpcSeedKey in server/) still see it.
   mock.module("@terreno/admin-frontend", () => ({
+    ...realAdminFrontend,
     AdminShellLayout: (props: {
       api?: unknown;
       apiBase?: string;

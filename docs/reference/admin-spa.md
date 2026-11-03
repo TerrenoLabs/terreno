@@ -107,6 +107,8 @@ new TerrenoApp({userModel: User})
 | `appConfig` | see [App config](#app-config) | Partial config merged over defaults; served at `${basePath}/app-config.json`. |
 | `distDir` | `<package>/dist` | Directory containing the pre-built static export (tests/custom builds). |
 | `devProxyTarget` | — | When set, proxy all SPA paths to a running `expo start --web` server (e.g. `http://localhost:8083`). `app-config.json` is still served by the plugin. |
+| `internalOrigin` | `http://127.0.0.1:${PORT ?? 4000}` | Origin server renders fetch API data from, with the visitor's cookie. Never derived from `Host` or `X-Forwarded-*`. |
+| `ssrApiPrefixes` | admin API base path, `/auth/me`, `/orgs`, `/jobs`, `/comms`, `/configuration`, `/rbac` | API path prefixes a server render may fetch; any other path is rejected before a request is sent. |
 
 ### Utility exports
 
@@ -134,9 +136,12 @@ new TerrenoApp({userModel: User})
 
 1. `${basePath}/_expo` and `${basePath}/assets` — `express.static` with `maxAge: 365d`, `immutable: true`.
 2. `${basePath}/app-config.json` — `Cache-Control: no-store`.
-3. `${basePath}` and `${basePath}/*splat` — SPA fallback returns rewritten `index.html` with `Cache-Control: no-store`.
+3. `${basePath}/*` — server-rendered by the Expo server build, with `Cache-Control: no-store, private`.
+4. `/_expo/loaders/*` and `${basePath}/_expo/loaders/*` — route loader data, with `Cache-Control: no-store, private`.
 
-`index.html` is read once at startup; asset paths are rewritten to `${basePath}/...` and `window.__ADMIN_SPA_BASE__` is injected for deep-link config fetches.
+Pages and loader data can hold PHI, so neither may be cached or shared. See
+[Server-rendering the admin SPA](../explanation/admin-spa-ssr.md) for the request scope,
+`loadSsrPayload` and the escaping rules.
 
 **Development (`devProxyTarget` set):**
 

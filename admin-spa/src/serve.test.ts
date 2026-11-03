@@ -1,9 +1,11 @@
-import {afterAll, beforeAll, describe, expect, it, spyOn} from "bun:test";
+import {afterAll, afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
+import path from "node:path";
 import {logger} from "@terreno/api";
 import express from "express";
 import request from "supertest";
 import {DEFAULT_APP_CONFIG} from "./appConfig";
 import {AdminSpaServeApp, injectBaseGlobal, rewriteIndexHtml} from "./serve";
+import {getAdminSpaServerContext} from "./serverContext";
 import {
   removeStubSsrBuild,
   STUB_ASSET_CONTENT,
@@ -288,5 +290,360 @@ describe("injectBaseGlobal", () => {
   it("falls back to prepending when there is no </head>", () => {
     const out = injectBaseGlobal("<body>x</body>", "/admin-ui");
     expect(out.startsWith('<script>window.__ADMIN_SPA_BASE__="/admin-ui";</script>')).toBe(true);
+  });
+});
+
+describe("AdminSpaServeApp PHI response headers", () => {
+  it.each([
+    ["HTML page", "/console/login"],
+    ["loader under basePath", "/console/_expo/loaders/login"],
+    ["loader at the site root", "/_expo/loaders/login"],
+  ])("sends Cache-Control: no-store, private on the %s", async (_label, url) => {
+    const res = await request(makeApp()).get(url);
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store, private");
+  });
+
+  it("keeps app-config.json at plain no-store", async () => {
+    const res = await request(makeApp()).get("/console/app-config.json");
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("keeps the immutable cache header on hashed assets", async () => {
+    const res = await request(makeApp()).get(`/console${STUB_ASSET_PATH}`);
+    expect(res.headers["cache-control"]).not.toContain("private");
+  });
+});
+
+describe("AdminSpaServeApp internalOrigin and ssrApiPrefixes options", () => {
+  const savedPort = process.env.PORT;
+
+  afterEach(() => {
+    if (savedPort === undefined) {
+      delete process.env.PORT;
+    } else {
+      process.env.PORT = savedPort;
+    }
+  });
+
+  it("defaults internalOrigin to http://127.0.0.1:$PORT", () => {
+    process.env.PORT = "5123";
+    makeApp();
+    expect(getAdminSpaServerContext()?.internalOrigin).toBe("http://127.0.0.1:5123");
+  });
+
+  it("defaults internalOrigin to port 4000 when PORT is unset", () => {
+    delete process.env.PORT;
+    makeApp();
+    expect(getAdminSpaServerContext()?.internalOrigin).toBe("http://127.0.0.1:4000");
+  });
+
+  it("publishes an explicit internalOrigin and ssrApiPrefixes", () => {
+    const app = express();
+    new AdminSpaServeApp({
+      distDir,
+      internalOrigin: "http://127.0.0.1:9999",
+      ssrApiPrefixes: ["/admin"],
+    }).register(app);
+    expect(getAdminSpaServerContext()?.internalOrigin).toBe("http://127.0.0.1:9999");
+    expect(getAdminSpaServerContext()?.ssrApiPrefixes).toEqual(["/admin"]);
+  });
+
+  it("publishes the default ssrApiPrefixes", () => {
+    makeApp();
+    expect(getAdminSpaServerContext()?.ssrApiPrefixes).toEqual([
+      "/admin",
+      "/auth/me",
+      "/orgs",
+      "/jobs",
+      "/comms",
+      "/configuration",
+      "/rbac",
+    ]);
+  });
+});
+
+const SENTINEL = "PHI-SENTINEL";
+const SERVER_MODULES = {
+  loadSsrPayload: path.resolve(import.meta.dir, "../server/loadSsrPayload.ts"),
+  serverContext: path.resolve(import.meta.dir, "./serverContext.ts"),
+};
+
+describe("AdminSpaServeApp request scope and escaping through the Expo handler", () => {
+  let ssrDir: string;
+  let internal: ReturnType<typeof Bun.serve>;
+
+  beforeAll(() => {
+    internal = Bun.serve({
+      fetch: () => Response.json({rows: [{email: SENTINEL}]}),
+      port: 0,
+    });
+    ssrDir = writeStubSsrBuild({
+      extraRoutes: [
+        {
+          loaderSource: 'exports.loader = () => ({rows: [{note: "</script><script>x()"}]});',
+          path: "/phi",
+        },
+        {
+          loaderSource: `exports.loader = async (request) => {
+  const {loadSsrPayload} = require(LOAD_SSR_PAYLOAD);
+  await loadSsrPayload(request, {requests: [{url: "/admin/users"}]});
+  throw new Error("loader exploded");
+};`,
+          path: "/boom",
+        },
+      ],
+      ssrModules: SERVER_MODULES,
+    });
+  });
+
+  afterAll(() => {
+    internal.stop(true);
+    removeStubSsrBuild(ssrDir);
+  });
+
+  const makeScopedApp = async (): Promise<express.Application> => {
+    // Loaded lazily so the pre-existing cases in this file still run while the export is missing.
+    const {runInAdminSpaRequest} = await import("./serverContext");
+    const app = express();
+    // Stands in for the T3 gate: sets the per-request scope before the Expo handler runs.
+    app.use((req, _res, next) => {
+      runInAdminSpaRequest(
+        {
+          appConfig: DEFAULT_APP_CONFIG,
+          basePath: "/console",
+          session: {userId: String(req.headers["x-user"] ?? "none")},
+        } as unknown as Parameters<typeof runInAdminSpaRequest>[0],
+        next
+      );
+    });
+    new AdminSpaServeApp({
+      distDir: ssrDir,
+      internalOrigin: `http://127.0.0.1:${internal.port}`,
+    }).register(app);
+    return app;
+  };
+
+  it("escapes a loader row containing </script><script>x() in the server-rendered HTML", async () => {
+    const res = await request(await makeScopedApp()).get("/console/phi");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('id="loader-blob"');
+    expect(res.text).not.toContain("</script><script>x()");
+  });
+
+  it("exposes a value set before the handler inside render.js, and not across requests", async () => {
+    const app = await makeScopedApp();
+    const [a, b] = await Promise.all([
+      request(app).get("/console/phi").set("x-user", "user-A"),
+      request(app).get("/console/phi").set("x-user", "user-B"),
+    ]);
+    expect(a.text).toContain("user-A");
+    expect(a.text).not.toContain("user-B");
+    expect(b.text).toContain("user-B");
+    expect(b.text).not.toContain("user-A");
+  });
+
+  it("logs the route path and error, never row values, when a loader throws after fetching rows", async () => {
+    const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
+    const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+    const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const res = await request(await makeScopedApp())
+        .get("/console/boom")
+        .set("Cookie", "sid=1");
+      expect(res.text).not.toContain(SENTINEL);
+      const dump = (calls: unknown[][]): string =>
+        JSON.stringify(calls, (_key, value) =>
+          value instanceof Error ? `${value.message}\n${value.stack}` : value
+        );
+      const logged = dump(errorSpy.mock.calls);
+      expect(errorSpy).toHaveBeenCalled();
+      expect(logged).toContain("/boom");
+      expect(logged).toContain("loader exploded");
+      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+        expect(dump(calls)).not.toContain(SENTINEL);
+      }
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      consoleSpy.mockRestore();
+    }
+  });
+
+  it("logs req.path, never the query string, when a loader throws on /boom?q=PHI-SENTINEL", async () => {
+    const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
+    const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+    const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await request(await makeScopedApp())
+        .get(`/console/boom?q=${SENTINEL}`)
+        .set("Cookie", "sid=1");
+      const dump = (calls: unknown[][]): string =>
+        JSON.stringify(calls, (_key, value) =>
+          value instanceof Error ? `${value.message}\n${value.stack}` : value
+        );
+      expect(errorSpy).toHaveBeenCalled();
+      expect(dump(errorSpy.mock.calls)).toContain("/boom");
+      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+        expect(dump(calls)).not.toContain(SENTINEL);
+      }
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      consoleSpy.mockRestore();
+    }
+  });
+});
+
+describe("AdminSpaServeApp when the internal origin returns a non-JSON body", () => {
+  let ssrDir: string;
+  let internal: ReturnType<typeof Bun.serve>;
+
+  beforeAll(() => {
+    internal = Bun.serve({
+      fetch: () =>
+        new Response(`PHISENTINEL not json ${SENTINEL}`, {
+          headers: {"content-type": "text/plain"},
+          status: 200,
+        }),
+      port: 0,
+    });
+    ssrDir = writeStubSsrBuild({
+      extraRoutes: [
+        {
+          loaderSource: `exports.loader = async (request) => {
+  const {loadSsrPayload} = require(LOAD_SSR_PAYLOAD);
+  return loadSsrPayload(request, {requests: [{url: "/admin/users"}]});
+};`,
+          path: "/badjson",
+        },
+      ],
+      ssrModules: SERVER_MODULES,
+    });
+  });
+
+  afterAll(() => {
+    internal.stop(true);
+    removeStubSsrBuild(ssrDir);
+  });
+
+  it("keeps the body out of every log call and the response", async () => {
+    const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
+    const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+    const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const app = express();
+      new AdminSpaServeApp({
+        distDir: ssrDir,
+        internalOrigin: `http://127.0.0.1:${internal.port}`,
+      }).register(app);
+      const res = await request(app).get("/console/badjson").set("Cookie", "sid=1");
+      expect(res.text).not.toContain(SENTINEL);
+      expect(res.text).not.toContain("PHISENTINEL");
+      expect(errorSpy).toHaveBeenCalled();
+      const dump = (calls: unknown[][]): string =>
+        JSON.stringify(calls, (_key, value) =>
+          value instanceof Error ? `${value.message}\n${value.stack}` : value
+        );
+      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+        expect(dump(calls)).not.toContain(SENTINEL);
+        expect(dump(calls)).not.toContain("PHISENTINEL");
+      }
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      consoleSpy.mockRestore();
+    }
+  });
+});
+
+describe("AdminSpaServeApp keeps a loader's API query string out of logs", () => {
+  const PHI_LOADER = `exports.loader = async (request) => {
+  const {loadSsrPayload} = require(LOAD_SSR_PAYLOAD);
+  return loadSsrPayload(request, {requests: [{url: "/admin/users?search=${SENTINEL}"}]});
+};`;
+  let ssrDir: string;
+
+  beforeAll(() => {
+    ssrDir = writeStubSsrBuild({
+      extraRoutes: [{loaderSource: PHI_LOADER, path: "/phiquery"}],
+      ssrModules: SERVER_MODULES,
+    });
+  });
+
+  afterAll(() => {
+    removeStubSsrBuild(ssrDir);
+  });
+
+  /** Renders each call with Bun.inspect so Error causes and stacks are included. */
+  const dump = (calls: unknown[][]): string =>
+    calls
+      .map((args) =>
+        [
+          Bun.inspect(args),
+          JSON.stringify(args, (_key, value) =>
+            value instanceof Error ? `${value.message}\n${value.stack}` : value
+          ),
+        ].join("\n")
+      )
+      .join("\n");
+
+  const expectNoQueryInLogs = async (internalOrigin: string): Promise<void> => {
+    const errorSpy = spyOn(logger, "error").mockImplementation((() => logger) as never);
+    const warnSpy = spyOn(logger, "warn").mockImplementation((() => logger) as never);
+    const consoleSpy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const app = express();
+      new AdminSpaServeApp({distDir: ssrDir, internalOrigin}).register(app);
+      const res = await request(app).get("/console/phiquery").set("Cookie", "sid=1");
+      expect(res.text).not.toContain(SENTINEL);
+      expect(errorSpy).toHaveBeenCalled();
+      expect(dump(errorSpy.mock.calls)).toContain("/phiquery");
+      for (const calls of [errorSpy.mock.calls, warnSpy.mock.calls, consoleSpy.mock.calls]) {
+        expect(dump(calls)).not.toContain(SENTINEL);
+      }
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+      consoleSpy.mockRestore();
+    }
+  };
+
+  it("logs the route path, never the API query string, when the internal origin is down", async () => {
+    const dead = Bun.serve({fetch: () => new Response("unused"), port: 0});
+    const deadOrigin = `http://127.0.0.1:${dead.port}`;
+    dead.stop(true);
+    await expectNoQueryInLogs(deadOrigin);
+  });
+
+  it("logs the route path, never the API query string, when the internal origin returns non-JSON", async () => {
+    const plain = Bun.serve({
+      fetch: () => new Response("not json", {headers: {"content-type": "text/plain"}, status: 200}),
+      port: 0,
+    });
+    try {
+      await expectNoQueryInLogs(`http://127.0.0.1:${plain.port}`);
+    } finally {
+      plain.stop(true);
+    }
+  });
+});
+
+describe("AdminSpaServeApp base request scope without upstream middleware", () => {
+  it("renders inside a scope whose basePath is /console", async () => {
+    const ssrDir = writeStubSsrBuild({ssrModules: SERVER_MODULES});
+    try {
+      const app = express();
+      new AdminSpaServeApp({distDir: ssrDir}).register(app);
+      const res = await request(app).get("/console/login");
+      expect(res.status).toBe(200);
+      const match = res.text.match(/data-scope=("(?:[^"\\]|\\.)*")/);
+      expect(match).not.toBeNull();
+      const scope = JSON.parse(match?.[1] ?? '""') as string;
+      expect(scope).not.toBe("null");
+      expect(scope).toContain("/console");
+    } finally {
+      removeStubSsrBuild(ssrDir);
+    }
   });
 });

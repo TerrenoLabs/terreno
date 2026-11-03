@@ -1,19 +1,6 @@
 import {ScrollViewStyleReset, useServerDocumentContext} from "expo-router/html";
 import type React from "react";
-import {getAdminSpaServerContext} from "../src/serverContext";
-
-/**
- * Serialize a value for an inline `<script>`: JSON with every character that could close
- * the script or break a JS string literal escaped.
- */
-const serializeForInlineScript = (value: unknown): string => {
-  return JSON.stringify(value)
-    .replaceAll("<", "\\u003c")
-    .replaceAll(">", "\\u003e")
-    .replaceAll("&", "\\u0026")
-    .replaceAll(" ", "\\u2028")
-    .replaceAll(" ", "\\u2029");
-};
+import {getAdminSpaRequest, getAdminSpaServerContext, serializeForHtml} from "../src/serverContext";
 
 /**
  * Document shell for the server-rendered admin SPA. Renders only on the server, where the
@@ -22,10 +9,11 @@ const serializeForInlineScript = (value: unknown): string => {
  */
 const Root: React.FC<{children: React.ReactNode}> = ({children}) => {
   const {htmlAttributes, bodyAttributes, headNodes, bodyNodes} = useServerDocumentContext();
-  const context = getAdminSpaServerContext();
+  // The request scope, set by the serve plugin for each render, wins over the process context.
+  const context = getAdminSpaRequest() ?? getAdminSpaServerContext();
   const bootstrap = context
-    ? `window.__ADMIN_SPA_BASE__=${serializeForInlineScript(context.basePath)};` +
-      `window.__ADMIN_SPA_CONFIG__=${serializeForInlineScript(context.appConfig)};`
+    ? `window.__ADMIN_SPA_BASE__=${serializeForHtml(context.basePath)};` +
+      `window.__ADMIN_SPA_CONFIG__=${serializeForHtml(context.appConfig)};`
     : "";
 
   return (

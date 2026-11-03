@@ -110,7 +110,7 @@ None — no new or changed screens.
   - Test skills: none (follow `admin-spa/src/serve.test.ts` supertest and `admin-spa/e2e/login.spec.ts` patterns)
   - Docs: docs/explanation/admin-spa-ssr.md (new; spike results + architecture)
 
-- [ ] **T2** — Request scope, the SSR payload loader helper, and PHI headers
+- [x] **T2** — Request scope, the SSR payload loader helper, and PHI headers
   - Depends on: T1, T5 (imports `adminRpcSeedKey`)
   - Files: admin-spa/src/serverContext.ts, admin-spa/src/serverContext.test.ts, admin-spa/src/serve.ts, admin-spa/src/serve.test.ts, admin-spa/server/loadSsrPayload.ts, admin-spa/server/loadSsrPayload.test.ts, admin-spa/src/appConfig.ts, docs/explanation/admin-spa-ssr.md
   - Criteria:

@@ -1,3 +1,4 @@
+import type {AsyncLocalStorage} from "node:async_hooks";
 import type {AdminSpaAppConfig} from "./appConfig";
 
 /**
@@ -8,14 +9,31 @@ import type {AdminSpaAppConfig} from "./appConfig";
  */
 const ADMIN_SPA_SERVER_CONTEXT_KEY = Symbol.for("terreno.adminSpa.server");
 
+/** Key of the one per-request `AsyncLocalStorage`, shared by every bundle in the process. */
+const ADMIN_SPA_REQUEST_STORE_KEY = Symbol.for("terreno.adminSpa.requestStore");
+
 /** What the serve plugin publishes for `render.js`, `+html.tsx`, and route loaders. */
 export interface AdminSpaServerContext {
+  appConfig: AdminSpaAppConfig;
+  basePath: string;
+  /** Origin loopback SSR fetches go to. Never built from `Host` or `X-Forwarded-*`. */
+  internalOrigin: string;
+  /** API path prefixes a server render may fetch; anything else is rejected. */
+  ssrApiPrefixes: string[];
+}
+
+/**
+ * What one request's server render may read: set by Express before the Expo handler runs,
+ * visible to that request's render and loaders only.
+ */
+export interface AdminSpaRequestScope {
   appConfig: AdminSpaAppConfig;
   basePath: string;
 }
 
 type GlobalWithContext = typeof globalThis & {
   [ADMIN_SPA_SERVER_CONTEXT_KEY]?: AdminSpaServerContext;
+  [ADMIN_SPA_REQUEST_STORE_KEY]?: AsyncLocalStorage<AdminSpaRequestScope>;
 };
 
 /** Publish the server context. One admin SPA per process: a later call replaces it. */
@@ -26,4 +44,46 @@ export const publishAdminSpaServerContext = (context: AdminSpaServerContext): vo
 /** Read the published server context, or undefined before the plugin registers. */
 export const getAdminSpaServerContext = (): AdminSpaServerContext | undefined => {
   return (globalThis as GlobalWithContext)[ADMIN_SPA_SERVER_CONTEXT_KEY];
+};
+
+/**
+ * The process-wide request store, created on first use. `process.getBuiltinModule` keeps
+ * `node:async_hooks` out of the static import graph, because this module is also bundled for
+ * the browser, where there is no request store.
+ */
+const requestStore = (): AsyncLocalStorage<AdminSpaRequestScope> => {
+  const global = globalThis as GlobalWithContext;
+  const existing = global[ADMIN_SPA_REQUEST_STORE_KEY];
+  if (existing) {
+    return existing;
+  }
+  const asyncHooks = process.getBuiltinModule(
+    "node:async_hooks"
+  ) as typeof import("node:async_hooks");
+  const store = new asyncHooks.AsyncLocalStorage<AdminSpaRequestScope>();
+  global[ADMIN_SPA_REQUEST_STORE_KEY] = store;
+  return store;
+};
+
+/** Run `fn` with `scope` as the current request scope (server only). */
+export const runInAdminSpaRequest = <T>(scope: AdminSpaRequestScope, fn: () => T): T => {
+  return requestStore().run(scope, fn);
+};
+
+/** The current request's scope, or undefined outside a request (and always in the browser). */
+export const getAdminSpaRequest = (): AdminSpaRequestScope | undefined => {
+  return (globalThis as GlobalWithContext)[ADMIN_SPA_REQUEST_STORE_KEY]?.getStore();
+};
+
+/**
+ * Serialize a value for embedding in HTML (an inline `<script>` or a JSON script blob): JSON
+ * with every character that could close the script or break a JS string literal escaped.
+ */
+export const serializeForHtml = (value: unknown): string => {
+  return JSON.stringify(value)
+    .replaceAll("<", "\\u003c")
+    .replaceAll(">", "\\u003e")
+    .replaceAll("&", "\\u0026")
+    .replaceAll("\u2028", "\\u2028")
+    .replaceAll("\u2029", "\\u2029");
 };

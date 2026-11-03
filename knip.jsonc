@@ -223,7 +223,10 @@
         "jspdf-native-stub.js",
         "src/isolated/**/*.isolated.{ts,tsx}",
         // Test-only helper: writes a stub expo-server `dist/server` build for the SSR serve tests.
-        "src/testing/ssrStubBuild.ts"
+        "src/testing/ssrStubBuild.ts",
+        // Route loaders import this SSR fetch helper; the first route loader lands in T6 of
+        // docs/plans/2026-11-02-admin-spa-ssr.md, which removes this entry.
+        "server/loadSsrPayload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

@@ -2445,7 +2445,7 @@ jobs:
             # npm does not resolve dependencies at publish time, so order does not
             # matter; xargs exits non-zero if any package fails.
             printf '%s\n' "${packages[@]}" | xargs -P 8 -I{} bash -c \
-              'scripts/ci/publish-package.sh "$1" "$2" "$3" release 2>&1 | sed "s/^/[$1] /"; exit "${PIPESTATUS[0]}"' \
+              'scripts/ci/publish-package.sh "$1" "$2" "$3" release 2>&1 | sed "s|^|[$1] |"; exit "${PIPESTATUS[0]}"' \
               _ {} "$version" "$npm_tag"
       - run:
           name: Update stable package versions on master

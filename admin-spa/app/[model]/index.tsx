@@ -5,7 +5,7 @@ import React, {useMemo} from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
-import {resolveModelListUrl} from "../../server/modelRoutes";
+import {decodeRouteParam, resolveModelListUrl} from "../../server/modelRoutes";
 import {getAdminSpaRequest} from "../../src/serverContext";
 
 interface ModelListLoaderData {
@@ -22,7 +22,7 @@ export const loader: LoaderFunction<ModelListLoaderData> = async (
   request,
   params
 ): Promise<ModelListLoaderData> => {
-  const modelName = typeof params.model === "string" ? params.model : "";
+  const modelName = decodeRouteParam(params.model) ?? "";
   const url = resolveModelListUrl(getAdminSpaRequest()?.adminConfig, modelName);
   if (!request || !url) {
     return {rpc: {}};

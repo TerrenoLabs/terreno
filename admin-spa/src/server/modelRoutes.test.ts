@@ -1,5 +1,10 @@
 import {describe, expect, it} from "bun:test";
-import {resolveModelListUrl} from "../../server/modelRoutes";
+import * as modelRoutes from "../../server/modelRoutes";
+
+const {resolveModelListUrl} = modelRoutes;
+const {resolveModelReadUrl} = modelRoutes as unknown as {
+  resolveModelReadUrl: (adminConfig: unknown, modelName: string, id: string) => string | null;
+};
 
 /**
  * The URL `AdminModelTable` requests for default params: page 1, default limit, `defaultSort`.
@@ -85,5 +90,51 @@ describe("resolveModelListUrl", () => {
 
   it("returns null for an empty model name", () => {
     expect(resolveModelListUrl(adminConfig, "")).toBeNull();
+  });
+});
+
+describe("resolveModelReadUrl", () => {
+  it("builds the read URL the form requests for a model name and id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "u1")).toBe("/admin/users/u1");
+  });
+
+  it("encodes an id that tries to leave the model route", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "../config")).toBe("/admin/users/..%2Fconfig");
+  });
+
+  it("encodes query and fragment characters in the id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "a?b#c")).toBe("/admin/users/a%3Fb%23c");
+  });
+
+  it("returns null for an unknown model name", () => {
+    expect(resolveModelReadUrl(adminConfig, "Nope", "u1")).toBeNull();
+  });
+
+  it("matches the model by name, not by display name or route path", () => {
+    expect(resolveModelReadUrl(adminConfig, "Todos", "t1")).toBeNull();
+    expect(resolveModelReadUrl(adminConfig, "/admin/users", "u1")).toBeNull();
+  });
+
+  it("returns null for a model with no route path", () => {
+    expect(resolveModelReadUrl(adminConfig, "Unrouted", "x")).toBeNull();
+  });
+
+  it("returns null for an empty id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "")).toBeNull();
+  });
+
+  it("returns null for an empty model name", () => {
+    expect(resolveModelReadUrl(adminConfig, "", "u1")).toBeNull();
+  });
+
+  it.each([null, undefined, {}, {models: "x"}, "str", 7])(
+    "returns null for a malformed config (%p)",
+    (config) => {
+      expect(resolveModelReadUrl(config, "User", "u1")).toBeNull();
+    }
+  );
+
+  it("returns the REST read URL for a windowed sync model", () => {
+    expect(resolveModelReadUrl(adminConfig, "Todo", "t1")).toBe("/admin/todos/t1");
   });
 });

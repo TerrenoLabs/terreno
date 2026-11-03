@@ -764,3 +764,82 @@ describe("createAdminSpaGate hands the handler the normalized path", () => {
     expect(lastUrl()).toBe("/console/Todo");
   });
 });
+
+describe("createAdminSpaGate canonicalizes percent-escapes per RFC 3986", () => {
+  const ADMIN_ID = "6ae96720ae6891bc61e5a55c";
+
+  it("decodes an escaped unreserved character before handing the admin's request on", async () => {
+    const {app, handlerCalls, lastUrl} = await makeGateApp();
+    const rawPath = `/console/User/%36${ADMIN_ID.slice(1)}`;
+    const res = await rawGet(app, rawPath, {asUser: true});
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(200);
+    expect(handlerCalls()).toBe(1);
+    expect(lastUrl()).toBe(`/console/User/${ADMIN_ID}`);
+  });
+
+  it("keeps an escaped reserved character and uppercases its hex", async () => {
+    const {app, lastUrl} = await makeGateApp();
+    const rawPath = "/console/User/a%2fb";
+    const res = await rawGet(app, rawPath, {asUser: true});
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(200);
+    expect(lastUrl()).toBe("/console/User/a%2Fb");
+  });
+
+  it("keeps an escaped space", async () => {
+    const {app, lastUrl} = await makeGateApp();
+    const rawPath = "/console/User/a%20b";
+    const res = await rawGet(app, rawPath, {asUser: true});
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(200);
+    expect(lastUrl()).toBe("/console/User/a%20b");
+  });
+
+  it("decodes a fully escaped id character by character", async () => {
+    const {app, lastUrl} = await makeGateApp();
+    const encoded = [...ADMIN_ID]
+      .map((char) => `%${char.charCodeAt(0).toString(16).padStart(2, "0")}`)
+      .join("");
+    const res = await rawGet(app, `/console/User/${encoded}`, {asUser: true});
+    expect(res.status).toBe(200);
+    expect(lastUrl()).toBe(`/console/User/${ADMIN_ID}`);
+  });
+
+  it("falls through on an escaped static prefix for an anonymous visitor without rendering", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const rawPath = "/console/%61ssets/Todo";
+    const res = await rawGet(app, rawPath);
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(404);
+    expect(res.text).toBe("fell through");
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("redirects anonymous /console/%61ssets/../Todo to login like /console/assets/../Todo", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const rawPath = "/console/%61ssets/../Todo";
+    const res = await rawGet(app, rawPath);
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/console/login?returnTo=%2FTodo");
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("redirects anonymous /console/%54odo to login with the decoded returnTo", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const rawPath = "/console/%54odo";
+    const res = await rawGet(app, rawPath);
+    expect(res.seenUrl).toBe(rawPath);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/console/login?returnTo=%2FTodo");
+    expect(handlerCalls()).toBe(0);
+  });
+
+  it("answers 401 to an anonymous escaped loader path", async () => {
+    const {app, handlerCalls} = await makeGateApp();
+    const res = await rawGet(app, "/console/_expo/%6coaders/Todo");
+    expect(res.status).toBe(401);
+    expect(handlerCalls()).toBe(0);
+  });
+});

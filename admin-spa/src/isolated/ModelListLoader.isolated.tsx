@@ -49,6 +49,13 @@ const adminConfig = {
       routePath: "/admin/sized",
     },
     {
+      displayName: "Team Member",
+      fields: {_id: {required: true, type: "string"}},
+      listFields: ["_id"],
+      name: "Team Member",
+      routePath: "/admin/teamMembers",
+    },
+    {
       displayName: "Unrouted",
       fields: {_id: {required: true, type: "string"}},
       listFields: ["_id"],
@@ -119,6 +126,20 @@ describe("[model] list loader", () => {
     expect(result.rpc[adminRpcSeedKey(USER_LIST_URL)]).toEqual({
       data: [{_id: "u1", email: "ada@example.com"}],
     });
+  });
+
+  // expo-server delivers params.model percent-encoded.
+  it("resolves a model whose name arrives percent-encoded", async () => {
+    const url = "/admin/teamMembers?limit=20&page=1";
+    const result = await runLoader("Team%20Member");
+    expect(seen.map((entry) => entry.path)).toEqual([url]);
+    expect(Object.keys(result.rpc)).toEqual([adminRpcSeedKey(url)]);
+  });
+
+  it("does not throw on a malformed encoded model name", async () => {
+    const result = await runLoader("%E0%A4%A");
+    expect(result).toEqual({rpc: {}});
+    expect(seen).toEqual([]);
   });
 
   it("returns {rpc: {}} and fetches nothing for an unknown model name", async () => {

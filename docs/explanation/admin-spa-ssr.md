@@ -152,8 +152,21 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   size, its default sort. It builds the URL with the table's own builders
   (`buildAdminListQueryParams`, `buildAdminApiListQueryRequest`), so the key matches the
   table's request. An unknown name or a screen that is not a model list loads nothing.
+- **Model detail** (`/console/<Model>/<id>`): the loader fetches the document's read URL
+  (`resolveModelReadUrl`) and seeds the form, which fills its fields on the first render. A
+  backend 404 renders a "Not found" page with HTTP 200: expo-server 58 can set another status
+  only by throwing, which replaces the page with an error body.
 - **Read URLs:** `useReadQuery` builds them with `buildAdminReadUrl(routePath, id)`, which
-  encodes the id, so a server render that uses the same builder seeds the same key.
+  encodes the id, so a server render that uses the same builder seeds the same key. Loaders
+  decode their route params first, because expo-server passes them still encoded.
+- **Encoded ids (Expo 58 limitation):** Expo keys server loader data by the raw path but looks
+  it up by the decoded params. The gate canonicalizes escapes (RFC 3986: `%36` becomes `6`), so
+  an over-encoded plain id renders normally. An id that must stay encoded (a space, `/`, `%` or
+  a non-ASCII character) renders its page without the form's values; the browser then fetches
+  the loader data and fills the form. Expo's client trims leading and trailing whitespace
+  from the path, so for such an id it fetches another path's loader data; the form then falls
+  back to its own read, and a missing record shows an empty form rather than "Not found".
+  ObjectIds and UUIDs never need encoding.
 - **Windowed sync models** render the seeded REST page first. The admin provider binds the
   syncdb client only after `start()` resolves, and the table then switches to its window,
   so live updates reach it.

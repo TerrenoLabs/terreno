@@ -53,6 +53,7 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
 const REAL_API_ISOLATED_FILES = new Set([
   "././src/isolated/hooks.isolated.tsx",
   "././src/isolated/adminModelTable.ssr.isolated.tsx",
+  "././src/isolated/adminModelForm.ssr.isolated.tsx",
 ]);
 
 const ESC = String.fromCharCode(27);

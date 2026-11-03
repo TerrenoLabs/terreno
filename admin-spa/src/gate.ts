@@ -71,6 +71,23 @@ class GateUnavailableError extends Error {}
 /** Base for resolving a request URL on its own. */
 const URL_BASE = "http://gate.invalid";
 
+/** Characters RFC 3986 calls unreserved: an escape of one of them means the character itself. */
+const UNRESERVED = /^[A-Za-z0-9\-._~]$/;
+
+/**
+ * RFC 3986 percent-encoding normalization: decode escapes of unreserved characters and
+ * uppercase the hex of the rest. `/console/User/%36ae…` and `/console/User/6ae…` name the same
+ * record, and Expo keys loader data by the raw path while the router looks it up by the decoded
+ * params, so only the canonical form renders with its data. The URL parser already treats `%2E`
+ * as a dot, so this changes no dot-segment decision.
+ */
+const canonicalizeEscapes = (url: string): string => {
+  return url.replace(/%([0-9A-Fa-f]{2})/g, (match, hex: string) => {
+    const character = String.fromCharCode(Number.parseInt(hex, 16));
+    return UNRESERVED.test(character) ? character : match.toUpperCase();
+  });
+};
+
 /**
  * Classify a request by its normalized path: dot segments, including encoded ones, resolved
  * the way Expo will resolve them. Deciding on the raw path would let `/console/assets/../Todo`
@@ -214,7 +231,7 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
   };
 
   return (req, res, next): void => {
-    const normalized = new URL(req.url, URL_BASE);
+    const normalized = new URL(canonicalizeEscapes(req.url), URL_BASE);
     const classified = classify(req.method, normalized.pathname, basePath);
     // Static paths are served by the static middleware mounted before the gate. A miss must
     // never reach the page renderer, which would render it as a route (`/assets/Todo` matches

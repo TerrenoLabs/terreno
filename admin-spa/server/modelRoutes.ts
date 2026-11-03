@@ -2,7 +2,25 @@ import {
   type AdminModelConfig,
   buildAdminApiListQueryRequest,
   buildAdminListQueryParams,
+  buildAdminReadUrl,
 } from "@terreno/admin-frontend";
+
+/**
+ * A route param as a loader sees it, decoded. expo-server passes params straight from the
+ * encoded pathname (the browser router decodes them), so `/console/User/a%20b` arrives as
+ * `a%20b`; the URL builders encode again, so the param must be decoded first. Undefined for a
+ * missing param or a malformed escape.
+ */
+export const decodeRouteParam = (value: string | string[] | undefined): string | undefined => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return undefined;
+  }
+};
 
 /** Rows `AdminModelTable` asks for when a model sets no `pageSize`. */
 const DEFAULT_PAGE_LIMIT = 20;
@@ -40,4 +58,21 @@ export const resolveModelListUrl = (adminConfig: unknown, modelName: string): st
     sort: model.defaultSort,
   });
   return buildAdminApiListQueryRequest(model.routePath, params).url;
+};
+
+/**
+ * The read URL `useReadQuery` requests for `id` of `modelName`, built with the hook's own
+ * `buildAdminReadUrl` (the id is encoded). Null for an unknown name, a model without a route
+ * path, or an empty id.
+ */
+export const resolveModelReadUrl = (
+  adminConfig: unknown,
+  modelName: string,
+  id: string
+): string | null => {
+  const model = findAdminModel(adminConfig, modelName);
+  if (!model?.routePath || !id) {
+    return null;
+  }
+  return buildAdminReadUrl(model.routePath, id);
 };

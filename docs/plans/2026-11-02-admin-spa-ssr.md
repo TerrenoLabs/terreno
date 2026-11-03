@@ -293,7 +293,8 @@ None — no new or changed screens.
   - Test skills: terreno:verify-ui-changes
   - Docs: docs/explanation/admin-spa-ssr.md (data SSR section)
 
-- [ ] **T7** — Server-render the model detail form
+- [x] **T7** — Server-render the model detail form
+  - Built note: expo-server passes route params still encoded, so the loaders decode them. Expo 58 keys server loader data by the raw path but looks it up by the decoded params. The gate canonicalizes percent-escapes (RFC 3986), so over-encoded plain ids render with their data. Ids that must stay encoded (a space, `/`, `%` or non-ASCII) render without the form's values in the first HTML, and the client fetches the loader JSON and fills it. This is an upstream Expo limitation, recorded under Expansions.
   - Depends on: T6
   - Files: admin-frontend/src/AdminModelForm.tsx, admin-frontend/src/AdminModelForm.test.tsx, admin-spa/app/[model]/[id].tsx, admin-spa/server/modelRoutes.ts, admin-spa/server/modelRoutes.test.ts, admin-spa/e2e/integration/adminSpa.ssr.detail.integration.spec.ts
   - Criteria:
@@ -456,6 +457,8 @@ None — no new or changed screens.
 | Q5 | Should forbidden users get a 302 to `/forbidden` or a 403 status page at the same URL? | 302 to `/forbidden` | Keeps today's URLs and `forbidden.tsx` | Render 403 in place; the gate's Cases change | T3 |
 
 ## Expansions (follow up later)
+
+- Upstream: report the Expo 58 loader-data key mismatch for percent-encoded route params (server keys by raw pathname, `useLoaderData` by decoded params) and drop the client recovery once it is fixed.
 
 | ID | Idea | Why it came up | Rough size | Depends on |
 | --- | --- | --- | --- | --- |

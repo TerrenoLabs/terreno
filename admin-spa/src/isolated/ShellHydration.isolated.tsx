@@ -123,6 +123,8 @@ let authClientBaseUrls: Array<string | undefined> = [];
 let apiClientBaseUrls: Array<string | undefined> = [];
 let startResolvers: Array<() => void> = [];
 let startCalls = 0;
+let createdClients: unknown[] = [];
+let probeSyncDbs: unknown[] = [];
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}, status});
@@ -174,11 +176,12 @@ const routerReplace = mock(() => {});
 const Probe: React.FC = () => {
   // Resolved lazily: these modules load after the mocks below are registered.
   const {useSession} = require("@terreno/syncdb/auth") as typeof import("@terreno/syncdb/auth");
-  const {useAdminConfig} =
+  const {useAdminConfig, useAdminContext} =
     require("@terreno/admin-frontend") as typeof import("@terreno/admin-frontend");
   const {useAdminSpaProfile} =
     require("../../components/adminSpaProfile") as typeof import("../../components/adminSpaProfile");
   const session = useSession();
+  probeSyncDbs.push(useAdminContext()?.syncDb);
   const {config} = useAdminConfig("/admin");
   const {data: profile} = useAdminSpaProfile();
   probeRenders.push({
@@ -232,9 +235,11 @@ beforeAll(async () => {
     ...realSyncDb,
     createSyncDb: (config: {baseUrl?: string; collections?: string[]}): unknown => {
       createSyncDbConfigs.push(config);
-      return state.useFakeSyncDb
+      const client = state.useFakeSyncDb
         ? makeFakeSyncDb()
         : realSyncDb.createSyncDb(config as Parameters<typeof realSyncDb.createSyncDb>[0]);
+      createdClients.push(client);
+      return client;
     },
   }));
   const realReact = {...(await import("@terreno/syncdb/react"))};
@@ -296,6 +301,8 @@ beforeEach(async () => {
   apiClientBaseUrls = [];
   startResolvers = [];
   startCalls = 0;
+  createdClients = [];
+  probeSyncDbs = [];
   routerReplace.mockClear();
   state.payload = undefined;
   state.useFakeSyncDb = true;
@@ -453,6 +460,28 @@ describe("root layout with a windowed sync model", () => {
     await waitFor(() => expect(startCalls).toBeGreaterThan(0));
     expect(startResolvers.length).toBeGreaterThan(0);
     expect(queryByTestId("shell-probe")).not.toBeNull();
+  });
+
+  it("hands AdminProvider no syncDb until start() resolves, then the client", async () => {
+    state.payload = adminPayload(WINDOWED_CONFIG);
+
+    const {queryByTestId} = renderWithTheme(<RootLayout />);
+
+    // First render: the shell is up but windowed tables must not bind to an unstarted store.
+    expect(queryByTestId("shell-probe")).not.toBeNull();
+    expect(probeSyncDbs[0]).toBeUndefined();
+    await waitFor(() => expect(startCalls).toBeGreaterThan(0));
+    expect(probeSyncDbs.every((syncDb) => syncDb === undefined)).toBe(true);
+
+    await act(async () => {
+      for (const resolve of startResolvers) {
+        resolve();
+      }
+    });
+
+    await waitFor(() => expect(probeSyncDbs[probeSyncDbs.length - 1]).toBeDefined());
+    expect(createdClients.length).toBeGreaterThan(0);
+    expect(probeSyncDbs[probeSyncDbs.length - 1]).toBe(createdClients[createdClients.length - 1]);
   });
 
   it("without a payload keeps the spinner until start() resolves", async () => {

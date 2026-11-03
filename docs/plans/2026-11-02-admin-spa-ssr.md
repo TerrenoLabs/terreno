@@ -315,6 +315,7 @@ None — no new or changed screens.
   - Docs: none beyond T6's section
 
 - [ ] **T8** — Windowed syncdb tables render the first view from seeded rows
+  - Carried from T4/T6 (found against a live backend): the windowed table now renders server-seeded REST rows, and `AdminProvider` gets `syncDb` only after `start()` resolves. A change made between the server render and `start()` (about 1.5 s) is missed until a refresh, because the table hydrates its window from the seeded rows. T8 must make the window catch up after `start()`, so it shows the current entity, and must add a case for it.
   - Depends on: T6
   - Files: admin-frontend/src/AdminModelTable.tsx, admin-frontend/src/adminWindowedTable.ts, admin-frontend/src/AdminModelTable.test.tsx, admin-spa/e2e/integration/adminSpa.ssr.windowed.integration.spec.ts, docs/explanation/admin-spa-ssr.md
   - Criteria:

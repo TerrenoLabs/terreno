@@ -48,7 +48,7 @@ const SyncEnabledAdminProvider: React.FC<{
   routeOrganization?: OrganizationSummary;
 }> = ({apiBase, children, client, isServerRendered, routeOrganization}) => {
   const syncConflicts = useConflicts();
-  const [isReady, setIsReady] = useState(isServerRendered);
+  const [isReady, setIsReady] = useState(false);
   const [startError, setStartError] = useState<string | undefined>();
 
   // Start the cookie-authenticated window client only while the authorized SPA is mounted
@@ -77,7 +77,8 @@ const SyncEnabledAdminProvider: React.FC<{
     };
   }, [client]);
 
-  if (!isReady) {
+  // Without a server render, wait for sync as before. With one, show the shell at once.
+  if (!isReady && !isServerRendered) {
     return (
       <Box alignItems="center" justifyContent="center" padding={6}>
         {startError ? (
@@ -95,7 +96,10 @@ const SyncEnabledAdminProvider: React.FC<{
       credentials="same-origin"
       routeBase=""
       syncConflicts={syncConflicts}
-      syncDb={client}
+      // Windowed tables bind to the sync store only after start() resolves; until then they
+      // read the REST list (seeded by the route loader). A window registered before start
+      // never receives live updates, and writes must wait for start.
+      syncDb={isReady ? client : undefined}
     >
       {startError ? (
         <Text testID="admin-spa-sync-error">Admin sync could not start: {startError}</Text>

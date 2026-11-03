@@ -1,16 +1,15 @@
 import {
   AdminModelForm,
   AdminRpcSeed,
-  AdminScreenPage,
   adminRpcSeedKey,
   useAdminConfig,
 } from "@terreno/admin-frontend";
-import {Box, Text} from "@terreno/ui";
 import {useLoaderData, useLocalSearchParams} from "expo-router";
 import type {LoaderFunction} from "expo-server";
 import React, {useMemo} from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
+import {RecordNotFound} from "../../components/RecordNotFound";
 import {loadSsrPayload} from "../../server/loadSsrPayload";
 import {decodeRouteParam, resolveModelReadUrl} from "../../server/modelRoutes";
 import {getAdminSpaRequest} from "../../src/serverContext";
@@ -72,17 +71,10 @@ const ModelEditScreen: React.FC = () => {
   return (
     <AdminSpaShell breadcrumbs={breadcrumbs}>
       {loaderData?.notFound ? (
-        <AdminScreenPage
+        <RecordNotFound
           backHref={`/${model}`}
-          color="transparent"
-          maxWidth="100%"
-          padding={4}
-          title="Not found"
-        >
-          <Box testID="admin-screen-not-found">
-            <Text color="error">{`No ${model ?? "record"} with id "${id ?? ""}".`}</Text>
-          </Box>
-        </AdminScreenPage>
+          message={`No ${model ?? "record"} with id "${id ?? ""}".`}
+        />
       ) : (
         <AdminRpcSeed data={seed}>
           <AdminModelForm

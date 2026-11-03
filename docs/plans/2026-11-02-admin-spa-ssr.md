@@ -356,7 +356,7 @@ None — no new or changed screens.
   - Test skills: terreno:verify-ui-changes
   - Docs: none beyond T6's section
 
-- [ ] **T10** — Server-render the jobs and comms screens
+- [x] **T10** — Server-render the jobs and comms screens
   - Depends on: T4
   - Files: admin-spa/app/jobs/index.tsx, admin-spa/app/jobs/[id].tsx, admin-spa/app/comms/index.tsx, admin-spa/app/comms/[id].tsx, admin-spa/server/jobsCommsRoutes.ts, admin-spa/server/jobsCommsRoutes.test.ts, admin-spa/e2e/integration/adminSpa.ssr.jobs.integration.spec.ts, admin-spa/e2e/integration/adminSpa.ssr.comms.integration.spec.ts
   - Criteria:

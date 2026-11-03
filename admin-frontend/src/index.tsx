@@ -57,6 +57,7 @@ export {
   bindAdminRequest,
   DEFAULT_ADMIN_REQUEST_TIMEOUT_MS,
 } from "./adminRequest";
+export {withQueryString} from "./adminRpc";
 export {AdminRpcSeed, type AdminRpcSeedProps, adminRpcSeedKey} from "./adminRpcSeed";
 export {buildAdminSidebarGroups, groupAdminModelsByGroup} from "./adminShellNav";
 export {CheckboxListEditor} from "./CheckboxListEditor";
@@ -78,6 +79,7 @@ export {
   type CommsDashboardFilters,
   parseCommsDashboardSearchParams,
   serializeCommsDashboardSearchParams,
+  withDefaultCommsDashboardDates,
 } from "./comms/commsDashboardParams";
 export {DocumentStorageBrowser} from "./DocumentStorageBrowser";
 export {generateConsentHistoryPdf} from "./generateConsentHistoryPdf";

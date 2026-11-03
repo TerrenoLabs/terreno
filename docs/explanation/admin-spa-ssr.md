@@ -175,6 +175,11 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   for the built-in widgets (`modelStats` / `modelsGrid`, `recentActivity`, `versionConfig`,
   `jobs`). Custom app widgets are not seeded and load on the client, as are organization-scoped
   models, because a server render has no organization selected.
+- **Jobs and comms** (`/console/jobs`, `/console/comms` and their detail pages): the loaders
+  fetch the URLs the dashboards request on mount (`jobsSsrUrls`, `commsSsrUrls`); a missing
+  job or message renders "Not found" with HTTP 200. The comms dashboard's default 7-day range
+  ends at the next whole minute, so the server render and the hydrating browser build the same
+  URL within that minute.
 - **Windowed sync models** render the seeded REST page first. The admin provider binds the
   syncdb client only after `start()` resolves, and the table then switches to its window,
   so live updates reach it. On that switch the table refetches its REST page once, so a change

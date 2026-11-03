@@ -138,3 +138,25 @@ describe("resolveModelReadUrl", () => {
     expect(resolveModelReadUrl(adminConfig, "Todo", "t1")).toBe("/admin/todos/t1");
   });
 });
+
+describe("decodeRouteParam", () => {
+  it("decodes a percent-encoded param", () => {
+    expect(modelRoutes.decodeRouteParam("a%20b")).toBe("a b");
+  });
+
+  it("is undefined for a missing param, an array, or a malformed escape", () => {
+    expect(modelRoutes.decodeRouteParam(undefined)).toBeUndefined();
+    expect(modelRoutes.decodeRouteParam(["a", "b"])).toBeUndefined();
+    expect(modelRoutes.decodeRouteParam("%E0%A4%A")).toBeUndefined();
+  });
+});
+
+describe("isSinglePathSegment", () => {
+  it.each(["j1", "a b", "6ae5f0c1"])("accepts %s", (value) => {
+    expect(modelRoutes.isSinglePathSegment(value)).toBe(true);
+  });
+
+  it.each([undefined, "", ".", "..", "a/b", "a?b", "a#b", "a\\b", "%2E"])("rejects %s", (value) => {
+    expect(modelRoutes.isSinglePathSegment(value)).toBe(false);
+  });
+});

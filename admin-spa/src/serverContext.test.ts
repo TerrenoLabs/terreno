@@ -1,6 +1,13 @@
-import {describe, expect, it} from "bun:test";
+import {afterEach, describe, expect, it} from "bun:test";
 import {DEFAULT_APP_CONFIG} from "./appConfig";
-import {type AdminSpaRequestScope, getAdminSpaRequest, runInAdminSpaRequest} from "./serverContext";
+import {
+  type AdminSpaRequestScope,
+  getAdminSpaRequest,
+  getAdminSpaServerContext,
+  isAdminSpaServerRender,
+  publishAdminSpaServerContext,
+  runInAdminSpaRequest,
+} from "./serverContext";
 
 const makeScope = (userId: string): AdminSpaRequestScope =>
   ({
@@ -75,5 +82,43 @@ describe("admin SPA request scope", () => {
     const scope = makeScope("shared");
     const seen = runInAdminSpaRequest(scope, () => second.getAdminSpaRequest());
     expect(seen).toBe(scope);
+  });
+});
+
+describe("isAdminSpaServerRender", () => {
+  const globalState = globalThis as unknown as Record<string, unknown>;
+  const hadWindow = "window" in globalState;
+  const originalWindow = globalState.window;
+  const originalContext = getAdminSpaServerContext();
+
+  afterEach(() => {
+    if (hadWindow) {
+      globalState.window = originalWindow;
+    } else {
+      delete globalState.window;
+    }
+    if (originalContext) {
+      publishAdminSpaServerContext(originalContext);
+    } else {
+      delete (globalThis as unknown as Record<symbol, unknown>)[
+        Symbol.for("terreno.adminSpa.server")
+      ];
+    }
+  });
+
+  it("is true with no window once the server context is published", () => {
+    delete globalState.window;
+    publishAdminSpaServerContext({
+      internalOrigin: "http://127.0.0.1:4000",
+    } as Parameters<typeof publishAdminSpaServerContext>[0]);
+    expect(isAdminSpaServerRender()).toBe(true);
+  });
+
+  it("is false in a browser, where window exists", () => {
+    globalState.window = {};
+    publishAdminSpaServerContext({
+      internalOrigin: "http://127.0.0.1:4000",
+    } as Parameters<typeof publishAdminSpaServerContext>[0]);
+    expect(isAdminSpaServerRender()).toBe(false);
   });
 });

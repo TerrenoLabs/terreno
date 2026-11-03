@@ -41,11 +41,18 @@ on a MongoDB replica set. See [Backend setup](../reference/syncdb.md#backend-set
 ```bash
 bun remove @terreno/rtk @reduxjs/toolkit react-redux redux-persist @rtk-query/codegen-openapi
 bun add @terreno/syncdb
-bunx expo install expo-sqlite expo-secure-store @react-native-async-storage/async-storage
+bunx expo install expo-sqlite expo-secure-store @react-native-async-storage/async-storage expo-constants expo-network
 ```
 
-Keep `better-auth`, `@better-auth/expo`, and `@openfeature/react-sdk` / `@openfeature/web-sdk`
-if the app uses them; they are optional peers of `@terreno/syncdb`. Rebuild native clients
+`@terreno/rtk` depended on `expo-constants` and `expo-network`, so apps got them transitively.
+`@terreno/syncdb` lists them only as optional peers, and `baseUrl` imports `expo-constants`, so
+install both explicitly.
+
+Keep or add the other optional peers of `@terreno/syncdb` for the features the app uses:
+
+- `better-auth`, `@better-auth/expo`, `@better-auth/passkey`: `createBetterAuthClient`
+- `@openfeature/web-sdk`, `@openfeature/react-sdk`: feature flags
+- `@modelcontextprotocol/client`: `useMCPTools` Rebuild native clients
 after adding `expo-sqlite`.
 
 Pin `better-auth`, `@better-auth/expo`, and `@better-auth/passkey` to the same `1.7.4`.

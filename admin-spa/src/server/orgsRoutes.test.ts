@@ -108,7 +108,7 @@ describe("orgsSsrRequests /orgs/[orgId]/members", () => {
 });
 
 describe("orgsSsrRequests id guard", () => {
-  it.each(["../../admin/config", "o1/members", "o1?x=1", "o1#x", "o1\\x"])(
+  it.each(["../../admin/config", "o1/members", "o1?x=1", "o1#x", "o1\\x", "%2E", "..", "."])(
     "seeds nothing for an orgId that is not one path segment: %s",
     (orgId) => {
       expect(orgsSsrRequests("/orgs/[orgId]", {isOperator: true, orgId})).toEqual([]);

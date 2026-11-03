@@ -184,8 +184,11 @@ screen's hooks request, through `loadSsrPayload`, and the route wraps its screen
   build their requests with `orgsSsrRequests`. Organization-scoped reads carry the hooks'
   `X-Organization-Id`, which is part of the seed key. The directory is fetched only for an
   operator (`operator` or `superadmin` role on the gate's profile); an organization admin gets
-  no directory data, as on the client. An organization id that is not one path segment seeds
-  nothing.
+  no directory data, as on the client.
+- **Path ids:** the jobs, comms and organization hooks put the decoded id into their URL
+  unencoded, so the server seeds an id only when it is one plain path segment: no `/`, `?`,
+  `#`, `\` or `%`, and not `.` or `..`. Any other id seeds nothing, and the screen loads it on
+  the client.
 - **Selected organization (limitation):** once the client selects an organization (from
   `/orgs/mine`), its model reads carry `X-Organization-Id`. A server render has no selected
   organization, so for a visitor who belongs to one, the model list and detail seeds do not

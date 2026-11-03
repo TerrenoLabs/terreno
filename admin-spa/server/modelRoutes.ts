@@ -22,6 +22,19 @@ export const decodeRouteParam = (value: string | string[] | undefined): string |
   }
 };
 
+/**
+ * Whether a decoded route param is one plain path segment. The jobs, comms and orgs hooks put
+ * the decoded id into their URL unencoded, so the loaders seed only ids that keep that URL on
+ * the same endpoint: a `/`, `?`, `#`, `\\` or `%` (a still-encoded escape the URL parser would
+ * decode), or a `.` / `..` segment, could point the server's read somewhere else.
+ */
+export const isSinglePathSegment = (value: string | undefined): value is string => {
+  if (!value || value === "." || value === "..") {
+    return false;
+  }
+  return !/[/?#\\%]/.test(value);
+};
+
 /** Rows `AdminModelTable` asks for when a model sets no `pageSize`. */
 const DEFAULT_PAGE_LIMIT = 20;
 

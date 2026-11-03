@@ -226,6 +226,11 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
     runInAdminSpaRequest(scope, () => handler(req, res, next));
   };
 
+  // Every decision depends on the visitor's session, so no redirect may be cached or shared.
+  const redirect = (res: express.Response, location: string): void => {
+    res.set("Cache-Control", "no-store, private").redirect(302, location);
+  };
+
   const deny = (res: express.Response, status: 401 | 403): void => {
     res
       .status(status)
@@ -273,7 +278,7 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
         }
         const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
         const returnTo = encodeURIComponent(`${route}${search}`);
-        res.redirect(302, `${basePath}/login?returnTo=${returnTo}`);
+        redirect(res, `${basePath}/login?returnTo=${returnTo}`);
         return;
       }
       if (payload.access === "forbidden") {
@@ -284,23 +289,23 @@ export const createAdminSpaGate = (options: AdminSpaGateOptions): express.Reques
             ? sanitizeReturnTo(req.query.returnTo as string | string[] | undefined)
             : null;
         if (forbiddenTarget) {
-          res.redirect(302, `${basePath}${forbiddenTarget}`);
+          redirect(res, `${basePath}${forbiddenTarget}`);
           return;
         }
         if (isOpenToVisitor) {
           render(req, res, next, payload);
           return;
         }
-        res.redirect(302, `${basePath}/forbidden`);
+        redirect(res, `${basePath}/forbidden`);
         return;
       }
       if (route === "/login") {
         const target = sanitizeReturnTo(req.query.returnTo as string | string[] | undefined);
-        res.redirect(302, `${basePath}${target ?? "/"}`);
+        redirect(res, `${basePath}${target ?? "/"}`);
         return;
       }
       if (route === "/forbidden") {
-        res.redirect(302, `${basePath}/`);
+        redirect(res, `${basePath}/`);
         return;
       }
       render(req, res, next, payload);

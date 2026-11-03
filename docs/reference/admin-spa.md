@@ -154,7 +154,7 @@ no root `/_expo/loaders/*` route and no injected config. `expo start` renders th
 | `${basePath}/app-config.json` | the plugin's merged `appConfig` | `no-store` |
 | `${basePath}` and `${basePath}/*` (pages) | rendered by `dist/server/` behind the [access gate](#access-gate) | `no-store, private` |
 | `${basePath}/_expo/loaders/*` and root `/_expo/loaders/*` (loader data) | rendered by `dist/server/` behind the access gate | `no-store, private` |
-| a gate denial (401/403 JSON), the gate's 503, a render error (500) | the plugin | `no-store, private` |
+| a gate redirect (302), a gate denial (401/403 JSON), the gate's 503, a render error (500) | the plugin | `no-store, private` |
 
 Pages and loader data can hold PHI, so neither may be cached or shared by a browser, proxy or
 CDN. See [Server-rendering the admin SPA](../explanation/admin-spa-ssr.md) for the request

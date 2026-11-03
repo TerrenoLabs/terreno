@@ -5,7 +5,7 @@ import {
 } from "@terreno/admin-frontend";
 import type {LoaderFunction} from "expo-server";
 import {loadSsrPayload} from "./loadSsrPayload";
-import {decodeRouteParam} from "./modelRoutes";
+import {decodeRouteParam, isSinglePathSegment} from "./modelRoutes";
 
 /** Rows the jobs and comms dashboards list per page (`LIST_LIMIT` in each screen). */
 const LIST_LIMIT = 20;
@@ -20,11 +20,12 @@ export type CommsSsrRoute = "/comms" | "/comms/[id]";
  * @public Also the test seam that pins these URLs against the jobs screens' hooks.
  *
  * The URLs the jobs screens request on mount. They are not under the admin API base, and the
- * detail id is used as the hook uses it (decoded, not re-encoded).
+ * detail id is used as the hook uses it (decoded, not re-encoded), and only when it is one
+ * plain path segment.
  */
 export const jobsSsrUrls = (route: JobsSsrRoute, {id}: {id?: string}): string[] => {
   if (route === "/jobs/[id]") {
-    return id ? [`/jobs/${id}`] : [];
+    return isSinglePathSegment(id) ? [`/jobs/${id}`] : [];
   }
   return [
     withQueryString({params: {limit: LIST_LIMIT, page: 1}, url: "/jobs"}),
@@ -41,7 +42,7 @@ export const jobsSsrUrls = (route: JobsSsrRoute, {id}: {id?: string}): string[] 
  */
 export const commsSsrUrls = (route: CommsSsrRoute, {id}: {id?: string}): string[] => {
   if (route === "/comms/[id]") {
-    return id ? [`/comms/messages/${id}`] : [];
+    return isSinglePathSegment(id) ? [`/comms/messages/${id}`] : [];
   }
   const {endDate, startDate} = withDefaultCommsDashboardDates({});
   return [

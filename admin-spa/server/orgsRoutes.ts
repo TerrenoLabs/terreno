@@ -3,7 +3,7 @@ import type {LoaderFunction} from "expo-server";
 import {isOrganizationOperatorProfile} from "../components/adminSpaProfile";
 import {getAdminSpaRequest} from "../src/serverContext";
 import {loadSsrPayload, type SsrPayloadRequest} from "./loadSsrPayload";
-import {decodeRouteParam} from "./modelRoutes";
+import {decodeRouteParam, isSinglePathSegment} from "./modelRoutes";
 
 /** Organization routes whose screens read through `useOrganizationsApi`. */
 export type OrgsSsrRoute = "/orgs" | "/orgs/[orgId]" | "/orgs/[orgId]/members";
@@ -23,9 +23,8 @@ export const orgsSsrRequests = (
   if (route === "/orgs") {
     return isOperator ? [{url: "/orgs"}] : [];
   }
-  // An organization id is one path segment: a decoded `/`, `?`, `#` or `\` would point the read
-  // at another endpoint, so such an id seeds nothing (the screen loads on the client).
-  if (!orgId || /[/?#\\]/.test(orgId)) {
+  // An id that is not one plain path segment seeds nothing (the screen loads on the client).
+  if (!isSinglePathSegment(orgId)) {
     return [];
   }
   const headers = adminOrganizationHeaders(orgId) as Record<string, string>;

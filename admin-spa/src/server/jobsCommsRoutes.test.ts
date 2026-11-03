@@ -44,6 +44,13 @@ describe("jobsSsrUrls", () => {
     expect(jobsSsrUrls("/jobs/[id]", {id: "a b"})).toEqual(["/jobs/a b"]);
   });
 
+  it.each(["../../admin/users", "a/b", "a?x=1", "a#x", "a\\b", "%2E", "..", "."])(
+    "/jobs/[id] seeds nothing for an id that is not one path segment: %s",
+    (id) => {
+      expect(jobsSsrUrls("/jobs/[id]", {id})).toEqual([]);
+    }
+  );
+
   it("/jobs/[id] without an id requests nothing", () => {
     expect(jobsSsrUrls("/jobs/[id]", {})).toEqual([]);
     expect(jobsSsrUrls("/jobs/[id]", {id: ""})).toEqual([]);
@@ -66,6 +73,13 @@ describe("commsSsrUrls", () => {
   it("builds the detail URL from the decoded id, as the hook does (no re-encoding)", () => {
     expect(commsSsrUrls("/comms/[id]", {id: "a b"})).toEqual(["/comms/messages/a b"]);
   });
+
+  it.each(["../../admin/users", "a/b", "a?x=1", "%2E", ".."])(
+    "/comms/[id] seeds nothing for an id that is not one path segment: %s",
+    (id) => {
+      expect(commsSsrUrls("/comms/[id]", {id})).toEqual([]);
+    }
+  );
 
   it("/comms/[id] without an id requests nothing", () => {
     expect(commsSsrUrls("/comms/[id]", {})).toEqual([]);

@@ -289,6 +289,23 @@ describe("createAdminSpaGate signed-in non-admins", () => {
   });
 });
 
+describe("createAdminSpaGate redirect caching", () => {
+  it("marks the anonymous redirect no-store, private", async () => {
+    const {app} = await makeGateApp();
+    const res = await request(app).get("/console/User").redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers["cache-control"]).toBe("no-store, private");
+  });
+
+  it("marks the forbidden redirect no-store, private", async () => {
+    stub.status["/admin/config"] = 403;
+    const {app} = await makeGateApp();
+    const res = await asUser(request(app).get("/console/User").redirects(0));
+    expect(res.status).toBe(302);
+    expect(res.headers["cache-control"]).toBe("no-store, private");
+  });
+});
+
 describe("createAdminSpaGate signed-in-only routes for anonymous visitors", () => {
   it("redirects /oauth/consent to login with its returnTo", async () => {
     const {app, handlerCalls} = await makeGateApp();

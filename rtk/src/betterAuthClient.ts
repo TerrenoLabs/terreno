@@ -417,12 +417,11 @@ type BetterAuthBaseClientMethods = Pick<
  * The expo plugin is left out of the type: it is typed only as a generic plugin (see
  * createBetterAuthClient), which would widen every namespace to `any`. It adds only `getCookie`.
  *
- * Passkey plugin options can fail Better Auth's structural `BetterAuthClientOptions` check while
- * still inferring namespaces correctly; intersect base auth APIs so controllers and the Redux
- * slice accept feature clients without widening disabled feature namespaces.
+ * Passkey plugin options previously failed Better Auth's structural `BetterAuthClientOptions`
+ * check on older versions; intersect base auth APIs so controllers and the Redux slice accept
+ * feature clients without widening disabled feature namespaces.
  */
 export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
-  // @ts-expect-error Passkey plugin typings can exceed BetterAuthClientOptions; runtime uses cast.
   ReactAuthClient<{
     baseURL: string;
     fetchOptions?: BetterAuthFetchOptions;

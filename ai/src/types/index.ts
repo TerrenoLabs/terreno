@@ -1,18 +1,18 @@
-import type {ImageModelV4, LanguageModelV4} from "@ai-sdk/provider";
+import type {ImageModelV3, LanguageModelV3} from "@ai-sdk/provider";
 import type {FindExactlyOnePlugin, FindOneOrNonePlugin} from "@terreno/api";
 import type {Ask, AskKind, ConfirmAskInput, DatasetColumn, SimpleCard} from "@terreno/blocks";
 import type {ImageModel, LanguageModel, ModelMessage, StopCondition, ToolSet} from "ai";
 import type mongoose from "mongoose";
 
-/** Vertex and newer AI SDK providers may return v4 models while `ai` still types v2/v3 only. */
-export type TerrenoLanguageModel = LanguageModel | LanguageModelV4;
-export type TerrenoImageModel = ImageModel | ImageModelV4;
+/** Vertex and newer AI SDK providers may return v3 models while `ai` still types v2 only. */
+export type TerrenoLanguageModel = LanguageModel | LanguageModelV3;
+export type TerrenoImageModel = ImageModel | ImageModelV3;
 
-/** Bridges v4 provider models into `ai` APIs still typed for v2/v3 `LanguageModel`. */
+/** Bridges v3 provider models into `ai` APIs still typed for v2 `LanguageModel`. */
 export const toAiSdkLanguageModel = (model: TerrenoLanguageModel): LanguageModel =>
   model as unknown as LanguageModel;
 
-/** Bridges v4 provider image models into `ai` APIs still typed for v2/v3 `ImageModel`. */
+/** Bridges v3 provider image models into `ai` APIs still typed for v2 `ImageModel`. */
 export const toAiSdkImageModel = (model: TerrenoImageModel): ImageModel =>
   model as unknown as ImageModel;
 

@@ -12,7 +12,6 @@ import {
   listGeminiApiModels,
   MCPService,
   normalizeVertexModelId,
-  preparePromptForAI,
   TemperaturePresets,
   type TerrenoVertexProvider,
   verifyVertexModelsEnabled,
@@ -660,35 +659,21 @@ const pdfTool = tool({
   output: Record<string, unknown>;
 }) => [{text: (output.description as string) ?? "PDF generated.", type: "text"}];
 
-const JOKE_FALLBACK_SYSTEM_PROMPT =
+const JOKE_SYSTEM_PROMPT =
   "You are a witty comedian. Tell a short, clever joke in 1-3 sentences. Be funny and concise.";
 const EXAMPLE_SUMMARIZE_PROMPT_NAME = "example-summarize";
 
 const jokeGeneratorTool = tool({
-  description:
-    "Generate a joke about any topic. Uses a Langfuse prompt template when configured, otherwise uses a built-in prompt.",
+  description: "Generate a joke about any topic.",
   execute: async ({topic, style}: {topic: string; style?: string}) => {
     const svc = getAiService();
     if (!svc) {
       return {joke: `Why did the developer quit? Because they couldn't find their ${topic}!`};
     }
 
-    let systemPrompt = JOKE_FALLBACK_SYSTEM_PROMPT;
-    try {
-      const prepared = await preparePromptForAI({
-        promptName: "joke-generator",
-        variables: {style: style ?? "witty", topic},
-      });
-      if (typeof prepared.prompt === "string") {
-        systemPrompt = prepared.prompt;
-      }
-    } catch (err) {
-      logger.debug(`Langfuse prompt skipped for joke-generator: ${(err as Error).message}`);
-    }
-
     const joke = await svc.generateText({
       prompt: `Tell me a ${style ?? "witty"} joke about: ${topic}`,
-      systemPrompt,
+      systemPrompt: JOKE_SYSTEM_PROMPT,
       temperature: 1.2,
     });
     return {joke: joke.trim()};
@@ -816,7 +801,6 @@ export const addAiRoutes = (
     ...(fileStorageService ? {fileStorageService} : {}),
     demoMode: !aiService,
     fileUploadsEnabled: fileUploadsEnabledForRequest,
-    langfuseSystemPromptName: "chat-assistant",
     maxSteps: 5,
     mcpService,
     openApiOptions: options,

@@ -20,6 +20,37 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.22.0] - 2026-11-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.22.0.md`](mcp-server/src/docs/upgrades/57.22.0.md).
+
+### Breaking
+
+- `@terreno/ai` no longer integrates with Langfuse. The built-in observability prompt registry, traces, and review queue (`ObservabilityApp` with `createLocalObservabilityPlugin()`) replace it. Removed exports: `LangfuseApp`, `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`, `initLangfuseClient`, `getLangfuseClient`, `isLangfuseInitialized`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `invalidatePromptCache`, `initTracing`, `shutdownTracing`, `createTelemetryConfig`, `preparePromptForAI`, and the types `ChatMessage`, `GetPromptOptions`, `LangfuseAppOptions`, `LangfuseCachedPrompt`, `PaginatedResult`, `PreparePromptResult`, `PromptListItem`, `ScoreSubmission`, `ScoringFunction`, `TelemetrySettings`, `TraceListItem`. The `@terreno/ai/langfuseApp` and `@terreno/ai/langfuseClient` subpath exports are gone, along with the `@langfuse/client`, `@langfuse/otel`, and `@opentelemetry/*` dependencies of `@terreno/ai`.
+- `addGptRoutes` drops `langfuseSystemPromptName`; use `systemPromptName` (a registry prompt) instead. Chat turns no longer set `experimental_telemetry`.
+- `ControlPrimary` is now only `"local"`.
+- The example backend no longer reads `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_ORGANIZATION`, `LANGFUSE_PROJECT`, or `LANGFUSE_PROJECT_ID`. Deploys (`.github/workflows/cd.yml`, `scripts/ci/gcp-deploy.sh`) no longer mount the Langfuse secrets, and `infra/flourish/main.tf` drops the `backend_secret_langfuse_secret_key` and `backend_secret_langfuse_public_key` modules, so the next `terraform apply` deletes those two Secret Manager secrets. Deploy a revision without the mounts before applying.
+
+### Added
+
+- `addGptRoutes` accepts `systemPromptName` and `systemPromptLabel`. A chat turn prepends that observability registry prompt to the system prompt and records its version on the trace.
+- The example chat reads `chat-assistant` and the `generate_joke` tool reads `joke-generator` from the observability prompt registry.
+- `bun run backend:seed` fills every AI Observability screen: labelled prompt versions for `example-summarize`, `joke-generator`, and `chat-assistant`, golden datasets, finished experiments, traces with scores, and review items in every status. Run it on an existing database with the `seedAiObservabilityDemo` admin script.
+- Review batches: pick a human question set and press **Grab 10 recent traces** to give reviewers a fixed set of inputs and outputs (`POST /ai/observability/review/batches`).
+- The review item screen shows one input, one output, and every question as Yes / No rows. On web, `Y` / `N` answer the highlighted question, `Enter` submits and moves to the next batch item, and `S` skips. Evaluator dimensions accept a reviewer `question`.
+- Run any LLM judge over a batch and see overall and per-question agreement with the human answers, plus a list of disagreements (`POST /ai/observability/review/batches/:id/judgeRuns`).
+- The AI observability seed adds the `summary-review-questions` question set, two judges for it, and a 10-item batch with 8 answers where one judge agrees 97% and the other 78%.
+- Observability registry prompts can reference other prompts with `{{> base-rules}}`, `{{> base-rules label=staging}}`, or `{{> base-rules version=3}}` (default label `production`). Shared instructions live in one prompt; `PromptRegistry.get`, the playground, experiments, and judges use the resolved text.
+- Every reference must resolve when it is saved. Creating a prompt, saving a version, and moving a label return 400 `Invalid prompt reference` for a malformed tag, an unknown prompt or version, or a label the referenced prompt does not have yet, 400 `Prompt reference cycle` when the change would make prompts include each other, and 400 `Prompt references nested too deeply` when it would nest the prompt, or any prompt that includes it, more than 5 levels.
+- Traces stay named after the called prompt. `ObsTrace.prompts` lists it first, then each shared prompt version it pulled in, marked with `includedBy`. `PromptVersionRef.includes` and harness prompt refs carry the same list.
+
+### Fixed
+
+- Review queue: `Y` and `N` answer the highlighted question when a Yes/No segment is focused. **What the AI was given** and **What the AI wrote** are headings above the field cards.
+- Review batches: **Save batch** sits on the New batch card. Search and **More filters** share a baseline.
+- Prompt hub: description, folder, and tags sit on the Versions screen with the editor. System and template fields explain what to write.
+- Evaluator detail loads the judge prompt `outputSchema` (so helpfulness no longer reports a missing dimension) and experiment rows open that experiment.
+
 ## [57.21.0] - 2026-11-01
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.21.0.md`](mcp-server/src/docs/upgrades/57.21.0.md).

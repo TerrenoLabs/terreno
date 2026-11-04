@@ -5,6 +5,7 @@
   },
   "dependencies": {
     "@ai-sdk/mcp": "^1.0.21",
+    "@ai-sdk/provider": "^3.0.16",
     "@google-cloud/storage": "catalog:",
     "@langfuse/client": "^5.0.1",
     "@langfuse/otel": "^5.0.1",

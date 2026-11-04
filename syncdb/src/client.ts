@@ -2190,6 +2190,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       // transition exactly like softDeleteEntity, and also records the pending
       // mutation id that protects the row from inbound deltas.
       store.upsertEntity({
+        awaitingServerDelta: false,
         collection,
         data: existing.data ?? null,
         deleted: true,
@@ -2202,6 +2203,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
           ? {...existing.data, ...data}
           : (data ?? {});
       store.upsertEntity({
+        awaitingServerDelta: false,
         collection,
         data: mergedData,
         id: entityId,

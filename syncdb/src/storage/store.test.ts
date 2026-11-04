@@ -91,6 +91,25 @@ describe("upsertEntity / getEntity", () => {
     expect(updated.pendingMutationId).toBe("m1");
   });
 
+  it("clears awaitingServerDelta when a later write changes the payload", () => {
+    const store = makeStore();
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "acked"},
+      id: "t1",
+      seq: 4,
+    });
+    expect(store.getEntity({collection: "todos", id: "t1"})?.awaitingServerDelta).toBe(true);
+    const edited = store.upsertEntity({
+      collection: "todos",
+      data: {title: "edited"},
+      id: "t1",
+    });
+    expect(edited.awaitingServerDelta).toBeUndefined();
+    expect(edited.seq).toBe(4);
+  });
+
   it("clears pendingMutationId when explicitly set to empty", () => {
     const store = makeStore();
     store.upsertEntity({

@@ -61,9 +61,14 @@ describe("applyDelta", () => {
 
   it("applies the server's doc for an own create whose ACK already stamped the same seq", () => {
     const store = makeStore();
-    // mutate() writes the optimistic row with no stream; the ACK then stamps its seq
-    // (replayCoordinator releaseEntity) before the server's delta for that seq arrives.
-    store.upsertEntity({collection: "todos", data: {title: "Optimistic"}, id: "t1", seq: 4});
+    // releaseEntity stamps seq and awaitingServerDelta before the server's delta arrives.
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
     const result = applyDelta({
       delta: makeDelta({data: {_id: "t1", ownerId: "u1", title: "Optimistic"}, seq: 4}),
       store,
@@ -72,11 +77,38 @@ describe("applyDelta", () => {
     const entity = store.getEntity({collection: "todos", id: "t1"});
     expect(entity?.data).toEqual({_id: "t1", ownerId: "u1", title: "Optimistic"});
     expect(entity?.stream).toBe(STREAM);
+    expect(entity?.awaitingServerDelta).toBeUndefined();
+  });
+
+  it("skips an equal-seq delta once a later local edit has cleared the ACK marker", () => {
+    const store = makeStore();
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
+    store.upsertEntity({collection: "todos", data: {title: "Edited after ACK"}, id: "t1"});
+    const result = applyDelta({
+      delta: makeDelta({data: {_id: "t1", title: "Optimistic"}, seq: 4}),
+      store,
+    });
+    expect(result.applied).toBe(false);
+    expect(store.getEntity({collection: "todos", id: "t1"})?.data).toEqual({
+      title: "Edited after ACK",
+    });
   });
 
   it("still skips an older delta for an ACK-stamped row with no stream", () => {
     const store = makeStore();
-    store.upsertEntity({collection: "todos", data: {title: "Optimistic"}, id: "t1", seq: 4});
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
     const result = applyDelta({delta: makeDelta({data: {title: "Stale"}, seq: 3}), store});
     expect(result.applied).toBe(false);
     expect(store.getEntity({collection: "todos", id: "t1"})?.data).toEqual({title: "Optimistic"});

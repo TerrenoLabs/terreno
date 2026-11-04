@@ -447,6 +447,7 @@ describe("createSyncDb", () => {
       const entity = client.store.getEntity({collection: "todos", id});
       expect(entity?.pendingMutationId).toBeUndefined();
       expect(entity?.seq).toBe(11);
+      expect(entity?.awaitingServerDelta).toBe(true);
       expect(client.getSyncStatus().queuedCount).toBe(0);
       await client.stop();
     });

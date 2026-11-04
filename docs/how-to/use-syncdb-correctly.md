@@ -63,16 +63,11 @@ For a tenant-scoped collection, `enforceWriteScope` checks a client-sent scope f
 
 Either omit the tenant field and let `preCreate` set it, or send it only from the currently synced row of the parent tenant, never from a persisted id that may be stale.
 
-### The local row never gets server-computed fields from the create
+### The create's server fields arrive on the matching delta
 
-After an ack, the client stamps the row with the ack's seq and keeps the optimistic data. The server's create delta has the same seq, so the client skips it. Whatever `preCreate`, schema defaults or hooks set on the server does not reach the local row until that row changes again or is repaired. If the delta arrives before the ack, the row is marked for repair, but repair only runs on the next `reconcile()` (reconnect, seq jump, or every 5 minutes).
+The ack stamps the row's seq and marks it waiting for the server delta at that same seq. When that delta arrives, the client replaces the optimistic payload with the server doc, including `_id` and other server-added fields. A later local edit clears the mark, so that same delta does not overwrite the edit. Deltas older than the row's seq are skipped either way.
 
-Do one of these:
-
-- Send every field the UI reads in the create payload, matching what the server would compute (defaults, `order`, ownership fields).
-- After the ack, patch the local row yourself.
-
-The local row's `data` is exactly what you passed. Include `_id` in the payload if anything reads `row._id`. Server-written rows carry `_id` and `id`.
+If the delta arrives before the ack, the row is marked for repair, but repair only runs on the next `reconcile()` (reconnect, seq jump, or every 5 minutes). Until one of those happens, the row still shows the payload you passed. Include `_id` in the create payload if anything reads `row._id` before that delta.
 
 ### A refused create leaves a phantom row
 

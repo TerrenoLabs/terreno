@@ -1127,7 +1127,7 @@ Conflict responses on mutate: **409** with `{nack}` body (`code: "conflict"`).
 | `sync:subscribe` / `sync:unsubscribe` | client → server | `{collections: string[], mode?: "window"}` |
 | `sync:subscribed` | server → client | `{collection, streams, mode?: "window"}` — sent after the stream rooms are joined; full-mode clients page each confirmed stream from its cursor. `mode: "window"` joins `{collection}\|admin` only and must not trigger snapshot paging |
 | `sync:error` | server → client | `{collection, message}` |
-| `sync:delta` | server → client | `{collection, id, method, data?, seq, stream, deleted?, frontierSeq?}` |
+| `sync:delta` | server → client | `{collection, id, method, data?, seq, stream, deleted?, frontierSeq?}`. A delta at the row's current seq is applied only when that row is still waiting on its own ACK; any later local edit skips it |
 | `sync:mutate` | client → server | `{mutationId, collection, operation, id?, data?, baseVersion?, mutationMode?}` — validated `mutationMode: "adminWindow"` uses AdminApp executor hooks server-side |
 | `sync:ack` | server → client | `{mutationId, id, seq}` |
 | `sync:nack` | server → client | `{mutationId, code, serverDoc?, serverSeq?, serverDeleted?, message?, retryAfterMs?}` |

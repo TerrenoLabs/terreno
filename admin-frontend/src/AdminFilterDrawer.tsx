@@ -144,8 +144,7 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
           );
         }
         if (f.kind === "ref") {
-          const refModelName =
-            (f as {refModel?: string}).refModel ?? fields[f.field]?.ref ?? undefined;
+          const refModelName = f.refModel ?? fields[f.field]?.ref ?? undefined;
           const routePath = getRefRoutePath(modelConfigs, refModelName);
           return (
             <Box key={f.field} width="100%">

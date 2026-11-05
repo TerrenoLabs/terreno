@@ -8,7 +8,7 @@ import type TestAgent from "supertest/lib/agent";
 import {createLocalObservabilityPlugin} from "../../observability/local/localPlugin";
 import {registerObsSpan} from "../../observability/local/models/obsSpan";
 import {registerObsTrace} from "../../observability/local/models/obsTrace";
-import {ensureTestUsers, UserModel} from "../../tests/helpers";
+import {ensureTestUsers, terrenoUserModel, UserModel} from "../../tests/helpers";
 import type {ObsSpanModel, ObsTraceModel} from "../../types/observability";
 import {defineTask, Harness, HarnessApp, InProcessRunner} from "../harness";
 import {registerHarnessEvent, registerHarnessEventStream} from "../models/harnessEvent";
@@ -55,7 +55,7 @@ const setup = async ({start = false}: {start?: boolean} = {}) => {
   if (start) {
     await harness.start();
   }
-  const app: express.Application = new TerrenoApp({skipListen: true, userModel: UserModel})
+  const app: express.Application = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
     .register(new HarnessApp({harness}))
     .build();
   const login = async ({email, password}: {email: string; password: string}) => {

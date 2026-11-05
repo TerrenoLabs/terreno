@@ -34,8 +34,8 @@ beforeAll(() => {
   globalThis.requestAnimationFrame = (callback: FrameRequestCallback) => {
     return setTimeout(() => callback(Date.now()), 0) as unknown as number;
   };
-  globalThis.cancelAnimationFrame = (id: number) => {
-    clearTimeout(id);
+  globalThis.cancelAnimationFrame = (id: number | null | undefined) => {
+    clearTimeout(id ?? undefined);
   };
 });
 
@@ -299,7 +299,7 @@ describe("Tooltip", () => {
     const {StyleSheet, View: ViewComp} = await import("react-native");
     const findPlacementStyle = () => {
       const positioned = UNSAFE_getAllByType(ViewComp).find(
-        (node: {props: {style?: unknown; onLayout?: unknown}}) =>
+        (node) =>
           Boolean(node.props.onLayout) &&
           StyleSheet.flatten(node.props.style)?.position === "absolute"
       );

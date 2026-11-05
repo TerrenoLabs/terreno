@@ -10,6 +10,12 @@ import {
   parseDatasetJsonImport,
 } from "../datasetImport";
 import {validateAgainstSchema} from "../schemaValidation";
+import {
+  type DatasetHumanAnswerView,
+  type DatasetJudgmentSummary,
+  summarizeDatasetJudgments,
+  toHumanAnswerViews,
+} from "./humanAnswers";
 import {registerObsDataset} from "./models/obsDataset";
 import {registerObsDatasetItem} from "./models/obsDatasetItem";
 import {registerObsTrace} from "./models/obsTrace";
@@ -48,6 +54,8 @@ export interface DatasetView {
   expectedOutputSchema?: Record<string, unknown>;
   id: string;
   inputSchemaPromptName?: string;
+  /** Human judging progress per question set (see `summarizeDatasetJudgments`). */
+  judgments: DatasetJudgmentSummary[];
   name: string;
   tags: string[];
   updated: string;
@@ -58,6 +66,8 @@ export interface DatasetItemView {
   created: string;
   datasetId: string;
   expectedOutput?: unknown;
+  /** Human answers keyed by question-set evaluator id. */
+  humanAnswers?: Record<string, DatasetHumanAnswerView>;
   id: string;
   input: unknown;
   metadata?: Record<string, unknown>;
@@ -85,17 +95,22 @@ export const throwOnDatasetImportErrors = (result: DatasetImportResult): void =>
   });
 };
 
-const toDatasetView = async (doc: {
-  _id: mongoose.Types.ObjectId;
-  created: Date;
-  description?: string;
-  expectedOutputSchema?: Record<string, unknown>;
-  inputSchemaPromptName?: string;
-  name: string;
-  tags: string[];
-  updated: Date;
-}): Promise<DatasetView> => {
+const toDatasetView = async (
+  doc: {
+    _id: mongoose.Types.ObjectId;
+    created: Date;
+    description?: string;
+    expectedOutputSchema?: Record<string, unknown>;
+    inputSchemaPromptName?: string;
+    name: string;
+    tags: string[];
+    updated: Date;
+  },
+  judgments?: DatasetJudgmentSummary[]
+): Promise<DatasetView> => {
   const counts = await computeDatasetCounts(String(doc._id));
+  const resolvedJudgments =
+    judgments ?? (await summarizeDatasetJudgments([doc._id])).get(String(doc._id)) ?? [];
   return {
     counts,
     created: DateTime.fromJSDate(doc.created).toUTC().toISO() ?? "",
@@ -103,6 +118,7 @@ const toDatasetView = async (doc: {
     expectedOutputSchema: doc.expectedOutputSchema,
     id: String(doc._id),
     inputSchemaPromptName: doc.inputSchemaPromptName,
+    judgments: resolvedJudgments,
     name: doc.name,
     tags: doc.tags,
     updated: DateTime.fromJSDate(doc.updated).toUTC().toISO() ?? "",
@@ -115,6 +131,7 @@ const toItemView = (doc: {
   created: Date;
   datasetId: mongoose.Types.ObjectId;
   expectedOutput?: unknown;
+  humanAnswers?: ObsDatasetItemDocument["humanAnswers"];
   input: unknown;
   metadata?: Record<string, unknown>;
   origin: "manual" | "synthetic" | "trace";
@@ -129,6 +146,7 @@ const toItemView = (doc: {
     created: DateTime.fromJSDate(doc.created).toUTC().toISO() ?? "",
     datasetId: String(doc.datasetId),
     expectedOutput: doc.expectedOutput,
+    humanAnswers: toHumanAnswerViews(doc.humanAnswers),
     id: String(doc._id),
     input: doc.input,
     metadata: doc.metadata,
@@ -193,9 +211,10 @@ export class LocalDatasetStore {
 
   async list(): Promise<DatasetView[]> {
     const rows = await registerObsDataset().find({}).sort({name: 1});
+    const judgments = await summarizeDatasetJudgments(rows.map((row) => row._id));
     return Promise.all(
       rows.map((row) => {
-        return toDatasetView(row);
+        return toDatasetView(row, judgments.get(String(row._id)) ?? []);
       })
     );
   }

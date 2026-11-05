@@ -2,7 +2,7 @@ import {AdminModelForm, UserSecurityLink} from "@terreno/admin-frontend";
 import {Box, Button, Card, FormContainer, Text, TextField, useToast} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
-import {terrenoApi, useGetMeQuery, useSetAdminUserPasswordMutation} from "@/store/sdk";
+import {adminApi, useGetMeQuery, useSetAdminUserPasswordMutation} from "@/store/sdk";
 import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
 const ADMIN_BASE_URL = "/admin";
@@ -109,7 +109,7 @@ const AdminEditScreen: React.FC = () => {
 
   return (
     <AdminModelForm
-      api={terrenoApi}
+      api={adminApi}
       baseUrl={ADMIN_BASE_URL}
       footerContent={footerContent}
       itemId={id}

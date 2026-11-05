@@ -6,13 +6,18 @@ import {join} from "node:path";
 import type {CliIo} from "./io";
 import {runCli} from "./runCli";
 
+/** Bun's `typeof fetch` also carries `preconnect`; add a no-op so stubs satisfy it. */
+const stubFetch = (
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>
+): typeof fetch => Object.assign(handler, {preconnect: (): void => {}});
+
 const createIo = (cwd = "/tmp"): CliIo & {stderrLines: string[]; stdoutLines: string[]} => {
   const stdoutLines: string[] = [];
   const stderrLines: string[] = [];
   return {
     cwd,
     env: {},
-    fetch: (async () => new Response()) as typeof fetch,
+    fetch: stubFetch(async () => new Response()),
     stderr: (line: string) => {
       stderrLines.push(line);
     },
@@ -120,7 +125,7 @@ describe("additional command branches", () => {
     await writeFile(specPath, JSON.stringify(SPEC), "utf8");
     await writeFile(bodyPath, JSON.stringify({title: "x"}), "utf8");
     const io = createIo(dir);
-    io.fetch = (async () => new Response("{}", {status: 200})) as typeof fetch;
+    io.fetch = stubFetch(async () => new Response("{}", {status: 200}));
     const code = await runCli(
       ["api", "call", "todo_list", "--schema", specPath, "--body-file", "body.json", "--json"],
       io

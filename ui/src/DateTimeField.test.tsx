@@ -1,13 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  type mock as MockType,
-  mock,
-} from "bun:test";
+import {afterAll, afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent, userEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {DateTime} from "luxon";
@@ -59,7 +50,7 @@ afterAll(() => {
 });
 
 describe("DateTimeField", () => {
-  let mockOnChange: ReturnType<MockType>;
+  let mockOnChange: ReturnType<typeof setupComponentTest>["onChange"];
 
   beforeEach(() => {
     setDesktop();
@@ -1497,7 +1488,7 @@ describe("DateTimeField", () => {
   describe("TimezonePicker onChange", () => {
     it("forwards the picked timezone to onTimezoneChange and emits a new value", async () => {
       setDesktop();
-      const mockTzChange = mock(() => {});
+      const mockTzChange = mock((_timezone: string) => {});
       const {UNSAFE_root} = renderWithTheme(
         <DateTimeField
           onChange={mockOnChange}

@@ -5,11 +5,11 @@ import {join} from "node:path";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 
-import {handleLocalToolCall, localMcpTools} from "./localTools";
-import {resolveTerrenoLogDirs} from "./logPaths";
-import {resolveMetroHttpBase} from "./metro/metroDevSession";
-import {lastError, readLogs} from "./tools/readLogs";
-import {evaluate, getClientState, navigate} from "./tools/runtime";
+import {handleLocalToolCall, localMcpTools} from "./localTools.js";
+import {resolveTerrenoLogDirs} from "./logPaths.js";
+import {resolveMetroHttpBase} from "./metro/metroDevSession.js";
+import {lastError, readLogs} from "./tools/readLogs.js";
+import {evaluate, getClientState, navigate} from "./tools/runtime.js";
 
 const readRtk = async (args: {query?: string; slice?: string}): Promise<unknown> => {
   return (JSON.parse(await getClientState(args)) as {rtk?: unknown}).rtk;

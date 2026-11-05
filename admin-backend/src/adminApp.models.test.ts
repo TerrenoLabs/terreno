@@ -34,12 +34,15 @@ import {
 } from "@terreno/api/testing";
 import {assert} from "chai";
 import type express from "express";
-import mongoose from "mongoose";
+import mongoose, {type Model} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
 import type {AdminAuditEvent, AdminModelConfig, AdminOptions} from "./adminApp";
 import {AdminApp, getArrayEmbeddedSchemaType} from "./adminApp";
+
+/** Plugin contributions take `Model<unknown>`; the shared Food fixture keys `_id` as a string. */
+const contributedFoodModel = FoodModel as unknown as Model<unknown>;
 
 const buildApp = (
   models: AdminModelConfig[] = [],
@@ -175,7 +178,7 @@ describe("AdminApp /admin/config", () => {
         models: [
           {
             admin: {displayName: "Flags", listFields: ["key"]},
-            model: FoodModel,
+            model: contributedFoodModel,
             routePath: "/feature-flags",
           },
         ],
@@ -2219,7 +2222,7 @@ describe("AdminApp adminPermissions methods", () => {
               listFields: ["name", "calories"],
               searchFields: ["name"],
             },
-            model: FoodModel,
+            model: contributedFoodModel,
             routePath: "/locked-foods",
           },
         ],

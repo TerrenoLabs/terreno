@@ -141,7 +141,7 @@ describe("GcpCloudTasksRunner", () => {
     const {client: _client, ...configWithoutClient} = baseConfig();
     let isPeerAvailable = true;
     try {
-      createRequire(import.meta.url)("@google-cloud/tasks");
+      createRequire(__filename)("@google-cloud/tasks");
     } catch {
       isPeerAvailable = false;
     }

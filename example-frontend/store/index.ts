@@ -105,6 +105,7 @@ const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 const sentryReduxEnhancer = createSentryReduxEnhancer();
 
+// biome-ignore assist/source/useSortedKeys: middleware must precede enhancers for type inference
 const store = configureStore({
   devTools: process.env.NODE_ENV !== "production" && {
     name: `Terreno-${
@@ -114,16 +115,18 @@ const store = configureStore({
         : "Unknown"
     }`,
   },
-  enhancers: (getDefaultEnhancers) =>
-    getDefaultEnhancers({
-      autoBatch: {type: "tick"},
-    }).concat(sentryReduxEnhancer),
+  // `middleware` must precede `enhancers`: TypeScript infers configureStore's middleware tuple
+  // from whichever callback comes first, and `getDefaultEnhancers` would pin it to the defaults.
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       immutableCheck: false,
       serializableCheck: false,
       thunk: true,
     }).concat([...betterAuth.middleware, terrenoApi.middleware, rtkQueryErrorMiddleware]),
+  enhancers: (getDefaultEnhancers) =>
+    getDefaultEnhancers({
+      autoBatch: {type: "tick"},
+    }).concat(sentryReduxEnhancer),
   reducer: persistedReducer,
 });
 

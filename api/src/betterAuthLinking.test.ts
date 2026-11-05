@@ -782,7 +782,9 @@ describe("syncBetterAuthUser email matches", () => {
 
     await syncBetterAuthUser(userModel, unverifiedUser(email), undefined, {password: PASSWORD});
 
-    const stored = await LinkingUser.collection.findOne({_id: legacy._id});
+    const stored = await LinkingUser.collection.findOne({
+      _id: legacy._id as mongoose.Types.ObjectId,
+    });
     expect(typeof stored?.hash).toBe("string");
   });
 

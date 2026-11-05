@@ -38,7 +38,7 @@ projectSchema.plugin(organizationIdImmutabilityPlugin);
 projectSchema.plugin(syncPlugin);
 
 // Named "ExampleProject" because @terreno/ai (imported by server.ts) already registers a
-// mongoose model called "Project" for Langfuse. The exported binding and the /projects
+// mongoose model called "Project" for GPT chat projects. The exported binding and the /projects
 // route keep the friendly name.
 export const Project = mongoose.model<ProjectDocument, ProjectModel>(
   "ExampleProject",

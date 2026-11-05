@@ -1157,15 +1157,43 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 
 ## ai-observability
 
-**Title:** `AI observability (Langfuse-light, pluggable)`
+**Title:** `AI observability (built in, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
 **Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
-Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
+Ship built-in prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
 - **Implementation plan:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability.md)
 - **Tasks:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability.md)
+
+---
+
+## ai-observability-production-loop
+
+**Title:** `AI observability in production: live evals, alerts, threads, CI suites, prompt optimizer`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`ai-observability-production-loop`, Status=`Planned`
+
+Terreno's AI observability covers building an AI feature: versioned prompts, traces, evaluators, datasets, experiments, and human review. It stops at production. The evaluator's live-sampling setting is never run. There's no view of quality, cost, or latency over time, nothing alerts on a regression, and a chat conversation is a loose set of traces. Prompt changes can't be gated in CI.
+
+This work adds:
+
+- Online evaluation of sampled production traces.
+- Named trace groups (conversations, or any id the app chooses) with a timeline view.
+- A monitoring dashboard.
+- Threshold alerts, delivered as signed, metadata-only webhooks to Slack or any URL.
+- Stored eval suites that `terreno ai test <suite>` runs from CI with a scoped service token.
+- A prompt optimizer that proposes better prompt versions from failing dataset items.
+
+Everything stays local to `@terreno/ai`, with screens in `admin-frontend`.
+
+Out of scope: conversation-level evaluators, eval backfill and budgets, email alerts, custom dashboards, and other optimizer algorithms.
+
+- **Implementation plan:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability-production-loop.md)
+- **Tasks:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability-production-loop.md)
+- **Depends on:** `ai-observability` (phases 1–4)
 
 ---
 
@@ -1342,6 +1370,42 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 
 ---
 
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`In review`
+
+Today an implementation plan never says which end-to-end tests a feature needs, so bots decide alone whether a slice deserves a Playwright spec, and the manual checks a person should repeat before a release live in nobody's file. Most packages are tested only in-process.
+
+Every IP will carry `## E2E tests` and `## Regression cases` sections (either may be `None — <reason>`, neither may be missing). Grow plans the rows, Pick writes each spec with its feature, Roast runs them, Brew merges manual cases into one living suite per area under `docs/regression/`, and Taste keeps both current after fixes. Regression stays minimal: only what a developer or QA must check by hand, such as push notifications, real email delivery, or how the app feels. Terreno itself gains a real-process smoke test and an e2e guide page for every package, and brewery mirrors the contract.
+
+Out of scope: running manual cases automatically, and coverage targets.
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+- **Pull requests:** [#1628](https://github.com/TerrenoLabs/terreno/pull/1628), brewery [#15](https://github.com/joshgachnang/brewery/pull/15)
+
+---
+
+## lifecycle-user-guide
+
+**Title:** `An end-user guide that grows with every feature`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`lifecycle-user-guide`, Status=`Shaping`
+
+Chat agents cannot answer "how do I…" questions about an app today, because no text describes its features in the words users see, and a guide written once drifts from the app the first time a label changes.
+
+Every IP will gain a `## User guide` section, and the task that ships a feature writes its page: one plain-text file per feature under `docs/user-guide/<area>/<feature>.md`, with `audience`, `platforms`, and the `questions` users would ask in its frontmatter, then what it does, how to use it, and what it is meant for. Roast checks the steps against the shipped screens, and Brew gates on the page. A repository with no end users opts out with `User guide: none`. A `backfill-user-guide` skill drafts pages for features that already shipped, for a human to approve.
+
+Open for discussion: how this relates to the support agent's `support/kb/` docs (one corpus or two), whether pages ship in the app or are served by the backend, and who reviews the wording.
+
+- **Implementation plan:** [lifecycle-user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/lifecycle-user-guide.md)
+- **Pull request:** [#1633](https://github.com/TerrenoLabs/terreno/pull/1633)
+
+---
+
 ## list-detail-layout
 
 **Title:** `ListDetailLayout: a route-driven list/detail layout for phone and tablet`
@@ -1350,6 +1414,17 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 **Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`list-detail-layout`, Status=`Planned`
 
 - **Implementation plan:** [list-detail-layout.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/list-detail-layout.md)
+
+---
+
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:tooling`, `type:feature`  
+**Project fields:** Area=`tooling`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`Planned`
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
 
 ---
 

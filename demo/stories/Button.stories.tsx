@@ -194,6 +194,7 @@ export const ButtonLoading: React.FC = () => {
               setTimeout(resolve, 2 * 1000);
             });
           }}
+          testID="button-loading-async"
           text="Async Loading Button"
         />
       </Box>

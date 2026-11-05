@@ -3,6 +3,7 @@ import {
   type AdminScreenWidgetProps,
   AdminShellLayout,
   AiPromptEditorScreenWidget,
+  AiReviewBatchScreenWidget,
   AiTracesScreenWidget,
   OrgContextProvider,
   OrgSwitcher,
@@ -17,7 +18,7 @@ import React, {useEffect, useMemo, useState} from "react";
 import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
 import {getAdminAuthHeaders} from "@/store/adminAuthHeaders";
-import {terrenoApi, useGetMeQuery} from "@/store/sdk";
+import {adminApi, useGetMeQuery} from "@/store/sdk";
 import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
@@ -47,6 +48,21 @@ const ExampleTracesScreen: React.FC<AdminScreenWidgetProps> = (props) => {
       {...props}
       apiKey={geminiApiKey || undefined}
       apiKeyHint={MULTI_STAGE_GEMINI_KEY_HINT}
+      apiKeyLoading={isGeminiApiKeyLoading}
+    />
+  );
+};
+
+const JUDGE_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run LLM judges on this batch.";
+
+const ExampleReviewBatchScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiReviewBatchScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyHint={JUDGE_GEMINI_KEY_HINT}
       apiKeyLoading={isGeminiApiKeyLoading}
     />
   );
@@ -157,7 +173,7 @@ const AdminLayoutContent: React.FC = () => {
 
   return (
     <AdminProvider
-      api={terrenoApi}
+      api={adminApi}
       apiBase={ADMIN_ROUTE}
       apiOrigin={baseUrl}
       getAuthHeaders={getAdminAuthHeaders}
@@ -167,6 +183,7 @@ const AdminLayoutContent: React.FC = () => {
       widgets={{
         screens: {
           "ai-prompt-editor": ExamplePromptEditorScreen,
+          "ai-review-batch": ExampleReviewBatchScreen,
           "ai-traces": ExampleTracesScreen,
           "sync-lab": SyncLabScreen,
         },
@@ -175,12 +192,12 @@ const AdminLayoutContent: React.FC = () => {
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindAdminSyncOrganization />
         <AdminShellLayout
-          api={terrenoApi}
+          api={adminApi}
           apiBase={ADMIN_ROUTE}
           configurationPath="/admin/configuration"
           isOrganizationOperator={isOrganizationOperator}
           organizationDirectoryPath="/orgs"
-          organizationSwitcher={<OrgSwitcher api={terrenoApi} routeBase={ADMIN_ROUTE} />}
+          organizationSwitcher={<OrgSwitcher api={adminApi} routeBase={ADMIN_ROUTE} />}
           rolesPath="/roles"
           routeBase={ADMIN_ROUTE}
           versionConfigPath="/version-config"

@@ -6,6 +6,7 @@ import {
   IconButton,
   SelectField,
   Text,
+  TextField,
   ThemeContext,
 } from "@terreno/ui";
 import {useContext, useState} from "react";
@@ -144,6 +145,61 @@ export const ThemeFontStories = () => {
         type="text"
         value=""
       />
+    </Box>
+  );
+};
+
+type FieldThemeName = "default" | "custom";
+
+export const ThemeFieldStories = () => {
+  const [fieldTheme, setFieldTheme] = useState<FieldThemeName>("default");
+  const {resetTheme, setTheme} = useContext(ThemeContext);
+
+  return (
+    <Box color="base" direction="column" gap={3} padding={4} testID="theme-field-story" width={320}>
+      <SelectField
+        onChange={(value: string) => {
+          const nextTheme = value as FieldThemeName;
+          setFieldTheme(nextTheme);
+          resetTheme();
+          if (nextTheme === "custom") {
+            setTheme({
+              field: {
+                background: "secondary000",
+                backgroundDisabled: "neutral100",
+                border: "secondary500",
+                borderDisabled: "neutral400",
+                borderError: "warning100",
+                borderFocus: "accent500",
+              },
+            });
+          }
+        }}
+        options={[
+          {label: "Default fields", value: "default"},
+          {label: "Custom field colors", value: "custom"},
+        ]}
+        testID="theme-field-select"
+        title="Field theme"
+        value={fieldTheme}
+      />
+      <TextField onChange={() => {}} placeholder="Text field" title="Text field" value="" />
+      <TextField
+        grow
+        multiline
+        onChange={() => {}}
+        placeholder="Text area"
+        rows={3}
+        title="Text area"
+        value=""
+      />
+      <TextField
+        errorText="This field is required"
+        onChange={() => {}}
+        title="With error"
+        value=""
+      />
+      <TextField disabled onChange={() => {}} title="Disabled" value="Read only" />
     </Box>
   );
 };

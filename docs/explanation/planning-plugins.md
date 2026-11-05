@@ -5,7 +5,7 @@ the lifecycle plugin knows *how to build one approved thing correctly*, and the 
 plugin knows *what is worth building next and whether it worked*.
 
 ```text
-terreno-scan                            terreno (lifecycle)
+terreno-loop                            terreno (lifecycle)
 ------------                            -------------------
 Aim     charter a measurable goal
 Sweep   shard + map the repository
@@ -42,10 +42,26 @@ Five bounded transitions plus three outer loops. Canonical source:
 Full contract: [lifecycle plugin reference](../reference/lifecycle-plugin.md) and
 [loop engineering](loop-engineering.md).
 
-## terreno-scan (scan plugin)
+Every IP also carries a testing plan: an `## E2E tests` table and a `## Regression
+cases` table, either of which may be `None — <reason>` but never missing. Grow plans the
+rows, Pick writes each spec in the task that delivers it, Roast runs them, Brew merges
+the manual cases into one living suite file per area under `docs/regression/`, and
+Taste keeps both current after review fixes. The point is that no bot decides alone
+whether a feature deserves an end-to-end test, and the checks a human repeats before a
+release live in a known file instead of in someone's head. See
+[Testing plan](../reference/lifecycle-plugin.md#testing-plan).
 
-Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-scan/`;
-Claude Code consumes the generated `plugins/terreno-scan-claude/`. It depends on the
+Every IP also says which pages of the end-user guide it adds, updates, or retires. The
+guide is one plain-text page per feature, written in the words users see, so a chat agent
+can answer "how do I…" questions from it. Writing the page in the same task as the
+feature keeps it true; a guide written once at the end drifts from the app the first time
+a label changes. A repository with no end users opts out in its agent instructions. See
+[User guide](../reference/lifecycle-plugin.md#user-guide).
+
+## terreno-loop (scan plugin)
+
+Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-loop/`;
+Claude Code consumes the generated `plugins/terreno-loop-claude/`. It depends on the
 lifecycle plugin — Plot hands every slice to Grow.
 
 | Stage | Owns | PASS next |
@@ -78,6 +94,8 @@ Full contract: [scan plugin reference](../reference/scan-plugin.md).
 | Artifact | Owner | Committed |
 | --- | --- | --- |
 | IP and task list | Grow | yes |
+| Regression suites (`docs/regression/<area>.md`) | Brew, Taste | yes |
+| User guide (`docs/user-guide/<area>/<feature>.md`) | Pick, Taste | yes |
 | Execution state (`.terreno/pipeline/<slug>.json`) | Lifecycle outer loops | no |
 | Charter (`docs/scans/<goal>/charter.md`) | Aim | yes |
 | Findings report (`docs/scans/<goal>/round-<n>-findings.md`) | Sift | yes |
@@ -104,9 +122,9 @@ Three properties fall out of keeping discovery and delivery in separate plugins:
 
 | Host | Lifecycle | Scan |
 | --- | --- | --- |
-| Cursor | `terreno-planning`, `/terreno-1-grow` | `terreno-scan`, `/terreno-scan-1-aim` |
-| Codex | `terreno-planning`, `$terreno-1-grow` | `terreno-scan`, `$terreno-scan-1-aim` |
-| Claude Code | `terreno`, `/terreno:1-grow` | `terreno-scan`, `/terreno-scan:1-aim` |
+| Cursor | `terreno-planning`, `/terreno-1-grow` | `terreno-loop`, `/terreno-loop-1-aim` |
+| Codex | `terreno-planning`, `$terreno-1-grow` | `terreno-loop`, `$terreno-loop-1-aim` |
+| Claude Code | `terreno`, `/terreno:1-grow` | `terreno-loop`, `/terreno-loop:1-aim` |
 
 Install both from the marketplaces described in
 [install agent skills](../how-to/install-agent-skills.md). Claude Code resolves a plugin

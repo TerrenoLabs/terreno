@@ -29,7 +29,13 @@ mock.module("./useAdminConfig", () => ({
 const listState: {data: {data: Array<Record<string, unknown>>; total: number}} = {
   data: {data: [], total: 0},
 };
-const listRefetch = mock(async () => ({data: listState.data}));
+// Refetch results are RTK Query envelopes: data on success, error/isError on failure, or empty.
+interface RefetchResult {
+  data?: typeof listState.data;
+  error?: unknown;
+  isError?: boolean;
+}
+const listRefetch = mock(async (): Promise<RefetchResult> => ({data: listState.data}));
 const bulkPatchFn = mock(() => ({unwrap: async () => ({updated: 1})}));
 
 mock.module("./useAdminBackgroundTask", () => ({
@@ -826,7 +832,7 @@ describe("AdminModelTable windowed path", () => {
     };
     const originalFetch = globalThis.fetch;
     const fetchMock = mock(
-      async () =>
+      async (_input: string | URL | Request, _init?: RequestInit) =>
         new Response(JSON.stringify({updated: 1}), {
           headers: {"Content-Type": "application/json"},
           status: 200,
@@ -849,9 +855,9 @@ describe("AdminModelTable windowed path", () => {
 
       assert.equal(fetchMock.mock.calls.length, 1);
       assert.equal(fetchMock.mock.calls[0]?.[0], "/admin/todos/bulk-patch");
-      const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-      assert.equal(request.method, "POST");
-      assert.deepEqual(JSON.parse(String(request.body)), {
+      const request = fetchMock.mock.calls[0]?.[1];
+      assert.equal(request?.method, "POST");
+      assert.deepEqual(JSON.parse(String(request?.body)), {
         ids: ["todo-1"],
         patch: {active: true},
       });

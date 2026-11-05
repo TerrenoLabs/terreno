@@ -18,6 +18,7 @@ import {Provider} from "react-redux";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {adminOrgScopedArg} from "../orgs/adminModelEndpoints";
 import {OrgContextProvider, useOrgContext} from "../orgs/useOrgContext";
+import type {AdminApi} from "../types";
 import {useAdminApi} from "../useAdminApi";
 import {useAdminBackgroundTaskMutation} from "../useAdminBackgroundTask";
 import {useAdminConfig} from "../useAdminConfig";
@@ -26,19 +27,50 @@ import {useAdminScripts} from "../useAdminScripts";
 import {useConfigurationApi} from "../useConfigurationApi";
 import {useDocumentStorageApi} from "../useDocumentStorageApi";
 
-interface BuildSpec {
-  query?: (arg?: unknown) => unknown;
-  mutation?: (arg?: unknown) => unknown;
+/** What an injected endpoint's `query` returns: an RTK Query request description. */
+interface QuerySpec {
+  [key: string]: unknown;
+  method?: string;
+  responseHandler?: (response: unknown) => Promise<unknown>;
+  url?: string;
+}
+
+type TagsFn = (result: unknown, error: unknown, arg: unknown) => unknown;
+
+/** An endpoint definition as captured by the mock builder. */
+interface CapturedEndpoint {
+  __kind?: "query" | "mutation";
+  query: (arg?: unknown) => QuerySpec;
   providesTags?: unknown;
   invalidatesTags?: unknown;
-  extraOptions?: unknown;
+  serializeQueryArgs?: (args: {endpointName: string; queryArgs: unknown}) => string;
 }
 
-interface CapturedEndpoints {
-  [key: string]: BuildSpec;
-}
+type CapturedEndpoints = Record<string, CapturedEndpoint>;
 
-const makeMockApi = () => {
+/** The proxy double handed to the hooks, plus what it recorded. */
+type MockAdminApi = AdminApi & {
+  readonly __injected: CapturedEndpoints;
+  readonly __tagTypes: string[];
+};
+
+/** Calls an endpoint's function-form `providesTags` / `invalidatesTags` for `arg`. */
+const callTags = (tags: unknown, arg: unknown): unknown => {
+  if (typeof tags !== "function") {
+    throw new Error("Expected a tag function");
+  }
+  return (tags as TagsFn)(null, null, arg);
+};
+
+/** Calls an endpoint's `serializeQueryArgs`, failing when the endpoint has none. */
+const serializeArgs = (endpoint: CapturedEndpoint, endpointName: string, queryArgs: unknown) => {
+  if (!endpoint.serializeQueryArgs) {
+    throw new Error(`${endpointName} has no serializeQueryArgs`);
+  }
+  return endpoint.serializeQueryArgs({endpointName, queryArgs});
+};
+
+const makeMockApi = (): MockAdminApi => {
   const injected: CapturedEndpoints = {};
   const enhancedTagTypes: string[] = [];
 
@@ -75,16 +107,15 @@ const makeMockApi = () => {
         };
       }
       if (prop === "injectEndpoints") {
-        return ({endpoints}: {endpoints: (build: unknown) => Record<string, BuildSpec>}) => {
+        return ({endpoints}: {endpoints: (build: unknown) => CapturedEndpoints}) => {
           const build = {
-            mutation: (spec: BuildSpec) => ({...spec, __kind: "mutation"}),
-            query: (spec: BuildSpec) => ({...spec, __kind: "query"}),
+            mutation: (spec: CapturedEndpoint): CapturedEndpoint => ({...spec, __kind: "mutation"}),
+            query: (spec: CapturedEndpoint): CapturedEndpoint => ({...spec, __kind: "query"}),
           };
           const defs = endpoints(build);
           for (const [key, def] of Object.entries(defs)) {
             injected[key] = def;
-            const kind =
-              (def as Record<string, unknown>).__kind === "mutation" ? "mutation" : "query";
+            const kind = def.__kind === "mutation" ? "mutation" : "query";
             addHookFor(key, kind);
           }
           return apiProxy;
@@ -100,7 +131,8 @@ const makeMockApi = () => {
     },
   });
 
-  return apiProxy;
+  // Test double: the proxy answers only the Api members the hooks touch.
+  return apiProxy as unknown as MockAdminApi;
 };
 
 const runHook = <T,>(fn: () => T): T => {
@@ -118,7 +150,7 @@ describe("useAdminApi", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminApi(api, "/admin/users", "User"));
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.adminList_User).toBeDefined();
     expect(injected.adminRead_User).toBeDefined();
     expect(injected.adminCreate_User).toBeDefined();
@@ -126,7 +158,7 @@ describe("useAdminApi", () => {
     expect(injected.adminDelete_User).toBeDefined();
 
     // tag types include the admin_<model>
-    expect((api as Record<string, unknown>).__tagTypes).toContain("admin_User");
+    expect(api.__tagTypes).toContain("admin_User");
 
     // Each endpoint's query fn produces expected URL/method
     const listDef = injected.adminList_User;
@@ -147,7 +179,7 @@ describe("useAdminApi", () => {
       method: "GET",
       url: "/admin/users/abc",
     });
-    expect(readDef.providesTags(null, null, "abc")).toEqual([{id: "abc", type: "admin_User"}]);
+    expect(callTags(readDef.providesTags, "abc")).toEqual([{id: "abc", type: "admin_User"}]);
 
     const createDef = injected.adminCreate_User;
     expect(createDef.query({name: "x"})).toEqual({
@@ -165,7 +197,7 @@ describe("useAdminApi", () => {
       method: "PATCH",
       url: "/admin/users/123",
     });
-    expect(updateDef.invalidatesTags(null, null, {id: "123"})).toEqual([
+    expect(callTags(updateDef.invalidatesTags, {id: "123"})).toEqual([
       {id: "123", type: "admin_User"},
       "admin_User",
     ]);
@@ -197,7 +229,7 @@ describe("useAdminApi", () => {
   it("pins list/read/create/update/delete/bulk-patch URLs for String-_id routePath", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminApi(api, "/admin/todos", "Todo"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
 
     expect(
       injected.adminList_Todo.query({limit: 20, page: 1, q: "Alpha", sort: "-created"})
@@ -295,11 +327,7 @@ describe("useAdminApi organization switches", () => {
   it("keys list and read entries by the organization carried in the argument", () => {
     const api = makeMockApi();
     runHook(() => useAdminApi(api, "/admin/users", "User"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints & {
-      [key: string]: {
-        serializeQueryArgs: (args: {endpointName: string; queryArgs: unknown}) => string;
-      };
-    };
+    const injected = api.__injected;
     const read = injected.adminRead_User;
     const list = injected.adminList_User;
 
@@ -308,26 +336,20 @@ describe("useAdminApi organization switches", () => {
       method: "GET",
       url: "/admin/users/abc",
     });
-    expect(read.providesTags(null, null, adminOrgScopedArg("abc", "org-b"))).toEqual([
+    expect(callTags(read.providesTags, adminOrgScopedArg("abc", "org-b"))).toEqual([
       {id: "abc", type: "admin_User"},
     ]);
-    expect(
-      read.serializeQueryArgs({
-        endpointName: "adminRead_User",
-        queryArgs: adminOrgScopedArg("abc", "org-b"),
-      })
-    ).toBe("adminRead_User:org-b:abc");
+    expect(serializeArgs(read, "adminRead_User", adminOrgScopedArg("abc", "org-b"))).toBe(
+      "adminRead_User:org-b:abc"
+    );
     expect(list.query(adminOrgScopedArg({limit: 1}, undefined))).toEqual({
       headers: undefined,
       method: "GET",
       url: "/admin/users?limit=1",
     });
-    expect(
-      list.serializeQueryArgs({
-        endpointName: "adminList_User",
-        queryArgs: adminOrgScopedArg({limit: 1}, "org-b"),
-      })
-    ).toBe('adminList_User:org-b:{"limit":1}');
+    expect(serializeArgs(list, "adminList_User", adminOrgScopedArg({limit: 1}, "org-b"))).toBe(
+      'adminList_User:org-b:{"limit":1}'
+    );
   });
 });
 
@@ -336,7 +358,7 @@ describe("useAdminConfig", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminConfig(api, "/admin"));
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.adminConfig).toBeDefined();
     const def = injected.adminConfig;
     expect(def.query()).toEqual({method: "GET", url: "/admin/config"});
@@ -354,7 +376,7 @@ describe("useAdminScripts", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminScripts(api, "/admin"));
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.adminRunScript).toBeDefined();
     expect(injected.adminGetScriptTask).toBeDefined();
     expect(injected.adminCancelScriptTask).toBeDefined();
@@ -399,7 +421,9 @@ describe("useAdminScripts", () => {
   it("returns safe script hooks when endpoint injection is unavailable", async () => {
     const result = runHook(() => useAdminScripts({} as never, "/admin"));
 
-    expect(await result.useCancelScriptTaskMutation()[0]("task-1").unwrap()).toEqual({});
+    // The no-op fallback resolves to an empty object rather than a typed task response.
+    const cancelled: unknown = await result.useCancelScriptTaskMutation()[0]("task-1").unwrap();
+    expect(cancelled).toEqual({});
     expect(result.useGetScriptTaskQuery("task-1")).toEqual({
       data: undefined,
       error: null,
@@ -421,7 +445,7 @@ describe("useAdminRoles", () => {
   it("injects RBAC endpoints outside the admin base", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminRoles(api, "/admin"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
 
     expect(
       injected.adminCreateRbacRole.query({
@@ -489,7 +513,7 @@ describe("useAdminBackgroundTaskMutation", () => {
   it("injects a background-task request at a normalized admin root", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminBackgroundTaskMutation(api, "/admin/"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
 
     expect(
       injected.adminPostBackgroundTask.query({
@@ -517,33 +541,29 @@ describe("useConfigurationApi", () => {
     const api = makeMockApi();
     const result = runHook(() => useConfigurationApi({api, basePath: "/admin/configuration"}));
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.configMeta).toBeDefined();
     expect(injected.configValues).toBeDefined();
     expect(injected.configUpdate).toBeDefined();
     expect(injected.configRefreshSecrets).toBeDefined();
-    expect((api as Record<string, unknown>).__tagTypes).toContain("configuration");
+    expect(api.__tagTypes).toContain("configuration");
 
-    expect((injected.configMeta as BuildSpec & Record<string, unknown>).query()).toEqual({
+    expect(injected.configMeta.query()).toEqual({
       method: "GET",
       url: "/admin/configuration/meta",
     });
-    expect((injected.configValues as BuildSpec & Record<string, unknown>).query()).toEqual({
+    expect(injected.configValues.query()).toEqual({
       method: "GET",
       url: "/admin/configuration",
     });
-    expect((injected.configValues as BuildSpec & Record<string, unknown>).providesTags).toEqual([
-      "configuration",
-    ]);
-    expect((injected.configUpdate as BuildSpec & Record<string, unknown>).query({a: 1})).toEqual({
+    expect(injected.configValues.providesTags).toEqual(["configuration"]);
+    expect(injected.configUpdate.query({a: 1})).toEqual({
       body: {a: 1},
       method: "PATCH",
       url: "/admin/configuration",
     });
-    expect((injected.configUpdate as BuildSpec & Record<string, unknown>).invalidatesTags).toEqual([
-      "configuration",
-    ]);
-    expect((injected.configRefreshSecrets as BuildSpec & Record<string, unknown>).query()).toEqual({
+    expect(injected.configUpdate.invalidatesTags).toEqual(["configuration"]);
+    expect(injected.configRefreshSecrets.query()).toEqual({
       method: "POST",
       url: "/admin/configuration/refresh-secrets",
     });
@@ -560,7 +580,7 @@ describe("useDocumentStorageApi", () => {
     const api = makeMockApi();
     const result = runHook(() => useDocumentStorageApi(api, "/documents"));
 
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.documentStorageList).toBeDefined();
     expect(injected.documentStorageUpload).toBeDefined();
     expect(injected.documentStorageDownload).toBeDefined();
@@ -614,6 +634,10 @@ describe("useDocumentStorageApi", () => {
     expect(dlSpec.url).toBe("/documents/download/my%20folder%2Ffile.pdf");
     expect(dlSpec.method).toBe("GET");
     expect(typeof dlSpec.responseHandler).toBe("function");
+    const responseHandler = dlSpec.responseHandler;
+    if (!responseHandler) {
+      throw new Error("download endpoint has no responseHandler");
+    }
 
     // responseHandler returns the blob on ok
     const okBlob = {size: 5, type: "text/plain"};
@@ -624,7 +648,7 @@ describe("useDocumentStorageApi", () => {
       status: 200,
       statusText: "OK",
     };
-    return dlSpec.responseHandler(okResp).then(async (blob: unknown) => {
+    return responseHandler(okResp).then(async (blob: unknown) => {
       expect(blob).toBe(okBlob);
 
       // non-ok JSON response
@@ -636,7 +660,7 @@ describe("useDocumentStorageApi", () => {
         statusText: "Bad Request",
         text: async () => errJson,
       };
-      const parsed = await dlSpec.responseHandler(jsonResp);
+      const parsed = await responseHandler(jsonResp);
       expect(parsed).toEqual({detail: "Bad", status: 400});
 
       // non-ok non-JSON response (fallback)
@@ -647,7 +671,7 @@ describe("useDocumentStorageApi", () => {
         statusText: "err",
         text: async () => "boom",
       };
-      const textParsed = await dlSpec.responseHandler(textResp);
+      const textParsed = await responseHandler(textResp);
       expect(textParsed).toEqual({detail: "boom", status: 500});
 
       // Delete endpoints
@@ -684,7 +708,7 @@ describe("useAdminBackgroundTaskMutation", () => {
   it("posts to the background-tasks collection under the admin root", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminBackgroundTaskMutation(api as never, "/admin/"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.adminPostBackgroundTask.query({ids: ["a"], kind: "reindex"})).toEqual({
       body: {ids: ["a"], kind: "reindex"},
       method: "POST",
@@ -707,7 +731,7 @@ describe("useAdminRoles", () => {
   it("injects rbac list and mutation endpoints at the API root", () => {
     const api = makeMockApi();
     const result = runHook(() => useAdminRoles(api as never, "/v1/admin"));
-    const injected = (api as Record<string, unknown>).__injected as CapturedEndpoints;
+    const injected = api.__injected;
     expect(injected.adminListRbacRoles.query()).toEqual({method: "GET", url: "/v1/rbac/roles"});
     expect(injected.adminListRbacStatements.query()).toEqual({
       method: "GET",

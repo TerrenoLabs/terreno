@@ -18,7 +18,7 @@ import mongoose from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
-import {AdminApp} from "./adminApp";
+import {AdminApp, type AdminScriptConfig} from "./adminApp";
 
 const createTestScript = (overrides?: {
   runner?: ScriptRunner;
@@ -53,7 +53,7 @@ const createFailingScript = () => ({
 });
 
 const buildApp = (
-  scripts = [createTestScript()],
+  scripts: AdminScriptConfig[] = [createTestScript()],
   accessControl?: AnyTerrenoAccess
 ): express.Application => {
   const app = getBaseServer();

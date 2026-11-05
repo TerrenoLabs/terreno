@@ -43,6 +43,9 @@ bun run script seedFeatureFlags --wet
 # Load the synthetic chat-safety dataset into the database this process uses
 bun run script seedChatSafetyDataset --wet
 
+# Fill AI Observability with demo prompts, experiments, traces, review items, and a judged review batch
+bun run script seedAiObservabilityDemo --wet
+
 # Machine-readable output for tooling
 bun run script countRecords --json --model users
 ```

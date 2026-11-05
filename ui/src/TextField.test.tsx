@@ -5,6 +5,7 @@ import type {ReactElement} from "react";
 import type {TextInput} from "react-native";
 import type {TextFieldProps} from "./Common";
 import {TextField} from "./TextField";
+import {defaultThemePrimitives, useTheme} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
 describe("TextField", () => {
@@ -399,21 +400,25 @@ describe("TextField", () => {
         const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
         const originalSetTimeout = globalThis.setTimeout;
         let scheduledRefocus: (() => void) | undefined;
-        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-          (handler, timeout, ...args) => {
-            scheduledRefocus = handler as unknown as () => void;
-            return originalSetTimeout(() => {}, timeout, ...args);
-          }
-        );
+        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
+          handler: () => void,
+          timeout?: number,
+          ...args: unknown[]
+        ) => {
+          scheduledRefocus = handler;
+          return originalSetTimeout(() => {}, timeout, ...args);
+        }) as unknown as typeof setTimeout);
         reactNative.Platform.OS = "web";
-        globalThis.requestAnimationFrame = undefined;
+        (
+          globalThis as {requestAnimationFrame?: typeof requestAnimationFrame}
+        ).requestAnimationFrame = undefined;
 
         try {
           const {getByDisplayValue, getByTestId} = renderWithTheme(
             <TextField onChange={mockOnChange} testID="pw" type="password" value="hunter2" />
           );
           const input = getByDisplayValue("hunter2");
-          const webInput = {focus: () => void 0};
+          const webInput = {focus: (): void => {}};
           const ref = (input.props as unknown as {ref?: (value: TextInput | null) => void}).ref;
           assert.isFunction(ref);
           const focusSpy = mock(() => {});
@@ -770,8 +775,10 @@ describe("TextField", () => {
 
     it("warns for not-yet-supported field types", () => {
       const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      // TextFieldProps excludes numberRange; untyped callers can still pass it.
+      const unsupportedType = "numberRange" as unknown as TextFieldProps["type"];
       try {
-        renderWithTheme(<TextField onChange={mockOnChange} type="numberRange" value="" />);
+        renderWithTheme(<TextField onChange={mockOnChange} type={unsupportedType} value="" />);
         expect(warnSpy).toHaveBeenCalledWith("numberRange is not yet supported");
       } finally {
         warnSpy.mockRestore();
@@ -1165,6 +1172,72 @@ describe("TextField", () => {
       } finally {
         setOS(originalOS);
       }
+    });
+  });
+
+  describe("field theming", () => {
+    type ThemeContextValue = ReturnType<typeof useTheme>;
+
+    const renderWithFieldTheme = (
+      props: Partial<TextFieldProps> = {}
+    ): {captured: () => ThemeContextValue | undefined; findBox: (color: string) => unknown[]} => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = (): null => {
+        captured = useTheme();
+        return null;
+      };
+      const view = renderWithTheme(
+        <>
+          <Capture />
+          <TextField onChange={() => {}} testID="themed-field" value="" {...props} />
+        </>
+      );
+      const findBox = (color: string): unknown[] =>
+        view.UNSAFE_root.findAll(
+          (node) =>
+            typeof node.type === "string" &&
+            node.props.style?.backgroundColor === color &&
+            node.props.style?.borderRadius === 4
+        );
+      return {captured: () => captured, findBox};
+    };
+
+    it("paints the input box from field.background and field.border", () => {
+      const {captured, findBox} = renderWithFieldTheme();
+      act(() => {
+        captured()?.setTheme({field: {background: "primary000", border: "primary500"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.primary000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.primary500);
+    });
+
+    it("paints a disabled input from field.backgroundDisabled and field.borderDisabled", () => {
+      const {captured, findBox} = renderWithFieldTheme({disabled: true});
+      act(() => {
+        captured()?.setTheme({
+          field: {backgroundDisabled: "accent050", borderDisabled: "accent700"},
+        });
+      });
+      const boxes = findBox(defaultThemePrimitives.accent050) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.accent700);
+    });
+
+    it("paints an error border from field.borderError", () => {
+      const {captured, findBox} = renderWithFieldTheme({errorText: "Required"});
+      act(() => {
+        captured()?.setTheme({field: {borderError: "warning200"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.neutral000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.warning200);
     });
   });
 });

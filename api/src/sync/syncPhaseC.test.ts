@@ -1,11 +1,12 @@
 import {beforeEach, describe, expect, it} from "bun:test";
 import type express from "express";
+import type {Collection} from "mongodb";
 import {type Model, model, Schema} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
-import type {ModelRouterOptions} from "../api";
+import type {ModelRouterOptions, RESTMethod} from "../api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth, type User} from "../auth";
-import {Permissions, type RESTMethod} from "../permissions";
+import {Permissions} from "../permissions";
 import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "../plugins";
 import {DEFAULT_IGNORED_COLLECTIONS} from "../realtime/changeStreamWatcher";
 import {authAsUser, getBaseServer, setupDb, UserModel} from "../tests";
@@ -247,7 +248,7 @@ describe("Phase C sync routes", () => {
         ownerId: notAdminId,
         title: `legacy-${String(i).padStart(4, "0")}`,
       }));
-      await PhaseCTodoModel.collection.insertMany(legacy as unknown as PhaseCTodo[]);
+      await PhaseCTodoModel.collection.insertMany(legacy);
       // A couple of modern (stamped) docs after the legacy stratum.
       await PhaseCTodoModel.create({ownerId: notAdminId, title: "modern-1"});
       await PhaseCTodoModel.create({ownerId: notAdminId, title: "modern-2"});
@@ -291,7 +292,7 @@ describe("Phase C sync routes", () => {
       await PhaseCTodoModel.collection.insertMany([
         {deleted: false, ownerId: notAdminId, title: "legacy-a"},
         {deleted: false, ownerId: notAdminId, title: "legacy-b"},
-      ] as unknown as PhaseCTodo[]);
+      ]);
       await PhaseCTodoModel.create({ownerId: notAdminId, title: "stamped"});
 
       const page1 = await agent
@@ -319,7 +320,7 @@ describe("Phase C sync routes", () => {
       await PhaseCTodoModel.collection.insertMany([
         {deleted: true, ownerId: notAdminId, title: "DUMMY-deleted-legacy"},
         {deleted: false, ownerId: notAdminId, title: "DUMMY-live-legacy"},
-      ] as unknown as PhaseCTodo[]);
+      ]);
 
       const page = await agent
         .get(`/sync/snapshot?stream=${enc(ownerStream())}&limit=10`)
@@ -341,13 +342,15 @@ describe("Phase C sync routes", () => {
       const noteStream = `phaseCNotes|owner:${notAdminId}`;
       const total = 25;
       const limit = 10;
-      await PhaseCNoteModel.collection.insertMany(
+      // The driver collection defaults to ObjectId keys; this model mints string ids.
+      const rawNotes = PhaseCNoteModel.collection as unknown as Collection<PhaseCNote>;
+      await rawNotes.insertMany(
         Array.from({length: total}, (_v, i) => ({
           _id: `note-${String(i).padStart(3, "0")}`,
           deleted: false,
           ownerId: notAdminId,
           title: `legacy note ${i}`,
-        })) as unknown as PhaseCNote[]
+        }))
       );
       await PhaseCNoteModel.create({
         _id: "note-modern",
@@ -389,7 +392,7 @@ describe("Phase C sync routes", () => {
     it("Task 9.14: 400s (not 500s) on a malformed legacyCursor for an ObjectId-keyed model", async () => {
       await PhaseCTodoModel.collection.insertMany([
         {deleted: false, ownerId: notAdminId, title: "legacy-a"},
-      ] as unknown as PhaseCTodo[]);
+      ]);
       await agent
         .get(`/sync/snapshot?stream=${enc(ownerStream())}&legacyCursor=not-an-object-id`)
         .expect(400);
@@ -475,7 +478,7 @@ describe("Phase C sync routes", () => {
       await PhaseCTodoModel.create({ownerId: notAdminId, title: "visible-2"});
 
       const res = await agent.get(`/sync/snapshot?stream=${enc(ownerStream())}`).expect(200);
-      const titles = res.body.entities.map((e: SnapshotEntity) => e.data.title);
+      const titles = res.body.entities.map((e: SnapshotEntity) => e.data?.title);
       expect(titles).toEqual(["visible-1", "visible-2"]);
       // The cursor advanced past the denied doc (seq 3), so it is never re-fetched.
       expect(res.body.cursor).toBe(3);
@@ -496,7 +499,7 @@ describe("Phase C sync routes", () => {
                 if (!doc) {
                   return true;
                 }
-                return !String(doc.title).startsWith("denied-");
+                return !String((doc as {title?: string}).title).startsWith("denied-");
               },
             ],
           },
@@ -564,7 +567,7 @@ describe("Phase C sync routes", () => {
       // "other" is excluded by the $or filter; "mine" appears as a tombstone (data null).
       const titles = res.body.entities
         .filter((e: SnapshotEntity) => !e.deleted)
-        .map((e: SnapshotEntity) => e.data.title)
+        .map((e: SnapshotEntity) => e.data?.title)
         .sort();
       expect(titles).toEqual(["shared"]);
       const tombstone = byTitle.get(String(mine._id));

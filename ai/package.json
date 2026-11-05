@@ -7,10 +7,6 @@
     "@ai-sdk/mcp": "^1.0.21",
     "@ai-sdk/provider": "^3.0.16",
     "@google-cloud/storage": "catalog:",
-    "@langfuse/client": "^5.0.1",
-    "@langfuse/otel": "^5.0.1",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-node": "0.222.0",
     "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
     "ajv": "catalog:",
@@ -88,18 +84,6 @@
       "require": "./dist/harness/runners/jobsRunner.js",
       "types": "./dist/harness/runners/jobsRunner.d.ts"
     },
-    "./langfuseApp": {
-      "default": "./dist/langfuseApp.js",
-      "import": "./dist/langfuseApp.js",
-      "require": "./dist/langfuseApp.js",
-      "types": "./dist/langfuseApp.d.ts"
-    },
-    "./langfuseClient": {
-      "default": "./dist/langfuseClient.js",
-      "import": "./dist/langfuseClient.js",
-      "require": "./dist/langfuseClient.js",
-      "types": "./dist/langfuseClient.d.ts"
-    },
     "./observability/localPlugin": {
       "default": "./dist/observability/local/localPlugin.js",
       "import": "./dist/observability/local/localPlugin.js",
@@ -137,7 +121,6 @@
   "name": "@terreno/ai",
   "peerDependencies": {
     "@ai-sdk/google-vertex": "^4.0.142",
-    "@ai-sdk/provider": "^4.0.26",
     "@terreno/api": "workspace:*",
     "@terreno/jobs": "workspace:*",
     "mongoose": "^8.0.0 || ^9.0.0"
@@ -161,14 +144,16 @@
     "compile": "bun tsc",
     "compile:watch": "bun tsc -w",
     "dev": "bun tsc -w",
-    "lint": "biome check ./src",
-    "lint:fix": "biome check --write ./src",
-    "lint:unsafefix": "biome check --fix --unsafe ./src",
+    "lint": "biome check ./src ./e2e",
+    "lint:fix": "biome check --write ./src ./e2e",
+    "lint:unsafefix": "biome check --fix --unsafe ./src ./e2e",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun test --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do bun test --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
     "test:agent": "AGENT=1 bun test --only-failures --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do AGENT=1 bun test --only-failures --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
     "test:ci": "bun test --preload ./src/tests/bunSetup.ts && for f in ./src/isolated/*.isolated.ts; do bun test --preload ./src/tests/bunSetup.ts \"$f\" || exit 1; done",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
-  "version": "57.20.0"
+  "version": "57.22.0"
 }

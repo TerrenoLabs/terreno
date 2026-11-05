@@ -6,17 +6,18 @@ import {join} from "node:path";
 import mongoose from "mongoose";
 import type {UserModel as UserModelType} from "./auth";
 import {runStartupMigrations} from "./migrations/runner";
-import {MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION} from "./migrations/types";
+import {MIGRATION_LOCK_ID, MIGRATIONS_COLLECTION, type MigrationStoreDoc} from "./migrations/types";
 import {TerrenoApp} from "./terrenoApp";
 import {setupDb, UserModel} from "./tests";
+import {partialEnv} from "./tests/testEnv";
 
 const fixtures = (...parts: string[]): string => {
-  return join(import.meta.dir, "migrations", "fixtures", ...parts);
+  return join(__dirname, "migrations", "fixtures", ...parts);
 };
 
 const appliedIds = async (): Promise<string[]> => {
   const docs = await mongoose.connection
-    .collection(MIGRATIONS_COLLECTION)
+    .collection<MigrationStoreDoc>(MIGRATIONS_COLLECTION)
     .find({_id: {$ne: MIGRATION_LOCK_ID}})
     .project({id: 1})
     .toArray();
@@ -31,7 +32,7 @@ describe("runStartupMigrations", () => {
 
   it("does not run when migrations option is omitted", async () => {
     const result = await runStartupMigrations({
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       mongoose,
     });
     expect(result.ran).toBe(false);
@@ -40,7 +41,7 @@ describe("runStartupMigrations", () => {
 
   it("does not run when runOnStart is omitted", async () => {
     const result = await runStartupMigrations({
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       migrations: {dir: fixtures("valid")},
       mongoose,
     });
@@ -50,7 +51,7 @@ describe("runStartupMigrations", () => {
 
   it("applies pending files when runOnStart is true", async () => {
     const result = await runStartupMigrations({
-      env: {NODE_ENV: "test"},
+      env: partialEnv({NODE_ENV: "test"}),
       migrations: {dir: fixtures("valid"), runOnStart: true},
       mongoose,
     });
@@ -62,7 +63,7 @@ describe("runStartupMigrations", () => {
   it("throws in production without ALLOW_MIGRATIONS before applying", async () => {
     await expect(
       runStartupMigrations({
-        env: {NODE_ENV: "production"},
+        env: partialEnv({NODE_ENV: "production"}),
         migrations: {dir: fixtures("valid"), runOnStart: true},
         mongoose,
       })

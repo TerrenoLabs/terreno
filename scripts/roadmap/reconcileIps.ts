@@ -386,7 +386,7 @@ const PACKAGE_AREAS: [RegExp, string][] = [
   [/@terreno\/admin|admin-(backend|frontend|spa)\//, "admin"],
   [/@terreno\/syncdb|syncdb\//, "syncdb"],
   [/@terreno\/mcp|mcp-server\//, "mcp"],
-  [/@terreno\/ai\b|langfuse/i, "ai"],
+  [/@terreno\/ai\b/i, "ai"],
   [/better auth|@terreno\/.*auth|oauth/i, "auth"],
   [/terraform|cloud run|netlify|vercel/i, "deploy"],
   [/@terreno\/ui|\bui\/src\//, "ui"],

@@ -39,6 +39,12 @@ export interface PromptRelatedTraceSummary {
   status: "error" | "ok";
 }
 
+export interface PromptUsedBy {
+  folder: string;
+  name: string;
+  versions: number[];
+}
+
 export interface PromptRelationships {
   experiments: {
     items: PromptRelatedExperimentSummary[];
@@ -73,6 +79,12 @@ export interface PromptDetail {
   name: string;
   relationships: PromptRelationships;
   tags: string[];
+  /** Other prompts whose saved text contains `{{> this name}}`, capped like other relationships. */
+  usedBy: {
+    items: PromptUsedBy[];
+    limit: number;
+    total: number;
+  };
   versions: PromptVersionDetail[];
 }
 
@@ -81,10 +93,22 @@ const emptyRelationships = (): PromptRelationships => ({
   traces: {items: [], limit: 20, total: 0},
 });
 
+const emptyUsedBy = (): PromptDetail["usedBy"] => ({items: [], limit: 20, total: 0});
+
+const normalizeUsedBy = (
+  usedBy: PromptDetail["usedBy"] | PromptUsedBy[] | undefined
+): PromptDetail["usedBy"] => {
+  if (Array.isArray(usedBy)) {
+    return {items: usedBy, limit: 20, total: usedBy.length};
+  }
+  return usedBy ?? emptyUsedBy();
+};
+
 const normalizePromptDetail = (detail: PromptDetail): PromptDetail => {
   return {
     ...detail,
     relationships: detail.relationships ?? emptyRelationships(),
+    usedBy: normalizeUsedBy(detail.usedBy),
   };
 };
 
@@ -102,6 +126,23 @@ export interface FolderCount {
 }
 
 export const ALL_FOLDERS = "";
+
+/**
+ * The registry tag that pulls another prompt's production body into this one.
+ * Keep this aligned with `promptReferencePattern` in `@terreno/ai`: `{{> name}}`.
+ */
+const promptReferenceTag = (name: string): string => {
+  return `{{> ${name}}}`;
+};
+
+/** Appends a prompt reference, keeping it on its own line when the field already has text. */
+export const appendPromptReference = (current: string, name: string): string => {
+  const tag = promptReferenceTag(name);
+  if (current.trim().length === 0) {
+    return tag;
+  }
+  return current.endsWith("\n") ? `${current}${tag}` : `${current}\n${tag}`;
+};
 
 export const TEMPERATURE_PRESETS: Array<{label: string; value: string}> = [
   {label: "Deterministic (0)", value: "0"},
@@ -158,27 +199,6 @@ export const formatProduction = (production: number | "—"): string => {
     return "—";
   }
   return `v${production}`;
-};
-
-export const formatUsageCalls = (usage?: PromptUsage7d): string => {
-  if (!usage) {
-    return "—";
-  }
-  return String(usage.calls);
-};
-
-export const formatUsageCost = (usage?: PromptUsage7d): string => {
-  if (!usage || usage.costUsd === undefined) {
-    return "—";
-  }
-  return `$${usage.costUsd.toFixed(4)}`;
-};
-
-export const formatLastUsed = (usage?: PromptUsage7d): string => {
-  if (!usage?.lastUsed) {
-    return "—";
-  }
-  return usage.lastUsed;
 };
 
 export const filterPrompts = ({
@@ -248,10 +268,51 @@ export const variableNamesFromVersion = (version: PromptVersionDetail): string[]
   return templateVariableKeys(version.template ?? "");
 };
 
+const JSON_SCHEMA_OBJECT_KEYWORDS = new Set([
+  "$schema",
+  "additionalProperties",
+  "description",
+  "properties",
+  "required",
+  "title",
+]);
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+// Output field names: a JSON Schema's `properties` (with types when given), else a field map's keys.
+const outputFieldNames = (schema?: Record<string, unknown>): string[] => {
+  if (!schema) {
+    return [];
+  }
+  const {properties} = schema;
+  // A field map may have a field named "properties"; only treat it as JSON Schema when the
+  // object says so or holds nothing but object-schema keywords.
+  const isJsonSchema =
+    isPlainObject(properties) &&
+    Object.values(properties).every(isPlainObject) &&
+    (schema.type === "object" ||
+      Object.keys(schema).every((key) => JSON_SCHEMA_OBJECT_KEYWORDS.has(key)));
+  if (!isJsonSchema) {
+    return Object.keys(schema);
+  }
+  return Object.entries(properties).map(([name, property]) => {
+    const type = isPlainObject(property) ? property.type : undefined;
+    if (typeof type === "string") {
+      return `${name} (${type})`;
+    }
+    if (Array.isArray(type) && type.length > 0) {
+      return `${name} (${type.join(" | ")})`;
+    }
+    return name;
+  });
+};
+
 export const schemaSummary = (version: PromptVersionDetail): string => {
   const variableKeys = version.variables.map((entry) => entry.key);
   const input = variableKeys.length > 0 ? variableKeys.join(", ") : "none";
-  const outputKeys = version.outputSchema ? Object.keys(version.outputSchema) : [];
+  const outputKeys = outputFieldNames(version.outputSchema);
   const output = outputKeys.length > 0 ? outputKeys.join(", ") : "none";
   return `Variables: ${input}. Output: ${output}.`;
 };

@@ -18,21 +18,10 @@ describe("@terreno/ai public exports", () => {
     "addMcpRoutes",
     "addProjectRoutes",
     "assertVertexModelsEnabled",
-    "compilePrompt",
     "createAskTools",
-    "createPrompt",
-    "createTelemetryConfig",
     "createVertexProvider",
     "findAgentBlock",
-    "getCached",
     "getMCPTools",
-    "getLangfuseClient",
-    "getPrompt",
-    "initLangfuseClient",
-    "initTracing",
-    "invalidateCache",
-    "invalidatePromptCache",
-    "isLangfuseInitialized",
     "isVertexModelAllowed",
     "jsonSchema",
     "listEnabledVertexModels",
@@ -41,17 +30,13 @@ describe("@terreno/ai public exports", () => {
     "normalizeLlmJsonTextForStructuredOutput",
     "normalizeVertexModelId",
     "parseAiJson",
-    "preparePromptForAI",
     "getObservabilityApp",
     "resetObservabilityApp",
     "resolveObservabilityControl",
     "runBufferedChatTurn",
     "validateObservabilityConfig",
-    "setCached",
-    "shutdownLangfuseClient",
-    "shutdownTracing",
     "verifyVertexModelsEnabled",
-  ] as const;
+  ];
 
   const expectedClasses = [
     "AIRequest",
@@ -60,14 +45,12 @@ describe("@terreno/ai public exports", () => {
     "FileAttachment",
     "FileStorageService",
     "GptHistory",
-    "LangfuseApp",
-    "LangfuseCache",
     "MCPService",
     "MemoryScoreSink",
     "MemoryTraceSink",
     "ObservabilityApp",
     "Project",
-  ] as const;
+  ];
 
   const expectedConstants = [
     "COMPACT_SURFACE_SYSTEM_PROMPT",
@@ -85,7 +68,7 @@ describe("@terreno/ai public exports", () => {
     "toggleChecklistHostAction",
     "TRANSLATION_PROMPT",
     "TemperaturePresets",
-  ] as const;
+  ];
 
   it.each(expectedFunctions)("exports %s as a function", (name) => {
     expect(typeof exported[name]).toBe("function");

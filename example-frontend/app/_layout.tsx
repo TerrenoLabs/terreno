@@ -40,7 +40,7 @@ import {AppThemeProvider} from "@/contexts/ThemePreferenceContext";
 import {oauthHandoff} from "@/lib/oauthHandoff";
 import store, {persistor, syncBetterAuthSession} from "@/store/index";
 import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
-import {terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
+import {flagsApi, terrenoApi, useGetMeQuery, usePostCommsPushTokensMutation} from "@/store/sdk";
 import {socketTransports} from "@/store/socketTransports";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
@@ -64,7 +64,7 @@ const OpenFeatureBridge: FC<{
   socket: ReturnType<typeof useSocketConnection>["socket"];
 }> = ({children, socket}) => {
   const bridgeUserId = useSelector(selectBetterAuthUserId) ?? undefined;
-  useTerrenoFeatureFlags(terrenoApi, {
+  useTerrenoFeatureFlags(flagsApi, {
     skip: !bridgeUserId,
     socket,
     userId: bridgeUserId,

@@ -34,7 +34,7 @@ mock.module("../emptyApi", () => ({
 }));
 
 const {configureStore} = await import("@reduxjs/toolkit");
-const {createApi, fetchBaseQuery} = await import("@reduxjs/toolkit/query");
+const {createApi, fetchBaseQuery, QueryStatus} = await import("@reduxjs/toolkit/query");
 const {createOfflineMiddleware, isNetworkFetchError, shouldReplayQueuedMutation} = await import(
   "../offlineMiddleware"
 );
@@ -184,7 +184,7 @@ const goOfflineAndQueue = (
   queueRejectedMutation(store, mutation);
 };
 
-const syncQueuedMutations = async (store: TestStore, ms = 120): Promise<void> => {
+const syncQueuedMutations = async (store: TestStore | SourceStore, ms = 120): Promise<void> => {
   store.dispatch(setOnlineStatus(true));
   await waitForEffects(ms);
 };
@@ -249,7 +249,7 @@ describe("createOfflineMiddleware", () => {
 
       const result = await store.dispatch(api.endpoints.getTodos.initiate(undefined));
 
-      expect(result.status).toBe("fulfilled");
+      expect(result.status).toBe(QueryStatus.fulfilled);
       expect(selectIsOnline(store.getState())).toBe(true);
     });
 

@@ -197,6 +197,10 @@ describe("emptyApi token helpers", () => {
   });
 });
 
+// axios.post is generic over its response type; the refresh tests only control the response body.
+const fakeAxiosPost = (impl: () => Promise<{data: unknown}>): typeof axios.post =>
+  impl as unknown as typeof axios.post;
+
 describe("refreshAuthToken", () => {
   let postSpy: ReturnType<typeof spyOn<typeof axios, "post">>;
 
@@ -270,10 +274,12 @@ describe("refreshAuthToken", () => {
     setTokens({refresh: "old-refresh"});
     // The refresh token must be readable, so only remove the window after the read would happen
     // by making the storage read come from a pre-populated value and deleting window in between.
-    postSpy.mockImplementation(async () => {
-      Reflect.deleteProperty(globalWithWindow, "window");
-      return {data: {data: {refreshToken: "new-refresh", token: "new-auth"}}};
-    });
+    postSpy.mockImplementation(
+      fakeAxiosPost(async () => {
+        Reflect.deleteProperty(globalWithWindow, "window");
+        return {data: {data: {refreshToken: "new-refresh", token: "new-auth"}}};
+      })
+    );
 
     await refreshAuthToken();
 
@@ -510,11 +516,13 @@ describe("staggeredBaseQuery", () => {
     setTokens({auth: makeJwt(3600), refresh: makeJwt(7200)});
     let resolveRefresh: (() => void) | undefined;
     postSpy.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          resolveRefresh = () =>
-            resolve({data: {data: {refreshToken: "new-refresh", token: "new-auth"}}});
-        })
+      fakeAxiosPost(
+        () =>
+          new Promise((resolve) => {
+            resolveRefresh = () =>
+              resolve({data: {data: {refreshToken: "new-refresh", token: "new-auth"}}});
+          })
+      )
     );
     const requests = installFetch([
       () => jsonResponse({title: "Unauthorized"}, 401),

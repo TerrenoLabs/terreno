@@ -24,6 +24,7 @@ describe("observabilityAdminScreens", () => {
       "ai-datasets",
       "ai-experiments",
       "ai-review",
+      "ai-review-batches",
     ]);
   });
 
@@ -65,6 +66,12 @@ describe("observabilityAdminScreens", () => {
         displayName: "Review queue",
         group: AI_OBSERVABILITY_GROUP,
         name: "ai-review",
+      },
+      {
+        adminAccess: {action: "list", resource: "aiReview"},
+        displayName: "Review batches",
+        group: AI_OBSERVABILITY_GROUP,
+        name: "ai-review-batches",
       },
     ]);
   });

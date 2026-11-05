@@ -131,6 +131,16 @@ mcpServiceTokenSchema.statics = {
     });
     return {mcpServiceToken, token};
   },
+  async revokeAllForUser(
+    this: McpServiceTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<number> {
+    const result = await this.updateMany(
+      {revokedAt: {$exists: false}, userId: new mongoose.Types.ObjectId(String(userId))},
+      {$set: {revokedAt: DateTime.now().toJSDate()}}
+    );
+    return result.modifiedCount;
+  },
   async revokeForUser(
     this: McpServiceTokenModel,
     user: {_id: {toString(): string}},

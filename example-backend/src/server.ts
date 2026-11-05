@@ -1,14 +1,13 @@
 import type http from "node:http";
 import * as Sentry from "@sentry/bun";
-import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
-import {AdminSpaServeApp} from "@terreno/admin-spa";
 import {
-  AIAdminApp,
-  AIService,
-  createLocalObservabilityPlugin,
-  LangfuseApp,
-  ObservabilityApp,
-} from "@terreno/ai";
+  AdminApp,
+  DocumentStorageApp,
+  mcpAdminModels,
+  mcpAdminScripts,
+} from "@terreno/admin-backend";
+import {AdminSpaServeApp} from "@terreno/admin-spa";
+import {AIAdminApp, AIService, createLocalObservabilityPlugin, ObservabilityApp} from "@terreno/ai";
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
@@ -62,7 +61,6 @@ import {
 } from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
-import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -213,10 +211,23 @@ export const start = async (
         level: Configuration.get<string>("LOGGING_LEVEL") as "debug" | "info" | "warn" | "error",
         logRequests: Boolean(!isDeployed),
       },
+      // Opt-in OAuth for remote MCP clients; consent runs on the admin SPA's built-in screen.
+      mcpOAuth:
+        process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
+          ? {
+              allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost", "127.0.0.1"],
+              consentUrl: `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
+              dynamicClientRegistration: true,
+              enabled: true,
+              issuer: process.env.PUBLIC_API_URL,
+            }
+          : undefined,
+      mcpRequestLog: {enabled: true, retentionDays: 30},
       mcpServiceTokens: {
         enabled: true,
         publicMcpUrl: process.env.PUBLIC_API_URL ?? process.env.BETTER_AUTH_URL,
       },
+      mcpToolSettings: true,
       migrations: {dir: resolveExampleMigrationsDir()},
       organizations: {
         settingsSchema: organizationSettingsSchema,
@@ -494,9 +505,9 @@ export const start = async (
           ],
           home: exampleAdminHome,
           migrations: {dir: resolveExampleMigrationsDir()},
-          models: [mcpServiceTokenAdminModel],
+          models: mcpAdminModels({requestLog: true, toolSettings: true}),
           organizations: true,
-          scripts: adminScripts,
+          scripts: [...adminScripts, ...mcpAdminScripts()],
         })
       )
       .register(
@@ -546,25 +557,6 @@ export const start = async (
           // Compiled deploys (Cloud Run) must point at the bundled SPA export, since the
           // plugin's __dirname-relative default cannot resolve inside a bun-compiled binary.
           distDir: process.env.ADMIN_SPA_DIST_DIR,
-        })
-      );
-    }
-
-    // Langfuse OTEL/client init has crashed Cloud Run preview revisions before PORT
-    // opens. Smoke tests omit these keys; production deploy still registers Langfuse.
-    if (
-      process.env.LANGFUSE_SECRET_KEY &&
-      process.env.LANGFUSE_PUBLIC_KEY &&
-      !process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
-    ) {
-      terraApp.register(
-        new LangfuseApp({
-          baseUrl: process.env.LANGFUSE_BASE_URL,
-          organization: process.env.LANGFUSE_ORGANIZATION,
-          project: process.env.LANGFUSE_PROJECT,
-          projectId: process.env.LANGFUSE_PROJECT_ID,
-          publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-          secretKey: process.env.LANGFUSE_SECRET_KEY,
         })
       );
     }

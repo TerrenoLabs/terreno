@@ -21,7 +21,7 @@ const updateOrganization = mock(() => ({unwrap: async () => ({})}));
 const attachMember = mock(() => ({unwrap: async () => ({})}));
 const updateMember = mock(() => ({unwrap: async () => ({})}));
 const removeMember = mock(() => ({unwrap: async () => ({})}));
-const routerPush = mock(() => {});
+const routerPush = mock((_href: unknown) => {});
 
 mock.module("expo-router", () => ({router: {push: routerPush}}));
 

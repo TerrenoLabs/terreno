@@ -13,13 +13,13 @@ interface QueryState<T> {
 const metaState: QueryState<unknown> = {data: undefined, isLoading: false};
 const valuesState: QueryState<unknown> = {data: undefined, isLoading: false};
 let updateImpl: (body: unknown) => Promise<unknown> = async () => ({});
-const updateCalls: unknown[] = [];
+const updateCalls: Record<string, unknown>[] = [];
 
 mock.module("./useConfigurationApi", () => ({
   useConfigurationApi: () => ({
     useMetaQuery: () => ({data: metaState.data, isLoading: metaState.isLoading}),
     useUpdateMutation: () => [
-      (body: unknown) => ({
+      (body: Record<string, unknown>) => ({
         unwrap: async () => {
           updateCalls.push(body);
           return updateImpl(body);

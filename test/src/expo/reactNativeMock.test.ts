@@ -12,9 +12,14 @@ import {registerExpoTestEnvironment} from "./registerExpoTestEnvironment";
 
 registerExpoTestEnvironment({setProcessEnv: false});
 
-const {createElement, createRef} = await import("react");
-const {render} = await import("@testing-library/react-native");
-const ReactNative = await import("react-native");
+// Required, not imported, so react-native resolves to the mock the environment registers.
+const {createElement, createRef} = require("react") as typeof import("react");
+const {render} =
+  require("@testing-library/react-native") as typeof import("@testing-library/react-native");
+// The mock also exposes itself as `default`, which the CommonJS typings do not declare.
+const ReactNative = require("react-native") as typeof import("react-native") & {
+  default: typeof import("react-native");
+};
 
 interface AnimatedNode {
   _value: number;
@@ -45,14 +50,17 @@ describe("react-native mock", () => {
   it("flattens styles and processes colors", () => {
     expect(flattenStyle([{margin: 1}, [{padding: 2}], null])).toEqual({margin: 1, padding: 2});
     expect(flattenStyle(undefined)).toEqual({});
-    expect(ReactNative.StyleSheet.compose({a: 1}, {b: 2})).toEqual([{a: 1}, {b: 2}]);
-    expect(ReactNative.StyleSheet.compose(undefined, {b: 2})).toEqual({b: 2});
+    expect(ReactNative.StyleSheet.compose({margin: 1}, {padding: 2})).toEqual([
+      {margin: 1},
+      {padding: 2},
+    ]);
+    expect(ReactNative.StyleSheet.compose(undefined, {padding: 2})).toEqual({padding: 2});
     expect(ReactNative.StyleSheet.create({box: {flex: 1}})).toEqual({box: {flex: 1}});
     expect(processColor(null)).toBeNull();
     expect(processColor(0x112233)).toBe(0x112233);
     expect(processColor("red")).toBe(0xff000000);
-    expect(ReactNative.DynamicColorIOS({dark: "black", light: "white"})).toBe("white");
-    expect(ReactNative.PlatformColor("systemBlue", "blue")).toBe("systemBlue");
+    expect<unknown>(ReactNative.DynamicColorIOS({dark: "black", light: "white"})).toBe("white");
+    expect<unknown>(ReactNative.PlatformColor("systemBlue", "blue")).toBe("systemBlue");
   });
 
   it("completes composite animations and runs their children", () => {
@@ -105,8 +113,7 @@ describe("react-native mock", () => {
         createElement(ReactNative.SectionList<string>, {
           renderItem: ({item}: {item: string}) =>
             createElement(ReactNative.Text, null, `item ${item}`),
-          renderSectionHeader: ({section}: {section: {title: string}}) =>
-            createElement(ReactNative.Text, null, section.title),
+          renderSectionHeader: ({section}) => createElement(ReactNative.Text, null, section.title),
           sections: [{data: ["x"], title: "Section"}] as never,
         }),
         createElement(ReactNative.SectionList<string>, {

@@ -165,6 +165,20 @@ mcpOAuthTokenSchema.statics = {
       refreshToken: includeRefreshToken ? refreshSecret : undefined,
     };
   },
+  async revokeAllForUser(
+    this: McpOAuthTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<number> {
+    const tokens = await this.find({
+      revokedAt: {$exists: false},
+      userId: new mongoose.Types.ObjectId(String(userId)),
+    }).select({familyId: 1});
+    const familyIds = new Set(tokens.map((token) => token.familyId));
+    for (const familyId of familyIds) {
+      await this.revokeFamily(familyId);
+    }
+    return familyIds.size;
+  },
   async revokeClient(this: McpOAuthTokenModel, clientId: string): Promise<void> {
     const tokens = await this.find({clientId, revokedAt: {$exists: false}}).select({familyId: 1});
     const familyIds = new Set(tokens.map((token) => token.familyId));
@@ -210,6 +224,24 @@ mcpOAuthTokenSchema.statics = {
     });
   },
 };
+
+// Deleting a token row (for example from the admin panel) revokes its whole rotation chain and
+// keeps the rows, so the connection ends and its history stays visible.
+mcpOAuthTokenSchema.methods = {
+  ...mcpOAuthTokenSchema.methods,
+  async deleteOne(this: McpOAuthTokenDocument): Promise<McpOAuthTokenDocument> {
+    await (this.constructor as McpOAuthTokenModel).revokeFamily(this.familyId);
+    return this;
+  },
+};
+
+mcpOAuthTokenSchema.pre("deleteOne", {document: false, query: true}, async function () {
+  const [existing] = await this.model.find(this.getFilter()).limit(1).select({familyId: 1});
+  if (existing) {
+    await (this.model as McpOAuthTokenModel).revokeFamily(existing.familyId);
+  }
+  this.setQuery({_id: {$exists: false}});
+});
 
 export const McpOAuthToken =
   (mongoose.models.TerrenoMcpOAuthToken as McpOAuthTokenModel | undefined) ??

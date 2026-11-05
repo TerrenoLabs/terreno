@@ -7,6 +7,7 @@ import {expect} from "bun:test";
 import {createHmac, randomUUID} from "node:crypto";
 import type {BetterAuthPlugin} from "better-auth";
 import {genericOAuth} from "better-auth/plugins";
+import type {GoogleProfile} from "better-auth/social-providers";
 import type express from "express";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
@@ -83,12 +84,12 @@ export const stubOidcPlugin = (identity: StubIdentity): BetterAuthPlugin =>
 export const stubGoogleIdTokenOptions = (identity: StubIdentity): BetterAuthOptionsOverride => ({
   socialProviders: {
     google: {
+      // Google keys the account on `profile.sub`; the stub returns only the fields it reads.
       getUserInfo: async () => ({
-        data: {sub: identity.id},
+        data: {sub: identity.id} as GoogleProfile,
         user: {
           email: identity.email,
           emailVerified: identity.emailVerified ?? true,
-          id: identity.id,
           name: "Google User",
         },
       }),

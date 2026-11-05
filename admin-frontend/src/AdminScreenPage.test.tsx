@@ -6,7 +6,7 @@ import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminScreenPage} from "./AdminScreenPage";
 
-const pushMock = mock(() => {});
+const pushMock = mock((_href: unknown) => {});
 const backMock = mock(() => {});
 
 mock.module("expo-router", () => ({

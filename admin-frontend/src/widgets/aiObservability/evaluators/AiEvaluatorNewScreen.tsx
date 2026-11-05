@@ -159,6 +159,10 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
     });
   }, []);
 
+  const handleCancel = useCallback((): void => {
+    router.push(backHref);
+  }, [backHref]);
+
   const handleCreate = useCallback(async (): Promise<void> => {
     setCreateError("");
     if (!name.trim()) {
@@ -242,7 +246,13 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
   ]);
 
   return (
-    <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-new">
+    <AiObservabilityChrome
+      {...props}
+      backHref={backHref}
+      description="Set who decides the score, what they look at, and which scores are saved."
+      screenName="ai-evaluator-new"
+      title="New evaluator"
+    >
       <AiEvaluatorNewView
         assertionConstraint={assertionConstraint}
         assertionPath={assertionPath}
@@ -258,6 +268,7 @@ export const AiEvaluatorNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pro
         onAddDimension={handleAddDimension}
         onAssertionConstraintChange={setAssertionConstraint}
         onAssertionPathChange={setAssertionPath}
+        onCancel={handleCancel}
         onCreate={handleCreate}
         onDescriptionChange={setDescription}
         onDimensionChange={handleDimensionChange}

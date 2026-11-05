@@ -1,4 +1,3 @@
-import type {ImageModelV4, LanguageModelV4} from "@ai-sdk/provider";
 import {APIError, logger} from "@terreno/api";
 import type {ImageModel, LanguageModel} from "ai";
 
@@ -25,10 +24,8 @@ const MODEL_LIST_PAGE_SIZE = "200";
 
 /** Provider returned by `@ai-sdk/google-vertex` `createVertex`. */
 export interface VertexLanguageModelProvider {
-  /** `@ai-sdk/google-vertex` v4+ returns `LanguageModelV4`; older `ai` majors still type `LanguageModel` as v2/v3 only. */
-  (modelId: string): LanguageModel | LanguageModelV4;
-  /** `@ai-sdk/google-vertex` v4+ returns `ImageModelV4`; older `ai` majors still type `ImageModel` as v2/v3 only. */
-  image: (modelId: string) => ImageModel | ImageModelV4;
+  (modelId: string): LanguageModel;
+  image: (modelId: string) => ImageModel;
 }
 
 interface VertexModule {
@@ -61,11 +58,11 @@ export interface TerrenoVertexProvider {
   /** Configured allow-list (`undefined` means all models are allowed). */
   allowedModels?: string[];
   /** Resolve an image model, enforcing the allow-list. Throws `APIError(400)` when disallowed. */
-  imageModel: (modelId: string) => ImageModel | ImageModelV4;
+  imageModel: (modelId: string) => ImageModel;
   /** Returns true when the model id is permitted by the configured allow-list. */
   isModelAllowed: (modelId: string) => boolean;
   /** Resolve a language model, enforcing the allow-list. Throws `APIError(400)` when disallowed. */
-  languageModel: (modelId: string) => LanguageModel | LanguageModelV4;
+  languageModel: (modelId: string) => LanguageModel;
   /** Configured Vertex location. */
   location: string;
   /** Configured GCP project id. */
@@ -232,10 +229,9 @@ export const createVertexProvider = (
 
   return {
     allowedModels,
-    imageModel: (modelId: string): ImageModel | ImageModelV4 => raw.image(assertAllowed(modelId)),
+    imageModel: (modelId: string): ImageModel => raw.image(assertAllowed(modelId)),
     isModelAllowed: (modelId: string): boolean => isVertexModelAllowed(modelId, allowedModels),
-    languageModel: (modelId: string): LanguageModel | LanguageModelV4 =>
-      raw(assertAllowed(modelId)),
+    languageModel: (modelId: string): LanguageModel => raw(assertAllowed(modelId)),
     location,
     project,
     raw,

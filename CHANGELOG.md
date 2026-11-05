@@ -20,6 +20,87 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [57.22.0] - 2026-11-03
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.22.0.md`](mcp-server/src/docs/upgrades/57.22.0.md).
+
+### Breaking
+
+- `@terreno/ai` no longer integrates with Langfuse. The built-in observability prompt registry, traces, and review queue (`ObservabilityApp` with `createLocalObservabilityPlugin()`) replace it. Removed exports: `LangfuseApp`, `LangfuseCache`, `getCached`, `setCached`, `invalidateCache`, `initLangfuseClient`, `getLangfuseClient`, `isLangfuseInitialized`, `shutdownLangfuseClient`, `compilePrompt`, `createPrompt`, `getPrompt`, `invalidatePromptCache`, `initTracing`, `shutdownTracing`, `createTelemetryConfig`, `preparePromptForAI`, and the types `ChatMessage`, `GetPromptOptions`, `LangfuseAppOptions`, `LangfuseCachedPrompt`, `PaginatedResult`, `PreparePromptResult`, `PromptListItem`, `ScoreSubmission`, `ScoringFunction`, `TelemetrySettings`, `TraceListItem`. The `@terreno/ai/langfuseApp` and `@terreno/ai/langfuseClient` subpath exports are gone, along with the `@langfuse/client`, `@langfuse/otel`, and `@opentelemetry/*` dependencies of `@terreno/ai`.
+- `addGptRoutes` drops `langfuseSystemPromptName`; use `systemPromptName` (a registry prompt) instead. Chat turns no longer set `experimental_telemetry`.
+- `ControlPrimary` is now only `"local"`.
+- The example backend no longer reads `LANGFUSE_SECRET_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_ORGANIZATION`, `LANGFUSE_PROJECT`, or `LANGFUSE_PROJECT_ID`. Deploys (`.github/workflows/cd.yml`, `scripts/ci/gcp-deploy.sh`) no longer mount the Langfuse secrets, and `infra/flourish/main.tf` drops the `backend_secret_langfuse_secret_key` and `backend_secret_langfuse_public_key` modules, so the next `terraform apply` deletes those two Secret Manager secrets. Deploy a revision without the mounts before applying.
+
+### Added
+
+- `addGptRoutes` accepts `systemPromptName` and `systemPromptLabel`. A chat turn prepends that observability registry prompt to the system prompt and records its version on the trace.
+- The example chat reads `chat-assistant` and the `generate_joke` tool reads `joke-generator` from the observability prompt registry.
+- `bun run backend:seed` fills every AI Observability screen: labelled prompt versions for `example-summarize`, `joke-generator`, and `chat-assistant`, golden datasets, finished experiments, traces with scores, and review items in every status. Run it on an existing database with the `seedAiObservabilityDemo` admin script.
+- Review batches: pick a human question set and press **Grab 10 recent traces** to give reviewers a fixed set of inputs and outputs (`POST /ai/observability/review/batches`).
+- The review item screen shows one input, one output, and every question as Yes / No rows. On web, `Y` / `N` answer the highlighted question, `Enter` submits and moves to the next batch item, and `S` skips. Evaluator dimensions accept a reviewer `question`.
+- Run any LLM judge over a batch and see overall and per-question agreement with the human answers, plus a list of disagreements (`POST /ai/observability/review/batches/:id/judgeRuns`).
+- The AI observability seed adds the `summary-review-questions` question set, two judges for it, and a 10-item batch with 8 answers where one judge agrees 97% and the other 78%.
+- Observability registry prompts can reference other prompts with `{{> base-rules}}`, `{{> base-rules label=staging}}`, or `{{> base-rules version=3}}` (default label `production`). Shared instructions live in one prompt; `PromptRegistry.get`, the playground, experiments, and judges use the resolved text.
+- Every reference must resolve when it is saved. Creating a prompt, saving a version, and moving a label return 400 `Invalid prompt reference` for a malformed tag, an unknown prompt or version, or a label the referenced prompt does not have yet, 400 `Prompt reference cycle` when the change would make prompts include each other, and 400 `Prompt references nested too deeply` when it would nest the prompt, or any prompt that includes it, more than 5 levels.
+- Traces stay named after the called prompt. `ObsTrace.prompts` lists it first, then each shared prompt version it pulled in, marked with `includedBy`. `PromptVersionRef.includes` and harness prompt refs carry the same list.
+
+### Fixed
+
+- Review queue: `Y` and `N` answer the highlighted question when a Yes/No segment is focused. **What the AI was given** and **What the AI wrote** are headings above the field cards.
+- Review batches: **Save batch** sits on the New batch card. Search and **More filters** share a baseline.
+- Prompt hub: description, folder, and tags sit on the Versions screen with the editor. System and template fields explain what to write.
+- Evaluator detail loads the judge prompt `outputSchema` (so helpfulness no longer reports a missing dimension) and experiment rows open that experiment.
+
+## [57.21.0] - 2026-11-01
+
+Upgrade note: [`mcp-server/src/docs/upgrades/57.21.0.md`](mcp-server/src/docs/upgrades/57.21.0.md).
+
+### Breaking
+
+- The `terreno-scan` plugin is now `terreno-loop`, and its skills are renamed from `terreno-scan-*` to `terreno-loop-*`. The resident loop `terreno-scan-loop` is now `terreno-loop-run`: `/terreno-loop:run` in Claude Code, `/terreno-loop-run` in Cursor, `$terreno-loop-run` in Codex. Claude Code moves existing installs over through the marketplace `renames` entry. In Cursor and Codex, uninstall `terreno-scan` and install `terreno-loop`. Campaign state stays at `.terreno/scan/<goal>.json`, so campaigns already in progress resume.
+
+### Added
+
+- `@terreno/admin-spa` serves an MCP OAuth consent screen at `/console/oauth/consent`, so a backend with no product frontend can set `mcpOAuth.consentUrl` to `${issuer}/console/oauth/consent`. Any signed-in user can approve or deny a request with their Better Auth session; signed-out users sign in and return through the login screen's new `returnTo` parameter, which accepts only in-app paths.
+- Claude Code plugins now publish to npm with every release, as `@terreno/agent-plugin` and `@terreno/agent-plugin-loop`. A new `terreno-releases` marketplace installs them at the latest stable release. To pin one release, add `TerrenoLabs/terreno#<version>` instead. See [Install agent skills](docs/how-to/install-agent-skills.md#pick-a-channel).
+- The generated Claude plugin manifest no longer pins `version`. Before this change, plugins installed from the `TerrenoLabs/terreno` marketplace stayed on the `2.12.0` copy, because their version never changed. They now update on every commit. Run `/plugin update terreno@terreno-plugins` once to leave `2.12.0`.
+- The `terreno-planning` lifecycle plugin (2.13.0) plans e2e tests and manual regression cases in every IP:
+
+  - Grow requires `## E2E tests` and `## Regression cases` sections (either may be `None — <reason>`), read from the e2e guide at `docs/testing/e2e.md` or a `## Testing conventions` override in AGENTS.md or CLAUDE.md.
+  - Regression cases stay minimal: most features add none. A case is only for what a developer or QA must check by hand, such as push notifications, and Roast fails one that repeats an existing case.
+  - Pick writes each planned spec in the task that delivers it, and Roast runs it; a missing or failing row is `FAIL`.
+  - Brew gates on every planned spec and merges regression cases into `docs/regression/<area>.md` with the next free ID.
+  - Taste re-checks both sections after behaviour-changing fixes and renumbers regression ID collisions with `master`.
+  - `bun run check:lifecycle-skills` enforces these phrases in every stage.
+  - New `backfill-regression` skill proposes manual regression cases one area at a time and writes only the sets the human approves.
+  - A consumer opts out of manual regression suites with `Regression suites | none` in its `## Testing conventions` table.
+- The `terreno-planning` lifecycle plugin (2.14.0) grows an end-user guide with every feature:
+
+  - Every IP has a `## User guide` section listing the guide pages it adds, updates, or retires, or `None — <reason>`. Pages live in `docs/user-guide/<area>/<feature>.md`, one feature per page, with `title`, `audience`, `platforms`, and `questions` frontmatter that chat agents use to answer "how do I…" questions.
+  - Pick writes each page in the task that ships the feature, Roast checks it against the shipped screens, Brew gates on it and the index, and Taste keeps it current after fixes.
+  - A repo opts out with `| User guide | none — <reason> |` in a `## User guide conventions` table in AGENTS.md or CLAUDE.md.
+  - New `backfill-user-guide` skill drafts pages for features that shipped without one, one area at a time, and writes only the pages the human approves.
+  - `bun run check:user-guide` validates the pages and index (CI `repo-policies`); `--uncovered <app dir>` lists screens no page names.
+  - Terreno's own guide covers the example app's main features.
+- `@terreno/api`: opt-in `mcpRequestLog` on `TerrenoApp` records one metadata-only `McpRequestLog` row per MCP tool call (tool, user, credential, service token or OAuth client, duration, outcome, error class; never arguments, results, or error text), expiring after `retentionDays` (default 30).
+- `@terreno/api`: opt-in `mcpToolSettings` on `TerrenoApp` registers every MCP tool in `McpToolSetting` at startup; tools an admin switches off are hidden from `tools/list` and rejected by `tools/call`.
+- `@terreno/api`: deleting an `McpOAuthToken` row revokes its whole connection (token family) and keeps the rows. New `McpOAuthToken.revokeAllForUser` and `McpServiceToken.revokeAllForUser`.
+- `@terreno/admin-backend`: `mcpAdminModels()` adds MCP admin screens (service tokens, OAuth clients, OAuth connections, request log, tool switches), `mcpAdminStatements` for RBAC, and `mcpAdminScripts()` adds `mcp-sign-out-everywhere`. See [Manage MCP from the admin panel](docs/how-to/manage-mcp-in-admin.md).
+- Docs: [Expose an MCP server safely](docs/how-to/expose-mcp-server-safely.md) (OAuth, service tokens, Cloudflare Tunnel, Access) and the `bootstrap-mcp-server` skill for a single-binary MCP server with the admin console embedded.
+- Every workspace package has a real-process smoke test and an e2e page:
+
+  - Each package's `e2e/smoke.ts` (or `smoke.spec.ts` for browser packages) runs its built output through its public entry: a server on a real port, the compiled binary, or a page in Chromium. `bun run --cwd <package> smoke` runs one; `bun run smoke` runs them all and prints each package's time. The CircleCI `smoke` job runs them on every package change.
+  - `@terreno/test` adds the smoke helpers `smokeMongoUri()`, `spawnUntilReady()`, `spawnExampleBackend()`, `runBin()`, and `freePort()`.
+  - The [E2E testing guide](docs/testing/e2e.md) explains the test tiers and links one page per package under `docs/testing/e2e/`.
+  - Manual regression cases live in `docs/regression/<area>.md`, one file per area, and `bun run check:regression-suites` validates them.
+  - example-frontend's smoke serves a web export that `bun run --cwd example-frontend export:smoke` builds once with a placeholder API URL; the smoke swaps in a `freePort()` API URL as it serves the bundle, so the 30 s smoke no longer rebuilds the export. `spawnUntilReady()` takes `stopGraceMs`, and `spawnExampleBackend()` stops example-backend after 0.5 s instead of 5 s.
+- Every workspace package has a `typecheck` script that runs `tsc` over source and test files through a new `tsconfig.typecheck.json`. Root `bun run lint` ends with `bun run typecheck`, and CircleCI runs it in a new `typecheck` job. Test files that had type errors were fixed.
+
+### Changed
+
+- `@terreno/api`: deleting an `McpOAuthToken` row with document or query `deleteOne` now revokes that row's whole token family (the connection) and keeps the rows instead of removing one pair. `deleteMany` is unchanged.
+- `@terreno/ui`: new `theme.field` tokens (`background`, `backgroundDisabled`, `border`, `borderFocus`, `borderError`, `borderDisabled`) style form inputs. `TextField`, `SelectField`, `DateTimeField`, `HeightField`, and `OtpField` read them instead of `surface.base` and `border.dark`. Defaults equal the old colors, but overriding `surface` or `border` no longer recolors those fields; use `setTheme({field: ...})`.
+
 ## [57.20.0] - 2026-10-30
 
 Upgrade note: [`mcp-server/src/docs/upgrades/57.20.0.md`](mcp-server/src/docs/upgrades/57.20.0.md).

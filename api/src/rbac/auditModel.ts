@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 
-import {createdUpdatedPlugin, findExactlyOne, findOneOrNone} from "../plugins";
+import {
+  createdUpdatedPlugin,
+  type FindExactlyOnePlugin,
+  type FindOneOrNonePlugin,
+  findExactlyOne,
+  findOneOrNone,
+} from "../plugins";
 import type {PermissionSet} from "./statements";
 
 export interface RbacAuditDocument {
@@ -18,7 +24,9 @@ export interface RbacAuditDocument {
   updated: Date;
 }
 
-export type RbacAuditModel = mongoose.Model<RbacAuditDocument>;
+export type RbacAuditModel = mongoose.Model<RbacAuditDocument> &
+  FindExactlyOnePlugin<RbacAuditDocument> &
+  FindOneOrNonePlugin<RbacAuditDocument>;
 
 const rbacAuditSchema = new mongoose.Schema<RbacAuditDocument, RbacAuditModel>(
   {

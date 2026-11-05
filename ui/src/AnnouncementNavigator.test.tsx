@@ -803,7 +803,7 @@ describe("AnnouncementNavigator", () => {
         },
       }
     );
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator api={api} onError={onError}>
         <Box testID="app-content">
@@ -1007,7 +1007,7 @@ describe("AnnouncementNavigator", () => {
   it("reports acknowledge failures through onError", async () => {
     const refetch = mock(() => Promise.reject(new Error("refetch failed")));
     const {api} = createMockApi({current: makeAnnouncement(), remainingCount: 0}, refetch);
-    const onError = mock(() => undefined);
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
       <AnnouncementNavigator api={api} onError={onError}>
         <Box testID="app-content">
@@ -1028,7 +1028,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("warns but keeps showing the announcement when recording an impression fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
 
@@ -1069,7 +1069,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("warns when opening the primary action URL fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
     const originalCanOpenURL = Linking.canOpenURL;

@@ -12,14 +12,18 @@ interface MailModule {
   setApiKey: (key: string) => void;
 }
 
+// Not a dependency of this package: the specifier is a variable so tsc does not resolve it,
+// and the registered mock serves the import.
+const SENDGRID_MODULE: string = "@sendgrid/mail";
+
 describe("registerSendGridMock", () => {
   beforeEach((): void => {
     sendGrid.reset();
   });
 
   it("serves the ESM default export and the CommonJS module", async (): Promise<void> => {
-    const esm = (await import("@sendgrid/mail")) as unknown as {default: MailModule};
-    const cjs = createRequire(import.meta.url)("@sendgrid/mail") as MailModule;
+    const esm = (await import(SENDGRID_MODULE)) as {default: MailModule};
+    const cjs = createRequire(__filename)("@sendgrid/mail") as MailModule;
 
     esm.default.setApiKey("SG.key");
     const [first] = await esm.default.send({subject: "one", to: "a@example.com"});
@@ -37,7 +41,7 @@ describe("registerSendGridMock", () => {
   });
 
   it("reset clears messages, overrides, and the id counter", async (): Promise<void> => {
-    const cjs = createRequire(import.meta.url)("@sendgrid/mail") as MailModule;
+    const cjs = createRequire(__filename)("@sendgrid/mail") as MailModule;
     sendGrid.send.mockRejectedValueOnce(Object.assign(new Error("Bad Request"), {code: 400}));
     await expect(cjs.send({subject: "x"})).rejects.toThrow("Bad Request");
 

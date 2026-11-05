@@ -3,11 +3,11 @@ import type express from "express";
 import mongoose from "mongoose";
 
 import {modelRouter} from "../api";
-import {addAuthRoutes, setupAuth, type UserModel as UserMongooseModel} from "../auth";
+import {addAuthRoutes, setupAuth, type User, type UserModel as UserMongooseModel} from "../auth";
 import {apiErrorMiddleware, apiUnauthorizedMiddleware} from "../errors";
 import {Permissions} from "../permissions";
 import {executeCreate, executeDelete, executeUpdate} from "../sync/executors";
-import {authAsUser, getBaseServer, setupDb, type User, UserModel} from "../tests";
+import {authAsUser, getBaseServer, setupDb, UserModel} from "../tests";
 import {createAccess} from "./access";
 import {terrenoStatements} from "./statements";
 import type {AnyTerrenoAccess} from "./types";
@@ -37,7 +37,7 @@ const buildAccess = async (): Promise<AnyTerrenoAccess> => {
   return access as unknown as AnyTerrenoAccess;
 };
 
-const setRoles = async (userId: unknown, roles: string[]): Promise<void> => {
+const setRoles = async (userId: mongoose.Types.ObjectId, roles: string[]): Promise<void> => {
   await UserModel.updateOne({_id: userId}, {$set: {roles}});
 };
 
@@ -240,7 +240,10 @@ describe("RBAC target-privilege check over modelRouter HTTP", () => {
         instanceActions: {
           rename: {
             handler: async ({doc}) => {
-              await UserModel.updateOne({_id: (doc as {_id: unknown})._id}, {name: "Action"});
+              await UserModel.updateOne(
+                {_id: (doc as {_id: mongoose.Types.ObjectId})._id},
+                {name: "Action"}
+              );
               return {ok: true};
             },
             method: "POST",
@@ -421,7 +424,7 @@ describe("user:updateIdentity over modelRouter HTTP", () => {
           changeEmail: {
             handler: async ({body, doc}) => {
               await UserModel.updateOne(
-                {_id: (doc as {_id: unknown})._id},
+                {_id: (doc as {_id: mongoose.Types.ObjectId})._id},
                 {email: (body as {email: string}).email}
               );
               return {ok: true};

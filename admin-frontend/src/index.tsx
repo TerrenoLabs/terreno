@@ -138,10 +138,12 @@ export {
   useOrgContext,
 } from "./orgs/useOrgContext";
 export type {
+  AdminApi,
   AdminCapabilities,
   AdminConfigResponse,
   AdminCustomScreen,
   AdminFieldConfig,
+  AdminFieldValue,
   AdminFieldWidgetProps,
   AdminGetAuthHeaders,
   AdminHomeWidgetProps,
@@ -188,6 +190,8 @@ export {
   AI_OBSERVABILITY_WIDGETS,
   AiPromptEditorScreenWidget,
   AiPromptsScreenWidget,
+  AiReviewBatchesScreenWidget,
+  AiReviewBatchScreenWidget,
   AiReviewItemScreenWidget,
   AiReviewScreenWidget,
   AiTraceDetailScreenWidget,

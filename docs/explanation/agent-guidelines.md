@@ -9,7 +9,7 @@ and every other copy is generated from it.
 | Hosted MCP docs | `docs/`, `website/versioned_docs/`, `mcp-server/src/docs/resources/` | `terreno_search_docs`, `terreno_get_component_docs`, `terreno://docs/*` resources | Shipped |
 | Per-package guidelines | `<package>/.ai/guidelines/core.md` | Merged into the files `terreno_bootstrap_ai_rules` returns | Shipped |
 | App rule files | The app's `.rulesync/rules/` | Generated per editor by `rulesync generate` | Shipped |
-| Agent skills | `plugins/terreno-planning/skills/`, `plugins/terreno-scan/skills/`, `.rulesync/skills/` | `npx skills add TerrenoLabs/terreno` or a host plugin | Shipped |
+| Agent skills | `plugins/terreno-planning/skills/`, `plugins/terreno-loop/skills/`, `.rulesync/skills/` | `npx skills add TerrenoLabs/terreno` or a host plugin | Shipped |
 
 The runtime side of the loop, meaning what the agent can see in a running app, is covered
 in [AI development loop](ai-development-loop.md). This page covers only conventions.
@@ -108,7 +108,7 @@ In this repository:
 | --- | --- |
 | `.rulesync/rules/**` | `CLAUDE.md`, `.claude/rules/`, `AGENTS.md`, `.cursor/rules/`, `.github/copilot-instructions.md`, `.github/instructions/`, `.devin/rules/` |
 | `.rulesync/skills/`, `.rulesync/subagents/`, `.rulesync/hooks.json` | Per-host skill, subagent, and hook directories (`.claude/`, `.cursor/`, `.github/`, `.devin/`, `.agents/`) |
-| `plugins/terreno-planning/skills/`, `plugins/terreno-scan/skills/`, plus `.rulesync/skills/` | `skills/` (installable set), `plugins/terreno-claude/` and `plugins/terreno-scan-claude/` (Claude Code plugins) |
+| `plugins/terreno-planning/skills/`, `plugins/terreno-loop/skills/`, plus `.rulesync/skills/` | `skills/` (installable set), `plugins/terreno-claude/` and `plugins/terreno-loop-claude/` (Claude Code plugins) |
 
 `rulesync.jsonc` maps each target to its features. `bun run rules` regenerates the rulesync
 targets. `bun run skills:sync` regenerates `skills/` and the Claude plugin. The

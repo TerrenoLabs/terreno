@@ -966,7 +966,7 @@ describe("addMeRoutes edge cases", () => {
   it("PATCH /auth/me returns 404 when user is deleted after auth", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;
-    const notAdminId = (notAdmin as unknown as {_id: {toString(): string}})._id;
+    const notAdminId = notAdmin._id;
     const token = jwtLib.sign({id: notAdminId.toString()}, process.env.TOKEN_SECRET as string, {
       issuer: process.env.TOKEN_ISSUER,
     });
@@ -1172,7 +1172,7 @@ describe("privileged user fields", () => {
   it("does not let PATCH /auth/me escalate to admin or join organizations", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;
-    const notAdminId = (notAdmin as unknown as {_id: {toString(): string}})._id;
+    const notAdminId = notAdmin._id;
     const token = jwtLib.sign({id: notAdminId.toString()}, process.env.TOKEN_SECRET as string, {
       issuer: process.env.TOKEN_ISSUER,
     });
@@ -1202,7 +1202,7 @@ describe("privileged user fields", () => {
   it("clears email verification when PATCH /auth/me changes the mailbox", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;
-    const notAdminId = (notAdmin as unknown as {_id: {toString(): string}})._id;
+    const notAdminId = notAdmin._id;
     const token = jwtLib.sign({id: notAdminId.toString()}, process.env.TOKEN_SECRET as string, {
       issuer: process.env.TOKEN_ISSUER,
     });
@@ -1221,7 +1221,7 @@ describe("privileged user fields", () => {
   it("keeps email verification for a casing-only email update", async () => {
     const [_admin, notAdmin] = await setupDb();
     const jwtLib = (await import("jsonwebtoken")).default;
-    const notAdminId = (notAdmin as unknown as {_id: {toString(): string}})._id;
+    const notAdminId = notAdmin._id;
     const token = jwtLib.sign({id: notAdminId.toString()}, process.env.TOKEN_SECRET as string, {
       issuer: process.env.TOKEN_ISSUER,
     });
@@ -1452,8 +1452,22 @@ describe("PATCH /auth/me email change step-up", () => {
   });
 });
 
+interface IdentityUser {
+  admin: boolean;
+  betterAuthId?: string;
+  email?: string;
+  githubId?: string;
+  githubUsername?: string;
+  /** passport-local-mongoose credential fields, selected explicitly with `+hash +salt`. */
+  hash?: string;
+  name?: string;
+  oauthProvider?: string;
+  salt?: string;
+  tokenEpoch: number;
+}
+
 // A user schema that declares the identity-binding fields Better Auth and GitHub linking add.
-const identityUserSchema = new Schema({
+const identityUserSchema = new Schema<IdentityUser>({
   admin: {default: false, description: "Admin flag", type: Boolean},
   betterAuthId: {description: "Better Auth user id", type: String},
   email: {description: "Email", type: String},
@@ -1467,8 +1481,8 @@ identityUserSchema.plugin(
 );
 identityUserSchema.plugin(githubUserPlugin);
 const IdentityUserModel =
-  (mongoose.models.AuthIdentityUser as mongoose.Model<Record<string, unknown>> | undefined) ??
-  mongoose.model("AuthIdentityUser", identityUserSchema);
+  (mongoose.models.AuthIdentityUser as mongoose.Model<IdentityUser> | undefined) ??
+  mongoose.model<IdentityUser>("AuthIdentityUser", identityUserSchema);
 
 describe("self-service identity and credential fields", () => {
   const identityFields = {

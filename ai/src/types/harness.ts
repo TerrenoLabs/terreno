@@ -8,9 +8,12 @@ import type {ObsPromptRef} from "./observability";
 
 /**
  * A prompt version a task used, recorded on its `ObsTrace.prompts`. A `PromptVersionRef`
- * from `promptRegistry.get` fits as-is; its `body` is ignored.
+ * from `promptRegistry.get` fits as-is; its `body` is ignored and its `includes` (shared
+ * prompts it referenced) are recorded right after it.
  */
-export type HarnessPromptRef = ObsPromptRef;
+export interface HarnessPromptRef extends ObsPromptRef {
+  includes?: ObsPromptRef[];
+}
 
 /** A registry prompt passed as instructions: its `body` is used and its version recorded. */
 export interface HarnessPromptInstructions extends HarnessPromptRef {
@@ -625,9 +628,13 @@ export interface HarnessToolDefinition<Args = unknown, Result = unknown>
 
 /**
  * Any tool, whatever its argument and result types. `execute` arguments are contravariant, so
- * `never` accepts every tool in heterogeneous lists without an explicit `any`.
+ * `never` accepts every tool in heterogeneous lists without an explicit `any`. A Zod schema's
+ * output is covariant, so `parameters` widens to `unknown` instead.
  */
-export type AnyHarnessToolDefinition = HarnessToolDefinition<never, unknown>;
+export interface AnyHarnessToolDefinition
+  extends Omit<HarnessToolDefinition<never, unknown>, "parameters"> {
+  parameters: z.ZodType<unknown>;
+}
 
 export interface HarnessAgentDefinitionInput {
   /** Tried in order once the primary model's retryable failures exhaust `modelRetry`. */

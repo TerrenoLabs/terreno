@@ -7,6 +7,7 @@ import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
 import {OpenFeatureProvider} from "@openfeature/react-sdk";
+import {registerTerrenoDevStorage} from "@terreno/syncdb";
 import {installDevConsoleLogger, useUpgradeCheck} from "@terreno/syncdb/app";
 import {SessionProvider, useSession} from "@terreno/syncdb/auth";
 import {baseUrl} from "@terreno/syncdb/config";
@@ -36,8 +37,11 @@ import {registerExpoPushTokenSafely} from "@/store/registerExpoPushToken";
 import {adminSyncDb, setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
+import {installExampleDevMcpCommands} from "../devMcpCommands";
 
 installDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
+installExampleDevMcpCommands();
 
 // useSession().logout signs both sync clients out (wiping local rows, `wipeOnSignOut`) before
 // ending the auth session, while they still know the current user.

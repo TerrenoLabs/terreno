@@ -16,7 +16,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
 
 ## Phase 1: CDP network capture
 
-- [ ] **Task 1.1**: Enable Network domain on the Metro CDP session
+- [x] **Task 1.1**: Enable Network domain on the Metro CDP session
   - Description: In `metroDevSession.ts`, after the debugger WebSocket attaches, send
     `Network.enable` alongside `Runtime.enable`. Handle `Network.requestWillBeSent`,
     `Network.responseReceived`, and optionally `Network.loadingFailed`. Push normalized entries
@@ -27,7 +27,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Acceptance: tests cover at least one request/response pair and header redaction; ring respects
     max size.
 
-- [ ] **Task 1.2**: Wire `network` into `read_logs` and connection status
+- [x] **Task 1.2**: Wire `network` into `read_logs` and connection status
   - Description: Extend `readLogs.ts` to include source `network` in default merge and in
     `sources` filtering. Include network buffer status in the JSON `connection` block (same
     pattern as `app` / metro events). Ensure `last_error` does not treat HTTP 4xx as error
@@ -37,7 +37,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Acceptance: `read_logs` with `sources: ["network"]` returns entries after a mocked CDP
     response; merged output sorts by timestamp with other sources.
 
-- [ ] **Task 1.3**: Local server E2E for network source
+- [x] **Task 1.3**: Local server E2E for network source
   - Description: Extend `localServer.e2e.test.ts` (or dedicated test) so the MCP client calls
     `read_logs` and receives a `network`-sourced line from the test harness CDP mock — satisfies
     E1 in the IP.
@@ -47,7 +47,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
 
 ## Phase 2: Dispatch and local storage
 
-- [ ] **Task 2.1**: `registerTerrenoDevStorage` in `@terreno/syncdb`
+- [x] **Task 2.1**: `registerTerrenoDevStorage` in `@terreno/syncdb`
   - Description: Add dev-only registry on `globalThis.__TERRENO_DEV_STORAGE__` with AsyncStorage
     wiring and optional SecureStore allowlist. Export from `@terreno/syncdb` and
     `@terreno/syncdb/devMcpRegistry` (concrete path per no-barrel rules). Tests with mocked
@@ -56,7 +56,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Depends on: —
   - Acceptance: tests prove list/get/set; production guard no-ops.
 
-- [ ] **Task 2.2**: `registerTerrenoDevCommand` in `@terreno/syncdb`
+- [x] **Task 2.2**: `registerTerrenoDevCommand` in `@terreno/syncdb`
   - Description: Dev-only map on `globalThis.__TERRENO_DEV_COMMANDS__` with register/list
     metadata and serializable `inputSchema` (JSON Schema subset). Handler invocation only through
     a single `runTerrenoDevCommand(name, args)` used by MCP evaluate path. Tests for register,
@@ -65,7 +65,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Depends on: Task 2.1 (same file OK)
   - Acceptance: handler runs in test via direct call; registry cleared between tests.
 
-- [ ] **Task 2.3**: MCP tools `dispatch_client_action`, `read_local_storage`, `write_local_storage`
+- [x] **Task 2.3**: MCP tools `dispatch_client_action`, `read_local_storage`, `write_local_storage`
   - Description: Add tools in `localTools.ts` and handlers under `mcp-server/src/local/tools/`.
     Implement CDP evaluate fallbacks mirroring `get_client_state` / `evaluate`. Gate writes and
     dispatch on `TERRENO_MCP_EVAL=1`. Register schemas and descriptions (when to use vs
@@ -75,7 +75,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Acceptance: unit tests for EVAL gate, dispatch success/failure, storage read cap, write
     rejection without EVAL.
 
-- [ ] **Task 2.4**: Wire bootstrap and example app
+- [x] **Task 2.4**: Wire bootstrap and example app
   - Description: Call `registerTerrenoDevStorage({asyncStorage: true})` from bootstrap template
     and `example-frontend/app/_layout.tsx` (with `registerTerrenoDevStore` already present).
     Update `create-terreno-app` generated store if it duplicates layout wiring.
@@ -87,7 +87,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
 
 ## Phase 3: Native platform logs
 
-- [ ] **Task 3.1**: Native log collectors
+- [x] **Task 3.1**: Native log collectors
   - Description: Add `mcp-server/src/local/native/` (or under `tools/`) with
     `snapshotNativeLogs({entries})` using adb and simctl as in the IP. Respect
     `TERRENO_NATIVE_LOGS=0` and `TERRENO_ADB_SERIAL`. Return structured `{lines, status}`.
@@ -95,7 +95,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Depends on: —
   - Acceptance: tests cover happy path, missing adb, missing sim; line cap enforced.
 
-- [ ] **Task 3.2**: `read_logs` source `native`
+- [x] **Task 3.2**: `read_logs` source `native`
   - Description: Integrate Task 3.1 into `readLogs.ts`; document platform requirements in tool
     JSON output when empty.
   - Files: `readLogs.ts`, tests
@@ -104,14 +104,14 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
 
 ## Phase 4: Dev command MCP surface
 
-- [ ] **Task 4.1**: MCP tools `list_dev_commands` and `invoke_dev_command`
+- [x] **Task 4.1**: MCP tools `list_dev_commands` and `invoke_dev_command`
   - Description: List metadata from registry via in-process or CDP read. Invoke via evaluate
     calling `runTerrenoDevCommand` (EVAL-gated). Wire in `localTools.ts`.
   - Files: `mcp-server/src/local/tools/devCommands.ts`, `localTools.ts`, tests
   - Depends on: Task 2.2, Task 2.3
   - Acceptance: list returns registered commands; invoke runs example handler in test mock.
 
-- [ ] **Task 4.2**: Example dev command
+- [x] **Task 4.2**: Example dev command
   - Description: Register one command in `example-frontend` (for example clear a dev-only
     AsyncStorage key or flip a debug flag) and document it in how-to as the sample invoke.
   - Files: `example-frontend/**` (small module + `_layout` import)
@@ -121,7 +121,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
 
 ## Phase 5: Documentation and verification
 
-- [ ] **Task 5.1**: Capture real tool output
+- [x] **Task 5.1**: Capture real tool output
   - Description: Run example backend + frontend + Metro. Record verbatim output for: `read_logs`
     with `network` and `native` (or status when native unavailable), `dispatch_client_action`,
     `read_local_storage`, `write_local_storage`, `list_dev_commands`, `invoke_dev_command`.
@@ -131,7 +131,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Acceptance: evidence file paths referenced in PR body; every new surface has at least one
     captured sample.
 
-- [ ] **Task 5.2**: Update reference and explainer docs
+- [x] **Task 5.2**: Update reference and explainer docs
   - Description: Update `docs/reference/mcp-server.md` (tool tables, env vars,
     can/cannot-see), `docs/how-to/debug-with-mcp.md` (symptom → tool table rows for wrong API
     data, auth token in storage, native-only crash), `docs/explanation/ai-development-loop.md`
@@ -142,7 +142,7 @@ See: [`docs/implementationPlans/mcp-agent-debugger-gaps.md`](../implementationPl
   - Acceptance: grep for new tool names in reference matches `localTools.ts`; loop diagram
     mentions `network` and `native` sources.
 
-- [ ] **Task 5.3**: Browser E2E or documented CI skip
+- [x] **Task 5.3**: Browser E2E or documented CI skip
   - Description: Add `example-frontend/e2e/mcp-network-debug.spec.ts` per E2 if feasible; if Metro
     CDP is not available in CI, document skip in spec comment and IP Activity Log; ensure E1
     still satisfies automated proof.

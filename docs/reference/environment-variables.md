@@ -121,6 +121,8 @@ Hosting platforms scope variables per environment. Vercel has **Production**, **
 | `TERRENO_PROJECT_ROOT` | `terreno-mcp-local`, `terreno` CLI | ❌ | nearest Terreno project root | No | tooling |
 | `TERRENO_METRO_URL` | `terreno-mcp-local` | ❌ | frontend script port or `http://localhost:8082` | No | tooling |
 | `TERRENO_MCP_EVAL` | `terreno-mcp-local` | ❌ | disabled | No | tooling |
+| `TERRENO_NATIVE_LOGS` | `terreno-mcp-local` `read_logs` source `native` | ❌ | enabled (`0` disables) | No | tooling |
+| `TERRENO_ADB_SERIAL` | `terreno-mcp-local` native Android logs | ❌ | default `adb` device | No | tooling |
 | `TERRENO_WEB_URL` | `terreno` CLI | ❌ | `http://localhost:8082` | No | tooling |
 | `BUN_CHROME_PATH` | Bun WebView | ❌ | browser auto-discovery | No | tooling |
 | `TERRENO_OPENAPI` | `terreno` CLI | ❌ | — | No | tooling |

@@ -1,6 +1,6 @@
 # Implementation Plan: MCP Agent Debugger Gaps (Network, Dispatch, Storage, Native Logs, Dev Commands)
 
-**Status:** Approved — defaults accepted (2026-11-05)  
+**Status:** Complete — Pick landed 2026-11-06  
 **Parent IP:** [mcp-boost-parity.md](mcp-boost-parity.md) (extends the local stdio companion; does not repeat hosted docs/codegen work)  
 **Roadmap:** Area=`mcp`, Target=`Next`, Impact=`Feature`  
 **Created:** 2026-11-05  
@@ -229,6 +229,9 @@ See [`docs/tasks/mcp-agent-debugger-gaps.md`](../tasks/mcp-agent-debugger-gaps.m
 If CI cannot attach Metro CDP reliably, Task 5.2 records `None — Metro CDP not in CI` and E2
 becomes a manual evidence step in Task 5.1 only; unit/E1 coverage remains required.
 
+**Pick note (2026-11-06):** E2 browser spec not added — Metro CDP is not reliable in CI. E1
+(`localServer.e2e.test.ts`) plus unit tests satisfy automated proof.
+
 ## Regression cases
 
 None — no hard-to-automate change
@@ -239,16 +242,16 @@ None — operator/agent documentation only; no end-user workflow change
 
 ## Acceptance Criteria
 
-- [ ] `read_logs` documents and returns entries with `source: "network"` when the app performs
+- [x] `read_logs` documents and returns entries with `source: "network"` when the app performs
   fetch/XHR over CDP, with auth headers redacted in captured output.
-- [ ] `read_logs` documents and returns entries with `source: "native"` on Android (adb) and
+- [x] `read_logs` documents and returns entries with `source: "native"` on Android (adb) and
   iOS Simulator when tools are available, with clear status when not.
-- [ ] `dispatch_client_action` dispatches a known action in `example-frontend` under
+- [x] `dispatch_client_action` dispatches a known action in `example-frontend` under
   `TERRENO_MCP_EVAL=1` and `get_client_state` reflects the new state.
-- [ ] `read_local_storage` / `write_local_storage` round-trip a key in `example-frontend` dev
+- [x] `read_local_storage` / `write_local_storage` round-trip a key in `example-frontend` dev
   build; write refused without `TERRENO_MCP_EVAL=1`.
-- [ ] `list_dev_commands` / `invoke_dev_command` list and run the example-frontend registered
+- [x] `list_dev_commands` / `invoke_dev_command` list and run the example-frontend registered
   command with EVAL gate on invoke only.
-- [ ] Reference and how-to pages list every new tool and source with real output captured in
+- [x] Reference and how-to pages list every new tool and source with real output captured in
   Task 5.1.
-- [ ] `bun run mcp:build`, affected package tests, and `bun run lint` pass.
+- [x] `bun run mcp:build`, affected package tests, and `bun run lint` pass.

@@ -197,3 +197,16 @@ export {
   type InstallTerrenoDevConsoleLoggerArgs,
   installTerrenoDevConsoleLogger,
 } from "./devConsoleLogger";
+
+export {
+  clearTerrenoDevMcpRegistryForTests,
+  getTerrenoDevStorageAdapter,
+  listTerrenoDevCommandSummaries,
+  type RegisterTerrenoDevStorageOptions,
+  registerTerrenoDevCommand,
+  registerTerrenoDevStorage,
+  runTerrenoDevCommand,
+  type TerrenoDevCommandDefinition,
+  type TerrenoDevCommandSummary,
+  type TerrenoDevStorageAdapter,
+} from "./devMcpRegistry";

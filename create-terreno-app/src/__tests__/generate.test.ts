@@ -484,7 +484,12 @@ describe("generated frontend Terreno 57 compatibility", () => {
       dependencies: Record<string, string>;
     };
 
-    assert.include(rootLayout, 'import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";');
+    assert.include(rootLayout, "installTerrenoDevConsoleLogger");
+    assert.include(rootLayout, "registerTerrenoDevStorage({asyncStorage: true})");
+    assert.match(
+      rootLayout,
+      /import \{[^}]*installTerrenoDevConsoleLogger[^}]*\} from "@terreno\/syncdb";/
+    );
     assert.match(rootLayout, /import \{baseUrl,[^}]*\} from "@terreno\/rtk";/);
     assert.include(rootLayout, "\ninstallTerrenoDevConsoleLogger({baseUrl});\n");
     assert.isBelow(

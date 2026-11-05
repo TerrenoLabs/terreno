@@ -4,8 +4,8 @@ import {
   isForbiddenAdminConfigError,
   isSignedInOnlyRoute,
   resolveAdminGate,
-  sanitizeReturnTo,
-} from "./adminGateUtils";
+} from "../../components/adminGateUtils";
+import {sanitizeReturnTo} from "../returnTo";
 
 describe("isForbiddenAdminConfigError", () => {
   it("returns true only for authenticated 403 responses", () => {

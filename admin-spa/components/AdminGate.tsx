@@ -11,6 +11,7 @@ import {
   isForbiddenAdminConfigError,
   resolveAdminGate,
 } from "./adminGateUtils";
+import {useSsrPayload} from "./ssrPayload";
 
 interface AdminRequestError {
   status?: number;
@@ -30,9 +31,10 @@ const LoadingScreen: React.FC = () => (
 /**
  * Auth + authorization gate. Reads the Better Auth session from `SessionProvider` (which
  * syncs it on mount and whenever Better Auth's session signal fires), then:
- * - unauthenticated → redirect to /login
+ * - unauthenticated → redirect to /login (signed-in-only routes keep a `returnTo`)
  * - authenticated but NOT an admin (admin API returns 403) → redirect to /forbidden
- * - authenticated admin sitting on /login or /forbidden → redirect to /
+ * - signed in on /login with a safe `returnTo` → go there; an admin otherwise → /
+ * - a server render that already found this session forbidden skips the probe
  *
  * Admin status is determined by the backend's own authorization on `${adminApiBase}/config`
  * (200 = admin, 403 = forbidden), since the better-auth session does not carry the
@@ -43,26 +45,36 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   const pathname = usePathname();
   const searchParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const {appConfig} = useAppConfig();
-  const {isAuthenticated, isLoading: isAuthLoading} = useSession();
+  const {isAuthenticated, isLoading: isAuthLoading, userId} = useSession();
+  const payload = useSsrPayload();
+  // The server already found this session forbidden: no need to probe `/admin/config` again.
+  const isForbiddenByServer =
+    isAuthenticated &&
+    payload?.adminConfigStatus === 403 &&
+    payload.session?.userId !== undefined &&
+    payload.session.userId === userId;
 
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
   const rpc = useAdminRpc();
   // Probe `/admin/config` only with a session so signing in starts a fresh request.
   const configQuery = useAdminRpcQuery<AdminConfigResponse>({
     rpc,
-    skip: !isAuthenticated,
+    skip: !isAuthenticated || isForbiddenByServer,
     url: `${apiBase}/config`,
   });
   const {data: config, error} = configQuery;
   // A signed-in session has no answer yet until the probe resolves or fails.
-  const isConfigLoading = configQuery.isLoading || (isAuthenticated && !config && !error);
+  const isConfigLoading =
+    !isForbiddenByServer && (configQuery.isLoading || (isAuthenticated && !config && !error));
   const status = (error as AdminRequestError | null | undefined)?.status;
-  const isForbidden = isForbiddenAdminConfigError({
-    error,
-    isAuthenticated,
-    isConfigLoading,
-    status,
-  });
+  const isForbidden =
+    isForbiddenByServer ||
+    isForbiddenAdminConfigError({
+      error,
+      isAuthenticated,
+      isConfigLoading,
+      status,
+    });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
 
   const currentPath = buildRoutePath({params: searchParams, pathname});
@@ -100,7 +112,12 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   }, [decision, router]);
 
   if (decision.kind === "loading") {
-    return <LoadingScreen />;
+    // The server-rendered login form stays on screen while the session resolves.
+    return pathname === "/login" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (decision.kind === "redirect" && !decision.render) {
     return <LoadingScreen />;

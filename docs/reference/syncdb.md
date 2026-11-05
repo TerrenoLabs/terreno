@@ -572,6 +572,7 @@ await updateMe({name: "Ada"}).unwrap();
 | `getQueryState(args)` / `subscribeQuery(args, listener)` | Read and watch one cache entry |
 | `invalidateTags(tags)` | Refetch mounted queries with those tags; drop unmounted ones |
 | `reset()` | Clear the cache; call when the signed-in user changes |
+| `primeQuery(args, data)` | Store `data` as the fulfilled result for `args` without a request, for example a response a server render already fetched. Hooks for the same args render it on their first render; tags and `reset()` treat it like a fetched entry. |
 
 | Hook | Returns |
 |------|---------|
@@ -642,6 +643,7 @@ blocks every native request. `storagePrefix` defaults to `"terreno"`.
 | `onLogout` | `() => void \| Promise<void>` | Extra cleanup after the auth and syncdb sign-outs. |
 | `signOutTimeoutMs` | `number` | How long `logout` waits for the server's sign-out, and for the session check after a failed one. Default `10000`. |
 | `pollIntervalMs` | `number` | Poll cadence when the source cannot push changes. Default `60000`; `0` turns polling off. |
+| `initialSession` | `SessionSnapshot \| null` | The session a server render already read, in the source's `{userId, user}` shape (`null` for signed out). The store starts settled on it with `isLoading: false`, and its first read on start is silent: a matching session changes nothing, and the state never flips back to loading. Omit it for the usual loading-then-read startup. |
 
 When the session syncs:
 

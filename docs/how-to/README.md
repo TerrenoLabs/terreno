@@ -60,6 +60,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
 - [Upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](migrate-rtk-to-syncdb.md) — Remove `@terreno/rtk` and Redux; every removed export mapped to its replacement
+- [Upgrade to the server-rendered admin SPA](upgrade-admin-spa-ssr.md) — New `dist/client` + `dist/server` layout, the baked `/console` mount, `internalOrigin`, and proxy cache rules
 - [Use syncdb correctly](use-syncdb-correctly.md) — Serial snapshot startup, outbox-halting 403s, phantom creates, conflicts, and other library behavior apps must handle
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
 - [Generate the client SDK](generate-the-client-sdk.md) — `terreno-syncdb-codegen` writes collection hooks and typed request hooks from OpenAPI

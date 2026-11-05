@@ -1,0 +1,162 @@
+import {describe, expect, it} from "bun:test";
+import * as modelRoutes from "../../server/modelRoutes";
+
+const {resolveModelListUrl} = modelRoutes;
+const {resolveModelReadUrl} = modelRoutes as unknown as {
+  resolveModelReadUrl: (adminConfig: unknown, modelName: string, id: string) => string | null;
+};
+
+/**
+ * The URL `AdminModelTable` requests for default params: page 1, default limit, `defaultSort`.
+ * Pinned by admin-frontend/src/isolated/adminModelTable.ssr.isolated.tsx, which records what the
+ * rendered table requests, so server and client build the same seed key by construction.
+ */
+const USER_LIST_URL = "/admin/users?limit=20&page=1&sort=-created";
+
+const adminConfig = {
+  customScreens: [],
+  models: [
+    {
+      defaultSort: "-created",
+      displayName: "User",
+      fields: {_id: {required: true, type: "string"}, email: {required: false, type: "string"}},
+      listFields: ["email"],
+      name: "User",
+      routePath: "/admin/users",
+    },
+    {
+      adminBroadcast: true,
+      defaultSort: "-created",
+      displayName: "Todos",
+      fields: {_id: {required: true, type: "string"}, title: {required: false, type: "string"}},
+      listFields: ["title"],
+      name: "Todo",
+      routePath: "/admin/todos",
+      syncCollection: "todos",
+    },
+    {
+      displayName: "Sized",
+      fields: {_id: {required: true, type: "string"}},
+      listFields: ["_id"],
+      name: "Sized",
+      pageSize: 50,
+      routePath: "/admin/sized",
+    },
+    {
+      displayName: "Unrouted",
+      fields: {_id: {required: true, type: "string"}},
+      listFields: ["_id"],
+      name: "Unrouted",
+      routePath: "",
+    },
+  ],
+  scripts: [],
+};
+
+describe("resolveModelListUrl", () => {
+  it("builds the default list URL the table requests for a model name", () => {
+    expect(resolveModelListUrl(adminConfig, "User")).toBe(USER_LIST_URL);
+  });
+
+  it("returns null for an unknown model name", () => {
+    expect(resolveModelListUrl(adminConfig, "Nope")).toBeNull();
+  });
+
+  it("matches the model by name, not by display name or route path", () => {
+    expect(resolveModelListUrl(adminConfig, "Todos")).toBeNull();
+    expect(resolveModelListUrl(adminConfig, "/admin/users")).toBeNull();
+  });
+
+  it("still returns the REST membership URL for a windowed sync model", () => {
+    expect(resolveModelListUrl(adminConfig, "Todo")).toBe(
+      "/admin/todos?limit=20&page=1&sort=-created"
+    );
+  });
+
+  it("uses the model's page size as the limit and omits sort without a defaultSort", () => {
+    expect(resolveModelListUrl(adminConfig, "Sized")).toBe("/admin/sized?limit=50&page=1");
+  });
+
+  it("returns null for a model with no route path", () => {
+    expect(resolveModelListUrl(adminConfig, "Unrouted")).toBeNull();
+  });
+
+  it.each([null, undefined, {}, {models: "x"}, "str", 7])(
+    "returns null for a malformed config (%p)",
+    (config) => {
+      expect(resolveModelListUrl(config, "User")).toBeNull();
+    }
+  );
+
+  it("returns null for an empty model name", () => {
+    expect(resolveModelListUrl(adminConfig, "")).toBeNull();
+  });
+});
+
+describe("resolveModelReadUrl", () => {
+  it("builds the read URL the form requests for a model name and id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "u1")).toBe("/admin/users/u1");
+  });
+
+  it("encodes an id that tries to leave the model route", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "../config")).toBe("/admin/users/..%2Fconfig");
+  });
+
+  it("encodes query and fragment characters in the id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "a?b#c")).toBe("/admin/users/a%3Fb%23c");
+  });
+
+  it("returns null for an unknown model name", () => {
+    expect(resolveModelReadUrl(adminConfig, "Nope", "u1")).toBeNull();
+  });
+
+  it("matches the model by name, not by display name or route path", () => {
+    expect(resolveModelReadUrl(adminConfig, "Todos", "t1")).toBeNull();
+    expect(resolveModelReadUrl(adminConfig, "/admin/users", "u1")).toBeNull();
+  });
+
+  it("returns null for a model with no route path", () => {
+    expect(resolveModelReadUrl(adminConfig, "Unrouted", "x")).toBeNull();
+  });
+
+  it("returns null for an empty id", () => {
+    expect(resolveModelReadUrl(adminConfig, "User", "")).toBeNull();
+  });
+
+  it("returns null for an empty model name", () => {
+    expect(resolveModelReadUrl(adminConfig, "", "u1")).toBeNull();
+  });
+
+  it.each([null, undefined, {}, {models: "x"}, "str", 7])(
+    "returns null for a malformed config (%p)",
+    (config) => {
+      expect(resolveModelReadUrl(config, "User", "u1")).toBeNull();
+    }
+  );
+
+  it("returns the REST read URL for a windowed sync model", () => {
+    expect(resolveModelReadUrl(adminConfig, "Todo", "t1")).toBe("/admin/todos/t1");
+  });
+});
+
+describe("decodeRouteParam", () => {
+  it("decodes a percent-encoded param", () => {
+    expect(modelRoutes.decodeRouteParam("a%20b")).toBe("a b");
+  });
+
+  it("is undefined for a missing param, an array, or a malformed escape", () => {
+    expect(modelRoutes.decodeRouteParam(undefined)).toBeUndefined();
+    expect(modelRoutes.decodeRouteParam(["a", "b"])).toBeUndefined();
+    expect(modelRoutes.decodeRouteParam("%E0%A4%A")).toBeUndefined();
+  });
+});
+
+describe("isSinglePathSegment", () => {
+  it.each(["j1", "a b", "6ae5f0c1"])("accepts %s", (value) => {
+    expect(modelRoutes.isSinglePathSegment(value)).toBe(true);
+  });
+
+  it.each([undefined, "", ".", "..", "a/b", "a?b", "a#b", "a\\b", "%2E"])("rejects %s", (value) => {
+    expect(modelRoutes.isSinglePathSegment(value)).toBe(false);
+  });
+});

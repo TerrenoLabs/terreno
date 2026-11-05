@@ -9,7 +9,7 @@ export interface AdminSpaProfile {
 }
 
 /** Request for the signed-in user's profile (cookie session, same origin). */
-const ADMIN_SPA_PROFILE_REQUEST: ApiRequestArgs = {method: "GET", url: "/auth/me"};
+export const ADMIN_SPA_PROFILE_REQUEST: ApiRequestArgs = {method: "GET", url: "/auth/me"};
 
 /** Cached `/auth/me` for the current session, shared by every caller. */
 export const useAdminSpaProfile = (): UseApiQueryResult<AdminSpaProfile> =>

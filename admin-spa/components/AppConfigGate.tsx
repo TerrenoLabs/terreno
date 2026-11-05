@@ -52,20 +52,59 @@ const resolveBasePath = (): string => {
   return injected ?? "";
 };
 
+/** Process global the serve plugin publishes for the server render (`src/serverContext.ts`). */
+const SERVER_CONTEXT_KEY = Symbol.for("terreno.adminSpa.server");
+
+interface InjectedAppConfig {
+  appConfig: AdminSpaAppConfig;
+  basePath: string;
+}
+
+/**
+ * The config available without a fetch: on the server, the serve plugin's process global;
+ * in the browser, `window.__ADMIN_SPA_CONFIG__`, which `+html.tsx` writes into the
+ * server-rendered page. Undefined in dev-proxy mode, where the gate fetches instead.
+ */
+const readInjectedAppConfig = (): InjectedAppConfig | undefined => {
+  if (typeof window === "undefined") {
+    const published = (globalThis as unknown as Record<symbol, unknown>)[SERVER_CONTEXT_KEY] as
+      | {appConfig?: Partial<AdminSpaAppConfig>; basePath?: string}
+      | undefined;
+    if (!published?.appConfig) {
+      return undefined;
+    }
+    return {
+      appConfig: {...DEFAULT_APP_CONFIG, ...published.appConfig},
+      basePath: published.basePath ?? "",
+    };
+  }
+  const injected = (window as {__ADMIN_SPA_CONFIG__?: Partial<AdminSpaAppConfig>})
+    .__ADMIN_SPA_CONFIG__;
+  if (!injected) {
+    return undefined;
+  }
+  return {appConfig: {...DEFAULT_APP_CONFIG, ...injected}, basePath: resolveBasePath()};
+};
+
 /**
  * Top-level gate (above `StoreProvider`) that fetches `${basePath}/app-config.json`
  * once on boot and exposes it via context. Blocks render until loaded so the auth client
  * can be built from the config.
  */
 export const AppConfigGate: React.FC<{children: React.ReactNode}> = ({children}) => {
-  const [appConfig, setAppConfig] = useState<AdminSpaAppConfig | undefined>(undefined);
+  const [injected] = useState<InjectedAppConfig | undefined>(readInjectedAppConfig);
+  const [appConfig, setAppConfig] = useState<AdminSpaAppConfig | undefined>(injected?.appConfig);
   const [error, setError] = useState<string | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
-  const basePath = resolveBasePath();
+  const basePath = injected?.basePath ?? resolveBasePath();
 
   // Fetch the runtime app-config on boot (and on retry). Absolute URL derived from the
   // injected base so deep refreshes (e.g. /console/users/abc) still resolve correctly.
   useEffect(() => {
+    // A server-rendered page already carries its config; only a retry refetches it.
+    if (injected && reloadKey === 0) {
+      return;
+    }
     let cancelled = false;
     const load = async (): Promise<void> => {
       try {
@@ -90,7 +129,7 @@ export const AppConfigGate: React.FC<{children: React.ReactNode}> = ({children})
     return (): void => {
       cancelled = true;
     };
-  }, [basePath, reloadKey]);
+  }, [basePath, injected, reloadKey]);
 
   const handleRetry = useCallback((): void => {
     setError(undefined);

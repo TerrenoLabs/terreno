@@ -1,16 +1,32 @@
 import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Heading, SocialLoginButton, Text, TextField} from "@terreno/ui";
-import {useLocalSearchParams, useRouter} from "expo-router";
+import {useLoaderData, useLocalSearchParams, useRouter} from "expo-router";
 import React, {useCallback, useState} from "react";
 import {useAppConfig} from "../components/AppConfigGate";
-import {sanitizeReturnTo} from "../components/adminGateUtils";
 import {useAuthClient} from "../components/StoreProvider";
+import type {AdminSpaAppConfig} from "../src/appConfig";
+import {sanitizeReturnTo} from "../src/returnTo";
+import {getAdminSpaServerContext} from "../src/serverContext";
 
 type SocialProvider = "google" | "github" | "apple";
+
+interface LoginLoaderData {
+  appConfig: AdminSpaAppConfig | null;
+}
+
+/**
+ * Server loader: the runtime config the serve plugin published, so the brand is in the
+ * first HTML and in the JSON a client-side navigation to /login fetches.
+ */
+export const loader = (): LoginLoaderData => ({
+  appConfig: getAdminSpaServerContext()?.appConfig ?? null,
+});
 
 const LoginScreen: React.FC = () => {
   const router = useRouter();
   const {appConfig} = useAppConfig();
+  const loaderData = useLoaderData<typeof loader>();
+  const brandName = loaderData?.appConfig?.brandName ?? appConfig.brandName;
   const authClient = useAuthClient();
   const {refresh} = useSession();
   const {returnTo} = useLocalSearchParams<{returnTo?: string | string[]}>();
@@ -22,7 +38,8 @@ const LoginScreen: React.FC = () => {
   const [error, setError] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Resolve the new session now rather than waiting for Better Auth's session signal.
+  // Resolve the new session now rather than waiting for Better Auth's session signal, then
+  // go where the visitor was headed when the gate sent them here.
   const onSuccess = useCallback(async (): Promise<void> => {
     await refresh();
     router.replace(safeReturnTo ?? "/");
@@ -68,7 +85,7 @@ const LoginScreen: React.FC = () => {
     <Box alignItems="center" color="base" flex="grow" justifyContent="center" padding={6}>
       <Box gap={5} maxWidth={400} width="100%">
         <Heading align="center" size="lg">
-          {appConfig.brandName}
+          {brandName}
         </Heading>
         {error ? (
           <Text color="error" testID="admin-spa-login-error">

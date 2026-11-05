@@ -561,6 +561,55 @@ client is `adminRequest`, built on `apiFetch` from `@terreno/syncdb/api` (timeou
 `FormData`, `credentials` forwarded); `unwrapAdminEnvelope` unwraps `{data}` responses the
 same way the syncdb request client does.
 
+### buildAdminReadUrl, buildAdminListQueryParams, buildAdminApiListQueryRequest
+
+The URL builders the model hooks use, exported so a server render can request exactly what a
+screen will request and seed it under the same key:
+
+- `buildAdminReadUrl(routePath, id)`: `GET {routePath}/:id`, with `id` encoded by
+  `encodeURIComponent`. `useReadQuery` uses it.
+- `buildAdminListQueryParams({filterState, limit, modelConfig, page, searchDebounced, sort?})`:
+  the list params `AdminModelTable` sends for its current state.
+- `buildAdminApiListQueryRequest(routePath, params)`: `{method: "GET", url}` for a list
+  request, with the params serialized as `useListQuery` serializes them.
+
+### homeWidgetUrls
+
+`homeWidgetUrls({adminConfig, apiBase})` returns the URLs the home dashboard's built-in widgets
+request on mount, for the widgets in `adminConfig.home.slots`: one `limit=1` count per model for
+`modelStats` / `modelsGrid`, the audit log's first 8 rows for `recentActivity`,
+`{apiBase}/version-config` for `versionConfig`, and `/jobs/stats` for `jobs`. Each URL appears
+once. Custom widgets and organization-scoped models contribute nothing: a server render seeds
+what this returns, and the rest loads on the client.
+
+### AdminRpcSeed and adminRpcSeedKey
+
+`<AdminRpcSeed data={...}>` gives `useAdminRpcQuery` initial data, such as response bodies a
+server render already fetched. Key each body with `adminRpcSeedKey(url, headers?)`: the exact
+`url` the hook receives (query string included) plus its `X-Organization-Id` header, when it
+sends one. Other headers do not change the key, so a body fetched for one organization, or for
+none, never answers a hook that asks for another.
+
+```tsx
+import {AdminRpcSeed, adminRpcSeedKey} from "@terreno/admin-frontend";
+
+<AdminRpcSeed data={{[adminRpcSeedKey("/admin/roles")]: roles}}>
+  <AdminRolesList />
+</AdminRpcSeed>
+```
+
+A query with a matching seed returns it as `data` (after `transformResponse`) with
+`isLoading: false` on its first render, and skips its first fetch. It fetches again on
+`refetch()`, when its `url` or `X-Organization-Id` changes, and when a mutation invalidates its
+`providesTags`. `skip: true` wins over a seed. Seeds nest, and inner seeds override outer ones
+for the same key. `AdminRpcSeed` does not need `AdminProvider`.
+
+Seeded or not, `useAdminRpcQuery` treats a change of `url` or `X-Organization-Id` as a new
+request and clears the previous body before the next render is shown, so one organization's data
+never appears under another. `keepPreviousData` keeps rows across a `url` change only while the
+organization stays the same. In earlier releases, an organization change on the same `url` kept
+the old body on screen until the new one arrived.
+
 ## Expo Router Setup
 
 ``````typescript

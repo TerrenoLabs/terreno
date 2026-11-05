@@ -1,11 +1,14 @@
 import {
   AdminProvider,
+  AdminRpcSeed,
+  adminRpcSeedKey,
   type OrganizationSummary,
   OrgContextProvider,
   organizationFromPath,
   useOptionalOrgContext,
 } from "@terreno/admin-frontend";
 import {createSyncDb, type SyncDb} from "@terreno/syncdb";
+import {useSession} from "@terreno/syncdb/auth";
 import {SyncDbProvider, useConflicts} from "@terreno/syncdb/react";
 import {Box, Spinner, TerrenoProvider, Text} from "@terreno/ui";
 import {Stack, usePathname} from "expo-router";
@@ -14,7 +17,9 @@ import {AdminGate} from "../components/AdminGate";
 import {AppConfigGate, useAppConfig} from "../components/AppConfigGate";
 import {useAdminGateConfig} from "../components/adminGateConfig";
 import {isSignedInOnlyRoute} from "../components/adminGateUtils";
-import {StoreProvider, useAuthClient} from "../components/StoreProvider";
+import {resolveAdminSpaOrigin, StoreProvider, useAuthClient} from "../components/StoreProvider";
+import {useSsrPayload} from "../components/ssrPayload";
+import {isAdminSpaServerRender} from "../src/serverContext";
 import {
   createAdminSpaSyncDbConfig,
   resolveAdminSyncCollections,
@@ -39,14 +44,20 @@ const SyncEnabledAdminProvider: React.FC<{
   apiBase: string;
   children: React.ReactNode;
   client: SyncDb;
+  /** A server render already decided access: render the shell now, start sync behind it. */
+  isServerRendered: boolean;
   routeOrganization?: OrganizationSummary;
-}> = ({apiBase, children, client, routeOrganization}) => {
+}> = ({apiBase, children, client, isServerRendered, routeOrganization}) => {
   const syncConflicts = useConflicts();
   const [isReady, setIsReady] = useState(false);
   const [startError, setStartError] = useState<string | undefined>();
 
-  // Start the cookie-authenticated window client only while the authorized SPA is mounted.
+  // Start the cookie-authenticated window client only while the authorized SPA is mounted
+  // in a browser; a server render never opens a socket or local store.
   useEffect(() => {
+    if (isAdminSpaServerRender()) {
+      return;
+    }
     let isStopped = false;
     client
       .start()
@@ -67,7 +78,8 @@ const SyncEnabledAdminProvider: React.FC<{
     };
   }, [client]);
 
-  if (!isReady) {
+  // Without a server render, wait for sync as before. With one, show the shell at once.
+  if (!isReady && !isServerRendered) {
     return (
       <Box alignItems="center" justifyContent="center" padding={6}>
         {startError ? (
@@ -85,8 +97,14 @@ const SyncEnabledAdminProvider: React.FC<{
       credentials="same-origin"
       routeBase=""
       syncConflicts={syncConflicts}
-      syncDb={client}
+      // Windowed tables bind to the sync store only after start() resolves; until then they
+      // read the REST list (seeded by the route loader). A window registered before start
+      // never receives live updates, and writes must wait for start.
+      syncDb={isReady ? client : undefined}
     >
+      {startError ? (
+        <Text testID="admin-spa-sync-error">Admin sync could not start: {startError}</Text>
+      ) : null}
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindSpaAdminOrganization />
         {children}
@@ -99,6 +117,7 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
   const {appConfig} = useAppConfig();
   const authClient = useAuthClient();
   const pathname = usePathname();
+  const isServerRendered = Boolean(useSsrPayload());
   const routeOrganization = useMemo(() => organizationFromPath(pathname), [pathname]);
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
   // Use the config AdminGate already loaded. Fetching it again here would render the
@@ -119,7 +138,7 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
       createAdminSpaSyncDbConfig({
         authClient,
         collections,
-        origin: typeof window === "undefined" ? "http://localhost:4000" : window.location.origin,
+        origin: resolveAdminSpaOrigin(),
       })
     );
   }, [authClient, syncCollectionsKey]);
@@ -130,6 +149,7 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
         <SyncEnabledAdminProvider
           apiBase={apiBase}
           client={client}
+          isServerRendered={isServerRendered}
           routeOrganization={routeOrganization}
         >
           {children}
@@ -146,6 +166,27 @@ const AdminProviderBridge: React.FC<{children: React.ReactNode}> = ({children}) 
       </OrgContextProvider>
     </AdminProvider>
   );
+};
+
+/**
+ * Seeds `${apiBase}/config` from the server's shell payload, so AdminGate and every config
+ * reader below it render from it on the first render instead of fetching it again.
+ */
+const AdminConfigSeed: React.FC<{children: React.ReactNode}> = ({children}) => {
+  const payload = useSsrPayload();
+  const {userId} = useSession();
+  const {appConfig} = useAppConfig();
+  const apiBase = appConfig.adminApiBasePath ?? "/admin";
+  // The config is filtered per user: it seeds only while the session it was read for is live,
+  // so a later sign-in on the same page fetches its own.
+  const isPayloadSession = userId !== null && payload?.session?.userId === userId;
+  const adminConfig = isPayloadSession ? payload?.adminConfig : undefined;
+  const data = useMemo(
+    (): Record<string, unknown> =>
+      adminConfig ? {[adminRpcSeedKey(`${apiBase}/config`)]: adminConfig} : {},
+    [adminConfig, apiBase]
+  );
+  return <AdminRpcSeed data={data}>{children}</AdminRpcSeed>;
 };
 
 /**
@@ -169,6 +210,7 @@ const AdminChrome: React.FC<{children: React.ReactNode}> = ({children}) => {
  * - TerrenoProvider: theme/toast context.
  * - AdminProvider (cookie-bound): the same-origin fetch client AdminGate uses for
  *   `/admin/config`. AdminProviderBridge nests a second AdminProvider with syncDb.
+ * - AdminConfigSeed: seeds `/admin/config` from the server's shell payload.
  * - AdminGate: session + admin authorization, gating the route Stack. It shares the loaded
  *   config with AdminProviderBridge, which picks the syncDb provider from it on first render
  *   so the Stack mounts once.
@@ -180,11 +222,13 @@ const RootLayout: React.FC = () => {
       <StoreProvider>
         <TerrenoProvider>
           <AdminProvider credentials="same-origin" routeBase="">
-            <AdminGate>
-              <AdminChrome>
-                <Stack screenOptions={{headerShown: false}} />
-              </AdminChrome>
-            </AdminGate>
+            <AdminConfigSeed>
+              <AdminGate>
+                <AdminChrome>
+                  <Stack screenOptions={{headerShown: false}} />
+                </AdminChrome>
+              </AdminGate>
+            </AdminConfigSeed>
           </AdminProvider>
         </TerrenoProvider>
       </StoreProvider>

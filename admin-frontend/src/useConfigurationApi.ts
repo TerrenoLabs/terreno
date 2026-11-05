@@ -1,5 +1,6 @@
 import {
   type AdminRpcQueryState,
+  unwrapAdminEnvelope,
   useAdminRpc,
   useAdminRpcMutation,
   useAdminRpcQuery,
@@ -47,6 +48,13 @@ export const useConfigurationApi = ({
       const [trigger, meta] = useAdminRpcMutation(rpc, {invalidatesTags: CONFIGURATION_TAGS});
       return [(body: ConfigBody) => trigger({body, method: "PATCH", url: basePath}), meta] as const;
     },
-    useValuesQuery: () => useAdminRpcQuery({providesTags: CONFIGURATION_TAGS, rpc, url: basePath}),
+    // The API answers `{data: <document>}`; screens read the document itself.
+    useValuesQuery: () =>
+      useAdminRpcQuery({
+        providesTags: CONFIGURATION_TAGS,
+        rpc,
+        transformResponse: unwrapAdminEnvelope,
+        url: basePath,
+      }),
   };
 };

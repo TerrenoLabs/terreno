@@ -52,7 +52,7 @@ COPY --from=builder /app/example-backend/migrations ./migrations
 ENV NODE_ENV=production
 ENV PORT=3000
 # The compiled binary cannot resolve the SPA bundle via __dirname, so point the
-# serve plugin at the copied export explicitly.
+# serve plugin at the copied export root (client/ + server/) explicitly.
 ENV ADMIN_SPA_DIST_DIR=/app/admin-spa-dist
 ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 3000

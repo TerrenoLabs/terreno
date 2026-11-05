@@ -168,6 +168,7 @@ describe("createReplayCoordinator", () => {
     expect(entity?.pendingMutationId).toBeUndefined();
     expect(entity?.seq).toBe(42);
     expect(entity?.data).toEqual({title: "t1"});
+    expect(entity?.awaitingServerDelta).toBe(true);
   });
 
   it("ignores an ack that resolves after its replay lifecycle is reset", async () => {

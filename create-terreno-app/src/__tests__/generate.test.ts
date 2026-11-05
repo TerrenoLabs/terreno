@@ -118,6 +118,9 @@ describe("generateAllFiles", () => {
     assert.equal(frontendPackageJson.dependencies.expo, "~58.0.14");
     assert.equal(frontendPackageJson.dependencies["expo-router"], "~58.0.23");
     assert.equal(frontendPackageJson.dependencies["expo-constants"], "~58.0.12");
+    // @better-auth/expo imports expo-network when the auth client is created, and nothing else
+    // installs it since @terreno/rtk was removed, so a clean install without it crashes on launch.
+    assert.equal(frontendPackageJson.dependencies["expo-network"], "~58.0.3");
     assert.equal(frontendPackageJson.dependencies["expo-sqlite"], "~58.0.13");
   });
 

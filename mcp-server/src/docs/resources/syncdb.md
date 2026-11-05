@@ -12,7 +12,8 @@ and generated hooks. Since Terreno 58 there is no Redux and no `@terreno/rtk`.
 - `@terreno/syncdb/auth`: `createBetterAuthClient`, `SessionProvider`, `useSession`
 - `@terreno/syncdb/config`: `baseUrl`, `baseWebsocketsUrl`, `appHeaders`
 - `@terreno/syncdb/flags`: `useFeatureFlags`, `useTerrenoFeatureFlags`
-- `@terreno/syncdb/app`: `useUpgradeCheck`, `canOpenAdminPage`, `installDevConsoleLogger`, `useMCPTools`
+- `@terreno/syncdb/app`: `useUpgradeCheck`, `canOpenAdminPage`, `installDevConsoleLogger`
+- `@terreno/syncdb/mcp`: `useMCPTools` (needs the optional `@modelcontextprotocol/client` peer)
 - `@terreno/syncdb/testing`: `createFakeTransport`
 - `terreno-syncdb-codegen` (bin): `--out store/syncDbSdk.ts` for collections, `--api-out store/apiSdk.ts` for typed request hooks
 

@@ -409,6 +409,10 @@ export const createReplayCoordinator = ({
       return;
     }
     store.upsertEntity({
+      // The seq stamp is the only write that arms the equal-seq delta. A
+      // release without a seq (terminal failure) clears it so that delta
+      // cannot overwrite a newer local edit.
+      awaitingServerDelta: seq !== undefined,
       collection: mutation.collection,
       data: entity.data,
       id: mutation.entityId,

@@ -418,7 +418,7 @@ The only frontend data layer: local-first collections plus every request/respons
 - **React hooks**: `useQuery`, `useEntity`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSocketEvent`
 - **Request client** (`/api` + `/react`): `createApiClient`, `ApiClientProvider`, `useApiQuery`, `useApiMutation`; generated hooks in `store/apiSdk.ts`
 - **Auth** (`/auth`): `createBetterAuthClient`, `SessionProvider`, `useSession`, `betterAuthAdapter`, `jwtAuthAdapter`
-- **Config, flags, app** (`/config`, `/flags`, `/app`): `baseUrl`, `useTerrenoFeatureFlags`, `useUpgradeCheck`, `canOpenAdminPage`, `useMCPTools`
+- **Config, flags, app, MCP** (`/config`, `/flags`, `/app`, `/mcp`): `baseUrl`, `useTerrenoFeatureFlags`, `useUpgradeCheck`, `canOpenAdminPage`, `useMCPTools` (`/mcp`, needs `@modelcontextprotocol/client`)
 
 Key imports:
 ```typescript

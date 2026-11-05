@@ -46,7 +46,14 @@ bunx expo install expo-sqlite expo-secure-store @react-native-async-storage/asyn
 
 `@terreno/rtk` depended on `expo-constants` and `expo-network`, so apps got them transitively.
 `@terreno/syncdb` lists them only as optional peers, and `baseUrl` imports `expo-constants`, so
-install both explicitly.
+install both explicitly. `@better-auth/expo`'s client also imports `expo-network` when the auth
+client is created. A missing `expo-network` doesn't show up in development, because the old copy
+stays in `node_modules` after `@terreno/rtk` is removed, but a clean install (an EAS build) leaves
+it out. The release build then crashes on launch with `Unhandled JS Exception: Error: Cannot find
+module`, thrown from `createAuthClient`, and expo-updates aborts the app. The `.catch` in that
+import doesn't help, because Metro replaces an unresolvable import with a stub that throws
+synchronously. To check an upgraded app, run `rm -rf node_modules && bun install --frozen-lockfile`
+and confirm both packages are installed.
 
 Keep or add the other optional peers of `@terreno/syncdb` for the features the app uses:
 
@@ -391,7 +398,7 @@ Every export of `@terreno/rtk` 57.x and its 58 replacement. Paths: `api` =
 | `installTerrenoDevConsoleLogger` | `installDevConsoleLogger` (app) |
 | `resetTerrenoDevConsoleLoggerForTests` | Removed from the public API |
 | `registerTerrenoDevStore` | Removed. `createSyncDb({debug})` registers the client for terreno-mcp-local (`get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`). |
-| `useMCPTools`, `MCPToolInfo`, `UseMCPToolsOptions`, `UseMCPToolsResult` | Same names (app); pass `authProvider` |
+| `useMCPTools`, `MCPToolInfo`, `UseMCPToolsOptions`, `UseMCPToolsResult` | Same names, from `@terreno/syncdb/mcp`; pass `authProvider` |
 | `useTerrenoChat`, `UseTerrenoChatOptions` | Removed (no consumers). Use `useChat` from `@ai-sdk/react` with a bearer header from `authProvider.getToken()`, or `GPTChat` from `@terreno/ui`. |
 | `@terreno/rtk/buildNumber`: `coerceBuildNumber`, `resolveBuildNumber` | `@terreno/syncdb/buildNumber` (node-only) |
 

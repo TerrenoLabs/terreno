@@ -145,7 +145,7 @@ saved in **Profile** as `x-ai-api-key`; otherwise the route answers **503**.
 The route sends `text` as the user prompt. The labelled registry version supplies the
 system prompt and the route uses `TemperaturePresets.LOW`.
 
-The example registers the local plugin even when no Langfuse keys exist. Set
+The example registers the local plugin and does not register `LangfuseApp`. Set
 `AI_OBS_PRICE_MAP_JSON` to calculate USD cost; unlisted models show tokens with no cost,
 never `$0`.
 

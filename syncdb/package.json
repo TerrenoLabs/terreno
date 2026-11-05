@@ -78,6 +78,10 @@
       "default": "./dist/flags/useFeatureFlags.js",
       "types": "./dist/flags/useFeatureFlags.d.ts"
     },
+    "./mcp": {
+      "default": "./dist/app/mcpTools.js",
+      "types": "./dist/app/mcpTools.d.ts"
+    },
     "./react": {
       "default": "./dist/react/index.js",
       "types": "./dist/react/index.d.ts"

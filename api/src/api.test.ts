@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import type express from "express";
 import {DateTime} from "luxon";
 import mongoose, {type Model} from "mongoose";
@@ -9,6 +9,7 @@ import {addPopulateToQuery, type JSONValue, modelRouter} from "./api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "./auth";
 import {clearCollectionRegistry, getCollection} from "./collectionRegistry";
 import {APIError} from "./errors";
+import {logger} from "./logger";
 import {clearMCPRegistry, getMCPRegistry} from "./mcp/registry";
 import {Permissions} from "./permissions";
 import type {AnyTerrenoAccess} from "./rbac/types";
@@ -2208,6 +2209,35 @@ describe("@terreno/api", () => {
       expect(registration).toHaveProperty("_buildWithContext");
       expect(registration).toHaveProperty("model");
       expect(registration).toHaveProperty("options");
+    });
+
+    it("builds the standalone router only when something reads it", () => {
+      const debugSpy = spyOn(logger, "debug");
+      const openApiSkips = (): number =>
+        debugSpy.mock.calls.filter((call) =>
+          String(call[0]).includes('No options.openApi provided for model "Food"')
+        ).length;
+      try {
+        const registration = modelRouter("/food", FoodModel, {
+          permissions: {
+            create: [Permissions.IsAny],
+            delete: [Permissions.IsAny],
+            list: [Permissions.IsAny],
+            read: [Permissions.IsAny],
+            update: [Permissions.IsAny],
+          },
+        });
+        // TerrenoApp mounts _buildWithContext's router, so registering must not build one.
+        expect(openApiSkips()).toBe(0);
+
+        const router = registration.router;
+        expect(typeof router).toBe("function");
+        expect(openApiSkips()).toBe(1);
+        expect(registration.router).toBe(router);
+        expect(openApiSkips()).toBe(1);
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
 
     it("refreshes MCP registry options when rebuilt with accessControl", () => {

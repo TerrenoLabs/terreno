@@ -72,10 +72,10 @@ const tools = getMCPTools(req.user);
 ```
 
 To list the signed-in user's tools in an app, use `useMCPTools` from
-`@terreno/syncdb/app` with the same auth provider you pass to `createSyncDb`:
+`@terreno/syncdb/mcp` with the same auth provider you pass to `createSyncDb`:
 
 ```typescript
-import {useMCPTools} from "@terreno/syncdb/app";
+import {useMCPTools} from "@terreno/syncdb/mcp";
 import {authProvider} from "@/store/syncdb";
 
 const {tools, isLoading, error, refetch} = useMCPTools({authProvider});

@@ -31,7 +31,8 @@ bun run lint             # Lint code
 | `@terreno/syncdb/auth` | `src/auth/auth.ts` | `createBetterAuthClient`, `SessionProvider`, `useSession`, `jwtAuthAdapter`, `useJwtAuth`, token-expiry helpers |
 | `@terreno/syncdb/config` | `src/config/baseUrl.ts` | `baseUrl`, `baseWebsocketsUrl`, `resolveBaseUrls`, `appHeaders` |
 | `@terreno/syncdb/flags` | `src/flags/useFeatureFlags.ts` | `useFeatureFlags`, `useTerrenoFeatureFlags` |
-| `@terreno/syncdb/app` | `src/app/app.ts` | `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `installDevConsoleLogger`, `useMCPTools` |
+| `@terreno/syncdb/app` | `src/app/app.ts` | `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `installDevConsoleLogger` |
+| `@terreno/syncdb/mcp` | `src/app/mcpTools.ts` | `useMCPTools` (needs the optional `@modelcontextprotocol/client` peer) |
 | `@terreno/syncdb/buildNumber` | `src/buildNumber.ts` | `resolveBuildNumber` (node-only, for `app.config.ts`) |
 | `@terreno/syncdb/codegen` + bin `terreno-syncdb-codegen` | `src/codegen/` | `--out` synced collection hooks, `--api-out` request hooks |
 | `@terreno/syncdb/testing` | `src/testing/index.ts` | `createFakeTransport` |

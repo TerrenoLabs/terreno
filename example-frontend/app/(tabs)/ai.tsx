@@ -1,8 +1,8 @@
 import {type BlocksDocument, parseBlocks} from "@terreno/blocks";
-import {useMCPTools} from "@terreno/syncdb/app";
 import {useSession} from "@terreno/syncdb/auth";
 import {baseUrl} from "@terreno/syncdb/config";
 import {useFeatureFlags} from "@terreno/syncdb/flags";
+import {useMCPTools} from "@terreno/syncdb/mcp";
 import {useApiClient, useMutate, useQuery} from "@terreno/syncdb/react";
 import {
   type AskSubmission,

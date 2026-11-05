@@ -498,6 +498,8 @@ describe("generated frontend Terreno 58 compatibility", () => {
     assert.include(layout, "<SyncDbProvider client={syncDb}>");
     assert.include(layout, 'import {installDevConsoleLogger} from "@terreno/syncdb/app"');
     assert.include(layout, "installDevConsoleLogger({baseUrl});");
+    assert.include(layout, 'import {registerTerrenoDevStorage} from "@terreno/syncdb"');
+    assert.include(layout, "registerTerrenoDevStorage({asyncStorage: true});");
     assert.notInclude(layout, "PersistGate");
     for (const screen of [login, signup]) {
       assert.include(screen, "const {refresh} = useSession();");

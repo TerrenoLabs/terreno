@@ -21,7 +21,8 @@
     "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
-  "ignoreBinaries": ["maestro"],
+  // adb is spawned by terreno-mcp-local native log capture when Android tooling is present.
+  "ignoreBinaries": ["maestro", "adb"],
   // Root tooling loads these through package scripts or child CLIs rather than imports:
   // Biome powers hooks, RTK codegen is resolved by generate-sdk.ts, and ts-node loads
   // TypeScript codegen configuration.
@@ -197,6 +198,9 @@
       ]
     },
     "syncdb": {
+      // devMcpRegistry dynamically imports AsyncStorage / SecureStore when the host app
+      // registers MCP storage; apps supply those packages, not @terreno/syncdb.
+      "ignoreDependencies": ["@react-native-async-storage/async-storage", "expo-secure-store"],
       "entry": [
         "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -500,6 +504,8 @@
       // the array form in bunfig.toml; with bun: false Knip cannot discover that
       // preload file from the plugin, so it is listed as an entry.
       "bun": false,
+      // Android platform logs spawn the host `adb` binary when present.
+      "ignoreBinaries": ["adb"],
       "entry": [
         "e2e/smoke.{ts,spec.ts}",
         "src/index.ts",

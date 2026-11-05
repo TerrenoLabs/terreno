@@ -29,7 +29,7 @@ type DevMcpGlobal = typeof globalThis & {
   __TERRENO_STORE__?: {dispatch: (action: unknown) => unknown};
 };
 
-export const isTerrenoMcpEvalEnabled = (): boolean => {
+const isTerrenoMcpEvalEnabled = (): boolean => {
   return process.env.TERRENO_MCP_EVAL === "1" || process.env.TERRENO_MCP_EVAL === "true";
 };
 

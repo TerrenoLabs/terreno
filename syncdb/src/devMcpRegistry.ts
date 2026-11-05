@@ -18,7 +18,7 @@ export interface RegisterTerrenoDevStorageOptions {
   secureStoreKeyAllowlist?: string[];
 }
 
-export interface TerrenoDevCommandInputSchema {
+interface TerrenoDevCommandInputSchema {
   properties?: Record<string, {type?: string; description?: string}>;
   type?: string;
 }

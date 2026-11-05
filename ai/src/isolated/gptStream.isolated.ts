@@ -17,14 +17,6 @@ let addGptRoutes: typeof import("../routes/gpt.js").addGptRoutes;
 let AIService: typeof import("../service/aiService.js").AIService;
 
 beforeAll(async () => {
-  // Mock langfuseVercelAi to avoid transitive langfuse SDK imports.
-  const realLangfuseVercelAi = await import("../langfuseVercelAi.js");
-  mock.module("../langfuseVercelAi", () => ({
-    ...realLangfuseVercelAi,
-    createTelemetryConfig: () => ({functionId: "test", isEnabled: false}),
-    preparePromptForAI: async () => ({config: {}, prompt: "test", telemetry: {isEnabled: false}}),
-  }));
-
   // Mock the AI SDK so we control exactly which fullStream parts the GPT prompt
   // handler iterates over. All other exports are preserved so AIService and the
   // route helpers keep working.

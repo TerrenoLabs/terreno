@@ -1,0 +1,57 @@
+---
+title: "Text field"
+description: "Use the text field to allow a user to input a single line of text."
+sidebar_label: "Text field"
+slug: /reference/components/text-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Text field
+
+Use the text field to allow a user to input a single line of text.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component, Form  
+**Props interface:** `TextFieldProps`  
+**Story source:** [`demo/stories/Textfield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Textfield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Text field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `OnChangeCallback` | Yes |  |
+| `accessibilityLabel` | `string` |  | Accessible name for the input. Screen readers otherwise announce "Text input field". |
+| `aiSuggestion` | `AiSuggestionProps` |  |  |
+| `autoComplete` | `union` |  | Autofill hint. On web it is set as the input's  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `disabled` | `boolean` |  |  |
+| `errorPosition` | `union` |  | Where  |
+| `errorText` | `string` |  |  |
+| `grow` | `boolean` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `inputRef` | `reflection` |  |  |
+| `maxHeight` | `number` |  | Caps the height (in pixels) a  |
+| `mono` | `boolean` |  | Renders the value in a monospace face with tracking, for codes such as backup codes. |
+| `multiline` | `boolean` |  |  |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `placeholder` | `string` |  |  |
+| `returnKeyType` | `union` |  |  |
+| `rows` | `number` |  |  |
+| `showVisibilityToggle` | `boolean` |  | Renders the show/hide eye control on  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `trimOnBlur` | `boolean` |  |  |
+| `type` | `union` |  |  |
+| `value` | `string` |  |  |

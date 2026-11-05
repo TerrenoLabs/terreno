@@ -3,6 +3,7 @@ import {
   type AdminScreenWidgetProps,
   AdminShellLayout,
   AiPromptEditorScreenWidget,
+  AiReviewBatchScreenWidget,
   AiTracesScreenWidget,
   OrgContextProvider,
   OrgSwitcher,
@@ -47,6 +48,21 @@ const ExampleTracesScreen: React.FC<AdminScreenWidgetProps> = (props) => {
       {...props}
       apiKey={geminiApiKey || undefined}
       apiKeyHint={MULTI_STAGE_GEMINI_KEY_HINT}
+      apiKeyLoading={isGeminiApiKeyLoading}
+    />
+  );
+};
+
+const JUDGE_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run LLM judges on this batch.";
+
+const ExampleReviewBatchScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiReviewBatchScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyHint={JUDGE_GEMINI_KEY_HINT}
       apiKeyLoading={isGeminiApiKeyLoading}
     />
   );
@@ -167,6 +183,7 @@ const AdminLayoutContent: React.FC = () => {
       widgets={{
         screens: {
           "ai-prompt-editor": ExamplePromptEditorScreen,
+          "ai-review-batch": ExampleReviewBatchScreen,
           "ai-traces": ExampleTracesScreen,
           "sync-lab": SyncLabScreen,
         },

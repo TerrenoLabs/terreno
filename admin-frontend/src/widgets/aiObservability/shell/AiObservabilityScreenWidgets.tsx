@@ -9,6 +9,8 @@ import {AiExperimentResultsScreenWidget} from "../experiments/AiExperimentResult
 import {AiExperimentsScreenWidget} from "../experiments/AiExperimentsListScreen";
 import {AiPromptEditorScreenWidget} from "../prompts/AiPromptEditorScreen";
 import {AiPromptsScreenWidget} from "../prompts/AiPromptsListScreen";
+import {AiReviewBatchesScreenWidget} from "../review/AiReviewBatchesScreen";
+import {AiReviewBatchScreenWidget} from "../review/AiReviewBatchScreen";
 import {AiReviewItemScreenWidget} from "../review/AiReviewItemScreen";
 import {AiReviewScreenWidget} from "../review/AiReviewQueueScreen";
 import {AiTraceDetailScreenWidget} from "../traces/AiTraceDetailScreen";
@@ -17,6 +19,8 @@ import {AiTracesScreenWidget} from "../traces/AiTracesListScreen";
 export {
   AiPromptEditorScreenWidget,
   AiPromptsScreenWidget,
+  AiReviewBatchesScreenWidget,
+  AiReviewBatchScreenWidget,
   AiReviewItemScreenWidget,
   AiReviewScreenWidget,
   AiTraceDetailScreenWidget,
@@ -35,6 +39,8 @@ export const AI_OBSERVABILITY_WIDGETS: Record<string, ScreenWidgetComponent> = {
   "ai-prompt-editor": AiPromptEditorScreenWidget,
   "ai-prompts": AiPromptsScreenWidget,
   "ai-review": AiReviewScreenWidget,
+  "ai-review-batch": AiReviewBatchScreenWidget,
+  "ai-review-batches": AiReviewBatchesScreenWidget,
   "ai-review-item": AiReviewItemScreenWidget,
   "ai-trace-detail": AiTraceDetailScreenWidget,
   "ai-traces": AiTracesScreenWidget,

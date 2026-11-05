@@ -25,6 +25,10 @@ const obsExperimentItemSchema = new mongoose.Schema<
       description: "When true, this row failed a gate or evaluator",
       type: Boolean,
     },
+    humanScores: {
+      description: "Judge experiments: human answers the judge versions are compared with",
+      type: mongoose.Schema.Types.Mixed,
+    },
     versionResults: {
       default: {},
       description: "Per-version outputs and evaluator score maps keyed by version number",

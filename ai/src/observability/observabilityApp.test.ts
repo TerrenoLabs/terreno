@@ -26,12 +26,15 @@ const createLocalPlugin = (): ObservabilityPlugin => {
   };
 };
 
-const createLangfusePlugin = (): ObservabilityPlugin => {
+// Only "local" is a typed primary; these cases check runtime validation of other ids.
+const REMOTE = "remote" as never;
+
+const createRemotePlugin = (): ObservabilityPlugin => {
   return {
     capabilities: new Set(["datasets", "experiments", "prompts", "scores", "traces"]),
     datasetStore: {},
     experimentRunner: {},
-    id: "langfuse",
+    id: "remote",
     promptRegistry: {get: async () => undefined},
     scoreSink: {export: async () => {}},
     traceSink: {export: async () => {}},
@@ -55,16 +58,16 @@ describe("ObservabilityApp config", () => {
   it("rejects experiments.primary that does not equal datasets.primary", () => {
     expect(() => {
       new ObservabilityApp({
-        control: {datasets: "local", experiments: "langfuse"},
-        plugins: [createLocalPlugin(), createLangfusePlugin()],
+        control: {datasets: "local", experiments: REMOTE},
+        plugins: [createLocalPlugin(), createRemotePlugin()],
       });
     }).toThrow(/experiments\.primary must equal datasets\.primary/);
   });
 
-  it("rejects reviewQueue.primary langfuse", () => {
+  it("rejects a reviewQueue.primary other than local", () => {
     expect(() => {
       new ObservabilityApp({
-        control: {reviewQueue: "langfuse"},
+        control: {reviewQueue: REMOTE},
         plugins: [createLocalPlugin()],
       });
     }).toThrow(/reviewQueue\.primary must be local/);
@@ -81,12 +84,12 @@ describe("ObservabilityApp config", () => {
     expect(() => {
       new ObservabilityApp({
         control: {
-          datasets: "langfuse",
-          experiments: "langfuse",
-          prompts: "langfuse",
+          datasets: REMOTE,
+          experiments: REMOTE,
+          prompts: REMOTE,
         },
         plugins: [createLocalPlugin()],
       });
-    }).toThrow(/prompts primary "langfuse" has no plugin/);
+    }).toThrow(/prompts primary "remote" has no plugin/);
   });
 });

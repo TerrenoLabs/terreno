@@ -27,6 +27,16 @@ const parseOptionalPromptName = (value: unknown): string | undefined => {
   return trimmed;
 };
 
+const parseKind = (value: unknown): "judge" | "prompt" | undefined => {
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+  if (value !== "judge" && value !== "prompt") {
+    throw new APIError({status: 400, title: "kind must be prompt or judge"});
+  }
+  return value;
+};
+
 const parsePositiveInt = (value: unknown, fallback: number): number => {
   if (value === undefined) {
     return fallback;
@@ -73,6 +83,7 @@ export const addObservabilityExperimentRoutes = (
         .withTags(["observability"])
         .withSummary("List experiments")
         .withQueryParameter("promptName", {type: "string"}, {required: false})
+        .withQueryParameter("kind", {enum: ["judge", "prompt"], type: "string"}, {required: false})
         .withQueryParameter("page", {type: "number"}, {required: false})
         .withQueryParameter("limit", {type: "number"}, {required: false})
         .withResponse(200, {})
@@ -80,6 +91,7 @@ export const addObservabilityExperimentRoutes = (
     ),
     asyncHandler(async (req, res) => {
       const listed = await options.runner.list({
+        kind: parseKind(req.query.kind),
         limit: parsePositiveInt(req.query.limit, EXPERIMENT_LIST_DEFAULT_LIMIT),
         page: parsePositiveInt(req.query.page, 1),
         promptName: parseOptionalPromptName(req.query.promptName),
@@ -102,7 +114,7 @@ export const addObservabilityExperimentRoutes = (
       {action: "create", resource: "aiExperiment"},
       builder()
         .withTags(["observability"])
-        .withSummary("Create an experiment")
+        .withSummary("Create a prompt comparison or judge calibration experiment")
         .withResponse(201, {})
         .build()
     ),

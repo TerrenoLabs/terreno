@@ -1,0 +1,37 @@
+---
+title: "SocialLoginButton"
+description: "Branded OAuth login button for Google, GitHub, and Apple. Primary uses provider colors; outline uses a light background."
+sidebar_label: "SocialLoginButton"
+slug: /reference/components/socialloginbutton
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# SocialLoginButton
+
+Branded OAuth login button for Google, GitHub, and Apple. Primary uses provider colors; outline uses a light background.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `SocialLoginButtonProps`  
+**Story source:** [`demo/stories/SocialLoginButton.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/SocialLoginButton.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="SocialLoginButton" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onPress` | `reflection` | Yes | The function to call when the button is pressed. Should initiate the OAuth flow. |
+| `provider` | `union` | Yes | The OAuth provider for the social login. |
+| `accessibilityLabel` | `string` |  | Accessible name. Defaults to the button text. |
+| `disabled` | `boolean` |  | If true, the button will be disabled. |
+| `fullWidth` | `boolean` |  | If true, the button will take the full width of its container. |
+| `lastUsedLabel` | `string` |  | When set on the outline variant, highlights the pill and shows this label inside it. |
+| `lastUsedTestID` | `string` |  | Test ID of the last-used label. Requires  |
+| `loading` | `boolean` |  | If true, a loading spinner will be shown in the button. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `text` | `string` |  | Custom text for the button. Defaults to "Continue with \{Provider\}". |
+| `variant` | `union` |  | The visual variant of the button. - "primary": Uses the provider's brand colors - "outline": Neutral outline pill, matching the other sign-in methods |

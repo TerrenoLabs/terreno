@@ -377,10 +377,9 @@ jobs:
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
             ${{ steps.announcements.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
-            LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
-            LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
             ${{ steps.better-auth.outputs.secrets }}
             ${{ steps.announcements.outputs.secrets }}
           flags: |
@@ -776,10 +775,9 @@ jobs:
             MONGO_DB_NAME=terreno-example-pr-${{ github.event.pull_request.number }}
             PR_NUMBER=${{ github.event.pull_request.number }}
             ${{ steps.jobs.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
-            LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
-            LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
           flags: |
             --port=3000
             --memory=512Mi
@@ -867,10 +865,9 @@ jobs:
             FLOURISH_SERVICE=${{ env.GCP_TASKS_SERVICE }}
             JOBS_START_WORKER=false
             ${{ steps.jobs.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
-            LANGFUSE_SECRET_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-secret-key:latest
-            LANGFUSE_PUBLIC_KEY=${{ env.GCP_BACKEND_SERVICE }}-langfuse-public-key:latest
           flags: |
             --port=3000
             --memory=512Mi

@@ -1,0 +1,5 @@
+## Properties
+
+### retentionDays
+
+> **retentionDays**: `number`

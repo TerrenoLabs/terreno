@@ -8,11 +8,14 @@ import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPrompts
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolveAiRunBlockedMessage, resolveAiRunError} from "../shell/aiRunAccess";
-import {AiTracesListView} from "./AiTracesListView";
+import {AiTracesHeaderActions, AiTracesListView} from "./AiTracesListView";
 import {
+  DEFAULT_TRACE_SORT,
   emptyTraceFilters,
+  filterValuesToTraceFilters,
   TRACE_PAGE_SIZE,
   type TraceListFilters,
+  traceFiltersToFilterValues,
   unwrapEvaluators,
   unwrapTraceList,
 } from "./traceTypes";
@@ -27,7 +30,10 @@ export interface AiTracesScreenWidgetProps extends AdminScreenWidgetProps {
   apiKeyHint?: string;
 }
 
-const MULTI_STAGE_FEATURE_LABEL = "Multi-stage trace test";
+const MULTI_STAGE_FEATURE_LABEL = "Test trace";
+
+const TRACES_DESCRIPTION =
+  "Every AI call your app made, with its steps, cost and scores. Pick traces to send to people for review or to save as a dataset.";
 
 export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props) => {
   const {api, apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
@@ -41,6 +47,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
   const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi(api);
   const [filters, setFilters] = useState<TraceListFilters>(emptyTraceFilters);
+  const [sort, setSort] = useState(DEFAULT_TRACE_SORT);
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
@@ -51,10 +58,11 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   const [addToDatasetError, setAddToDatasetError] = useState("");
   const [multiStageError, setMultiStageError] = useState("");
 
-  const {data, isError, isLoading} = useListQuery({
+  const {data, isError, isLoading, refetch} = useListQuery({
     ...filters,
     limit: TRACE_PAGE_SIZE,
     page,
+    sort,
   });
   const {data: evaluatorsRaw} = useEvaluatorsQuery();
   const {data: datasetsRaw} = useDatasetsQuery();
@@ -101,8 +109,16 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
     setDatasetId(first.id);
   }, [datasetId, datasetModalOpen, datasets]);
 
-  const handleFiltersChange = useCallback((next: TraceListFilters): void => {
-    setFilters(next);
+  const filterValues = useMemo(() => traceFiltersToFilterValues(filters), [filters]);
+
+  const handleFilterValuesChange = useCallback((next: Record<string, unknown>): void => {
+    setFilters((current) => filterValuesToTraceFilters(next, current));
+    setPage(1);
+    setSelectedIds([]);
+  }, []);
+
+  const handleSortChange = useCallback((next: string): void => {
+    setSort(next);
     setPage(1);
     setSelectedIds([]);
   }, []);
@@ -178,7 +194,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
     try {
       const result = await runTestMultiStage({apiKey}).unwrap();
       if (!result.traceId) {
-        setMultiStageError("The workflow ran, but no local trace id was returned.");
+        setMultiStageError("The test ran, but no local trace id came back.");
         return;
       }
       router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(result.traceId)}`);
@@ -196,7 +212,19 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   }, [apiKey, apiKeyHint, multiStageBlockedMessage, playgroundAiSource, prefix, runTestMultiStage]);
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-traces">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        <AiTracesHeaderActions
+          isRunningMultiStage={testMultiStageState.isLoading}
+          multiStageBlockedMessage={multiStageBlockedMessage}
+          onRunTestMultiStage={handleRunTestMultiStage}
+          showMultiStageTest={status?.localOn === true}
+        />
+      }
+      description={TRACES_DESCRIPTION}
+      screenName="ai-traces"
+    >
       <AiTracesListView
         addToDatasetError={addToDatasetError}
         datasetId={datasetId}
@@ -205,13 +233,11 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         enqueueError={enqueueError}
         evaluatorId={evaluatorId}
         evaluators={evaluators}
-        filters={filters}
+        filterValues={filterValues}
         isAddingToDataset={addTracesState.isLoading}
         isEnqueueing={enqueueState.isLoading}
         isLoading={isLoading}
-        isRunningMultiStage={testMultiStageState.isLoading}
-        loadError={isError ? "Failed to load traces." : undefined}
-        more={listed.more}
+        loadError={isError ? "Could not load traces." : undefined}
         multiStageBlockedMessage={multiStageBlockedMessage}
         multiStageError={multiStageError}
         onAddToDataset={handleAddToDataset}
@@ -225,12 +251,13 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         }}
         onEnqueueReview={handleEnqueueReview}
         onEvaluatorChange={setEvaluatorId}
-        onFiltersChange={handleFiltersChange}
+        onFilterValuesChange={handleFilterValuesChange}
         onOpenAddToDataset={handleOpenAddToDataset}
         onOpenReview={handleOpenReview}
         onOpenTrace={handleOpenTrace}
         onPageChange={setPage}
-        onRunTestMultiStage={handleRunTestMultiStage}
+        onRetry={refetch}
+        onSortChange={handleSortChange}
         onToggleSelect={handleToggleSelect}
         page={page}
         pageSize={listed.limit}
@@ -239,6 +266,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         routeBase={prefix}
         selectedIds={selectedIds}
         showMultiStageTest={status?.localOn === true}
+        sort={sort}
         total={listed.total}
         traces={listed.data}
       />

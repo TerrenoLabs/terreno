@@ -1,0 +1,55 @@
+---
+title: "Markdown editor field"
+description: "A side-by-side markdown editor with a text input on the left and a live preview on the right. Useful for editing rich text content in admin panels and forms."
+sidebar_label: "Markdown editor field"
+slug: /reference/components/markdown-editor-field
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Markdown editor field
+
+A side-by-side markdown editor with a text input on the left and a live preview on the right. Useful for editing rich text content in admin panels and forms.
+
+**Package:** `@terreno/ui`  
+**Categories:** Form  
+**Props interface:** `TextAreaProps`  
+**Story source:** [`demo/stories/Markdowneditorfield.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Markdowneditorfield.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Markdown editor field" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `OnChangeCallback` | Yes |  |
+| `accessibilityLabel` | `string` |  | Accessible name for the input. Screen readers otherwise announce "Text input field". |
+| `aiSuggestion` | `AiSuggestionProps` |  |  |
+| `autoComplete` | `union` |  | Autofill hint. On web it is set as the input's  |
+| `blurOnSubmit` | `boolean` |  |  |
+| `disabled` | `boolean` |  |  |
+| `errorPosition` | `union` |  | Where  |
+| `errorText` | `string` |  |  |
+| `grow` | `boolean` |  |  |
+| `helperText` | `string` |  |  |
+| `iconName` | `IconName` |  |  |
+| `id` | `string` |  |  |
+| `inputRef` | `reflection` |  |  |
+| `maxHeight` | `number` |  | Caps the height (in pixels) a  |
+| `mono` | `boolean` |  | Renders the value in a monospace face with tracking, for codes such as backup codes. |
+| `onBlur` | `OnChangeCallback` |  |  |
+| `onEnter` | `reflection` |  |  |
+| `onFocus` | `reflection` |  |  |
+| `onIconClick` | `reflection` |  |  |
+| `onSubmitEditing` | `reflection` |  |  |
+| `placeholder` | `string` |  |  |
+| `returnKeyType` | `union` |  |  |
+| `rows` | `number` |  |  |
+| `showVisibilityToggle` | `boolean` |  | Renders the show/hide eye control on  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `testIDs` | `FieldTestIDs` |  |  |
+| `title` | `string` |  |  |
+| `trimOnBlur` | `boolean` |  |  |
+| `value` | `string` |  |  |

@@ -1,6 +1,8 @@
 # Set up Terreno MCP
 
-Connect your editor to both Terreno MCP servers:
+Connect your editor to both Terreno MCP servers. After setup, **`debug-with-mcp`** is the
+standard workflow for debugging and driving your app (logs, database, client state, web and
+native navigation).
 
 - **`terreno`** (hosted, Streamable HTTP) supplies documentation search and code generators.
 - **`terreno-local`** (stdio, runs in your repository) reads the app's packages, database, logs,

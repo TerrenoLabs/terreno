@@ -135,7 +135,8 @@ See `docs/reference/syncdb.md` for `sync` scoping (`owner`, `tenant`, `broadcast
 
 ## Runtime debugging
 
-Use the `debug-syncdb-with-mcp` skill for stale entities, outbox stalls,
+Use the **`debug-with-mcp`** skill first (stack + logs + drive). Use
+**`debug-syncdb-with-mcp`** for stale entities, outbox stalls,
 conflicts, cursor/stream drift, reconcile behavior, and offline replay. A client
 created with `debug: true` registers itself with `terreno-mcp-local`.
 

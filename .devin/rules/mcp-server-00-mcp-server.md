@@ -47,16 +47,24 @@ src/
 
 Each tool returns generated code wrapped with file path instructions and additional setup steps.
 
-The local stdio server also exposes runtime diagnostics. For SyncDB use:
+The local stdio server also exposes runtime diagnostics (19 tools). Prefer the
+**`debug-with-mcp`** skill for the standard observe → fix → verify loop. For SyncDB-only
+issues use **`debug-syncdb-with-mcp`**. Tool list: [`docs/reference/mcp-server.md`](../../../docs/reference/mcp-server.md).
 
 | Tool | Description |
 |------|-------------|
+| `read_logs` / `last_error` | Merged dev logs (backend, browser, metro, app, network, native) |
+| `get_client_state` | RTK + SyncDB summary from the running app |
 | `get_syncdb_state` | Read entities, outbox, conflicts, cursors, streams, repair markers, status, and debug events |
 | `syncdb_snapshot` | Capture, list, read, compare, and delete in-memory snapshots |
 | `syncdb_action` | Mutate or directly edit local state, flush, reconcile/resync, resolve/retry, toggle offline, clear events, and merge snapshots |
+| `dispatch_client_action` | Redux dispatch on the dev store |
+| `read_local_storage` / `write_local_storage` | Dev AsyncStorage registry |
+| `list_dev_commands` / `invoke_dev_command` | App-registered dev command handlers |
+| `navigate` / `browser` / `evaluate` | Drive native/web runtime |
 
-SyncDB state changes require `TERRENO_MCP_EVAL=1`. Read and snapshot operations
-remain available without that opt-in. Follow `docs/how-to/debug-with-mcp.md`.
+SyncDB state changes and other gated tools require `TERRENO_MCP_EVAL=1`. Read and snapshot
+operations remain available without that opt-in. Follow `docs/how-to/debug-with-mcp.md`.
 
 ## Available Prompts
 

@@ -66,6 +66,25 @@ The installed planning plugin also ships the reusable Terreno app, docs, upgrade
 deployment, and verification skills used by consumer projects. Repository-only roadmap,
 release, and maintenance workflows remain under `.rulesync/skills/`.
 
+## Standard debugging (MCP)
+
+**Default for every bug, regression, or “does it work?” check on a Terreno app:** invoke the
+**`debug-with-mcp`** skill and use **`terreno-local`** tools on a running dev stack. Do not
+guess from code alone or ask for pasted logs when MCP is configured.
+
+| Server | Role |
+| --- | --- |
+| **`terreno`** (hosted) | Docs search, codegen, validators |
+| **`terreno-local`** (stdio) | Merged logs, Mongo reads, client/SyncDB state, web drive, native navigate |
+
+Observe with `last_error`, `read_logs` (including `network` / `native` when relevant),
+`get_client_state`, and `database_query`. Reproduce and prove fixes with `browser` (web) or
+`navigate` (native). State changes require `TERRENO_MCP_EVAL=1` on the MCP server process
+(`dispatch_client_action`, `write_local_storage`, `invoke_dev_command`, `syncdb_action`,
+`evaluate`). SyncDB-specific workflows: **`debug-syncdb-with-mcp`**. Architecture:
+[`docs/explanation/ai-development-loop.md`](docs/explanation/ai-development-loop.md). How-to:
+[`docs/how-to/debug-with-mcp.md`](docs/how-to/debug-with-mcp.md).
+
 ## Documentation
 
 Human-facing docs are the architecture source. Before changing code, read the
@@ -433,8 +452,8 @@ import {createSyncDb, betterAuthAdapter} from "@terreno/syncdb";
 import {SyncDbProvider, useQuery, useMutate} from "@terreno/syncdb/react";
 ```
 
-For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
-`get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
+For running-app SyncDB bugs, invoke **`debug-syncdb-with-mcp`** (after **`debug-with-mcp`**
+preconditions). Use `get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
 `terreno-mcp-local`. Enable the client with `debug: true`; set
 `TERRENO_MCP_EVAL=1` only for state-changing actions. See
 `docs/how-to/debug-with-mcp.md`.

@@ -240,6 +240,43 @@ describe("observability experiment routes", () => {
     expect(emptyPromptName.body.total).toBeGreaterThanOrEqual(2);
   });
 
+  it("filters experiments by kind and validates judge experiments", async () => {
+    const admin = await authAsUser(app, "admin");
+    const fixtures = await seedExperimentFixtures(admin);
+    const run = await admin.post("/ai/observability/experiments").send({
+      datasetId: fixtures.datasetId,
+      evaluatorIds: [fixtures.evaluatorId],
+      name: "prompt-run",
+      promptName: fixtures.promptName,
+      versions: [1, 2],
+    });
+    expect(run.status).toBe(201);
+    expect(run.body.data.kind).toBe("prompt");
+    expect(run.body.data.datasetName).toBe("route-exp-dataset");
+
+    const prompts = await admin.get("/ai/observability/experiments?kind=prompt");
+    expect(prompts.body.total).toBe(1);
+    const judges = await admin.get("/ai/observability/experiments?kind=judge");
+    expect(judges.body.total).toBe(0);
+    const badKind = await admin.get("/ai/observability/experiments?kind=other");
+    expect(badKind.status).toBe(400);
+
+    const notHuman = await admin.post("/ai/observability/experiments").send({
+      datasetId: fixtures.datasetId,
+      judgeEvaluatorId: fixtures.evaluatorId,
+      kind: "judge",
+      name: "judge-run",
+      questionSetId: fixtures.evaluatorId,
+      versions: [1, 2],
+    });
+    expect(notHuman.status).toBe(400);
+    expect(notHuman.body.title).toBe("questionSetId must be a human question set");
+    const unknownKind = await admin
+      .post("/ai/observability/experiments")
+      .send({datasetId: fixtures.datasetId, kind: "other", name: "x", versions: [1, 2]});
+    expect(unknownKind.status).toBe(400);
+  });
+
   it("lists experiments and returns estimates", async () => {
     const admin = await authAsUser(app, "admin");
     const fixtures = await seedExperimentFixtures(admin);

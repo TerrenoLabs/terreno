@@ -418,6 +418,12 @@ describe("AiDatasetsListScreen", () => {
   };
 
   describe("AiDatasetsScreenWidget", () => {
+    beforeEach(() => {
+      listState.data = datasets;
+      listState.isError = false;
+      listState.isLoading = false;
+    });
+
     it("shows loading then the loaded datasets table", async () => {
       listState.isLoading = true;
       listState.data = undefined;
@@ -469,10 +475,7 @@ describe("AiDatasetsListScreen", () => {
       });
       expect(view.getByText("Name is required.")).toBeTruthy();
 
-      fireEvent.changeText(
-        view.getAllByDisplayValue("")[0] ?? view.getByLabelText("Name"),
-        "new-set"
-      );
+      fireEvent.changeText(view.getByTestId("ai-datasets-create-name"), "new-set");
       await act(async () => {
         fireEvent.press(view.getByText("Create dataset"));
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -557,8 +560,9 @@ describe("AiDatasetsListScreen", () => {
       );
       await flushObservabilityRequests();
       expect(errored.getByTestId("ai-datasets-load-error")).toBeTruthy();
+      expect(errored.getByText("Could not load datasets.")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByText("Try again"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       await flushObservabilityRequests();
@@ -581,7 +585,7 @@ describe("AiDatasetsListScreen", () => {
         fireEvent.press(createFail.getByTestId("ai-datasets-create"));
         await Promise.resolve();
       });
-      fireEvent.changeText(createFail.getAllByDisplayValue("")[0]!, "broken");
+      fireEvent.changeText(createFail.getByTestId("ai-datasets-create-name"), "broken");
       await act(async () => {
         fireEvent.press(createFail.getByText("Create dataset"));
         await Promise.resolve();
@@ -687,7 +691,7 @@ describe("AiDatasetsListScreen", () => {
       });
       await flushObservabilityRequests();
       globalThis.fetch = serverFetch;
-      expect(failing.getByText("Import failed.")).toBeTruthy();
+      expect(failing.getByText("Could not import these items.")).toBeTruthy();
     });
 
     it("dismisses create and import modals", async () => {
@@ -727,24 +731,26 @@ describe("AiDatasetsListScreen", () => {
     it("creates a dataset with optional prompt binding", async () => {
       listState.data = datasets;
       routerPush.mockClear();
-      const view = renderWithTheme(
-        <AiDatasetsScreenWidget server={createServer()} {...widgetProps} />
-      );
+      const server = createServer();
+      const view = renderWithTheme(<AiDatasetsScreenWidget server={server} {...widgetProps} />);
       await flushObservabilityRequests();
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-datasets-create"));
         await Promise.resolve();
       });
-      const emptyFields = view.getAllByDisplayValue("");
-      fireEvent.changeText(emptyFields[0]!, "bound-set");
-      if (emptyFields[1]) {
-        fireEvent.changeText(emptyFields[1], "summarize");
-      }
+      fireEvent.changeText(view.getByTestId("ai-datasets-create-name"), "bound-set");
+      fireEvent.changeText(view.getByTestId("ai-datasets-create-binding"), "summarize");
       await act(async () => {
         fireEvent.press(view.getByText("Create dataset"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
+      await flushObservabilityRequests();
       assert.equal(routerPush.mock.calls.length, 1);
+      assert.equal(routerPush.mock.calls[0]?.[0], "/admin/ai-dataset-detail?id=ds-new");
+      assert.deepEqual(server.callsTo(CREATE_ROUTE)[0]?.body, {
+        inputSchemaPromptName: "summarize",
+        name: "bound-set",
+      });
     });
   });
 });
@@ -871,7 +877,7 @@ describe("AiDatasetsListView", () => {
       expect(view.getByTestId("ai-datasets-import-result")).toBeTruthy();
       expect(view.getByTestId("ai-datasets-import-error")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(view.getByText("Retry"));
+        fireEvent.press(view.getByText("Try again"));
         await Promise.resolve();
       });
       assert.equal(onRetry.mock.calls.length, 1);
@@ -981,6 +987,7 @@ describe("AiDatasetsListView", () => {
 
     it("ignores empty file selection and failed file reads", async () => {
       const onFilePicked = mock((_args: {content: string; filename: string}): void => undefined);
+      const onFileReadError = mock((_message: string) => undefined);
       const originalFetch = globalThis.fetch;
       globalThis.fetch = mock(async () => {
         throw new Error("read failed");
@@ -1002,6 +1009,7 @@ describe("AiDatasetsListView", () => {
           onDismissCreate={() => undefined}
           onDismissImport={() => undefined}
           onFilePicked={onFilePicked}
+          onFileReadError={onFileReadError}
           onImportPasteChange={() => undefined}
           onImportSubmit={() => undefined}
           onOpenCreate={() => undefined}
@@ -1017,6 +1025,8 @@ describe("AiDatasetsListView", () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       assert.equal(onFilePicked.mock.calls.length, 0);
+      assert.equal(onFileReadError.mock.calls.length, 1);
+      assert.include(String(onFileReadError.mock.calls[0]?.[0]), "Could not read that file");
       globalThis.fetch = originalFetch;
     });
 

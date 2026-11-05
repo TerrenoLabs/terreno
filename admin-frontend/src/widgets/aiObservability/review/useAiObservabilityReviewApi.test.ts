@@ -81,4 +81,63 @@ describe("useAiObservabilityReviewApi", () => {
     });
     expect(calls.map((call) => call.url)).toContain("/ai/observability/review?status=pending");
   });
+
+  it("reads review batches and a batch's queue", async () => {
+    const calls = stub();
+    renderHook(
+      () => {
+        const api = useAiObservabilityReviewApi();
+        return {
+          batch: api.useBatchQuery("batch 1"),
+          batches: api.useBatchesQuery(),
+          queue: api.useBatchQueueQuery({batchId: "batch-1", status: "pending"}),
+          queueAll: api.useBatchQueueQuery({batchId: "batch-2"}),
+          skipped: api.useBatchQuery("batch-3", {skip: true}),
+        };
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    expect(calls.map((call) => `${call.method} ${call.url}`).sort()).toEqual([
+      "GET /ai/observability/review/batches",
+      "GET /ai/observability/review/batches/batch%201",
+      "GET /ai/observability/review?batchId=batch-1&status=pending",
+      "GET /ai/observability/review?batchId=batch-2",
+    ]);
+  });
+
+  it("creates a batch and runs a judge with the caller's AI key", async () => {
+    const calls = stub();
+    const {result} = renderHook(
+      () => {
+        const api = useAiObservabilityReviewApi();
+        return {create: api.useCreateBatchMutation(), runJudge: api.useRunJudgeMutation()};
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+
+    await act(async () => {
+      await result.current.create[0]({evaluatorId: "eval-1", limit: 10}).unwrap();
+      await result.current.runJudge[0]({
+        apiKey: "key-1",
+        batchId: "batch 1",
+        evaluatorId: "judge-1",
+      }).unwrap();
+      await result.current.runJudge[0]({batchId: "batch-2", evaluatorId: "judge-1"}).unwrap();
+    });
+
+    expect(calls[0]).toMatchObject({
+      body: {evaluatorId: "eval-1", limit: 10},
+      method: "POST",
+      url: "/ai/observability/review/batches",
+    });
+    expect(calls[1]).toMatchObject({
+      body: {evaluatorId: "judge-1"},
+      method: "POST",
+      url: "/ai/observability/review/batches/batch%201/judgeRuns",
+    });
+    expect(calls[1]?.headers["x-ai-api-key"]).toBe("key-1");
+    expect(calls[2]?.headers["x-ai-api-key"]).toBeUndefined();
+  });
 });

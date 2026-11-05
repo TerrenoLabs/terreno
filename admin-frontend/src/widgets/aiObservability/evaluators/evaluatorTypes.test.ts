@@ -84,6 +84,13 @@ describe("evaluatorTypes helpers", () => {
       ),
       {dataType: "boolean", key: "score", required: true}
     );
+    assert.deepEqual(
+      dimensionForDataType(
+        {dataType: "boolean", key: "faithful", question: "Is it faithful?", required: true},
+        "boolean"
+      ),
+      {dataType: "boolean", key: "faithful", question: "Is it faithful?", required: true}
+    );
     assert.equal(
       dimensionForDataType({dataType: "boolean", key: "score", required: true}, "categorical")
         .range,

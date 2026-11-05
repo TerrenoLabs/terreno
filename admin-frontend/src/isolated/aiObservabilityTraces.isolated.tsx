@@ -8,12 +8,11 @@ import type {AdminConfigResponse} from "../types";
 import {AiTraceDetailScreenWidget as AiTraceDetailScreenWidgetBase} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
 import {AiTraceDetailView} from "../widgets/aiObservability/traces/AiTraceDetailView";
 import {AiTracesScreenWidget as AiTracesScreenWidgetBase} from "../widgets/aiObservability/traces/AiTracesListScreen";
-import {AiTracesListView} from "../widgets/aiObservability/traces/AiTracesListView";
 import {
-  emptyTraceFilters,
-  type TraceDetail,
-  type TraceListItem,
-} from "../widgets/aiObservability/traces/traceTypes";
+  AiTracesHeaderActions,
+  AiTracesListView,
+} from "../widgets/aiObservability/traces/AiTracesListView";
+import type {TraceDetail, TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
 import {
   createObservabilityServer,
   type FakeObservabilityRoutes,
@@ -447,7 +446,12 @@ describe("AiTracesListScreen", () => {
       const server = createServer();
       const loadedView = await renderTraces(server);
       expect(loadedView.getByTestId("ai-traces-table")).toBeTruthy();
-      assert.deepEqual(server.callsTo(TRACES_ROUTE)[0]?.query, {limit: "20", page: "1"});
+      // Newest first is the default sort.
+      assert.deepEqual(server.callsTo(TRACES_ROUTE)[0]?.query, {
+        limit: "20",
+        page: "1",
+        sort: "-startedAt",
+      });
     });
 
     it("runs a multi-stage trace and opens its detail", async () => {
@@ -556,36 +560,52 @@ describe("AiTracesListScreen", () => {
       const server = createServer();
       const view = await renderTraces(server);
       await pressAndSettle(view, "ai-traces-select-trace-ok-clickable");
+      expect(view.getByTestId("ai-traces-bulk-bar")).toBeTruthy();
       await pressAndSettle(view, "ai-traces-clear-selection");
-      const changeFilter = async (testID: string, value: string): Promise<void> => {
-        const field = view.UNSAFE_root.findAllByType(SelectField).find(
-          (node) => node.props.testID === testID
-        );
-        assert.isDefined(field);
-        await act(async () => {
-          fireEvent(field as NonNullable<typeof field>, "onChange", value);
-          await Promise.resolve();
-        });
-      };
-      // Each filter change builds on the previous one, so apply them one render at a time.
-      await changeFilter("ai-traces-filter-prompt", "summarize");
-      await changeFilter("ai-traces-filter-has-score", "false");
-      await changeFilter("ai-traces-filter-sensitive", "true");
+      assert.notExists(view.queryByTestId("ai-traces-bulk-bar"));
+
+      await act(async () => {
+        fireEvent(view.getByTestId("ai-traces-table"), "setPage", 2);
+        await Promise.resolve();
+      });
       await flushObservabilityRequests();
-      expect(view.getByTestId("ai-traces-pagination")).toBeTruthy();
-      const lastQuery = server.callsTo(TRACES_ROUTE).at(-1)?.query;
-      assert.deepInclude(lastQuery, {
+      assert.equal(server.callsTo(TRACES_ROUTE).at(-1)?.query.page, "2");
+
+      await act(async () => {
+        fireEvent(view.getByTestId("ai-traces-table"), "filterValuesChange", {
+          hasScore: false,
+          prompt: ["summarize", "safety"],
+          sensitive: true,
+        });
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      expect(view.getByTestId("ai-traces-pagination")).toHaveTextContent("40 traces");
+      const last = server.callsTo(TRACES_ROUTE).at(-1);
+      assert.isDefined(last);
+      // A filter change goes back to page 1; several prompts repeat the `prompt` key.
+      assert.deepInclude(last?.query, {
         hasScore: "false",
         page: "1",
-        prompt: "summarize",
         sensitive: "true",
+        sort: "-startedAt",
       });
+      assert.deepEqual(new URL(String(last?.url)).searchParams.getAll("prompt"), [
+        "summarize",
+        "safety",
+      ]);
     });
 
-    it("surfaces list load error in the bulk bar", async () => {
+    it("surfaces a list load error with Try again", async () => {
       setListState({isError: true});
-      const view = await renderTraces(createServer());
-      expect(view.getByText("Failed to load traces.")).toBeTruthy();
+      const server = createServer();
+      const view = await renderTraces(server);
+      expect(view.getByText("Could not load traces.")).toBeTruthy();
+      expect(view.getByTestId("ai-traces-load-error-retry")).toBeTruthy();
+      const before = server.callsTo(TRACES_ROUTE).length;
+      await pressAndSettle(view, "ai-traces-load-error-retry");
+      // Try again requests the traces again.
+      assert.isAbove(server.callsTo(TRACES_ROUTE).length, before);
     });
 
     it("no-ops enqueue when no evaluator is installed", async () => {
@@ -608,7 +628,7 @@ describe("AiTracesListScreen", () => {
         (node) => node.props.title === "Add traces to dataset"
       );
       assert.isDefined(modal);
-      fireEvent(modal!, "onDismiss");
+      fireEvent(modal as NonNullable<typeof modal>, "onDismiss");
 
       const table = view.getByTestId("ai-traces-table");
       await act(async () => {
@@ -676,12 +696,12 @@ describe("AiTracesListView", () => {
     onDismissReviewModal: () => undefined,
     onEnqueueReview: () => undefined,
     onEvaluatorChange: () => undefined,
-    onFiltersChange: () => undefined,
+    onFilterValuesChange: () => undefined,
     onOpenAddToDataset: () => undefined,
     onOpenReview: () => undefined,
     onOpenTrace: () => undefined,
     onPageChange: () => undefined,
-    onRunTestMultiStage: () => undefined,
+    onSortChange: () => undefined,
     onToggleSelect: () => undefined,
   };
 
@@ -701,7 +721,7 @@ describe("AiTracesListView", () => {
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           page={1}
           selectedIds={[]}
           showMultiStageTest
@@ -711,25 +731,30 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByTestId("ai-traces-empty")).toBeTruthy();
-      expect(getByText("No traces match these filters.")).toBeTruthy();
+      expect(getByText("No traces yet")).toBeTruthy();
     });
 
-    it("runs the multi-stage trace smoke action", async () => {
-      const onRunTestMultiStage = mock(() => undefined);
-      const {getByTestId} = renderWithTheme(
+    it("says no traces match when filters are applied", () => {
+      const {getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{status: ["error"]}}
           page={1}
           selectedIds={[]}
-          showMultiStageTest
           total={0}
           traces={[]}
           {...idleHandlers}
-          onRunTestMultiStage={onRunTestMultiStage}
         />
+      );
+      expect(getByText("No traces match these filters")).toBeTruthy();
+    });
+
+    it("runs the test trace from the header action", async () => {
+      const onRunTestMultiStage = mock(() => undefined);
+      const {getByTestId} = renderWithTheme(
+        <AiTracesHeaderActions onRunTestMultiStage={onRunTestMultiStage} showMultiStageTest />
       );
 
       await act(async () => {
@@ -740,14 +765,24 @@ describe("AiTracesListView", () => {
       assert.equal(onRunTestMultiStage.mock.calls.length, 1);
     });
 
-    it("disables the multi-stage action and explains why when it is blocked", () => {
+    it("disables the test trace action and explains why when it is blocked", () => {
       const onRunTestMultiStage = mock(() => undefined);
-      const {getByTestId} = renderWithTheme(
+      const header = renderWithTheme(
+        <AiTracesHeaderActions
+          multiStageBlockedMessage="Save a Gemini API key on Profile."
+          onRunTestMultiStage={onRunTestMultiStage}
+          showMultiStageTest
+        />
+      );
+      expect(header.getByTestId("ai-traces-run-multi-stage")).toBeDisabled();
+      assert.equal(onRunTestMultiStage.mock.calls.length, 0);
+
+      const body = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           multiStageBlockedMessage="Save a Gemini API key on Profile."
           page={1}
           selectedIds={[]}
@@ -755,42 +790,28 @@ describe("AiTracesListView", () => {
           total={0}
           traces={[]}
           {...idleHandlers}
-          onRunTestMultiStage={onRunTestMultiStage}
         />
       );
-
-      expect(getByTestId("ai-traces-multi-stage-blocked")).toHaveTextContent(
+      expect(body.getByTestId("ai-traces-multi-stage-blocked")).toHaveTextContent(
         "Save a Gemini API key on Profile."
       );
-      expect(getByTestId("ai-traces-run-multi-stage")).toBeDisabled();
-      assert.equal(onRunTestMultiStage.mock.calls.length, 0);
     });
 
-    it("hides the multi-stage smoke action without local trace storage", () => {
+    it("hides the test trace action without local trace storage", () => {
       const {queryByTestId} = renderWithTheme(
-        <AiTracesListView
-          {...datasetDefaults}
-          evaluatorId=""
-          evaluators={[]}
-          filters={emptyTraceFilters()}
-          page={1}
-          selectedIds={[]}
-          total={0}
-          traces={[]}
-          {...idleHandlers}
-        />
+        <AiTracesHeaderActions onRunTestMultiStage={() => undefined} />
       );
 
       assert.notExists(queryByTestId("ai-traces-run-multi-stage"));
     });
 
-    it("renders an error row with the error line and prompt count", () => {
+    it("renders an error row with the error line and step count", () => {
       const {getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           page={1}
           selectedIds={[]}
           total={1}
@@ -799,17 +820,17 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByText("model timeout")).toBeTruthy();
-      expect(getByText("2")).toBeTruthy();
+      expect(getByText("1 step")).toBeTruthy();
       expect(getByText("failed-call")).toBeTruthy();
     });
 
-    it("uses distinct primary and accent colors for prompt-run status dots", () => {
-      const {getByLabelText, getByTestId} = renderWithTheme(
+    it("uses the shared OK and Error status badges", () => {
+      const {getByTestId, getByText} = renderWithTheme(
         <AiTracesListView
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           page={1}
           selectedIds={[]}
           total={2}
@@ -817,14 +838,10 @@ describe("AiTracesListView", () => {
           {...idleHandlers}
         />
       );
-      const primaryDotColor = getByTestId("ai-traces-status-ok").props.style.backgroundColor;
-      const accentDotColor = getByTestId("ai-traces-status-error").props.style.backgroundColor;
-
-      assert.isString(primaryDotColor);
-      assert.isString(accentDotColor);
-      assert.notEqual(primaryDotColor, accentDotColor);
-      expect(getByLabelText("Trace status: ok")).toBeTruthy();
-      expect(getByLabelText("Trace status: error")).toBeTruthy();
+      expect(getByTestId("ai-traces-status-ok")).toBeTruthy();
+      expect(getByTestId("ai-traces-status-error")).toBeTruthy();
+      expect(getByText("OK")).toBeTruthy();
+      expect(getByText("Error")).toBeTruthy();
     });
 
     it("renders a sensitive badge on sensitive traces", () => {
@@ -833,7 +850,7 @@ describe("AiTracesListView", () => {
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           page={1}
           selectedIds={[]}
           total={1}
@@ -842,7 +859,7 @@ describe("AiTracesListView", () => {
         />
       );
       expect(getByTestId("ai-traces-sensitive-badge")).toBeTruthy();
-      expect(getByText("3")).toBeTruthy();
+      expect(getByText("3 steps")).toBeTruthy();
       expect(getByText("2")).toBeTruthy();
     });
 
@@ -852,7 +869,7 @@ describe("AiTracesListView", () => {
           {...datasetDefaults}
           evaluatorId="eval-1"
           evaluators={[{id: "eval-1", name: "correctness", type: "human"}]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           page={1}
           selectedIds={[sensitiveTrace.id, okTrace.id]}
           total={2}
@@ -872,12 +889,12 @@ describe("AiTracesListView", () => {
 
     it("toggles selection, filters, dataset modal, and pagination", async () => {
       const onToggleSelect = mock(() => undefined);
-      const onFiltersChange = mock(() => undefined);
+      const onFilterValuesChange = mock((_values: Record<string, unknown>) => undefined);
       const onClearSelection = mock(() => undefined);
       const onPageChange = mock(() => undefined);
       const onAddToDataset = mock(() => undefined);
       const onDismissDatasetModal = mock(() => undefined);
-      const {getByTestId, getByText, UNSAFE_root} = renderWithTheme(
+      const {getByTestId, getByText} = renderWithTheme(
         <AiTracesListView
           addToDatasetError="Could not add traces to the dataset."
           datasetId="ds-1"
@@ -886,8 +903,7 @@ describe("AiTracesListView", () => {
           enqueueError="enqueue failed"
           evaluatorId="eval-1"
           evaluators={[{id: "eval-1", name: "correctness", type: "human"}]}
-          filters={emptyTraceFilters()}
-          more
+          filterValues={{}}
           onAddToDataset={onAddToDataset}
           onClearSelection={onClearSelection}
           onDatasetChange={() => undefined}
@@ -895,12 +911,12 @@ describe("AiTracesListView", () => {
           onDismissReviewModal={() => undefined}
           onEnqueueReview={() => undefined}
           onEvaluatorChange={() => undefined}
-          onFiltersChange={onFiltersChange}
+          onFilterValuesChange={onFilterValuesChange}
           onOpenAddToDataset={() => undefined}
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
-          onRunTestMultiStage={() => undefined}
+          onSortChange={() => undefined}
           onToggleSelect={onToggleSelect}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -917,22 +933,19 @@ describe("AiTracesListView", () => {
       });
       assert.isAtLeast(onToggleSelect.mock.calls.length, 1);
 
-      const promptSelect = UNSAFE_root.findAllByType(SelectField).find(
-        (field) => field.props.testID === "ai-traces-filter-prompt"
-      );
-      const scoreSelect = UNSAFE_root.findAllByType(SelectField).find(
-        (field) => field.props.testID === "ai-traces-filter-has-score"
-      );
-      const sensitiveSelect = UNSAFE_root.findAllByType(SelectField).find(
-        (field) => field.props.testID === "ai-traces-filter-sensitive"
-      );
-      assert.isDefined(promptSelect);
-      assert.isDefined(scoreSelect);
-      assert.isDefined(sensitiveSelect);
-      fireEvent(promptSelect!, "onChange", "summarize");
-      fireEvent(scoreSelect!, "onChange", "false");
-      fireEvent(sensitiveSelect!, "onChange", "true");
-      assert.isAtLeast(onFiltersChange.mock.calls.length, 3);
+      await act(async () => {
+        fireEvent(getByTestId("ai-traces-table"), "filterValuesChange", {
+          hasScore: false,
+          prompt: ["summarize"],
+          sensitive: true,
+        });
+        await Promise.resolve();
+      });
+      assert.deepEqual(onFilterValuesChange.mock.calls[0]?.[0], {
+        hasScore: false,
+        prompt: ["summarize"],
+        sensitive: true,
+      });
 
       expect(getByText("enqueue failed")).toBeTruthy();
       expect(getByTestId("ai-traces-add-dataset-error")).toBeTruthy();
@@ -941,7 +954,27 @@ describe("AiTracesListView", () => {
       expect(getByTestId("ai-traces-review-modal")).toHaveTextContent(
         /human evaluator defines the score fields/
       );
-      expect(getByText("40 traces · more pages")).toBeTruthy();
+      expect(getByText("40 traces")).toBeTruthy();
+    });
+
+    it("links to datasets instead of a fake option when there are none", () => {
+      const {getByTestId, getByText, queryByTestId} = renderWithTheme(
+        <AiTracesListView
+          {...datasetDefaults}
+          datasetModalOpen
+          evaluatorId=""
+          evaluators={[]}
+          filterValues={{}}
+          page={1}
+          selectedIds={[okTrace.id]}
+          total={1}
+          traces={[okTrace]}
+          {...idleHandlers}
+        />
+      );
+      expect(getByTestId("ai-traces-dataset-none")).toBeTruthy();
+      expect(getByText("Create a dataset")).toBeTruthy();
+      assert.notExists(queryByTestId("ai-traces-dataset-picker"));
     });
 
     it("wires evaluator change, page change, and dataset modal dismiss", async () => {
@@ -958,8 +991,7 @@ describe("AiTracesListView", () => {
             {id: "eval-1", name: "correctness", type: "human"},
             {id: "eval-2", name: "tone", type: "human"},
           ]}
-          filters={emptyTraceFilters()}
-          more
+          filterValues={{}}
           onAddToDataset={() => undefined}
           onClearSelection={() => undefined}
           onDatasetChange={() => undefined}
@@ -967,12 +999,12 @@ describe("AiTracesListView", () => {
           onDismissReviewModal={() => undefined}
           onEnqueueReview={() => undefined}
           onEvaluatorChange={onEvaluatorChange}
-          onFiltersChange={() => undefined}
+          onFilterValuesChange={() => undefined}
           onOpenAddToDataset={() => undefined}
           onOpenReview={() => undefined}
           onOpenTrace={() => undefined}
           onPageChange={onPageChange}
-          onRunTestMultiStage={() => undefined}
+          onSortChange={() => undefined}
           onToggleSelect={() => undefined}
           page={1}
           promptOptions={["summarize", "safety"]}
@@ -987,13 +1019,13 @@ describe("AiTracesListView", () => {
         (field) => field.props.testID === "ai-traces-evaluator"
       );
       assert.isDefined(evaluatorSelect);
-      fireEvent(evaluatorSelect!, "onChange", "eval-2");
+      fireEvent(evaluatorSelect as NonNullable<typeof evaluatorSelect>, "onChange", "eval-2");
       assert.isAtLeast(onEvaluatorChange.mock.calls.length, 1);
       const pageButtons = getByTestId("ai-traces-table.pagination").findAllByProps({
         accessibilityLabel: "Pagination Number",
       });
       await act(async () => {
-        fireEvent.press(pageButtons[1]!);
+        fireEvent.press(pageButtons[1] as NonNullable<(typeof pageButtons)[number]>);
         await Promise.resolve();
       });
       assert.isAtLeast(onPageChange.mock.calls.length, 1);
@@ -1001,28 +1033,29 @@ describe("AiTracesListView", () => {
       assert.equal(onDismissDatasetModal.mock.calls.length, 1);
     });
 
-    it("wires time and status filters and opens traces from the table", async () => {
-      const onFiltersChange = mock(() => undefined);
+    it("wires sort and column filters and opens traces from the table", async () => {
+      const onFilterValuesChange = mock((_values: Record<string, unknown>) => undefined);
+      const onSortChange = mock((_sort: string) => undefined);
       const onOpenTrace = mock(() => undefined);
-      const {getByTestId, UNSAFE_root} = renderWithTheme(
+      const {getByTestId} = renderWithTheme(
         <AiTracesListView
-          onDismissReviewModal={() => undefined}
-          onOpenReview={() => undefined}
           {...datasetDefaults}
           evaluatorId=""
           evaluators={[]}
-          filters={emptyTraceFilters()}
+          filterValues={{}}
           onAddToDataset={() => undefined}
           onClearSelection={() => undefined}
           onDatasetChange={() => undefined}
           onDismissDatasetModal={() => undefined}
+          onDismissReviewModal={() => undefined}
           onEnqueueReview={() => undefined}
           onEvaluatorChange={() => undefined}
-          onFiltersChange={onFiltersChange}
+          onFilterValuesChange={onFilterValuesChange}
           onOpenAddToDataset={() => undefined}
+          onOpenReview={() => undefined}
           onOpenTrace={onOpenTrace}
           onPageChange={() => undefined}
-          onRunTestMultiStage={() => undefined}
+          onSortChange={onSortChange}
           onToggleSelect={() => undefined}
           page={1}
           selectedIds={[]}
@@ -1030,15 +1063,17 @@ describe("AiTracesListView", () => {
           traces={[okTrace]}
         />
       );
-      fireEvent.changeText(getByTestId("ai-traces-filter-from"), "2026-09-01");
-      fireEvent.changeText(getByTestId("ai-traces-filter-to"), "2026-09-02");
-      const statusSelect = UNSAFE_root.findAllByType(SelectField).find(
-        (field) => field.props.testID === "ai-traces-filter-status"
-      );
-      fireEvent(statusSelect!, "onChange", "error");
-      fireEvent.changeText(getByTestId("ai-traces-filter-user"), "user-1");
-      fireEvent.changeText(getByTestId("ai-traces-filter-session"), "sess-1");
-      assert.isAtLeast(onFiltersChange.mock.calls.length, 3);
+      const table = getByTestId("ai-traces-table");
+      await act(async () => {
+        fireEvent(table, "setSortColumn", {column: 6, direction: "desc"});
+        fireEvent(table, "filterValuesChange", {status: ["error"], userId: "user-1"});
+        await Promise.resolve();
+      });
+      assert.deepEqual(onSortChange.mock.calls[0]?.[0], "-cost");
+      assert.deepEqual(onFilterValuesChange.mock.calls[0]?.[0], {
+        status: ["error"],
+        userId: "user-1",
+      });
       await act(async () => {
         fireEvent.press(getByTestId("ai-traces-open-trace-ok"));
         await Promise.resolve();

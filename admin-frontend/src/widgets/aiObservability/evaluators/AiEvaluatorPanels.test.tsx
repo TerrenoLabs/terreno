@@ -5,6 +5,7 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../../../ui/src/test-utils";
 import {
+  AiEvaluatorDetailMeta,
   AiEvaluatorDetailView,
   type AiEvaluatorDetailViewProps,
   AiEvaluatorNewView,
@@ -244,7 +245,7 @@ describe("AiEvaluatorNewView panels", () => {
       />
     );
     await act(async () => {
-      fireEvent.press(getByTestId("ai-evaluator-type-llm-judge"));
+      fireEvent.press(getByText("LLM judge"));
       fireEvent.press(getByTestId("ai-evaluator-add-dimension"));
       const removeButtons = getAllByText("Remove");
       if (removeButtons.length > 0) {
@@ -287,7 +288,6 @@ describe("AiEvaluatorDetailView", () => {
       />
     );
     expect(getByTestId("ai-evaluator-detail")).toBeTruthy();
-    expect(getByTestId("ai-evaluator-name")).toHaveTextContent("quality");
     expect(getByTestId("ai-evaluator-panel-llm-judge")).toBeTruthy();
     expect(getByText("judge")).toBeTruthy();
 
@@ -295,13 +295,63 @@ describe("AiEvaluatorDetailView", () => {
     // height-constrained table container.
     const dimensions = within(getByTestId("ai-evaluator-dimensions"));
     expect(dimensions.getByText("correct")).toBeTruthy();
-    expect(dimensions.getByText("boolean")).toBeTruthy();
+    expect(dimensions.getByText("Yes or no")).toBeTruthy();
     expect(dimensions.getByText("Yes")).toBeTruthy();
 
     const usage = within(getByTestId("ai-evaluator-used-by"));
     expect(usage.getByText("compare")).toBeTruthy();
     expect(usage.getByText("3")).toBeTruthy();
     expect(usage.getByText("$1.20")).toBeTruthy();
+  });
+
+  it("opens the experiment from a usage row", async () => {
+    const onOpenExperiment = mock((_experimentId: string) => undefined);
+    const {getByTestId} = renderWithTheme(
+      <AiEvaluatorDetailView
+        evaluator={{
+          confidenceAlertBelow: 0.5,
+          dimensions: [{dataType: "numeric", key: "helpfulness", range: "0-1", required: true}],
+          id: "eval-help",
+          judgePromptName: "eval-judge-helpfulness",
+          name: "helpfulness",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+          target: "full trace",
+          type: "llm-judge",
+        }}
+        judgeOutputSchema={{properties: {helpfulness: {type: "number"}}}}
+        onOpenExperiment={onOpenExperiment}
+        routeBase="/admin"
+        usageRows={[
+          {costUsd: 0.4, experimentId: "exp-9", experimentName: "helpfulness-compare", runs: 2},
+        ]}
+      />
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("ai-evaluator-used-by-row-exp-9-clickable"));
+      await Promise.resolve();
+    });
+    assert.equal(onOpenExperiment.mock.calls.length, 1);
+    assert.equal(onOpenExperiment.mock.calls[0]?.[0], "exp-9");
+  });
+
+  it("puts kind, target, and run modes in the header meta", () => {
+    const {getByTestId, getByText} = renderWithTheme(
+      <AiEvaluatorDetailMeta
+        evaluator={{
+          confidenceAlertBelow: 0.5,
+          dimensions: [],
+          id: "eval-1",
+          name: "quality",
+          runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 10},
+          target: "full trace",
+          type: "llm-judge",
+        }}
+      />
+    );
+    expect(getByTestId("ai-evaluator-kind-badge")).toBeTruthy();
+    expect(getByText("LLM judge")).toBeTruthy();
+    expect(getByText("Full trace")).toBeTruthy();
+    expect(getByText("Live 10%")).toBeTruthy();
   });
 
   it("shows human and json-assert detail panels with empty usage", () => {
@@ -459,6 +509,44 @@ describe("AiEvaluatorDetailView", () => {
   });
 });
 
+describe("AiEvaluatorNewView footer", () => {
+  it("offers Cancel next to the primary Create evaluator button", async () => {
+    const onCancel = mock(() => undefined);
+    const {getByTestId} = renderWithTheme(
+      <AiEvaluatorNewView
+        assertionConstraint="exists"
+        assertionPath=""
+        description=""
+        dimensions={[{dataType: "boolean", key: "pass", required: true}]}
+        instructions=""
+        isCreating={false}
+        judgePromptName=""
+        name=""
+        onAddDimension={() => undefined}
+        onAssertionConstraintChange={() => undefined}
+        onAssertionPathChange={() => undefined}
+        onCancel={onCancel}
+        onCreate={() => undefined}
+        onDimensionChange={() => undefined}
+        onInstructionsChange={() => undefined}
+        onJudgePromptNameChange={() => undefined}
+        onLiveSampleRateChange={() => undefined}
+        onNameChange={() => undefined}
+        onRemoveDimension={() => undefined}
+        onTypeChange={() => undefined}
+        runModes={{allowManualRun: true, availableInExperiments: true, liveSampleRate: 0}}
+        target="full trace"
+        type="human"
+      />
+    );
+    await act(async () => {
+      fireEvent.press(getByTestId("ai-evaluator-cancel"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(onCancel.mock.calls.length, 1);
+  });
+});
+
 describe("AiEvaluatorNewView dimension editing", () => {
   it("wires dimension key, type, range, and remove handlers", async () => {
     const onDimensionChange = mock<NonNullable<AiEvaluatorNewViewProps["onDimensionChange"]>>(
@@ -497,7 +585,7 @@ describe("AiEvaluatorNewView dimension editing", () => {
       />
     );
     fireEvent.changeText(getAllByDisplayValue("pass")[0]!, "score");
-    const numericButtons = getAllByText("numeric");
+    const numericButtons = getAllByText("Number");
     await act(async () => {
       fireEvent.press(numericButtons[0]!);
       const removeButtons = getAllByText("Remove");
@@ -633,7 +721,7 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
     const onLiveSampleRateChange = mock<
       NonNullable<AiEvaluatorNewViewProps["onLiveSampleRateChange"]>
     >(() => undefined);
-    const {getAllByText, getByTestId} = renderWithTheme(
+    const {getAllByText, getByTestId, getByText} = renderWithTheme(
       <AiEvaluatorNewView
         assertionConstraint="exists"
         assertionPath="output"
@@ -660,10 +748,10 @@ describe("AiEvaluatorNewView type and live sample controls", () => {
       />
     );
     await act(async () => {
-      fireEvent.press(getByTestId("ai-evaluator-type-human"));
-      fireEvent.press(getByTestId("ai-evaluator-type-json-assert"));
-      fireEvent.press(getAllByText("numeric")[0]!);
-      fireEvent.press(getAllByText("categorical")[0]!);
+      fireEvent.press(getByText("Human"));
+      fireEvent.press(getByText("JSON assert"));
+      fireEvent.press(getAllByText("Number")[0]!);
+      fireEvent.press(getAllByText("Category")[0]!);
       await Promise.resolve();
     });
     assert.isAtLeast(onTypeChange.mock.calls.length, 2);

@@ -8,6 +8,7 @@ import {
   FileStorageService,
   GptHistory,
   getMCPTools,
+  getObservabilityApp,
   listEnabledVertexModels,
   listGeminiApiModels,
   MCPService,
@@ -619,6 +620,11 @@ const createPerRequestTools = (req: express.Request): Record<string, Tool> => {
   };
 
   const apiKey = req.headers["x-ai-api-key"] as string | undefined;
+  tools.generate_joke = createJokeGeneratorTool({
+    apiKey,
+    sessionId: req.header("x-ai-session-id"),
+    userId: user?._id,
+  });
   if (apiKey) {
     tools.generate_image = createImageTool(apiKey);
   }
@@ -659,40 +665,68 @@ const pdfTool = tool({
   output: Record<string, unknown>;
 }) => [{text: (output.description as string) ?? "PDF generated.", type: "text"}];
 
-const JOKE_SYSTEM_PROMPT =
+const JOKE_FALLBACK_SYSTEM_PROMPT =
   "You are a witty comedian. Tell a short, clever joke in 1-3 sentences. Be funny and concise.";
 const EXAMPLE_SUMMARIZE_PROMPT_NAME = "example-summarize";
 
-const jokeGeneratorTool = tool({
-  description: "Generate a joke about any topic.",
-  execute: async ({topic, style}: {topic: string; style?: string}) => {
-    const svc = getAiService();
-    if (!svc) {
-      return {joke: `Why did the developer quit? Because they couldn't find their ${topic}!`};
-    }
+const JOKE_PROMPT_NAME = "joke-generator";
 
-    const joke = await svc.generateText({
-      prompt: `Tell me a ${style ?? "witty"} joke about: ${topic}`,
-      systemPrompt: JOKE_SYSTEM_PROMPT,
-      temperature: 1.2,
-    });
-    return {joke: joke.trim()};
-  },
-  inputSchema: zodSchema(
-    z.object({
-      style: z
-        .string()
-        .optional()
-        .describe("Style of joke: witty, pun, dad joke, dark, absurdist, etc."),
-      topic: z.string().describe("What the joke should be about"),
-    })
-  ),
-});
+/**
+ * Joke tool that reads the production `joke-generator` registry prompt, so its calls show up as
+ * traces for that prompt. Falls back to a built-in prompt when the registry has no version.
+ */
+export const createJokeGeneratorTool = ({
+  aiService,
+  apiKey,
+  sessionId,
+  userId,
+}: {
+  aiService?: AIService;
+  apiKey?: string;
+  sessionId?: string;
+  userId?: UserDocument["_id"];
+}): Tool => {
+  return tool({
+    description:
+      "Generate a joke about any topic. Uses the joke-generator observability prompt when it exists, otherwise a built-in prompt.",
+    execute: async ({topic, style}: {topic: string; style?: string}) => {
+      const svc =
+        aiService ??
+        getAiService() ??
+        (apiKey ? new AIService({model: createModelFromKey(apiKey)}) : undefined);
+      if (!svc) {
+        return {joke: `Why did the developer quit? Because they couldn't find their ${topic}!`};
+      }
+      const registered = await getObservabilityApp()?.promptRegistry?.get({
+        label: "production",
+        name: JOKE_PROMPT_NAME,
+      });
+      const joke = await svc.generateText({
+        prompt: `Tell me a ${style ?? "witty"} joke about: ${topic}`,
+        sessionId,
+        temperature: 1.2,
+        userId,
+        ...(registered
+          ? {promptLabel: "production", promptName: JOKE_PROMPT_NAME}
+          : {systemPrompt: JOKE_FALLBACK_SYSTEM_PROMPT}),
+      });
+      return {joke: joke.trim()};
+    },
+    inputSchema: zodSchema(
+      z.object({
+        style: z
+          .string()
+          .optional()
+          .describe("Style of joke: witty, pun, dad joke, dark, absurdist, etc."),
+        topic: z.string().describe("What the joke should be about"),
+      })
+    ),
+  }) as Tool;
+};
 
 // Sample tools for demo purposes
 const getDemoTools = (): Record<string, Tool> => {
   const tools: Record<string, Tool> = {
-    generate_joke: jokeGeneratorTool,
     generate_pdf: pdfTool,
     get_current_time: tool({
       description: "Get the current date and time",
@@ -804,6 +838,7 @@ export const addAiRoutes = (
     maxSteps: 5,
     mcpService,
     openApiOptions: options,
+    systemPromptName: "chat-assistant",
     toolChoice: "auto",
     tools: getDemoTools() as unknown as GptRouteOptions["tools"],
     uiBlocks: exampleUiBlocksOptions,

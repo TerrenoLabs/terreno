@@ -7,17 +7,42 @@ import {registerObsScore} from "./models/obsScore";
 import {registerObsSpan} from "./models/obsSpan";
 import {registerObsTrace} from "./models/obsTrace";
 
+/** Columns the trace list can sort by. Prefix with `-` for descending. */
+export const TRACE_LIST_SORT_KEYS = [
+  "cost",
+  "latency",
+  "name",
+  "scores",
+  "spans",
+  "startedAt",
+  "status",
+  "tokens",
+] as const;
+
+export type TraceListSortKey = (typeof TRACE_LIST_SORT_KEYS)[number];
+
+export interface TraceListSort {
+  direction: 1 | -1;
+  key: TraceListSortKey;
+}
+
+/** Newest first, matching the admin Traces screen default. */
+export const DEFAULT_TRACE_LIST_SORT = "-startedAt";
+
 export interface TraceListQuery {
   flaggedForDataset?: boolean;
   from?: string;
   hasScore?: boolean;
   limit?: number;
   page?: number;
-  prompt?: string;
+  /** One prompt name, or several to match traces that used any of them. */
+  prompt?: string | string[];
   promptVersion?: number;
   scope?: string;
   sensitive?: boolean;
   sessionId?: string;
+  /** One of `TRACE_LIST_SORT_KEYS`, optionally prefixed with `-` for descending. */
+  sort?: string;
   status?: "error" | "ok";
   to?: string;
   userId?: string;
@@ -129,6 +154,112 @@ const usageWithoutUndefinedCost = (
   return usage;
 };
 
+const isTraceListSortKey = (value: string): value is TraceListSortKey => {
+  return (TRACE_LIST_SORT_KEYS as readonly string[]).includes(value);
+};
+
+export const parseTraceListSort = (value?: string): TraceListSort => {
+  const raw = value?.trim() || DEFAULT_TRACE_LIST_SORT;
+  const descending = raw.startsWith("-");
+  const key = descending ? raw.slice(1) : raw;
+  if (!isTraceListSortKey(key)) {
+    throw new APIError({
+      detail: `Use one of ${TRACE_LIST_SORT_KEYS.join(", ")}, optionally prefixed with "-".`,
+      status: 400,
+      title: "Unknown trace sort key",
+    });
+  }
+  return {direction: descending ? -1 : 1, key};
+};
+
+const promptNames = (prompt?: string | string[]): string[] => {
+  const values = Array.isArray(prompt) ? prompt : prompt === undefined ? [] : [prompt];
+  return values.map((entry) => entry.trim()).filter((entry) => entry !== "");
+};
+
+/** Count rows in `from` whose traceId matches the trace, for span and score sorts. */
+const countLookupStages = (from: string): mongoose.PipelineStage[] => {
+  return [
+    {
+      $lookup: {
+        as: "_sortCounts",
+        from,
+        let: {traceId: "$_id"},
+        pipeline: [{$match: {$expr: {$eq: ["$traceId", "$$traceId"]}}}, {$count: "n"}],
+      },
+    },
+    {$addFields: {_sortValue: {$ifNull: [{$arrayElemAt: ["$_sortCounts.n", 0]}, 0]}}},
+  ];
+};
+
+const missingAware = (expression: unknown): mongoose.PipelineStage[] => {
+  return [
+    {$addFields: {_sortValue: expression}},
+    {$addFields: {_sortMissing: {$cond: [{$eq: ["$_sortValue", null]}, 1, 0]}}},
+  ];
+};
+
+const isMissing = (path: string): Record<string, unknown> => {
+  return {$eq: [{$type: path}, "missing"]};
+};
+
+/**
+ * Stages that compute `_sortValue` (and `_sortMissing` for usage-derived values, so traces
+ * without usage or an end time always list last) before the sort runs.
+ */
+const sortValueStages = (key: TraceListSortKey): mongoose.PipelineStage[] => {
+  if (key === "cost") {
+    return missingAware({$ifNull: ["$usage.costUsd", null]});
+  }
+  if (key === "tokens") {
+    return missingAware({
+      $cond: [
+        {$and: [isMissing("$usage.inputTokens"), isMissing("$usage.outputTokens")]},
+        null,
+        {$add: [{$ifNull: ["$usage.inputTokens", 0]}, {$ifNull: ["$usage.outputTokens", 0]}]},
+      ],
+    });
+  }
+  if (key === "latency") {
+    return missingAware({
+      $cond: [
+        {$or: [{$eq: [{$ifNull: ["$endedAt", null]}, null]}, {$eq: ["$startedAt", null]}]},
+        null,
+        {$subtract: ["$endedAt", "$startedAt"]},
+      ],
+    });
+  }
+  if (key === "spans") {
+    return countLookupStages(registerObsSpan().collection.name);
+  }
+  if (key === "scores") {
+    return countLookupStages(registerObsScore().collection.name);
+  }
+  return [];
+};
+
+/** `$sort` keys are order-significant, so the spec is built from an ordered entry list. */
+const sortSpec = (sort: TraceListSort): Record<string, 1 | -1> => {
+  const dir = sort.direction;
+  if (sort.key === "startedAt" || sort.key === "name" || sort.key === "status") {
+    return Object.fromEntries([
+      [sort.key, dir],
+      ["_id", dir],
+    ]);
+  }
+  if (sort.key === "spans" || sort.key === "scores") {
+    return Object.fromEntries([
+      ["_sortValue", dir],
+      ["_id", dir],
+    ]);
+  }
+  return Object.fromEntries([
+    ["_sortMissing", 1],
+    ["_sortValue", dir],
+    ["_id", dir],
+  ]);
+};
+
 const countByTraceId = async (
   model: mongoose.Model<mongoose.Document>,
   ids: mongoose.Types.ObjectId[]
@@ -229,15 +360,22 @@ export class LocalTraceStore {
     if (query.scope) {
       filter.scope = query.scope;
     }
-    if (query.promptVersion !== undefined && !query.prompt) {
+    const sort = parseTraceListSort(query.sort);
+    const prompts = promptNames(query.prompt);
+    if (query.promptVersion !== undefined && prompts.length === 0) {
       throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
     }
-    if (query.prompt && query.promptVersion !== undefined) {
+    if (query.promptVersion !== undefined && prompts.length > 1) {
+      throw new APIError({status: 400, title: "promptVersion needs exactly one prompt"});
+    }
+    if (prompts.length === 1 && query.promptVersion !== undefined) {
       filter.prompts = {
-        $elemMatch: {name: query.prompt, version: query.promptVersion},
+        $elemMatch: {name: prompts[0], version: query.promptVersion},
       };
-    } else if (query.prompt) {
-      filter["prompts.name"] = query.prompt;
+    } else if (prompts.length === 1) {
+      filter["prompts.name"] = prompts[0];
+    } else if (prompts.length > 1) {
+      filter["prompts.name"] = {$in: prompts};
     }
     if (query.sensitive !== undefined) {
       filter.sensitive = query.sensitive;
@@ -270,11 +408,24 @@ export class LocalTraceStore {
     }
     const ObsTrace = registerObsTrace();
     const total = await ObsTrace.countDocuments(filter);
-    const rows = await ObsTrace.find(filter)
-      .sort({created: -1})
-      .skip((page - 1) * limit)
-      .limit(limit);
-    const ids = rows.map((row) => row._id);
+    // Sort in Mongo before skip/limit so derived columns (latency, counts) order every page.
+    const aggregate = ObsTrace.aggregate<{_id: mongoose.Types.ObjectId}>([
+      {$match: {deleted: {$ne: true}, ...filter}},
+      ...sortValueStages(sort.key),
+      {$sort: sortSpec(sort)},
+      {$skip: (page - 1) * limit},
+      {$limit: limit},
+      {$project: {_id: 1}},
+    ]);
+    if (sort.key === "name") {
+      aggregate.collation({locale: "en"});
+    }
+    const ordered = await aggregate.exec();
+    const ids = ordered.map((row) => row._id);
+    const position = new Map(ids.map((id, index) => [String(id), index]));
+    const rows = (await ObsTrace.find({_id: {$in: ids}})).sort((a, b) => {
+      return (position.get(String(a._id)) ?? 0) - (position.get(String(b._id)) ?? 0);
+    });
     const spanCountById = await countByTraceId(registerObsSpan(), ids);
     const scoreCountById = await countByTraceId(registerObsScore(), ids);
     return {

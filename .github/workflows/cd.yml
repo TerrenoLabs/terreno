@@ -377,6 +377,7 @@ jobs:
             ${{ steps.jobs.outputs.env_vars }}
             ${{ steps.better-auth.outputs.env_vars }}
             ${{ steps.announcements.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
             ${{ steps.better-auth.outputs.secrets }}
@@ -774,6 +775,7 @@ jobs:
             MONGO_DB_NAME=terreno-example-pr-${{ github.event.pull_request.number }}
             PR_NUMBER=${{ github.event.pull_request.number }}
             ${{ steps.jobs.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
           flags: |
@@ -863,6 +865,7 @@ jobs:
             FLOURISH_SERVICE=${{ env.GCP_TASKS_SERVICE }}
             JOBS_START_WORKER=false
             ${{ steps.jobs.outputs.env_vars }}
+          secrets_update_strategy: overwrite
           secrets: |
             MONGO_URI=${{ env.GCP_BACKEND_SERVICE }}-mongodb-uri:latest
           flags: |

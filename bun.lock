@@ -24,7 +24,7 @@
     },
     "admin-backend": {
       "name": "@terreno/admin-backend",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@google-cloud/storage": "catalog:",
         "@terreno/api": "workspace:*",
@@ -51,7 +51,7 @@
     },
     "admin-frontend": {
       "name": "@terreno/admin-frontend",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@terreno/syncdb": "workspace:*",
         "@terreno/ui": "workspace:*",
@@ -86,7 +86,7 @@
     },
     "admin-spa": {
       "name": "@terreno/admin-spa",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@better-auth/expo": "^1.6.25",
         "@expo/vector-icons": "catalog:",
@@ -138,14 +138,10 @@
     },
     "ai": {
       "name": "@terreno/ai",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@ai-sdk/mcp": "^2.0.57",
         "@google-cloud/storage": "catalog:",
-        "@langfuse/client": "^5.0.1",
-        "@langfuse/otel": "^5.0.1",
-        "@opentelemetry/api": "^1.9.0",
-        "@opentelemetry/sdk-node": "0.222.0",
         "@terreno/blocks": "workspace:*",
         "ai": "catalog:",
         "ajv": "catalog:",
@@ -187,7 +183,7 @@
     },
     "announcements": {
       "name": "@terreno/announcements",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -210,7 +206,7 @@
     },
     "api": {
       "name": "@terreno/api",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "terreno-migrate": "./src/migrations/cli.ts",
       },
@@ -292,7 +288,7 @@
     },
     "api-health": {
       "name": "@terreno/api-health",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -309,7 +305,7 @@
     },
     "blocks": {
       "name": "@terreno/blocks",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "terreno-blocks": "./dist/cli.js",
       },
@@ -345,7 +341,7 @@
     },
     "comms": {
       "name": "@terreno/comms",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "libphonenumber-js": "catalog:",
@@ -376,7 +372,7 @@
     },
     "create-terreno-app": {
       "name": "create-terreno-app",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "create-terreno-app": "./dist/cli.js",
       },
@@ -590,7 +586,7 @@
     },
     "feature-flags": {
       "name": "@terreno/feature-flags",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@openfeature/server-sdk": "catalog:",
         "@terreno/api": "workspace:*",
@@ -617,7 +613,7 @@
     },
     "jobs": {
       "name": "@terreno/jobs",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "cron": "^4.3.4",
@@ -647,7 +643,7 @@
     },
     "mcp-server": {
       "name": "@terreno/mcp",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "terreno-mcp": "./dist/index.js",
         "terreno-mcp-local": "./dist/local/index.js",
@@ -677,7 +673,7 @@
     },
     "syncdb": {
       "name": "@terreno/syncdb",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "terreno-syncdb-codegen": "./src/codegen/cli.ts",
       },
@@ -750,7 +746,7 @@
     },
     "test": {
       "name": "@terreno/test",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "bin": {
         "terreno-test-hygiene": "./dist/cli/testHygieneCli.js",
         "terreno-test-shard": "./dist/cli/testShardCli.js",
@@ -799,7 +795,7 @@
     },
     "ui": {
       "name": "@terreno/ui",
-      "version": "57.20.0",
+      "version": "57.22.0",
       "dependencies": {
         "@expo-google-fonts/caveat": "^0.4.2",
         "@expo-google-fonts/dancing-script": "^0.4.2",
@@ -1780,14 +1776,6 @@
     "@jsonjoy.com/json-pointer": ["@jsonjoy.com/json-pointer@1.0.2", "", { "dependencies": { "@jsonjoy.com/codegen": "^1.0.0", "@jsonjoy.com/util": "^1.9.0" }, "peerDependencies": { "tslib": "2" } }, "sha512-Fsn6wM2zlDzY1U+v4Nc8bo3bVqgfNTGcn6dMgs6FjrEnt4ZCe60o6ByKRjOGlI2gow0aE/Q41QOigdTqkyK5fg=="],
 
     "@jsonjoy.com/util": ["@jsonjoy.com/util@1.9.0", "", { "dependencies": { "@jsonjoy.com/buffers": "^1.0.0", "@jsonjoy.com/codegen": "^1.0.0" }, "peerDependencies": { "tslib": "2" } }, "sha512-pLuQo+VPRnN8hfPqUTLTHk126wuYdXVxE6aDmjSeV4NCAgyxWbiOIeNJVtID3h1Vzpoi9m4jXezf73I6LgabgQ=="],
-
-    "@langfuse/client": ["@langfuse/client@5.11.1", "", { "dependencies": { "@langfuse/core": "^5.11.1", "@langfuse/tracing": "^5.11.1", "mustache": "^4.2.0" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0" } }, "sha512-8xqjQKAo9TKSSgclnphdforUTDY8H3lv6Cf/yq2q6STkG8fmIV8AxJWm27/AI9XVodtQPYjj8jKWt55qgGqqCg=="],
-
-    "@langfuse/core": ["@langfuse/core@5.11.1", "", { "peerDependencies": { "@opentelemetry/api": "^1.9.0" } }, "sha512-Oor1z4BlgI5RaUrRYYKf3ijyCAx0tiGCWsABzfm6ZDAgbaaFuiwvJVtXGohiq5evcnjGGE5h4Mf4ZjH1yd5vjw=="],
-
-    "@langfuse/otel": ["@langfuse/otel@5.11.1", "", { "dependencies": { "@langfuse/core": "^5.11.1" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0", "@opentelemetry/core": "^2.0.1", "@opentelemetry/exporter-trace-otlp-http": ">=0.202.0 <1.0.0", "@opentelemetry/sdk-trace-base": "^2.0.1" } }, "sha512-Urn2WMvOINh7tNCTrq7qvDvNuA1VkxnJstLAHZghDeo1TFGQE7Ok9GoWmyBEwl6uX3D04TL2vkX9Vr7XDORvxQ=="],
-
-    "@langfuse/tracing": ["@langfuse/tracing@5.11.1", "", { "dependencies": { "@langfuse/core": "^5.11.1" }, "peerDependencies": { "@opentelemetry/api": "^1.9.0" } }, "sha512-5lT0VhKSI3P5z3jylAE7Qf+V6GJ6IT0TZhvAQdU5bP0oUx2kRoXcnpdxwqEr7NdKIzaAPiN9E08ehO9wk/8xTA=="],
 
     "@leichtgewicht/ip-codec": ["@leichtgewicht/ip-codec@2.0.5", "", {}, "sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw=="],
 
@@ -4296,8 +4284,6 @@
     "multicast-dns": ["multicast-dns@7.2.5", "", { "dependencies": { "dns-packet": "^5.2.2", "thunky": "^1.0.2" }, "bin": { "multicast-dns": "cli.js" } }, "sha512-2eznPJP8z2BFLX50tf0LuODrpINqP1RVIm/CObbTcBRITQgmC/TjcREF1NeTBzIcR5XO/ukWo+YHOjBbFwIupg=="],
 
     "multitars": ["multitars@1.0.2", "", {}, "sha512-6GwVw5eLi9sThdtlS4PKwC7yRLaf45pYhIEzKBHdKxi+YOXGKFX8acIniH+Uh/+k9mS2lQOupTccjoe5r0/1IQ=="],
-
-    "mustache": ["mustache@4.2.0", "", { "bin": { "mustache": "bin/mustache" } }, "sha512-71ippSywq5Yb7/tVYyGbkBggbU8H3u5Rz56fH60jGFgr8uHwxs+aSKeqmluIVzM0m0kB7xQjKS6qPfd0b2ZoqQ=="],
 
     "mute-stream": ["mute-stream@3.0.0", "", {}, "sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw=="],
 

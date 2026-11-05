@@ -110,11 +110,11 @@ describe("AiObservabilityChrome", () => {
 
   const localOffStatus: ObservabilityStatusPayload = {
     localOn: false,
-    plugins: [{capabilities: ["prompts", "traces"], id: "langfuse"}],
+    plugins: [{capabilities: ["prompts", "traces"], id: "remote"}],
     primaries: {
-      datasets: "langfuse",
-      experiments: "langfuse",
-      prompts: "langfuse",
+      datasets: "remote",
+      experiments: "remote",
+      prompts: "remote",
       reviewQueue: "local",
     },
   };
@@ -123,12 +123,8 @@ describe("AiObservabilityChrome", () => {
 
   describe("AI observability chrome", () => {
     it("formats the status chip for local on and local off primaries", () => {
-      expect(formatObservabilityStatusChip(localOnStatus)).toBe(
-        "Local on · prompts:local · datasets:local · experiments:local"
-      );
-      expect(formatObservabilityStatusChip(localOffStatus)).toBe(
-        "Local off · prompts:langfuse · datasets:langfuse · experiments:langfuse"
-      );
+      expect(formatObservabilityStatusChip(localOnStatus)).toBe("Local observability on");
+      expect(formatObservabilityStatusChip(localOffStatus)).toBe("Local observability off");
     });
 
     it("unwraps both envelope and already-unwrapped status payloads", () => {
@@ -149,6 +145,57 @@ describe("AiObservabilityChrome", () => {
       ]);
     });
 
+    it("ends list screen breadcrumbs at the section", () => {
+      const crumbs = buildAiObservabilityBreadcrumbs({
+        routeBase: "/admin",
+        screenName: "ai-datasets",
+      });
+      expect(crumbs.map((crumb) => crumb.label)).toEqual(["Admin", "AI Observability", "Datasets"]);
+    });
+
+    it("renders the page header with title override, description, meta, and actions", async () => {
+      const {getByTestId, getByText} = renderWithTheme(
+        <AiObservabilityChrome
+          actions={<Text>Header action</Text>}
+          config={emptyConfig}
+          description="What this screen is for."
+          meta={<Text>Header meta</Text>}
+          routeBase="/admin"
+          screenName="ai-review-batch"
+          server={createObservabilityServer()}
+          status={localOnStatus}
+          title="Recent summaries — batch 1"
+        >
+          <Text>Body</Text>
+        </AiObservabilityChrome>
+      );
+      await flushObservabilityRequests();
+      expect(getByTestId("observability-page-header-title")).toBeTruthy();
+      expect(getByText("Recent summaries — batch 1")).toBeTruthy();
+      expect(getByText("What this screen is for.")).toBeTruthy();
+      expect(getByText("Header meta")).toBeTruthy();
+      expect(getByText("Header action")).toBeTruthy();
+      expect(getByText("Body")).toBeTruthy();
+    });
+
+    it("hides the page header when asked", async () => {
+      const {getByText, queryByTestId} = renderWithTheme(
+        <AiObservabilityChrome
+          config={emptyConfig}
+          hideHeader
+          routeBase="/admin"
+          screenName="ai-datasets"
+          server={createObservabilityServer()}
+          status={localOnStatus}
+        >
+          <Text>Body</Text>
+        </AiObservabilityChrome>
+      );
+      await flushObservabilityRequests();
+      expect(queryByTestId("observability-page-header")).toBeNull();
+      expect(getByText("Body")).toBeTruthy();
+    });
+
     it("renders loading, error, local-on, and local-off chip states", () => {
       const loading = renderWithTheme(<AiObservabilityStatusChip isLoading />);
       expect(loading.getByText("Checking observability…")).toBeTruthy();
@@ -157,14 +204,10 @@ describe("AiObservabilityChrome", () => {
       expect(errored.getByText("Observability unavailable")).toBeTruthy();
 
       const on = renderWithTheme(<AiObservabilityStatusChip status={localOnStatus} />);
-      expect(
-        on.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(on.getByText("Local observability on")).toBeTruthy();
 
       const off = renderWithTheme(<AiObservabilityStatusChip status={localOffStatus} />);
-      expect(
-        off.getByText("Local off · prompts:langfuse · datasets:langfuse · experiments:langfuse")
-      ).toBeTruthy();
+      expect(off.getByText("Local observability off")).toBeTruthy();
     });
 
     it("fetches loading and error states through the admin client", async () => {
@@ -187,9 +230,7 @@ describe("AiObservabilityChrome", () => {
       const unwrappedServer = createObservabilityServer({[STATUS_ROUTE]: {data: localOnStatus}});
       const unwrapped = renderWithTheme(<AiObservabilityStatusChip server={unwrappedServer} />);
       await flushObservabilityRequests();
-      expect(
-        unwrapped.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(unwrapped.getByText("Local observability on")).toBeTruthy();
       assert.equal(unwrappedServer.callsTo(STATUS_ROUTE).length, 1);
 
       const missingStatus = renderWithTheme(
@@ -206,9 +247,7 @@ describe("AiObservabilityChrome", () => {
         />
       );
       await flushObservabilityRequests();
-      expect(
-        fetched.getByText("Local on · prompts:local · datasets:local · experiments:local")
-      ).toBeTruthy();
+      expect(fetched.getByText("Local observability on")).toBeTruthy();
     });
 
     it("shows unavailable chip when the status fetch returns nothing", async () => {
@@ -261,6 +300,8 @@ describe("AiObservabilityChrome", () => {
         "ai-prompt-editor",
         "ai-prompts",
         "ai-review",
+        "ai-review-batch",
+        "ai-review-batches",
         "ai-review-item",
         "ai-trace-detail",
         "ai-traces",
@@ -294,6 +335,7 @@ describe("AiPromptEditorScreen", () => {
     name: "summarize",
     relationships: emptyPromptRelationships,
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {temperature: 0.3},
@@ -634,6 +676,7 @@ describe("AiPromptEditorView", () => {
     name: "summarize",
     relationships: emptyPromptRelationships,
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {temperature: 0.3},
@@ -843,6 +886,7 @@ describe("AiPromptPlaygroundView", () => {
       traces: {items: [], limit: 20, total: 0},
     },
     tags: [],
+    usedBy: {items: [], limit: 20, total: 0},
     versions: [
       {
         config: {},
@@ -1085,7 +1129,7 @@ describe("AiPromptsListScreen", () => {
         <AiPromptsScreenWidget {...widgetProps} server={createServer()} />
       );
       await flushObservabilityRequests();
-      expect(errored.getByText("Failed to load prompts")).toBeTruthy();
+      expect(errored.getByText("Could not load prompts.")).toBeTruthy();
       Object.assign(listState, {data: loaded, error: undefined, isError: false, isLoading: false});
     });
 
@@ -1097,7 +1141,8 @@ describe("AiPromptsListScreen", () => {
       await flushObservabilityRequests();
       fireEvent.changeText(view.getByTestId("ai-prompts-search"), "summ");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-prompts-folder-examples"));
+        // The folder picker renders above the table, so its segment is the first match.
+        fireEvent.press(view.getAllByText("examples")[0]!);
         await Promise.resolve();
       });
       expect(view.getByTestId("ai-prompts-table")).toBeTruthy();
@@ -1115,7 +1160,7 @@ describe("AiPromptsListScreen", () => {
       await flushObservabilityRequests();
       Object.assign(listState, {data: loaded, error: undefined, isError: false, isLoading: false});
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByText("Try again"));
         await Promise.resolve();
       });
       await flushObservabilityRequests();
@@ -1208,11 +1253,11 @@ describe("AiPromptsListView", () => {
         />
       );
       expect(getByTestId("ai-prompts-empty")).toBeTruthy();
-      expect(getByText("No prompts in this folder yet.")).toBeTruthy();
+      expect(getByText("No prompts yet")).toBeTruthy();
     });
 
-    it("renders a loaded table with folder counts and latest vs production columns", () => {
-      const {getByTestId, getByText} = renderWithTheme(
+    it("renders a loaded table with folder counts and newest vs production columns", () => {
+      const {getAllByText, getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription=""
           createFolder="examples"
@@ -1227,9 +1272,11 @@ describe("AiPromptsListView", () => {
         />
       );
       expect(getByTestId("ai-prompts-table")).toBeTruthy();
-      expect(getByText("All (1)")).toBeTruthy();
-      expect(getByText("examples (1)")).toBeTruthy();
-      expect(getByText("examples/summarize")).toBeTruthy();
+      expect(getByTestId("ai-prompts-folders")).toBeTruthy();
+      expect(getByText("All")).toBeTruthy();
+      // Folder segment plus the row's folder line.
+      assert.isAtLeast(getAllByText("examples").length, 2);
+      expect(getByText("summarize")).toBeTruthy();
       expect(getByText("v2")).toBeTruthy();
       expect(getByText("v1")).toBeTruthy();
     });
@@ -1257,7 +1304,7 @@ describe("AiPromptsListView", () => {
       const onSearchChange = mock(() => undefined);
       const onCreate = mock(() => undefined);
       const onRetry = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
+      const {getAllByText, getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription="Short summary"
           createError="Name required"
@@ -1267,7 +1314,7 @@ describe("AiPromptsListView", () => {
           createSystem="You are helpful"
           createTemplate="Hi {{name}}"
           folder=""
-          loadError="Failed to load prompts"
+          loadError="Could not load prompts."
           onCreate={onCreate}
           onCreateDescriptionChange={() => undefined}
           onCreateFolderChange={() => undefined}
@@ -1287,12 +1334,12 @@ describe("AiPromptsListView", () => {
       fireEvent.changeText(getByTestId("ai-prompts-search"), "note");
       assert.isAtLeast(onSearchChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByTestId("ai-prompts-folder-examples"));
+        fireEvent.press(getAllByText("examples")[0]!);
         await Promise.resolve();
       });
       assert.isAtLeast(onFolderChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByText("Retry"));
+        fireEvent.press(getByText("Try again"));
         await Promise.resolve();
       });
       assert.equal(onRetry.mock.calls.length, 1);

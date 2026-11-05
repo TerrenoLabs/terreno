@@ -207,6 +207,8 @@ export {
   AI_OBSERVABILITY_WIDGETS,
   AiPromptEditorScreenWidget,
   AiPromptsScreenWidget,
+  AiReviewBatchesScreenWidget,
+  AiReviewBatchScreenWidget,
   AiReviewItemScreenWidget,
   AiReviewScreenWidget,
   AiTraceDetailScreenWidget,

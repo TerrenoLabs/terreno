@@ -1,4 +1,4 @@
-import {asJsonBody} from "../../../adminRpc";
+import {asJsonBody, withQueryString} from "../../../adminRpc";
 import type {AdminRpcQueryState} from "../../../useAdminRpc";
 import {
   type ObservabilityMutation,
@@ -6,15 +6,22 @@ import {
   useObservabilityMutation,
   useObservabilityQuery,
 } from "../shell/observabilityRequest";
-import type {ExperimentEstimate, ExperimentRecord, ScoreThreshold} from "./experimentTypes";
+import type {
+  ExperimentEstimate,
+  ExperimentKind,
+  ExperimentRecord,
+  ScoreThreshold,
+} from "./experimentTypes";
 
 const EXPERIMENTS_TAGS = ["aiObservabilityExperiments"] as const;
 const EXPERIMENTS_URL = "/ai/observability/experiments";
 
-export interface ExperimentCreateBody {
+/** Step 4: compare product prompt versions, scored by evaluators. */
+export interface PromptExperimentCreateBody {
   datasetId: string;
   evaluatorIds: string[];
   includeUnproofread?: boolean;
+  kind?: "prompt";
   modelOverride?: string;
   name: string;
   promptName: string;
@@ -22,12 +29,44 @@ export interface ExperimentCreateBody {
   versions: number[];
 }
 
-export interface ExperimentEstimateBody {
+/** Step 3: compare judge prompt versions by agreement with human answers on a judged dataset. */
+export interface JudgeExperimentCreateBody {
+  datasetId: string;
+  judgeEvaluatorId: string;
+  kind: "judge";
+  modelOverride?: string;
+  name: string;
+  questionSetId: string;
+  /** Agreement rate (0–1) a version must reach to pass. The server defaults to 0.9. */
+  targetAgreement?: number;
+  versions: number[];
+}
+
+export type ExperimentCreateBody = JudgeExperimentCreateBody | PromptExperimentCreateBody;
+
+export interface PromptExperimentEstimateBody {
   datasetId: string;
   evaluatorIds: string[];
   includeUnproofread?: boolean;
+  kind?: "prompt";
   modelOverride?: string;
   versions: number[];
+}
+
+export interface JudgeExperimentEstimateBody {
+  datasetId: string;
+  kind: "judge";
+  modelOverride?: string;
+  questionSetId: string;
+  versions: number[];
+}
+
+export type ExperimentEstimateBody = JudgeExperimentEstimateBody | PromptExperimentEstimateBody;
+
+export interface ExperimentListArgs {
+  kind?: ExperimentKind;
+  /** Page size; the server caps it at EXPERIMENT_LIST_MAX_LIMIT. */
+  limit?: number;
 }
 
 export interface AiObservabilityExperimentsApi {
@@ -37,7 +76,9 @@ export interface AiObservabilityExperimentsApi {
     options?: ObservabilityQueryOptions
   ) => AdminRpcQueryState<ExperimentRecord | {data: ExperimentRecord}>;
   useEstimateMutation: () => ObservabilityMutation<ExperimentEstimateBody, ExperimentEstimate>;
-  useListQuery: () => AdminRpcQueryState<ExperimentRecord[] | {data: ExperimentRecord[]}>;
+  useListQuery: (
+    args?: ExperimentListArgs
+  ) => AdminRpcQueryState<ExperimentRecord[] | {data: ExperimentRecord[]; more?: boolean}>;
   usePromoteMutation: () => ObservabilityMutation<
     {id: string; version: number},
     {label: string; outgoingVersion?: number}
@@ -72,8 +113,14 @@ export const useAiObservabilityExperimentsApi = (): AiObservabilityExperimentsAp
           url: `${EXPERIMENTS_URL}/estimate`,
         }),
       }),
-    useListQuery: () =>
-      useObservabilityQuery({providesTags: EXPERIMENTS_TAGS, url: EXPERIMENTS_URL}),
+    useListQuery: (args) =>
+      useObservabilityQuery({
+        providesTags: EXPERIMENTS_TAGS,
+        url: withQueryString({
+          params: {kind: args?.kind, limit: args?.limit || undefined},
+          url: EXPERIMENTS_URL,
+        }),
+      }),
     usePromoteMutation: () =>
       useObservabilityMutation({
         invalidatesTags: EXPERIMENTS_TAGS,

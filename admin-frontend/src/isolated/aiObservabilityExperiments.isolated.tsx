@@ -79,7 +79,7 @@ describe("AiExperimentNewScreen", () => {
   const pendingEstimates: PendingEstimate[] = [];
 
   beforeEach(() => {
-    setExpoSearchParams(() => ({datasetId: "ds-1"}));
+    setExpoSearchParams(() => ({datasetId: "ds-1", pipeline: "prompt"}));
     routerPush.mockClear();
     estimateShouldFail = false;
     createShouldFail = false;
@@ -142,7 +142,33 @@ describe("AiExperimentNewScreen", () => {
             counts: {auto: 0, human: 2, needsReview: 0, total: 2},
             created: "2026-01-01T00:00:00.000Z",
             id: "ds-1",
+            judgments: [
+              {
+                answered: 2,
+                current: 2,
+                evaluatorId: "eval-human",
+                evaluatorName: "review queue",
+                stale: 0,
+                total: 2,
+              },
+              {
+                answered: 1,
+                current: 1,
+                evaluatorId: "eval-tone-human",
+                evaluatorName: "tone review",
+                stale: 0,
+                total: 2,
+              },
+            ],
             name: "gold",
+            tags: [],
+            updated: "2026-01-02T00:00:00.000Z",
+          },
+          {
+            counts: {auto: 0, human: 0, needsReview: 0, total: 1},
+            created: "2026-01-01T00:00:00.000Z",
+            id: "ds-plain",
+            name: "ungraded",
             tags: [],
             updated: "2026-01-02T00:00:00.000Z",
           },
@@ -158,6 +184,38 @@ describe("AiExperimentNewScreen", () => {
             runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
             target: "full trace",
             type: "human",
+          },
+          {
+            confidenceAlertBelow: 0.5,
+            dimensions: [{dataType: "boolean", key: "tone", required: true}],
+            id: "eval-tone-human",
+            name: "tone review",
+            runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+            target: "full trace",
+            type: "human",
+          },
+          {
+            confidenceAlertBelow: 0.5,
+            dimensions: [{dataType: "boolean", key: "correct", required: true}],
+            id: "eval-judge",
+            judgePromptName: "summarize",
+            name: "tone judge",
+            runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+            target: "full trace",
+            type: "llm-judge",
+          },
+          {
+            confidenceAlertBelow: 0.5,
+            dimensions: [
+              {dataType: "boolean", key: "correct", required: true},
+              {dataType: "boolean", key: "tone", required: true},
+            ],
+            id: "eval-judge-tone",
+            judgePromptName: "summarize",
+            name: "full judge",
+            runModes: {allowManualRun: true, availableInExperiments: true, liveSampleRate: 0},
+            target: "full trace",
+            type: "llm-judge",
           },
           {
             confidenceAlertBelow: 0.5,
@@ -305,17 +363,17 @@ describe("AiExperimentNewScreen", () => {
       holdEstimates = true;
       const view = await renderNewScreen();
       await advanceToReview(view);
-      const firstBatch = pendingEstimates.length;
-      assert.isAtLeast(firstBatch, 1);
+      // One estimate per selection, not one per render.
+      assert.lengthOf(pendingEstimates, 1);
 
       await act(async () => {
         fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-test");
         await Promise.resolve();
       });
       await flushObservabilityRequests();
-      assert.isAbove(pendingEstimates.length, firstBatch);
+      assert.lengthOf(pendingEstimates, 2);
       const stale = pendingEstimates[0];
-      const fresh = pendingEstimates[pendingEstimates.length - 1];
+      const fresh = pendingEstimates[1];
       assert.exists(stale);
       assert.exists(fresh);
 
@@ -325,10 +383,7 @@ describe("AiExperimentNewScreen", () => {
       });
       await flushObservabilityRequests();
       await waitFor(() => {
-        assert.include(
-          view.getByTestId("ai-experiment-estimate").props.children.join(""),
-          "~$0.20"
-        );
+        assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.20");
       });
 
       await act(async () => {
@@ -336,23 +391,22 @@ describe("AiExperimentNewScreen", () => {
         await Promise.resolve();
       });
       await flushObservabilityRequests();
-      assert.include(view.getByTestId("ai-experiment-estimate").props.children.join(""), "~$0.20");
-      assert.notInclude(view.getByTestId("ai-experiment-estimate").props.children.join(""), "9.99");
+      assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.20");
+      assert.notInclude(String(view.getByTestId("ai-experiment-estimate").props.children), "9.99");
 
-      const beforeNext = pendingEstimates.length;
       await act(async () => {
         fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-next");
         await Promise.resolve();
       });
       await flushObservabilityRequests();
-      const staleError = pendingEstimates[pendingEstimates.length - 1];
       await act(async () => {
         fireEvent.changeText(view.getByTestId("ai-experiment-model-override"), "gpt-latest");
         await Promise.resolve();
       });
       await flushObservabilityRequests();
-      assert.isAtLeast(pendingEstimates.length, beforeNext + 2);
-      const newest = pendingEstimates[pendingEstimates.length - 1];
+      assert.lengthOf(pendingEstimates, 4);
+      const staleError = pendingEstimates[2];
+      const newest = pendingEstimates[3];
       assert.exists(staleError);
       assert.exists(newest);
       assert.notStrictEqual(staleError, newest);
@@ -367,10 +421,7 @@ describe("AiExperimentNewScreen", () => {
       });
       await flushObservabilityRequests();
       await waitFor(() => {
-        assert.include(
-          view.getByTestId("ai-experiment-estimate").props.children.join(""),
-          "~$0.30"
-        );
+        assert.include(String(view.getByTestId("ai-experiment-estimate").props.children), "$0.30");
       });
       assert.isNull(view.queryByText("Could not estimate experiment cost."));
     });
@@ -455,6 +506,152 @@ describe("AiExperimentNewScreen", () => {
         await Promise.resolve();
       });
       expect(view.getByTestId("ai-experiment-step-review")).toBeTruthy();
+    });
+
+    it("runs a judge calibration from a judged dataset", async () => {
+      setExpoSearchParams(() => ({pipeline: "judge"}));
+      const server = createServer();
+      const view = await renderNewScreen(server);
+      fireEvent.changeText(view.getByTestId("ai-experiment-name"), "calibrate tone");
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-dataset-send-review-ds-plain"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      assert.equal(routerPush.mock.calls[0]?.[0], "/admin/ai-dataset-detail?id=ds-plain");
+      routerPush.mockClear();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-dataset-ds-1-clickable"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      expect(view.getByTestId("ai-judge-step-question-set")).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-tone-human"));
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-human"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      expect(view.getByTestId("ai-judge-step-judge")).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-judge-tone"));
+        fireEvent.press(view.getByTestId("web_dropdown_option_eval-judge"));
+        await Promise.resolve();
+      });
+      // The judge's prompt detail loads its versions.
+      await flushObservabilityRequests();
+      assert.isAtLeast(server.callsTo("GET /ai/observability/prompts/:name").length, 1);
+      assert.equal(
+        server.callsTo("GET /ai/observability/prompts/:name").at(-1)?.params.name,
+        "summarize"
+      );
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-2-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        fireEvent.press(view.getByTestId("ai-judge-version-1-clickable"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-next"));
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      await waitFor(() => {
+        expect(view.getByTestId("ai-judge-estimate")).toBeTruthy();
+      });
+      assert.deepEqual(server.callsTo(ESTIMATE_ROUTE).at(-1)?.body, {
+        datasetId: "ds-1",
+        kind: "judge",
+        questionSetId: "eval-human",
+        versions: [1, 2],
+      });
+
+      estimateShouldFail = true;
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-judge-model-override"), "gpt-test");
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      await waitFor(() => {
+        expect(view.getByText("Could not estimate experiment cost.")).toBeTruthy();
+      });
+      assert.deepInclude(server.callsTo(ESTIMATE_ROUTE).at(-1)?.body as Record<string, unknown>, {
+        modelOverride: "gpt-test",
+      });
+
+      // Judge runs surface the server's error title.
+      estimateShouldFail = false;
+      createShouldFail = true;
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-run"));
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      await waitFor(() => {
+        expect(view.getByText("create failed")).toBeTruthy();
+      });
+      assert.equal(routerPush.mock.calls.length, 0);
+
+      // A transport failure (no API error body) falls back to the generic copy. Tests freeze the
+      // clock, so the run button's 500ms press debounce never expires on its own; changing the
+      // model gives the button a fresh handler before each press.
+      createShouldFail = false;
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-judge-model-override"), "gpt-retry");
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      const serverFetch = globalThis.fetch;
+      globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === `${server.origin}${CREATE_ROUTE.split(" ")[1]}`) {
+          return Promise.reject(new TypeError("network"));
+        }
+        return serverFetch(input, init);
+      }) as unknown as typeof fetch;
+      try {
+        await act(async () => {
+          fireEvent.press(view.getByTestId("ai-judge-run"));
+          await Promise.resolve();
+        });
+        await flushObservabilityRequests();
+        await waitFor(() => {
+          expect(view.getByText("Could not start experiment.")).toBeTruthy();
+        });
+      } finally {
+        globalThis.fetch = serverFetch;
+      }
+      assert.equal(routerPush.mock.calls.length, 0);
+
+      // A fresh handler again for the successful run.
+      await act(async () => {
+        fireEvent.changeText(view.getByTestId("ai-judge-model-override"), "gpt-judge");
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-judge-run"));
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+      await waitFor(() => {
+        assert.equal(routerPush.mock.calls[0]?.[0], "/admin/ai-experiment-results?id=exp-new");
+      });
+      assert.deepEqual(server.callsTo(CREATE_ROUTE).at(-1)?.body, {
+        datasetId: "ds-1",
+        judgeEvaluatorId: "eval-judge",
+        kind: "judge",
+        modelOverride: "gpt-judge",
+        name: "calibrate tone",
+        questionSetId: "eval-human",
+        targetAgreement: 0.9,
+        versions: [1, 2],
+      });
     });
   });
 });
@@ -583,9 +780,20 @@ describe("AiExperimentResultsScreen", () => {
     });
 
     it("does not reset the selected version when polled experiment data updates", async () => {
+      // Both versions pass, so the version picker shows. The run is still going so it polls.
+      const bothPass: ExperimentRecord = {
+        ...baseExperiment,
+        results: {
+          ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+          gates: (baseExperiment.results?.gates ?? []).map((gate) => ({...gate, passed: true})),
+        },
+      };
+      detailState.data = bothPass;
       const polling = capturePolling();
       try {
-        const {getByTestId} = await renderResults();
+        const server = createServer();
+        const {getByTestId} = await renderResults(server);
+        expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v2 to production");
         await act(async () => {
           fireEvent.press(getByTestId("web_picker"));
           await Promise.resolve();
@@ -594,20 +802,70 @@ describe("AiExperimentResultsScreen", () => {
           fireEvent.press(getByTestId("web_dropdown_option_1"));
           await Promise.resolve();
         });
+        expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v1 to production");
+        const before = server.callsTo(DETAIL_ROUTE).length;
         detailState.data = {
-          ...baseExperiment,
+          ...bothPass,
           results: {
-            ...baseExperiment.results!,
+            ...(bothPass.results as NonNullable<ExperimentRecord["results"]>),
             progress: {completed: 2, total: 2},
           },
-          status: "completed",
+          updated: "2026-01-01T00:06:00.000Z",
         };
         await act(async () => {
           polling.fire();
           await Promise.resolve();
         });
         await flushObservabilityRequests();
-        expect(getByTestId("ai-experiment-gate-correct")).toHaveTextContent(/v1 quality\.correct/);
+        assert.isAbove(server.callsTo(DETAIL_ROUTE).length, before);
+        expect(getByTestId("ai-experiment-promote")).toHaveTextContent("Promote v1 to production");
+      } finally {
+        polling.restore();
+      }
+    });
+
+    it("re-picks the promote version when gates arrive after the run finishes", async () => {
+      // While running there are no gates yet, so the default is the newest version.
+      detailState.data = {
+        ...baseExperiment,
+        results: {
+          ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+          gates: [],
+          progress: {completed: 1, total: 2},
+        },
+        status: "running",
+      };
+      const polling = capturePolling();
+      try {
+        const view = await renderResults();
+        expect(view.getByTestId("ai-experiment-promote")).toHaveTextContent(
+          "Promote v2 to production"
+        );
+        expect(view.queryByTestId("ai-experiment-promote-version")).toBeNull();
+
+        // The run finishes and only the earlier version passes.
+        detailState.data = {
+          ...baseExperiment,
+          results: {
+            ...(baseExperiment.results as NonNullable<ExperimentRecord["results"]>),
+            gates: (baseExperiment.results?.gates ?? []).map((gate) => {
+              return {...gate, passed: gate.version === 1};
+            }),
+            progress: {completed: 2, total: 2},
+          },
+          status: "completed",
+          updated: "2026-01-01T00:06:00.000Z",
+        };
+        await act(async () => {
+          polling.fire();
+          await Promise.resolve();
+        });
+        await flushObservabilityRequests();
+        expect(view.getByTestId("ai-experiment-promote")).toHaveTextContent(
+          "Promote v1 to production"
+        );
+        expect(view.getByTestId("ai-experiment-promote")).not.toBeDisabled();
+        expect(view.getByTestId("ai-experiment-promote-version")).toBeTruthy();
       } finally {
         polling.restore();
       }
@@ -637,18 +895,29 @@ describe("AiExperimentResultsScreen", () => {
       const server = createServer();
       const view = await renderResults(server);
       expect(view.getByTestId("ai-experiment-gates-failing")).toBeTruthy();
+      expect(view.getByTestId("ai-experiment-promote")).toBeDisabled();
       fireEvent.press(view.getByTestId("ai-experiment-promote"));
       await flushObservabilityRequests();
-      expect(view.getByTestId("ai-experiment-promote-blocked")).toBeTruthy();
+      expect(view.getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
+        /v2 fails 1 gate: quality: correct ≥ 0\.8 \(got 0\.40\) — can't promote v2\./
+      );
       assert.lengthOf(server.callsTo(PROMOTE_ROUTE), 0);
     });
 
-    it("shows query errors", async () => {
+    it("shows query errors with a retry", async () => {
       detailState.isError = true;
+      const server = createServer();
 
-      const view = await renderResults();
+      const view = await renderResults(server);
 
-      assert.exists(view.getByText("Failed to load experiment results."));
+      assert.exists(view.getByText("Could not load experiment results."));
+      const before = server.callsTo(DETAIL_ROUTE).length;
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-experiment-results-error-retry"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      await flushObservabilityRequests();
+      assert.isAbove(server.callsTo(DETAIL_ROUTE).length, before);
     });
 
     it("surfaces promote API errors and dismisses the confirmation", async () => {
@@ -802,6 +1071,18 @@ describe("AiExperimentsListScreen", () => {
 
   const createServer = (): FakeObservabilityServer =>
     createObservabilityServer({
+      "GET /ai/observability/datasets": {
+        data: [
+          {
+            counts: {auto: 0, human: 2, needsReview: 0, total: 2},
+            created: "2026-01-01T00:00:00.000Z",
+            id: "ds-1",
+            name: "gold set",
+            tags: [],
+            updated: "2026-01-02T00:00:00.000Z",
+          },
+        ],
+      },
       "GET /ai/observability/experiments": listState,
       // Read at request time so tests can change permissions between renders.
       "GET /ai/observability/status": () => statusData,
@@ -809,13 +1090,15 @@ describe("AiExperimentsListScreen", () => {
 
   const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
-  const renderList = async (): Promise<ReturnType<typeof renderWithTheme>> => {
+  const renderList = async (
+    server: FakeObservabilityServer = createServer()
+  ): Promise<ReturnType<typeof renderWithTheme>> => {
     const view = renderWithTheme(
       <AiExperimentsScreenWidget
         config={emptyConfig}
         routeBase="/admin"
         screenName="ai-experiments"
-        server={createServer()}
+        server={server}
       />
     );
     await flushObservabilityRequests();
@@ -832,8 +1115,15 @@ describe("AiExperimentsListScreen", () => {
       listState.isLoading = false;
       listState.data = experiments;
       routerPush.mockClear();
-      const loaded = await renderList();
+      const server = createServer();
+      const loaded = await renderList(server);
       expect(loaded.getByTestId("ai-experiments-table")).toBeTruthy();
+      // Sorting and filtering run on the client, so the screen asks for the largest page.
+      assert.deepEqual(server.callsTo("GET /ai/observability/experiments")[0]?.query, {
+        limit: "100",
+      });
+      // Rows name the dataset from the datasets list rather than its id.
+      expect(loaded.getByText("gold set")).toBeTruthy();
       await act(async () => {
         fireEvent.press(loaded.getByTestId("ai-experiments-create"));
         await new Promise((resolve) => setTimeout(resolve, 50));
@@ -979,7 +1269,6 @@ describe("AiExperimentResultsView", () => {
         onSelectVersion={() => undefined}
         promoteConfirmOpen={false}
         promoteVersion={2}
-        selectedVersion={2}
       />
     );
     expect(getByTestId("ai-experiment-results-running")).toBeTruthy();
@@ -994,16 +1283,13 @@ describe("AiExperimentResultsView", () => {
         onOpenPromoteConfirm={() => undefined}
         onPromote={() => undefined}
         onSelectVersion={() => undefined}
-        promoteBlockedMessage="gate failed for v2 quality.correct"
         promoteConfirmOpen={false}
         promoteVersion={2}
-        selectedVersion={2}
       />
     );
-    expect(getByTestId("ai-experiment-gates-failing")).toBeTruthy();
-    assert.include(
-      String(getByTestId("ai-experiment-promote-blocked").props.children),
-      "quality.correct"
+    expect(getByTestId("ai-experiment-gates-failing")).toHaveTextContent(
+      /v2 fails 1 gate: quality: correct ≥ 0\.8 \(got 0\.40\)/
     );
+    expect(getByTestId("ai-experiment-gates-v2-verdict")).toHaveTextContent("Fails 1 of 1 gate");
   });
 });

@@ -96,13 +96,16 @@ result.
 | --- | --- |
 | `navigate` | Moves a native app to an expo-router path over the same CDP connection the logs use |
 | `browser` | Drives the web app in a headless WebView: open, click, type, scroll, then `snapshot` the rendered page and save a `screenshot` as proof |
-| `evaluate` | Runs a JavaScript expression in the app's Hermes runtime |
+| `dispatch_client_action` | Dispatches a known Redux action on the dev store (prefer over raw `evaluate`) |
+| `read_local_storage` / `write_local_storage` | Read or write AsyncStorage keys registered for MCP dev tooling |
+| `list_dev_commands` / `invoke_dev_command` | List and run app-registered dev-only command handlers |
+| `evaluate` | Runs a JavaScript expression in the app's Hermes runtime when no fixed tool fits |
 | `syncdb_action` | Changes a live SyncDB client: mutate, flush, resync, resolve conflicts, go offline |
 
-`evaluate`, `navigate`, `syncdb_action`, and the `browser` tool's `evaluate` action run code
-or change state inside the app, so they refuse unless the local server was started with
-`TERRENO_MCP_EVAL=1`. Generated editor configuration never sets it. The other `browser`
-actions do not need it.
+`evaluate`, `navigate`, `dispatch_client_action`, `write_local_storage`, `invoke_dev_command`,
+`syncdb_action`, and the `browser` tool's `evaluate` action run code or change state inside the
+app, so they refuse unless the local server was started with `TERRENO_MCP_EVAL=1`. Generated
+editor configuration never sets it. The other `browser` actions do not need it.
 
 After the fix, the loop goes back to Observe. A change is done when the logs and state show
 the new behavior, not when the edit compiles.

@@ -1,7 +1,9 @@
 # Set up Terreno MCP
 
 Configure both Terreno servers: the hosted server supplies documentation and generators; the local
-stdio server inspects the app, database, logs, Metro, and SyncDB state.
+stdio server inspects the app, database, logs, Metro, SyncDB state, web and native navigation.
+After setup, invoke **`debug-with-mcp`** (and when applicable **`debug-syncdb-with-mcp`**) for the
+standard diagnostic workflow.
 - **`terreno`** (hosted, Streamable HTTP) supplies documentation search and code generators.
 - **`terreno-local`** (stdio, runs in your repository) reads the app's packages, database, logs,
   Metro, and client state.

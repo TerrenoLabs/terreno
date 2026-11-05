@@ -1,5 +1,9 @@
 # Debug a Terreno app with MCP
 
+**This is the standard agent workflow** for finding and fixing issues on Terreno apps: run the
+dev stack, call **`terreno-local`** MCP tools to observe and drive the app, edit code, then
+observe again. Installable skill: **`debug-with-mcp`**. SyncDB-only depth: **`debug-syncdb-with-mcp`**.
+
 Use the local MCP server (`terreno-mcp-local`) to go from a symptom to a verified fix without
 pasting logs into the chat. This guide follows one real failure from start to finish, then lists
 what each tool does. Every tool output below was copied unchanged from a real run against

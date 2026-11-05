@@ -9,7 +9,10 @@ description: >-
 
 Use this skill when building or refactoring screens in a Terreno Expo app (`example-frontend`, `admin-spa`, or a consumer app using `@terreno/ui` + `@terreno/syncdb`). Terreno 58 apps have no Redux and no `@terreno/rtk`; upgrade old apps with `docs/how-to/migrate-rtk-to-syncdb.md`.
 
-**Related skills:** `terreno-ui` (component selection), `terreno-data-fetching` (API hooks), `verify-ui-changes` (mandatory UI verification), `generate-sdk` (after backend changes), `building-admin-interfaces` (admin shell, custom screens, sidebar).
+**Related skills:** `debug-with-mcp` (standard runtime debug and drive),
+`debug-syncdb-with-mcp` (SyncDB depth), `terreno-ui` (component selection),
+`terreno-data-fetching` (API hooks), `verify-ui-changes` (mandatory UI verification),
+`generate-sdk` (after backend changes), `building-admin-interfaces` (admin shell, custom screens, sidebar).
 
 ## Documentation
 

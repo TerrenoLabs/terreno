@@ -85,7 +85,9 @@ Read the shared [`lifecycle contract`](references/lifecycle-contract.md),
     mandatory runtime/UI/safety verification declared by repository instructions or
     supporting skills; for a user-facing change that is `verify-ui-changes` (own stack,
     adversarial steps, the required checks, the Maestro flow for mobile-focused work or
-    direct simulator commands when the app has no Maestro, evidence outside the tree). Missing mandatory capability is `BLOCKED`, not skipped.
+    direct simulator commands when the app has no Maestro, evidence outside the tree); for
+    runtime bugs and repro on a running app that is **`debug-with-mcp`** before marking the
+    task done. Missing mandatory capability is `BLOCKED`, not skipped.
     Missing docs for a user-visible or architectural change is `FAIL`. Write or edit
     each user guide page whose `## User guide` row names this task, at the row's path,
     in the user-guide page format, from the behavior this slice shipped; update the

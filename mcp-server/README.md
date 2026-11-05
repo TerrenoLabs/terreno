@@ -36,17 +36,19 @@ Restart the editor, then ask the agent to call `terreno_search_docs` or `applica
   `terreno_get_update_note`, `terreno_ask_update_help`, `terreno_generate_model`,
   `terreno_generate_route`, `terreno_generate_screen`, `terreno_generate_form_fields`,
   `terreno_validate_model_schema`, `terreno_validate_ui_blocks`, `terreno_install_admin`
-- Local `terreno-mcp-local` tools (13): `application_info`, `database_schema`, `database_query`,
+- Local `terreno-mcp-local` tools (19): `application_info`, `database_schema`, `database_query`,
   `read_logs`, `last_error`, `get_client_state`, `get_rtk_state` (deprecated alias of
   `get_client_state`), `get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`, `evaluate`,
-  `navigate`, `browser`
+  `navigate`, `dispatch_client_action`, `read_local_storage`, `write_local_storage`,
+  `list_dev_commands`, `invoke_dev_command`, `browser`
 - Nine workflow prompts (`terreno_bootstrap`, `terreno_create_crud_feature`, `terreno_upgrade`, and
   more) and `terreno://docs/*` documentation resources on the hosted server
 - Code generators return text with a target path; the agent writes the files
 - Rate limiting: the hosted server allows 120 requests per 60 seconds per client IP by default and
   answers `429` with `Retry-After` beyond that
-- `TERRENO_MCP_EVAL` gate: `evaluate`, `navigate`, `syncdb_action`, and the `browser` `evaluate`
-  action run only when the local server's environment sets `TERRENO_MCP_EVAL=1` (or `true`)
+- `TERRENO_MCP_EVAL` gate: `evaluate`, `navigate`, `syncdb_action`, `dispatch_client_action`,
+  `write_local_storage`, `invoke_dev_command`, and the `browser` `evaluate` action run only when
+  the local server's environment sets `TERRENO_MCP_EVAL=1` (or `true`)
 
 ## Documentation
 

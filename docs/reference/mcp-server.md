@@ -6,7 +6,7 @@ is `mcp-server/`. The package ships two servers with separate tool sets:
 | Server | npm bin | Entry | Transport | Registers |
 |--------|---------|-------|-----------|-----------|
 | Hosted `terreno-mcp` | `terreno-mcp` → `dist/index.js` | `src/index.ts`, `src/httpApp.ts` | Streamable HTTP, stateless | 14 tools, 9 prompts, documentation resources |
-| Local `terreno-mcp-local` | `terreno-mcp-local` → `dist/local/index.js` | `src/local/index.ts`, `src/local/localServer.ts` | stdio | 13 tools (no prompts, no resources) |
+| Local `terreno-mcp-local` | `terreno-mcp-local` → `dist/local/index.js` | `src/local/index.ts`, `src/local/localServer.ts` | stdio | 19 tools (no prompts, no resources) |
 
 The hosted server gives an agent documentation search, upgrade notes, and code generators. It never
 sees your project. The local server runs inside your project and reads its packages, database, logs,
@@ -645,7 +645,7 @@ table when it looks unfiltered.
 | [`application_info`](#application_info) | Workspace packages and key dependency versions | no |
 | [`database_schema`](#database_schema) | Mongo collections, indexes, counts, model excerpts | no |
 | [`database_query`](#database_query) | Read-only Mongo queries | no |
-| [`read_logs`](#read_logs) | Merged backend, browser, Metro, and app log tail | no |
+| [`read_logs`](#read_logs) | Merged backend, browser, Metro, app, network, and native log tail | no |
 | [`last_error`](#last_error) | Newest error-level log entry | no |
 | [`get_client_state`](#get_client_state) | RTK Query and SyncDB state of the running app | no |
 | [`get_rtk_state`](#get_rtk_state) | Deprecated alias of `get_client_state` | no |
@@ -654,6 +654,11 @@ table when it looks unfiltered.
 | [`syncdb_action`](#syncdb_action) | Change SyncDB client state | yes, every action |
 | [`evaluate`](#evaluate) | Run JavaScript in the app runtime | yes |
 | [`navigate`](#navigate) | Navigate the app with expo-router | yes |
+| [`dispatch_client_action`](#dispatch_client_action) | Dispatch a Redux action on the dev store | yes |
+| [`read_local_storage`](#read_local_storage) | Read AsyncStorage keys registered for MCP | no |
+| [`write_local_storage`](#write_local_storage) | Write one AsyncStorage key | yes |
+| [`list_dev_commands`](#list_dev_commands) | List app-registered dev commands | no |
+| [`invoke_dev_command`](#invoke_dev_command) | Run a registered dev command handler | yes |
 | [`browser`](#browser) | Drive a headless WebView | only the `evaluate` action |
 
 Example outputs below are real tool output, shortened with `…`. Where an output needs a running
@@ -780,7 +785,7 @@ Filter rejected: `$where`, `$function`, and `$accumulator` are not allowed.
 
 #### read_logs
 
-Merge log entries from up to four sources, sort them by timestamp, and return the newest.
+Merge log entries from up to six sources, sort them by timestamp, and return the newest.
 
 | Source | Reads | Written by | Notes |
 |--------|-------|-----------|-------|
@@ -788,13 +793,15 @@ Merge log entries from up to four sources, sort them by timestamp, and return th
 | `browser` | `browser.log` in the same directories | [`POST /__terreno/browser-logs`](api.md#development-browser-log-ingestion), fed by `installTerrenoDevConsoleLogger` from `@terreno/syncdb` | `console.error` entries carry no stack; uncaught errors carry `stack`. A render error caught by an error boundary is a `console.error` entry: no `stack`, unformatted `%o`/`%s` placeholders, and the component name in `message` |
 | `metro` | In-memory ring (2000) from Metro's `ws://<metro>/events` | Metro dev server | Always empty with Expo CLI 57 (see [Metro and CDP connection](#metro-and-cdp-connection)) |
 | `app` | In-memory ring (2000) of Hermes `Runtime.consoleAPICalled` over CDP | The running Hermes app | Needs a Hermes target; `stack` is a JSON string of the first 8 call frames; timestamps are receipt time |
+| `network` | In-memory ring (2000) of CDP `Network.*` events on the same Hermes session | Fetch/XHR in the running app | `Authorization`, `Cookie`, and `set-auth-token` headers are redacted in captured entries |
+| `native` | Subprocess tail of `adb logcat` (Android) or `xcrun simctl spawn booted log stream` (iOS Simulator) | Platform logging | Disabled when `TERRENO_NATIVE_LOGS=0`; empty with a status note when `adb`/simctl are unavailable |
 
-The `metro` and `app` rings start filling on the first call that requests those sources and are
+The `metro`, `app`, and `network` rings start filling on the first call that requests those sources and are
 held for the life of the MCP process. Earlier output is not captured.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `sources` | string[] | no | Any of `backend`, `browser`, `metro`, `app`. Default all four. |
+| `sources` | string[] | no | Any of `backend`, `browser`, `metro`, `app`, `network`, `native`. Default all except `native`. |
 | `entries` | number | no | Default 200, clamped 1–2000. Limits lines read per file and the merged result. |
 | `level` | string | no | Exact, case-insensitive level match, e.g. `error` |
 | `since` | string | no | ISO-8601 instant. Drops entries before it; entries without a parseable timestamp are kept. |
@@ -1047,6 +1054,104 @@ Without the opt-in (a successful call needs a Hermes app and is not shown):
 
 ``````text
 Refused: set `TERRENO_MCP_EVAL=1` to opt in to CDP-driven navigation (runs a fixed expo-router snippet in the app).
+``````
+
+#### dispatch_client_action
+
+Dispatch a plain Redux action object on `globalThis.__TERRENO_STORE__` (same registry as
+`registerTerrenoDevStore` from `@terreno/rtk`). Prefer this over raw `evaluate` when you only need
+to fire a known action type. Requires `TERRENO_MCP_EVAL`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `type` | string | yes | Redux action `type` |
+| `payload` | any | no | Action payload |
+
+``````json
+{"name":"dispatch_client_action","arguments":{"type":"demo/ping","payload":{"x":1}}}
+``````
+
+Captured in-process (unit harness, `TERRENO_MCP_EVAL=1`):
+
+``````json
+{"ok":true,"dispatched":{"type":"demo/ping","payload":{"x":1}}}
+``````
+
+#### read_local_storage
+
+List and read keys from the dev storage registry (`registerTerrenoDevStorage` from
+`@terreno/syncdb`). Values longer than 4 000 characters truncate. Keys matching sensitive name
+patterns redact to `[REDACTED]`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `prefix` | string | no | Only keys starting with this prefix |
+| `keys` | string[] | no | Read specific keys (max 50) |
+| `maxKeys` | number | no | Default 20, max 100 when listing |
+
+``````json
+{"name":"read_local_storage","arguments":{"prefix":"persist:"}}
+``````
+
+Captured in-process (unit harness):
+
+``````json
+{"keys":["persist:root"],"values":{"persist:root":"{}"}}
+``````
+
+#### write_local_storage
+
+Write one key through the dev storage registry. Requires `TERRENO_MCP_EVAL`. SecureStore keys are
+refused unless the app allowlisted them at registration time.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | yes | Storage key |
+| `value` | string | yes | String value to store |
+
+``````json
+{"name":"write_local_storage","arguments":{"key":"demo","value":"1"}}
+``````
+
+Without the opt-in:
+
+``````text
+Refused: set `TERRENO_MCP_EVAL=1` to opt in to `write_local_storage`.
+``````
+
+#### list_dev_commands
+
+Return metadata for commands registered with `registerTerrenoDevCommand` from `@terreno/syncdb`.
+No parameters.
+
+``````json
+{"name":"list_dev_commands","arguments":{}}
+``````
+
+Captured in-process (unit harness):
+
+``````json
+{"commands":[{"name":"ping","description":"pong"}]}
+``````
+
+#### invoke_dev_command
+
+Run a registered dev command handler. Requires `TERRENO_MCP_EVAL`. Use for app-specific debug
+actions (seed data, flip flags) instead of arbitrary `evaluate`.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name` | string | yes | Command name from `list_dev_commands` |
+| `arguments` | object | no | Arguments passed to the handler |
+
+``````json
+{"name":"invoke_dev_command","arguments":{"name":"ping","arguments":{"n":2}}}
+``````
+
+Captured in-process (unit harness, `TERRENO_MCP_EVAL=1`):
+
+``````json
+{"ok":true,"result":3}
 ``````
 
 #### browser

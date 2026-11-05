@@ -14,11 +14,15 @@ type FakeWebSocketListener = (event: FakeMessageEvent | Record<string, never>) =
 
 class FakeWebSocket {
   static readonly OPEN = 1;
+  static instances: FakeWebSocket[] = [];
 
+  readonly url: string;
   readyState = 0;
   private readonly listeners = new Map<string, FakeWebSocketListener[]>();
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    this.url = url;
+    FakeWebSocket.instances.push(this);
     queueMicrotask((): void => {
       this.readyState = FakeWebSocket.OPEN;
       this.emit("open", {});
@@ -40,14 +44,18 @@ class FakeWebSocket {
     const request = JSON.parse(raw) as {id: number; method: string};
     const value =
       request.method === "Runtime.evaluate" ? {method: "navigate", ok: true} : undefined;
+    const payload =
+      request.method === "Runtime.evaluate"
+        ? {id: request.id, result: {result: {value}}}
+        : {id: request.id, result: {}};
     queueMicrotask((): void => {
       this.emit("message", {
-        data: JSON.stringify({id: request.id, result: {result: {value}}}),
+        data: JSON.stringify(payload),
       });
     });
   }
 
-  private emit(name: string, event: FakeMessageEvent | Record<string, never>): void {
+  emit(name: string, event: FakeMessageEvent | Record<string, never>): void {
     for (const listener of this.listeners.get(name) ?? []) {
       listener(event);
     }
@@ -118,6 +126,7 @@ describe("local MCP server end-to-end", () => {
 
   beforeEach((): void => {
     FakeWebView.interactions = [];
+    FakeWebSocket.instances = [];
     process.env.TERRENO_MCP_EVAL = "1";
     process.env.TERRENO_METRO_URL = "http://localhost:8082";
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
@@ -167,6 +176,30 @@ describe("local MCP server end-to-end", () => {
         name: "navigate",
       });
       assert.include(textFromToolResult(appResult), '"ok": true');
+
+      const cdpSocket = FakeWebSocket.instances.find((socket) => socket.url.includes("/cdp"));
+      assert.isDefined(cdpSocket);
+      cdpSocket.emit("message", {
+        data: JSON.stringify({
+          method: "Network.responseReceived",
+          params: {
+            requestId: "e2e-1",
+            response: {
+              headers: {Authorization: "secret"},
+              status: 200,
+              url: "http://localhost:4000/health",
+            },
+          },
+        }),
+      });
+      const logsResult = await client.callTool({
+        arguments: {entries: 5, sources: ["network"]},
+        name: "read_logs",
+      });
+      const logs = JSON.parse(textFromToolResult(logsResult)) as {
+        entries: Array<{source?: string}>;
+      };
+      assert.equal(logs.entries[0]?.source, "network");
 
       await client.callTool({
         arguments: {action: "open", url: "http://localhost:8082"},

@@ -1633,7 +1633,7 @@ import {Stack} from "expo-router";
 import {useEffect} from "react";
 import "react-native-reanimated";
 import {baseUrl, selectBetterAuthIsLoading, selectBetterAuthUserId} from "@terreno/rtk";
-import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+import {installTerrenoDevConsoleLogger, registerTerrenoDevStorage} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {Spinner, TerrenoProvider} from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
@@ -1645,6 +1645,7 @@ import {setSyncDbReady, syncDb} from "@/store/syncdb";
 // POST /__terreno/browser-logs so terreno-mcp-local \`read_logs\` / \`last_error\` can read them.
 // No-op outside __DEV__.
 installTerrenoDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
 
 export {ErrorBoundary} from "expo-router";
 

@@ -17,7 +17,7 @@ import {
   useTerrenoFeatureFlags,
   useUpgradeCheck,
 } from "@terreno/rtk";
-import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+import {installTerrenoDevConsoleLogger, registerTerrenoDevStorage} from "@terreno/syncdb";
 import {SyncDbProvider} from "@terreno/syncdb/react";
 import {
   AnnouncementNavigator,
@@ -45,8 +45,11 @@ import {socketTransports} from "@/store/socketTransports";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 import {getCurrentExpoToken} from "@/store/utils";
 import {buildNavigationTheme} from "@/utils/navigationTheme";
+import {installExampleDevMcpCommands} from "../devMcpCommands";
 
 installTerrenoDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
+installExampleDevMcpCommands();
 
 interface ProfileData {
   _id: string;

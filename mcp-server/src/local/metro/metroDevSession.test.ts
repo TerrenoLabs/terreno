@@ -11,6 +11,7 @@ import {
   resetMetroDevSessionForTests,
   snapshotCdpConsoleRing,
   snapshotMetroEventsRing,
+  snapshotNetworkRing,
 } from "./metroDevSession.js";
 
 interface FakeMessageEvent {
@@ -168,6 +169,38 @@ describe("Metro development session", () => {
 
     process.env.TERRENO_MCP_EVAL = "1";
     expect(await navigate({path: "/profile"})).toContain('"result": 2');
+  });
+
+  it("captures CDP network events with redacted authorization headers", async (): Promise<void> => {
+    expect((await ensureCdpConnected()).ok).toBe(true);
+    const socket = FakeWebSocket.instances[0];
+    socket?.emit("message", {
+      data: JSON.stringify({
+        method: "Network.responseReceived",
+        params: {
+          requestId: "1",
+          response: {
+            headers: {Authorization: "secret", "Content-Type": "application/json"},
+            mimeType: "application/json",
+            status: 403,
+            url: "http://localhost:4000/todos",
+          },
+        },
+      }),
+    });
+    const entry = JSON.parse(snapshotNetworkRing()[0]?.raw ?? "{}") as {
+      message?: string;
+      responseHeaders?: Record<string, string>;
+      source?: string;
+      status?: number;
+    };
+    expect(entry.source).toBe("network");
+    expect(entry.status).toBe(403);
+    expect(entry.responseHeaders?.Authorization).toBe("[REDACTED]");
+    const logs = JSON.parse(await readLogs({sources: ["network"]})) as {
+      entries: Array<{source?: string}>;
+    };
+    expect(logs.entries[0]?.source).toBe("network");
   });
 
   it("reports an unreachable Metro target", async (): Promise<void> => {

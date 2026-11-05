@@ -6,7 +6,7 @@ import * as SplashScreen from "expo-splash-screen";
 import {useEffect} from "react";
 import "react-native-reanimated";
 import {baseUrl, selectBetterAuthUserId} from "@terreno/rtk";
-import {installTerrenoDevConsoleLogger} from "@terreno/syncdb";
+import {installTerrenoDevConsoleLogger, registerTerrenoDevStorage} from "@terreno/syncdb";
 import {TerrenoProvider} from "@terreno/ui";
 import {Provider, useSelector} from "react-redux";
 import {PersistGate} from "redux-persist/integration/react";
@@ -14,6 +14,7 @@ import {useColorScheme} from "@/components/useColorScheme";
 import store, {persistor} from "@/store/index";
 
 installTerrenoDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
 
 export {ErrorBoundary} from "expo-router";
 

@@ -1,8 +1,8 @@
 import {type BlocksDocument, parseBlocks} from "@terreno/blocks";
-import {useMCPTools} from "@terreno/syncdb/app";
 import {useSession} from "@terreno/syncdb/auth";
 import {baseUrl} from "@terreno/syncdb/config";
 import {useFeatureFlags} from "@terreno/syncdb/flags";
+import {useMCPTools} from "@terreno/syncdb/mcp";
 import {useApiClient, useMutate, useQuery} from "@terreno/syncdb/react";
 import {
   type AskSubmission,
@@ -104,7 +104,7 @@ type TurnOutcome =
   | {fields: AskErrors[string]; kind: "invalidAnswer"}
   | {detail: string; kind: "conflict"};
 
-/** The synced row's id: the entity key, which is the string `_id`. */
+/** The synced row's id: the entity key, which is the ObjectId `_id` as a hex string. */
 const historyIdOf = (history: GptHistory): string => history._id;
 
 /** Bearer header for the SSE and rating requests, from the same session the sync client uses. */

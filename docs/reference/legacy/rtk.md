@@ -14,7 +14,8 @@ which maps every former export to its replacement.
 | `baseUrl`, `baseWebsocketsUrl`, base URL resolution | `@terreno/syncdb/config` |
 | `useSocketConnection` | The syncdb socket: `useSocketEvent` (`@terreno/syncdb/react`) |
 | `useFeatureFlags`, `useTerrenoFeatureFlags` | `@terreno/syncdb/flags` |
-| `useUpgradeCheck`, permissions helpers, dev console logger, `useMCPTools` | `@terreno/syncdb/app` |
+| `useUpgradeCheck`, permissions helpers, dev console logger | `@terreno/syncdb/app` |
+| `useMCPTools` | `@terreno/syncdb/mcp` |
 | `@terreno/rtk/buildNumber` | `@terreno/syncdb/buildNumber` |
 | Offline middleware, `useOfflineStatus`, `useServerStatus` | The syncdb outbox and `useSyncStatus` (`@terreno/syncdb/react`) |
 

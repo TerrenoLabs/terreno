@@ -74,4 +74,45 @@ describe("useAiObservabilityExperimentsApi", () => {
       {body: {version: 2}, method: "POST", url: "/ai/observability/experiments/exp-1/promote"},
     ]);
   });
+
+  it("filters the list by kind and page size", async () => {
+    const calls = stub();
+    renderHook(
+      () => {
+        const api = useAiObservabilityExperimentsApi();
+        return {
+          judge: api.useListQuery({kind: "judge", limit: 5}),
+          prompt: api.useListQuery({kind: "prompt"}),
+        };
+      },
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    expect(calls.map((call) => call.url).sort()).toEqual([
+      "/ai/observability/experiments?kind=judge&limit=5",
+      "/ai/observability/experiments?kind=prompt",
+    ]);
+  });
+
+  it("creates a judge experiment", async () => {
+    const calls = stub();
+    const {result} = renderHook(() => useAiObservabilityExperimentsApi().useCreateMutation(), {
+      wrapper: ObservabilityTestProvider,
+    });
+    const body = {
+      datasetId: "ds-1",
+      judgeEvaluatorId: "judge-1",
+      kind: "judge" as const,
+      name: "Judge v2",
+      questionSetId: "qs-1",
+      versions: [1, 2],
+    };
+
+    await act(async () => {
+      await result.current[0](body).unwrap();
+    });
+
+    expect(calls[0]).toMatchObject({body, method: "POST", url: "/ai/observability/experiments"});
+  });
 });

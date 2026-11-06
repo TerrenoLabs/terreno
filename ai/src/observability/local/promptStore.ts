@@ -2,7 +2,7 @@ import {APIError} from "@terreno/api";
 import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
-import type {ObsPromptVariable} from "../../types/observability";
+import type {ObsPromptRef, ObsPromptVariable} from "../../types/observability";
 import {compileTemplate} from "../compileTemplate";
 import type {ModelPrice, PromptRegistry, PromptVersionRef} from "../types";
 import {registerObsExperiment} from "./models/obsExperiment";
@@ -10,6 +10,12 @@ import {registerObsPrompt} from "./models/obsPrompt";
 import {registerObsPromptLabel} from "./models/obsPromptLabel";
 import {registerObsPromptVersion} from "./models/obsPromptVersion";
 import {registerObsTrace} from "./models/obsTrace";
+import {
+  type PromptReferenceLookup,
+  promptIncludeKey,
+  type ResolvedPromptText,
+  resolvePromptReferences,
+} from "./promptReferences";
 
 const PROMPT_RELATIONSHIP_LIMIT = 20;
 
@@ -43,6 +49,20 @@ export interface PromptRelationships {
     limit: number;
     total: number;
   };
+}
+
+/** Another prompt whose saved system or template contains `{{> name}}`. */
+export interface PromptUsedBy {
+  folder: string;
+  name: string;
+  versions: number[];
+}
+
+/** Bounded used-by list, same cap as trace and experiment relationships. */
+export interface PromptUsedByPage {
+  items: PromptUsedBy[];
+  limit: number;
+  total: number;
 }
 
 export interface PromptVersionFields {
@@ -80,9 +100,34 @@ export interface MoveLabelResult {
   version: number;
 }
 
+/** A label of the prompt being saved, as it will read after the save. */
+interface PendingLabel {
+  body: string;
+  label: string;
+  version: number;
+}
+
+interface ResolvedVersionText {
+  includes: ObsPromptRef[];
+  system?: string;
+  template?: string;
+}
+
 export interface CompiledMessage {
   content: string;
   role: "system" | "user";
+}
+
+/** A stored version with prompt references in `system` and `template` resolved. */
+export interface ResolvedPromptVersion {
+  includes: ObsPromptRef[];
+  inputSchema?: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
+  system?: string;
+  template?: string;
+  type: "chat" | "text";
+  variables: ObsPromptVariable[];
+  version: number;
 }
 
 export interface PlaygroundRunResult {
@@ -111,6 +156,11 @@ const versionBody = (system?: string, template?: string): string => {
     return system;
   }
   return template ?? "";
+};
+
+/** Matches `{{> name}}`, `{{> name label=…}}`, and `{{> name version=n}}`. */
+const promptReferencePattern = (name: string): RegExp => {
+  return new RegExp(`\\{\\{>\\s*${escapeRegex(name)}(\\s|\\}\\})`);
 };
 
 const escapeRegex = (value: string): string => {
@@ -146,6 +196,7 @@ export class LocalPromptStore implements PromptRegistry {
     if (existing) {
       throw new APIError({status: 409, title: `Prompt "${input.name}" already exists`});
     }
+    await this.validateReferences(input.name, input);
     try {
       const prompt = await ObsPrompt.create({
         ...(input.description !== undefined ? {description: input.description} : {}),
@@ -174,6 +225,13 @@ export class LocalPromptStore implements PromptRegistry {
       .sort({version: -1})
       .limit(1);
     const nextVersion = (latestDocs[0]?.version ?? 0) + 1;
+    await this.validateReferences(prompt.name, fields);
+    // The new version takes the `latest` label, so prompts that include `latest` must still resolve.
+    await this.validateDependents(prompt.name, {
+      body: versionBody(fields.system, fields.template),
+      label: "latest",
+      version: nextVersion,
+    });
     const created = await this.insertVersion(prompt._id, nextVersion, fields);
     await this.upsertLabel(prompt._id, "latest", created._id);
     return {name: prompt.name, version: nextVersion};
@@ -198,6 +256,13 @@ export class LocalPromptStore implements PromptRegistry {
         title: `Unknown version ${params.version} for prompt "${name}"`,
       });
     }
+    await this.validateReferences(prompt.name, versionDoc);
+    // Other prompts may include this label, so moving it can nest them too deeply.
+    await this.validateDependents(prompt.name, {
+      body: versionBody(versionDoc.system, versionDoc.template),
+      label: params.label,
+      version: versionDoc.version,
+    });
     const outgoingVersion = await this.upsertLabel(prompt._id, params.label, versionDoc._id);
     return {label: params.label, outgoingVersion, version: params.version};
   }
@@ -219,8 +284,13 @@ export class LocalPromptStore implements PromptRegistry {
     if (!version) {
       return undefined;
     }
+    const resolved = await this.resolveText(
+      prompt.name,
+      versionBody(version.system, version.template)
+    );
     return {
-      body: versionBody(version.system, version.template),
+      body: resolved.text,
+      ...(resolved.includes.length > 0 ? {includes: resolved.includes} : {}),
       label,
       name: prompt.name,
       sensitive: version.sensitive,
@@ -238,9 +308,13 @@ export class LocalPromptStore implements PromptRegistry {
     name: string;
     relationships: PromptRelationships;
     tags: string[];
+    usedBy: PromptUsedByPage;
     versions: Array<{
       config?: Record<string, unknown>;
       created: string;
+      inputSchema?: Record<string, unknown>;
+      outputFieldNotes?: Record<string, string>;
+      outputSchema?: Record<string, unknown>;
       sensitive: boolean;
       system?: string;
       template?: string;
@@ -264,10 +338,14 @@ export class LocalPromptStore implements PromptRegistry {
       name: prompt.name,
       relationships: await this.loadRelationships(prompt.name, options?.promptVersion),
       tags: prompt.tags,
+      usedBy: await this.loadUsedBy(prompt.name),
       versions: versions.map((row) => {
         return {
           config: row.config,
           created: DateTime.fromJSDate(row.created).toUTC().toISO() ?? "",
+          ...(row.inputSchema ? {inputSchema: row.inputSchema} : {}),
+          ...(row.outputFieldNotes ? {outputFieldNotes: row.outputFieldNotes} : {}),
+          ...(row.outputSchema ? {outputSchema: row.outputSchema} : {}),
           sensitive: row.sensitive,
           system: row.system,
           template: row.template,
@@ -361,9 +439,10 @@ export class LocalPromptStore implements PromptRegistry {
   }): Promise<PlaygroundRunResult> {
     const prompt = await this.requirePrompt(params.name);
     const versionDoc = await this.resolvePlaygroundVersion(prompt._id, params.version);
+    const resolved = await this.resolveVersionText(prompt.name, versionDoc);
     const compiledMessages = this.compile({
-      system: versionDoc.system,
-      template: versionDoc.template,
+      system: resolved.system,
+      template: resolved.template,
       userPrompt: params.userPrompt,
       variables: params.variables,
     });
@@ -503,18 +582,7 @@ export class LocalPromptStore implements PromptRegistry {
   async getVersionByLabel(
     name: string,
     label = "production"
-  ): Promise<
-    | {
-        inputSchema?: Record<string, unknown>;
-        outputSchema?: Record<string, unknown>;
-        system?: string;
-        template?: string;
-        type: "chat" | "text";
-        variables: ObsPromptVariable[];
-        version: number;
-      }
-    | undefined
-  > {
+  ): Promise<ResolvedPromptVersion | undefined> {
     const prompt = await registerObsPrompt().findOneOrNone({name});
     if (!prompt) {
       return undefined;
@@ -530,11 +598,13 @@ export class LocalPromptStore implements PromptRegistry {
     if (!version) {
       return undefined;
     }
+    const resolved = await this.resolveVersionText(prompt.name, version);
     return {
+      includes: resolved.includes,
       inputSchema: version.inputSchema,
       outputSchema: version.outputSchema,
-      system: version.system,
-      template: version.template,
+      system: resolved.system,
+      template: resolved.template,
       type: version.type,
       variables: version.variables,
       version: version.version,
@@ -544,18 +614,7 @@ export class LocalPromptStore implements PromptRegistry {
   async getVersionByNumber(
     name: string,
     versionNumber: number
-  ): Promise<
-    | {
-        inputSchema?: Record<string, unknown>;
-        outputSchema?: Record<string, unknown>;
-        system?: string;
-        template?: string;
-        type: "chat" | "text";
-        variables: ObsPromptVariable[];
-        version: number;
-      }
-    | undefined
-  > {
+  ): Promise<ResolvedPromptVersion | undefined> {
     const prompt = await registerObsPrompt().findOneOrNone({name});
     if (!prompt) {
       return undefined;
@@ -567,14 +626,57 @@ export class LocalPromptStore implements PromptRegistry {
     if (!version) {
       return undefined;
     }
+    const resolved = await this.resolveVersionText(prompt.name, version);
     return {
+      includes: resolved.includes,
       inputSchema: version.inputSchema,
       outputSchema: version.outputSchema,
-      system: version.system,
-      template: version.template,
+      system: resolved.system,
+      template: resolved.template,
       type: version.type,
       variables: version.variables,
       version: version.version,
+    };
+  }
+
+  /**
+   * Prompts that mention this name in a saved `{{> name}}` tag, with the versions that do.
+   * The current prompt is omitted so a self-tag does not list itself.
+   */
+  private async loadUsedBy(name: string): Promise<PromptUsedByPage> {
+    const versions = await registerObsPromptVersion().find({
+      $or: [{system: promptReferencePattern(name)}, {template: promptReferencePattern(name)}],
+    });
+    const versionsByPromptId = new Map<string, number[]>();
+    for (const version of versions) {
+      const promptId = String(version.promptId);
+      const current = versionsByPromptId.get(promptId) ?? [];
+      current.push(version.version);
+      versionsByPromptId.set(promptId, current);
+    }
+    const empty = {items: [], limit: PROMPT_RELATIONSHIP_LIMIT, total: 0};
+    if (versionsByPromptId.size === 0) {
+      return empty;
+    }
+    const prompts = await registerObsPrompt().find({
+      _id: {$in: [...versionsByPromptId.keys()]},
+    });
+    const items = prompts
+      .filter((prompt) => prompt.name !== name)
+      .map((prompt) => {
+        return {
+          folder: prompt.folder,
+          name: prompt.name,
+          versions: [...(versionsByPromptId.get(String(prompt._id)) ?? [])].sort(
+            (left, right) => left - right
+          ),
+        };
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    return {
+      items: items.slice(0, PROMPT_RELATIONSHIP_LIMIT),
+      limit: PROMPT_RELATIONSHIP_LIMIT,
+      total: items.length,
     };
   }
 
@@ -638,6 +740,115 @@ export class LocalPromptStore implements PromptRegistry {
         total: totalTraces,
       },
     };
+  }
+
+  /**
+   * Loads a referenced prompt by pinned version or by label. `pending` stands in for a label
+   * of the prompt being saved, as it will read once the save lands, when checking the prompts
+   * that include it.
+   */
+  private referenceLookup(pending?: PendingLabel & {name: string}): PromptReferenceLookup {
+    return async (reference) => {
+      if (pending && reference.name === pending.name && reference.label === pending.label) {
+        return pending;
+      }
+      const prompt = await registerObsPrompt().findOneOrNone({name: reference.name});
+      if (!prompt) {
+        return undefined;
+      }
+      const ObsPromptVersion = registerObsPromptVersion();
+      if (reference.version !== undefined) {
+        const pinned = await ObsPromptVersion.findOneOrNone({
+          promptId: prompt._id,
+          version: reference.version,
+        });
+        return pinned
+          ? {body: versionBody(pinned.system, pinned.template), version: pinned.version}
+          : undefined;
+      }
+      const labelDoc = await registerObsPromptLabel().findOneOrNone({
+        label: reference.label,
+        promptId: prompt._id,
+      });
+      const labelled = labelDoc
+        ? await ObsPromptVersion.findOneOrNone({_id: labelDoc.versionId})
+        : undefined;
+      return labelled
+        ? {
+            body: versionBody(labelled.system, labelled.template),
+            label: reference.label,
+            version: labelled.version,
+          }
+        : undefined;
+    };
+  }
+
+  private async resolveText(name: string, text: string): Promise<ResolvedPromptText> {
+    return resolvePromptReferences({ancestors: [name], lookup: this.referenceLookup(), text});
+  }
+
+  private async resolveVersionText(
+    name: string,
+    version: {system?: string; template?: string}
+  ): Promise<ResolvedVersionText> {
+    const system =
+      version.system === undefined ? undefined : await this.resolveText(name, version.system);
+    const template =
+      version.template === undefined ? undefined : await this.resolveText(name, version.template);
+    const includes = new Map<string, ObsPromptRef>();
+    for (const ref of [...(system?.includes ?? []), ...(template?.includes ?? [])]) {
+      includes.set(promptIncludeKey(ref), ref);
+    }
+    return {includes: [...includes.values()], system: system?.text, template: template?.text};
+  }
+
+  /**
+   * Rejects a malformed, unknown, cyclic, or too-deep reference before a version or label is
+   * saved, so every saved reference resolves at call time. A label must already exist on the
+   * referenced prompt: promote the shared prompt before referencing it by label.
+   */
+  private async validateReferences(
+    name: string,
+    fields: {system?: string; template?: string},
+    lookup: PromptReferenceLookup = this.referenceLookup()
+  ): Promise<void> {
+    for (const text of [fields.system, fields.template]) {
+      if (text) {
+        await resolvePromptReferences({ancestors: [name], lookup, text});
+      }
+    }
+  }
+
+  /**
+   * Re-resolves every version of each prompt that includes `name`, directly or through another
+   * prompt, as it will read once `pending` lands. A new body for a shared prompt can push a prompt
+   * that includes it past the nesting limit, and experiments still run unlabelled versions.
+   */
+  private async validateDependents(name: string, pending: PendingLabel): Promise<void> {
+    const lookup = this.referenceLookup({...pending, name});
+    const ObsPrompt = registerObsPrompt();
+    const ObsPromptVersion = registerObsPromptVersion();
+    const seen = new Set([name]);
+    const queue = [name];
+    while (queue.length > 0) {
+      const target = queue.shift() as string;
+      const includesTarget = promptReferencePattern(target);
+      const promptIds = await ObsPromptVersion.distinct("promptId", {
+        $or: [{system: includesTarget}, {template: includesTarget}],
+      });
+      const dependents = await ObsPrompt.find({_id: {$in: promptIds}});
+      for (const dependent of dependents) {
+        if (seen.has(dependent.name)) {
+          continue;
+        }
+        seen.add(dependent.name);
+        queue.push(dependent.name);
+        const versions = await ObsPromptVersion.find({promptId: dependent._id});
+        for (const version of versions) {
+          await this.validateReferences(dependent.name, version, lookup);
+        }
+      }
+    }
   }
 
   private async requirePrompt(name: string): Promise<{

@@ -35,7 +35,12 @@ export const observabilityAdminScreens = ({localOn}: {localOn: boolean}): AdminC
   ];
   if (localOn) {
     screens.push(
-      observabilityScreen({displayName: "Review queue", name: "ai-review", resource: "aiReview"})
+      observabilityScreen({displayName: "Review queue", name: "ai-review", resource: "aiReview"}),
+      observabilityScreen({
+        displayName: "Review batches",
+        name: "ai-review-batches",
+        resource: "aiReview",
+      })
     );
   }
   return screens;

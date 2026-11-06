@@ -12,6 +12,7 @@
       "store/**/*.tsx",
       "components/**/*.ts",
       "components/**/*.tsx",
+      "server/**/*.ts",
       "e2e/**/*.ts",
       "playwright.config.ts",
       "!!**/node_modules",

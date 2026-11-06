@@ -5,26 +5,20 @@ import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import type {AdminConfigResponse} from "../types";
-import {AiDatasetDetailScreenWidget as AiDatasetDetailScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetDetailScreen";
-import {AiDatasetsScreenWidget as AiDatasetsScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetsListScreen";
-import {AiEvaluatorDetailScreenWidget as AiEvaluatorDetailScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorDetailScreen";
-import {AiEvaluatorNewScreenWidget as AiEvaluatorNewScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorNewScreen";
-import {AiEvaluatorsScreenWidget as AiEvaluatorsScreenWidgetBase} from "../widgets/aiObservability/evaluators/AiEvaluatorsListScreen";
-import {AiExperimentNewScreenWidget as AiExperimentNewScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentNewScreen";
-import {AiExperimentResultsScreenWidget as AiExperimentResultsScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentResultsScreen";
-import {AiExperimentsScreenWidget as AiExperimentsScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentsListScreen";
-import {AiPromptEditorScreenWidget as AiPromptEditorScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptEditorScreen";
-import {AiPromptsScreenWidget as AiPromptsScreenWidgetBase} from "../widgets/aiObservability/prompts/AiPromptsListScreen";
 import {AiReviewItemScreenWidget as AiReviewItemScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewItemScreen";
-import {AiReviewItemView} from "../widgets/aiObservability/review/AiReviewItemView";
+import {
+  AiReviewItemHeaderMeta,
+  AiReviewItemNav,
+  AiReviewItemView,
+  reviewItemTitle,
+} from "../widgets/aiObservability/review/AiReviewItemView";
 import {AiReviewScreenWidget as AiReviewScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewQueueScreen";
-import {AiReviewQueueView} from "../widgets/aiObservability/review/AiReviewQueueView";
+import {
+  AiReviewQueueActions,
+  AiReviewQueueView,
+} from "../widgets/aiObservability/review/AiReviewQueueView";
 import {ReviewScoreField} from "../widgets/aiObservability/review/ReviewScoreField";
 import type {ReviewDetail, ReviewListItem} from "../widgets/aiObservability/review/reviewTypes";
-import {AiObservabilityChrome as AiObservabilityChromeBase} from "../widgets/aiObservability/shell/AiObservabilityChrome";
-import {AiObservabilityStatusChip as AiObservabilityStatusChipBase} from "../widgets/aiObservability/shell/AiObservabilityStatusChip";
-import {AiTraceDetailScreenWidget as AiTraceDetailScreenWidgetBase} from "../widgets/aiObservability/traces/AiTraceDetailScreen";
-import {AiTracesScreenWidget as AiTracesScreenWidgetBase} from "../widgets/aiObservability/traces/AiTracesListScreen";
 import {
   createObservabilityServer,
   type FakeObservabilityRoute,
@@ -33,24 +27,8 @@ import {
   withObservabilityServer,
 } from "./observabilityFakeApi.isolated";
 
-const _AiDatasetDetailScreenWidget = withObservabilityServer(AiDatasetDetailScreenWidgetBase);
-const _AiDatasetsScreenWidget = withObservabilityServer(AiDatasetsScreenWidgetBase);
-const _AiEvaluatorDetailScreenWidget = withObservabilityServer(AiEvaluatorDetailScreenWidgetBase);
-const _AiEvaluatorNewScreenWidget = withObservabilityServer(AiEvaluatorNewScreenWidgetBase);
-const _AiEvaluatorsScreenWidget = withObservabilityServer(AiEvaluatorsScreenWidgetBase);
-const _AiExperimentNewScreenWidget = withObservabilityServer(AiExperimentNewScreenWidgetBase);
-const _AiExperimentResultsScreenWidget = withObservabilityServer(
-  AiExperimentResultsScreenWidgetBase
-);
-const _AiExperimentsScreenWidget = withObservabilityServer(AiExperimentsScreenWidgetBase);
-const _AiPromptEditorScreenWidget = withObservabilityServer(AiPromptEditorScreenWidgetBase);
-const _AiPromptsScreenWidget = withObservabilityServer(AiPromptsScreenWidgetBase);
 const AiReviewItemScreenWidget = withObservabilityServer(AiReviewItemScreenWidgetBase);
 const AiReviewScreenWidget = withObservabilityServer(AiReviewScreenWidgetBase);
-const _AiTraceDetailScreenWidget = withObservabilityServer(AiTraceDetailScreenWidgetBase);
-const _AiTracesScreenWidget = withObservabilityServer(AiTracesScreenWidgetBase);
-const _AiObservabilityChrome = withObservabilityServer(AiObservabilityChromeBase);
-const _AiObservabilityStatusChip = withObservabilityServer(AiObservabilityStatusChipBase);
 
 interface ExpoRouterPushMock {
   (...args: unknown[]): void;
@@ -76,23 +54,33 @@ mock.module("expo-router", () => ({
   },
   useLocalSearchParams: (): Record<string, string> => readExpoSearchParams.current(),
 }));
+
+const statusData = {
+  localOn: true,
+  plugins: [],
+  primaries: {
+    datasets: "local",
+    experiments: "local",
+    prompts: "local",
+    reviewQueue: "local",
+  },
+};
+
+const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+
+/** A review list envelope; `more` keeps it a list envelope so `counts` reaches the screen. */
+const reviewList = (items: ReviewListItem[]): Record<string, unknown> => ({
+  counts: {done: 0, in_progress: 0, pending: items.length, skipped: 0},
+  data: items,
+  more: false,
+});
+
 describe("AiReviewItemScreen", () => {
   beforeEach(() => {
     setExpoSearchParams(() => ({id: reviewId}));
     routerPush.mockClear();
   });
   let reviewId = "rev-1";
-
-  const statusData = {
-    localOn: true,
-    plugins: [],
-    primaries: {
-      datasets: "local",
-      experiments: "local",
-      prompts: "local",
-      reviewQueue: "local",
-    },
-  };
 
   const detail: ReviewDetail = {
     dimensions: [{dataType: "boolean", key: "correct", required: true}],
@@ -126,6 +114,7 @@ describe("AiReviewItemScreen", () => {
   const createServer = (options?: {
     currentUserId?: string;
     detailRoute?: FakeObservabilityRoute;
+    listRoute?: FakeObservabilityRoute;
     pendingItems?: ReviewListItem[];
   }): FakeObservabilityServer => {
     const pendingItems = options?.pendingItems ?? pending;
@@ -140,69 +129,54 @@ describe("AiReviewItemScreen", () => {
         data: options?.currentUserId === "" ? undefined : {id: options?.currentUserId ?? "user-1"},
       },
       [DETAIL_ROUTE]: options?.detailRoute ?? {data: detail},
-      [LIST_ROUTE]: {
-        data: {
-          counts: {done: 0, in_progress: 0, pending: pendingItems.length, skipped: 0},
-          data: pendingItems,
-          more: false,
-        },
-      },
+      [LIST_ROUTE]: options?.listRoute ?? {data: reviewList(pendingItems)},
       [STATUS_ROUTE]: {data: statusData},
     });
   };
 
-  const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+  const renderScreen = async (
+    server: FakeObservabilityServer
+  ): Promise<ReturnType<typeof renderWithTheme>> => {
+    const view = renderWithTheme(
+      <AiReviewItemScreenWidget
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-review-item"
+        server={server}
+      />
+    );
+    await flushObservabilityRequests();
+    return view;
+  };
 
   describe("AiReviewItemScreenWidget", () => {
     it("shows loading then review item with score controls", async () => {
-      const loading = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={createServer({currentUserId: "", detailRoute: {isLoading: true}})}
-        />
+      const loading = await renderScreen(
+        createServer({currentUserId: "", detailRoute: {isLoading: true}})
       );
-      await flushObservabilityRequests();
       expect(loading.getByTestId("ai-review-item-loading")).toBeTruthy();
       loading.unmount();
 
       const server = createServer();
-      const loaded = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={server}
-        />
-      );
-      await flushObservabilityRequests();
+      const loaded = await renderScreen(server);
       expect(loaded.getByTestId("ai-review-item")).toBeTruthy();
-      expect(loaded.getByTestId("ai-review-score-boolean-correct")).toBeTruthy();
+      expect(loaded.getByTestId("ai-review-question-correct")).toBeTruthy();
       assert.deepEqual(server.callsTo(DETAIL_ROUTE)[0]?.params, {id: "rev-1"});
       assert.equal(server.callsTo(LIST_ROUTE)[0]?.query.status, "pending");
     });
 
     it("requires scores before submit and submits on pass", async () => {
       const server = createServer();
-      const view = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={server}
-        />
-      );
-      await flushObservabilityRequests();
+      const view = await renderScreen(server);
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-review-submit-next"));
         await Promise.resolve();
       });
-      expect(view.getByText("Score correct before submitting.")).toBeTruthy();
+      expect(view.getByText(`Answer "correct" before submitting.`)).toBeTruthy();
       assert.equal(server.callsTo(ACTION_ROUTE).length, 0);
 
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -221,32 +195,17 @@ describe("AiReviewItemScreen", () => {
 
     it("shows missing id and load error with retry", async () => {
       reviewId = "";
-      const missing = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={createServer()}
-        />
-      );
-      await flushObservabilityRequests();
+      const missing = await renderScreen(createServer());
       expect(missing.getByText(/Missing review item id/)).toBeTruthy();
       missing.unmount();
       reviewId = "rev-1";
 
       const errorServer = createServer({detailRoute: {isError: true}});
-      const errored = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={errorServer}
-        />
-      );
-      await flushObservabilityRequests();
+      const errored = await renderScreen(errorServer);
+      expect(errored.getByText("Could not load this review item.")).toBeTruthy();
       assert.equal(errorServer.callsTo(DETAIL_ROUTE).length, 1);
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
+        fireEvent.press(errored.getByTestId("ai-review-item-error-retry"));
         await new Promise((resolve) => setTimeout(resolve, 100));
       });
       await flushObservabilityRequests();
@@ -255,23 +214,14 @@ describe("AiReviewItemScreen", () => {
 
     it("skips, assigns, and surfaces action errors", async () => {
       actionShouldFail = false;
-      routerPush.mockClear();
       const server = createServer();
-      const view = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={server}
-        />
-      );
-      await flushObservabilityRequests();
+      const view = await renderScreen(server);
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-review-skip"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       await flushObservabilityRequests();
-      assert.isAtLeast(server.callsTo(ACTION_ROUTE).length, 1);
+      assert.equal(server.callsTo(ACTION_ROUTE).length, 1);
       assert.deepInclude(server.callsTo(ACTION_ROUTE)[0]?.body as Record<string, unknown>, {
         action: "skip",
       });
@@ -289,15 +239,7 @@ describe("AiReviewItemScreen", () => {
       });
 
       actionShouldFail = true;
-      const failing = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={createServer()}
-        />
-      );
-      await flushObservabilityRequests();
+      const failing = await renderScreen(createServer());
       await act(async () => {
         fireEvent.press(failing.getByTestId("ai-review-skip"));
         await Promise.resolve();
@@ -306,15 +248,7 @@ describe("AiReviewItemScreen", () => {
       expect(failing.getByText("Could not skip this review.")).toBeTruthy();
 
       const noUserServer = createServer({currentUserId: ""});
-      const noUser = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={noUserServer}
-        />
-      );
-      await flushObservabilityRequests();
+      const noUser = await renderScreen(noUserServer);
       await act(async () => {
         fireEvent.press(noUser.getByTestId("ai-review-assign"));
         await Promise.resolve();
@@ -335,26 +269,17 @@ describe("AiReviewItemScreen", () => {
         traceId: "trace-2",
         traceName: "summarize",
       };
-      const server = createServer({pendingItems: [pending[0]!, secondPending]});
-
-      routerPush.mockClear();
-      const view = renderWithTheme(
-        <AiReviewItemScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-review-item"
-          server={server}
-        />
-      );
-      await flushObservabilityRequests();
+      const server = createServer({pendingItems: [...pending, secondPending]});
+      const view = await renderScreen(server);
+      expect(view.getByText("Item 1 of 2")).toBeTruthy();
       await act(async () => {
         fireEvent.press(view.getByText("Next"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
-      assert.include(String(routerPush.mock.calls[0]?.[0]), "ai-review-item");
+      assert.equal(String(routerPush.mock.calls[0]?.[0]), "/admin/ai-review-item?id=rev-2");
 
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -367,11 +292,55 @@ describe("AiReviewItemScreen", () => {
       });
       await flushObservabilityRequests();
       const actions = server.callsTo(ACTION_ROUTE);
-      assert.isAtLeast(actions.length, 1);
+      assert.equal(actions.length, 1);
       assert.deepInclude(actions[0]?.body as Record<string, unknown>, {
         action: "submit",
         comment: "looks good",
+        scores: {correct: true},
       });
+      assert.equal(String(routerPush.mock.calls.at(-1)?.[0]), "/admin/ai-review-item?id=rev-2");
+    });
+
+    it("walks pending and in-progress items of the item's batch", async () => {
+      const batchItem = (id: string, status: ReviewListItem["status"]): ReviewListItem => ({
+        batchId: "b1",
+        enqueuedAt: "2026-01-01T00:00:00.000Z",
+        evaluatorId: "eval-1",
+        id,
+        reason: "manual",
+        status,
+        traceId: `trace-${id}`,
+        traceName: "summarize",
+      });
+      const batchItems = [
+        batchItem("rev-1", "pending"),
+        batchItem("rev-2", "in_progress"),
+        batchItem("rev-3", "done"),
+      ];
+      // The global pending queue and the batch queue share a route; branch on `batchId`.
+      const server = createServer({
+        detailRoute: {data: {...detail, batchId: "b1"}},
+        listRoute: (request) => reviewList(request.query.batchId === "b1" ? batchItems : []),
+      });
+      const view = await renderScreen(server);
+      const batchQueueCalls = server
+        .callsTo(LIST_ROUTE)
+        .filter((request) => request.query.batchId !== undefined);
+      assert.isAtLeast(batchQueueCalls.length, 1);
+      assert.deepEqual(batchQueueCalls.at(-1)?.query, {batchId: "b1"});
+      expect(view.getByText("Item 1 of 2")).toBeTruthy();
+
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-question-correct-yes"));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-submit-next"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      await flushObservabilityRequests();
+      assert.equal(server.callsTo(ACTION_ROUTE).length, 1);
+      assert.equal(String(routerPush.mock.calls.at(-1)?.[0]), "/admin/ai-review-item?id=rev-2");
     });
   });
 });
@@ -403,18 +372,16 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={1}
           scores={{}}
-          totalPending={2}
         />
       );
-      expect(getByText("Item 1 of 2 pending")).toBeTruthy();
+      expect(reviewItemTitle({isPending: true, position: 1, totalPending: 2})).toBe("Item 1 of 2");
+      expect(reviewItemTitle({isPending: false, position: 1, totalPending: 0})).toBe("Review item");
       expect(getByText("45 words")).toBeTruthy();
       expect(queryByText(longInput)).toBeNull();
       expect(getByTestId("ai-review-raw-json")).toBeTruthy();
@@ -431,15 +398,12 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={onAssign}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={onSkip}
           onSubmit={onSubmit}
-          position={1}
           scores={{correct: true}}
-          totalPending={1}
         />
       );
       await act(async () => {
@@ -458,24 +422,25 @@ describe("AiReviewItemView", () => {
       const onPrevious = mock(() => undefined);
       const onCommentChange = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
-        <AiReviewItemView
-          comment="needs work"
-          detail={{...detail, status: "done"}}
-          isPending={false}
-          onAssign={() => undefined}
-          onCommentChange={onCommentChange}
-          onNext={onNext}
-          onPrevious={onPrevious}
-          onScoreChange={() => undefined}
-          onSkip={() => undefined}
-          onSubmit={() => undefined}
-          position={1}
-          scores={{correct: true}}
-          submitError="Could not submit this review."
-          totalPending={0}
-        />
+        <>
+          <AiReviewItemHeaderMeta detail={{...detail, status: "done"}} isPending={false} />
+          <AiReviewItemNav onNext={onNext} onPrevious={onPrevious} />
+          <AiReviewItemView
+            comment="needs work"
+            detail={{...detail, status: "done"}}
+            onAssign={() => undefined}
+            onCommentChange={onCommentChange}
+            onScoreChange={() => undefined}
+            onSkip={() => undefined}
+            onSubmit={() => undefined}
+            scores={{correct: true}}
+            submitError="Could not submit this review."
+          />
+        </>
       );
-      expect(getByText(/not in pending queue/)).toBeTruthy();
+      expect(getByText("Not in the pending queue")).toBeTruthy();
+      expect(getByText("From a trace")).toBeTruthy();
+      expect(getByTestId("ai-review-item-status")).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByText("Previous"));
         fireEvent.press(getByText("Next"));
@@ -491,22 +456,22 @@ describe("AiReviewItemView", () => {
     it("scores boolean dimensions when navigation handlers are absent", async () => {
       const onScoreChange = mock(() => undefined);
       const {getByTestId, getByText, UNSAFE_root} = renderWithTheme(
-        <AiReviewItemView
-          comment=""
-          detail={detail}
-          isPending
-          onAssign={() => undefined}
-          onCommentChange={() => undefined}
-          onScoreChange={onScoreChange}
-          onSkip={() => undefined}
-          onSubmit={() => undefined}
-          position={1}
-          scores={{}}
-          totalPending={1}
-        />
+        <>
+          <AiReviewItemNav />
+          <AiReviewItemView
+            comment=""
+            detail={detail}
+            onAssign={() => undefined}
+            onCommentChange={() => undefined}
+            onScoreChange={onScoreChange}
+            onSkip={() => undefined}
+            onSubmit={() => undefined}
+            scores={{}}
+          />
+        </>
       );
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(getByTestId("ai-review-question-correct-yes"));
         await Promise.resolve();
       });
       assert.isAtLeast(onScoreChange.mock.calls.length, 1);
@@ -529,15 +494,12 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={detail}
-          isPending
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={() => undefined}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={1}
           scores={{}}
-          totalPending={1}
         />
       );
       await act(async () => {
@@ -562,19 +524,18 @@ describe("AiReviewItemView", () => {
         <AiReviewItemView
           comment=""
           detail={multiDetail}
-          isPending
           isSaving
           onAssign={() => undefined}
           onCommentChange={() => undefined}
           onScoreChange={onScoreChange}
           onSkip={() => undefined}
           onSubmit={() => undefined}
-          position={2}
           scores={{correct: true, helpfulness: 0.7}}
-          totalPending={3}
         />
       );
-      expect(getByText("Item 2 of 3 pending")).toBeTruthy();
+      // Scores without question text are labelled by their humanized key, not "2. helpfulness".
+      expect(getByText("Helpfulness")).toBeTruthy();
+      expect(queryByText("2. helpfulness")).toBeNull();
       expect(queryByText("Mark correct only when grounded.")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-score-tone-safe"));
@@ -592,16 +553,6 @@ describe("AiReviewQueueScreen", () => {
     setExpoSearchParams(() => ({}));
     routerPush.mockClear();
   });
-  const statusData = {
-    localOn: true,
-    plugins: [],
-    primaries: {
-      datasets: "local",
-      experiments: "local",
-      prompts: "local",
-      reviewQueue: "local",
-    },
-  };
 
   const items: ReviewListItem[] = [
     {
@@ -615,25 +566,21 @@ describe("AiReviewQueueScreen", () => {
     },
   ];
 
-  const listState = {
-    // The review route answers a list envelope (`more`), so `counts` reaches the screen.
-    data: {counts: {done: 0, in_progress: 0, pending: 1, skipped: 0}, data: items, more: false},
-  };
-
+  const EVALUATORS_ROUTE = "GET /ai/observability/evaluators";
   const LIST_ROUTE = "GET /ai/observability/review";
 
   const createServer = (): FakeObservabilityServer => {
     return createObservabilityServer({
-      [LIST_ROUTE]: listState,
+      [EVALUATORS_ROUTE]: {
+        data: [{dimensions: [], id: "eval-1", name: "summary-questions", type: "human"}],
+      },
+      [LIST_ROUTE]: {data: reviewList(items)},
       "GET /ai/observability/status": {data: statusData},
     });
   };
 
-  const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
-
   describe("AiReviewScreenWidget", () => {
     it("shows pending queue and opens the oldest item", async () => {
-      routerPush.mockClear();
       const server = createServer();
       const view = renderWithTheme(
         <AiReviewScreenWidget
@@ -646,11 +593,23 @@ describe("AiReviewQueueScreen", () => {
       await flushObservabilityRequests();
       expect(view.getByTestId("ai-review-table")).toBeTruthy();
       assert.equal(server.callsTo(LIST_ROUTE)[0]?.query.status, "pending");
+      assert.isAtLeast(server.callsTo(EVALUATORS_ROUTE).length, 1);
+      expect(view.getByText("summary-questions")).toBeTruthy();
+      expect(
+        view.getByText(
+          "Answer yes or no questions about AI outputs, oldest first. Items arrive from Traces and from review batches."
+        )
+      ).toBeTruthy();
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-review-start-oldest"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
-      assert.include(String(routerPush.mock.calls[0]?.[0]), "ai-review-item");
+      assert.equal(String(routerPush.mock.calls[0]?.[0]), "/admin/ai-review-item?id=rev-1");
+      await act(async () => {
+        fireEvent.press(view.getByTestId("ai-review-open-batches"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      assert.equal(String(routerPush.mock.calls.at(-1)?.[0]), "/admin/ai-review-batches");
     });
   });
 });
@@ -673,45 +632,74 @@ describe("AiReviewQueueView", () => {
   };
 
   describe("AiReviewQueueView", () => {
-    it("names both review intake paths in the empty state", () => {
+    it("names both review intake paths in the empty state and links to Traces", async () => {
+      const onOpenTraces = mock(() => undefined);
       const {getByTestId, getByText} = renderWithTheme(
         <AiReviewQueueView
           counts={counts}
           items={[]}
           onOpenItem={() => undefined}
+          onOpenTraces={onOpenTraces}
           onRetry={() => undefined}
-          onStart={() => undefined}
           onStatusChange={() => undefined}
           status="pending"
         />
       );
       expect(getByTestId("ai-review-empty")).toBeTruthy();
-      expect(getByText(/Traces bulk action/)).toBeTruthy();
-      expect(getByText(/Assign to me for manual assignment/)).toBeTruthy();
+      expect(getByText(/send them to human review, or start a review batch/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(getByTestId("ai-review-empty-action"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(onOpenTraces).toHaveBeenCalled();
     });
 
     it("renders oldest-first row fields and starts reviewing", async () => {
       const onStart = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
-        <AiReviewQueueView
-          counts={{...counts, pending: 1}}
-          items={[item]}
-          onOpenItem={() => undefined}
-          onRetry={() => undefined}
-          onStart={onStart}
-          onStatusChange={() => undefined}
-          status="pending"
-        />
+      const {getByTestId, getByText, queryByText} = renderWithTheme(
+        <>
+          <AiReviewQueueActions canStart onStart={onStart} />
+          <AiReviewQueueView
+            counts={{...counts, pending: 1}}
+            items={[item, {...item, batchId: "b1", id: "review-item-2", outputPreview: "Short"}]}
+            onOpenItem={() => undefined}
+            onRetry={() => undefined}
+            onStatusChange={() => undefined}
+            status="pending"
+          />
+        </>
       );
       expect(getByTestId("ai-review-table")).toBeTruthy();
-      expect(getByText("generate summary")).toBeTruthy();
-      expect(getByText("summarize")).toBeTruthy();
-      expect(getByText("Unassigned")).toBeTruthy();
+      expect(getByTestId("ai-review-open-review-item-1")).toBeTruthy();
+      expect(getByText("From Traces")).toBeTruthy();
+      expect(getByText("Short")).toBeTruthy();
+      expect(getByText("Review oldest pending")).toBeTruthy();
+      expect(queryByText("Open")).toBeNull();
       await act(async () => {
         fireEvent.press(getByTestId("ai-review-start-oldest"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onStart).toHaveBeenCalled();
+    });
+
+    it("labels where each untitled review item came from", () => {
+      const {getByText} = renderWithTheme(
+        <AiReviewQueueView
+          counts={{...counts, pending: 3}}
+          items={[
+            {...item, batchId: "b1", id: "review-item-batch"},
+            {...item, id: "review-item-eval", reason: "eval"},
+            {...item, id: "review-item-other", reason: "other"},
+          ]}
+          onOpenItem={() => undefined}
+          onRetry={() => undefined}
+          onStatusChange={() => undefined}
+          status="pending"
+        />
+      );
+      expect(getByText("From a review batch")).toBeTruthy();
+      expect(getByText("From an experiment")).toBeTruthy();
+      expect(getByText("From Traces")).toBeTruthy();
     });
 
     it("renders loading, error retry, status tabs, and open controls", async () => {
@@ -725,7 +713,6 @@ describe("AiReviewQueueView", () => {
           items={[]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
@@ -739,24 +726,23 @@ describe("AiReviewQueueView", () => {
           items={[]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
       );
+      expect(errored.getByText("Could not load the review queue.")).toBeTruthy();
       await act(async () => {
-        fireEvent.press(errored.getByText("Retry"));
-        await Promise.resolve();
+        fireEvent.press(errored.getByTestId("ai-review-error-retry"));
+        await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onRetry).toHaveBeenCalled();
 
-      const {getByText} = renderWithTheme(
+      const {getByTestId, getByText} = renderWithTheme(
         <AiReviewQueueView
           counts={{...counts, done: 1, pending: 1}}
           items={[item]}
           onOpenItem={onOpenItem}
           onRetry={onRetry}
-          onStart={() => undefined}
           onStatusChange={onStatusChange}
           status="pending"
         />
@@ -767,37 +753,41 @@ describe("AiReviewQueueView", () => {
       });
       assert.isAtLeast(onStatusChange.mock.calls.length, 1);
       await act(async () => {
-        fireEvent.press(getByText("Open"));
+        fireEvent.press(getByTestId("ai-review-open-review-item-1"));
         await Promise.resolve();
       });
-      expect(onOpenItem).toHaveBeenCalled();
+      expect(onOpenItem).toHaveBeenCalledWith("review-item-1");
     });
   });
 });
+
 describe("ReviewScoreField", () => {
   beforeEach(() => {
     setExpoSearchParams(() => ({}));
     routerPush.mockClear();
   });
   describe("ReviewScoreField", () => {
-    it("renders boolean dimensions as Pass and Fail controls", async () => {
+    it("renders boolean dimensions as one Yes/No control", async () => {
       const onChange = mock(() => undefined);
-      const {getByTestId, getByText} = renderWithTheme(
+      const {getByTestId, getByText, queryByText} = renderWithTheme(
         <ReviewScoreField
-          dimension={{dataType: "boolean", key: "correct", required: true}}
+          dimension={{dataType: "boolean", key: "is_correct", required: true}}
           onChange={onChange}
+          value={false}
         />
       );
-      expect(getByTestId("ai-review-score-boolean-correct")).toBeTruthy();
-      expect(getByText("Pass")).toBeTruthy();
-      expect(getByText("Fail")).toBeTruthy();
+      expect(getByTestId("ai-review-score-boolean-is_correct")).toBeTruthy();
+      expect(getByTestId("ai-review-score-is_correct-answer")).toBeTruthy();
+      expect(getByText("Is correct")).toBeTruthy();
+      expect(queryByText("Pass")).toBeNull();
+      expect(queryByText("Fail")).toBeNull();
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-pass"));
+        fireEvent.press(getByTestId("ai-review-score-is_correct-yes"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onChange).toHaveBeenCalledWith(true);
       await act(async () => {
-        fireEvent.press(getByTestId("ai-review-score-correct-fail"));
+        fireEvent.press(getByTestId("ai-review-score-is_correct-no"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
       expect(onChange).toHaveBeenCalledWith(false);
@@ -813,7 +803,7 @@ describe("ReviewScoreField", () => {
         />
       );
       expect(getByTestId("ai-review-score-numeric-helpfulness")).toBeTruthy();
-      expect(getByText("helpfulness")).toBeTruthy();
+      expect(getByText("Helpfulness")).toBeTruthy();
       expect(getByText("0")).toBeTruthy();
       expect(getByText("1")).toBeTruthy();
       fireEvent(UNSAFE_getByType(SliderComponent), "valueChange", 0.8);
@@ -829,7 +819,9 @@ describe("ReviewScoreField", () => {
           value=""
         />
       );
-      fireEvent.changeText(getAllByDisplayValue("")[0]!, "custom");
+      const [input] = getAllByDisplayValue("");
+      assert.exists(input);
+      fireEvent.changeText(input as NonNullable<typeof input>, "custom");
       expect(onChange).toHaveBeenCalledWith("custom");
     });
 

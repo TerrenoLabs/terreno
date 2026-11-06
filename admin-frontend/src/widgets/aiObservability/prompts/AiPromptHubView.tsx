@@ -1,4 +1,4 @@
-import {Badge, Box, Heading, SegmentedControl, Spinner, Text} from "@terreno/ui";
+import {Badge, Box, Button, Heading, SegmentedControl, Spinner, Text} from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useMemo, useState} from "react";
 import {
@@ -24,6 +24,7 @@ export interface AiPromptHubViewProps {
   isSaving: boolean;
   isSettingProduction: boolean;
   onOpenExperiment?: (experimentId: string) => void;
+  onOpenPrompt?: (name: string) => void;
   onOpenTrace?: (traceId: string) => void;
   onRunPlayground: (variables: Record<string, string>) => Promise<void>;
   onSaveVersion: (body: {
@@ -40,12 +41,14 @@ export interface AiPromptHubViewProps {
   playgroundError?: string;
   playgroundResult?: PlaygroundRunResult;
   productionError?: string;
+  /** Other prompt names offered by Insert prompt reference. */
+  promptNames?: string[];
   relationshipsError?: string;
   saveError?: string;
   selectedVersion: number;
 }
 
-const HUB_TABS = ["Overview", "Versions", "Traces", "Experiments"];
+const HUB_TABS = ["Versions", "Traces", "Experiments"];
 
 const TRACE_COLUMNS: ObservabilityTableColumn[] = [
   {grow: 2, minWidth: 180, title: "Trace"},
@@ -69,7 +72,10 @@ const formatTimestamp = (value: string): string => {
   return timestamp.toLocal().toLocaleString(DateTime.DATETIME_MED);
 };
 
-const PromptOverviewPanel: React.FC<{detail: PromptDetail}> = ({detail}) => {
+const PromptOverviewPanel: React.FC<{
+  detail: PromptDetail;
+  onOpenPrompt?: (name: string) => void;
+}> = ({detail, onOpenPrompt}) => {
   const latest = latestVersionFromDetail(detail);
   const production = productionVersionFromDetail(detail);
   return (
@@ -89,6 +95,39 @@ const PromptOverviewPanel: React.FC<{detail: PromptDetail}> = ({detail}) => {
           testID="ai-prompt-production-badge"
           value={`Production: ${formatProduction(production ?? "—")}`}
         />
+      </Box>
+      <Box gap={2} testID="ai-prompt-used-by">
+        <Heading size="sm">Used by</Heading>
+        {detail.usedBy.items.length > 0 ? (
+          <Box gap={2}>
+            {detail.usedBy.total > detail.usedBy.items.length ? (
+              <Text color="secondaryDark" size="sm" testID="ai-prompt-used-by-total">
+                {`Showing ${detail.usedBy.items.length} of ${detail.usedBy.total}.`}
+              </Text>
+            ) : undefined}
+            {detail.usedBy.items.map((entry) => (
+              <Box alignItems="center" direction="row" gap={2} key={entry.name} wrap>
+                {onOpenPrompt ? (
+                  <Button
+                    onClick={() => onOpenPrompt(entry.name)}
+                    testID={`ai-prompt-used-by-${entry.name}`}
+                    text={entry.name}
+                    variant="outline"
+                  />
+                ) : (
+                  <Text testID={`ai-prompt-used-by-${entry.name}`}>{entry.name}</Text>
+                )}
+                <Text color="secondaryDark" size="sm">
+                  {`${entry.folder} · ${entry.versions.map((version) => `v${version}`).join(", ")}`}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Text color="secondaryDark" testID="ai-prompt-used-by-empty">
+            No other prompt references this one yet.
+          </Text>
+        )}
       </Box>
       <Box gap={1}>
         <Heading size="sm">Tags</Heading>
@@ -162,6 +201,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
   isSaving,
   isSettingProduction,
   onOpenExperiment,
+  onOpenPrompt,
   onOpenTrace,
   onRunPlayground,
   onSaveVersion,
@@ -172,6 +212,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
   playgroundError,
   playgroundResult,
   productionError,
+  promptNames,
   relationshipsError,
   saveError,
   selectedVersion,
@@ -211,30 +252,33 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
         selectedIndex={tabIndex}
         testID="ai-prompt-hub-tabs"
       />
-      {tabIndex === 0 ? <PromptOverviewPanel detail={detail} /> : undefined}
-      {tabIndex === 1 ? (
-        <AiPromptEditorView
-          canPlayground={permissions.canPlayground}
-          canPromote={permissions.canPromote}
-          canUpdate={permissions.canUpdate}
-          detail={detail}
-          isApiKeyLoading={isApiKeyLoading}
-          isRunningPlayground={isRunningPlayground}
-          isSaving={isSaving}
-          isSettingProduction={isSettingProduction}
-          onRunPlayground={onRunPlayground}
-          onSaveVersion={onSaveVersion}
-          onSelectVersion={onSelectVersion}
-          onSetProduction={onSetProduction}
-          playgroundBlockedMessage={playgroundBlockedMessage}
-          playgroundError={playgroundError}
-          playgroundResult={playgroundResult}
-          productionError={productionError}
-          saveError={saveError}
-          selectedVersion={selectedVersion}
-        />
+      {tabIndex === 0 ? (
+        <Box gap={4} testID="ai-prompt-versions">
+          <PromptOverviewPanel detail={detail} onOpenPrompt={onOpenPrompt} />
+          <AiPromptEditorView
+            canPlayground={permissions.canPlayground}
+            canPromote={permissions.canPromote}
+            canUpdate={permissions.canUpdate}
+            detail={detail}
+            isApiKeyLoading={isApiKeyLoading}
+            isRunningPlayground={isRunningPlayground}
+            isSaving={isSaving}
+            isSettingProduction={isSettingProduction}
+            onRunPlayground={onRunPlayground}
+            onSaveVersion={onSaveVersion}
+            onSelectVersion={onSelectVersion}
+            onSetProduction={onSetProduction}
+            playgroundBlockedMessage={playgroundBlockedMessage}
+            playgroundError={playgroundError}
+            playgroundResult={playgroundResult}
+            productionError={productionError}
+            promptNames={promptNames}
+            saveError={saveError}
+            selectedVersion={selectedVersion}
+          />
+        </Box>
       ) : undefined}
-      {tabIndex === 2 ? (
+      {tabIndex === 1 ? (
         <RelationshipPanel
           columns={TRACE_COLUMNS}
           emptyLabel="No traces recorded for this prompt yet."
@@ -246,7 +290,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
           total={detail.relationships.traces.total}
         />
       ) : undefined}
-      {tabIndex === 3 ? (
+      {tabIndex === 2 ? (
         <RelationshipPanel
           columns={EXPERIMENT_COLUMNS}
           emptyLabel="No experiments reference this prompt yet."

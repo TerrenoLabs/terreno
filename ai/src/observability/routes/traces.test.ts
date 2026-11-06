@@ -109,6 +109,67 @@ describe("observability trace routes", () => {
     ).toEqual([[inScope.id, "ws-1"]]);
   });
 
+  it("sorts the trace list across pages and rejects unknown sort keys", async () => {
+    const base = DateTime.utc().minus({hours: 1});
+    const exportAt = async (
+      name: string,
+      offsetMs: number,
+      latencyMs: number,
+      costUsd: number,
+      inputTokens: number
+    ): Promise<string> => {
+      const exported = await store.exportTrace({
+        endedAt: base.plus({milliseconds: offsetMs + latencyMs}).toISO() ?? "",
+        id: name,
+        name,
+        prompts: [{name, version: 1}],
+        sensitive: false,
+        spans: [],
+        startedAt: base.plus({milliseconds: offsetMs}).toISO() ?? "",
+        status: "ok",
+        usage: {costUsd, inputTokens, outputTokens: 0},
+      });
+      return exported.id;
+    };
+    const cheapSlow = await exportAt("cheap-slow", 0, 900, 0.0001, 500);
+    const priceyFast = await exportAt("pricey-fast", 1000, 50, 0.05, 20);
+    const midMid = await exportAt("mid-mid", 2000, 300, 0.001, 12_345);
+    const admin = await authAsUser(app, "admin");
+
+    const pageIds = async (query: string): Promise<string[]> => {
+      const first = await admin.get(`/ai/observability/traces?${query}&limit=2&page=1`);
+      const second = await admin.get(`/ai/observability/traces?${query}&limit=2&page=2`);
+      expect(first.status).toBe(200);
+      expect(first.body.more).toBe(true);
+      expect(second.body.more).toBe(false);
+      return [...first.body.data, ...second.body.data].map((row: {id: string}) => row.id);
+    };
+
+    expect(await pageIds("sort=-cost")).toEqual([priceyFast, midMid, cheapSlow]);
+    expect(await pageIds("sort=cost")).toEqual([cheapSlow, midMid, priceyFast]);
+    expect(await pageIds("sort=-latency")).toEqual([cheapSlow, midMid, priceyFast]);
+    expect(await pageIds("sort=latency")).toEqual([priceyFast, midMid, cheapSlow]);
+    expect(await pageIds("sort=-tokens")).toEqual([midMid, cheapSlow, priceyFast]);
+    expect(await pageIds("sort=tokens")).toEqual([priceyFast, cheapSlow, midMid]);
+    expect(await pageIds("sort=startedAt")).toEqual([cheapSlow, priceyFast, midMid]);
+    expect(await pageIds("sort=-name")).toEqual([priceyFast, midMid, cheapSlow]);
+    // Default stays newest first.
+    expect(await pageIds("status=ok")).toEqual([midMid, priceyFast, cheapSlow]);
+
+    const multiPrompt = await admin.get(
+      "/ai/observability/traces?prompt[0]=cheap-slow&prompt[1]=mid-mid&sort=name"
+    );
+    expect(multiPrompt.status).toBe(200);
+    expect(multiPrompt.body.data.map((row: {id: string}) => row.id)).toEqual([cheapSlow, midMid]);
+
+    const unknown = await admin.get("/ai/observability/traces?sort=created");
+    expect(unknown.status).toBe(400);
+    const listSort = await admin.get("/ai/observability/traces?sort[0]=cost");
+    expect(listSort.status).toBe(400);
+    const objectPrompt = await admin.get("/ai/observability/traces?prompt[name]=x");
+    expect(objectPrompt.status).toBe(400);
+  });
+
   it("forbids non-admins from listing traces", async () => {
     const agent = await authAsUser(app, "notAdmin");
     const res = await agent.get("/ai/observability/traces");

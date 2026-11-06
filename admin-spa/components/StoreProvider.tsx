@@ -1,9 +1,18 @@
-import {type ApiClient, createApiClient, type FetchLike} from "@terreno/syncdb/api";
-import {SessionProvider} from "@terreno/syncdb/auth";
+import {type ApiClient, createApiClient, type FetchLike, unwrapEnvelope} from "@terreno/syncdb/api";
+import {
+  type BetterAuthUser,
+  createSessionStore,
+  SessionProvider,
+  type SessionSnapshot,
+  type SessionStore,
+} from "@terreno/syncdb/auth";
 import {ApiClientProvider} from "@terreno/syncdb/react";
 import {createAuthClient} from "better-auth/react";
 import React, {createContext, useContext, useMemo} from "react";
+import {getAdminSpaServerContext, isAdminSpaServerRender} from "../src/serverContext";
 import {useAppConfig} from "./AppConfigGate";
+import {ADMIN_SPA_PROFILE_REQUEST} from "./adminSpaProfile";
+import {useSsrPayload} from "./ssrPayload";
 
 export type AdminSpaAuthClient = ReturnType<typeof createAuthClient>;
 
@@ -29,12 +38,17 @@ export const useAuthClient = (): AdminSpaAuthClient => {
   return authClient;
 };
 
-/** Origin the SPA is served from; the backend serves the SPA, auth, and API on it. */
+/**
+ * Origin the SPA is served from; the backend serves the SPA, auth, and API on it. A server
+ * render uses the plugin's `internalOrigin`, never a guessed `localhost`.
+ */
 /** @internal */
-export const resolveAdminSpaOrigin = (): string =>
-  typeof window !== "undefined" && window.location?.origin
-    ? window.location.origin
-    : FALLBACK_ORIGIN;
+export const resolveAdminSpaOrigin = (): string => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return getAdminSpaServerContext()?.internalOrigin ?? FALLBACK_ORIGIN;
+};
 
 /**
  * Build the SPA's Better Auth client and request client. Both use the browser's
@@ -52,7 +66,12 @@ export const createAdminSpaClients = ({
   fetchImpl?: FetchLike;
   origin: string;
 }): AdminSpaClients => ({
-  apiClient: createApiClient({credentials: "same-origin", fetchImpl}),
+  // A server render has no page origin to resolve relative URLs against; the browser does.
+  apiClient: createApiClient({
+    baseUrl: isAdminSpaServerRender() ? origin : undefined,
+    credentials: "same-origin",
+    fetchImpl,
+  }),
   authClient: createAuthClient({
     basePath: authBasePath ?? DEFAULT_AUTH_BASE_PATH,
     baseURL: origin,
@@ -76,20 +95,39 @@ interface StoreProviderProps {
 export const StoreProvider: React.FC<StoreProviderProps> = ({children, fetchImpl}) => {
   const {appConfig} = useAppConfig();
   const authBasePath = appConfig.authBasePath ?? DEFAULT_AUTH_BASE_PATH;
+  const payload = useSsrPayload();
+  const profile = payload?.profile;
 
-  const {apiClient, authClient} = useMemo(
-    (): AdminSpaClients =>
-      createAdminSpaClients({authBasePath, fetchImpl, origin: resolveAdminSpaOrigin()}),
-    [authBasePath, fetchImpl]
-  );
+  const {apiClient, authClient} = useMemo((): AdminSpaClients => {
+    const clients = createAdminSpaClients({
+      authBasePath,
+      fetchImpl,
+      origin: resolveAdminSpaOrigin(),
+    });
+    // The server already read `/auth/me` for this session: profile readers render from it.
+    if (profile) {
+      clients.apiClient.primeQuery(ADMIN_SPA_PROFILE_REQUEST, unwrapEnvelope(profile));
+    }
+    return clients;
+  }, [authBasePath, fetchImpl, profile]);
+
+  // The gate's snapshot has the shape Better Auth's session source returns.
+  const initialSession = payload
+    ? ((payload.session ?? null) as SessionSnapshot<BetterAuthUser> | null)
+    : undefined;
+  const sessionStore = useMemo((): SessionStore => {
+    const store = createSessionStore({authClient, initialSession, onLogout: apiClient.reset});
+    // A server render only reads the session it was given: no source watch, no request.
+    if (isAdminSpaServerRender()) {
+      return {...store, start: (): void => {}, stop: (): void => {}};
+    }
+    return store;
+  }, [apiClient, authClient, initialSession]);
 
   return (
     <AuthClientContext.Provider value={authClient}>
       <ApiClientProvider client={apiClient}>
-        {/* SessionProvider reads its config once, so remount it when the clients change. */}
-        <SessionProvider authClient={authClient} key={authBasePath} onLogout={apiClient.reset}>
-          {children}
-        </SessionProvider>
+        <SessionProvider store={sessionStore}>{children}</SessionProvider>
       </ApiClientProvider>
     </AuthClientContext.Provider>
   );

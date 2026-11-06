@@ -154,9 +154,11 @@ interface GptHistoryPendingAskState {
 /** The ask a history is waiting on. At most one per history. */
 export type GptHistoryPendingAsk = Ask & GptHistoryPendingAskState;
 
-/** Synced through @terreno/syncdb, so `_id` is a String (UUID for new rows, ObjectId hex for migrated rows). */
-export interface GptHistoryDocument extends mongoose.Document<string> {
-  _id: string;
+/**
+ * Synced through @terreno/syncdb with the default ObjectId `_id`; sync clients that create
+ * histories configure `idFormats: {"gpt/histories": "objectId"}`.
+ */
+export interface GptHistoryDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;
   deleted: boolean;
   pendingAsk?: GptHistoryPendingAsk;
@@ -450,9 +452,14 @@ export interface GptRouteOptions {
    * `POST /gpt/actions`. `{repair: true}` runs one repair call when that check fails.
    */
   uiBlocks?: boolean | UiBlocksOptions;
-  /** Langfuse prompt name to load and use as the system prompt. Compiled with no variables.
-   * Falls back gracefully if Langfuse is not configured or the prompt is not found. */
-  langfuseSystemPromptName?: string;
+  /**
+   * Observability prompt registry name used as the default system prompt (prepended to the
+   * request's system prompt). The trace records the version. Skipped when no registry is registered, the
+   * label has no version, or an admin request selects `promptName`.
+   */
+  systemPromptName?: string;
+  /** Registry label read for `systemPromptName`. Defaults to `production`. */
+  systemPromptLabel?: string;
   /**
    * When `false` or the function returns `false`, prompts that include attachments are rejected.
    * Omit or pass `true` to leave uploads enabled.
@@ -517,8 +524,7 @@ export interface AIDatasetDocument extends mongoose.Document<mongoose.Types.Obje
   created: Date;
   deleted: boolean;
   expiresAt?: Date;
-  /** The GptHistory String `_id`. */
-  historyId: string;
+  historyId: mongoose.Types.ObjectId;
   rowCount: number;
   rows: AIDatasetCell[][];
   updated: Date;

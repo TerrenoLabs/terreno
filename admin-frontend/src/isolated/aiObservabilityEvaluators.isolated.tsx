@@ -274,7 +274,7 @@ describe("AiEvaluatorDetailScreen", () => {
         />
       );
       await flushObservabilityRequests();
-      expect(errored.getByText("Failed to load evaluator.")).toBeTruthy();
+      expect(errored.getByText("Could not load evaluator.")).toBeTruthy();
       detailState.isError = false;
       detailState.data = evaluator;
     });
@@ -430,7 +430,7 @@ describe("AiEvaluatorNewScreen", () => {
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "quality");
       setDimensionKey(view, "wrong-key");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-llm-judge"));
+        fireEvent.press(view.getByText("LLM judge"));
         await Promise.resolve();
       });
       await act(async () => {
@@ -451,7 +451,7 @@ describe("AiEvaluatorNewScreen", () => {
       expect(view.getByTestId("ai-evaluator-schema-mismatch")).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-human"));
+        fireEvent.press(view.getByText("Human"));
         await Promise.resolve();
       });
       setDimensionKey(view, "correct");
@@ -502,7 +502,7 @@ describe("AiEvaluatorNewScreen", () => {
       await flushObservabilityRequests();
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "assert");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-json-assert"));
+        fireEvent.press(view.getByText("JSON assert"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-assertion-path"), "output.text");
@@ -540,7 +540,7 @@ describe("AiEvaluatorNewScreen", () => {
       );
       setDimensionKey(view, "pass");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-human"));
+        fireEvent.press(view.getByText("Human"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-instructions"), "Rate quality");
@@ -585,16 +585,16 @@ describe("AiEvaluatorNewScreen", () => {
       assert.isOk(view.getByTestId("ai-evaluator-dimension-0-key"));
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("numeric")[0]!);
+        fireEvent.press(view.getAllByText("Number")[0]!);
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-dimension-0-min"), "8");
       await act(async () => {
-        fireEvent.press(view.getAllByText("boolean")[0]!);
+        fireEvent.press(view.getAllByText("Yes or no")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(view.getAllByText("numeric")[0]!);
+        fireEvent.press(view.getAllByText("Number")[0]!);
         await Promise.resolve();
       });
       assert.equal(view.getByTestId("ai-evaluator-dimension-0-min").props.value, "0");
@@ -611,7 +611,7 @@ describe("AiEvaluatorNewScreen", () => {
       ).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("categorical")[0]!);
+        fireEvent.press(view.getAllByText("Category")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
@@ -621,11 +621,11 @@ describe("AiEvaluatorNewScreen", () => {
       expect(view.getByText("Add at least one category for each categorical score.")).toBeTruthy();
 
       await act(async () => {
-        fireEvent.press(view.getAllByText("boolean")[0]!);
+        fireEvent.press(view.getAllByText("Yes or no")[0]!);
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-json-assert"));
+        fireEvent.press(view.getByText("JSON assert"));
         await Promise.resolve();
       });
       fireEvent.changeText(view.getByTestId("ai-evaluator-live-sample"), "25");
@@ -654,7 +654,7 @@ describe("AiEvaluatorNewScreen", () => {
       fireEvent.changeText(view.getByTestId("ai-evaluator-name"), "judge-check");
       setDimensionKey(view, "quality");
       await act(async () => {
-        fireEvent.press(view.getByTestId("ai-evaluator-type-llm-judge"));
+        fireEvent.press(view.getByText("LLM judge"));
         await Promise.resolve();
       });
       const judgeSelect = view.UNSAFE_root.findAllByType(SelectField).find((field) => {
@@ -791,6 +791,32 @@ describe("AiEvaluatorsListScreen", () => {
       expect(view.queryByTestId("ai-evaluators-create")).toBeNull();
       statusData.permissions = {aiEvaluator: {create: true, list: true, read: true}};
     });
+
+    it("shows a load error and retries the list", async () => {
+      listState.isError = true;
+      try {
+        const server = createServer();
+        const view = renderWithTheme(
+          <AiEvaluatorsScreenWidget
+            config={emptyConfig}
+            routeBase="/admin"
+            screenName="ai-evaluators"
+            server={server}
+          />
+        );
+        await flushObservabilityRequests();
+        expect(view.getByText("Could not load evaluators.")).toBeTruthy();
+        const before = server.callsTo("GET /ai/observability/evaluators").length;
+        await act(async () => {
+          fireEvent.press(view.getByText("Try again"));
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        });
+        await flushObservabilityRequests();
+        assert.isAbove(server.callsTo("GET /ai/observability/evaluators").length, before);
+      } finally {
+        listState.isError = false;
+      }
+    });
   });
 });
 
@@ -852,7 +878,7 @@ describe("AiEvaluatorsListView", () => {
       expect(getByTestId("ai-evaluator-open-eval-1")).toBeTruthy();
     });
 
-    it("uses a distinct badge status for each evaluator type", () => {
+    it("uses one neutral badge colour for every evaluator kind and filters by kind", async () => {
       const baseEvaluator = evaluators[0];
       assert.exists(baseEvaluator);
       const allTypes: EvaluatorRecord[] = [
@@ -860,7 +886,7 @@ describe("AiEvaluatorsListView", () => {
         {...baseEvaluator, id: "eval-2", name: "human", type: "human"},
         {...baseEvaluator, id: "eval-3", name: "assert", type: "json-assert"},
       ];
-      const {getByTestId} = renderWithTheme(
+      const {getAllByText, getByTestId, queryByTestId} = renderWithTheme(
         <AiEvaluatorsListView
           evaluators={allTypes}
           isLoading={false}
@@ -873,7 +899,56 @@ describe("AiEvaluatorsListView", () => {
         return getByTestId(`ai-evaluator-type-${evaluator.type}`).props.style[0].backgroundColor;
       });
 
-      assert.equal(new Set(colors).size, 3);
+      // Colour means state, not category: kinds differ by icon and label only.
+      assert.equal(new Set(colors).size, 1);
+      expect(getByTestId("ai-evaluators-kind-filter")).toBeTruthy();
+      assert.lengthOf(getAllByText("Full trace"), 3);
+
+      // The kind filter renders above the table, so its segment is the first match.
+      const jsonAssertSegment = getAllByText("JSON assert")[0];
+      assert.exists(jsonAssertSegment);
+      await act(async () => {
+        fireEvent.press(jsonAssertSegment);
+        await Promise.resolve();
+      });
+      expect(getByTestId("ai-evaluator-open-eval-3")).toBeTruthy();
+      expect(queryByTestId("ai-evaluator-open-eval-1")).toBeNull();
+    });
+
+    it("shows a retryable error and an empty state with New evaluator", async () => {
+      const onRetry = mock(() => undefined);
+      const onCreate = mock(() => undefined);
+      const errored = renderWithTheme(
+        <AiEvaluatorsListView
+          evaluators={[]}
+          isLoading={false}
+          loadError="Could not load evaluators."
+          onCreate={onCreate}
+          onOpen={() => undefined}
+          onRetry={onRetry}
+        />
+      );
+      expect(errored.getByText("Could not load evaluators.")).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(errored.getByText("Try again"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.equal(onRetry.mock.calls.length, 1);
+
+      const empty = renderWithTheme(
+        <AiEvaluatorsListView
+          evaluators={[]}
+          isLoading={false}
+          onCreate={onCreate}
+          onOpen={() => undefined}
+          onRetry={onRetry}
+        />
+      );
+      await act(async () => {
+        fireEvent.press(empty.getByTestId("ai-evaluators-empty-action"));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      assert.equal(onCreate.mock.calls.length, 1);
     });
   });
 });

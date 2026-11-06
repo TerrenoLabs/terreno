@@ -40,9 +40,7 @@ describe("AiObservabilityStatusChip", () => {
     expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
       "GET /ai/observability/status",
     ]);
-    expect(
-      view.getByText("Local on · prompts:local · datasets:local · experiments:local")
-    ).toBeTruthy();
+    expect(view.getByText("Local observability on")).toBeTruthy();
   });
 
   it("shows unavailable when the status request fails", async () => {
@@ -67,8 +65,6 @@ describe("AiObservabilityStatusChip", () => {
     );
     await flushObservabilityRequests();
     expect(calls).toHaveLength(0);
-    expect(
-      view.getByText("Local on · prompts:local · datasets:local · experiments:local")
-    ).toBeTruthy();
+    expect(view.getByText("Local observability on")).toBeTruthy();
   });
 });

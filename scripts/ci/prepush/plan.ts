@@ -47,6 +47,8 @@ const COVERAGE_PACKAGES: Record<string, string> = {
 /** Parameters whose CI jobs need infrastructure a laptop run should not assume. */
 const CI_ONLY_HINTS: Record<string, string> = {
   "run-admin-spa": "cd admin-spa && bun run test:e2e (Playwright)",
+  "run-admin-spa-image-smoke":
+    "docker build -f example-backend/Dockerfile ., run it with ADMIN_SPA_ENABLED=true, then scripts/admin-spa-image-smoke.sh <base-url>",
   "run-admin-spa-integration":
     "cd admin-spa && bun run test:integration (needs Mongo + example-backend)",
   "run-circleci-config": "config-only change; CircleCI validates the continuation config",

@@ -345,24 +345,24 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
     syncDb: adminContext?.syncDb,
   });
 
-  // Initialize form state from fetched item data in edit mode
-  useEffect(() => {
-    if (mode === "edit" && itemData && !isInitialized) {
-      const initial: Record<string, AdminFieldValue> = {};
-      if (modelConfig) {
-        for (const [key, fieldConfig] of getVisibleFieldEntries(
-          modelConfig.fields,
-          modelConfig.fieldOrder,
-          modelConfig.hiddenFields
-        )) {
-          const raw = itemData[key];
-          initial[key] = raw ?? getFieldDefault(fieldConfig);
-        }
+  // Initialize form state from the item in edit mode during render, not in an effect: when the
+  // item is already present (a server-rendered seed), the fields show its values on the first
+  // render, and fetched data fills them before paint as before.
+  if (mode === "edit" && itemData && !isInitialized) {
+    const initial: Record<string, AdminFieldValue> = {};
+    if (modelConfig) {
+      for (const [key, fieldConfig] of getVisibleFieldEntries(
+        modelConfig.fields,
+        modelConfig.fieldOrder,
+        modelConfig.hiddenFields
+      )) {
+        const raw = itemData[key];
+        initial[key] = raw ?? getFieldDefault(fieldConfig);
       }
-      setFormState(initial);
-      setIsInitialized(true);
     }
-  }, [mode, itemData, modelConfig, isInitialized]);
+    setFormState(initial);
+    setIsInitialized(true);
+  }
 
   // Initialize form state with defaults in create mode
   useEffect(() => {

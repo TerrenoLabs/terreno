@@ -12,6 +12,16 @@ describe("withQueryString", () => {
     );
   });
 
+  it("repeats the key for each non-empty list entry", () => {
+    assert.strictEqual(
+      withQueryString({
+        params: {limit: 20, prompt: ["summarize", "", "title"]},
+        url: "/ai/observability/traces",
+      }),
+      "/ai/observability/traces?limit=20&prompt=summarize&prompt=title"
+    );
+  });
+
   it("asJsonBody preserves JSON objects for adminRequest", () => {
     assert.deepEqual(asJsonBody({kind: "bulk-patch"}), {kind: "bulk-patch"});
   });

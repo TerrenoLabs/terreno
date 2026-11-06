@@ -1,9 +1,11 @@
-import {afterEach, describe, it} from "bun:test";
+import {afterEach, beforeEach, describe, it} from "bun:test";
 import {act} from "@testing-library/react-native";
 import {assert} from "chai";
-import React, {useState} from "react";
+import React, {useLayoutEffect, useState} from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminProvider} from "./AdminProvider";
+import type {AdminRequestArgs} from "./adminRequest";
+import type {AdminRpc} from "./adminRpc";
 import {
   resetAdminRpcWarningForTests,
   unwrapAdminEnvelope,
@@ -578,5 +580,539 @@ describe("useAdminRpc", () => {
     }
     assert.isTrue(threw);
     rendered.unmount();
+  });
+});
+
+type SeedModule = typeof import("./adminRpcSeed");
+
+interface SeedQueryState {
+  data: unknown;
+  isLoading: boolean;
+  refetch: () => Promise<unknown>;
+}
+
+interface SeedQueryOptions {
+  headers?: Record<string, string>;
+  keepPreviousData?: boolean;
+  providesTags?: readonly string[];
+  skip?: boolean;
+  transformResponse?: (result: unknown) => unknown;
+  url: string;
+}
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
+
+// The seed module is loaded lazily so the pre-existing tests above still run while it is missing.
+describe("useAdminRpcQuery with AdminRpcSeed", () => {
+  let seedModule: SeedModule;
+
+  beforeEach(async () => {
+    seedModule = await import("./adminRpcSeed");
+  });
+
+  const ROLES = [{name: "admin"}, {name: "viewer"}];
+
+  interface CommittedRender {
+    data: unknown;
+    isLoading: boolean;
+    org: string | undefined;
+  }
+
+  interface Setup {
+    commits: CommittedRender[];
+    getCalls: () => AdminRequestArgs[];
+    renders: SeedQueryState[];
+    setOptions: (next: SeedQueryOptions) => void;
+    trigger: () => {unwrap: () => Promise<unknown>};
+  }
+
+  const setup = async ({
+    options,
+    respond = () => ({fetched: true}),
+    seeds,
+  }: {
+    options: SeedQueryOptions;
+    respond?: (args: AdminRequestArgs) => unknown;
+    seeds?: Record<string, unknown>[];
+  }): Promise<Setup> => {
+    const calls: AdminRequestArgs[] = [];
+    const rpc: AdminRpc = async (args) => {
+      if ((args.method ?? "GET") === "GET") {
+        calls.push(args);
+      }
+      return respond(args);
+    };
+    const renders: SeedQueryState[] = [];
+    const commits: CommittedRender[] = [];
+    let setOptions: (next: SeedQueryOptions) => void = () => undefined;
+    let trigger: Setup["trigger"] = () => ({unwrap: async () => undefined});
+    const Harness: React.FC = () => {
+      const [current, setCurrent] = useState(options);
+      setOptions = setCurrent;
+      const state = useAdminRpcQuery({...current, rpc}) as SeedQueryState;
+      renders.push(state);
+      const org = current.headers?.["X-Organization-Id"];
+      // Records what each committed render showed, so a transient stale frame cannot hide.
+      useLayoutEffect(() => {
+        commits.push({data: state.data, isLoading: state.isLoading, org});
+      });
+      const [mutate] = useAdminRpcMutation(rpc, {invalidatesTags: ["roles"]});
+      trigger = () => mutate({method: "POST", url: "/admin/roles"});
+      return null;
+    };
+    let tree = (
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <Harness />
+      </AdminProvider>
+    );
+    for (const data of [...(seeds ?? [])].reverse()) {
+      const Seed = seedModule.AdminRpcSeed;
+      tree = <Seed data={data}>{tree}</Seed>;
+    }
+    renderWithTheme(tree);
+    await flush();
+    return {
+      commits,
+      getCalls: () => calls,
+      renders,
+      setOptions: (next) => setOptions(next),
+      trigger: () => trigger(),
+    };
+  };
+
+  it("returns the seeded body on first render without calling rpc", async () => {
+    const t = await setup({
+      options: {url: "/admin/roles"},
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.strictEqual(t.renders[0]?.data, ROLES);
+    assert.isFalse(t.renders[0]?.isLoading);
+    assert.lengthOf(t.getCalls(), 0);
+  });
+
+  it("loads and calls rpc once for a URL that is not seeded", async () => {
+    const t = await setup({
+      options: {url: "/admin/other"},
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.isTrue(t.renders[0]?.isLoading);
+    assert.isUndefined(t.renders[0]?.data);
+    assert.lengthOf(t.getCalls(), 1);
+  });
+
+  it("calls rpc once on refetch and updates data", async () => {
+    const t = await setup({
+      options: {url: "/admin/roles"},
+      respond: () => ["fresh"],
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    await act(async () => {
+      void t.renders.at(-1)?.refetch();
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.renders.at(-1)?.data, ["fresh"]);
+  });
+
+  it("treats a different query string as unseeded (exact match)", async () => {
+    const t = await setup({
+      options: {url: "/admin/roles?page=2"},
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.isTrue(t.renders[0]?.isLoading);
+    assert.isUndefined(t.renders[0]?.data);
+    assert.lengthOf(t.getCalls(), 1);
+  });
+
+  it("fetches when the url changes from a seeded url to an unseeded one", async () => {
+    const t = await setup({
+      options: {url: "/admin/roles"},
+      respond: () => ["page2"],
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.lengthOf(t.getCalls(), 0);
+    await act(async () => {
+      t.setOptions({url: "/admin/roles?page=2"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.equal(t.getCalls()[0]?.url, "/admin/roles?page=2");
+    assert.deepEqual(t.renders.at(-1)?.data, ["page2"]);
+  });
+
+  it("does not satisfy an org-scoped hook with a seed stored without the header", async () => {
+    const t = await setup({
+      options: {headers: {"X-Organization-Id": "o1"}, url: "/orgs/o1/members"},
+      seeds: [{[seedModule.adminRpcSeedKey("/orgs/o1/members")]: ["m"]}],
+    });
+    assert.isTrue(t.renders[0]?.isLoading);
+    assert.isUndefined(t.renders[0]?.data);
+    assert.lengthOf(t.getCalls(), 1);
+  });
+
+  it("does not satisfy a hook scoped to another org", async () => {
+    const t = await setup({
+      options: {headers: {"X-Organization-Id": "o2"}, url: "/orgs/members"},
+      seeds: [
+        {
+          [seedModule.adminRpcSeedKey("/orgs/members", {"X-Organization-Id": "o1"})]: ["m"],
+        },
+      ],
+    });
+    assert.isTrue(t.renders[0]?.isLoading);
+    assert.isUndefined(t.renders[0]?.data);
+    assert.lengthOf(t.getCalls(), 1);
+  });
+
+  it("satisfies a hook scoped to the same org", async () => {
+    const members = ["m"];
+    const t = await setup({
+      options: {headers: {"X-Organization-Id": "o1"}, url: "/orgs/members"},
+      seeds: [
+        {
+          [seedModule.adminRpcSeedKey("/orgs/members", {"X-Organization-Id": "o1"})]: members,
+        },
+      ],
+    });
+    assert.strictEqual(t.renders[0]?.data, members);
+    assert.isFalse(t.renders[0]?.isLoading);
+    assert.lengthOf(t.getCalls(), 0);
+  });
+
+  it("returns no data and does not fetch when seeded but skipped", async () => {
+    const t = await setup({
+      options: {skip: true, url: "/admin/roles"},
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.isUndefined(t.renders[0]?.data);
+    assert.isUndefined(t.renders.at(-1)?.data);
+    assert.lengthOf(t.getCalls(), 0);
+  });
+
+  it("fetches when a seeded query is skipped (sign-out) and then unskipped again", async () => {
+    const CONFIG = {models: []};
+    const t = await setup({
+      options: {skip: false, url: "/admin/config"},
+      respond: () => ({models: ["fresh"]}),
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/config")]: CONFIG}],
+    });
+    assert.strictEqual(t.renders[0]?.data, CONFIG);
+    assert.lengthOf(t.getCalls(), 0);
+
+    await act(async () => {
+      t.setOptions({skip: true, url: "/admin/config"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 0);
+
+    await act(async () => {
+      t.setOptions({skip: false, url: "/admin/config"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.renders.at(-1)?.data, {models: ["fresh"]});
+  });
+
+  it("applies transformResponse to the seed", async () => {
+    const items = [{id: 1}, {id: 2}];
+    const t = await setup({
+      options: {
+        transformResponse: (body) => (body as {items: unknown[]}).items,
+        url: "/admin/roles",
+      },
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: {items}}],
+    });
+    assert.deepEqual(t.renders[0]?.data, items);
+    assert.isFalse(t.renders[0]?.isLoading);
+    assert.lengthOf(t.getCalls(), 0);
+  });
+
+  it("refetches once when a mutation invalidates a seeded query's tags", async () => {
+    const t = await setup({
+      options: {providesTags: ["roles"], url: "/admin/roles"},
+      respond: () => ["after-mutation"],
+      seeds: [{[seedModule.adminRpcSeedKey("/admin/roles")]: ROLES}],
+    });
+    assert.lengthOf(t.getCalls(), 0);
+    await act(async () => {
+      await t.trigger().unwrap();
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.renders.at(-1)?.data, ["after-mutation"]);
+  });
+
+  it("lets an inner seed win over an outer one and keeps outer-only keys visible", async () => {
+    const aKey = seedModule.adminRpcSeedKey("/a");
+    const bKey = seedModule.adminRpcSeedKey("/b");
+    const inner = await setup({
+      options: {url: "/a"},
+      seeds: [{[aKey]: 1, [bKey]: "outer-b"}, {[aKey]: 2}],
+    });
+    assert.equal(inner.renders[0]?.data, 2);
+    assert.lengthOf(inner.getCalls(), 0);
+    const outerOnly = await setup({
+      options: {url: "/b"},
+      seeds: [{[aKey]: 1, [bKey]: "outer-b"}, {[aKey]: 2}],
+    });
+    assert.equal(outerOnly.renders[0]?.data, "outer-b");
+    assert.lengthOf(outerOnly.getCalls(), 0);
+  });
+
+  it("refetches under the new org when the org header changes on a mounted seeded hook", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    const t = await setup({
+      options: {headers: o1, url: "/m"},
+      respond: (args) =>
+        `${(args.headers as Record<string, string> | undefined)?.["X-Organization-Id"]}-fetched`,
+      seeds: [{[seedModule.adminRpcSeedKey("/m", o1)]: "o1-body"}],
+    });
+    assert.equal(t.renders.at(-1)?.data, "o1-body");
+    assert.lengthOf(t.getCalls(), 0);
+    const switchedAt = t.renders.length;
+    await act(async () => {
+      t.setOptions({headers: o2, url: "/m"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.getCalls()[0]?.headers, o2);
+    assert.equal(t.renders.at(-1)?.data, "o2-fetched");
+    const settledAt = t.renders.findIndex((r, i) => i >= switchedAt && r.data === "o2-fetched");
+    assert.isAtLeast(settledAt, 0);
+    for (const render of t.renders.slice(settledAt)) {
+      assert.notEqual(render.data, "o1-body");
+    }
+  });
+
+  it("refetches when an org header is added to a mounted hook seeded without one", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const t = await setup({
+      options: {url: "/m"},
+      respond: () => "scoped-fetched",
+      seeds: [{[seedModule.adminRpcSeedKey("/m")]: "unscoped-body"}],
+    });
+    assert.equal(t.renders.at(-1)?.data, "unscoped-body");
+    assert.lengthOf(t.getCalls(), 0);
+    await act(async () => {
+      t.setOptions({headers: o1, url: "/m"});
+    });
+    await flush();
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.getCalls()[0]?.headers, o1);
+    assert.equal(t.renders.at(-1)?.data, "scoped-fetched");
+  });
+
+  it("loads again when returning to the seeded url after leaving it", async () => {
+    const t = await setup({
+      options: {url: "/s"},
+      respond: (args) => `fetched:${args.url}`,
+      seeds: [{[seedModule.adminRpcSeedKey("/s")]: "seed-s"}],
+    });
+    assert.equal(t.renders.at(-1)?.data, "seed-s");
+    assert.lengthOf(t.getCalls(), 0);
+    await act(async () => {
+      t.setOptions({url: "/r"});
+    });
+    await flush();
+    assert.deepEqual(
+      t.getCalls().map((c) => c.url),
+      ["/r"]
+    );
+    await act(async () => {
+      t.setOptions({url: "/s"});
+    });
+    await flush();
+    assert.deepEqual(
+      t.getCalls().map((c) => c.url),
+      ["/r", "/s"]
+    );
+    assert.equal(t.renders.at(-1)?.data, "fetched:/s");
+  });
+
+  it("never commits a render under o2 that shows the seeded o1 body", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    const t = await setup({
+      options: {headers: o1, url: "/m"},
+      respond: (args) =>
+        `${(args.headers as Record<string, string> | undefined)?.["X-Organization-Id"]}-fetched`,
+      seeds: [{[seedModule.adminRpcSeedKey("/m", o1)]: "o1-body"}],
+    });
+    assert.equal(t.commits.at(-1)?.data, "o1-body");
+    await act(async () => {
+      t.setOptions({headers: o2, url: "/m"});
+    });
+    await flush();
+    const o2Commits = t.commits.filter((c) => c.org === "o2");
+    assert.isAbove(o2Commits.length, 0);
+    for (const commit of o2Commits) {
+      assert.notEqual(commit.data, "o1-body", "an o2 render showed the o1 seed");
+    }
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.getCalls()[0]?.headers, o2);
+    assert.equal(t.commits.at(-1)?.data, "o2-fetched");
+  });
+
+  it("refetches for o1 after o1 -> o2 -> o1 and never shows the o2 body under o1", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    const t = await setup({
+      options: {headers: o1, url: "/m"},
+      respond: (args) =>
+        `${(args.headers as Record<string, string> | undefined)?.["X-Organization-Id"]}-fetched`,
+      seeds: [{[seedModule.adminRpcSeedKey("/m", o1)]: "o1-body"}],
+    });
+    await act(async () => {
+      t.setOptions({headers: o2, url: "/m"});
+    });
+    await flush();
+    assert.equal(t.commits.at(-1)?.data, "o2-fetched");
+    await act(async () => {
+      t.setOptions({headers: o1, url: "/m"});
+    });
+    await flush();
+    assert.deepEqual(
+      t
+        .getCalls()
+        .map((c) => (c.headers as Record<string, string> | undefined)?.["X-Organization-Id"]),
+      ["o2", "o1"]
+    );
+    for (const commit of t.commits.filter((c) => c.org === "o1")) {
+      assert.notEqual(commit.data, "o2-fetched", "an o1 render showed the o2 body");
+    }
+    assert.equal(t.commits.at(-1)?.data, "o1-fetched");
+  });
+
+  it("never commits a render under o2 that shows an unseeded o1 fetch", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    const t = await setup({
+      options: {headers: o1, url: "/m"},
+      respond: (args) =>
+        `${(args.headers as Record<string, string> | undefined)?.["X-Organization-Id"]}-fetched`,
+    });
+    assert.equal(t.commits.at(-1)?.data, "o1-fetched");
+    await act(async () => {
+      t.setOptions({headers: o2, url: "/m"});
+    });
+    await flush();
+    const o2Commits = t.commits.filter((c) => c.org === "o2");
+    assert.isAbove(o2Commits.length, 0);
+    assert.isTrue(o2Commits[0]?.isLoading, "first o2 render is not loading");
+    for (const commit of o2Commits) {
+      assert.notEqual(commit.data, "o1-fetched", "an o2 render showed the o1 body");
+    }
+    assert.equal(t.commits.at(-1)?.data, "o2-fetched");
+  });
+
+  it("drops a keepPreviousData body and loads when the org changes on the same url", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    const t = await setup({
+      options: {headers: o1, keepPreviousData: true, url: "/m"},
+      respond: (args) =>
+        (args.headers as Record<string, string> | undefined)?.["X-Organization-Id"] === "o2"
+          ? "B"
+          : "A",
+    });
+    assert.equal(t.commits.at(-1)?.data, "A");
+    assert.isFalse(t.commits.at(-1)?.isLoading);
+    await act(async () => {
+      t.setOptions({headers: o2, keepPreviousData: true, url: "/m"});
+    });
+    await flush();
+    const o2Commits = t.commits.filter((c) => c.org === "o2");
+    assert.isAbove(o2Commits.length, 0);
+    for (const commit of o2Commits) {
+      assert.notEqual(commit.data, "A", "an o2 render kept the o1 body");
+    }
+    assert.isTrue(o2Commits[0]?.isLoading, "first o2 render is not loading");
+    assert.deepEqual(t.getCalls().at(-1)?.headers, o2);
+    assert.equal(t.commits.at(-1)?.data, "B");
+  });
+
+  it("reports loading on every o2 render until the o2 fetch resolves", async () => {
+    const o1 = {"X-Organization-Id": "o1"};
+    const o2 = {"X-Organization-Id": "o2"};
+    let resolveO2: (value: unknown) => void = () => undefined;
+    const o2Body = new Promise<unknown>((resolve) => {
+      resolveO2 = resolve;
+    });
+    const t = await setup({
+      options: {headers: o1, url: "/m"},
+      respond: (args) =>
+        (args.headers as Record<string, string> | undefined)?.["X-Organization-Id"] === "o2"
+          ? o2Body
+          : "o1-fetched",
+    });
+    assert.equal(t.commits.at(-1)?.data, "o1-fetched");
+    await act(async () => {
+      t.setOptions({headers: o2, url: "/m"});
+    });
+    await flush();
+    assert.deepEqual(t.getCalls().at(-1)?.headers, o2);
+    const pendingO2Commits = t.commits.filter((c) => c.org === "o2");
+    assert.isAbove(pendingO2Commits.length, 0);
+    for (const commit of pendingO2Commits) {
+      assert.isTrue(commit.isLoading, "an o2 render before the o2 fetch resolved was not loading");
+      assert.isUndefined(commit.data);
+    }
+    await act(async () => {
+      resolveO2("o2-fetched");
+    });
+    await flush();
+    assert.equal(t.commits.at(-1)?.data, "o2-fetched");
+    assert.isFalse(t.commits.at(-1)?.isLoading);
+  });
+
+  it("behaves as before when there is no AdminRpcSeed in the tree", async () => {
+    const t = await setup({options: {url: "/admin/roles"}, respond: () => ["live"]});
+    assert.isTrue(t.renders[0]?.isLoading);
+    assert.isUndefined(t.renders[0]?.data);
+    assert.lengthOf(t.getCalls(), 1);
+    assert.deepEqual(t.renders.at(-1)?.data, ["live"]);
+    assert.isFalse(t.renders.at(-1)?.isLoading);
+  });
+});
+
+describe("adminRpcSeedKey", () => {
+  let key: SeedModule["adminRpcSeedKey"];
+
+  beforeEach(async () => {
+    key = (await import("./adminRpcSeed")).adminRpcSeedKey;
+  });
+
+  it("differs when an X-Organization-Id header is sent", () => {
+    assert.notEqual(key("/a"), key("/a", {"X-Organization-Id": "o1"}));
+  });
+
+  it("differs between org ids", () => {
+    assert.notEqual(key("/a", {"X-Organization-Id": "o1"}), key("/a", {"X-Organization-Id": "o2"}));
+  });
+
+  it("keeps the query string in the key", () => {
+    assert.notEqual(key("/a"), key("/a?page=2"));
+  });
+
+  it("ignores other header names", () => {
+    assert.equal(key("/a"), key("/a", {"X-Other": "o1"}));
+    assert.equal(key("/a"), key("/a", {}));
+  });
+
+  it("reads the org header from Headers, tuple arrays, and any name casing", () => {
+    const expected = key("/a", {"X-Organization-Id": "o1"});
+    assert.equal(key("/a", new Headers({"X-Organization-Id": "o1"})), expected);
+    assert.equal(key("/a", [["X-Organization-Id", "o1"]]), expected);
+    assert.equal(key("/a", {"x-organization-id": "o1"}), expected);
+    assert.equal(key("/a", [["x-ORGANIZATION-id", "o1"]]), expected);
+    assert.equal(key("/a", new Headers({"x-organization-id": "o1"})), expected);
   });
 });

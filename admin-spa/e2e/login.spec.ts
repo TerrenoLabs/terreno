@@ -22,6 +22,43 @@ test("anonymous visitor is redirected to the login screen", async ({page}) => {
 });
 
 /**
+ * E2: the Express gate redirects an anonymous visit to a protected page on the server, before
+ * any HTML is rendered, and the login screen sends the user back to the page they asked for.
+ */
+test.describe("server-side login redirect", () => {
+  test("anonymous request to a protected page gets a server 302 to login with returnTo", async ({
+    page,
+  }) => {
+    const response = await page.request.get("/console/Todo", {maxRedirects: 0});
+    expect(response.status()).toBe(302);
+    expect(response.headers().location).toBe("/console/login?returnTo=%2FTodo");
+  });
+
+  test("after sign-in the user lands on the page they asked for", async ({page}) => {
+    await page.goto("/console/Todo");
+    await page.waitForURL(/\/console\/login\?returnTo=%2FTodo/);
+    await expect(page.getByTestId("admin-spa-login-email")).toBeVisible();
+
+    await page.getByTestId("admin-spa-login-email").fill(E2E_ADMIN_EMAIL);
+    await page.getByTestId("admin-spa-login-password").fill(E2E_ADMIN_PASSWORD);
+    await page.getByTestId("admin-spa-login-submit").click();
+
+    await page.waitForURL(/\/console\/Todo$/, {timeout: 20_000});
+  });
+
+  test("an unsafe returnTo is ignored after sign-in", async ({page}) => {
+    await page.goto("/console/login?returnTo=https%3A%2F%2Fevil.example");
+    await expect(page.getByTestId("admin-spa-login-email")).toBeVisible();
+
+    await page.getByTestId("admin-spa-login-email").fill(E2E_ADMIN_EMAIL);
+    await page.getByTestId("admin-spa-login-password").fill(E2E_ADMIN_PASSWORD);
+    await page.getByTestId("admin-spa-login-submit").click();
+
+    await page.waitForURL(/\/console\/?$/, {timeout: 20_000});
+  });
+});
+
+/**
  * End-to-end: email/password login against the test server's mock better-auth
  * endpoints. Exercises the login form, `authClient.signIn.email`, the session cookie,
  * the session refresh (get-session), and AdminGate's admin check (`/admin/config` 200) before

@@ -78,6 +78,10 @@
       "default": "./dist/flags/useFeatureFlags.js",
       "types": "./dist/flags/useFeatureFlags.d.ts"
     },
+    "./mcp": {
+      "default": "./dist/app/mcpTools.js",
+      "types": "./dist/app/mcpTools.d.ts"
+    },
     "./react": {
       "default": "./dist/react/index.js",
       "types": "./dist/react/index.d.ts"
@@ -186,5 +190,5 @@
     "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
-  "version": "57.21.0"
+  "version": "57.22.0"
 }

@@ -7,6 +7,7 @@ import {attachDebugChannel, type DebugChannelBridge} from "./debug/debugChannel"
 import {resolveDebugLog, type SyncDebugLog, type SyncDebugLogOptions} from "./debug/debugLog";
 import {registerSyncDbDevtools} from "./debug/devtools";
 import {getConflict, listConflicts, pruneGhostConflicts} from "./mutations/conflicts";
+import {generateEntityId, isObjectIdHex, type SyncIdFormat} from "./mutations/entityIds";
 import {createOutbox, generateMutationId, type Outbox} from "./mutations/outbox";
 import {resolveConflict as applyConflictResolution} from "./mutations/resolveConflict";
 import {createDefaultPersisterFactory} from "./persisters/defaultPersisterFactory";
@@ -91,6 +92,13 @@ export interface SyncDbConfig {
   name: string;
   /** Collections to sync (become local entity tables and subscriptions). */
   collections: string[];
+  /**
+   * Id format per collection for creates (default `uuid`). Use `objectId` for a collection
+   * whose server model keeps the default ObjectId `_id`: the client mints 24-hex ObjectIds,
+   * and `mutate()` rejects an explicit id that is not one. The server rejects a non-hex id
+   * for such a collection with an `invalid_id` validation nack.
+   */
+  idFormats?: Record<string, SyncIdFormat>;
   authProvider: AuthProvider;
   /** Server origin; required unless both transport and httpChannel are injected. */
   baseUrl?: string;
@@ -2156,8 +2164,16 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
     if (operation !== "create" && !id) {
       throw new Error(`mutate() requires an id for ${operation}`);
     }
+    const idFormat = config.idFormats?.[collection];
+    // The server can never store this id; fail at the call site instead of queuing a
+    // mutation it will reject.
+    if (id && idFormat === "objectId" && !isObjectIdHex(id)) {
+      throw new Error(
+        `mutate() requires a 24-character hex ObjectId for ${collection}; got ${JSON.stringify(id)}`
+      );
+    }
     const mutationId = generateMutationId();
-    const entityId = id ?? generateMutationId();
+    const entityId = id ?? generateEntityId(idFormat);
     const existing = store.getEntity<Record<string, unknown> | null>({collection, id: entityId});
 
     if (operation === "delete") {
@@ -2174,6 +2190,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
       // transition exactly like softDeleteEntity, and also records the pending
       // mutation id that protects the row from inbound deltas.
       store.upsertEntity({
+        awaitingServerDelta: false,
         collection,
         data: existing.data ?? null,
         deleted: true,
@@ -2186,6 +2203,7 @@ export const createSyncDb = (config: SyncDbConfig): SyncDb => {
           ? {...existing.data, ...data}
           : (data ?? {});
       store.upsertEntity({
+        awaitingServerDelta: false,
         collection,
         data: mergedData,
         id: entityId,

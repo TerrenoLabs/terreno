@@ -735,9 +735,12 @@ export function modelRouter<T>(
     registerCollection({model, options, routePath: path});
   }
 
-  const router = shouldDeferBuild ? express.Router() : _buildModelRouter(model, options, path);
-
   if (path !== undefined) {
+    // TerrenoApp mounts _buildWithContext's router, which has OpenAPI wired in. Build the
+    // standalone router only if something reads `.router` (a hand-mounted registration), so
+    // registering doesn't build every router twice and log "No options.openApi provided" for
+    // each model at import.
+    let standaloneRouter: express.Router | undefined;
     return {
       __type: "modelRouter",
       _buildWithContext: (context: ModelRouterBuildContext) => {
@@ -756,7 +759,12 @@ export function modelRouter<T>(
       model,
       options,
       path,
-      router,
+      get router(): express.Router {
+        standaloneRouter ??= shouldDeferBuild
+          ? express.Router()
+          : _buildModelRouter(model, options, path);
+        return standaloneRouter;
+      },
     };
   }
 
@@ -767,7 +775,7 @@ export function modelRouter<T>(
     );
   }
 
-  return router;
+  return _buildModelRouter(model, options, path);
 }
 
 const _buildModelRouter = <T>(

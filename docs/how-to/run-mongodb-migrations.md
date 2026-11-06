@@ -45,7 +45,6 @@ export const up = mcpServiceTokenStringIdsMigration.up;
 | Package | Export | Since | What it does |
 | --- | --- | --- | --- |
 | `@terreno/api` | `mcpServiceTokenStringIdsMigration` | 58.0.0 | Re-keys ObjectId `McpServiceToken` rows to hex-string `_id`s. Idempotent; no `down`. |
-| `@terreno/ai` | `gptHistoryStringIdsMigration` | 58.0.0 | Re-keys ObjectId `GptHistory` rows to hex-string `_id`s and rewrites `AIDataset.historyId`. Idempotent; no `down`. |
 
 The upgrade note for each release says which framework migrations to add.
 

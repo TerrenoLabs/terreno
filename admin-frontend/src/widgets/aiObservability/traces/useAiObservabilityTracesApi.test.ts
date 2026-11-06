@@ -39,9 +39,10 @@ describe("useAiObservabilityTracesApi", () => {
           from: " 2026-01-01 ",
           hasScore: false,
           page: 2,
-          prompt: "summarize",
+          prompts: ["summarize"],
           sensitive: true,
           sessionId: "sess",
+          sort: "-cost",
           status: "error",
           to: "2026-01-02",
           userId: "user-1",
@@ -61,11 +62,28 @@ describe("useAiObservabilityTracesApi", () => {
       prompt: "summarize",
       sensitive: "true",
       sessionId: "sess",
+      sort: "-cost",
       status: "error",
       to: "2026-01-02",
       userId: "user-1",
     });
     expect(result.current.data).toEqual({data: [], limit: 20, more: false, page: 1, total: 0});
+  });
+
+  it("repeats prompt for each selected prompt and drops blank ones", async () => {
+    const calls = stub();
+    renderHook(
+      () =>
+        useAiObservabilityTracesApi().useListQuery({
+          ...emptyTraceFilters(),
+          prompts: ["summarize", " title ", ""],
+        }),
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+
+    const url = new URL(calls[0]?.url ?? "", "http://localhost");
+    expect(url.searchParams.getAll("prompt")).toEqual(["summarize", "title"]);
   });
 
   it("omits blank filters and reads detail, evaluators, and status", async () => {

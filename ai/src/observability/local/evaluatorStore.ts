@@ -4,10 +4,14 @@ import type {
   EvaluatorDimension,
   EvaluatorRunModes,
   ObsEvaluatorDocument,
+  ObsExperimentDocument,
 } from "../../types/observability";
 import {judgeSchemaMissingDimensions} from "../evaluate";
 import {getEvaluatorTemplate} from "../evaluatorTemplates";
+import {questionSetFingerprint} from "../questionFingerprint";
+import {registerObsDataset} from "./models/obsDataset";
 import {registerObsEvaluator} from "./models/obsEvaluator";
+import {registerObsExperiment} from "./models/obsExperiment";
 import {LocalPromptStore} from "./promptStore";
 
 export interface EvaluatorWriteInput {
@@ -23,8 +27,25 @@ export interface EvaluatorWriteInput {
   type: "human" | "json-assert" | "llm-judge";
 }
 
+/** How well an llm-judge agreed with human answers in its latest judge calibration experiment. */
+export interface EvaluatorCalibration {
+  datasetName?: string;
+  experimentId: string;
+  experimentName: string;
+  passed: boolean;
+  questionSetName?: string;
+  /** Agreement rate (0–1) of `version`; unset when nothing could be compared. */
+  rate?: number;
+  /** True when the question set's questions changed since the experiment ran. */
+  stale: boolean;
+  targetAgreement?: number;
+  /** The judge prompt's production version when it was compared, else the best version. */
+  version: number;
+}
+
 export interface EvaluatorView {
   assertion?: {constraint: string; path: string};
+  calibration?: EvaluatorCalibration;
   confidenceAlertBelow: number;
   description?: string;
   dimensions: EvaluatorDimension[];
@@ -140,8 +161,9 @@ export class LocalEvaluatorStore {
 
   async list(): Promise<EvaluatorView[]> {
     const rows = await registerObsEvaluator().find({}).sort({name: 1});
+    const calibrations = await this.loadCalibrations(rows);
     return rows.map((row) => {
-      return toView(row);
+      return {...toView(row), calibration: calibrations.get(String(row._id))};
     });
   }
 
@@ -150,7 +172,79 @@ export class LocalEvaluatorStore {
     if (!doc) {
       throw new APIError({status: 404, title: `Unknown evaluator "${id}"`});
     }
-    return toView(doc);
+    const calibrations = await this.loadCalibrations([doc]);
+    return {...toView(doc), calibration: calibrations.get(String(doc._id))};
+  }
+
+  // Latest completed judge experiment per llm-judge evaluator, summarized for display.
+  private async loadCalibrations(
+    evaluators: ObsEvaluatorDocument[]
+  ): Promise<Map<string, EvaluatorCalibration>> {
+    const result = new Map<string, EvaluatorCalibration>();
+    const judges = evaluators.filter((row) => row.type === "llm-judge");
+    if (judges.length === 0) {
+      return result;
+    }
+    const experiments = await registerObsExperiment()
+      .find({
+        judgeEvaluatorId: {$in: judges.map((row) => row._id)},
+        kind: "judge",
+        status: "completed",
+      })
+      .sort({created: -1});
+    const latest = new Map<string, ObsExperimentDocument>();
+    for (const experiment of experiments) {
+      const key = String(experiment.judgeEvaluatorId);
+      if (!latest.has(key)) {
+        latest.set(key, experiment);
+      }
+    }
+    if (latest.size === 0) {
+      return result;
+    }
+    const rows = [...latest.values()];
+    const datasets = await registerObsDataset().find({
+      _id: {$in: rows.map((row) => row.datasetId)},
+    });
+    const questionSets = await registerObsEvaluator().find({
+      _id: {$in: rows.flatMap((row) => (row.questionSetId ? [row.questionSetId] : []))},
+    });
+    for (const judge of judges) {
+      const experiment = latest.get(String(judge._id));
+      if (!experiment) {
+        continue;
+      }
+      const production = judge.judgePromptName
+        ? (await this.promptStore.getVersionByLabel(judge.judgePromptName, "production"))?.version
+        : undefined;
+      const agreement = experiment.results?.agreement ?? {};
+      const best = [...experiment.versions].sort((left, right) => {
+        return (agreement[String(right)]?.rate ?? -1) - (agreement[String(left)]?.rate ?? -1);
+      })[0];
+      const version =
+        production !== undefined && experiment.versions.includes(production) ? production : best;
+      if (version === undefined) {
+        continue;
+      }
+      const questionSet = questionSets.find((row) => {
+        return String(row._id) === String(experiment.questionSetId);
+      });
+      const gate = experiment.results?.gates.find((row) => row.version === version);
+      result.set(String(judge._id), {
+        datasetName: datasets.find((row) => String(row._id) === String(experiment.datasetId))?.name,
+        experimentId: String(experiment._id),
+        experimentName: experiment.name,
+        passed: gate?.passed ?? false,
+        questionSetName: questionSet?.name,
+        rate: agreement[String(version)]?.rate,
+        stale:
+          !questionSet ||
+          questionSetFingerprint(questionSet.dimensions) !== experiment.questionsFingerprint,
+        targetAgreement: experiment.targetAgreement,
+        version,
+      });
+    }
+    return result;
   }
 
   async getByName(name: string): Promise<EvaluatorView | undefined> {

@@ -1,5 +1,3 @@
-import {randomUUID} from "node:crypto";
-
 import {
   createdUpdatedPlugin,
   findExactlyOne,
@@ -161,14 +159,6 @@ const gptHistoryPromptSchema = new mongoose.Schema(
 
 const gptHistorySchema = new mongoose.Schema<GptHistoryDocument, GptHistoryModel>(
   {
-    _id: {
-      // Synced through @terreno/syncdb: offline clients mint entity ids locally and the sync
-      // mutation channel writes them through as _id. Histories created before Terreno 58 keep
-      // their ObjectId hex string after the gpt-history-string-ids migration.
-      default: (): string => randomUUID(),
-      description: "The conversation id (a String so offline sync clients can mint ids)",
-      type: String,
-    },
     pendingAsk: {
       description:
         "The ask this conversation is waiting on; cleared when the user answers or the ask is cancelled",

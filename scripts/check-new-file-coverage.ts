@@ -18,7 +18,7 @@ const DEFAULT_THRESHOLD = 90;
 const normalizePath = (path: string): string => path.split(sep).join("/");
 const SOURCE_FILE_PATTERN = /\.(?:ts|tsx)$/;
 const EXCLUDED_SOURCE_PATTERN =
-  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk)\.ts$/;
+  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|\.isolated\.(?:ts|tsx)$|(?:^|\/)example-frontend\/devMcpCommands\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk|openApiSdk)\.ts$/;
 /**
  * Expo Router route files under `app/`: `index`, `_layout`, `+not-found`, dynamic
  * segments such as `[id]`, thin `create` wrappers, and named recovery routes

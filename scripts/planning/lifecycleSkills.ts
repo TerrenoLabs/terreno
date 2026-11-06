@@ -81,6 +81,7 @@ const PLUGIN_APP_SKILL_DIRECTORIES = [
   "building-admin-interfaces",
   "building-terreno-apps",
   "debug-syncdb-with-mcp",
+  "debug-with-mcp",
   "deploy-gcp",
   "generate-release-announcements",
   "generate-sdk",

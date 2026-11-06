@@ -11,7 +11,8 @@
  * table, then enforces the 95% gate on the merged report. See
  * https://github.com/oven-sh/bun/issues/7367.
  *
- * When the package contains tests in `src/isolated/*.isolated.{ts,tsx}`, each
+ * When the package contains tests named `*.isolated.ts` or `*.isolated.tsx`
+ * anywhere under `src/`, each
  * isolated test file is run in its own `bun test` invocation (because those
  * tests rely on module-level `mock.module` calls that leak across files and
  * would otherwise pollute unrelated suites). The resulting LCOV coverage
@@ -320,7 +321,7 @@ export const countHitLines = (entry: FileCoverage): number => {
  * Isolated runs often instrument a different line set than the main suite
  * (different preload, fewer files loaded). Union-by-line-number then leaves
  * the main file's uncovered lines in place and does not get credit for the
- * isolated run's executed lines. Prefer the snapshot with more hit lines.
+ * isolated run's executed lines. Union per line and per function (max hits).
  */
 export const mergeIsolatedLcov = (
   target: Map<string, FileCoverage>,
@@ -335,23 +336,10 @@ export const mergeIsolatedLcov = (
       mergeLcov(target, new Map([[path, src]]));
       continue;
     }
-    const srcHits = countHitLines(src);
-    const dstHits = countHitLines(existing);
-    const srcPct = srcHits / Math.max(src.lines.size, 1);
-    const dstPct = dstHits / Math.max(existing.lines.size, 1);
-    if (srcPct > dstPct) {
-      existing.lines = new Map(src.lines);
-      existing.functions = new Map(src.functions);
-      existing.functionsFound = src.functionsFound;
-      existing.functionsHit = src.functionsHit;
-      existing.hasFnRecords = src.hasFnRecords;
-      continue;
-    }
-    for (const [lineNo, hits] of src.lines.entries()) {
-      const prev = existing.lines.get(lineNo) ?? 0;
-      if (hits > prev) {
-        existing.lines.set(lineNo, hits);
-      }
+    const lineNos = new Set([...existing.lines.keys(), ...src.lines.keys()]);
+    for (const lineNo of lineNos) {
+      const hits = Math.max(existing.lines.get(lineNo) ?? 0, src.lines.get(lineNo) ?? 0);
+      existing.lines.set(lineNo, hits);
     }
     for (const [name, hits] of src.functions.entries()) {
       const prev = existing.functions.get(name) ?? 0;

@@ -277,6 +277,8 @@ describe("findColocatedTests", () => {
       "api/src/errors.test.tsx",
       "api/src/errors.spec.ts",
       "api/src/errors.spec.tsx",
+      "api/src/errors.isolated.ts",
+      "api/src/errors.isolated.tsx",
     ]);
     assert.deepEqual(
       findColocatedTests({
@@ -284,7 +286,7 @@ describe("findColocatedTests", () => {
         packageRoot: join(repoRoot, "api"),
         repoRoot,
       }),
-      ["src/errors.test.ts"]
+      ["./src/errors.test.ts"]
     );
   });
 

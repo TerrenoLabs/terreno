@@ -96,7 +96,6 @@ import {
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
-import {io} from "./websockets";
 
 const BOOT_START_TIME = process.hrtime();
 const notificationsApp = new NotificationsApp({
@@ -190,6 +189,9 @@ export const start = async (
     const websocketsDebug = WEBSOCKETS_DEBUG || adminWebsocketsDebug === true;
 
     registerOrganizationSettings(organizationSettingsSchema);
+
+    /** Set when RealtimeApp is registered so FeatureFlags live updates reuse the same Socket.io. */
+    let featureFlagsRealtimeApp: RealtimeApp | null = null;
 
     const terraApp = new TerrenoApp({
       accessControl: access,
@@ -299,20 +301,25 @@ export const start = async (
         })
       );
 
-    if (isWebsocketService) {
-      terraApp.register(
-        new RealtimeApp({
-          changeStream: {
-            ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
-          },
-          debug: websocketsDebug,
-          // Required by the tenant-scoped `projects` sync stream: socket authorization
-          // must load the persisted user id before Membership-based tenant streams resolve.
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      );
+    // Mount Socket.io on the process HTTP server whenever this service owns realtime sync
+    // *or* Terreno hands us a host-owned server (Vercel Functions), so `/socket.io/` is
+    // served from the same listener as Express.
+    const shouldRegisterRealtimeApp = isWebsocketService || Boolean(httpServer);
+    if (shouldRegisterRealtimeApp) {
+      featureFlagsRealtimeApp = new RealtimeApp({
+        changeStream: {
+          ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
+        },
+        debug: websocketsDebug,
+        // Required by the tenant-scoped `projects` sync stream: socket authorization
+        // must load the persisted user id before Membership-based tenant streams resolve.
+        userModel: User as unknown as TerrenoAuthUserModel,
+      });
+      terraApp.register(featureFlagsRealtimeApp);
     } else {
-      logger.info("RealtimeApp disabled because BACKEND_SERVICE is not websockets/all");
+      logger.info(
+        "RealtimeApp disabled because BACKEND_SERVICE is not websockets/all and no httpServer was provided"
+      );
     }
 
     if (process.env.COMMS_ENABLED !== "false") {
@@ -427,7 +434,7 @@ export const start = async (
       .register(
         new FeatureFlagsApp({
           liveUpdates: {
-            socketIoServer: () => io,
+            socketIoServer: () => featureFlagsRealtimeApp?.getIo() ?? null,
           },
           segments: exampleFeatureFlagSegments,
         })

@@ -51,8 +51,6 @@ describe("findDedicatedJobsMissingCoverage", () => {
       "    command: bun run test",
       "  blocks-ci:",
       `    command: ${COVERAGE_COMMAND} ${NEW_FILE_LCOV_CIRCLE_COMMAND}`,
-      "  rtk-ci:",
-      `    command: ${COVERAGE_COMMAND} ${NEW_FILE_LCOV_CIRCLE_COMMAND}`,
       "  ui-ci:",
       "    command: bun run test:ci",
       "  syncdb-ci:",

@@ -331,6 +331,66 @@ export const FilterableDataTable = (): React.ReactElement => {
   );
 };
 
+const AUTO_WIDTH_COLUMNS: DataTableColumn[] = [
+  {columnType: "text", sortable: true, title: "Name"},
+  {columnType: "text", title: "Email"},
+  {columnType: "text", title: "Role"},
+  {columnType: "number", sortable: true, title: "Visits"},
+  {columnType: "date", title: "Last seen"},
+  {columnType: "boolean", title: "Active"},
+  // An explicit width still wins over auto sizing.
+  {columnType: "text", title: "Fixed 140", width: 140},
+];
+
+const AUTO_WIDTH_ROWS: DataTableCellData[][] = [
+  [
+    {value: "Alice Johnson"},
+    {value: "alice.johnson@example.com"},
+    {value: "Admin"},
+    {value: 128},
+    {value: "2026-10-01"},
+    {value: true},
+    {value: "pinned"},
+  ],
+  [
+    {value: "Bob Li"},
+    {value: "bob@example.com"},
+    {value: "Staff"},
+    {value: 7},
+    {value: "2026-09-14"},
+    {value: false},
+    {value: "pinned"},
+  ],
+  [
+    {value: "Carmen Ruiz-Delgado"},
+    {value: "carmen.ruiz-delgado@example.com"},
+    {value: "Care coordinator"},
+    {value: 3021},
+    {value: "2026-10-20"},
+    {value: true},
+    {value: "pinned"},
+  ],
+];
+
+export const AutoWidthDataTable = (): React.ReactElement => {
+  const [isNarrow, setIsNarrow] = useState(false);
+  return (
+    <Box direction="column" gap={3} padding={3}>
+      <Box direction="row" gap={2}>
+        <Button
+          onClick={() => setIsNarrow((previous) => !previous)}
+          testID="auto-width-toggle"
+          text={isNarrow ? "Make container wide" : "Make container narrow"}
+          variant="outline"
+        />
+      </Box>
+      <Box height={260} testID="auto-width-container" width={isNarrow ? 480 : "100%"}>
+        <DataTable columns={AUTO_WIDTH_COLUMNS} data={AUTO_WIDTH_ROWS} testID="auto-width-table" />
+      </Box>
+    </Box>
+  );
+};
+
 export const LargeVirtualizedDataTable = (): React.ReactElement => {
   const [pinnedColumns, setPinnedColumns] = useState(1);
   const [sortColumn, setSortColumn] = useState<

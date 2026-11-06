@@ -12,7 +12,6 @@ export const DEDICATED_PACKAGE_CI_JOBS: {circleJob: string; ghaWorkflow: string}
   {circleJob: "api-ci", ghaWorkflow: "api-ci.yml"},
   {circleJob: "ai-ci", ghaWorkflow: "ai-ci.yml"},
   {circleJob: "blocks-ci", ghaWorkflow: "blocks-ci.yml"},
-  {circleJob: "rtk-ci", ghaWorkflow: "rtk-ci.yml"},
   {circleJob: "ui-ci", ghaWorkflow: "ui-ci.yml"},
   {circleJob: "syncdb-ci", ghaWorkflow: "syncdb-ci.yml"},
   {circleJob: "comms-ci", ghaWorkflow: "comms-ci.yml"},

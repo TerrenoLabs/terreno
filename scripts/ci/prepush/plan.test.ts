@@ -119,7 +119,7 @@ describe("planPrepush", () => {
   it("hints the smoke command for a package change instead of running it", () => {
     const plan = planPrepush({
       baseSha: BASE,
-      changedFiles: ["rtk/src/index.ts"],
+      changedFiles: ["syncdb/src/index.ts"],
       mappings: MAPPINGS,
     });
     const smoke = plan.ciOnly.find((item) => item.parameter === "run-smoke");

@@ -66,9 +66,25 @@ export const runStateCommand = async (
   io: CliIo,
   json: boolean
 ): Promise<number> => {
-  const result = await handleLocalToolCall("get_client_state", {
-    query: flagString(parsed.flags, "query"),
-    slice: flagString(parsed.flags, "slice"),
+  if (flagString(parsed.flags, "slice", "query") !== undefined) {
+    io.stderr(
+      "terreno state no longer reads Redux slices (removed in Terreno 58). It reads the SyncDB " +
+        "client registered with createSyncDb({debug: true}); filter with --collection / --entity-id."
+    );
+    return 1;
+  }
+  const limitRaw = flagString(parsed.flags, "limit");
+  const limit = limitRaw ? Number(limitRaw) : undefined;
+  if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+    io.stderr("--limit must be a positive integer");
+    return 1;
+  }
+  const result = await handleLocalToolCall("get_syncdb_state", {
+    collection: flagString(parsed.flags, "collection"),
+    entityId: flagString(parsed.flags, "entity-id", "id"),
+    includeDebugEvents: flagBoolean(parsed.flags, "no-events") ? false : undefined,
+    limit,
+    name: flagString(parsed.flags, "name"),
   });
   return printToolResult(io, json, result);
 };

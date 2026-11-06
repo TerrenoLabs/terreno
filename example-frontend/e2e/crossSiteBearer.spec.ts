@@ -22,12 +22,12 @@ import {loginAs} from "./helpers/login";
 
 const CROSS_SITE_SOCKET_URL = `${CROSS_SITE_API_URL.replace(/^http/, "ws")}/socket.io/`;
 const SOCKET_TIMEOUT = 20_000;
+const PROFILE_TIMEOUT = 30_000;
 
 /**
  * Socket.IO namespace outcomes per Engine.IO session: `40{"sid"` is a successful CONNECT and
  * `44` a CONNECT_ERROR, such as the server's auth middleware rejecting the handshake. Sessions
- * that emit `sync:subscribe` belong to the syncdb transport; the others to rtk's
- * useSocketConnection.
+ * that emit `sync:subscribe` belong to the syncdb transport, the app's one socket.
  */
 interface SocketHandshakes {
   connected: Set<string>;
@@ -58,11 +58,10 @@ const recordSent = (handshakes: SocketHandshakes, sessionId: string, payload: st
   }
 };
 
-/** Connected sessions split by client: syncdb's transport and rtk's useSocketConnection. */
-const connectedClients = (handshakes: SocketHandshakes): {rtk: number; syncdb: number} => {
-  const connected = [...handshakes.connected];
-  const syncdb = connected.filter((sessionId) => handshakes.syncSubscribers.has(sessionId));
-  return {rtk: connected.length - syncdb.length, syncdb: syncdb.length};
+/** Connected sessions that subscribed to sync, i.e. the syncdb transport's sockets. */
+const connectedSyncSockets = (handshakes: SocketHandshakes): number => {
+  return [...handshakes.connected].filter((sessionId) => handshakes.syncSubscribers.has(sessionId))
+    .length;
 };
 
 /** Watches every Socket.IO session to the API, over polling and after the WebSocket upgrade. */
@@ -137,19 +136,16 @@ test.describe("Cross-site bearer sign-in", () => {
     await page.reload();
     await page.getByTestId("todos-screen").waitFor({state: "visible"});
     await page.goto("/profile");
-    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
+    // A full page load on the dev server re-reads the session and /auth/me before the profile shows.
+    await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email, {
+      timeout: PROFILE_TIMEOUT,
+    });
     expect(await betterAuthCookies(context)).toEqual([]);
 
-    // Both Socket.IO clients authenticate with the token source: rtk's useSocketConnection and
-    // the syncdb transport.
+    // The syncdb socket (which also carries flags and server events) authenticates with the
+    // shared authProvider's bearer token.
     await expect
-      .poll(
-        () => {
-          const clients = connectedClients(handshakes);
-          return clients.rtk > 0 && clients.syncdb > 0;
-        },
-        {timeout: SOCKET_TIMEOUT}
-      )
+      .poll(() => connectedSyncSockets(handshakes) > 0, {timeout: SOCKET_TIMEOUT})
       .toBe(true);
     expect(handshakes.rejected).toEqual([]);
 

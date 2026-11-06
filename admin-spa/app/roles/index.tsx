@@ -1,9 +1,12 @@
 import {AdminRolesList} from "@terreno/admin-frontend";
 import React from "react";
-
 import {AdminSpaShell} from "../../components/AdminSpaShell";
 import {useAppConfig} from "../../components/AppConfigGate";
-import {terrenoApi} from "../../store/sdk";
+import {RouteSeed} from "../../components/RouteSeed";
+import {createRpcRouteLoader} from "../../server/rpcRoutes";
+
+/** Server loader: the screen's reads, fetched so its data is in the first HTML. */
+export const loader = createRpcRouteLoader("/roles");
 
 const RolesRoute: React.FC = () => {
   const {appConfig} = useAppConfig();
@@ -11,7 +14,9 @@ const RolesRoute: React.FC = () => {
 
   return (
     <AdminSpaShell breadcrumbs={[{href: "/", label: "Admin"}, {label: "Roles"}]}>
-      <AdminRolesList api={terrenoApi} apiBase={apiBase} routeBase="" />
+      <RouteSeed>
+        <AdminRolesList apiBase={apiBase} routeBase="" />
+      </RouteSeed>
     </AdminSpaShell>
   );
 };

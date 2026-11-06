@@ -72,7 +72,7 @@ export const recordMcpToolCall = (
     oauthClientId: auth?.oauthClientId,
     oauthFamilyId: auth?.oauthFamilyId,
     outcome: record.outcome,
-    serviceTokenId: toObjectId(auth?.serviceTokenId),
+    serviceTokenId: auth?.serviceTokenId,
     toolName: record.toolName,
     userId: toObjectId(auth?.user?.id ? String(auth.user.id) : undefined),
   }).catch((error: unknown) => {

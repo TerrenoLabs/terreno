@@ -17,10 +17,10 @@ import {
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useListQuery} = useAiObservabilityExperimentsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
-  const {useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
+  const {routeBase} = props;
+  const {useListQuery} = useAiObservabilityExperimentsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
+  const {useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi();
   // Sorting and filtering run on the client, so load the largest page the server allows.
   const {data, isError, isLoading, refetch} = useListQuery({limit: EXPERIMENT_LIST_MAX_LIMIT});
   const datasetsQuery = useDatasetsQuery();

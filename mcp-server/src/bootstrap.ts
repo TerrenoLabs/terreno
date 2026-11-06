@@ -35,7 +35,7 @@ export const bootstrapTools: Tool[] = [
         },
         packages: {
           description:
-            'Optional list of Terreno packages to include in merged guidelines (e.g. ["api","ui","rtk","syncdb"]). Use names like `api`, `ui`, `rtk`, `syncdb`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit admin packages if the app does not use the admin panel.',
+            'Optional list of Terreno packages to include in merged guidelines (e.g. ["api","ui","syncdb"]). Use names like `api`, `ui`, `syncdb`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit admin packages if the app does not use the admin panel.',
           items: {type: "string"},
           type: "array",
         },
@@ -118,7 +118,7 @@ ${appDescription}
 
 ## Project Structure
 
-- **frontend/** - Expo/React Native frontend using @terreno/ui, @terreno/syncdb, and @terreno/rtk (SDK + Better Auth)
+- **frontend/** - Expo/React Native frontend using @terreno/ui and @terreno/syncdb (data, request client, generated API hooks, Better Auth session)
 - **backend/** - Express/Mongoose backend using @terreno/api
 
 ## Development
@@ -135,7 +135,7 @@ cd backend && bun run dev    # Start backend on port 4000
 
 # Frontend
 cd frontend && bun run web   # Start web frontend on port 8082
-cd frontend && bun run sdk   # Regenerate SDK after backend changes
+cd frontend && bun run sdk   # Regenerate store/apiSdk.ts after backend changes
 \`\`\`
 
 ## Adding Features
@@ -156,10 +156,10 @@ cd frontend && bun run sdk   # Regenerate SDK after backend changes
 ## Frontend Conventions
 
 - Use \`@terreno/syncdb/react\` hooks (\`useQuery\`, \`useMutate\`) for synced collection CRUD
-- Use generated SDK hooks from \`@/store/openApiSdk\` for non-synced routes only
+- Use generated hooks from \`@/store/apiSdk\` (\`useGetAuthMeQuery\`, \`usePatchAuthMeMutation\`, ...) for non-synced routes only
 - Use @terreno/ui components (Box, Page, Button, TextField, etc.)
-- Never modify \`openApiSdk.ts\` manually - regenerate with \`bun run sdk\`
-- Use Redux Toolkit for state management (Better Auth session and the RTK Query SDK)
+- Never modify \`apiSdk.ts\` manually - regenerate with \`bun run sdk\`
+- Session: \`SessionProvider\` / \`useSession()\` from \`@terreno/syncdb/auth\` (no Redux)
 
 ## AI Assistance
 
@@ -300,24 +300,25 @@ globs: ["**/*"]
 
 # ${appDisplayName} Frontend
 
-Expo/React Native frontend using @terreno/ui, @terreno/syncdb, and @terreno/rtk.
+Expo/React Native frontend using @terreno/ui and @terreno/syncdb.
 
 ## Development
 
 \`\`\`bash
 bun run web      # Start web frontend on port 8082
-bun run sdk      # Regenerate SDK from backend OpenAPI spec
+bun run sdk      # Regenerate store/apiSdk.ts from the backend OpenAPI spec
 bun run lint     # Lint code
 \`\`\`
 
 ## Frontend Conventions
 
 - Use \`@terreno/syncdb/react\` hooks (\`useQuery\`, \`useMutate\`) for synced collection CRUD
-- Use generated SDK hooks from \`@/store/openApiSdk\` for non-synced routes only
+- Use generated hooks from \`@/store/apiSdk\` (\`useGetAuthMeQuery\`, \`usePatchAuthMeMutation\`, ...) for non-synced routes only
 - Use @terreno/ui components (Box, Page, Button, TextField, etc.)
-- Never modify \`openApiSdk.ts\` manually - regenerate with \`bun run sdk\`
+- Never modify \`apiSdk.ts\` manually - regenerate with \`bun run sdk\`
 - Use Luxon for date operations
-- Better Auth session: \`generateBetterAuthSlice\` + \`lib/betterAuth.ts\`
+- Session: \`SessionProvider\` / \`useSession()\` from \`@terreno/syncdb/auth\` + \`lib/betterAuth.ts\` (no Redux)
+- Request client: \`store/apiClient.ts\` (\`createApiClient\` from \`@terreno/syncdb/api\`, \`baseUrl\` from \`@terreno/syncdb/config\`)
 ${admin}## Expo SDK upgrades
 
 - For Expo/React Native dependency upgrades, install and use the official \`upgrading-expo\` skill from \`expo/skills\` (\`bunx skills add expo/skills\` when using the Skills CLI). It covers \`expo install\`, doctor, caches, and SDK breaking changes.
@@ -326,16 +327,16 @@ ${admin}## Expo SDK upgrades
 ## MCP servers (dev)
 
 - **terreno** (HTTP): codegen, docs search, bootstrap tools.
-- **terreno-local** (stdio): Mongo introspection, dev logs, RTK state (via \`registerTerrenoDevStore\`).
+- **terreno-local** (stdio): Mongo introspection, dev logs, and runtime syncdb state for a client created with \`debug: true\`.
 - **expo** (HTTP): Expo docs + local simulator automation when \`EXPO_UNSTABLE_MCP_SERVER=1\` dev server is running.
 - **playwright**: web UI automation for \`expo start --web\`.
 
 ## Adding a New Screen
 
-1. Regenerate SDK if backend changed: \`bun run sdk\`
+1. Regenerate API hooks if backend changed: \`bun run sdk\`
 2. Create screen in \`app/\` directory
 3. Use @terreno/ui components for layout
-4. Use SDK hooks for non-synced routes; use syncdb hooks for synced collections
+4. Use \`@/store/apiSdk\` hooks for non-synced routes; use syncdb hooks for synced collections
 `;
 };
 
@@ -536,8 +537,8 @@ The application should include:
 - Better Auth login (email/password via \`@terreno/ui\` LoginScreen)
 - Tab-based navigation with Home and Profile screens
 - \`@terreno/syncdb\` client wired in the root layout (empty \`SYNC_COLLECTIONS\` until you add synced models)
-- Redux with Better Auth session + RTK Query SDK for non-synced routes
-- OpenAPI SDK generation from backend spec
+- Better Auth session via \`SessionProvider\` / \`useSession()\` from \`@terreno/syncdb/auth\` (no Redux)
+- Request client (\`store/apiClient.ts\`) plus generated hooks in \`store/apiSdk.ts\` for non-synced routes (\`bun run sdk\` runs \`terreno-syncdb-codegen --api-out\`)
 - Cursor rules for AI assistance
 - MCP integration for development assistance
 

@@ -51,7 +51,8 @@ const tokenFor = async (user: {_id: UserDocument["_id"]; admin: boolean}): Promi
 describe("example-backend MCP service token admin", () => {
   beforeEach(async () => {
     await UserModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    // The token collection is synced once TerrenoApp mounts it; syncPlugin rejects deleteMany.
+    await McpServiceToken.collection.deleteMany({});
   });
 
   it("lets an admin list tokens for multiple users without tokenHash", async () => {
@@ -89,8 +90,9 @@ describe("example-backend MCP service token admin", () => {
       .expect(204);
 
     const stored = await McpServiceToken.findById(issued.mcpServiceToken._id);
-    assert.isDefined(stored);
-    assert.isDefined(stored?.revokedAt);
+    assert.isNotNull(stored);
+    assert.isFalse(stored?.deleted);
+    assert.instanceOf(stored?.revokedAt, Date);
     assert.isNull(await McpServiceToken.verify(issued.token));
   });
 

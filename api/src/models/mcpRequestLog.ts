@@ -47,7 +47,7 @@ const mcpRequestLogSchema = new mongoose.Schema<McpRequestLogDocument, McpReques
       description: "Service token used for the call, when the credential was a service token",
       index: true,
       ref: "TerrenoMcpServiceToken",
-      type: mongoose.Schema.Types.ObjectId,
+      type: String,
     },
     toolName: {
       description: "Name of the MCP tool that was called",

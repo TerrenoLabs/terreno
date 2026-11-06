@@ -1,6 +1,11 @@
-import {useMemo} from "react";
-import {asDynamicHookApi} from "../../../dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {asJsonBody, withQueryString} from "../../../adminRpc";
+import type {AdminRpcQueryState} from "../../../useAdminRpc";
+import {
+  type ObservabilityMutation,
+  type ObservabilityQueryOptions,
+  useObservabilityMutation,
+  useObservabilityQuery,
+} from "../shell/observabilityRequest";
 import type {
   ExperimentEstimate,
   ExperimentKind,
@@ -8,11 +13,8 @@ import type {
   ScoreThreshold,
 } from "./experimentTypes";
 
-const LIST_KEY = "aiObservabilityExperiments";
-const DETAIL_KEY = "aiObservabilityExperiment";
-const CREATE_KEY = "createAiObservabilityExperiment";
-const ESTIMATE_KEY = "estimateAiObservabilityExperiment";
-const PROMOTE_KEY = "promoteAiObservabilityExperiment";
+const EXPERIMENTS_TAGS = ["aiObservabilityExperiments"] as const;
+const EXPERIMENTS_URL = "/ai/observability/experiments";
 
 /** Step 4: compare product prompt versions, scored by evaluators. */
 export interface PromptExperimentCreateBody {
@@ -67,106 +69,66 @@ export interface ExperimentListArgs {
   limit?: number;
 }
 
-interface QueryOptions {
-  skip?: boolean;
+export interface AiObservabilityExperimentsApi {
+  useCreateMutation: () => ObservabilityMutation<ExperimentCreateBody, ExperimentRecord>;
+  useDetailQuery: (
+    id: string,
+    options?: ObservabilityQueryOptions
+  ) => AdminRpcQueryState<ExperimentRecord | {data: ExperimentRecord}>;
+  useEstimateMutation: () => ObservabilityMutation<ExperimentEstimateBody, ExperimentEstimate>;
+  useListQuery: (
+    args?: ExperimentListArgs
+  ) => AdminRpcQueryState<ExperimentRecord[] | {data: ExperimentRecord[]; more?: boolean}>;
+  usePromoteMutation: () => ObservabilityMutation<
+    {id: string; version: number},
+    {label: string; outgoingVersion?: number}
+  >;
 }
 
-const createExperimentsApi = (api: AdminApi) => {
-  const tagged =
-    typeof api.enhanceEndpoints === "function"
-      ? api.enhanceEndpoints({addTagTypes: ["aiObservabilityExperiments"]})
-      : api;
-  return tagged.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      [LIST_KEY]: build.query({
-        providesTags: ["aiObservabilityExperiments"],
-        query: (args?: ExperimentListArgs) => {
-          const params = {
-            ...(args?.kind ? {kind: args.kind} : {}),
-            ...(args?.limit ? {limit: args.limit} : {}),
-          };
-          return {
-            method: "GET",
-            ...(Object.keys(params).length > 0 ? {params} : {}),
-            url: "/ai/observability/experiments",
-          };
-        },
-      }),
-      [DETAIL_KEY]: build.query({
-        providesTags: (_result: unknown, _error: unknown, id: string) => [
-          {id, type: "aiObservabilityExperiments"},
-        ],
-        query: (id: string) => ({
-          method: "GET",
-          url: `/ai/observability/experiments/${encodeURIComponent(id)}`,
-        }),
-      }),
-      [ESTIMATE_KEY]: build.mutation({
-        query: (body: ExperimentEstimateBody) => ({
-          body,
+const experimentUrl = (id: string): string => `${EXPERIMENTS_URL}/${encodeURIComponent(id)}`;
+
+/** Experiment hooks for `/ai/observability/experiments` over the host-bound admin client. */
+export const useAiObservabilityExperimentsApi = (): AiObservabilityExperimentsApi => {
+  return {
+    useCreateMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: EXPERIMENTS_TAGS,
+        toRequest: (body: ExperimentCreateBody) => ({
+          body: asJsonBody(body),
           method: "POST",
-          url: "/ai/observability/experiments/estimate",
+          url: EXPERIMENTS_URL,
         }),
       }),
-      [CREATE_KEY]: build.mutation({
-        invalidatesTags: ["aiObservabilityExperiments"],
-        query: (body: ExperimentCreateBody) => ({
-          body,
+    useDetailQuery: (id, options) =>
+      useObservabilityQuery({
+        providesTags: EXPERIMENTS_TAGS,
+        skip: options?.skip,
+        url: experimentUrl(id),
+      }),
+    useEstimateMutation: () =>
+      useObservabilityMutation({
+        toRequest: (body: ExperimentEstimateBody) => ({
+          body: asJsonBody(body),
           method: "POST",
-          url: "/ai/observability/experiments",
+          url: `${EXPERIMENTS_URL}/estimate`,
         }),
       }),
-      [PROMOTE_KEY]: build.mutation({
-        invalidatesTags: (_result, _error, args: {id: string}) => [
-          {id: args.id, type: "aiObservabilityExperiments"},
-        ],
-        query: ({id, version}: {id: string; version: number}) => ({
+    useListQuery: (args) =>
+      useObservabilityQuery({
+        providesTags: EXPERIMENTS_TAGS,
+        url: withQueryString({
+          params: {kind: args?.kind, limit: args?.limit || undefined},
+          url: EXPERIMENTS_URL,
+        }),
+      }),
+    usePromoteMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: EXPERIMENTS_TAGS,
+        toRequest: ({id, version}: {id: string; version: number}) => ({
           body: {version},
           method: "POST",
-          url: `/ai/observability/experiments/${encodeURIComponent(id)}/promote`,
+          url: `${experimentUrl(id)}/promote`,
         }),
       }),
-    }),
-    overrideExisting: true,
-  });
-};
-
-export const useAiObservabilityExperimentsApi = (api: AdminApi) => {
-  const enhancedApi = useMemo(() => {
-    return createExperimentsApi(api);
-  }, [api]);
-  const hooks = asDynamicHookApi(enhancedApi);
-  return {
-    useCreateMutation: hooks.useCreateAiObservabilityExperimentMutation as () => [
-      (body: ExperimentCreateBody) => {unwrap: () => Promise<ExperimentRecord>},
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useDetailQuery: hooks.useAiObservabilityExperimentQuery as (
-      id: string,
-      options?: QueryOptions
-    ) => {
-      data?: ExperimentRecord | {data: ExperimentRecord};
-      error?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    useEstimateMutation: hooks.useEstimateAiObservabilityExperimentMutation as () => [
-      (body: ExperimentEstimateBody) => {unwrap: () => Promise<ExperimentEstimate>},
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useListQuery: hooks.useAiObservabilityExperimentsQuery as (args?: ExperimentListArgs) => {
-      data?: ExperimentRecord[] | {data: ExperimentRecord[]; more?: boolean};
-      error?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    usePromoteMutation: hooks.usePromoteAiObservabilityExperimentMutation as () => [
-      (args: {id: string; version: number}) => {
-        unwrap: () => Promise<{label: string; outgoingVersion?: number}>;
-      },
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
   };
 };

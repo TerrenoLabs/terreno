@@ -72,7 +72,6 @@ if (sentryDsn) {
     // @sentry/bun's default integrations call Bun.serve, which does not exist on Vercel's Node runtime.
     defaultIntegrations: isVercel ? false : undefined,
     dsn: sentryDsn,
-    enableLogs: true,
     environment: process.env.APP_ENV ?? "development",
     ignoreErrors: [/^.*ECONNRESET*$/, /^.*socket hang up*$/],
     integrations: [],

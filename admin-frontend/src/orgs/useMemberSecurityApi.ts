@@ -160,7 +160,7 @@ export const useMemberSecurityApi = ({
   const [isRunning, setIsRunning] = useState(false);
   const summary =
     query.data === undefined ? undefined : unwrapData<MemberSecuritySummary>(query.data);
-  const error = rpc ? query.error : new Error("Admin RPC client is unavailable");
+  const error = query.error;
 
   const runAction = useCallback(
     async ({

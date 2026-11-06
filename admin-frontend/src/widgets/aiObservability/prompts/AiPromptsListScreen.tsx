@@ -18,8 +18,8 @@ const PROMPTS_DESCRIPTION =
   "Versioned prompts your app loads by name. Apps use the version labelled production; saving creates a new version.";
 
 export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useCreateMutation, useListQuery, useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading, refetch} = useListQuery({include: "usage7d"});
   const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();

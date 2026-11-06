@@ -68,7 +68,7 @@ Bug
 
 Use one of:
 
-`@terreno/api`, `@terreno/test`, `@terreno/ui`, `@terreno/rtk`, `@terreno/syncdb`,
+`@terreno/api`, `@terreno/test`, `@terreno/ui`, `@terreno/syncdb`,
 `@terreno/admin-backend`, `@terreno/admin-frontend`, `@terreno/admin-spa`,
 `@terreno/ai`, `@terreno/blocks`, `@terreno/api-health`, `@terreno/comms`,
 `@terreno/feature-flags`, `@terreno/jobs`, `@terreno/mcp`, `docs`, `examples`, `mcp`, `plugins`

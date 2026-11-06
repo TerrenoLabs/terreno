@@ -2,6 +2,7 @@ import {DemoConfiguration} from "@config";
 import {DataTable} from "@terreno/ui";
 
 import {
+  AutoWidthDataTable,
   FilterableDataTable,
   LargeVirtualizedDataTable,
   StandardDataTable,
@@ -49,6 +50,7 @@ export const DataTableConfiguration: DemoConfiguration = {
   demoOptions: {},
   stories: {
     StandardDataTable: {render: StandardDataTable},
+    AutoWidthDataTable: {render: AutoWidthDataTable},
     FilterableDataTable: {render: FilterableDataTable},
     LargeVirtualizedDataTable: {render: LargeVirtualizedDataTable},
   },

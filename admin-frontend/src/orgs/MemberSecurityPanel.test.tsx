@@ -4,7 +4,6 @@ import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {AdminProvider} from "../AdminProvider";
-import type {AdminApi} from "../types";
 import {MemberSecurityPanel, type MemberSecurityPanelProps} from "./MemberSecurityPanel";
 import {
   type MemberSecuritySummary,
@@ -13,7 +12,6 @@ import {
   securityActionParams,
 } from "./useMemberSecurityApi";
 
-const api = {} as unknown as AdminApi;
 const SECURITY_URL = "http://api.test/orgs/org-1/members/user-1/security";
 
 interface RecordedCall {
@@ -86,7 +84,6 @@ describe("MemberSecurityPanel", () => {
   const renderPanel = (props: Partial<MemberSecurityPanelProps> = {}) =>
     renderWithTheme(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         apiOrigin="http://api.test"
         getAuthHeaders={async () => ({authorization: "Bearer test"})}
@@ -544,10 +541,25 @@ describe("MemberSecurityPanel", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("explains that it needs a fetch-capable AdminProvider", () => {
-    const screen = renderWithTheme(<MemberSecurityPanel orgId="org-1" userId="user-1" />);
+  it("falls back to the same-origin client outside an AdminProvider", async () => {
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return new Response(JSON.stringify({title: "Nope"}), {
+        headers: {"Content-Type": "application/json"},
+        status: 403,
+      });
+    }) as typeof fetch;
+    try {
+      renderWithTheme(<MemberSecurityPanel orgId="org-1" userId="user-1" />);
 
-    expect(screen.getByText("Admin RPC client is unavailable")).toBeTruthy();
+      await waitFor(() => {
+        expect(requested).toContain("/orgs/org-1/members/user-1/security");
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

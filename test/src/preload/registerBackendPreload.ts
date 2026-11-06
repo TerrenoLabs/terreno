@@ -118,9 +118,10 @@ export const registerBackendPreload = (options: BackendPreloadOptions = {}): voi
         await stopMongoServer();
       }, MONGO_STOP_TIMEOUT_MS);
     } else {
+      // onAfterAll may close Mongoose and stop an in-memory server (registerSimpleMongoPreload)
       afterAll(async () => {
         await options.onAfterAll?.();
-      });
+      }, MONGO_STOP_TIMEOUT_MS);
     }
   }
 

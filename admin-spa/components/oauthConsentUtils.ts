@@ -3,17 +3,17 @@ export type ConsentErrorKind = "decided" | "error" | "expired" | "notFound" | "s
 
 const MCP_OAUTH_EXPIRED_CODE = "mcp-oauth-request-expired";
 
-interface RtkErrorLike {
+interface RequestErrorLike {
   data?: {code?: unknown; title?: unknown};
   status?: unknown;
 }
 
-/** Map an RTK Query error from the consent endpoints to the state the screen shows. */
+/** Map a request client error from the consent endpoints to the state the screen shows. */
 export const consentErrorKind = (error: unknown): ConsentErrorKind => {
   if (!error || typeof error !== "object") {
     return "error";
   }
-  const {data, status} = error as RtkErrorLike;
+  const {data, status} = error as RequestErrorLike;
   if (status === 404) {
     return "notFound";
   }

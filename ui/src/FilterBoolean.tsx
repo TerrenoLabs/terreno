@@ -1,4 +1,4 @@
-import {type FC, useState} from "react";
+import {type ComponentProps, type FC, useState} from "react";
 import {Pressable, View} from "react-native";
 
 import type {FilterBooleanProps} from "./Common";
@@ -11,7 +11,7 @@ import {resolveTestID} from "./testing/resolveTestId";
 // Native Web forwards it. A switch needs its own spacebar handler (per ARIA,
 // Space toggles it) since role="switch" only activates on Enter on the web.
 interface WebKeyDownEvent {
-  key: string;
+  key?: string;
   preventDefault: () => void;
   repeat?: boolean;
 }
@@ -74,7 +74,7 @@ export const FilterBoolean: FC<FilterBooleanProps> = ({
 
   return (
     <Pressable
-      {...webKeyDownProps}
+      {...(webKeyDownProps as Pick<ComponentProps<typeof Pressable>, "onKeyDown">)}
       accessibilityRole="switch"
       accessibilityState={{checked: value, disabled}}
       aria-checked={value}

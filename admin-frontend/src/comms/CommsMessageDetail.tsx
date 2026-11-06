@@ -15,7 +15,6 @@ import {router} from "expo-router";
 import React, {useCallback, useMemo} from "react";
 import {AdminRefField} from "../AdminRefField";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import {CommsStatusBadge} from "./CommsStatusBadge";
 import {
   type CommsMessageRow,
@@ -26,7 +25,6 @@ import {
 import {useCommsDashboardApi} from "./useCommsDashboardApi";
 
 export interface CommsMessageDetailProps {
-  api: AdminApi;
   messageId: string;
   routeBase?: string;
 }
@@ -43,12 +41,11 @@ const consoleUrlFromMetadata = (
 };
 
 export const CommsMessageDetail: React.FC<CommsMessageDetailProps> = ({
-  api,
   messageId,
   routeBase = "/admin",
 }) => {
   const toast = useToast();
-  const {useDetailQuery, useRetryMutation} = useCommsDashboardApi(api);
+  const {useDetailQuery, useRetryMutation} = useCommsDashboardApi();
   const {data, error, isLoading} = useDetailQuery(messageId);
   const [retryMessage, retryState] = useRetryMutation();
   const message = unwrapCommsMessage(data);
@@ -102,7 +99,6 @@ export const CommsMessageDetail: React.FC<CommsMessageDetailProps> = ({
         ) : null}
         {message ? (
           <MessageBody
-            api={api}
             consoleUrl={consoleUrl}
             handleRetry={handleRetry}
             message={message}
@@ -118,7 +114,6 @@ export const CommsMessageDetail: React.FC<CommsMessageDetailProps> = ({
 };
 
 interface MessageBodyProps {
-  api: AdminApi;
   consoleUrl?: string;
   handleRetry: () => Promise<void>;
   message: CommsMessageRow;
@@ -129,7 +124,6 @@ interface MessageBodyProps {
 }
 
 const MessageBody: React.FC<MessageBodyProps> = ({
-  api,
   consoleUrl,
   handleRetry,
   message,
@@ -166,7 +160,6 @@ const MessageBody: React.FC<MessageBodyProps> = ({
       {message.userId ? (
         <Card padding={3} testID="comms-detail-user-card">
           <AdminRefField
-            api={api}
             onChange={noopChange}
             readOnly
             refModelName="User"

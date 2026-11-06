@@ -28,8 +28,7 @@ deploy.
 
 - **api/** - REST API framework built on Express/Mongoose (`@terreno/api`)
 - **ui/** - React Native UI component library (`@terreno/ui`)
-- **rtk/** - Redux Toolkit Query utilities for API backends (`@terreno/rtk`, legacy for data sync)
-- **syncdb/** - Local-first data layer (`@terreno/syncdb`)
+- **syncdb/** - Frontend data layer: local-first collections, request client + generated API hooks, auth session, flags (`@terreno/syncdb`)
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards (`@terreno/blocks`)
@@ -90,13 +89,13 @@ The three core packages form a complete full-stack framework:
               |                               |
      /openapi.json                    sync protocol
               |                               |
-     RTK Query SDK Codegen            @terreno/syncdb
-     (non-synced routes)              (collection CRUD)
+     terreno-syncdb-codegen            terreno-syncdb-codegen
+     --api-out (non-synced routes)    --out (synced collections)
               |                               |
                            FRONTEND
-  @terreno/rtk                         @terreno/syncdb
-  - Generated hooks (auth, admin, AI)  - useQuery / useMutate (local-first)
-  - Better Auth session Redux          - Offline outbox + conflict UI
+                       @terreno/syncdb
+  - Request client + generated hooks   - useQuery / useMutate (local-first)
+  - SessionProvider / useSession       - Offline outbox + conflict UI
                               +
   @terreno/ui
   - React Native components
@@ -105,12 +104,12 @@ The three core packages form a complete full-stack framework:
 ### Integration Flow
 
 1. **Backend (api)**: `syncPlugin` + `isDeletedPlugin`, `modelRouter` with `sync` config, `SyncApp` + `RealtimeApp`
-2. **OpenAPI**: `/openapi.json` for non-synced routes; `bun run sdk` for auth/admin/AI hooks
-3. **Frontend**: `useQuery` / `useMutate` for synced collections; Better Auth via `@terreno/rtk`
+2. **OpenAPI**: `/openapi.json`; `bun run sdk` → `store/apiSdk.ts` (non-synced routes), `bun run sync-sdk` → `store/syncDbSdk.ts`
+3. **Frontend**: `useQuery` / `useMutate` for synced collections; generated `store/apiSdk.ts` hooks for the rest; session via `useSession` from `@terreno/syncdb/auth`. `@terreno/rtk` and Redux were removed in Terreno 58 — never add them.
 
 ## Example Apps (Keep These Updated!)
 
-The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, syncdb, or rtk:
+The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, or syncdb:
 
 1. **Add examples** demonstrating new features
 2. **Update SDK** after backend changes: `cd example-frontend && bun run sdk`
@@ -239,17 +238,19 @@ import {
 } from "@terreno/ui";
 ```
 
-### @terreno/rtk
+### @terreno/syncdb
 
-Redux Toolkit Query integration:
+Frontend data, request, and session layer:
 
-- **generateAuthSlice**: Creates auth reducer and middleware with JWT handling
-- **emptyApi**: Base RTK Query API for code generation
-- **Platform utilities**: Secure token storage (expo-secure-store for native, AsyncStorage for web)
+- **createSyncDb** + `useQuery` / `useMutate`: Local-first collection CRUD
+- **createApiClient** + generated `store/apiSdk.ts` hooks: Every non-synced route
+- **SessionProvider** / **useSession**: Better Auth (or `jwtAuthAdapter`) session state
 
 Key imports:
 ```typescript
-import {generateAuthSlice} from "@terreno/rtk";
+import {createApiClient} from "@terreno/syncdb/api";
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {useMutate, useQuery} from "@terreno/syncdb/react";
 ```
 
 ## CI/CD Workflows

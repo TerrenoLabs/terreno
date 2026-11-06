@@ -10,7 +10,7 @@ TypeScript 7 removes.
 | --- | --- | --- | --- | --- |
 | Node library | `api`, `ai`, `admin-backend`, `announcements`, `api-health`, `blocks`, `comms`, `feature-flags`, `jobs`, `test`, `admin-spa` server (`tsconfig.server.json`) | `nodenext` | `es2023` | CommonJS `dist/` |
 | Node ESM tool | `mcp-server`, `create-terreno-app` | `nodenext` | `es2023` | ESM `dist/` (`"type": "module"`) |
-| Frontend library | `ui`, `admin-frontend`, `rtk`, `syncdb` | `esnext` + `moduleResolution: bundler` | `es2022` | ESM `dist/` for Metro |
+| Frontend library | `ui`, `admin-frontend`, `syncdb` | `esnext` + `moduleResolution: bundler` | `es2022` | ESM `dist/` for Metro |
 | Bun CLI | `cli` | `esnext` + `moduleResolution: bundler` + `customConditions: ["bun"]` | `es2022` | ESM `dist/` for Bun |
 | Expo app | `example-frontend`, `demo`, `admin-spa` | extends `expo/tsconfig.base` | from Expo | nothing (`noEmit`) |
 | Bun app | `example-backend` | `preserve` | `esnext` | nothing (`noEmit`) |
@@ -41,6 +41,4 @@ their `tsconfig.json`, so an `extends` into a repo-root base would ship a broken
 | `target: es5`, `downlevelIteration` | Deprecated. No supported runtime needs ES5 output. |
 | `esModuleInterop`, `allowSyntheticDefaultImports`, `forceConsistentCasingInFileNames` | Already `true` by default in TypeScript 6. Setting them to `false` is deprecated. |
 
-`create-terreno-app` scaffolds follow the Expo app and Bun app profiles. Its
-`tsconfig.codegen.json` pairs `module: commonjs` with `moduleResolution: bundler`, because
-the RTK codegen CLI forces CommonJS when it registers `ts-node`.
+`create-terreno-app` scaffolds follow the Expo app and Bun app profiles.

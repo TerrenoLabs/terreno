@@ -12,8 +12,8 @@
     "express": "catalog:",
     "luxon": "catalog:",
     "mongodb-memory-server": "catalog:",
-    "mongodb-memory-server-core": "^11.0.1",
-    "mongodb-memory-server-global": "^11.0.1",
+    "mongodb-memory-server-core": "^11.3.0",
+    "mongodb-memory-server-global": "^11.3.0",
     "qs": "catalog:",
     "supertest": "catalog:",
     "typescript": "catalog:",
@@ -22,7 +22,7 @@
   "description": "Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
+    "@reduxjs/toolkit": "^2.11.1",
     "@terreno/ui": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/bun": "catalog:",
@@ -32,7 +32,7 @@
     "mongoose": "catalog:",
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-redux": "catalog:"
+    "react-redux": "^9.2.0"
   },
   "exports": {
     ".": {
@@ -70,7 +70,7 @@
     "mongoose": "^8.0.0 || ^9.0.0",
     "react": "catalog:",
     "react-native": "catalog:",
-    "react-redux": "catalog:"
+    "react-redux": "^9.2.0"
   },
   "peerDependenciesMeta": {
     "@terreno/ui": {

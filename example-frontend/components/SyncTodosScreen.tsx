@@ -1,5 +1,6 @@
 import {FlashList, type ListRenderItemInfo} from "@shopify/flash-list";
 import {generateMutationId} from "@terreno/syncdb";
+import {useSession} from "@terreno/syncdb/auth";
 import {useEntityIds, useSyncStatus} from "@terreno/syncdb/react";
 import {
   Box,
@@ -24,7 +25,7 @@ import {SyncDevPanel} from "@/components/SyncDevPanel";
 import {TodoSummaryCard} from "@/components/TodoSummaryCard";
 import {WHATS_NEW_RELEASES} from "@/constants/whatsNew";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
-import {logout, useAppDispatch} from "@/store/index";
+import {betterAuthClient} from "@/lib/betterAuth";
 import {
   type CreateTodoBody,
   type Todo,
@@ -265,7 +266,7 @@ const SyncTodosScreen: React.FC = () => {
   // The app mounts exactly one ConflictSheet (owned by SyncHealthToast in _layout.tsx);
   // the banner's conflict badge requests it rather than rendering a second copy.
   const {openConflicts} = useSyncConflictsController();
-  const dispatch = useAppDispatch();
+  const {refresh: refreshSession} = useSession();
   const insets = useSafeAreaInsets();
   const listBottomPadding = insets.bottom + TAB_BAR_OVERLAP_PADDING;
 
@@ -359,10 +360,19 @@ const SyncTodosScreen: React.FC = () => {
 
   // Replay is paused until this user re-authenticates, and the session we hold is no
   // longer usable — clearing it sends the root layout's redirect effect to /login, and a
-  // successful sign-in resumes the queued mutations for the same user.
+  // successful sign-in resumes the queued mutations for the same user. This deliberately
+  // skips useSession().logout, which wipes local data and would drop those queued writes.
   const handleAuthRequired = useCallback((): void => {
-    dispatch(logout());
-  }, [dispatch]);
+    const endSession = async (): Promise<void> => {
+      try {
+        await betterAuthClient.signOut();
+      } catch (error: unknown) {
+        console.warn("[SyncTodos] Sign out after auth pause failed", error);
+      }
+      await refreshSession();
+    };
+    void endSession();
+  }, [refreshSession]);
 
   const keyExtractor = useCallback((item: TodoListRow): string => {
     if (item.type === "section") {
@@ -408,14 +418,22 @@ const SyncTodosScreen: React.FC = () => {
     (): React.ReactElement => (
       <Box>
         <SyncDevPanel />
-        <Box alignItems="center" direction="row" justifyContent="between" marginBottom={6}>
+        {/* Stacked on phones: the title and three controls do not fit one row below `lg`. */}
+        <Box
+          alignItems="start"
+          direction="column"
+          gap={3}
+          justifyContent="between"
+          lgDirection="row"
+          marginBottom={6}
+        >
           <Box flex="grow">
             <Heading size="xl">My Todos</Heading>
             <Text color="secondaryLight" size="sm">
               Local-first via @terreno/syncdb
             </Text>
           </Box>
-          <Box alignItems="center" direction="row" gap={2}>
+          <Box alignItems="center" direction="row" gap={2} wrap>
             <Button
               iconName="filter"
               onClick={handleOpenWindows}

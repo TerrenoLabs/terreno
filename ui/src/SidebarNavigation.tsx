@@ -267,14 +267,14 @@ const SidebarNavigationBase: FC<SidebarNavigationProps> = ({
   topItems,
   bottomItems,
   onNavigate,
-  initialRouteName,
+  initialRouteName: _initialRouteName,
   screenOptions,
   panelStyle,
   itemStyle,
   children,
 }) => {
   return (
-    <Navigator initialRouteName={initialRouteName} router={TabRouter} screenOptions={screenOptions}>
+    <Navigator router={TabRouter} screenOptions={screenOptions}>
       <SidebarNavigatorContent
         bottomItems={bottomItems}
         itemStyle={itemStyle}

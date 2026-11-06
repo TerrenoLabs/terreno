@@ -1,17 +1,12 @@
 import type {AdminFieldValue, AdminModelConfig, AdminSyncDb} from "./types";
 
 export interface WindowedAdminTableGate {
-  hasFetchClient: boolean;
   modelConfig?: AdminModelConfig;
   syncDb?: AdminSyncDb;
 }
 
-export const isWindowedAdminTable = ({
-  hasFetchClient,
-  modelConfig,
-  syncDb,
-}: WindowedAdminTableGate): boolean => {
-  if (!syncDb || !hasFetchClient || !modelConfig) {
+export const isWindowedAdminTable = ({modelConfig, syncDb}: WindowedAdminTableGate): boolean => {
+  if (!syncDb || !modelConfig) {
     return false;
   }
   if (modelConfig.adminBroadcast !== true) {

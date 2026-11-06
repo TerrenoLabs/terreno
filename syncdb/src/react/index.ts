@@ -7,6 +7,8 @@
  * main entry means non-React (node/backend) consumers never load React.
  */
 
+export * from "./apiHooks";
 export * from "./collectionHooks";
 export * from "./hooks";
 export * from "./provider";
+export * from "./useSocketEvent";

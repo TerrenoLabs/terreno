@@ -1,5 +1,12 @@
 import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {Platform, Pressable, type StyleProp, TextInput, View} from "react-native";
+import {
+  Platform,
+  Pressable,
+  type StyleProp,
+  TextInput,
+  type TextInputInstance,
+  View,
+} from "react-native";
 
 import type {ActionSheet} from "./ActionSheet";
 import {Box} from "./Box";
@@ -57,7 +64,7 @@ interface HeightSegmentProps {
   label: string;
   disabled?: boolean;
   maxValue: number;
-  inputRef?: (ref: TextInput | null) => void;
+  inputRef?: (ref: TextInputInstance | null) => void;
   error?: boolean;
   focused?: boolean;
 }

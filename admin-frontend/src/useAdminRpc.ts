@@ -1,7 +1,9 @@
+import {unwrapEnvelope} from "@terreno/syncdb/api";
 import {useCallback, useEffect, useRef, useState} from "react";
 import {useAdminContext} from "./adminContext";
-import type {AdminRequestArgs} from "./adminRequest";
+import {type AdminRequestArgs, adminRequest} from "./adminRequest";
 import type {AdminRpc} from "./adminRpc";
+import {adminRpcSeedKey, useAdminRpcSeedMatch} from "./adminRpcSeed";
 
 const invalidationListeners = new WeakMap<AdminRpc, Map<string, Set<() => void>>>();
 
@@ -33,95 +35,211 @@ const invalidateTags = (rpc: AdminRpc, tags: readonly string[]): void => {
   }
 };
 
-export const useAdminRpc = (): AdminRpc | undefined => {
-  const ctx = useAdminContext();
-  return ctx?.adminRpc;
+/**
+ * Unauthenticated, same-origin client used when an admin screen renders outside
+ * `AdminProvider`. Hosts that need cookies, Bearer headers, or a cross-origin API
+ * render `AdminProvider` instead.
+ */
+const defaultAdminRpc: AdminRpc = (args: AdminRequestArgs): Promise<unknown> => {
+  return adminRequest(args);
 };
+
+let warnedMissingProvider = false;
+
+/** @internal Test helper — clears the one-time missing-provider warning. */
+export const resetAdminRpcWarningForTests = (): void => {
+  warnedMissingProvider = false;
+};
+
+/**
+ * Host-bound admin fetch client from `AdminProvider`. Outside a provider this
+ * returns a plain same-origin client and warns once in development.
+ */
+export const useAdminRpc = (): AdminRpc => {
+  const ctx = useAdminContext();
+  if (ctx?.adminRpc) {
+    return ctx.adminRpc;
+  }
+  if (!warnedMissingProvider && typeof __DEV__ !== "undefined" && __DEV__) {
+    warnedMissingProvider = true;
+    console.warn(
+      "[admin] Admin screen rendered outside AdminProvider; requests use same-origin fetch without auth headers."
+    );
+  }
+  return defaultAdminRpc;
+};
+
+/**
+ * List envelopes (`{data, more, …}`) stay whole, and single-document envelopes
+ * (`{data}`) unwrap to the document — the same rule as the syncdb API client.
+ * Admin screens read this shape for model CRUD responses.
+ */
+export const unwrapAdminEnvelope = (result: unknown): unknown => unwrapEnvelope(result);
+
+export interface AdminRpcRefetchResult<T> {
+  data?: T;
+  error?: unknown;
+  isError: boolean;
+}
 
 export interface AdminRpcQueryState<T> {
   data: T | undefined;
   error: unknown;
+  isError: boolean;
   isFetching: boolean;
   isLoading: boolean;
-  refetch: () => void;
+  refetch: () => Promise<AdminRpcRefetchResult<T>>;
 }
 
-/**
- * GET-style admin RPC. Skips when `rpc` is missing or `skip` is true so RTK
- * dual-run callers can keep a stable hook order.
- */
-export const useAdminRpcQuery = <T = unknown>({
-  pollingInterval,
-  providesTags = [],
-  rpc,
-  skip = false,
-  url,
-}: {
+export interface AdminRpcQueryOptions {
+  /** Extra request headers (for example `X-Organization-Id`). */
+  headers?: Record<string, string>;
+  /**
+   * Keep the last body on screen, and `isLoading` false, while a new `url` loads. For paging
+   * inside one list, where the table should stay up. Leave it off when the url names another
+   * resource (a route change), so a body is never shown under the wrong url.
+   */
+  keepPreviousData?: boolean;
   pollingInterval?: number;
   providesTags?: readonly string[];
   rpc?: AdminRpc;
   skip?: boolean;
+  /** Maps the parsed response before it is stored as `data`. */
+  transformResponse?: (result: unknown) => unknown;
   url: string;
-}): AdminRpcQueryState<T> => {
-  const [data, setData] = useState<T | undefined>(undefined);
-  const [error, setError] = useState<unknown>(null);
-  const [isLoading, setIsLoading] = useState(Boolean(rpc) && !skip);
-  const [isFetching, setIsFetching] = useState(Boolean(rpc) && !skip);
-  const [generation, setGeneration] = useState(0);
-  const [requestUrl, setRequestUrl] = useState(url);
-  const loadedUrlRef = useRef<string | null>(null);
-  const tagsKey = providesTags.join("\u0000");
+}
 
-  // Drop the previous URL's body before paint so a route change cannot show it.
-  if (url !== requestUrl) {
-    setRequestUrl(url);
-    setData(undefined);
-    setError(null);
-    setIsLoading(Boolean(rpc) && !skip);
+/**
+ * GET-style admin query with tag invalidation, polling, and refetch. Skips when
+ * `rpc` is missing or `skip` is true so callers keep a stable hook order.
+ */
+export const useAdminRpcQuery = <T = unknown>({
+  headers,
+  keepPreviousData = false,
+  pollingInterval,
+  providesTags = [],
+  rpc,
+  skip = false,
+  transformResponse,
+  url,
+}: AdminRpcQueryOptions): AdminRpcQueryState<T> => {
+  const requestKey = adminRpcSeedKey(url, headers);
+  const seed = useAdminRpcSeedMatch(requestKey);
+  const isSeeded = seed.found && !skip;
+  const [data, setData] = useState<T | undefined>(() => {
+    if (!isSeeded) {
+      return undefined;
+    }
+    return (transformResponse ? transformResponse(seed.value) : seed.value) as T;
+  });
+  const [error, setError] = useState<unknown>(null);
+  const [isLoading, setIsLoading] = useState(!isSeeded && Boolean(rpc) && !skip);
+  const [isFetching, setIsFetching] = useState(!isSeeded && Boolean(rpc) && !skip);
+  const [generation, setGeneration] = useState(0);
+  const [activeRequestKey, setActiveRequestKey] = useState(requestKey);
+  // The organization part of the key alone; paging with keepPreviousData keeps rows only while it
+  // stays the same.
+  const organizationKey = adminRpcSeedKey("", headers);
+  const [activeOrganizationKey, setActiveOrganizationKey] = useState(organizationKey);
+  // Request key (url + organization header) of the body on screen. An organization change on the
+  // same url counts as a new request, so one organization's body never shows under another.
+  const loadedKeyRef = useRef<string | null>(isSeeded ? requestKey : null);
+  // The request key whose first fetch the seed replaces. Cleared once any other request runs, so
+  // returning to it loads again; a refetch or invalidation bumps `generation` and fetches as usual.
+  const seededKeyRef = useRef<string | null>(isSeeded ? requestKey : null);
+  const pendingRefetchesRef = useRef<Array<(result: AdminRpcRefetchResult<T>) => void>>([]);
+  const transformRef = useRef(transformResponse);
+  transformRef.current = transformResponse;
+  const tagsKey = providesTags.join("\u0000");
+  const headersKey = headers ? JSON.stringify(headers) : "";
+
+  // Drop the previous request's body before paint so a route or organization change cannot show
+  // it, unless the caller pages through one list in one organization and wants the rows to stay
+  // until the next page arrives.
+  if (requestKey !== activeRequestKey) {
+    const isSameOrganization = organizationKey === activeOrganizationKey;
+    setActiveRequestKey(requestKey);
+    setActiveOrganizationKey(organizationKey);
+    seededKeyRef.current = null;
+    if (!(keepPreviousData && isSameOrganization)) {
+      loadedKeyRef.current = null;
+      setData(undefined);
+      setError(null);
+      setIsLoading(Boolean(rpc) && !skip);
+    }
     setIsFetching(Boolean(rpc) && !skip);
   }
 
-  const refetch = useCallback((): void => {
-    setGeneration((current) => current + 1);
+  const settleRefetches = useCallback((result: AdminRpcRefetchResult<T>): void => {
+    const pending = pendingRefetchesRef.current;
+    pendingRefetchesRef.current = [];
+    for (const resolve of pending) {
+      resolve(result);
+    }
   }, []);
 
-  // Fetch whenever the bound client, URL, or skip flag changes.
+  const refetch = useCallback((): Promise<AdminRpcRefetchResult<T>> => {
+    return new Promise((resolve) => {
+      pendingRefetchesRef.current.push(resolve);
+      setGeneration((current) => current + 1);
+    });
+  }, []);
+
+  // Fetch whenever the bound client, URL, headers, or skip flag changes.
   useEffect(() => {
     if (!rpc || skip) {
+      // A seed answers only the first request it was rendered for. After a skip (for example
+      // a sign-out), the next request must fetch: the seed may belong to another session.
+      seededKeyRef.current = null;
       setIsLoading(false);
       setIsFetching(false);
+      settleRefetches({isError: false});
       return;
     }
+    const requestHeaders = headersKey
+      ? (JSON.parse(headersKey) as Record<string, string>)
+      : undefined;
+    const key = adminRpcSeedKey(url, requestHeaders);
+    if (generation === 0 && seededKeyRef.current === key) {
+      return;
+    }
+    seededKeyRef.current = null;
     let cancelled = false;
-    const isNewUrl = loadedUrlRef.current !== url;
-    setIsLoading(isNewUrl);
+    const isNewRequest = loadedKeyRef.current !== key;
+    // With keepPreviousData, only the first load of all shows as loading.
+    setIsLoading(keepPreviousData ? loadedKeyRef.current === null : isNewRequest);
     setIsFetching(true);
-    if (isNewUrl) {
-      // The body on screen is gone, so returning to the old URL must load it again.
-      loadedUrlRef.current = null;
+    if (isNewRequest && !keepPreviousData) {
+      // The body on screen is gone, so returning to the old request must load it again.
+      loadedKeyRef.current = null;
       setData(undefined);
     }
     setError(null);
-    rpc({method: "GET", url})
-      .then((result) => {
-        if (!cancelled) {
-          loadedUrlRef.current = url;
-          setData(result as T);
-          setIsLoading(false);
-          setIsFetching(false);
+    rpc({headers: requestHeaders, method: "GET", url})
+      .then((raw) => {
+        if (cancelled) {
+          return;
         }
+        const result = (transformRef.current ? transformRef.current(raw) : raw) as T;
+        loadedKeyRef.current = key;
+        setData(result);
+        setIsLoading(false);
+        setIsFetching(false);
+        settleRefetches({data: result, isError: false});
       })
       .catch((caught: unknown) => {
-        if (!cancelled) {
-          setError(caught);
-          setIsLoading(false);
-          setIsFetching(false);
+        if (cancelled) {
+          return;
         }
+        setError(caught);
+        setIsLoading(false);
+        setIsFetching(false);
+        settleRefetches({error: caught, isError: true});
       });
     return () => {
       cancelled = true;
     };
-  }, [generation, rpc, skip, url]);
+  }, [generation, headersKey, keepPreviousData, rpc, settleRefetches, skip, url]);
 
   // Refetch mounted queries when a successful RPC mutation invalidates their tags.
   useEffect(() => {
@@ -141,7 +259,7 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [rpc, skip, tagsKey]);
 
-  // Re-run the request on the same interval RTK `pollingInterval` uses.
+  // Re-run the request every `pollingInterval` milliseconds while mounted.
   useEffect(() => {
     if (!rpc || skip || !pollingInterval) {
       return;
@@ -154,14 +272,26 @@ export const useAdminRpcQuery = <T = unknown>({
     };
   }, [pollingInterval, rpc, skip]);
 
-  return {data, error, isFetching, isLoading, refetch};
+  return {data, error, isError: Boolean(error), isFetching, isLoading, refetch};
 };
 
+export interface AdminRpcMutationOptions {
+  invalidatesTags?: readonly string[];
+  /** Maps the parsed response before `unwrap()` resolves. */
+  transformResponse?: (result: unknown) => unknown;
+}
+
+export type AdminRpcMutationTrigger = (args: AdminRequestArgs) => {
+  unwrap: () => Promise<unknown>;
+};
+
+/** Mutation-style admin request: `trigger(args).unwrap()` then invalidate tags. */
 export const useAdminRpcMutation = (
   rpc: AdminRpc | undefined,
-  options: {invalidatesTags?: readonly string[]} = {}
-): [(args: AdminRequestArgs) => {unwrap: () => Promise<unknown>}, {isLoading: boolean}] => {
+  options: AdminRpcMutationOptions = {}
+): [AdminRpcMutationTrigger, {isLoading: boolean}] => {
   const [isLoading, setIsLoading] = useState(false);
+  const {invalidatesTags, transformResponse} = options;
   const trigger = useCallback(
     (args: AdminRequestArgs): {unwrap: () => Promise<unknown>} => {
       return {
@@ -171,19 +301,16 @@ export const useAdminRpcMutation = (
           }
           setIsLoading(true);
           try {
-            const result = await rpc(args);
-            invalidateTags(rpc, options.invalidatesTags ?? []);
-            return result;
+            const raw = await rpc(args);
+            invalidateTags(rpc, invalidatesTags ?? []);
+            return transformResponse ? transformResponse(raw) : raw;
           } finally {
             setIsLoading(false);
           }
         },
       };
     },
-    [options.invalidatesTags, rpc]
+    [invalidatesTags, rpc, transformResponse]
   );
-  return [trigger, {isLoading}] as [
-    (args: AdminRequestArgs) => {unwrap: () => Promise<unknown>},
-    {isLoading: boolean},
-  ];
+  return [trigger, {isLoading}];
 };

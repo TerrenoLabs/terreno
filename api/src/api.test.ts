@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import type express from "express";
 import {DateTime} from "luxon";
 import mongoose, {type Model} from "mongoose";
@@ -7,7 +7,9 @@ import type TestAgent from "supertest/lib/agent";
 
 import {addPopulateToQuery, type JSONValue, modelRouter} from "./api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "./auth";
+import {clearCollectionRegistry, getCollection} from "./collectionRegistry";
 import {APIError} from "./errors";
+import {logger} from "./logger";
 import {clearMCPRegistry, getMCPRegistry} from "./mcp/registry";
 import {Permissions} from "./permissions";
 import type {AnyTerrenoAccess} from "./rbac/types";
@@ -2191,7 +2193,7 @@ describe("@terreno/api", () => {
   });
 
   describe("three-arg modelRouter registration", () => {
-    it("returns a ModelRouterRegistration with path and realtime", () => {
+    it("returns a ModelRouterRegistration with path", () => {
       const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
@@ -2200,7 +2202,6 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
-        realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
       expect(registration).toHaveProperty("__type", "modelRouter");
       expect(registration).toHaveProperty("path", "/food");
@@ -2208,6 +2209,35 @@ describe("@terreno/api", () => {
       expect(registration).toHaveProperty("_buildWithContext");
       expect(registration).toHaveProperty("model");
       expect(registration).toHaveProperty("options");
+    });
+
+    it("builds the standalone router only when something reads it", () => {
+      const debugSpy = spyOn(logger, "debug");
+      const openApiSkips = (): number =>
+        debugSpy.mock.calls.filter((call) =>
+          String(call[0]).includes('No options.openApi provided for model "Food"')
+        ).length;
+      try {
+        const registration = modelRouter("/food", FoodModel, {
+          permissions: {
+            create: [Permissions.IsAny],
+            delete: [Permissions.IsAny],
+            list: [Permissions.IsAny],
+            read: [Permissions.IsAny],
+            update: [Permissions.IsAny],
+          },
+        });
+        // TerrenoApp mounts _buildWithContext's router, so registering must not build one.
+        expect(openApiSkips()).toBe(0);
+
+        const router = registration.router;
+        expect(typeof router).toBe("function");
+        expect(openApiSkips()).toBe(1);
+        expect(registration.router).toBe(router);
+        expect(openApiSkips()).toBe(1);
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
 
     it("refreshes MCP registry options when rebuilt with accessControl", () => {
@@ -2272,8 +2302,9 @@ describe("@terreno/api", () => {
       expect(registered?.options.permissions.list).not.toEqual([Permissions.IsAny]);
     });
 
-    it("logs a warning when realtime config is used without the path form", () => {
-      const router = modelRouter(FoodModel, {
+    it("rejects the removed realtime option and registers no realtime surface", () => {
+      clearCollectionRegistry();
+      const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
           delete: [Permissions.IsAny],
@@ -2281,11 +2312,12 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
+        // @ts-expect-error `realtime` was removed in Terreno 58; use `sync` with @terreno/syncdb.
         realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
-      // Returns a plain Router, not a registration, because no path was given
-      expect(router).toBeDefined();
-      expect(router).not.toHaveProperty("__type");
+      expect(registration).toHaveProperty("path", "/food");
+      expect(getCollection("/food")?.surfaces).toEqual({mcp: false, sync: false});
+      clearCollectionRegistry();
     });
   });
 

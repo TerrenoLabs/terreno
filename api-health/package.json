@@ -17,6 +17,12 @@
     "supertest": "catalog:",
     "typescript": "catalog:"
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "src/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "health",

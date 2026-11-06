@@ -6,11 +6,11 @@ import {GptHistory} from "./gptHistory";
 
 describe("GptHistory Model", () => {
   beforeEach(async () => {
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   afterEach(async () => {
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("schema", () => {

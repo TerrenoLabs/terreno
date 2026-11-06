@@ -5,6 +5,8 @@ description: >-
   non-scope, acceptance, affected package) so work-github-issues can plan and
   roast it. Trigger with /create-github-issue or phrases like "create a GitHub
   issue", "file a ticket", "open an issue with context".
+triggers:
+  - user
 ---
 # Create GitHub issue
 

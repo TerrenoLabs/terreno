@@ -19,7 +19,6 @@ import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import {CommsStatCard} from "./CommsStatCard";
 import {CommsStatusBadge} from "./CommsStatusBadge";
 import {type CommsDashboardFilters, withDefaultCommsDashboardDates} from "./commsDashboardParams";
@@ -74,7 +73,6 @@ const COLUMNS: DataTableColumn[] = [
 ];
 
 export interface CommsDashboardScreenProps {
-  api: AdminApi;
   filters: CommsDashboardFilters;
   onFiltersChange: (next: CommsDashboardFilters) => void;
   routeBase?: string;
@@ -150,7 +148,6 @@ const StatsCards: React.FC<{stats?: CommsStatsResponse; usingDefaultDateRange: b
 };
 
 export const CommsDashboardScreen: React.FC<CommsDashboardScreenProps> = ({
-  api,
   filters,
   onFiltersChange,
   routeBase = "/admin",
@@ -158,7 +155,7 @@ export const CommsDashboardScreen: React.FC<CommsDashboardScreenProps> = ({
   const toast = useToast();
   const [confirmRetryMany, setConfirmRetryMany] = useState(false);
   const {useListQuery, useRetryManyMutation, useRetryMutation, useStatsQuery} =
-    useCommsDashboardApi(api);
+    useCommsDashboardApi();
   const page = filters.page ?? 1;
   const queryFilters = useMemo(() => withDefaultCommsDashboardDates(filters), [filters]);
   const usingDefaultDateRange = !filters.startDate && !filters.endDate;

@@ -1,4 +1,12 @@
-import {type ReactElement, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {
+  type ReactElement,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Dimensions,
   type DimensionValue,
@@ -6,10 +14,13 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  type ScrollViewInstance,
   Text,
   TextInput,
+  type TextInputInstance,
   type TextStyle,
   View,
+  type ViewInstance,
   type ViewStyle,
 } from "react-native";
 
@@ -136,8 +147,8 @@ export const WebDropdownMenu = ({
   const searchable = !disableSearch;
   const {theme} = useTheme();
   const [searchQuery, setSearchQuery] = useState("");
-  const searchInputRef = useRef<TextInput>(null);
-  const listScrollRef = useRef<ScrollView>(null);
+  const searchInputRef = useRef<TextInputInstance>(null);
+  const listScrollRef = useRef<ScrollViewInstance>(null);
   const listViewportHeightRef = useRef(0);
   const optionLayoutsRef = useRef<Array<{height: number; offset: number}>>([]);
 
@@ -509,12 +520,12 @@ export const WebDropdownMenu = ({
  * the menu lines up beneath it across browsers.
  */
 export const useWebDropdownAnchor = (): {
-  triggerRef: React.RefObject<View | null>;
+  triggerRef: RefObject<ViewInstance | null>;
   anchor: WebDropdownAnchor;
   cancelPendingMeasurement: () => void;
   measure: (onMeasured: (anchor: WebDropdownAnchor) => void) => void;
 } => {
-  const triggerRef = useRef<View>(null);
+  const triggerRef = useRef<ViewInstance>(null);
   const [anchor, setAnchor] = useState<WebDropdownAnchor>({height: 0, width: 0, x: 0, y: 0});
   const measurementRequestRef = useRef(0);
 

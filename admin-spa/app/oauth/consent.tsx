@@ -1,8 +1,7 @@
-import {selectBetterAuthUser} from "@terreno/rtk";
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Card, Heading, Spinner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React, {useCallback, useState} from "react";
-import {useSelector} from "react-redux";
 import {
   CONSENT_ERROR_COPY,
   type ConsentErrorKind,
@@ -62,16 +61,9 @@ const ConsentMessage: React.FC<{message: string; testID: string; title: string}>
 const OAuthConsentScreen: React.FC = () => {
   const {request} = useLocalSearchParams<{request?: string | string[]}>();
   const requestId = readConsentRequestId(request);
-  const user = useSelector(selectBetterAuthUser);
+  const {user} = useSession();
 
-  const {
-    data: pending,
-    error: loadError,
-    isLoading,
-  } = useGetMcpOAuthRequestQuery(requestId ?? "", {
-    refetchOnMountOrArgChange: true,
-    skip: !requestId,
-  });
+  const {data: pending, error: loadError, isLoading} = useGetMcpOAuthRequestQuery(requestId);
   const [approve] = useApproveMcpOAuthRequestMutation();
   const [deny] = useDenyMcpOAuthRequestMutation();
 

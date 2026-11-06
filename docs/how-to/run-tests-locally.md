@@ -21,7 +21,7 @@ with `origin/master`. It applies the CircleCI path-filter mapping in
 `.circleci/config.yml`, then runs the local command for each triggered job: package
 `test:coverage` plus the 90% new-file LCOV gate, `ui` types, demo typecheck,
 example-backend and example-frontend tests, every `repo-policies` step, rulesync drift,
-and the typedoc API reference when `api/src` or `rtk/src` changes. Every step runs even
+and the typedoc API reference when `api/src` changes. Every step runs even
 after a failure, so a single pass lists every problem. Fix them all, then push once.
 
 Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, Docker)
@@ -64,7 +64,6 @@ bun test --only-failures <path>
 | `ai-ci` | `cd ai && bun run test:ci` |
 | `blocks-ci` | `bun run blocks:test` |
 | `ui-ci` | `bun run ui:test` |
-| `rtk-ci` | `bun run rtk:test` |
 | `syncdb-ci` | `bun run syncdb:test` |
 | `comms-ci` | `bun run comms:test` |
 | `jobs-ci` / jobs package | `bun run jobs:test` |
@@ -124,7 +123,7 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 | CircleCI shard | Specs |
 | --- | --- |
 | `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` `two-factor` |
-| `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
+| `e2e` `app` | `todos` `todo-windows` `todo-browser` `profile` `realtime` `ai-chat` `pdf` `notifications` `socket-flags` `mcp-tokens` |
 | `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` `org-admin-security` `admin-user-security` |
 | `e2e-cross-site` (not required) | the cross-site specs below, then `account-linking` with `E2E_ACCOUNT_LINKING=explicit` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
@@ -229,6 +228,15 @@ bun run test:integration    # needs Mongo + example-backend; job `admin-spa-inte
 For `test:integration`, start example-backend with `ADMIN_SPA_ENABLED=true`,
 `AUTH_PROVIDER=better-auth`, and, for the MCP OAuth consent spec, `MCP_OAUTH_ENABLED=true` and
 `PUBLIC_API_URL=http://localhost:4000`. Without the last two the consent spec is skipped.
+
+Job `admin-spa-image-smoke` builds `example-backend/Dockerfile` and checks the image's
+server-rendered admin SPA. Locally, with Docker, or against any running backend:
+
+```bash
+docker build --file example-backend/Dockerfile --tag terreno-example-backend:admin-spa-smoke .
+# run it with ADMIN_SPA_ENABLED=true and a Mongo replica set (see the job), then:
+ADMIN_SPA_SMOKE_BRAND="Terreno Example" bash scripts/admin-spa-image-smoke.sh http://localhost:4000
+```
 
 ## Maestro web e2e
 

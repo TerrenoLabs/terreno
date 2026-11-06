@@ -1,5 +1,5 @@
 [test]
-preload = ["../ui/src/bunSetup.ts", "./src/testing/useAdminApiDouble.ts"]
+preload = ["../ui/src/bunSetup.ts", "./src/testing/useAdminModelApiDouble.ts"]
 root = "./src"
 coveragePathIgnorePatterns = ["**/*.test.ts", "**/*.test.tsx", "**/*.isolated.ts", "**/*.isolated.tsx", "**/isolated/**", "../ui/**", "dist/**"]
 # `scripts/check-coverage.ts` enforces this table on Bun versions that parse

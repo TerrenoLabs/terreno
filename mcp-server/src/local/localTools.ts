@@ -5,10 +5,10 @@ import {isBrowserAction, useBrowser} from "./tools/browser.js";
 import {databaseQuery} from "./tools/databaseQuery.js";
 import {databaseSchema} from "./tools/databaseSchema.js";
 import {lastError, readLogs} from "./tools/readLogs.js";
-import {evaluate, getClientState, navigate} from "./tools/runtime.js";
+import {evaluate, navigate} from "./tools/runtime.js";
 import {getSyncDbState, syncDbAction, syncDbSnapshot} from "./tools/syncDb.js";
 
-const CLIENT_STATE_INPUT_SCHEMA: Tool["inputSchema"] = {
+const SYNCDB_STATE_INPUT_SCHEMA: Tool["inputSchema"] = {
   additionalProperties: false,
   properties: {
     collection: {description: "SyncDB: optional collection filter", type: "string"},
@@ -25,22 +25,9 @@ const CLIENT_STATE_INPUT_SCHEMA: Tool["inputSchema"] = {
       description: "SyncDB: client/store name; defaults to the first registered client",
       type: "string",
     },
-    query: {
-      description:
-        "RTK: when slice is rtk/terreno-rtk (or omitted), filter cache rows whose endpoint name or serialized args contain this substring (case-insensitive).",
-      type: "string",
-    },
-    slice: {
-      description:
-        "RTK: `auth`, `betterAuth`, `rtk`/`terreno-rtk`, or any top-level Redux state key. Omit for auth + RTK Query cache summary.",
-      type: "string",
-    },
   },
   type: "object",
 };
-
-const GET_CLIENT_STATE_DESCRIPTION =
-  "Inspect the running app's client data layer. Detects the RTK Query Redux store (`registerTerrenoDevStore` / `globalThis.__TERRENO_STORE__`) and the SyncDB client (`createSyncDb({debug: true})` / `globalThis.__TERRENO_SYNCDB__`), in-process or via CDP. Returns JSON with `layer`: `rtk`, `syncdb`, `syncdb+rtk` (both present; both payloads returned), or `none`. `rtk` holds auth plus an RTK Query cache summary (queries/mutations with endpoint, status, args), narrowed by `slice`/`query`. `syncdb` holds the SyncDB inspect output (status, entities, outbox, conflicts, cursors, streams, debug events), narrowed by `name`/`collection`/`entityId`/`limit`/`includeDebugEvents`. `none` returns a setup `hint`, per-layer `reasons`, and the CDP `connection` status. Sensitive fields are redacted. Use `get_syncdb_state` for SyncDB-only reads.";
 
 export const localMcpTools: Tool[] = [
   {
@@ -117,39 +104,9 @@ export const localMcpTools: Tool[] = [
     name: "last_error",
   },
   {
-    description: GET_CLIENT_STATE_DESCRIPTION,
-    inputSchema: CLIENT_STATE_INPUT_SCHEMA,
-    name: "get_client_state",
-  },
-  {
-    description:
-      "Deprecated: use `get_client_state`. Alias kept for one release; it runs the same handler and returns the same `{layer, rtk?, syncdb?}` response.",
-    inputSchema: CLIENT_STATE_INPUT_SCHEMA,
-    name: "get_rtk_state",
-  },
-  {
     description:
       "Inspect a live SyncDB client registered by createSyncDb({debug: true}): status, entities (including tombstones/pending metadata), decoded outbox, conflicts, cursors, streams, repairs, values, and debugger events. Sensitive fields are redacted.",
-    inputSchema: {
-      additionalProperties: false,
-      properties: {
-        collection: {description: "Optional collection filter", type: "string"},
-        entityId: {description: "Optional entity id filter", type: "string"},
-        includeDebugEvents: {
-          description: "Set false to return debug stats without event bodies",
-          type: "boolean",
-        },
-        limit: {
-          description: "Entity limit per collection (default 500, max 2000)",
-          type: "number",
-        },
-        name: {
-          description: "Client/store name; defaults to the first registered client",
-          type: "string",
-        },
-      },
-      type: "object",
-    },
+    inputSchema: SYNCDB_STATE_INPUT_SCHEMA,
     name: "get_syncdb_state",
   },
   {
@@ -341,20 +298,6 @@ export const createLocalToolCallHandler = (
           sources: Array.isArray(args.sources)
             ? args.sources.filter((s): s is string => typeof s === "string")
             : undefined,
-        });
-        return {content: [{text, type: "text"}]};
-      }
-      case "get_client_state":
-      case "get_rtk_state": {
-        const text = await getClientState({
-          collection: typeof args.collection === "string" ? args.collection : undefined,
-          entityId: typeof args.entityId === "string" ? args.entityId : undefined,
-          includeDebugEvents:
-            typeof args.includeDebugEvents === "boolean" ? args.includeDebugEvents : undefined,
-          limit: typeof args.limit === "number" ? args.limit : undefined,
-          name: typeof args.name === "string" ? args.name : undefined,
-          query: typeof args.query === "string" ? args.query : undefined,
-          slice: typeof args.slice === "string" ? args.slice : undefined,
         });
         return {content: [{text, type: "text"}]};
       }

@@ -42,7 +42,7 @@ User-facing guidance belongs in `docs/` (the published site). Agent-facing
 guidance belongs in `.ai/` (per package) or `.rulesync/` rules/skills. Cross-link
 those homes; do not duplicate the same architecture into both.
 
-When the guidance belongs to a published Terreno package (`@terreno/api`, `@terreno/ui`, `@terreno/rtk`, admin packages), prefer updating that package’s **`.ai/guidelines/`** or **`.ai/skills/`** (see `docs/implementationPlans/mcp-boost-parity.md` Phase 2). The MCP server copies those trees at build time; keep monorepo-wide rulesync files for cross-cutting or repo-only concerns. If the same fact is already on a `docs/` page, link it instead of copying.
+When the guidance belongs to a published Terreno package (`@terreno/api`, `@terreno/ui`, `@terreno/syncdb`, admin packages), prefer updating that package’s **`.ai/guidelines/`** or **`.ai/skills/`** (see `docs/implementationPlans/mcp-boost-parity.md` Phase 2). The MCP server copies those trees at build time; keep monorepo-wide rulesync files for cross-cutting or repo-only concerns. If the same fact is already on a `docs/` page, link it instead of copying.
 
 ### Step 4 — Sync
 After all changes, run `bun run rules` to sync to all AI tool directories, then

@@ -25,6 +25,13 @@
     "./fixtures/*": "./src/asks/fixtures/*",
     "./schemas/*": "./schemas/*"
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "schemas/**/*",
+    "src/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "ai",

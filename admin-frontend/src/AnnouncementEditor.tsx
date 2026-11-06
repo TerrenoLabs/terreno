@@ -15,9 +15,14 @@ import {
 } from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {asDynamicHookApi} from "./dynamicHookApi";
-import {type AdminApi, type EndpointBuilder, resolveAdminBases} from "./types";
-import {useAdminApi} from "./useAdminApi";
+import {resolveAdminBases} from "./types";
+import {useAdminModelApi} from "./useAdminModelApi";
+import {
+  unwrapAdminEnvelope,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "./useAdminRpc";
 
 type AnnouncementPlatform = "ios" | "android" | "web";
 type AnnouncementStatus = "draft" | "published" | "archived";
@@ -62,7 +67,6 @@ interface AnnouncementEditorProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   id?: string;
   onSave?: (announcement: AnnouncementDocument | undefined) => void;
   onCancel?: () => void;
@@ -127,47 +131,12 @@ const parseMinBuildNumber = (raw: string): number | null | undefined => {
   return parsed;
 };
 
-const enhancedApiCache = new WeakMap<AdminApi, unknown>();
-
-const getEnhancedApi = (api: AdminApi): unknown => {
-  const cached = enhancedApiCache.get(api);
-  if (cached) {
-    return cached;
-  }
-  const enhanced = api.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      announcementConfig: build.query({
-        query: () => ({
-          method: "GET",
-          url: ANNOUNCEMENT_CONFIG_ROUTE,
-        }),
-      }),
-      archiveAnnouncement: build.mutation({
-        invalidatesTags: ["admin_Announcement"],
-        query: (announcementId: string) => ({
-          method: "POST",
-          url: `${ANNOUNCEMENT_ACTION_ROUTE}/${announcementId}/archive`,
-        }),
-      }),
-      publishAnnouncement: build.mutation({
-        invalidatesTags: ["admin_Announcement"],
-        query: (announcementId: string) => ({
-          method: "POST",
-          url: `${ANNOUNCEMENT_ACTION_ROUTE}/${announcementId}/publish`,
-        }),
-      }),
-    }),
-    overrideExisting: false,
-  });
-  enhancedApiCache.set(api, enhanced);
-  return enhanced;
-};
+const ANNOUNCEMENT_TAGS = ["admin_Announcement"] as const;
 
 export const AnnouncementEditor: React.FC<AnnouncementEditorProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   id,
   onSave,
   onCancel,
@@ -199,25 +168,43 @@ export const AnnouncementEditor: React.FC<AnnouncementEditorProps> = ({
 
   const routePath = `${resolvedApiBase}${ANNOUNCEMENT_ADMIN_ROUTE}`;
 
-  const {useReadQuery, useCreateMutation, useUpdateMutation} = useAdminApi(
-    api,
+  const {useReadQuery, useCreateMutation, useUpdateMutation} = useAdminModelApi(
     routePath,
     "Announcement"
   );
 
-  const enhanced = asDynamicHookApi(getEnhancedApi(api));
-  const [publishAnnouncement, {isLoading: isPublishing}] =
-    enhanced.usePublishAnnouncementMutation();
-  const [archiveAnnouncement, {isLoading: isArchiving}] = enhanced.useArchiveAnnouncementMutation();
+  const rpc = useAdminRpc();
+  const [publishRpc, {isLoading: isPublishing}] = useAdminRpcMutation(rpc, {
+    invalidatesTags: ANNOUNCEMENT_TAGS,
+  });
+  const [archiveRpc, {isLoading: isArchiving}] = useAdminRpcMutation(rpc, {
+    invalidatesTags: ANNOUNCEMENT_TAGS,
+  });
+  const publishAnnouncement = useCallback(
+    (announcementId: string) =>
+      publishRpc({method: "POST", url: `${ANNOUNCEMENT_ACTION_ROUTE}/${announcementId}/publish`}),
+    [publishRpc]
+  );
+  const archiveAnnouncement = useCallback(
+    (announcementId: string) =>
+      archiveRpc({method: "POST", url: `${ANNOUNCEMENT_ACTION_ROUTE}/${announcementId}/archive`}),
+    [archiveRpc]
+  );
   const {
     data: configData,
     isLoading: isConfigLoading,
     error: configError,
-  } = enhanced.useAnnouncementConfigQuery(undefined, {skip: isEditMode});
-
-  const {data: announcementData, isLoading: isAnnouncementLoading} = useReadQuery(id ?? "", {
-    skip: !isEditMode || !id,
+  } = useAdminRpcQuery<AnnouncementConfigResponse>({
+    rpc,
+    skip: isEditMode,
+    transformResponse: unwrapAdminEnvelope,
+    url: ANNOUNCEMENT_CONFIG_ROUTE,
   });
+
+  const {data: announcementData, isLoading: isAnnouncementLoading} =
+    useReadQuery<AnnouncementDocument>(id ?? "", {
+      skip: !isEditMode || !id,
+    });
 
   const [createAnnouncement, {isLoading: isCreating}] = useCreateMutation();
   const [updateAnnouncement, {isLoading: isUpdating}] = useUpdateMutation();

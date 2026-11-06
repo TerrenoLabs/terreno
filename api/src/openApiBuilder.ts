@@ -131,6 +131,8 @@ export interface OpenApiSchemaProperty {
   items?: OpenApiSchemaProperty;
   /** Minimum array length when type is "array". */
   minItems?: number;
+  /** OpenAPI 3.0 flag: the value may also be `null`. */
+  nullable?: boolean;
   /** Nested properties when type is "object" */
   properties?: Record<string, OpenApiSchemaProperty>;
   /** Schema for additional properties or boolean to allow/disallow them */
@@ -518,6 +520,7 @@ export class OpenApiMiddlewareBuilder {
    * @param options - Optional configuration for the response
    * @param options.description - Description of the response (default: "Success")
    * @param options.mediaType - Media type for the response (default: "application/json")
+   * @param options.required - Top-level property names that are always present (e.g. `["data"]`)
    * @returns The builder instance for chaining
    *
    * @example
@@ -541,6 +544,7 @@ export class OpenApiMiddlewareBuilder {
     options?: {
       description?: string;
       mediaType?: string;
+      required?: string[];
     }
   ): this {
     if (typeof schema === "string") {
@@ -553,6 +557,7 @@ export class OpenApiMiddlewareBuilder {
           [options?.mediaType ?? "application/json"]: {
             schema: {
               properties: schema,
+              ...(options?.required?.length ? {required: options.required} : {}),
               type: "object",
             },
           },

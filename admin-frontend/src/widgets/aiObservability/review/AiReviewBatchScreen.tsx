@@ -28,11 +28,11 @@ export interface AiReviewBatchScreenWidgetProps extends AdminScreenWidgetProps {
 }
 
 export const AiReviewBatchScreenWidget: React.FC<AiReviewBatchScreenWidgetProps> = (props) => {
-  const {api, apiKey, apiKeyHint, apiKeyLoading, routeBase} = props;
+  const {apiKey, apiKeyHint, apiKeyLoading, routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const {useBatchQuery, useRunJudgeMutation, useStatusQuery} = useAiObservabilityReviewApi(api);
-  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi(api);
+  const {useBatchQuery, useRunJudgeMutation, useStatusQuery} = useAiObservabilityReviewApi();
+  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi();
   const batchQuery = useBatchQuery(id ?? "", {skip: !id});
   const statusQuery = useStatusQuery();
   const evaluatorsQuery = useEvaluatorListQuery();

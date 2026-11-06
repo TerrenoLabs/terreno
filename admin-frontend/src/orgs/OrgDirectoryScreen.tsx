@@ -12,7 +12,6 @@ import {
 } from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
-import type {AdminApi} from "../types";
 import {normalizeListData} from "./normalizeListData";
 import {useOrganizationsApi} from "./useOrganizationsApi";
 import {useOptionalOrgContext} from "./useOrgContext";
@@ -25,7 +24,6 @@ export interface OrganizationSummary {
 }
 
 export interface OrgDirectoryScreenProps {
-  api: AdminApi;
   basePath?: string;
   isOperator: boolean;
   onEnterOrganization: (organization: OrganizationSummary) => void;
@@ -41,7 +39,6 @@ const COLUMNS: DataTableColumn[] = [
 ];
 
 export const OrgDirectoryScreen: React.FC<OrgDirectoryScreenProps> = ({
-  api,
   basePath,
   isOperator,
   onEnterOrganization,
@@ -50,8 +47,10 @@ export const OrgDirectoryScreen: React.FC<OrgDirectoryScreenProps> = ({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [actionError, setActionError] = useState<string>();
-  const {useCreateMutation, useListQuery, useUpdateMutation} = useOrganizationsApi(api, basePath);
-  const {data, error, isLoading} = useListQuery(undefined, {skip: !isOperator});
+  const {useCreateMutation, useListQuery, useUpdateMutation} = useOrganizationsApi(basePath);
+  const {data, error, isLoading} = useListQuery<OrganizationSummary>(undefined, {
+    skip: !isOperator,
+  });
   const [createOrganization, {isLoading: isCreating}] = useCreateMutation();
   const [updateOrganization, {isLoading: isUpdating}] = useUpdateMutation();
   const organizations = normalizeListData<OrganizationSummary>(data);

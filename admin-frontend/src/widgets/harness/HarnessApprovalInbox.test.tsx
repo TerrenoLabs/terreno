@@ -332,9 +332,4 @@ describe("HarnessApprovalInbox", () => {
     expect(view.getByText("Chart")).toBeTruthy();
     expect(view.queryByText("**Chart** for `p-2`")).toBeNull();
   });
-
-  it("explains a missing request client", () => {
-    const view = renderWithTheme(<HarnessApprovalInbox />);
-    expect(view.getByTestId("harness-approvals-unavailable")).toBeTruthy();
-  });
 });

@@ -1,12 +1,15 @@
-import {ScrollViewStyleReset} from "expo-router/html";
+import {ScrollViewStyleReset, useServerDocumentContext} from "expo-router/html";
 
 // This file is web-only and used to configure the root HTML for every
 // web page during static rendering.
 // The contents of this function only run in Node.js environments and
 // do not have access to the DOM or browser APIs.
 export default function Root({children}: {children: React.ReactNode}) {
+  // Expo Router 58 streams static pages and passes the bundle scripts, RNW styles, and
+  // route metadata through this context; omitting them ships pages with no JavaScript.
+  const {bodyAttributes, bodyNodes, headNodes, htmlAttributes} = useServerDocumentContext();
   return (
-    <html lang="en">
+    <html lang="en" {...htmlAttributes}>
       <head>
         <meta charSet="utf-8" />
         <meta content="IE=edge" httpEquiv="X-UA-Compatible" />
@@ -21,8 +24,12 @@ export default function Root({children}: {children: React.ReactNode}) {
         {/* The app defaults to light, so first paint stays light regardless of the OS theme. */}
         <style>{responsiveBackground}</style>
         {/* Add any additional <head> elements that you want globally available on web... */}
+        {headNodes}
       </head>
-      <body>{children}</body>
+      <body {...bodyAttributes}>
+        {children}
+        {bodyNodes}
+      </body>
     </html>
   );
 }

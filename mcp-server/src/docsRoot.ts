@@ -36,5 +36,10 @@ export const getDocsRoot = (options?: GetDocsRootOptions): string => {
     }
   }
 
-  return join(__dirname, "docs");
+  const sourceDocsRoot = join(__dirname, "..", "src", "docs");
+  if (existsFn(sourceDocsRoot)) {
+    return sourceDocsRoot;
+  }
+
+  return bundledDocsRoot;
 };

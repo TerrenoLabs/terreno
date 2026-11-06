@@ -110,7 +110,7 @@ Each package has its own CI workflow that runs on pull requests and pushes:
 |----------|---------|-------|
 | `api-ci.yml` | @terreno/api | Unit tests, type checking, linting |
 | `ui-ci.yml` | @terreno/ui | Component tests, type checking, linting |
-| `rtk-ci.yml` | @terreno/rtk | Unit tests, type checking, linting |
+| `syncdb-ci.yml` | @terreno/syncdb | Unit tests, type checking, linting |
 | `mcp-server-ci.yml` | @terreno/mcp | Integration tests, type checking, linting |
 | `example-backend-ci.yml` | example-backend | Integration tests, type checking |
 | `example-frontend-ci.yml` | example-frontend | Build verification, type checking |
@@ -184,7 +184,7 @@ Ensures preview environments don't accumulate and waste resources.
 **Packages published:**
 - @terreno/api
 - @terreno/ui
-- @terreno/rtk
+- @terreno/syncdb
 - @terreno/mcp
 
 ## Workflow Philosophy
@@ -192,7 +192,9 @@ Ensures preview environments don't accumulate and waste resources.
 ### Single Source of Truth
 - **Documentation:** Code is truth, docs must reflect it
 - **Agent configuration:** `.rulesync/rules/`, `.rulesync/skills/`, and
-  `.rulesync/hooks.json` are truth; generated files derive from them
+  `.rulesync/hooks.json` are truth; generated files derive from them. Root `AGENTS.md`
+  and `CLAUDE.md` are generated from `.rulesync/rules/00-root.md` by `bun run rules`
+  (rulesync 17), so edit the rule, not the output
 - **Tests:** Implementation is truth, tests verify it
 
 ### Fail Fast

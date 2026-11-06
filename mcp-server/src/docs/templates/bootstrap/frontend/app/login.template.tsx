@@ -1,116 +1,54 @@
-import {Box, Button, Heading, Page, Text, TextField, useToast} from "@terreno/ui";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {LoginScreen} from "@terreno/ui";
+import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useState} from "react";
-import {useEmailLoginMutation, useEmailSignUpMutation} from "@/store/sdk";
+import {betterAuthClient} from "@/lib/betterAuth";
 
-const LoginScreen: React.FC = () => {
-  const [name, setName] = useState<string>("");
-  const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
-  const [isSignUp, setIsSignUp] = useState<boolean>(false);
-  const toast = useToast();
+const Login: React.FC = () => {
+  const router = useRouter();
+  const {refresh} = useSession();
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [emailLogin, {isLoading: isLoginLoading, error: loginError}] = useEmailLoginMutation();
-  const [emailSignUp, {isLoading: isSignUpLoading, error: signUpError}] = useEmailSignUpMutation();
-
-  const handleSubmit = useCallback(async (): Promise<void> => {
-    if (!email || !password) {
-      toast.warn("Email and password are required");
-      return;
-    }
-
-    if (isSignUp && !name) {
-      toast.warn("Signup requires name");
-      return;
-    }
-
-    try {
-      if (isSignUp) {
-        await emailSignUp({email, name, password}).unwrap();
-      } else {
-        await emailLogin({email, password}).unwrap();
+  const handleSubmit = useCallback(
+    async (values: Record<string, string>): Promise<void> => {
+      const {email, password} = values;
+      setErrorMessage(undefined);
+      setIsSubmitting(true);
+      try {
+        const result = await betterAuthClient.signIn.email({email, password});
+        if (result.error) {
+          setErrorMessage(result.error.message ?? "Sign in failed.");
+          return;
+        }
+        // Resolve the new session now instead of waiting for the next session push.
+        await refresh();
+        router.replace("/(tabs)");
+      } catch (error: unknown) {
+        console.error("[login] Sign in threw", {baseUrl, error});
+        setErrorMessage("Sign in failed. Please try again.");
+      } finally {
+        setIsSubmitting(false);
       }
-    } catch (err) {
-      console.error("Authentication error:", err);
-    }
-  }, [email, password, name, isSignUp, emailLogin, emailSignUp, toast]);
-
-  const toggleMode = useCallback((): void => {
-    setIsSignUp(!isSignUp);
-  }, [isSignUp]);
-
-  const isLoading = isLoginLoading || isSignUpLoading;
-  const error = loginError || signUpError;
-  const isSubmitDisabled = !email || !password || (isSignUp && !name) || isLoading;
+    },
+    [refresh, router]
+  );
 
   return (
-    <Page navigation={undefined}>
-      <Box
-        alignItems="center"
-        alignSelf="center"
-        flex="grow"
-        justifyContent="center"
-        maxWidth={400}
-        padding={4}
-        width="100%"
-      >
-        <Box marginBottom={8}>
-          <Heading>{isSignUp ? "Create Account" : "Welcome Back"}</Heading>
-        </Box>
-        <Box gap={4} width="100%">
-          {isSignUp && (
-            <TextField
-              disabled={isLoading}
-              onChange={setName}
-              placeholder="Name"
-              title="Name"
-              value={name}
-            />
-          )}
-          <TextField
-            autoComplete="username"
-            disabled={isLoading}
-            onChange={setEmail}
-            placeholder="Email"
-            title="Email"
-            type="email"
-            value={email}
-          />
-          <TextField
-            disabled={isLoading}
-            onChange={setPassword}
-            placeholder="Password"
-            title="Password"
-            type="password"
-            value={password}
-          />
-          {Boolean(error) && (
-            <Text color="error">
-              {(error as {data?: {message?: string}})?.data?.message || "An error occurred"}
-            </Text>
-          )}
-          <Box marginTop={4}>
-            <Button
-              disabled={isSubmitDisabled}
-              fullWidth
-              loading={isLoading}
-              onClick={handleSubmit}
-              text={isSignUp ? "Sign Up" : "Login"}
-            />
-          </Box>
-          <Box marginTop={2}>
-            <Button
-              disabled={isLoading}
-              fullWidth
-              onClick={toggleMode}
-              text={isSignUp ? "Already have an account? Login" : "Need an account? Sign Up"}
-              variant="outline"
-            />
-          </Box>
-        </Box>
-      </Box>
-    </Page>
+    <LoginScreen
+      error={errorMessage}
+      fields={[
+        {autoComplete: "username", label: "Email", name: "email", required: true, type: "email"},
+        {label: "Password", name: "password", required: true, type: "password"},
+      ]}
+      loading={isSubmitting}
+      onSignUpPress={() => router.push("/signup")}
+      onSubmit={handleSubmit}
+      title="Welcome"
+    />
   );
 };
 
-export default LoginScreen;
+export default Login;

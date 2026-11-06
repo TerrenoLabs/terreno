@@ -17,7 +17,7 @@ test.describe("Admin Todo CRUD smoke", () => {
     request,
   }) => {
     consoleGuard.allow("UTC is not a valid timezone");
-    // After delete, the form's RTK read can refetch GET /admin/todos/:id and Chrome
+    // After delete, the admin form's read can refetch GET /admin/todos/:id and Chrome
     // logs that 404 as console.error before the query unsubscribes.
     consoleGuard.allow("Failed to load resource: the server responded with a status of 404");
     const apiUrl = process.env.BACKEND_URL ?? "http://localhost:4000";

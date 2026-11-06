@@ -1,7 +1,8 @@
-import {describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
+import {act} from "@testing-library/react-native";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
+import type {AdminConfigResponse} from "../types";
 
 const replaceMock = mock(() => {});
 const searchParams: Record<string, string> = {channel: "mail"};
@@ -11,52 +12,49 @@ mock.module("expo-router", () => ({
   useLocalSearchParams: () => searchParams,
 }));
 
-/**
- * Stands in for the host RTK Query API so the real `useCommsDashboardApi` runs.
- * Mocking that module instead would leak process-wide and make the suite order-dependent.
- */
-const createCommsApi = (): AdminApi => {
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => ({
-      useCommsDashboardDetailQuery: () => ({isLoading: false}),
-      useCommsDashboardListQuery: () => ({
-        data: {data: [], more: false, page: 1, total: 0},
-        isLoading: false,
-      }),
-      useCommsDashboardRetryManyMutation: () => [
-        () => ({unwrap: async () => ({retried: [], skipped: []})}),
-        {isLoading: false},
-      ],
-      useCommsDashboardRetryMutation: () => [
-        () => ({unwrap: async () => ({data: {_id: "x"}})}),
-        {isLoading: false},
-      ],
-      useCommsDashboardStatsQuery: () => ({isLoading: false}),
-    }),
-  };
-  return api as unknown as AdminApi;
-};
+const requestedUrls: string[] = [];
+const originalFetch = globalThis.fetch;
 
+import {AdminProvider} from "../AdminProvider";
 import {COMMS_ADMIN_WIDGETS, CommsDashboardScreenWidget} from "./CommsDashboardScreenWidget";
 
 const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
 
 describe("CommsDashboardScreenWidget", () => {
+  beforeEach(() => {
+    requestedUrls.length = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+      const body = url.startsWith("/comms/messages")
+        ? {data: [], more: false, page: 1, total: 0}
+        : {};
+      return new Response(JSON.stringify(body), {
+        headers: {"Content-Type": "application/json"},
+        status: 200,
+      });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   it("registers as the comms custom screen widget", () => {
     expect(COMMS_ADMIN_WIDGETS.comms).toBe(CommsDashboardScreenWidget);
   });
 
-  it("reads URL filters into the dashboard", () => {
+  it("reads URL filters into the dashboard", async () => {
     const {getByTestId} = renderWithTheme(
-      <CommsDashboardScreenWidget
-        api={createCommsApi()}
-        config={emptyConfig}
-        routeBase="/admin"
-        screenName="comms"
-      />
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <CommsDashboardScreenWidget config={emptyConfig} routeBase="/admin" screenName="comms" />
+      </AdminProvider>
     );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     expect(getByTestId("comms-dashboard")).toBeTruthy();
     expect(getByTestId("comms-filter-channel.label")).toBeTruthy();
+    expect(requestedUrls.some((url) => url.includes("channel=mail"))).toBe(true);
   });
 });

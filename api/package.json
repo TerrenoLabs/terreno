@@ -148,5 +148,5 @@
     "updateSnapshot": "bun test --update-snapshots"
   },
   "types": "dist/index.d.ts",
-  "version": "57.22.0"
+  "version": "58.0.0"
 }

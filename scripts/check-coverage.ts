@@ -323,6 +323,33 @@ export const countHitLines = (entry: FileCoverage): number => {
  * the main file's uncovered lines in place and does not get credit for the
  * isolated run's executed lines. Union per line and per function (max hits).
  */
+const mergeFunctionAggregates = (existing: FileCoverage, src: FileCoverage): void => {
+  const foundA = existing.functionsFound;
+  const foundB = src.functionsFound;
+  const mergedFound =
+    foundA > 0 && foundB > 0 ? Math.min(foundA, foundB) : Math.max(foundA, foundB);
+  const mergedHit = Math.min(mergedFound, Math.max(existing.functionsHit, src.functionsHit));
+  existing.functionsFound = mergedFound;
+  existing.functionsHit = mergedHit;
+};
+
+/**
+ * Bun sometimes emits FNF/FNH aggregates where FNF counts more arrow bodies than
+ * FNH reports as hit, while every instrumented line executed. Align aggregates
+ * with line reality so merged gates do not contradict full line coverage.
+ */
+const alignFunctionAggregatesWhenAllLinesHit = (entry: FileCoverage): void => {
+  if (entry.hasFnRecords || entry.lines.size === 0) {
+    return;
+  }
+  for (const hits of entry.lines.values()) {
+    if (hits === 0) {
+      return;
+    }
+  }
+  entry.functionsHit = entry.functionsFound;
+};
+
 export const mergeIsolatedLcov = (
   target: Map<string, FileCoverage>,
   source: Map<string, FileCoverage>
@@ -347,12 +374,8 @@ export const mergeIsolatedLcov = (
         existing.functions.set(name, hits);
       }
     }
-    if (src.functionsFound > existing.functionsFound) {
-      existing.functionsFound = src.functionsFound;
-    }
-    if (src.functionsHit > existing.functionsHit) {
-      existing.functionsHit = src.functionsHit;
-    }
+    mergeFunctionAggregates(existing, src);
+    alignFunctionAggregatesWhenAllLinesHit(existing);
     if (src.hasFnRecords) {
       existing.hasFnRecords = true;
     }
@@ -382,12 +405,8 @@ export const mergeLcov = (
         existing.functions.set(name, hits);
       }
     }
-    if (src.functionsFound > existing.functionsFound) {
-      existing.functionsFound = src.functionsFound;
-    }
-    if (src.functionsHit > existing.functionsHit) {
-      existing.functionsHit = src.functionsHit;
-    }
+    mergeFunctionAggregates(existing, src);
+    alignFunctionAggregatesWhenAllLinesHit(existing);
     if (src.hasFnRecords) {
       existing.hasFnRecords = true;
     }

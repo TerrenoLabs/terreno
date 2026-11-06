@@ -9,6 +9,48 @@ describe("devMcpRegistry (module mocks)", () => {
   afterEach((): void => {
     clearTerrenoDevMcpRegistryForTests();
     Reflect.deleteProperty(process.env, "TERRENO_DEV_MCP_REGISTRY_TEST");
+    Reflect.deleteProperty(globalThis as {__DEV__?: boolean}, "__DEV__");
+  });
+
+  it("treats global __DEV__=true like test mode without env", async (): Promise<void> => {
+    (globalThis as {__DEV__?: boolean}).__DEV__ = true;
+    mock.module("@react-native-async-storage/async-storage", () => ({
+      default: {
+        getAllKeys: async () => [] as string[],
+        getItem: async () => null,
+        setItem: async () => {},
+      },
+    }));
+    registerTerrenoDevStorage({asyncStorage: true});
+    const adapter = getTerrenoDevStorageAdapter();
+    expect(adapter).toBeDefined();
+  });
+
+  it("returns null from get when AsyncStorage import throws", async (): Promise<void> => {
+    mock.module("@react-native-async-storage/async-storage", () => {
+      throw new Error("no async storage");
+    });
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    registerTerrenoDevStorage({asyncStorage: true});
+    const adapter = getTerrenoDevStorageAdapter();
+    expect(await adapter?.get("any")).toBeNull();
+  });
+
+  it("set on allowlisted secure key fails when SecureStore import throws", async (): Promise<void> => {
+    mock.module("@react-native-async-storage/async-storage", () => ({
+      default: {
+        getAllKeys: async () => [] as string[],
+        getItem: async () => null,
+        setItem: async () => {},
+      },
+    }));
+    mock.module("expo-secure-store", () => {
+      throw new Error("missing");
+    });
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    registerTerrenoDevStorage({asyncStorage: true, secureStoreKeyAllowlist: ["tok"]});
+    const adapter = getTerrenoDevStorageAdapter();
+    await expect(adapter?.set("tok", "v")).rejects.toThrow(/expo-secure-store is not available/);
   });
 
   it("wires AsyncStorage when asyncStorage is enabled", async (): Promise<void> => {

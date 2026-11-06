@@ -116,18 +116,10 @@ export interface ReadLocalStorageArgs {
   prefix?: string;
 }
 
-const readStorageInProcess = async (args: ReadLocalStorageArgs): Promise<string> => {
-  const adapter = getDevStorage();
-  if (!adapter) {
-    return JSON.stringify(
-      {
-        error: "No __TERRENO_DEV_STORAGE__ adapter. Call registerTerrenoDevStorage() in __DEV__.",
-        status: getCdpConnectionStatus(),
-      },
-      null,
-      2
-    );
-  }
+const readStorageInProcess = async (
+  adapter: DevStorageAdapter,
+  args: ReadLocalStorageArgs
+): Promise<string> => {
   let keys = args.keys ?? [];
   if (keys.length === 0) {
     keys = await adapter.listKeys();
@@ -151,7 +143,7 @@ const readStorageInProcess = async (args: ReadLocalStorageArgs): Promise<string>
 export const readLocalStorage = async (args: ReadLocalStorageArgs): Promise<string> => {
   const adapter = getDevStorage();
   if (adapter) {
-    return readStorageInProcess(args);
+    return readStorageInProcess(adapter, args);
   }
   const keysJson = JSON.stringify(args.keys ?? null);
   const prefixJson = JSON.stringify(args.prefix ?? null);

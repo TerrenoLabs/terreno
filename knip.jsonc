@@ -205,7 +205,8 @@
         "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts",
+        "src/**/*.isolated.ts",
+        "src/**/*.isolated.tsx",
         // Platform resolvers select these shipped implementations without an extension.
         "src/persisters/defaultPersisterFactory.native.ts!",
         "src/persisters/defaultPersisterFactory.web.ts!"
@@ -400,7 +401,9 @@
         "playwright.circleci.config.ts",
         "playwright.smoke.config.ts",
         "tests/bunSetup.ts",
-        "tests/testPreload.ts"
+        "tests/testPreload.ts",
+        "**/*.isolated.ts",
+        "**/*.isolated.tsx"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -511,6 +514,8 @@
         "src/index.ts",
         "src/local/index.ts",
         "src/**/*.test.ts",
+        "src/**/*.isolated.ts",
+        "src/**/*.isolated.tsx",
         "src/__tests__/**/*.test.ts",
         "src/__tests__/preload.ts"
       ],

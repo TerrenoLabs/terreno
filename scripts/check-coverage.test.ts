@@ -276,7 +276,7 @@ describe("mergeLcov", () => {
     expect(entry?.lines.get(1)).toBe(5);
   });
 
-  it("prefers the isolated snapshot when it executed more lines", () => {
+  it("unions isolated line hits with the main suite (max hits per line)", () => {
     const main = parseLcov(
       lcovRecord({
         functions: [{hits: 1, line: 1, name: "start"}],
@@ -299,10 +299,12 @@ describe("mergeLcov", () => {
       })
     );
     mergeIsolatedLcov(main, isolated);
-    expect(summarizeLcov(main)).toEqual({functions: 100, lines: 100});
+    const summary = summarizeLcov(main);
+    expect(summary.functions).toBeCloseTo(100, 5);
+    expect(summary.lines).toBeCloseTo(60, 5);
   });
 
-  it("does not keep the main suite's unhit functions when adopting an isolated snapshot", () => {
+  it("merges isolated hits into the main record without dropping other instrumented lines", () => {
     const main = parseLcov(
       lcovRecord({
         functions: [
@@ -328,7 +330,9 @@ describe("mergeLcov", () => {
       })
     );
     mergeIsolatedLcov(main, isolated);
-    expect(summarizeLcov(main)).toEqual({functions: 100, lines: 100});
+    const summary = summarizeLcov(main);
+    expect(summary.functions).toBeCloseTo(100 / 3, 5);
+    expect(summary.lines).toBeCloseTo(40, 5);
   });
 
   it("copies files from source when target is missing them", () => {

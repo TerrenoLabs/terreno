@@ -29,6 +29,34 @@ describe("devMcpRegistry", () => {
     expect(adapter?.canWriteKey("secure:secret")).toBe(false);
   });
 
+  it("rejects empty command names", (): void => {
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    expect(() =>
+      registerTerrenoDevCommand({description: "x", handler: () => 1, name: "  "})
+    ).toThrow(/non-empty name/);
+  });
+
+  it("runTerrenoDevCommand throws for unknown commands", async (): Promise<void> => {
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    await expect(runTerrenoDevCommand("missing")).rejects.toThrow(/Unknown dev command/);
+  });
+
+  it("registerTerrenoDevCommand no-ops outside dev or test", (): void => {
+    Reflect.deleteProperty(process.env, "TERRENO_DEV_MCP_REGISTRY_TEST");
+    registerTerrenoDevCommand({description: "noop", handler: () => 1, name: "ghost"});
+    expect(listTerrenoDevCommandSummaries()).toEqual([]);
+  });
+
+  it("returns null for AsyncStorage keys when asyncStorage is off", async (): Promise<void> => {
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    registerTerrenoDevStorage({
+      asyncStorage: false,
+      secureStoreKeyAllowlist: [],
+    });
+    const adapter = getTerrenoDevStorageAdapter();
+    expect(await adapter?.get("plain")).toBeNull();
+  });
+
   it("registers and runs dev commands", async (): Promise<void> => {
     process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
     registerTerrenoDevCommand({

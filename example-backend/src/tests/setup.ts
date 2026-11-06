@@ -3,6 +3,9 @@ import {registerSimpleMongoPreload} from "@terreno/test";
 import mongoose from "mongoose";
 
 process.env.TERRENO_TEST_USE_MEMORY_MONGO = "true";
+// Before any module imports `./conf`, default tests to the API-only process so the
+// websocket service does not try to listen on PORT (often 4000) alongside HTTP tests.
+process.env.BACKEND_SERVICE = process.env.BACKEND_SERVICE ?? "api";
 
 const defaultLocalMongoUri =
   process.env.TEST_MONGO_URI ||

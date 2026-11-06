@@ -173,7 +173,8 @@ exactly one administered organization may omit it; Terreno infers that org.
 Operators and superadmins must select an org.
 
 Frontend admin hosts use `OrgContextProvider` + `OrgSwitcher`.
-`useAdminApi` adds the selected organization header automatically.
+`useAdminModelApi` and the built-in admin screens add the selected organization
+header automatically.
 
 Disabled organizations are excluded from `/orgs/mine` and cannot be selected as
 tenant context. Operators re-enable them from the organization directory UI or

@@ -1,15 +1,14 @@
 import {afterEach, describe, it} from "bun:test";
-import {configureStore} from "@reduxjs/toolkit";
 import {AdminScreenPage, UserSecurityScreen} from "@terreno/admin-frontend";
-import type {PermissionSet} from "@terreno/rtk";
+import {createApiClient} from "@terreno/syncdb/api";
+import type {PermissionSet} from "@terreno/syncdb/app";
+import {ApiClientProvider} from "@terreno/syncdb/react";
 import {assert} from "chai";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
-import {Provider} from "react-redux";
 import TestRenderer, {act, type ReactTestRenderer} from "react-test-renderer";
 
 import AdminUserSecurityRoute from "../app/admin/users/[id]/security";
-import {terrenoApi} from "./sdk";
 
 interface Profile {
   _id: string;
@@ -97,23 +96,23 @@ describe("AdminUserSecurityRoute", () => {
 
   it("reads the user id from the route and the profile from the me query by default", async () => {
     searchParams.mockImplementation(() => ({id: "user-9"}));
-    const store = configureStore({
-      middleware: (getDefaultMiddleware) => getDefaultMiddleware().concat(terrenoApi.middleware),
-      reducer: {[terrenoApi.reducerPath]: terrenoApi.reducer},
+    // Serve the me query so the route decides access from it without a backend.
+    const client = createApiClient({
+      baseUrl: "http://api.test",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            data: {_id: "operator-1", permissions: {admin: ["access"], user: ["manageSecurity"]}},
+          }),
+          {headers: {"Content-Type": "application/json"}}
+        ),
     });
-    // Seed the me query so the route decides access from it without a backend.
-    await store.dispatch(
-      terrenoApi.util.upsertQueryData("getMe", undefined, {
-        _id: "operator-1",
-        permissions: {admin: ["access"], user: ["manageSecurity"]},
-      } as never)
-    );
 
-    act(() => {
+    await act(async () => {
       mounted = TestRenderer.create(
-        <Provider store={store}>
+        <ApiClientProvider client={client}>
           <AdminUserSecurityRoute />
-        </Provider>
+        </ApiClientProvider>
       );
     });
 

@@ -6,6 +6,8 @@ description: >-
   apply only what a maintainer approves. Trigger with /roadmap-triage or phrases
   like "triage this issue", "what labels does this need", "should this go on the
   roadmap".
+triggers:
+  - user
 ---
 # Roadmap triage
 

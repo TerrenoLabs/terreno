@@ -214,6 +214,10 @@ test.describe("Provisional consent signing", () => {
     // The denied status request (405) is what this test expects; the app logs it.
     consoleGuard.allow("the server responded with a status of 405");
     consoleGuard.allow("/consent-responses/status?userId=");
+    consoleGuard.allow("sending data to Sentry: GET /consent-responses/status rejected query");
+    consoleGuard.allow(
+      "Sentry not initialized, captured exception Error: GET /consent-responses/status"
+    );
     await loginAs(page, PROVISIONAL_OUTSIDER_USER);
     await waitForSyncTodosScreen(page);
     await page.goto(`/consent-sign/${memberId}`);

@@ -8,6 +8,7 @@ import {
   type StyleProp,
   TextInput,
   type TextInputChangeEvent,
+  type TextInputInstance,
   type TextInputProps,
   View,
 } from "react-native";
@@ -162,7 +163,7 @@ export const TextField: FC<TextFieldProps> = ({
   const [focused, setFocused] = useState(false);
   const [height, setHeight] = useState(rows * 40);
   const [isValueRevealed, setIsValueRevealed] = useState(false);
-  const textInputRef = useRef<TextInput | null>(null);
+  const textInputRef = useRef<TextInputInstance | null>(null);
 
   // Clear stale measured height so the next typed character starts at the default row height.
   useEffect(() => {

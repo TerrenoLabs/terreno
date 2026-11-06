@@ -1,0 +1,1 @@
+> **McpRequestLogMethods** = `Record`\<`string`, `never`\>

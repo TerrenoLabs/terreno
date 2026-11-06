@@ -1,15 +1,17 @@
-import {useMemo} from "react";
-import {asDynamicHookApi} from "../../../dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import {asJsonBody} from "../../../adminRpc";
+import type {AdminRpcQueryState} from "../../../useAdminRpc";
+import {
+  type ObservabilityMutation,
+  type ObservabilityQueryOptions,
+  useObservabilityMutation,
+  useObservabilityQuery,
+} from "../shell/observabilityRequest";
 import type {DatasetImportResult, DatasetItemRecord, DatasetRecord} from "./datasetTypes";
 
-const LIST_KEY = "aiObservabilityDatasets";
-const DETAIL_KEY = "aiObservabilityDataset";
-const ITEMS_KEY = "aiObservabilityDatasetItems";
-const CREATE_KEY = "createAiObservabilityDataset";
-const CREATE_ITEM_KEY = "createAiObservabilityDatasetItem";
-const IMPORT_KEY = "importAiObservabilityDataset";
-const ADD_TRACES_KEY = "addTracesToAiObservabilityDataset";
+const DATASETS_TAGS = ["aiObservabilityDatasets"] as const;
+const ITEMS_TAGS = ["aiObservabilityDatasetItems"] as const;
+const DATASET_AND_ITEMS_TAGS = ["aiObservabilityDatasets", "aiObservabilityDatasetItems"] as const;
+const DATASETS_URL = "/ai/observability/datasets";
 
 export interface DatasetWriteBody {
   description?: string;
@@ -29,157 +31,86 @@ export interface DatasetItemWriteBody {
   tags?: string[];
 }
 
-interface QueryOptions {
-  skip?: boolean;
+type DatasetImportBody = {content: string; format: "csv"} | {rows: unknown};
+
+export interface AiObservabilityDatasetsApi {
+  useAddTracesMutation: () => ObservabilityMutation<
+    {datasetId: string; traceIds: string[]},
+    {created: number}
+  >;
+  useCreateItemMutation: () => ObservabilityMutation<
+    {body: DatasetItemWriteBody; datasetId: string},
+    DatasetItemRecord
+  >;
+  useCreateMutation: () => ObservabilityMutation<DatasetWriteBody, DatasetRecord>;
+  useDetailQuery: (
+    id: string,
+    options?: ObservabilityQueryOptions
+  ) => AdminRpcQueryState<DatasetRecord | {data: DatasetRecord}>;
+  useImportMutation: () => ObservabilityMutation<
+    {body: DatasetImportBody; datasetId: string},
+    DatasetImportResult
+  >;
+  useItemsQuery: (
+    id: string,
+    options?: ObservabilityQueryOptions
+  ) => AdminRpcQueryState<DatasetItemRecord[] | {data: DatasetItemRecord[]}>;
+  useListQuery: () => AdminRpcQueryState<DatasetRecord[] | {data: DatasetRecord[]}>;
 }
 
-const createDatasetsApi = (api: AdminApi) => {
-  const tagged =
-    typeof api.enhanceEndpoints === "function"
-      ? api.enhanceEndpoints({
-          addTagTypes: ["aiObservabilityDatasets", "aiObservabilityDatasetItems"],
-        })
-      : api;
-  return tagged.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      [LIST_KEY]: build.query({
-        providesTags: ["aiObservabilityDatasets"],
-        query: () => ({
-          method: "GET",
-          url: "/ai/observability/datasets",
-        }),
-      }),
-      [DETAIL_KEY]: build.query({
-        providesTags: (_result: unknown, _error: unknown, id: string) => [
-          {id, type: "aiObservabilityDatasets"},
-        ],
-        query: (id: string) => ({
-          method: "GET",
-          url: `/ai/observability/datasets/${encodeURIComponent(id)}`,
-        }),
-      }),
-      [ITEMS_KEY]: build.query({
-        providesTags: (_result: unknown, _error: unknown, id: string) => [
-          {id, type: "aiObservabilityDatasetItems"},
-        ],
-        query: (id: string) => ({
-          method: "GET",
-          url: `/ai/observability/datasets/${encodeURIComponent(id)}/items`,
-        }),
-      }),
-      [CREATE_KEY]: build.mutation({
-        invalidatesTags: ["aiObservabilityDatasets"],
-        query: (body: DatasetWriteBody) => ({
-          body,
-          method: "POST",
-          url: "/ai/observability/datasets",
-        }),
-      }),
-      [CREATE_ITEM_KEY]: build.mutation({
-        invalidatesTags: (_result, _error, args: {datasetId: string}) => [
-          {id: args.datasetId, type: "aiObservabilityDatasets"},
-          {id: args.datasetId, type: "aiObservabilityDatasetItems"},
-        ],
-        query: ({body, datasetId}: {body: DatasetItemWriteBody; datasetId: string}) => ({
-          body,
-          method: "POST",
-          url: `/ai/observability/datasets/${encodeURIComponent(datasetId)}/items`,
-        }),
-      }),
-      [IMPORT_KEY]: build.mutation({
-        invalidatesTags: (
-          _result,
-          _error,
-          args: {
-            body: {content: string; format: "csv"} | {rows: unknown};
-            datasetId: string;
-          }
-        ) => [
-          {id: args.datasetId, type: "aiObservabilityDatasets"},
-          {id: args.datasetId, type: "aiObservabilityDatasetItems"},
-        ],
-        query: ({
-          body,
-          datasetId,
-        }: {
-          body: {content: string; format: "csv"} | {rows: unknown};
-          datasetId: string;
-        }) => ({
-          body,
-          method: "POST",
-          url: `/ai/observability/datasets/${encodeURIComponent(datasetId)}/import`,
-        }),
-      }),
-      [ADD_TRACES_KEY]: build.mutation({
-        invalidatesTags: (_result, _error, body: {datasetId: string}) => [
-          {id: body.datasetId, type: "aiObservabilityDatasets"},
-          {id: body.datasetId, type: "aiObservabilityDatasetItems"},
-        ],
-        query: (body: {datasetId: string; traceIds: string[]}) => ({
-          body,
+const datasetUrl = (id: string): string => `${DATASETS_URL}/${encodeURIComponent(id)}`;
+
+/** Dataset hooks for `/ai/observability/datasets` over the host-bound admin client. */
+export const useAiObservabilityDatasetsApi = (): AiObservabilityDatasetsApi => {
+  return {
+    useAddTracesMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: DATASET_AND_ITEMS_TAGS,
+        toRequest: (body: {datasetId: string; traceIds: string[]}) => ({
+          body: asJsonBody(body),
           method: "POST",
           url: "/ai/observability/traces/add-to-dataset",
         }),
       }),
-    }),
-    overrideExisting: true,
-  });
-};
-
-export const useAiObservabilityDatasetsApi = (api: AdminApi) => {
-  const enhancedApi = useMemo(() => {
-    return createDatasetsApi(api);
-  }, [api]);
-  const hooks = asDynamicHookApi(enhancedApi);
-  return {
-    useAddTracesMutation: hooks.useAddTracesToAiObservabilityDatasetMutation as () => [
-      (body: {datasetId: string; traceIds: string[]}) => {
-        unwrap: () => Promise<{created: number}>;
-      },
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useCreateItemMutation: hooks.useCreateAiObservabilityDatasetItemMutation as () => [
-      (args: {body: DatasetItemWriteBody; datasetId: string}) => {
-        unwrap: () => Promise<DatasetItemRecord>;
-      },
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useCreateMutation: hooks.useCreateAiObservabilityDatasetMutation as () => [
-      (body: DatasetWriteBody) => {unwrap: () => Promise<DatasetRecord>},
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useDetailQuery: hooks.useAiObservabilityDatasetQuery as (
-      id: string,
-      options?: QueryOptions
-    ) => {
-      data?: DatasetRecord | {data: DatasetRecord};
-      error?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    useImportMutation: hooks.useImportAiObservabilityDatasetMutation as () => [
-      (args: {body: {content: string; format: "csv"} | {rows: unknown}; datasetId: string}) => {
-        unwrap: () => Promise<DatasetImportResult>;
-      },
-      {error?: unknown; isError: boolean; isLoading: boolean},
-    ],
-    useItemsQuery: hooks.useAiObservabilityDatasetItemsQuery as (
-      id: string,
-      options?: QueryOptions
-    ) => {
-      data?: DatasetItemRecord[] | {data: DatasetItemRecord[]};
-      error?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
-    useListQuery: hooks.useAiObservabilityDatasetsQuery as () => {
-      data?: DatasetRecord[] | {data: DatasetRecord[]};
-      error?: unknown;
-      isError: boolean;
-      isLoading: boolean;
-      refetch: () => void;
-    },
+    useCreateItemMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: DATASET_AND_ITEMS_TAGS,
+        toRequest: ({body, datasetId}: {body: DatasetItemWriteBody; datasetId: string}) => ({
+          body: asJsonBody(body),
+          method: "POST",
+          url: `${datasetUrl(datasetId)}/items`,
+        }),
+      }),
+    useCreateMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: DATASETS_TAGS,
+        toRequest: (body: DatasetWriteBody) => ({
+          body: asJsonBody(body),
+          method: "POST",
+          url: DATASETS_URL,
+        }),
+      }),
+    useDetailQuery: (id, options) =>
+      useObservabilityQuery({
+        providesTags: DATASETS_TAGS,
+        skip: options?.skip,
+        url: datasetUrl(id),
+      }),
+    useImportMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: DATASET_AND_ITEMS_TAGS,
+        toRequest: ({body, datasetId}: {body: DatasetImportBody; datasetId: string}) => ({
+          body: asJsonBody(body),
+          method: "POST",
+          url: `${datasetUrl(datasetId)}/import`,
+        }),
+      }),
+    useItemsQuery: (id, options) =>
+      useObservabilityQuery({
+        providesTags: ITEMS_TAGS,
+        skip: options?.skip,
+        url: `${datasetUrl(id)}/items`,
+      }),
+    useListQuery: () => useObservabilityQuery({providesTags: DATASETS_TAGS, url: DATASETS_URL}),
   };
 };

@@ -554,7 +554,7 @@ org-admins manage only the current org. Invites and billing are design-only plac
 - **Implementation plan:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/org-management-ui.md)
 - **Tasks:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/org-management-ui.md)
 - **RTK flag:** Partial — custom non-synced routes use the generated SDK;
-  ObjectId admin compatibility may use `useAdminApi` in Terreno 57, while
+  ObjectId admin CRUD uses the admin fetch client (`useAdminModelApi`), while
   eligible String-`_id` CRUD uses windowed syncdb
 - **Depends on:** rbac-permissions
 
@@ -585,7 +585,7 @@ are a separate item.
 **Title:** `Native module baseline for the next major release`
 
 **Labels:** `area:ui`, `type:chore`, `breaking`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=`native-module-baseline`, Status=`Shaping`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=`native-module-baseline`, Status=`In progress`
 
 Adding a native module to a Terreno app forces a new dev-client/store binary, so every
 native dependency the B2B program needs lands in one major release: Stripe payment sheet,
@@ -871,9 +871,10 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1186
 **Labels:** `area:api`, `type:feature`
 **Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`rate-limiting`, Status=`Shipped`
 
-Adds opt-in HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
+Adds HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
 auth/OTP buckets (including login), memory Redis or Mongo stores, and 429 rate-limit
-headers. Default is off until Terreno 58. Sync mutation nacks stay a separate limiter.
+headers. Opt-in in 57.x; on by default from Terreno 58 (`rateLimit: false` turns it off).
+Sync mutation nacks stay a separate limiter.
 
 Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1187.
 
@@ -1425,6 +1426,28 @@ Open for discussion: how this relates to the support agent's `support/kb/` docs 
 **Project fields:** Area=`tooling`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`Planned`
 
 - **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+
+---
+
+## remove-rtk
+
+**Title:** `Remove @terreno/rtk and Redux in Terreno 58`
+
+**Labels:** `area:syncdb`, `type:feature`  
+**Project fields:** Area=`syncdb`, Target=`58`, Impact=`Breaking`, IP=`remove-rtk`, Status=`Planned`
+
+Delete the `@terreno/rtk` package and every Redux dependency from the monorepo. After this change `@terreno/syncdb` is the only frontend data and session layer:
+
+- Synced collections use `useQuery` / `useMutate` (unchanged).
+- Every other HTTP call (`/auth/me`, modelRouter actions, AI, consents, announcements,
+  version check) goes through a new syncdb request client with generated, typed hooks.
+- Session state comes from `@terreno/syncdb/auth` (Better Auth, plus a ported JWT adapter).
+- Feature flags and server pushes ride syncdb's existing socket.
+- GptHistory and McpServiceToken become synced collections.
+- All unit and e2e tests exercise these syncdb paths. No test imports RTK or Redux.
+
+- **Implementation plan:** [remove-rtk.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/remove-rtk.md)
+- **Tasks:** [remove-rtk.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-rtk.md)
 
 ---
 

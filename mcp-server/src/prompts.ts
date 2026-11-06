@@ -187,10 +187,10 @@ ${hasOwnerBool ? "- ownerId: ObjectId (reference to User, required)" : ""}
    - Add queryFields for filterable fields
    - Set default sort order
 
-### Frontend (using @terreno/syncdb, @terreno/ui, and @terreno/rtk for SDK/auth)
+### Frontend (using @terreno/syncdb and @terreno/ui)
 
 3. **List Screen** (\`screens/${name}ListScreen.tsx\`):
-   - Use \`useQuery\` / \`useEntityIds\` from \`@terreno/syncdb/react\` (not RTK Query list hooks)
+   - Use \`useQuery\` / \`useEntityIds\` from \`@terreno/syncdb/react\` (not request hooks from \`@/store/apiSdk\`)
    - Handle sync status with \`useSyncStatus\` instead of request loading spinners
    - Display items in a scrollable list
 
@@ -416,7 +416,7 @@ ${fieldsList}
 ## Required Imports
 \`\`\`typescript
 import { ${components.join(", ")}, Box, Page, Button } from "@terreno/ui";
-import { use${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Mutation } from "@/store/openApiSdk";
+import { use${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Mutation } from "@/store/apiSdk";
 \`\`\`
 
 ## Requirements
@@ -446,7 +446,7 @@ import { use${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Mutation } fr
 \`\`\`typescript
 import React, { useCallback, useState } from "react";
 import { Box, Page, Button, ${components.join(", ")} } from "@terreno/ui";
-import { use${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Mutation } from "@/store/openApiSdk";
+import { use${endpoint.charAt(0).toUpperCase() + endpoint.slice(1)}Mutation } from "@/store/apiSdk";
 
 interface FormErrors {
   ${parsedFields.map((f) => `${f.name}?: string;`).join("\n  ")}
@@ -518,12 +518,13 @@ ${features.map((f) => `- ${f}`).join("\n")}
    - Use a MongoDB replica set (\`MONGO_URI\` with \`replicaSet=rs0\`) for change streams
    ${features.includes("passwordReset") ? "- Enable Better Auth password reset in the auth config" : ""}
 
-## Frontend Setup (@terreno/syncdb, @terreno/rtk for Better Auth + SDK, @terreno/ui)
+## Frontend Setup (@terreno/syncdb for session, requests, and data; @terreno/ui)
 
-4. **Store Configuration** (\`store/index.ts\`):
-   - Import \`generateBetterAuthSlice\` from @terreno/rtk for session state
-   - Keep \`terrenoApi\` reducer for non-synced OpenAPI routes only
-   - Add \`store/syncdb.ts\` with \`createSyncDb\` + \`betterAuthAdapter\`
+4. **Session and clients** (no Redux store):
+   - \`lib/betterAuth.ts\`: \`createBetterAuthClient\` from \`@terreno/syncdb/auth\` with \`baseUrl\` from \`@terreno/syncdb/config\`
+   - \`store/syncdb.ts\`: \`authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient))\` and \`createSyncDb\`
+   - \`store/apiClient.ts\`: \`createApiClient({authProvider, baseUrl, headers: appHeaders})\` for non-synced routes
+   - \`app/_layout.tsx\`: \`<ApiClientProvider client={apiClient}>\` + \`<SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={apiClient.reset}>\`
 
 5. **Login Screen** (\`app/login.tsx\`):
    - Email and password fields only (no name field on login)
@@ -546,20 +547,18 @@ ${
 ## Auth State Management
 
 \`\`\`typescript
-import {selectBetterAuthUserId, syncBetterAuthSession} from "@/store/index";
+import {useSession} from "@terreno/syncdb/auth";
 import {betterAuthClient} from "@/lib/betterAuth";
 
-// Check authentication
-const userId = useAppSelector(selectBetterAuthUserId);
-const isAuthenticated = Boolean(userId);
+// Check authentication (inside a component under <SessionProvider>)
+const {userId, isAuthenticated, isLoading, refresh, logout} = useSession();
 
-// Sign in
+// Sign in, then resolve the new session immediately
 const result = await betterAuthClient.signIn.email({ email, password });
-await syncBetterAuthSession(dispatch);
+await refresh();
 
-// Sign out
-await betterAuthClient.signOut();
-await syncBetterAuthSession(dispatch);
+// Sign out: Better Auth sign-out, syncDb sign-out, and onLogout cleanup
+await logout();
 \`\`\`
 
 ## Protected Routes

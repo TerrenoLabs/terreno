@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and dynamic mock returns
+// noExplicitAny: test mocks use loosely typed hook doubles and dynamic mock returns
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
@@ -6,7 +6,6 @@ import React from "react";
 import {Platform} from "react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import type {AdminApi} from "./types";
 
 mock.module("react-native-webview", () => ({
   WebView: (props: Record<string, unknown>) =>
@@ -126,18 +125,14 @@ describe("DocumentStorageBrowser", () => {
 
   it("renders loading state", () => {
     listState.isLoading = true;
-    const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("renders error state", () => {
     listState.isError = true;
     listState.error = {status: 500};
-    const {getByText} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByText} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(getByText(/Failed to load files/)).toBeDefined();
   });
 
@@ -146,20 +141,14 @@ describe("DocumentStorageBrowser", () => {
     listState.error = {status: 503};
     const onSettingsPress = mock(() => undefined);
     const {getByText} = renderWithTheme(
-      <DocumentStorageBrowser
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-        onSettingsPress={onSettingsPress}
-      />
+      <DocumentStorageBrowser basePath="/documents" onSettingsPress={onSettingsPress} />
     );
     expect(getByText(/Storage is not configured/)).toBeDefined();
   });
 
   it("renders empty state when no files or folders", () => {
     listState.data = {files: [], folders: []};
-    const {getByText} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByText} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(getByText(/No files found/)).toBeDefined();
   });
 
@@ -183,26 +172,20 @@ describe("DocumentStorageBrowser", () => {
       ],
       folders: ["sub/"],
     };
-    const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("refreshes the list when refresh is pressed", async () => {
     listState.data = {files: [], folders: []};
-    const {getByTestId} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByTestId} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     await press(getByTestId("document-refresh-button"));
     expect(refetchMock).toHaveBeenCalled();
   });
 
   it("opens the new-folder modal when pressed", async () => {
     listState.data = {files: [], folders: []};
-    const {getByTestId, toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByTestId, toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     await press(getByTestId("document-new-folder-button"));
     expect(toJSON()).toBeDefined();
   });
@@ -210,11 +193,7 @@ describe("DocumentStorageBrowser", () => {
   it("does not show upload/new folder when allowUpload is false", () => {
     listState.data = {files: [], folders: []};
     const {queryByTestId} = renderWithTheme(
-      <DocumentStorageBrowser
-        allowUpload={false}
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-      />
+      <DocumentStorageBrowser allowUpload={false} basePath="/documents" />
     );
     expect(queryByTestId("document-upload-button")).toBeNull();
     expect(queryByTestId("document-new-folder-button")).toBeNull();
@@ -227,11 +206,7 @@ describe("DocumentStorageBrowser", () => {
     };
     const onFileSelect = mock(() => undefined);
     const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-        onFileSelect={onFileSelect}
-      />
+      <DocumentStorageBrowser basePath="/documents" onFileSelect={onFileSelect} />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -240,11 +215,7 @@ describe("DocumentStorageBrowser", () => {
     listState.data = {files: [], folders: []};
     const onSettingsPress = mock(() => undefined);
     const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-        onSettingsPress={onSettingsPress}
-      />
+      <DocumentStorageBrowser basePath="/documents" onSettingsPress={onSettingsPress} />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -252,11 +223,7 @@ describe("DocumentStorageBrowser", () => {
   it("does not render when allowDelete is false (folder actions return null)", () => {
     listState.data = {files: [], folders: ["sub/"]};
     const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser
-        allowDelete={false}
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-      />
+      <DocumentStorageBrowser allowDelete={false} basePath="/documents" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -264,11 +231,7 @@ describe("DocumentStorageBrowser", () => {
   it("uses custom title when provided", () => {
     listState.data = {files: [], folders: []};
     const {getByText} = renderWithTheme(
-      <DocumentStorageBrowser
-        api={{} as unknown as AdminApi}
-        basePath="/documents"
-        title="Custom Storage"
-      />
+      <DocumentStorageBrowser basePath="/documents" title="Custom Storage" />
     );
     expect(getByText("Custom Storage")).toBeDefined();
   });
@@ -277,7 +240,7 @@ describe("DocumentStorageBrowser", () => {
     listState.isError = true;
     listState.error = {status: 503};
     const {getByTestId, rerender} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
+      <DocumentStorageBrowser basePath="/documents" />
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
@@ -286,33 +249,27 @@ describe("DocumentStorageBrowser", () => {
     listState.isError = false;
     listState.error = null;
     listState.data = {files: [], folders: []};
-    rerender(<DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />);
+    rerender(<DocumentStorageBrowser basePath="/documents" />);
     expect(true).toBe(true);
   });
 
   it("supports originalStatus 503 error shape", () => {
     listState.isError = true;
     listState.error = {originalStatus: 503};
-    const {getByText} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByText} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(getByText(/Storage is not configured/)).toBeDefined();
   });
 
   it("renders breadcrumbs that can be clicked", () => {
     listState.data = {files: [], folders: []};
-    const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     // No current prefix, only root crumb
     expect(toJSON()).toBeDefined();
   });
 
   it("renders new folder modal markup when opened", async () => {
     listState.data = {files: [], folders: []};
-    const {getByTestId, toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {getByTestId, toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     await press(getByTestId("document-new-folder-button"));
     expect(toJSON()).toBeDefined();
   });
@@ -320,9 +277,7 @@ describe("DocumentStorageBrowser", () => {
   it("uploads a file when the hidden input fires change", async () => {
     Object.defineProperty(Platform, "OS", {configurable: true, value: "web"});
     listState.data = {files: [], folders: []};
-    const {UNSAFE_getAllByType} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {UNSAFE_getAllByType} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     const hostInputs = UNSAFE_getAllByType("input" as unknown as React.ComponentType);
     const fileInput = hostInputs.find(
       (node: ReactTestInstance) => node.props?.type === "file"
@@ -340,9 +295,7 @@ describe("DocumentStorageBrowser", () => {
   it("ignores upload change when no file selected", async () => {
     Object.defineProperty(Platform, "OS", {configurable: true, value: "web"});
     listState.data = {files: [], folders: []};
-    const {UNSAFE_getAllByType} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {UNSAFE_getAllByType} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     const hostInputs = UNSAFE_getAllByType("input" as unknown as React.ComponentType);
     const fileInput = hostInputs.find(
       (node: ReactTestInstance) => node.props?.type === "file"
@@ -360,9 +313,7 @@ describe("DocumentStorageBrowser", () => {
     uploadImpl = async () => {
       throw new Error("upload failed");
     };
-    const {UNSAFE_getAllByType} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {UNSAFE_getAllByType} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     const hostInputs = UNSAFE_getAllByType("input" as unknown as React.ComponentType);
     const fileInput = hostInputs.find(
       (node: ReactTestInstance) => node.props?.type === "file"
@@ -388,9 +339,7 @@ describe("DocumentStorageBrowser", () => {
       ],
       folders: ["sub-folder/"],
     };
-    const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(toJSON()).toBeDefined();
   });
 
@@ -417,9 +366,7 @@ describe("DocumentStorageBrowser", () => {
       ],
       folders: [],
     };
-    const {toJSON} = renderWithTheme(
-      <DocumentStorageBrowser api={{} as unknown as AdminApi} basePath="/documents" />
-    );
+    const {toJSON} = renderWithTheme(<DocumentStorageBrowser basePath="/documents" />);
     expect(toJSON()).toBeDefined();
   });
 });

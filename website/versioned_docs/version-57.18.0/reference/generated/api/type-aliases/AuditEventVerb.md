@@ -1,1 +1,0 @@
-> **AuditEventVerb** = `"created"` \| `"deleted"` \| `"updated"`

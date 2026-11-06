@@ -89,7 +89,11 @@ describe("static-analysis helpers", (): void => {
   });
 
   test("classifies isolated suites and repo script tests", (): void => {
-    assert.isTrue(isIsolatedOrRepoScriptTestFile("rtk/src/isolated/emptyApi.isolated.ts"));
+    assert.isTrue(
+      isIsolatedOrRepoScriptTestFile(
+        "syncdb/src/isolated/defaultPersisterFactoryNative.isolated.ts"
+      )
+    );
     assert.isTrue(isIsolatedOrRepoScriptTestFile("scripts/static-analysis/lib.test.ts"));
     assert.isTrue(
       isIsolatedOrRepoScriptTestFile(".github/scripts/architectural-pr-review.test.ts")

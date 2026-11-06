@@ -47,6 +47,20 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
   return {threshold};
 };
 
+/**
+ * admin-frontend isolated suites that run with the real API module (`ADMIN_USE_REAL_API=1`),
+ * matching admin-frontend/scripts/run-tests.sh.
+ */
+const REAL_API_ISOLATED_FILES = new Set([
+  "././src/isolated/hooks.isolated.tsx",
+  "././src/isolated/adminModelTable.ssr.isolated.tsx",
+  "././src/isolated/adminModelForm.ssr.isolated.tsx",
+  "././src/isolated/adminModelTable.windowedSeed.isolated.tsx",
+  "././src/isolated/adminRouteSeeds.ssr.isolated.tsx",
+  "././src/isolated/jobsCommsRouteSeeds.ssr.isolated.tsx",
+  "././src/isolated/orgsRouteSeeds.ssr.isolated.tsx",
+]);
+
 const ESC = String.fromCharCode(27);
 const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
 
@@ -697,7 +711,7 @@ const main = async (): Promise<void> => {
     coverageDirs.push(dir);
     rmSync(dir, {force: true, recursive: true});
     console.info(`\n--- Isolated coverage pass for ${testFile} ---`);
-    const needsReducedPreload = testFile === "././src/isolated/hooks.isolated.tsx";
+    const needsReducedPreload = REAL_API_ISOLATED_FILES.has(testFile);
     const run = await runBunTest(
       [testFile, "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${dir}`],
       needsReducedPreload ? {env: {ADMIN_USE_REAL_API: "1"}} : undefined

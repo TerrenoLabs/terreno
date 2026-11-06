@@ -8,7 +8,11 @@ import {Server} from "socket.io";
 
 import {betterAuthAdapter} from "./auth/betterAuthAdapter";
 import {createSyncDb, type SyncDbConfig} from "./client";
-import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
+import {
+  createLocalKeyProvider,
+  createServerKeyProvider,
+  DEFAULT_KEY_CACHE_DB_NAME,
+} from "./crypto/keyProviders";
 import {getConflict} from "./mutations/conflicts";
 import {createDefaultPersisterFactory as createWebPersisterFactory} from "./persisters/defaultPersisterFactory.web";
 import {memoryPersisterFactory} from "./persisters/memoryPersister";
@@ -371,6 +375,42 @@ describe("createSyncDb", () => {
       await client.stop();
     });
 
+    it("mints UUIDs by default and ObjectIds for collections configured with idFormats objectId", async () => {
+      const harness = makeHarness({
+        collections: ["todos", "notes"],
+        idFormats: {notes: "objectId"},
+      });
+      harness.transport.setDefaultResponder(async () => {
+        await flush();
+        throw new Error("offline");
+      });
+      const client = createSyncDb(harness.config);
+      await client.start();
+
+      const todo = client.mutate({collection: "todos", data: {title: "t"}, operation: "create"});
+      assert.match(todo.id, /^[0-9a-f]{8}-[0-9a-f]{4}-/);
+
+      const note = client.mutate({collection: "notes", data: {body: "n"}, operation: "create"});
+      assert.match(note.id, /^[0-9a-f]{24}$/);
+      assert.deepEqual(client.store.getEntity({collection: "notes", id: note.id})?.data, {
+        body: "n",
+      });
+
+      // An explicit id is kept when it is a valid ObjectId and refused before queuing when not.
+      const explicit = "65f0c0ffee0000000000abcd";
+      assert.equal(
+        client.mutate({collection: "notes", data: {}, id: explicit, operation: "create"}).id,
+        explicit
+      );
+      const queuedBefore = client.getSyncStatus().queuedCount;
+      expect(() =>
+        client.mutate({collection: "notes", data: {}, id: "not-hex", operation: "create"})
+      ).toThrow("24-character hex ObjectId for notes");
+      assert.equal(client.getSyncStatus().queuedCount, queuedBefore);
+      assert.isUndefined(client.store.getEntity({collection: "notes", id: "not-hex"}));
+      await client.stop();
+    });
+
     it("applies creates optimistically and immediately", async () => {
       const harness = makeHarness();
       // Hold replies so the pre-ack state is observable.
@@ -407,6 +447,7 @@ describe("createSyncDb", () => {
       const entity = client.store.getEntity({collection: "todos", id});
       expect(entity?.pendingMutationId).toBeUndefined();
       expect(entity?.seq).toBe(11);
+      expect(entity?.awaitingServerDelta).toBe(true);
       expect(client.getSyncStatus().queuedCount).toBe(0);
       await client.stop();
     });
@@ -2954,6 +2995,74 @@ describe("createSyncDb", () => {
       // still armed post-stop it would fire another send here.
       await new Promise((resolve) => setTimeout(resolve, 60));
       expect(harness.transport.sentMutations.length).toBe(sentBeforeWait);
+    });
+  });
+
+  describe("logout while start() is running", () => {
+    const keyMaterial = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+
+    it("persists without a post-logout /sync/key fetch and never connects after stop()", async () => {
+      const session = {active: true};
+      const keyFetches: Array<"ok" | "401"> = [];
+      const keyProvider = createServerKeyProvider({
+        appName: "logout-race",
+        cacheDbName: uniqueName(),
+        fetchKeyMaterial: async (): Promise<string> => {
+          if (!session.active) {
+            keyFetches.push("401");
+            throw new Error("401 from /sync/key");
+          }
+          keyFetches.push("ok");
+          return keyMaterial;
+        },
+      });
+      const webFactory = createWebPersisterFactory({keyProvider, saveDebounceMs: 20});
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      let stopPromise: Promise<void> | undefined;
+      // The user logs out while start() is still opening persistence: the session
+      // ends, and the host app's logout effect calls stop().
+      const persisterFactory: PersisterFactory = (args) => {
+        const persister = webFactory(args);
+        return {
+          ...persister,
+          startAutoSave: async (): Promise<typeof persister> => {
+            if (!stopPromise) {
+              session.active = false;
+              harness.auth.setUserId(null);
+              stopPromise = client.stop();
+            }
+            return persister.startAutoSave();
+          },
+        };
+      };
+      const client = createSyncDb({
+        ...harness.config,
+        persisterFactory,
+        transport: observable.transport,
+      });
+
+      await client.start();
+      await stopPromise;
+
+      expect(keyFetches).toEqual(["ok"]);
+      expect(client.getSyncStatus().persistence).toBe("durable");
+      expect(observable.events).not.toContain("connect");
+    });
+
+    it("stop() called before a queued start() runs cancels that start()", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+
+      const startPromise = client.start();
+      const stopPromise = client.stop();
+      await Promise.all([startPromise, stopPromise]);
+
+      expect(observable.events).not.toContain("connect");
+      expect((): unknown =>
+        client.mutate({collection: "todos", data: {title: "x"}, operation: "create"})
+      ).toThrow("requires start()");
     });
   });
 

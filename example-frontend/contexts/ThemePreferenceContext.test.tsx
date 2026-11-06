@@ -6,9 +6,12 @@ import TestRenderer, {act} from "react-test-renderer";
 
 import {AppThemeProvider, useThemePreference} from "./ThemePreferenceContext";
 
+// Host element type the probe renders; typed as string so it compares with node.type.
+const PROBE_HOST: string = "PreferenceProbe";
+
 const PreferenceProbe = (): ReactElement => {
   const {colorSchemeSetting, isLoading, setColorScheme} = useThemePreference();
-  return React.createElement("PreferenceProbe", {
+  return React.createElement(PROBE_HOST, {
     colorSchemeSetting,
     isLoading,
     onSetDark: (): void => {
@@ -24,7 +27,7 @@ describe("ThemePreferenceContext", () => {
       renderer = TestRenderer.create(React.createElement(PreferenceProbe));
     });
     assert.isDefined(renderer);
-    const probe = renderer.root.find((node) => String(node.type) === "PreferenceProbe");
+    const probe = renderer.root.find((node) => node.type === PROBE_HOST);
     assert.equal(probe.props.colorSchemeSetting, "light");
     assert.isFalse(probe.props.isLoading);
     await act(async () => {
@@ -45,7 +48,7 @@ describe("ThemePreferenceContext", () => {
     });
     assert.isDefined(renderer);
     const provider = renderer.root.findByType(TerrenoProvider);
-    const probe = renderer.root.find((node) => String(node.type) === "PreferenceProbe");
+    const probe = renderer.root.find((node) => node.type === PROBE_HOST);
     assert.equal(provider.props.openAPISpecUrl, "http://example.test/openapi.json");
     assert.equal(provider.props.colorScheme, probe.props.colorSchemeSetting);
     assert.isFalse(probe.props.isLoading);

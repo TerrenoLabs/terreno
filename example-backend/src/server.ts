@@ -234,8 +234,10 @@ export const start = async (
       organizations: {
         settingsSchema: organizationSettingsSchema,
       },
-      // App-owned env: @terreno/api does not read RATE_LIMIT_ENABLED. Unset = limiter off.
-      rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+      // The limiter is on by default. Deployed: Cloud Run is one Google Front End hop, so
+      // trust it to key unauthenticated traffic by client IP. Local dev, Playwright, and
+      // Maestro log in many times from one IP, so the limiter is off there.
+      rateLimit: isDeployed ? {trustProxy: 1} : false,
       skipListen,
       userModel: User as unknown as TerrenoAuthUserModel,
     }).configure(AppConfiguration);
@@ -301,9 +303,8 @@ export const start = async (
         })
       );
 
-    // Mount Socket.io on the process HTTP server whenever this service owns realtime sync
-    // *or* Terreno hands us a host-owned server (Vercel Functions), so `/socket.io/` is
-    // served from the same listener as Express.
+    // Mount Socket.io whenever this service owns realtime sync, or Terreno attaches to a
+    // host-owned listener (Vercel / early PORT bind), so `/socket.io/` shares Express.
     const shouldRegisterRealtimeApp = isWebsocketService || Boolean(httpServer);
     if (shouldRegisterRealtimeApp) {
       featureFlagsRealtimeApp = new RealtimeApp({
@@ -568,9 +569,22 @@ export const start = async (
       );
     }
 
-    await seedDefaultDataOnBoot({isDeployed});
+    const isPrPreviewDatabase = Boolean(
+      process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
+    );
+
+    // PR preview deploys smoke-test /health before Cloud Run's startup budget; seed after listen.
+    if (!isPrPreviewDatabase) {
+      await seedDefaultDataOnBoot({isDeployed});
+    }
 
     const app = terraApp.start();
+
+    if (isPrPreviewDatabase) {
+      void seedDefaultDataOnBoot({isDeployed}).catch((error: unknown) => {
+        logger.error("PR preview default seed failed", {error});
+      });
+    }
 
     // A host-owned server takes traffic as soon as this returns, so finish the sync
     // indexes and startup migrations first instead of racing the first requests.

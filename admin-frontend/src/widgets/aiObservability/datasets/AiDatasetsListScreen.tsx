@@ -15,9 +15,9 @@ const DATASETS_DESCRIPTION =
   "Fixed sets of inputs to test prompts and judges on. Build one from traces, then have people answer it once.";
 
 export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useCreateMutation, useImportMutation, useListQuery} = useAiObservabilityDatasetsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useCreateMutation, useImportMutation, useListQuery} = useAiObservabilityDatasetsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading, refetch} = useListQuery();
   const statusQuery = useStatusQuery();
   const canCreate = observabilityActionAllowed({
@@ -118,7 +118,7 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
         datasetId: importDatasetId,
       }).unwrap();
       setImportResult(result);
-      refetch();
+      void refetch();
     } catch (error) {
       const title =
         error && typeof error === "object" && "data" in error

@@ -19,12 +19,12 @@ file list and patch against the repo's documented conventions. Report concrete f
    ```
    Then `git diff origin/master...HEAD -- <path>` per named file you must inspect.
 
-2. Load the conventions for each touched package from `.rulesync/rules/<package>/` (e.g. `api`, `ui`, `rtk`, `example-backend`, `example-frontend`, `admin-backend`, `admin-frontend`, `ai`, `mcp-server`, `demo`), plus `.rulesync/rules/00-root.md`. Only read the rules for packages actually in the file list.
+2. Load the conventions for each touched package from `.rulesync/rules/<package>/` (e.g. `api`, `ui`, `syncdb`, `example-backend`, `example-frontend`, `admin-backend`, `admin-frontend`, `ai`, `mcp-server`, `demo`), plus `.rulesync/rules/00-root.md`. Only read the rules for packages actually in the file list.
 
 3. Review the named files against those rules. Pay particular attention to:
    - **api**: `APIError` usage, no `Model.findOne` (use `findExactlyOne`/`findOneOrThrow`/`findOneOrNone`), `schema.methods`/`statics` direct assignment, `description` on every schema field, `logger` not `console.log`, tests for every new hook/route/fix, no new `any`.
    - **ui / frontends**: `Box`/`Text` from @terreno/ui over raw `View`/`Text`, theme props over inline hex/styles, loading and error states, `testID` on interactive elements, Luxon over `Date`/dayjs, React Native Web support.
-   - **rtk / frontends**: generated SDK hooks only — no direct `axios`/`fetch`, never hand-edit `openApiSdk.ts`.
+   - **syncdb / frontends**: synced collections via `useQuery` / `useMutate`; other routes via generated `store/apiSdk.ts` hooks — no direct `axios`/`fetch`, never hand-edit `store/apiSdk.ts` or `store/syncDbSdk.ts`, never add `@terreno/rtk` or Redux.
    - **cross-cutting**: interfaces over types, no enums, const arrow functions, named exports, RORO pattern, early returns, no AI attribution in commits.
    - **correctness**: actual bugs, missing edge cases, security issues, and broken or missing tests outrank style findings — lead with them.
 

@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-11-03T23:52:45.455Z.
+> dates are promised. Last updated: 2026-11-06T18:32:24.375Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -12,6 +12,10 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### api
 
 - [Remove legacy RTK realtime in Terreno 58](https://github.com/TerrenoLabs/terreno/issues/1392) (Breaking, Planned) — IP: [remove-legacy-realtime](docs/implementationPlans/remove-legacy-realtime.md) · Tasks: [remove-legacy-realtime](docs/tasks/remove-legacy-realtime.md)
+
+### syncdb
+
+- [Remove @terreno/rtk and Redux in Terreno 58](https://github.com/TerrenoLabs/terreno/issues/1685) (Breaking, Planned) — IP: [remove-rtk](docs/implementationPlans/remove-rtk.md) · Tasks: [remove-rtk](docs/tasks/remove-rtk.md)
 
 ### dx
 

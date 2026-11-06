@@ -153,7 +153,7 @@ describe("TapToEdit", () => {
   });
 
   it("invokes Linking.openURL for url type when clicked", async () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve());
 
     const {getByLabelText} = renderWithTheme(
       <TapToEdit editable={false} title="Site" type="url" value="https://example.com" />
@@ -168,7 +168,7 @@ describe("TapToEdit", () => {
   });
 
   it("invokes Linking.openURL with google maps for address type when clicked", async () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve());
 
     const {getByLabelText} = renderWithTheme(
       <TapToEdit

@@ -29,7 +29,7 @@ const validBlocks = (): Record<string, unknown> => {
 describe("POST /gpt/actions", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("keeps the default handler cap at 10 seconds", () => {
@@ -283,7 +283,7 @@ blocks:
 describe("POST /gpt/actions with scaleStepperHostAction", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   const setup = async (
@@ -395,7 +395,7 @@ blocks:
 describe("POST /gpt/actions with toggleChecklistHostAction", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   const setup = async (

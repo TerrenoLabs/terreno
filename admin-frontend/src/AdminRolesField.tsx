@@ -20,7 +20,6 @@ const roleNamesFromValue = (value: unknown): string[] => {
  * the record without a refused `/rbac/roles` request.
  */
 export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
-  api,
   apiBase,
   baseUrl,
   errorText,
@@ -30,7 +29,7 @@ export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
   value,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
-  const {useListRolesQuery} = useAdminRoles(api, resolvedApiBase);
+  const {useListRolesQuery} = useAdminRoles(resolvedApiBase);
   // The catalog only supplies display names and the options to add; a read-only field needs
   // neither, and its viewer may lack `rbac:read`.
   const {data, error, isLoading} = useListRolesQuery(undefined, {skip: Boolean(readOnly)});

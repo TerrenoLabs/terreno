@@ -64,8 +64,8 @@ violation is an Architecture finding; cite the rule only when the diff breaks it
   element; Luxon for dates, never `Date` arithmetic or dayjs; React Native Web still
   works (no web-only or native-only APIs without a platform guard).
 - **Data layer**: synced collections use `@terreno/syncdb` (`useQuery`/`useMutate`); other
-  routes use the generated SDK hooks from `@terreno/rtk`; no direct `axios`/`fetch` in
-  app code; `openApiSdk.ts` is regenerated with `bun run sdk`, never hand-edited, and a
+  routes use the generated SDK hooks in `store/apiSdk.ts` (`@terreno/syncdb` request client);
+  no direct `axios`/`fetch` in app code; `apiSdk.ts` is regenerated with `bun run sdk`, never hand-edited, and a
   backend route change ships the regenerated SDK in the same PR.
 - **Cross-cutting style**: interfaces over types; maps over enums; `const` arrow
   functions; named exports; RORO (receive an object, return an object); early returns;

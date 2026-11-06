@@ -63,7 +63,7 @@ export const FilterSelectMenu: FC<FilterSelectMenuProps> = ({
           onChange={onChange}
           options={options}
           placeholder={placeholder}
-          // The Filter panel is a fixed portal on document.body (zIndex 9999).
+          // The DropdownPanel is a fixed portal on document.body (zIndex 9999).
           // Render the menu in a matching body portal so it floats above the
           // panel instead of a React Native Modal that would stack behind it.
           renderMenuInBodyPortal

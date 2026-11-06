@@ -49,9 +49,6 @@ flag_management:
     - name: ui
       paths:
         - ui/
-    - name: rtk
-      paths:
-        - rtk/
     - name: syncdb
       paths:
         - syncdb/

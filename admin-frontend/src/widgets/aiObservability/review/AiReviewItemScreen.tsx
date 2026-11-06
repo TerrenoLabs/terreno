@@ -25,7 +25,7 @@ import {
 import {type ReviewActionBody, useAiObservabilityReviewApi} from "./useAiObservabilityReviewApi";
 
 export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
@@ -36,7 +36,7 @@ export const AiReviewItemScreenWidget: React.FC<AdminScreenWidgetProps> = (props
     useDetailQuery,
     useListQuery,
     useStatusQuery,
-  } = useAiObservabilityReviewApi(api);
+  } = useAiObservabilityReviewApi();
   const detailQuery = useDetailQuery(id ?? "", {skip: !id});
   const detail = useMemo(() => unwrapReviewDetail(detailQuery.data), [detailQuery.data]);
   const batchId = detail?.batchId;

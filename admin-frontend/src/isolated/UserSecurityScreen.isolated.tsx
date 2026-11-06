@@ -5,7 +5,6 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import {AdminProvider} from "../AdminProvider";
 import type {MemberSecuritySummary} from "../orgs/useMemberSecurityApi";
-import type {AdminApi} from "../types";
 import {
   UserSecurityLink,
   type UserSecurityLinkProps,
@@ -21,7 +20,6 @@ mock.module("expo-router", () => ({
   router: {back: mock(() => {}), push: pushMock},
 }));
 
-const api = {} as unknown as AdminApi;
 const ORIGIN = "http://api.test";
 const SECURITY_URL = `${ORIGIN}/users/user-1/security`;
 const PANEL = "user-security-screen-panel";
@@ -116,7 +114,6 @@ describe("UserSecurityScreen", () => {
   const renderScreen = (props: Partial<UserSecurityScreenProps> = {}) =>
     renderWithTheme(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         apiOrigin={ORIGIN}
         getAuthHeaders={async () => ({authorization: "Bearer test"})}
@@ -174,7 +171,6 @@ describe("UserSecurityScreen", () => {
 
     screen.rerender(
       <AdminProvider
-        api={api}
         apiBase="/admin"
         apiOrigin={ORIGIN}
         getAuthHeaders={async () => ({authorization: "Bearer test"})}
@@ -327,7 +323,7 @@ describe("UserSecurityLink", () => {
       return renderWithTheme(link);
     }
     return renderWithTheme(
-      <AdminProvider api={api} apiBase="/admin" routeBase={routeBase}>
+      <AdminProvider apiBase="/admin" routeBase={routeBase}>
         {link}
       </AdminProvider>
     );

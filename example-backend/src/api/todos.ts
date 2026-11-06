@@ -178,10 +178,6 @@ export const todoRouter = modelRouter("/todos", Todo, {
   },
   queryFields: ["completed", "created", "ownerId"],
   queryFilter: OwnerQueryFilter,
-  realtime: {
-    methods: ["create", "update", "delete"],
-    roomStrategy: "owner",
-  },
   sort: "-created",
   // Local-first sync (@terreno/syncdb): stream = todos|owner:{ownerId}.
   sync: {adminBroadcast: true, scope: {type: "owner"}},

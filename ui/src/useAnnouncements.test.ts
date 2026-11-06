@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
+import {act, renderHook, waitFor} from "@testing-library/react-native";
+import {Platform} from "react-native";
 
 const constantsState = {
   expoConfig: {
@@ -14,213 +14,149 @@ mock.module("expo-constants", () => ({
   default: constantsState,
 }));
 
-import {useAnnouncements} from "./useAnnouncements";
+import {createFakeRequestClient, fakeHttpError} from "./test-utils";
+import {useAcknowledgeAnnouncement} from "./useAcknowledgeAnnouncement";
+import {type AnnouncementPublic, useAnnouncements} from "./useAnnouncements";
 
-type AnnouncementsApi = Parameters<typeof useAnnouncements>[0];
-
-interface MockQueryDef {
-  query: (args?: {page?: number; limit?: number}) => string;
-}
-
-interface MockInjectOpts {
-  endpoints: (build: {query: (def: MockQueryDef) => string}) => Record<string, unknown>;
-}
+const feedItem: AnnouncementPublic = {
+  body: "Body",
+  id: "feed-1",
+  priority: 0,
+  requiresAcknowledgement: false,
+  title: "Feed",
+  version: 1,
+};
 
 describe("useAnnouncements", () => {
+  const originalOS = Platform.OS;
+
   afterEach(() => {
     constantsState.expoConfig.extra.buildNumber = undefined;
+    Platform.OS = originalOS;
   });
 
-  const buildApi = ({
-    feedData,
-    pendingData,
-    feedError,
-    pendingError,
-  }: {
-    feedData?: unknown;
-    pendingData?: unknown;
-    feedError?: unknown;
-    pendingError?: unknown;
-  }) => {
-    const refetchPending = mock(() => Promise.resolve());
-    const refetchFeed = mock(() => Promise.resolve());
-    const useGetPendingAnnouncementsQuery = mock(() => ({
-      data: pendingData,
-      error: pendingError,
-      isLoading: false,
-      refetch: refetchPending,
-    }));
-    const useGetAnnouncementFeedQuery = mock(() => ({
-      data: feedData,
-      error: feedError,
-      isLoading: false,
-      refetch: refetchFeed,
-    }));
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock((opts: MockInjectOpts) => {
-          const build = {
-            query: mock((def: MockQueryDef) => {
-              const pendingUrl = def.query();
-              const feedUrl = def.query({limit: 5, page: 2});
-              expect(
-                pendingUrl.includes("/announcements/pending") ||
-                  feedUrl.includes("/announcements/feed")
-              ).toBe(true);
-              return "query";
-            }),
-          };
-          opts.endpoints(build);
-          return {useGetAnnouncementFeedQuery, useGetPendingAnnouncementsQuery};
-        }),
-      })),
-    };
-    return {api, refetchFeed, refetchPending};
-  };
-
-  it("unwraps pending and feed payloads", () => {
-    const {api} = buildApi({
-      feedData: {
-        data: [
-          {
-            body: "Body",
-            id: "feed-1",
-            priority: 0,
-            requiresAcknowledgement: false,
-            title: "Feed",
-            version: 1,
-          },
-        ],
-      },
-      pendingData: {data: {current: null, remainingCount: 0}},
+  it("unwraps pending and feed payloads", async () => {
+    const {client} = createFakeRequestClient({
+      "GET /api/announcements/feed": () => ({data: [feedItem]}),
+      "GET /api/announcements/pending": () => ({data: {current: null, remainingCount: 0}}),
     });
-    const {result} = renderHook(() => useAnnouncements(api as unknown as AnnouncementsApi, "/api"));
-    expect(result.current.pending?.remainingCount).toBe(0);
-    expect(result.current.feed).toHaveLength(1);
+    const {result} = renderHook(() => useAnnouncements(client, "/api"));
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.pending?.remainingCount).toBe(0));
+    await waitFor(() => expect(result.current.feed).toHaveLength(1));
     expect(result.current.feed[0]?.id).toBe("feed-1");
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isFeedLoading).toBe(false);
   });
 
-  it("surfaces pending errors without treating feed errors as blocking", () => {
-    const {api} = buildApi({
-      feedError: new Error("feed failed"),
-      pendingError: new Error("pending failed"),
+  it("accepts bare payloads from clients that already unwrap envelopes", async () => {
+    const {client} = createFakeRequestClient({
+      "GET /announcements/feed": () => [feedItem],
+      "GET /announcements/pending": () => ({current: null, remainingCount: 2}),
     });
-    const {result} = renderHook(() => useAnnouncements(api as unknown as AnnouncementsApi));
-    expect(result.current.error).toEqual(new Error("pending failed"));
-    expect(result.current.feedError).toEqual(new Error("feed failed"));
+    const {result} = renderHook(() => useAnnouncements(client));
+    await waitFor(() => expect(result.current.pending?.remainingCount).toBe(2));
+    await waitFor(() => expect(result.current.feed).toHaveLength(1));
   });
 
-  it("keeps feed errors separate from pending errors", () => {
-    const {api} = buildApi({
-      feedError: new Error("feed failed"),
-      pendingData: {data: {current: null, remainingCount: 0}},
+  it("returns an empty feed when the feed envelope has no data", async () => {
+    const {client} = createFakeRequestClient({
+      "GET /announcements/feed": () => ({}),
+      "GET /announcements/pending": () => ({current: null, remainingCount: 0}),
     });
-    const {result} = renderHook(() => useAnnouncements(api as unknown as AnnouncementsApi));
+    const {result} = renderHook(() => useAnnouncements(client));
+    await waitFor(() => expect(result.current.isFeedLoading).toBe(false));
+    expect(result.current.feed).toEqual([]);
+  });
+
+  it("surfaces pending errors without treating feed errors as blocking", async () => {
+    const pendingFailure = fakeHttpError(500, "pending failed");
+    const feedFailure = fakeHttpError(500, "feed failed");
+    const {client} = createFakeRequestClient({
+      "GET /announcements/feed": () => {
+        throw feedFailure;
+      },
+      "GET /announcements/pending": () => {
+        throw pendingFailure;
+      },
+    });
+    const {result} = renderHook(() => useAnnouncements(client));
+    await waitFor(() => expect(result.current.error).toBe(pendingFailure));
+    await waitFor(() => expect(result.current.feedError).toBe(feedFailure));
+  });
+
+  it("keeps feed errors separate from pending errors", async () => {
+    const feedFailure = fakeHttpError(500, "feed failed");
+    const {client} = createFakeRequestClient({
+      "GET /announcements/feed": () => {
+        throw feedFailure;
+      },
+      "GET /announcements/pending": () => ({current: null, remainingCount: 0}),
+    });
+    const {result} = renderHook(() => useAnnouncements(client));
+    await waitFor(() => expect(result.current.feedError).toBe(feedFailure));
     expect(result.current.error).toBeUndefined();
-    expect(result.current.feedError).toEqual(new Error("feed failed"));
   });
 
-  it("caches enhanced api per base url", () => {
-    let injectCount = 0;
-    const api = {
-      enhanceEndpoints: () => ({
-        injectEndpoints: () => {
-          injectCount += 1;
-          return {
-            useGetAnnouncementFeedQuery: () => ({
-              data: [],
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-            useGetPendingAnnouncementsQuery: () => ({
-              data: undefined,
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-          };
-        },
-      }),
-    };
-    const {rerender} = renderHook(() =>
-      useAnnouncements(api as unknown as AnnouncementsApi, "/api")
-    );
-    rerender(undefined);
-    expect(injectCount).toBe(1);
-  });
-
-  it("includes platform and version query params when build number is valid", () => {
+  it("sends platform, version, and feed paging params when build number is valid", async () => {
     constantsState.expoConfig.extra.buildNumber = 42;
-    const capturedUrls: string[] = [];
-    const api = {
-      enhanceEndpoints: () => ({
-        injectEndpoints: (opts: MockInjectOpts) => {
-          const build = {
-            query: (def: MockQueryDef) => {
-              capturedUrls.push(def.query());
-              capturedUrls.push(def.query({limit: 5, page: 2}));
-              return "query";
-            },
-          };
-          opts.endpoints(build);
-          return {
-            useGetAnnouncementFeedQuery: () => ({
-              data: [],
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-            useGetPendingAnnouncementsQuery: () => ({
-              data: undefined,
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-          };
-        },
-      }),
-    };
-
-    renderHook(() => useAnnouncements(api as unknown as AnnouncementsApi, "/api"));
-
-    assert.ok(capturedUrls.some((url) => url.includes("platform=ios")));
-    assert.ok(capturedUrls.some((url) => url.includes("version=42")));
+    Platform.OS = "ios";
+    const {client, callsTo} = createFakeRequestClient({
+      "GET /api/announcements/feed": () => [],
+      "GET /api/announcements/pending": () => ({current: null, remainingCount: 0}),
+    });
+    const {result} = renderHook(() => useAnnouncements(client, "/api", {limit: 5, page: 2}));
+    await waitFor(() => expect(result.current.isFeedLoading).toBe(false));
+    expect(callsTo("GET /api/announcements/pending")[0]?.params).toEqual({
+      platform: "ios",
+      version: 42,
+    });
+    expect(callsTo("GET /api/announcements/feed")[0]?.params).toEqual({
+      limit: 5,
+      page: 2,
+      platform: "ios",
+      version: 42,
+    });
   });
 
-  it("omits version when build number is invalid", () => {
+  it("omits version and defaults feed paging when build number is invalid", async () => {
     constantsState.expoConfig.extra.buildNumber = "invalid";
-    const capturedUrls: string[] = [];
-    const api = {
-      enhanceEndpoints: () => ({
-        injectEndpoints: (opts: MockInjectOpts) => {
-          const build = {
-            query: (def: MockQueryDef) => {
-              capturedUrls.push(def.query());
-              return "query";
-            },
-          };
-          opts.endpoints(build);
-          return {
-            useGetAnnouncementFeedQuery: () => ({
-              data: [],
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-            useGetPendingAnnouncementsQuery: () => ({
-              data: undefined,
-              error: undefined,
-              isLoading: false,
-              refetch: () => Promise.resolve(),
-            }),
-          };
-        },
-      }),
-    };
+    Platform.OS = "web";
+    const {client, calls} = createFakeRequestClient({
+      "GET /announcements/feed": () => [],
+      "GET /announcements/pending": () => ({current: null, remainingCount: 0}),
+    });
+    const {result} = renderHook(() => useAnnouncements(client));
+    await waitFor(() => expect(result.current.isFeedLoading).toBe(false));
+    for (const call of calls) {
+      expect(call.params && "version" in call.params).toBe(false);
+    }
+    expect(calls.find((call) => call.url === "/announcements/feed")?.params).toEqual({
+      limit: 20,
+      page: 1,
+      platform: "web",
+    });
+  });
 
-    renderHook(() => useAnnouncements(api as unknown as AnnouncementsApi, "/api"));
+  it("refetches the pending announcement after an acknowledgement", async () => {
+    let remainingCount = 1;
+    const {client, callsTo} = createFakeRequestClient({
+      "GET /announcements/feed": () => [],
+      "GET /announcements/pending": () => ({current: null, remainingCount}),
+      "POST /announcements/:id/acknowledge": () => ({acknowledged: true}),
+    });
+    const {result} = renderHook(() => ({
+      ack: useAcknowledgeAnnouncement(client),
+      announcements: useAnnouncements(client),
+    }));
+    await waitFor(() => expect(result.current.announcements.pending?.remainingCount).toBe(1));
 
-    assert.ok(capturedUrls.every((url) => !url.includes("version=")));
+    remainingCount = 0;
+    await act(async () => {
+      await result.current.ack.acknowledge("announcement-1");
+    });
+    await waitFor(() => expect(result.current.announcements.pending?.remainingCount).toBe(0));
+    expect(callsTo("GET /announcements/pending")).toHaveLength(2);
+    expect(callsTo("GET /announcements/feed")).toHaveLength(1);
   });
 });

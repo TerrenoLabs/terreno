@@ -1,6 +1,6 @@
 import express from "express";
 
-import {asyncHandler} from "./api";
+import {asyncHandler, type OpenApiMiddleware} from "./api";
 import {
   authenticateMiddleware,
   generateTokens,
@@ -220,6 +220,14 @@ const incrementTokenEpoch = (user: User): void => {
   user.tokenEpoch = (user.tokenEpoch ?? 0) + 1;
 };
 
+const okResponse = {
+  data: {
+    properties: {ok: {type: "boolean"}},
+    required: ["ok"],
+    type: "object",
+  },
+};
+
 // The auth options passed to addAuthRoutes, kept on the app so changeUserPassword can reach the
 // Better Auth credential sync that TerrenoApp wires after the routes are added.
 const AUTH_OPTIONS_LOCAL_KEY = "terrenoAuthOptions";
@@ -261,8 +269,10 @@ export const changeUserPassword = async (
 export const addAuthRecoveryRoutes = (
   app: express.Application,
   userModel: UserModel,
-  authOptions?: AuthOptions
+  authOptions?: AuthOptions,
+  openApi?: OpenApiMiddleware
 ): void => {
+  const openApiOptions = openApi ? {openApi} : {};
   if (authOptions) {
     app.locals[AUTH_OPTIONS_LOCAL_KEY] = authOptions;
   }
@@ -347,26 +357,42 @@ export const addAuthRecoveryRoutes = (
     });
   });
 
-  const forgotOpenApi = createOpenApiBuilder({})
+  const forgotOpenApi = createOpenApiBuilder(openApiOptions)
     .withTags(["auth"])
     .withSummary("Request a password reset email")
-    .withRequestBody({email: {type: "string"}})
-    .withResponse(202, {ok: {type: "boolean"}})
+    .withDescription(
+      "Always returns 202, whether or not an account exists for the email, so accounts cannot be probed."
+    )
+    .withRequestBody({email: {description: "The account's email address", type: "string"}})
+    .withResponse(202, okResponse, {description: "Accepted", required: ["data"]})
     .build();
 
-  const resetOpenApi = createOpenApiBuilder({})
+  const resetOpenApi = createOpenApiBuilder(openApiOptions)
     .withTags(["auth"])
     .withSummary("Reset password with a one-time token")
+    .withDescription(
+      "Send `token` and either `password` or `newPassword`. Returns fresh tokens for the user."
+    )
     .withRequestBody({
-      newPassword: {type: "string"},
-      password: {type: "string"},
-      token: {type: "string"},
+      newPassword: {description: "Alias for password", type: "string"},
+      password: {description: "The new password", type: "string"},
+      token: {description: "One-time reset token from the emailed link", type: "string"},
     })
-    .withResponse(200, {
-      refreshToken: {type: "string"},
-      token: {type: "string"},
-      userId: {type: "string"},
-    })
+    .withResponse(
+      200,
+      {
+        data: {
+          properties: {
+            refreshToken: {type: "string"},
+            token: {type: "string"},
+            userId: {type: "string"},
+          },
+          required: ["refreshToken", "token", "userId"],
+          type: "object",
+        },
+      },
+      {required: ["data"]}
+    )
     .build();
 
   const sendVerification = asyncHandler(async (req: express.Request, res: express.Response) => {
@@ -396,17 +422,19 @@ export const addAuthRecoveryRoutes = (
     return res.json({data: {ok: true}});
   });
 
-  const sendVerificationOpenApi = createOpenApiBuilder({})
+  const sendVerificationOpenApi = createOpenApiBuilder(openApiOptions)
     .withTags(["auth"])
     .withSummary("Send or resend an email verification link")
-    .withResponse(202, {ok: {type: "boolean"}})
+    .withResponse(202, okResponse, {description: "Accepted", required: ["data"]})
     .build();
 
-  const verifyEmailOpenApi = createOpenApiBuilder({})
+  const verifyEmailOpenApi = createOpenApiBuilder(openApiOptions)
     .withTags(["auth"])
     .withSummary("Verify email with a one-time token")
-    .withRequestBody({token: {type: "string"}})
-    .withResponse(200, {ok: {type: "boolean"}})
+    .withRequestBody({
+      token: {description: "One-time verification token from the emailed link", type: "string"},
+    })
+    .withResponse(200, okResponse, {required: ["data"]})
     .build();
 
   const router = express.Router();

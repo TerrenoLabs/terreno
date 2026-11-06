@@ -54,6 +54,7 @@ import {
   type TextStyle,
   TouchableWithoutFeedback,
   View,
+  type ViewInstance,
   type ViewStyle,
 } from "react-native";
 import type {ToastProps as TerrenoToastPayload} from "./Common";
@@ -224,7 +225,7 @@ const ToastItem: FC<ToastProps> = (props) => {
     onPress,
   } = props;
 
-  const containerRef = useRef<View>(null);
+  const containerRef = useRef<ViewInstance>(null);
   const [animation] = useState(new Animated.Value(0));
   const panResponderRef = useRef<PanResponderInstance | undefined>(undefined);
   const panResponderAnimRef = useRef<Animated.ValueXY | undefined>(undefined);
@@ -394,7 +395,7 @@ const ToastItem: FC<ToastProps> = (props) => {
 
   const animationStyle = {
     opacity: animation,
-    transform: baseTransform as Animated.WithAnimatedObject<ViewStyle>["transform"],
+    transform: baseTransform as Animated.WithAnimatedValue<ViewStyle>["transform"],
   };
 
   return (

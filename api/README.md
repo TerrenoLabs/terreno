@@ -7,7 +7,7 @@ Most REST APIs wind up being a lot of boilerplate, so this tries to cut that dow
 into a full blown framework of its own. This library is inspired by the
 [Django-REST-Framework](https://www.django-rest-framework.org).
 
-These APIs integrate with @terreno/rtk to create consistent types on the frontend
+These APIs integrate with @terreno/syncdb to create consistent types on the frontend
 and backend, and automatically generated React hooks to fetch, query, and modify
 model instances.
 

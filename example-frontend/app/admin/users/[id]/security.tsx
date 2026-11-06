@@ -1,10 +1,10 @@
 import {AdminScreenPage, UserSecurityScreen} from "@terreno/admin-frontend";
-import type {PermissionSet} from "@terreno/rtk";
+import type {PermissionSet} from "@terreno/syncdb/app";
 import {Box, Spinner, Text} from "@terreno/ui";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {useGetMeQuery} from "@/store/sdk";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 import {canManageUserSecurity} from "@/utils/userSecurityAccess";
 
 interface SecurityProfile {
@@ -18,7 +18,7 @@ interface AdminUserSecurityRouteDependencies {
 }
 
 const defaultDependencies: AdminUserSecurityRouteDependencies = {
-  useProfile: () => useGetMeQuery(),
+  useProfile: () => useGetAuthMeQuery(),
   useUserId: () => useLocalSearchParams<{id: string}>().id,
 };
 

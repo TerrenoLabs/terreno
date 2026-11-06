@@ -36,16 +36,16 @@ const TRACES_DESCRIPTION =
   "Every AI call your app made, with its steps, cost and scores. Pick traces to send to people for review or to save as a dataset.";
 
 export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props) => {
-  const {api, apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
+  const {apiKey, apiKeyHint, apiKeyLoading = false, routeBase} = props;
   const {
     useEnqueueReviewMutation,
     useEvaluatorsQuery,
     useListQuery,
     useStatusQuery,
     useTestMultiStageMutation,
-  } = useAiObservabilityTracesApi(api);
-  const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
-  const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi(api);
+  } = useAiObservabilityTracesApi();
+  const {useAddTracesMutation, useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi();
+  const {useListQuery: usePromptsQuery} = useAiObservabilityPromptsApi();
   const [filters, setFilters] = useState<TraceListFilters>(emptyTraceFilters);
   const [sort, setSort] = useState(DEFAULT_TRACE_SORT);
   const [page, setPage] = useState(1);

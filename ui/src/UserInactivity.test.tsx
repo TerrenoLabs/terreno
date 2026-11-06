@@ -4,7 +4,6 @@ import {
   type EmitterSubscription,
   type GestureResponderEvent,
   Keyboard,
-  type KeyboardEventListener,
   PanResponder,
   type PanResponderCallbacks,
   type PanResponderGestureState,
@@ -147,10 +146,10 @@ describe("UserInactivity", () => {
     const onAction = mock((_active: boolean) => {});
     let capturedHideCallback: (() => void) | undefined;
     const addListenerSpy = spyOn(Keyboard, "addListener").mockImplementation(
-      (event: string, callback: KeyboardEventListener) => {
+      (event: string, callback: () => void) => {
         if (event === "keyboardDidHide") {
           // UserInactivity's keyboard handler ignores the event payload.
-          capturedHideCallback = callback as () => void;
+          capturedHideCallback = callback;
         }
         return {remove: mock(() => {})} as unknown as EmitterSubscription;
       }

@@ -63,7 +63,8 @@ export const mcpAdminModels = (options: McpAdminModelsOptions = {}): AdminModelC
         "revokedAt",
         "created",
       ],
-      model: McpServiceToken,
+      // The synced token model has a String `_id`, which AdminModelConfig's Model<any> rejects.
+      model: McpServiceToken as unknown as mongoose.Model<unknown>,
       permissions: {create: false, delete: true, update: false},
       routePath: "/mcp-service-tokens",
       searchFields: ["name", "tokenPrefix"],

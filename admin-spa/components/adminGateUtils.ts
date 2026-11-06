@@ -1,3 +1,8 @@
+import {sanitizeReturnTo} from "../src/returnTo";
+import {isSignedInOnlyRoute} from "../src/signedInOnlyRoutes";
+
+export {isSignedInOnlyRoute};
+
 interface IsForbiddenAdminConfigErrorOptions {
   error: unknown;
   isAuthenticated: boolean;
@@ -21,42 +26,6 @@ export const isForbiddenAdminConfigError = ({
     return false;
   }
   return status === 403;
-};
-
-/** Routes any signed-in user may open; they skip the admin check and admin bootstrapping. */
-const SIGNED_IN_ONLY_ROUTES: readonly string[] = ["/oauth/consent"];
-
-export const isSignedInOnlyRoute = (pathname: string): boolean => {
-  return SIGNED_IN_ONLY_ROUTES.includes(pathname.replace(/\/+$/, "") || "/");
-};
-
-// Any ASCII control character or whitespace; a valid in-app path never contains one.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: rejecting control characters is the point
-const UNSAFE_RETURN_TO_CHARS = /[\u0000-\u001f\u007f\s\\]/;
-
-/**
- * Accept only an in-app path ("/oauth/consent?request=abc"). Anything that could leave the
- * SPA (absolute URLs, protocol-relative "//host", backslash tricks, schemes) is dropped, so
- * login cannot be turned into an open redirect.
- */
-export const sanitizeReturnTo = (value: unknown): string | undefined => {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (typeof raw !== "string") {
-    return undefined;
-  }
-  if (!raw.startsWith("/")) {
-    return undefined;
-  }
-  if (raw.startsWith("//")) {
-    return undefined;
-  }
-  if (UNSAFE_RETURN_TO_CHARS.test(raw)) {
-    return undefined;
-  }
-  if (raw.startsWith("/login")) {
-    return undefined;
-  }
-  return raw;
 };
 
 /** Build "/path?a=b" from a router pathname and its search params. */

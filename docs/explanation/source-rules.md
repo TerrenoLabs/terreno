@@ -6,13 +6,13 @@ file (or a new hit in an existing file) that would trip them.
 
 ## Scope
 
-`{api,ui,rtk,ai,admin-backend,admin-frontend,example-backend}/src/**/*.{ts,tsx}`
+`{api,ui,ai,admin-backend,admin-frontend,example-backend}/src/**/*.{ts,tsx}`
 
 `example-frontend` and `demo` are listed in the original align glob but have no `src/`
 tree (`app/`, `components/`, `stories/` instead), so this scanner does not cover them.
 
 Skipped: tests (`*.test.*`, `*.spec.*`, `*.isolated.*`, `__tests__`), generated SDKs
-(`openApiSdk.ts`, `*OpenApiSdk.ts`), declaration files (`*.d.ts`), `node_modules`, `dist`,
+(`openApiSdk.ts`, `*OpenApiSdk.ts`, `*.gen.ts`), declaration files (`*.d.ts`), `node_modules`, `dist`,
 and test harness files such as `bunSetup.ts`.
 
 ## Rules

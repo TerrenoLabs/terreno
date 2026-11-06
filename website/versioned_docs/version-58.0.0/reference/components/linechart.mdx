@@ -1,0 +1,43 @@
+---
+title: "LineChart"
+description: "Single-series line chart drawn with owned SVG. Press or hover a point for `{label}: {value}`. Empty data shows empty copy; loading shows a spinner."
+sidebar_label: "LineChart"
+slug: /reference/components/linechart
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# LineChart
+
+Single-series line chart drawn with owned SVG. Press or hover a point for `\{label\}: \{value\}`. Empty data shows empty copy; loading shows a spinner.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `LineChartProps`  
+**Story source:** [`demo/stories/LineChart.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/LineChart.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="LineChart" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data` | `array` | Yes | Single series of labeled numeric points. |
+| `accessibilityLabel` | `string` |  | Summary announced for the whole chart. |
+| `comparisonData` | `array` |  | Optional previous-period values drawn as a dotted overlay. |
+| `emptyText` | `string` |  | Copy shown when  |
+| `formatValue` | `reflection` |  | Formats the numeric value in tooltips. |
+| `height` | `number` |  | Plot height in pixels. |
+| `legendLabel` | `string` |  | Series name shown under the plot. |
+| `loading` | `boolean` |  | When true, shows  |
+| `loadingAnimation` | `SkeletonAnimation` |  | Animation for skeletons inside  |
+| `loadingComponent` | `ReactNode` |  | Placeholder rendered while  |
+| `loadingLabel` | `string` |  | Screen reader label announced while loading. |
+| `onPeriodPress` | `reflection` |  | Makes  |
+| `periodLabel` | `string` |  | Relative or absolute reporting period shown with  |
+| `series` | `array` |  | Named series. When non-empty, these replace the single  |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `title` | `string` |  | Optional chart-card title shortcut. |
+| `xTickPolicy` | `union` |  | X-label collision policy.  |

@@ -2,8 +2,11 @@ import {beforeEach, describe, it, mock} from "bun:test";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse} from "./types";
 
 const routerBack = mock(() => {});
 const routerPush = mock(() => {});
@@ -48,8 +51,8 @@ const orgScopedModel = {
 describe("AdminModelForm org-scoped read skip", () => {
   beforeEach(() => {
     readSkipCalls.length = 0;
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useReadQuery: (_id: string, opts: {skip?: boolean}) => {
         readSkipCalls.push(Boolean(opts.skip));
         return {data: null, error: null, isLoading: false};
@@ -64,14 +67,8 @@ describe("AdminModelForm org-scoped read skip", () => {
 
   it("skips edit reads until organization context is selected", () => {
     renderWithTheme(
-      <AdminProvider api={{} as unknown as AdminApi} apiBase="/admin" getAuthHeaders={() => ({})}>
-        <AdminModelForm
-          api={{} as unknown as AdminApi}
-          apiBase="/admin"
-          itemId="item-1"
-          mode="edit"
-          modelName="Project"
-        />
+      <AdminProvider apiBase="/admin" getAuthHeaders={() => ({})}>
+        <AdminModelForm apiBase="/admin" itemId="item-1" mode="edit" modelName="Project" />
       </AdminProvider>
     );
 

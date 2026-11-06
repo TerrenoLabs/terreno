@@ -27,11 +27,10 @@ const errorTitle = (error: unknown): string | undefined => {
 };
 
 export const AiReviewBatchesScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useBatchesQuery, useCreateBatchMutation, useStatusQuery} =
-    useAiObservabilityReviewApi(api);
-  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi(api);
-  const {useListQuery: usePromptListQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useBatchesQuery, useCreateBatchMutation, useStatusQuery} = useAiObservabilityReviewApi();
+  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi();
+  const {useListQuery: usePromptListQuery} = useAiObservabilityPromptsApi();
   const batchesQuery = useBatchesQuery();
   const statusQuery = useStatusQuery();
   const evaluatorsQuery = useEvaluatorListQuery();

@@ -13,9 +13,9 @@ const QUEUE_DESCRIPTION =
   "Answer yes or no questions about AI outputs, oldest first. Items arrive from Traces and from review batches.";
 
 export const AiReviewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useListQuery, useStatusQuery} = useAiObservabilityReviewApi(api);
-  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi(api);
+  const {routeBase} = props;
+  const {useListQuery, useStatusQuery} = useAiObservabilityReviewApi();
+  const {useListQuery: useEvaluatorListQuery} = useAiObservabilityEvaluatorsApi();
   const [status, setStatus] = useState<ReviewStatus>("pending");
   const query = useListQuery(status);
   const statusQuery = useStatusQuery();

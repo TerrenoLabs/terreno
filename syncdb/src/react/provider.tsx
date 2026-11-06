@@ -25,3 +25,6 @@ export const useSyncDbClient = (): SyncDb => {
   }
   return client;
 };
+
+/** The SyncDb client from context, or `null` when no provider is mounted. */
+export const useOptionalSyncDbClient = (): SyncDb | null => useContext(SyncDbContext);

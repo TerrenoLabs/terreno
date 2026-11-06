@@ -11,8 +11,10 @@ import type {
 } from "../types";
 import {
   DEFAULT_MUTATION_TIMEOUT_MS,
+  isReservedSocketEvent,
   type SendMutationBatchResult,
   type SendMutationResult,
+  type SocketEventHandler,
   type SyncTransport,
   type TransportStatus,
 } from "./transport";
@@ -471,6 +473,19 @@ export const createSocketTransport = ({
       return () => {
         deltaBatchListeners.delete(callback);
         inboundDeltaBatches.delete(callback);
+      };
+    },
+    onEvent: (event: string, handler: SocketEventHandler): (() => void) => {
+      if (isReservedSocketEvent(event)) {
+        throw new Error(`onSocketEvent: "${event}" is reserved by the sync protocol`);
+      }
+      // Wrap so the same handler can be registered twice and removed independently.
+      const listener = (...args: unknown[]): void => {
+        handler(...args);
+      };
+      socket.on(event, listener);
+      return () => {
+        socket.off(event, listener);
       };
     },
     onStatusChange: (callback: (status: TransportStatus) => void): (() => void) => {

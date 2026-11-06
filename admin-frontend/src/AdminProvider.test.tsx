@@ -13,7 +13,6 @@ import {
   useScreenWidget,
 } from "./AdminProvider";
 import type {
-  AdminApi,
   AdminProviderValue,
   AdminWidgetRegistry,
   FieldWidgetComponent,
@@ -57,7 +56,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         routeBase="/console"
         widgets={{
@@ -96,7 +94,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         baseUrl="/admin"
         widgets={{
           fields: {custom: CustomField},
@@ -134,7 +131,7 @@ describe("AdminProvider widget registry", () => {
     };
 
     const {toJSON} = renderWithTheme(
-      <AdminProvider api={{} as unknown as AdminApi} baseUrl="/admin">
+      <AdminProvider baseUrl="/admin">
         <Probe />
       </AdminProvider>
     );
@@ -156,7 +153,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         credentials="same-origin"
         getAuthHeaders={getAuthHeaders}
@@ -181,7 +177,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         apiOrigin="http://localhost:4000"
         getAuthHeaders={() => ({Authorization: "Bearer ctx-token"})}
@@ -212,7 +207,7 @@ describe("AdminProvider widget registry", () => {
     };
 
     renderWithTheme(
-      <AdminProvider api={{} as AdminApi} apiBase="/admin" syncDb={syncDb}>
+      <AdminProvider apiBase="/admin" syncDb={syncDb}>
         <Probe />
       </AdminProvider>
     );
@@ -230,7 +225,7 @@ describe("AdminProvider widget registry", () => {
     };
 
     renderWithTheme(
-      <AdminProvider api={{} as AdminApi} apiBase="/admin" syncConflicts={syncConflicts}>
+      <AdminProvider apiBase="/admin" syncConflicts={syncConflicts}>
         <Probe />
       </AdminProvider>
     );

@@ -160,7 +160,7 @@ describe("host tools that need approval", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("pause", () => {

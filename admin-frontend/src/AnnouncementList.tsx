@@ -13,8 +13,8 @@ import {
 } from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useCallback, useMemo, useState} from "react";
-import {type AdminApi, resolveAdminBases} from "./types";
-import {useAdminApi} from "./useAdminApi";
+import {resolveAdminBases} from "./types";
+import {useAdminModelApi} from "./useAdminModelApi";
 
 interface AnnouncementListProps {
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
@@ -23,7 +23,6 @@ interface AnnouncementListProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   onCreateNew?: () => void;
   onRowClick?: (id: string) => void;
 }
@@ -97,7 +96,6 @@ export const AnnouncementList: React.FC<AnnouncementListProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   onCreateNew,
   onRowClick,
 }) => {
@@ -106,7 +104,7 @@ export const AnnouncementList: React.FC<AnnouncementListProps> = ({
   const [sortColumn, setSortColumn] = useState<ColumnSortInterface | undefined>();
 
   const routePath = `${resolvedApiBase}/announcements`;
-  const {useListQuery} = useAdminApi(api, routePath, "Announcement");
+  const {useListQuery} = useAdminModelApi(routePath, "Announcement");
 
   const sortString = buildSortString(sortColumn) ?? "-priority,-publishedAt";
 

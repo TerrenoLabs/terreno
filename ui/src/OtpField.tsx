@@ -4,6 +4,7 @@ import {
   Platform,
   type StyleProp,
   TextInput,
+  type TextInputInstance,
   type TextInputKeyPressEvent,
   type TextInputProps,
   View,
@@ -156,9 +157,11 @@ export const OtpField: FC<OtpFieldProps> = ({
   // Roving tab stop: only the cell that takes the next digit is in the tab order, so Tab and
   // Shift+Tab leave the field instead of landing on a cell that hands focus back.
   const activeIndex = Math.min(code.length, length - 1);
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
 
   const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
   const focusCell = useCallback((index: number): void => {
     inputRefs.current[index]?.focus();
@@ -174,6 +177,7 @@ export const OtpField: FC<OtpFieldProps> = ({
 
   const commit = useCallback(
     (next: string): void => {
+      activeIndexRef.current = Math.min(next.length, length - 1);
       if (next === code) {
         return;
       }
@@ -215,13 +219,13 @@ export const OtpField: FC<OtpFieldProps> = ({
     (index: number): void => {
       // Digits fill left to right: a tap past the active cell lands on that cell instead. Keyboard
       // focus never needs this, because only the active cell is a tab stop.
-      if (index > activeIndex) {
-        focusCell(activeIndex);
+      if (index > activeIndexRef.current) {
+        focusCell(activeIndexRef.current);
         return;
       }
       setFocusedIndex(index);
     },
-    [activeIndex, focusCell]
+    [focusCell]
   );
 
   const handleBlur = useCallback((index: number): void => {

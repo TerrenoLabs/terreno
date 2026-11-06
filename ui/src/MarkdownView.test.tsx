@@ -218,7 +218,7 @@ describe("MarkdownView", () => {
   });
 
   it("opens ordinary markdown links", async () => {
-    const openURL = mock(() => Promise.resolve(true));
+    const openURL = mock((_url: string): Promise<void> => Promise.resolve());
     Linking.openURL = openURL;
     const {getByText} = renderWithTheme(
       <MarkdownView>[Docs](https://example.com/docs)</MarkdownView>
@@ -248,10 +248,14 @@ describe("MarkdownView", () => {
 
   it("passes ordinary image keys directly instead of spreading them through props", async () => {
     const consoleError = spyOn(console, "error").mockImplementation(() => {});
-    const originalGetSize = Image.getSize;
-    Image.getSize = mock((_uri: string, success: (width: number, height: number) => void): void => {
-      success(1200, 800);
-    }) as unknown as typeof Image.getSize;
+    // Image.getSize is typed read-only; the test swaps it for a synchronous stub.
+    const mutableImage = Image as unknown as {getSize: typeof Image.getSize};
+    const originalGetSize = mutableImage.getSize;
+    mutableImage.getSize = mock(
+      (_uri: string, success: (width: number, height: number) => void): void => {
+        success(1200, 800);
+      }
+    ) as unknown as typeof Image.getSize;
     try {
       const {toJSON} = renderWithTheme(
         <MarkdownView>
@@ -268,7 +272,7 @@ describe("MarkdownView", () => {
       );
       assert.equal(keySpreadWarnings.length, 0);
     } finally {
-      Image.getSize = originalGetSize;
+      mutableImage.getSize = originalGetSize;
       consoleError.mockRestore();
     }
   });

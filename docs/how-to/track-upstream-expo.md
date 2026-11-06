@@ -33,7 +33,7 @@ State files (in the repo, not linked from this page):
 
 ## 2. Branch name
 
-Expo `58.0.0-preview.1` → `release-58.0.0`. Create from `origin/master` the
+Expo `58.0.0-preview.2` → `release-58.0.0`. Create from `origin/master` the
 first day. Later days check it out, merge `master`, and either bump to a
 newer preview or resume **Open** items from the log.
 

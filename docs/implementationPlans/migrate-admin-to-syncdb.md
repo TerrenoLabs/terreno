@@ -7,6 +7,11 @@
 **Created:** 2026-09-01
 **Grow run:** https://cursor.com/agents/bc-47350376-6566-4c5a-aee2-e6a28698de61
 
+> **Terreno 58 follow-up (done):** the dual-run window closed. `useAdminApi`, admin
+> `injectEndpoints`, and the admin `api` prop were removed (umbrella issue #1252).
+> ObjectId and API-only admin CRUD now use the `AdminProvider` fetch client through
+> `useAdminModelApi`. The plan below is kept as written for history.
+
 ## Goal
 
 Move **built-in admin model list/read/create/update/delete** for collections that already use **String `_id`** onto **windowed local-first syncdb**, with **REST remaining the membership source** (search, sort, pagination, RBAC). Remaining admin RPC (config, scripts, roles, comms, AI, consent, documents, version-config, background-tasks) leaves RTK `injectEndpoints` for a **tiny native `fetch` wrapper** with **host-injected auth**.

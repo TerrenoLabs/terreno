@@ -97,11 +97,21 @@ cd frontend && bun run sdk   # Regenerate store/apiSdk.ts after backend changes
 
 ## AI Assistance
 
-This project is configured to use the Terreno MCP server for AI-assisted development.
+This project uses Terreno MCP for docs, codegen, **and runtime debugging**.
+
+- **Hosted \`terreno\`**: search docs, generate models/routes/screens, validate schemas.
+- **Local \`terreno-local\`**: read merged logs, query Mongo, inspect client/SyncDB state, drive web
+  (\`browser\`) and native (\`navigate\`) — **standard path for bugs and verification**.
+
+Before fixing a bug: run the dev stack, enable \`terreno-local\`, follow the **debug-with-mcp**
+skill (or \`docs/how-to/debug-with-mcp.md\`). Set \`TERRENO_MCP_EVAL=1\` on the MCP server only
+when you need state-changing tools (\`navigate\`, \`syncdb_action\`, storage writes, etc.).
+
 Use the MCP tools and prompts for:
 - Generating new models and routes
 - Creating screens and forms
 - Following Terreno patterns and best practices
+- Observing logs and client state instead of pasting stack traces into chat
 `;
 };
 
@@ -1652,6 +1662,7 @@ import {DefaultTheme, ThemeProvider} from "expo-router/react-navigation";
 import type React from "react";
 import {useEffect} from "react";
 import "react-native-reanimated";
+import {registerTerrenoDevStorage} from "@terreno/syncdb";
 import {installDevConsoleLogger} from "@terreno/syncdb/app";
 import {betterAuthClient} from "@/lib/betterAuth";
 import {apiClient} from "@/store/apiClient";
@@ -1661,6 +1672,7 @@ import {setSyncDbReady, syncDb} from "@/store/syncdb";
 // POST /__terreno/browser-logs so terreno-mcp-local \`read_logs\` / \`last_error\` can read them.
 // No-op outside __DEV__.
 installDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
 
 export {ErrorBoundary} from "expo-router";
 

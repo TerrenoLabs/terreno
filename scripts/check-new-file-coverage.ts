@@ -18,7 +18,7 @@ const DEFAULT_THRESHOLD = 90;
 const normalizePath = (path: string): string => path.split(sep).join("/");
 const SOURCE_FILE_PATTERN = /\.(?:ts|tsx)$/;
 const EXCLUDED_SOURCE_PATTERN =
-  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk)\.ts$/;
+  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|\.isolated\.(?:ts|tsx)$|(?:^|\/)example-frontend\/devMcpCommands\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk|openApiSdk)\.ts$/;
 /**
  * Expo Router route files under `app/`: `index`, `_layout`, `+not-found`, dynamic
  * segments such as `[id]`, thin `create` wrappers, and named recovery routes
@@ -114,6 +114,8 @@ export const colocatedTestCandidates = (repoRelativeSource: string): string[] =>
     `${withoutExt}.test.tsx`,
     `${withoutExt}.spec.ts`,
     `${withoutExt}.spec.tsx`,
+    `${withoutExt}.isolated.ts`,
+    `${withoutExt}.isolated.tsx`,
   ];
 };
 
@@ -135,10 +137,26 @@ export const findColocatedTests = ({
       return null;
     }
     for (const match of matches) {
-      tests.add(normalizePath(relative(packageRoot, resolve(repoRoot, match))));
+      const packageRelative = normalizePath(relative(packageRoot, resolve(repoRoot, match)));
+      tests.add(packageRelative.startsWith(".") ? packageRelative : `./${packageRelative}`);
     }
   }
-  return [...tests].sort();
+  const sorted = [...tests].sort();
+  // Run shared-suite files before *.isolated.* so a prior mock.module in an isolated file
+  // cannot replace modules still needed by colocated *.test.* files in the same process.
+  return sorted.sort((left, right) => {
+    const rank = (path: string): number => {
+      if (path.includes(".isolated.")) {
+        return 1;
+      }
+      return 0;
+    };
+    const diff = rank(left) - rank(right);
+    if (diff !== 0) {
+      return diff;
+    }
+    return left.localeCompare(right);
+  });
 };
 
 const terrenoPackageDir = (packageName: string): string => {

@@ -71,6 +71,9 @@ describe("isCoverageSourceFile", () => {
   it("excludes tests, stories, e2e helpers, generated SDKs, and non-source files", () => {
     assert.isFalse(isCoverageSourceFile("api/src/newRoute.test.ts"));
     assert.isFalse(isCoverageSourceFile("ui/src/NewComponent.stories.tsx"));
+    assert.isFalse(isCoverageSourceFile("mcp-server/src/local/tools/clientDev.isolated.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/devMcpCommands.ts"));
+    assert.isFalse(isCoverageSourceFile("example-frontend/devMcpCommands.isolated.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/e2e/helpers/auditEvents.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/store/apiSdk.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/store/syncDbSdk.ts"));
@@ -277,6 +280,8 @@ describe("findColocatedTests", () => {
       "api/src/errors.test.tsx",
       "api/src/errors.spec.ts",
       "api/src/errors.spec.tsx",
+      "api/src/errors.isolated.ts",
+      "api/src/errors.isolated.tsx",
     ]);
     assert.deepEqual(
       findColocatedTests({
@@ -284,7 +289,7 @@ describe("findColocatedTests", () => {
         packageRoot: join(repoRoot, "api"),
         repoRoot,
       }),
-      ["src/errors.test.ts"]
+      ["./src/errors.test.ts"]
     );
   });
 

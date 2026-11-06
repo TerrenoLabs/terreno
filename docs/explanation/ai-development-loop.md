@@ -15,7 +15,7 @@ flowchart LR
   ASK["1. Ask<br/>terreno_search_docs<br/>terreno_get_component_docs<br/>application_info"]
   GEN["2. Generate<br/>terreno_generate_*<br/>terreno_validate_model_schema"]
   RUN["3. Run<br/>backend dev server<br/>Metro (Expo)"]
-  OBS["4. Observe<br/>read_logs (backend / browser / metro / app)<br/>last_error<br/>get_client_state"]
+  OBS["4. Observe<br/>read_logs (backend / browser / metro / app / network / native)<br/>last_error<br/>get_client_state"]
   FIX["5. Fix<br/>edit, then navigate<br/>browser snapshot + screenshot"]
   ASK --> GEN --> RUN --> OBS --> FIX
   FIX -->|"iterate"| ASK
@@ -79,7 +79,7 @@ The agent reads what the app did.
 
 | Tool | Contributes |
 | --- | --- |
-| `read_logs` | One merged, time-ordered tail from four sources: `backend` (server JSONL), `browser` (web errors and warnings JSONL), `metro` (bundler events), and `app` (the Hermes console over the Chrome DevTools Protocol). Its `connection` field says which live sources are attached. |
+| `read_logs` | One merged, time-ordered tail from six sources: `backend` (server JSONL), `browser` (web errors and warnings JSONL), `metro` (bundler events), `app` (the Hermes console over CDP), `network` (CDP Network events on the same session), and `native` (adb / iOS Simulator log tail when available). Default sources omit `native`. Its `connection` field says which live sources are attached. |
 | `last_error` | The newest error-level entry across the same sources, as the raw line. It includes a stack when the entry carries one. |
 | `get_client_state` | The client data layer in the running app. It reports which `layer` it found (`rtk`, `syncdb`, both, or `none`) and returns the RTK Query cache and auth state, the SyncDB state, or both. `get_rtk_state` is a deprecated alias. |
 | `get_syncdb_state`, `syncdb_snapshot` | SyncDB entities, outbox, conflicts, cursors, and debug events, plus snapshots to compare before and after a change |
@@ -96,13 +96,16 @@ result.
 | --- | --- |
 | `navigate` | Moves a native app to an expo-router path over the same CDP connection the logs use |
 | `browser` | Drives the web app in a headless WebView: open, click, type, scroll, then `snapshot` the rendered page and save a `screenshot` as proof |
-| `evaluate` | Runs a JavaScript expression in the app's Hermes runtime |
+| `dispatch_client_action` | Dispatches a known Redux action on the dev store (prefer over raw `evaluate`) |
+| `read_local_storage` / `write_local_storage` | Read or write AsyncStorage keys registered for MCP dev tooling |
+| `list_dev_commands` / `invoke_dev_command` | List and run app-registered dev-only command handlers |
+| `evaluate` | Runs a JavaScript expression in the app's Hermes runtime when no fixed tool fits |
 | `syncdb_action` | Changes a live SyncDB client: mutate, flush, resync, resolve conflicts, go offline |
 
-`evaluate`, `navigate`, `syncdb_action`, and the `browser` tool's `evaluate` action run code
-or change state inside the app, so they refuse unless the local server was started with
-`TERRENO_MCP_EVAL=1`. Generated editor configuration never sets it. The other `browser`
-actions do not need it.
+`evaluate`, `navigate`, `dispatch_client_action`, `write_local_storage`, `invoke_dev_command`,
+`syncdb_action`, and the `browser` tool's `evaluate` action run code or change state inside the
+app, so they refuse unless the local server was started with `TERRENO_MCP_EVAL=1`. Generated
+editor configuration never sets it. The other `browser` actions do not need it.
 
 After the fix, the loop goes back to Observe. A change is done when the logs and state show
 the new behavior, not when the edit compiles.

@@ -7,12 +7,14 @@ import {DefaultTheme, ThemeProvider} from "expo-router/react-navigation";
 import type React from "react";
 import {useEffect} from "react";
 import "react-native-reanimated";
+import {registerTerrenoDevStorage} from "@terreno/syncdb";
 import {installDevConsoleLogger} from "@terreno/syncdb/app";
 import {betterAuthClient} from "@/lib/betterAuth";
 import {apiClient} from "@/store/apiClient";
 import {setSyncDbReady, syncDb} from "@/store/syncdb";
 
 installDevConsoleLogger({baseUrl});
+registerTerrenoDevStorage({asyncStorage: true});
 
 export {ErrorBoundary} from "expo-router";
 

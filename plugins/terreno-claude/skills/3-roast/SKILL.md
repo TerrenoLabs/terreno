@@ -39,7 +39,9 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
    the task-scoped briefing (criteria, file list, patch). Do not trust Pick's completion
    claims as proof. Do not reload unnamed lifecycle references or the whole skill catalog.
 2. **Discover supporting skills.** Load only skills whose descriptions match this task's
-   files and criteria. Repository-mandatory capabilities are hard requirements.
+   files and criteria. Repository-mandatory capabilities are hard requirements. For runtime
+   bugs and repro steps on a Terreno app, **`debug-with-mcp`** is mandatory before claiming
+   root cause or fix without MCP evidence.
 3. **Build the matrix.** Map every in-scope criterion **for the current task** to one or
    more objective methods and the evidence required. Include promised regressions,
    compatibility, and non-scope that this task could break. Add every IP
@@ -62,6 +64,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 4. **Inspect and execute.** Review this task's patch and run concrete checks in this
    invocation: repository-prescribed tests, integration/system behavior, lint/type/build
    checks, runtime/API/database probes, regression reproductions, or real UI interaction.
+   For backend/frontend/runtime defects, require evidence from **`terreno-local`** tools per
+   **`debug-with-mcp`** when the dev stack is runnable — not code review alone.
    Do not spawn two unconstrained reviewers. Prefer named commands here over a second
    general-purpose child that rediscovers the repo. Run the gate CI will run on these
    files, not only this task's test file. Use the root `prepush` package script when

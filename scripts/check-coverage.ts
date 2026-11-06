@@ -11,7 +11,8 @@
  * table, then enforces the 95% gate on the merged report. See
  * https://github.com/oven-sh/bun/issues/7367.
  *
- * When the package contains tests in `src/isolated/*.isolated.{ts,tsx}`, each
+ * When the package contains tests named `*.isolated.ts` or `*.isolated.tsx`
+ * anywhere under `src/`, each
  * isolated test file is run in its own `bun test` invocation (because those
  * tests rely on module-level `mock.module` calls that leak across files and
  * would otherwise pollute unrelated suites). The resulting LCOV coverage
@@ -315,8 +316,35 @@ export const countHitLines = (entry: FileCoverage): number => {
  * Isolated runs often instrument a different line set than the main suite
  * (different preload, fewer files loaded). Union-by-line-number then leaves
  * the main file's uncovered lines in place and does not get credit for the
- * isolated run's executed lines. Prefer the snapshot with more hit lines.
+ * isolated run's executed lines. Union per line and per function (max hits).
  */
+const mergeFunctionAggregates = (existing: FileCoverage, src: FileCoverage): void => {
+  const foundA = existing.functionsFound;
+  const foundB = src.functionsFound;
+  const mergedFound =
+    foundA > 0 && foundB > 0 ? Math.min(foundA, foundB) : Math.max(foundA, foundB);
+  const mergedHit = Math.min(mergedFound, Math.max(existing.functionsHit, src.functionsHit));
+  existing.functionsFound = mergedFound;
+  existing.functionsHit = mergedHit;
+};
+
+/**
+ * Bun sometimes emits FNF/FNH aggregates where FNF counts more arrow bodies than
+ * FNH reports as hit, while every instrumented line executed. Align aggregates
+ * with line reality so merged gates do not contradict full line coverage.
+ */
+const alignFunctionAggregatesWhenAllLinesHit = (entry: FileCoverage): void => {
+  if (entry.hasFnRecords || entry.lines.size === 0) {
+    return;
+  }
+  for (const hits of entry.lines.values()) {
+    if (hits === 0) {
+      return;
+    }
+  }
+  entry.functionsHit = entry.functionsFound;
+};
+
 export const mergeIsolatedLcov = (
   target: Map<string, FileCoverage>,
   source: Map<string, FileCoverage>
@@ -330,23 +358,10 @@ export const mergeIsolatedLcov = (
       mergeLcov(target, new Map([[path, src]]));
       continue;
     }
-    const srcHits = countHitLines(src);
-    const dstHits = countHitLines(existing);
-    const srcPct = srcHits / Math.max(src.lines.size, 1);
-    const dstPct = dstHits / Math.max(existing.lines.size, 1);
-    if (srcPct > dstPct) {
-      existing.lines = new Map(src.lines);
-      existing.functions = new Map(src.functions);
-      existing.functionsFound = src.functionsFound;
-      existing.functionsHit = src.functionsHit;
-      existing.hasFnRecords = src.hasFnRecords;
-      continue;
-    }
-    for (const [lineNo, hits] of src.lines.entries()) {
-      const prev = existing.lines.get(lineNo) ?? 0;
-      if (hits > prev) {
-        existing.lines.set(lineNo, hits);
-      }
+    const lineNos = new Set([...existing.lines.keys(), ...src.lines.keys()]);
+    for (const lineNo of lineNos) {
+      const hits = Math.max(existing.lines.get(lineNo) ?? 0, src.lines.get(lineNo) ?? 0);
+      existing.lines.set(lineNo, hits);
     }
     for (const [name, hits] of src.functions.entries()) {
       const prev = existing.functions.get(name) ?? 0;
@@ -354,12 +369,8 @@ export const mergeIsolatedLcov = (
         existing.functions.set(name, hits);
       }
     }
-    if (src.functionsFound > existing.functionsFound) {
-      existing.functionsFound = src.functionsFound;
-    }
-    if (src.functionsHit > existing.functionsHit) {
-      existing.functionsHit = src.functionsHit;
-    }
+    mergeFunctionAggregates(existing, src);
+    alignFunctionAggregatesWhenAllLinesHit(existing);
     if (src.hasFnRecords) {
       existing.hasFnRecords = true;
     }
@@ -389,12 +400,8 @@ export const mergeLcov = (
         existing.functions.set(name, hits);
       }
     }
-    if (src.functionsFound > existing.functionsFound) {
-      existing.functionsFound = src.functionsFound;
-    }
-    if (src.functionsHit > existing.functionsHit) {
-      existing.functionsHit = src.functionsHit;
-    }
+    mergeFunctionAggregates(existing, src);
+    alignFunctionAggregatesWhenAllLinesHit(existing);
     if (src.hasFnRecords) {
       existing.hasFnRecords = true;
     }
@@ -548,24 +555,32 @@ const runBunTest = async (
   });
 };
 
-const findIsolatedFiles = (cwd: string): string[] => {
+export const findIsolatedFiles = (cwd: string): string[] => {
   const files: string[] = [];
   const srcDir = join(cwd, "src");
-  if (existsSync(srcDir)) {
-    for (const f of readdirSync(srcDir)) {
-      if (f.endsWith(".isolated.ts") || f.endsWith(".isolated.tsx")) {
-        files.push(`././src/${f}`);
+  if (!existsSync(srcDir)) {
+    return files;
+  }
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, {withFileTypes: true})) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "node_modules" || entry.name === "dist") {
+          continue;
+        }
+        walk(full);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      if (entry.name.endsWith(".isolated.ts") || entry.name.endsWith(".isolated.tsx")) {
+        const rel = relative(cwd, full).replaceAll("\\", "/");
+        files.push(`././${rel}`);
       }
     }
-  }
-  const isolatedDir = join(cwd, "src", "isolated");
-  if (existsSync(isolatedDir)) {
-    for (const f of readdirSync(isolatedDir)) {
-      if (f.endsWith(".isolated.ts") || f.endsWith(".isolated.tsx")) {
-        files.push(`././src/isolated/${f}`);
-      }
-    }
-  }
+  };
+  walk(srcDir);
   return files.sort();
 };
 

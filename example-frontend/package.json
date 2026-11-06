@@ -60,15 +60,6 @@
     "react-test-renderer": "catalog:",
     "typescript": "catalog:"
   },
-  "expo": {
-    "doctor": {
-      "reactNativeDirectoryCheck": {
-        "exclude": [
-          "@react-native-community/blur"
-        ]
-      }
-    }
-  },
   "main": "index.js",
   "name": "@terreno/example-frontend",
   "private": true,

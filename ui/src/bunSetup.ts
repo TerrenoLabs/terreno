@@ -1518,12 +1518,6 @@ mock.module("@react-native-picker/picker", () => ({
   PickerIOS: PickerComponent,
 }));
 
-// Mock react-native-picker-select
-mock.module("react-native-picker-select", () => ({
-  default: ({children, ...props}: MockComponentProps) =>
-    React.createElement("RNPickerSelect", props, children),
-}));
-
 // Mock @react-native-community/datetimepicker
 mock.module("@react-native-community/datetimepicker", () => ({
   DateTimePickerAndroid: {

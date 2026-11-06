@@ -48,10 +48,8 @@ const FRONTEND_TOOL_BLIND_DEPENDENCIES = new Map<string, string[]>([
   [
     "ui/package.json",
     [
-      "@react-native-community/blur",
       "@react-navigation/native",
       "expo-notifications",
-      "react-date-picker",
       "react-native-permissions",
       "react-native-webview",
     ],

@@ -496,21 +496,12 @@
       // Published UI components expose native/web peers through platform resolution and
       // consumer bundlers; Knip cannot observe those out-of-repository consumers.
       "ignoreDependencies": [
-        "@react-native-community/blur",
         "@react-navigation/native",
         "expo-notifications",
         "expo-updates",
         "expo-web-browser",
-        "react-app-polyfill",
-        "react-date-picker",
-        "react-datetime-picker",
-        "react-dev-utils",
         "react-native-permissions",
-        "react-native-picker-select",
         "react-native-webview",
-        // mdurl ships its own types; the extra @types package is a catalog pin.
-        "@types/mdurl",
-        "react-time-picker",
         // Tests mock expo-modules-core subpaths by string; TypeDoc is invoked by
         // the package's `types` script.
         "expo-modules-core",

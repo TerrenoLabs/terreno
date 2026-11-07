@@ -47,21 +47,16 @@ export const allowSyncDbNoise = (consoleGuard: ConsoleGuard): void => {
   consoleGuard.allow(/WebSocket/i);
   consoleGuard.allow(/websocket error/i);
   consoleGuard.allow(/socket\.io/i);
-  // The realtime feature-flags/notifications socket (@terreno/rtk's useSocketConnection,
-  // distinct from syncdb's own transport) also can't reach a severed network during
-  // chaos/offline simulation.
-  consoleGuard.allow(/\[SocketConnection\]/);
   consoleGuard.allow("Failed to load resource");
   consoleGuard.allow("Sentry not initialized");
   consoleGuard.allow("[useConsentForms] Failed to fetch pending consent forms");
   consoleGuard.allow("[ConsentNavigator] Error fetching pending consents");
-  consoleGuard.allow("rejected mutation: Network unavailable");
-  consoleGuard.allow("rejected query");
   consoleGuard.allow("Error fetching OpenAPI spec");
   // Logging out while offline (see syncdb-storage.spec.ts's user-switch scenario)
-  // legitimately fails Better Auth's session and sign-out network calls.
-  consoleGuard.allow("Better Auth: Error syncing session: TypeError: Failed to fetch");
-  consoleGuard.allow("Better Auth: Error signing out");
+  // legitimately fails Better Auth's session and sign-out network calls. The session
+  // store in @terreno/syncdb/auth logs these (they were "Better Auth: ..." before 58).
+  consoleGuard.allow("[terreno/syncdb] Error syncing session: TypeError: Failed to fetch");
+  consoleGuard.allow("[terreno/syncdb] Error signing out");
   consoleGuard.allow(/sync needs attention/i);
   // Queueing mutations against a severed network is the point of these suites, so the
   // app's own "queue is deep" health warning is expected rather than a defect.

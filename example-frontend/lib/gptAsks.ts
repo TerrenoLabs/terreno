@@ -9,7 +9,7 @@ import {
   selectedFileMimeType,
 } from "@terreno/ui";
 
-import type {GptHistory} from "@/store/sdk";
+import type {GptHistory} from "@/types/gptHistory";
 
 type AskResponse = AskSubmission["response"];
 type AskFieldErrors = NonNullable<GPTChatProps["askErrors"]>[string];
@@ -277,16 +277,16 @@ export const readJson = async (response: Response): Promise<unknown> => {
 };
 
 /**
- * What an RTK Query upload mutation resolves to: the response's `data` (the base query unwraps
- * it), or the error, whose `status` is the HTTP status or, for a body that is not JSON, a string
- * such as `PARSING_ERROR` with the HTTP status in `originalStatus`.
+ * What an upload mutation trigger resolves to: the response's `data` (the request client unwraps
+ * it), or the error: an `ApiError` whose `status` is the HTTP status (`0` when the request never
+ * got a response) and whose `data` is the server's error body, or `{title}` with the status text
+ * when the body was not JSON.
  */
 export type AskFileUploadResult = {data: unknown} | {error: unknown};
 
 const NO_UPLOADED_FILE = "The upload returned no file id or size.";
 
-const isNotFound = (error: unknown): boolean =>
-  isRecord(error) && (error.status === 404 || error.originalStatus === 404);
+const isNotFound = (error: unknown): boolean => isRecord(error) && error.status === 404;
 
 /**
  * The example app's `AskFileUploader`. `send` posts the file as multipart form data, as the
@@ -306,7 +306,7 @@ export const createAskFileUploader = ({
         return undefined;
       }
       const detail = isRecord(error) ? errorDetailFromBody(error.data) : undefined;
-      const status = isRecord(error) ? String(error.status ?? "") : "";
+      const status = isRecord(error) && error.status ? String(error.status) : "";
       throw new Error(detail ?? `Upload failed (${status || "unknown error"})`);
     }
     const uploaded = uploadedFileFromData(result.data);

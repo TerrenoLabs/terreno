@@ -9,7 +9,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Text,
-  type View,
+  type ViewInstance,
 } from "react-native";
 
 import {
@@ -28,13 +28,13 @@ const layoutEvent = (height: number, width: number): LayoutChangeEvent =>
   ({nativeEvent: {layout: {height, width, x: 0, y: 0}}}) as LayoutChangeEvent;
 
 /** Stands in for the SafeAreaView ref, whose measureInWindow reports `height`. */
-const measuringSafeAreaRef = (height: number): React.RefObject<View | null> => {
-  const measuringView: Pick<View, "measureInWindow"> = {
+const measuringSafeAreaRef = (height: number): React.RefObject<ViewInstance | null> => {
+  const measuringView: Pick<ViewInstance, "measureInWindow"> = {
     measureInWindow: (callback) => {
       callback(0, 0, 100, height);
     },
   };
-  return {current: measuringView as View};
+  return {current: measuringView as ViewInstance};
 };
 
 beforeAll(() => {

@@ -18,9 +18,6 @@ parameters:
   run-blocks:
     type: boolean
     default: false
-  run-rtk:
-    type: boolean
-    default: false
   run-ui:
     type: boolean
     default: false
@@ -61,6 +58,9 @@ parameters:
     type: boolean
     default: false
   run-admin-spa-integration:
+    type: boolean
+    default: false
+  run-admin-spa-image-smoke:
     type: boolean
     default: false
   run-smoke:
@@ -213,10 +213,12 @@ commands:
             sudo install /tmp/terraform/terraform /usr/local/bin/terraform
 
   install_bun_and_deps:
-    description: Install Bun 1.4.4 and workspace deps with frozen lockfile (no package cache)
+    description: Install pinned Bun and workspace deps with frozen lockfile (no package cache)
     steps:
+      # Pinned: Bun 1.4.4 reports lower line coverage than 1.4.2 for the same
+      # tests, which fails the 95% package gates. Bump with the local toolchain.
       - node/install-bun:
-          version: "1.4.4"
+          version: "1.4.2"
       - node/install-packages:
           pkg-manager: bun
           with-cache: false
@@ -458,7 +460,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications socket-flags mcp-tokens" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -749,27 +751,6 @@ jobs:
       - check_new_file_lcov:
           package: blocks
 
-  rtk-ci:
-    executor: node22
-    steps:
-      - checkout
-      - install_bun_and_deps
-      - compile_packages:
-          packages: blocks syncdb ui
-      - run:
-          name: Lint / compile / test rtk
-          working_directory: ~/project/rtk
-          environment:
-            CI: "true"
-          command: |
-            set -euo pipefail
-            bun run lint
-            bun run compile
-            bun run test:coverage
-            bash ../scripts/upload-codecov.sh rtk
-      - check_new_file_lcov:
-          package: rtk
-
   ui-ci:
     executor: node22
     steps:
@@ -821,7 +802,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui
+          packages: blocks ui syncdb
       - run:
           name: Lint / compile / test admin-frontend
           working_directory: ~/project/admin-frontend
@@ -840,6 +821,8 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - compile_packages:
+          packages: blocks ui
       - run:
           name: Lint / compile / test syncdb
           working_directory: ~/project/syncdb
@@ -862,7 +845,7 @@ jobs:
       - run:
           name: Test coverage gate scripts
           command: |
-            bun test scripts/check-new-file-coverage.test.ts scripts/check-coverage.test.ts scripts/check-demo-coverage.test.ts scripts/check-package-coverage-ci.test.ts scripts/upload-codecov.test.ts
+            bun test scripts/check-new-file-coverage.test.ts scripts/check-coverage.test.ts scripts/check-demo-coverage.test.ts scripts/check-package-coverage-ci.test.ts scripts/upload-codecov.test.ts scripts/admin-spa-image-smoke.test.ts
 
   new-file-coverage:
     executor: node22_mongo
@@ -875,7 +858,7 @@ jobs:
           name: Fetch coverage base
           command: git fetch origin master
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements create-terreno-app mcp-server
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb admin-frontend admin-spa announcements create-terreno-app mcp-server
       - run:
           name: Check new source file coverage
           command: |
@@ -898,7 +881,6 @@ jobs:
             add_skip "<< pipeline.parameters.run-feature-flags >>" feature-flags
             add_skip "<< pipeline.parameters.run-jobs >>" jobs
             add_skip "<< pipeline.parameters.run-mcp-server >>" mcp-server
-            add_skip "<< pipeline.parameters.run-rtk >>" rtk
             add_skip "<< pipeline.parameters.run-syncdb >>" syncdb
             add_skip "<< pipeline.parameters.run-test-package >>" test
             add_skip "<< pipeline.parameters.run-ui >>" ui
@@ -999,6 +981,9 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      # generatedApp.compile.test.ts type-checks a scaffolded app against these packages' dist.
+      - compile_packages:
+          packages: api blocks jobs api-health admin-backend ui syncdb admin-frontend
       - run:
           name: Lint / compile / test create-terreno-app
           working_directory: ~/project/create-terreno-app
@@ -1053,7 +1038,7 @@ jobs:
       - checkout
       - install_bun_and_deps
       - compile_packages:
-          packages: blocks ui syncdb rtk admin-frontend
+          packages: blocks ui syncdb admin-frontend
       - run:
           name: Lint / test example-frontend
           working_directory: ~/project/example-frontend
@@ -1138,7 +1123,7 @@ jobs:
       - install_bun_and_deps
       - wait_for_mongo
       - compile_packages:
-          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb rtk admin-frontend admin-spa announcements example-backend
+          packages: api blocks jobs ai api-health comms admin-backend feature-flags ui syncdb admin-frontend admin-spa announcements example-backend
       - run:
           name: List admin scripts
           working_directory: ~/project/example-backend
@@ -1182,6 +1167,108 @@ jobs:
               exit 1
             fi
 
+  admin-spa-image-smoke:
+    # A machine executor runs Docker locally, so the built image's port is reachable on
+    # localhost (remote Docker would hide it from the job's own container).
+    machine:
+      image: ubuntu-2204:current
+    resource_class: large
+    environment:
+      # Throwaway values for an isolated smoke container; not secrets.
+      SMOKE_IMAGE: terreno-example-backend:admin-spa-smoke
+      SMOKE_SESSION_SECRET: admin-spa-image-smoke-session-secret
+      ADMIN_SPA_SMOKE_BRAND: Terreno Example
+    steps:
+      - checkout
+      - run:
+          name: Validate required environment
+          command: |
+            missing=()
+            if [ -z "$SMOKE_IMAGE" ]; then missing+=("SMOKE_IMAGE"); fi
+            if [ -z "$SMOKE_SESSION_SECRET" ]; then missing+=("SMOKE_SESSION_SECRET"); fi
+            if [ -z "$ADMIN_SPA_SMOKE_BRAND" ]; then missing+=("ADMIN_SPA_SMOKE_BRAND"); fi
+            if [ ${#missing[@]} -ne 0 ]; then
+              echo "Missing required environment: ${missing[*]}"
+              exit 1
+            fi
+      - run:
+          name: Build example-backend Docker image
+          no_output_timeout: 30m
+          command: docker build --file example-backend/Dockerfile --tag "$SMOKE_IMAGE" .
+      - run:
+          name: Start a Mongo replica set
+          command: |
+            set -euo pipefail
+            docker network create admin-spa-smoke
+            docker run -d --name mongo --network admin-spa-smoke mongo:6.0 --replSet rs0 --bind_ip_all
+            for i in $(seq 1 60); do
+              if docker exec mongo mongosh --quiet --eval \
+                'try { rs.status().ok } catch (e) { rs.initiate({_id: "rs0", members: [{_id: 0, host: "mongo:27017"}]}).ok }' \
+                | grep -q 1; then
+                echo "replica set ready"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "replica set failed to start"
+            exit 1
+      - run:
+          name: Run the image with the admin SPA enabled, and a copy without its bundle
+          command: |
+            set -euo pipefail
+            run_backend() {
+              docker run -d --name "$1" --network admin-spa-smoke -p "$2:3000" \
+                -e MONGO_URI="mongodb://mongo:27017/terreno-admin-spa-smoke?replicaSet=rs0" \
+                -e ADMIN_SPA_ENABLED=true -e AUTH_PROVIDER=better-auth \
+                -e BETTER_AUTH_URL="http://localhost:$2" -e BETTER_AUTH_SECRET="$SMOKE_SESSION_SECRET" \
+                -e TOKEN_SECRET="$SMOKE_SESSION_SECRET" -e TOKEN_ISSUER=terreno-admin-spa-smoke \
+                -e REFRESH_TOKEN_SECRET="$SMOKE_SESSION_SECRET" -e SESSION_SECRET="$SMOKE_SESSION_SECRET" \
+                "${@:3}" "$SMOKE_IMAGE"
+            }
+            run_backend backend 4000
+            # Without its export root the image must answer 503 for the SPA, never a broken page.
+            run_backend backend-no-bundle 4001 -e ADMIN_SPA_DIST_DIR=/nonexistent
+            for port in 4000 4001; do
+              for i in $(seq 1 90); do
+                if curl -sf "http://localhost:$port/health" | grep -q '"healthy":true'; then
+                  echo "backend on $port healthy"
+                  break
+                fi
+                if [ "$i" = 90 ]; then
+                  echo "backend on $port failed to become healthy"
+                  if [ "$port" = 4000 ]; then name=backend; else name=backend-no-bundle; fi
+                  docker logs "$name" --tail 100 || true
+                  exit 1
+                fi
+                sleep 2
+              done
+            done
+      - run:
+          name: Smoke-check server-rendered admin SPA
+          command: bash scripts/admin-spa-image-smoke.sh http://localhost:4000
+      - run:
+          name: Smoke check fails without the bundle
+          command: |
+            if output="$(bash scripts/admin-spa-image-smoke.sh http://localhost:4001 2>&1)"; then
+              echo "Expected the smoke check to fail when the image has no admin SPA bundle"
+              exit 1
+            fi
+            echo "$output"
+            # The image without its bundle must answer 503, not crash or 404.
+            if ! echo "$output" | grep -q "answered 503"; then
+              echo "Expected /console/login to answer 503 without the bundle"
+              exit 1
+            fi
+            echo "smoke check failed as expected without the bundle"
+      - run:
+          name: Container logs
+          when: on_fail
+          command: |
+            for name in backend backend-no-bundle mongo; do
+              echo "== $name"
+              docker logs "$name" --tail 200 || true
+            done
+
   example-backend-docker:
     executor: node22
     steps:
@@ -1208,7 +1295,7 @@ jobs:
       - run:
           name: Compile admin-spa dependencies
           command: |
-            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/rtk' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
+            bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/admin-frontend' --filter '@terreno/api' compile
       - run:
           name: Lint / compile / types / unit / build
           working_directory: ~/project/admin-spa
@@ -2042,7 +2129,8 @@ jobs:
           command: |
             set -euo pipefail
             curl -sf http://localhost:4000/console/app-config.json
-            curl -sf http://localhost:4000/console/ | grep -q "__ADMIN_SPA_BASE__"
+            # The server gate redirects an anonymous /console/ to login; the login page is server-rendered.
+            curl -sf http://localhost:4000/console/login | grep -q "__ADMIN_SPA_BASE__"
       - run:
           name: Install Playwright Chromium
           working_directory: ~/project/admin-spa
@@ -2426,7 +2514,7 @@ jobs:
           command: |
             set -euo pipefail
             packages=(
-              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             filters=()
@@ -2448,7 +2536,7 @@ jobs:
               npm_tag=latest
             fi
             packages=(
-              api test blocks ui rtk admin-backend admin-frontend admin-spa ai
+              api test blocks ui admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
             # Generated Claude Code plugins: no compile step and no master version bump
@@ -2474,7 +2562,7 @@ jobs:
             # Publish rewrites catalog:/workspace:* specifiers in the working tree;
             # --force drops those edits so only the version bump is committed.
             git checkout --force -B release-master origin/master
-            for package in api test blocks ui rtk admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
+            for package in api test blocks ui admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do
               [ -d "$package" ] || continue
               node -e "
                 const fs=require('fs');
@@ -2656,11 +2744,6 @@ workflows:
     jobs:
       - blocks-ci
 
-  rtk:
-    when: << pipeline.parameters.run-rtk >>
-    jobs:
-      - rtk-ci
-
   ui:
     when: << pipeline.parameters.run-ui >>
     jobs:
@@ -2738,7 +2821,7 @@ workflows:
     jobs:
       - packages-ci:
           package: admin-frontend
-          compile-deps: blocks ui
+          compile-deps: blocks ui syncdb
 
   api-health:
     when: << pipeline.parameters.run-api-health >>
@@ -2802,6 +2885,11 @@ workflows:
     when: << pipeline.parameters.run-admin-spa-integration >>
     jobs:
       - admin-spa-integration
+
+  admin-spa-image-smoke:
+    when: << pipeline.parameters.run-admin-spa-image-smoke >>
+    jobs:
+      - admin-spa-image-smoke
 
   smoke:
     when: << pipeline.parameters.run-smoke >>

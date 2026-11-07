@@ -22,7 +22,7 @@
 # This workflow improves JSDoc documentation for the Terreno monorepo by systematically adding
 # and improving JSDoc comments on exported functions, methods, and classes. The repo is a
 # Bun/TypeScript monorepo with workspace packages: api (Express/Mongoose), ui (React Native
-# components), rtk (Redux Toolkit Query), demo, example-frontend (Expo), example-backend
+# components), syncdb (local-first data layer and request client), demo, example-frontend (Expo), example-backend
 # (Express), and mcp-server.
 # Operates in two modes: on push to master it performs targeted JSDoc improvements for
 # changed files, and on a daily schedule it systematically improves documentation across
@@ -1111,7 +1111,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           WORKFLOW_NAME: "Daily JSDoc Improver"
-          WORKFLOW_DESCRIPTION: "This workflow improves JSDoc documentation for the Terreno monorepo by systematically adding\nand improving JSDoc comments on exported functions, methods, and classes. The repo is a\nBun/TypeScript monorepo with workspace packages: api (Express/Mongoose), ui (React Native\ncomponents), rtk (Redux Toolkit Query), demo, example-frontend (Expo), example-backend\n(Express), and mcp-server.\nOperates in two modes: on push to master it performs targeted JSDoc improvements for\nchanged files, and on a daily schedule it systematically improves documentation across\nthe entire codebase using a three-phase approach."
+          WORKFLOW_DESCRIPTION: "This workflow improves JSDoc documentation for the Terreno monorepo by systematically adding\nand improving JSDoc comments on exported functions, methods, and classes. The repo is a\nBun/TypeScript monorepo with workspace packages: api (Express/Mongoose), ui (React Native\ncomponents), syncdb (local-first data layer and request client), demo, example-frontend (Expo), example-backend\n(Express), and mcp-server.\nOperates in two modes: on push to master it performs targeted JSDoc improvements for\nchanged files, and on a daily schedule it systematically improves documentation across\nthe entire codebase using a three-phase approach."
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |

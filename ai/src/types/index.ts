@@ -167,6 +167,10 @@ interface GptHistoryPendingAskState {
 /** The ask a history is waiting on. At most one per history. */
 export type GptHistoryPendingAsk = Ask & GptHistoryPendingAskState;
 
+/**
+ * Synced through @terreno/syncdb with the default ObjectId `_id`; sync clients that create
+ * histories configure `idFormats: {"gpt/histories": "objectId"}`.
+ */
 export interface GptHistoryDocument extends mongoose.Document<mongoose.Types.ObjectId> {
   created: Date;
   deleted: boolean;

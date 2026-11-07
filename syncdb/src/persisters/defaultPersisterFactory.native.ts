@@ -48,6 +48,12 @@ export const createDefaultPersisterFactory = (
     const {createExpoSqlitePersister} =
       require("tinybase/persisters/persister-expo-sqlite") as typeof import("tinybase/persisters/persister-expo-sqlite");
     const db = openDatabaseSync(databaseName);
-    return createExpoSqlitePersister(store, db, config.storeTableName ?? DEFAULT_STORE_TABLE_NAME);
+    // TinyBase 9.5 still peers expo-sqlite ^57, so bun nests a second copy next to
+    // catalog 58. Private fields on SQLiteDatabase then fail assignability.
+    return createExpoSqlitePersister(
+      store,
+      db as unknown as Parameters<typeof createExpoSqlitePersister>[1],
+      config.storeTableName ?? DEFAULT_STORE_TABLE_NAME
+    );
   };
 };

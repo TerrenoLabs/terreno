@@ -207,10 +207,10 @@ const clonePermissions = (permissions?: Record<string, string[]>): Record<string
   );
 };
 
-export const AdminRolesList: React.FC<AdminScreenProps> = ({api, apiBase, baseUrl}) => {
+export const AdminRolesList: React.FC<AdminScreenProps> = ({apiBase, baseUrl}) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
   const {useCreateRoleMutation, useListRolesQuery, useListStatementsQuery, useUpdateRoleMutation} =
-    useAdminRoles(api, resolvedApiBase);
+    useAdminRoles(resolvedApiBase);
   const {data, error, isLoading, refetch} = useListRolesQuery();
   const {
     data: statementsData,

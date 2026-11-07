@@ -17,6 +17,15 @@ export const withQueryString = ({
     if (value === undefined || value === null || value === "") {
       continue;
     }
+    // A list repeats the key (`prompt=a&prompt=b`), which Express parses back into an array.
+    if (Array.isArray(value)) {
+      for (const entry of value) {
+        if (entry !== undefined && entry !== null && entry !== "") {
+          search.append(key, String(entry));
+        }
+      }
+      continue;
+    }
     search.set(key, String(value));
   }
   const query = search.toString();

@@ -1,4 +1,4 @@
-import {beforeEach, describe, it} from "bun:test";
+import {afterEach, beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
 import mongoose, {model, Schema} from "mongoose";
 import supertest from "supertest";
@@ -9,6 +9,7 @@ import {clearMCPRegistry} from "./mcp/registry";
 import {McpServiceToken} from "./models/mcpServiceToken";
 import {Permissions} from "./permissions";
 import {createdUpdatedPlugin} from "./plugins";
+import {clearSyncRegistry} from "./sync/registry";
 import {TerrenoApp} from "./terrenoApp";
 import {authAsUser, setupDb, UserModel} from "./tests";
 
@@ -53,9 +54,13 @@ describe("TerrenoApp mcpServiceTokens", () => {
   beforeEach(async () => {
     const users = await setupDb();
     notAdminId = users[1]._id as mongoose.Types.ObjectId;
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     await TokenMcpNote.deleteMany({});
     clearMCPRegistry();
+  });
+
+  afterEach(() => {
+    clearSyncRegistry();
   });
 
   it("does not serve token routes or accept mcp_ on /mcp when the flag is off", async () => {
@@ -89,7 +94,7 @@ describe("TerrenoApp mcpServiceTokens", () => {
       .build();
 
     const agent = await authAsUser(app, "notAdmin");
-    const created = await agent.post("/mcp/service-tokens").send({name: "Perplexity"});
+    const created = await agent.post("/mcp/service-tokens/create").send({name: "Perplexity"});
 
     assert.equal(created.status, 200);
     assert.match(created.body.data.token, /^mcp_[0-9a-f]{64}$/);
@@ -114,7 +119,7 @@ describe("TerrenoApp mcpServiceTokens", () => {
     }).build();
 
     const agent = await authAsUser(app, "notAdmin");
-    const created = await agent.post("/mcp/service-tokens").send({name: "Named"});
+    const created = await agent.post("/mcp/service-tokens/create").send({name: "Named"});
 
     assert.equal(created.status, 200);
     assert.equal(created.body.data.mcpUrl, `${PUBLIC_MCP_URL}/mcp`);
@@ -128,7 +133,10 @@ describe("TerrenoApp mcpServiceTokens", () => {
     }).build();
 
     const res = await supertest(app).get("/openapi.json");
-    assert.equal(res.body.paths["/mcp/service-tokens"].post.operationId, "createMcpServiceToken");
+    assert.equal(
+      res.body.paths["/mcp/service-tokens/create"].post.operationId,
+      "mcpServiceTokens_create"
+    );
   });
 
   it("lets a minted service token call tools as the owner while GET /mcp stays 405", async () => {
@@ -142,7 +150,7 @@ describe("TerrenoApp mcpServiceTokens", () => {
       .build();
 
     const agent = await authAsUser(app, "notAdmin");
-    const created = await agent.post("/mcp/service-tokens").send({name: "Perplexity probe"});
+    const created = await agent.post("/mcp/service-tokens/create").send({name: "Perplexity probe"});
     const mcpToken = created.body.data.token as string;
 
     const jwtCall = await agent

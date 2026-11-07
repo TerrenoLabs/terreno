@@ -12,11 +12,14 @@ import {
   type StrategyOptions,
 } from "passport-jwt";
 import {Strategy as LocalStrategy} from "passport-local";
+import type {OpenApiMiddleware} from "./api";
 import {addAuthRecoveryRoutes, sendEmailChangedNotice, sendVerificationEmail} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {APIError, apiErrorMiddleware, errorMessage} from "./errors";
 import type {AuthOptions, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
+import {createOpenApiBuilder, type OpenApiSchemaProperty} from "./openApiBuilder";
+import {getOpenApiSpecForModel} from "./populate";
 import {isJwtCredentialExchangePath} from "./rateLimit/policies";
 import {isRbacUserModelName, isWriteKeyForField} from "./rbac/userWriteGuards";
 import {
@@ -695,7 +698,8 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
 export const addAuthRoutes = (
   app: express.Application,
   userModel: UserModel,
-  authOptions?: AuthOptions
+  authOptions?: AuthOptions,
+  openApi?: OpenApiMiddleware
 ): void => {
   const router = express.Router();
   router.post("/login", async (req, res, next) => {
@@ -837,17 +841,124 @@ export const addAuthRoutes = (
   }
   app.set("etag", false);
   app.use("/auth", router);
-  addAuthRecoveryRoutes(app, userModel, authOptions);
+  addAuthRecoveryRoutes(app, userModel, authOptions, openApi);
+};
+
+/** Fields `PATCH /auth/me` cannot meaningfully set: identity and server-managed timestamps. */
+const ME_PATCH_EXCLUDED_FIELDS = ["_id", "id", "__v", "created", "updated", "deleted"];
+
+/**
+ * OpenAPI properties of the app's user model as `/auth/me` returns them. Paths with
+ * `select: false` (passport-local-mongoose `hash` and `salt`) are never loaded by `findById`,
+ * so they are left out of the documented shape.
+ */
+const getMeUserOpenApiSpec = (
+  userModel: UserModel
+): {properties: Record<string, OpenApiSchemaProperty>; required: string[]} => {
+  const {properties, required} = getOpenApiSpecForModel(userModel as unknown as Model<unknown>);
+  const visible: Record<string, OpenApiSchemaProperty> = {};
+  for (const [key, value] of Object.entries(properties)) {
+    const schemaPath = userModel.schema.path(key) as {options?: {select?: unknown}} | undefined;
+    if (schemaPath?.options?.select === false) {
+      continue;
+    }
+    visible[key] = value as OpenApiSchemaProperty;
+  }
+  return {properties: visible, required: required.filter((field) => field in visible)};
+};
+
+const buildMeOpenApi = ({
+  accessControl,
+  openApi,
+  userModel,
+}: {
+  accessControl?: import("./rbac/types").AnyTerrenoAccess;
+  openApi?: OpenApiMiddleware;
+  userModel: UserModel;
+}): {get: express.RequestHandler; patch: express.RequestHandler} => {
+  const noop: express.RequestHandler = (_req, _res, next) => next();
+  if (!openApi?.path) {
+    return {get: noop, patch: noop};
+  }
+  const user = getMeUserOpenApiSpec(userModel);
+  const idProperty: OpenApiSchemaProperty = {
+    description: "The user's id, the same value as _id",
+    type: "string",
+  };
+  const userRequired = Array.from(new Set([...user.required, "_id", "id"]));
+  const meUser: OpenApiSchemaProperty = {
+    properties: {
+      ...user.properties,
+      id: idProperty,
+      ...(accessControl
+        ? {
+            permissions: {
+              additionalProperties: {items: {type: "string"}, type: "array"},
+              description: "RBAC permissions resolved for the user, keyed by resource",
+              type: "object",
+            },
+            roles: {
+              description: "RBAC role names assigned to the user",
+              items: {type: "string"},
+              type: "array",
+            },
+          }
+        : {}),
+    },
+    required: accessControl ? [...userRequired, "permissions", "roles"] : userRequired,
+    type: "object",
+  };
+  const patchedUser: OpenApiSchemaProperty = {
+    properties: {...user.properties, id: idProperty},
+    required: userRequired,
+    type: "object",
+  };
+  const patchBody: Record<string, OpenApiSchemaProperty> = {};
+  for (const [key, value] of Object.entries(user.properties)) {
+    if (
+      ME_PATCH_EXCLUDED_FIELDS.includes(key) ||
+      (PRIVILEGED_USER_FIELDS as readonly string[]).includes(key)
+    ) {
+      continue;
+    }
+    patchBody[key] = value;
+  }
+  patchBody[CURRENT_PASSWORD_FIELD] = {
+    description: "The current password; required to change the email. It is never stored.",
+    type: "string",
+  };
+
+  // Documentation only: request validation stays off so the handlers behave as before.
+  return {
+    get: createOpenApiBuilder({openApi})
+      .withTags(["auth"])
+      .withSummary("Get the current user")
+      .withResponse(200, {data: meUser}, {required: ["data"]})
+      .withValidation({enabled: false})
+      .build(),
+    patch: createOpenApiBuilder({openApi})
+      .withTags(["auth"])
+      .withSummary("Update the current user")
+      .withDescription(
+        "Partial update of the current user. Privileged fields (admin, roles, organizationIds, emailVerified, tokenEpoch) are ignored."
+      )
+      .withRequestBody(patchBody)
+      .withResponse(200, {data: patchedUser}, {required: ["data"]})
+      .withValidation({enabled: false})
+      .build(),
+  };
 };
 
 export const addMeRoutes = (
   app: express.Application,
   userModel: UserModel,
   authOptions?: AuthOptions,
-  accessControl?: import("./rbac/types").AnyTerrenoAccess
+  accessControl?: import("./rbac/types").AnyTerrenoAccess,
+  openApi?: OpenApiMiddleware
 ): void => {
   const router = express.Router();
-  router.get("/me", authenticateMiddleware(), async (req, res) => {
+  const meOpenApi = buildMeOpenApi({accessControl, openApi, userModel});
+  router.get("/me", authenticateMiddleware(), meOpenApi.get, async (req, res) => {
     if (!req.user?.id) {
       logger.debug("Not user found for /me");
       return res.sendStatus(401);
@@ -869,7 +980,7 @@ export const addMeRoutes = (
     return res.json({data: dataObject});
   });
 
-  router.patch("/me", authenticateMiddleware(), async (req, res) => {
+  router.patch("/me", authenticateMiddleware(), meOpenApi.patch, async (req, res) => {
     if (!req.user?.id) {
       return res.sendStatus(401);
     }

@@ -14,6 +14,24 @@ const makeDelta = (overrides: Partial<SyncDelta> = {}): SyncDelta => ({
 });
 
 describe("createFakeTransport", () => {
+  it("emits app events to onEvent listeners and tracks listener counts", () => {
+    const transport = createFakeTransport();
+    const seen: unknown[][] = [];
+    const first = transport.onEvent?.("featureFlagsChanged", (...args) => seen.push(args));
+    const second = transport.onEvent?.("featureFlagsChanged", (...args) => seen.push(args));
+    expect(transport.eventListenerCount("featureFlagsChanged")).toBe(2);
+
+    transport.emitEvent("featureFlagsChanged", {key: "a"});
+    expect(seen).toEqual([[{key: "a"}], [{key: "a"}]]);
+
+    first?.();
+    second?.();
+    expect(transport.eventListenerCount("featureFlagsChanged")).toBe(0);
+    transport.emitEvent("featureFlagsChanged");
+    expect(seen).toHaveLength(2);
+    expect(() => transport.onEvent?.("sync:ack", () => {})).toThrow("reserved");
+  });
+
   it("connect/disconnect notify status listeners once per change", async () => {
     const transport = createFakeTransport();
     const statuses: TransportStatus[] = [];

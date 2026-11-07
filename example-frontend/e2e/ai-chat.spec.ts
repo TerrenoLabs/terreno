@@ -15,6 +15,7 @@ import {
   mockGptBlocks,
   mockGptDocument,
   mockGptStream,
+  mockGptStreamSavingHistory,
   mockGptTurns,
   mockSavedHistory,
   savedHistory,
@@ -172,17 +173,24 @@ test.describe("AI Chat", () => {
     await expect(page.getByTestId("gpt-mascot")).toBeVisible();
   });
 
-  test("conversation appears in sidebar after sending", async ({page}) => {
+  test("conversation the turn saved appears in the sidebar over sync", async ({page}) => {
     const chatTitle = `E2E Chat ${Date.now()}`;
-    await mockGptStream(page, "Sidebar test response", {title: chatTitle});
+    const gpt = await mockGptStreamSavingHistory(page, {
+      responseText: "Sidebar test response",
+      title: chatTitle,
+      user: TEST_USER,
+    });
+    try {
+      await page.getByTestId("gpt-input").fill("Test sidebar");
+      await page.getByTestId("gpt-submit").click();
+      await expect(page.getByText("Sidebar test response")).toBeVisible();
 
-    await page.getByTestId("gpt-input").fill("Test sidebar");
-    await page.getByTestId("gpt-submit").click();
-    await page.getByText("Sidebar test response").waitFor({state: "visible"});
-
-    // The history entry should appear in the sidebar with the title
-    await page.getByText(chatTitle).waitFor({state: "visible"});
-    await expect(page.getByText(chatTitle)).toBeVisible();
+      // The app never refetches the list: the saved history arrives as a sync delta.
+      await expect(page.getByLabel(`Select chat: ${chatTitle}`)).toBeVisible();
+      expect(gpt.saved).toHaveLength(1);
+    } finally {
+      await gpt.remove();
+    }
   });
 
   test("can rate a message", async ({page, consoleGuard}) => {
@@ -304,8 +312,6 @@ test.describe("AI Chat", () => {
     );
     await expect(page.getByText("You picked the Enterprise plan.")).toBeVisible();
     await expect(page.getByTestId("gpt-ask-call_plan-button-option:starter")).toHaveCount(0);
-    // The sidebar reloads too, so reopening the chat shows the answer instead of the stale ask.
-    await expect(page.getByLabel("Select chat: Choosing a plan")).toBeVisible();
     expect(gpt.requests.at(-1)).toMatchObject({
       askResponse: {action: "accept", content: {selected: ["starter"]}, toolCallId: "call_plan"},
     });
@@ -725,6 +731,88 @@ test.describe("AI Chat", () => {
       await page.getByTestId("blocks-8-0").scrollIntoViewIfNeeded();
       await saveChatShot(page, "roast-scaled-copied.png");
     });
+  });
+});
+
+test.describe("AI chat history", () => {
+  let first: SeededHistory | undefined;
+  let second: SeededHistory | undefined;
+  let firstTitle = "";
+  let secondTitle = "";
+
+  test.beforeEach(async ({page}) => {
+    const stamp = Date.now();
+    firstTitle = `History rename ${stamp}`;
+    secondTitle = `History delete ${stamp}`;
+    // Saved over REST before login, so they reach the app through the first sync.
+    first = await seedGptHistory({
+      prompt: "What should I cook?",
+      reply: "Try a lamb roast.",
+      title: firstTitle,
+      user: TEST_USER,
+    });
+    second = await seedGptHistory({
+      prompt: "Plan my week",
+      reply: "Monday: rest.",
+      title: secondTitle,
+      user: TEST_USER,
+    });
+    await loginAs(page);
+    await page.goto("/ai");
+    await page.getByTestId("gpt-history-sidebar").waitFor({state: "visible"});
+    await page.getByLabel(`Select chat: ${firstTitle}`).waitFor({state: "visible"});
+  });
+
+  test.afterEach(async () => {
+    await first?.remove();
+    await second?.remove();
+  });
+
+  test("user sees synced chats newest first and opens one", async ({page}) => {
+    const titles = await page
+      .getByTestId("gpt-history-sidebar")
+      .locator('[aria-label^="Select chat: History "]')
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("aria-label")));
+    expect(titles.slice(0, 2)).toEqual([
+      `Select chat: ${secondTitle}`,
+      `Select chat: ${firstTitle}`,
+    ]);
+
+    await page.getByLabel(`Select chat: ${firstTitle}`).click();
+    await expect(page.getByText("Try a lamb roast.")).toBeVisible();
+    await saveChatShot(page, "ai-chat-history-list.png");
+  });
+
+  test("user renames a chat and the new title survives a reload", async ({page}) => {
+    const historyId = first?.historyId ?? "";
+    const renamed = `${firstTitle} (renamed)`;
+
+    await page.getByTestId(`gpt-history-menu-${historyId}`).click();
+    await page.getByTestId(`gpt-rename-history-${historyId}`).click();
+    await page.getByTestId(`gpt-rename-input-${historyId}`).fill(renamed);
+    await page.getByTestId(`gpt-rename-save-${historyId}`).click();
+
+    // Local-first: the sidebar shows the title before the server answers.
+    await expect(page.getByLabel(`Select chat: ${renamed}`)).toBeVisible();
+    await expect.poll(async () => (await first?.read())?.title).toBe(renamed);
+
+    await page.reload();
+    await expect(page.getByLabel(`Select chat: ${renamed}`)).toBeVisible();
+    await expect(page.getByLabel(`Select chat: ${firstTitle}`, {exact: true})).toHaveCount(0);
+  });
+
+  test("user deletes a chat and it stays gone after a reload", async ({page}) => {
+    const historyId = second?.historyId ?? "";
+
+    await page.getByTestId(`gpt-history-menu-${historyId}`).click();
+    await page.getByTestId(`gpt-delete-history-${historyId}`).click();
+
+    await expect(page.getByLabel(`Select chat: ${secondTitle}`)).toHaveCount(0);
+    await expect.poll(async () => await second?.read()).toBeUndefined();
+
+    await page.reload();
+    await page.getByLabel(`Select chat: ${firstTitle}`).waitFor({state: "visible"});
+    await expect(page.getByLabel(`Select chat: ${secondTitle}`)).toHaveCount(0);
   });
 });
 

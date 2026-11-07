@@ -71,21 +71,22 @@ export const DropdownPanelDemo = (): React.ReactElement => {
             {STATUS_OPTIONS.map((status) => {
               const checked = statuses.includes(status);
               // Pressable does not type the web `onKeyDown`, but RN Web forwards it.
-              const webKeyDownProps = {
-                onKeyDown: (event: {key: string; preventDefault: () => void}) => {
-                  if (event.key === " " || event.key === "Spacebar") {
-                    event.preventDefault();
-                    toggleStatus(status);
-                  }
-                },
+              const handleWebKeyDown = (event: {
+                key?: string;
+                preventDefault: () => void;
+              }): void => {
+                if (event.key === " " || event.key === "Spacebar") {
+                  event.preventDefault();
+                  toggleStatus(status);
+                }
               };
               return (
                 <Pressable
-                  key={status}
-                  {...webKeyDownProps}
                   accessibilityRole="checkbox"
                   accessibilityState={{checked}}
                   aria-checked={checked}
+                  key={status}
+                  onKeyDown={handleWebKeyDown as never}
                   onPress={() => toggleStatus(status)}
                   style={{alignItems: "center", flexDirection: "row", gap: 8}}
                 >

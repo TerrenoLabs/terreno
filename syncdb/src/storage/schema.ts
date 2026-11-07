@@ -21,6 +21,12 @@ import {
 export const SYNC_SCHEMA_VERSION = 3;
 
 const ENTITY_TABLE_SCHEMA: Record<string, CellSchema> = {
+  /**
+   * Set by the mutation ACK until the equal-seq server delta is applied.
+   * Absent on older rows means false. Not a schema-version bump: a bump wipes
+   * the store, and a missing cell is already the false state.
+   */
+  awaitingServerDelta: {type: "boolean"},
   data: {type: "string"},
   deleted: {type: "boolean"},
   /** E5: stamped when a tombstone is first applied; "" otherwise. */

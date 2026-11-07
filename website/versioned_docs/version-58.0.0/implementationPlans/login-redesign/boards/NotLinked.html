@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in: account not linked</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&amp;family=Titillium+Web:wght@600;700&amp;display=swap">
+<style>
+body{margin:0;background:#e9eef0;display:flex;justify-content:center;padding:24px 0}
+a{color:#0a7092}a:hover{color:#095a75}
+.screen{--surface-base:#ffffff;--surface-primary:#0e9dcd;--surface-sec-xl:#f2f9fa;--surface-sec-l:#b6cdd5;--surface-sec-xd:#092e3a;--surface-warningLight:#ffe3c6;--text-primary:#1c1c1c;--text-secondary:#686868;--text-extraLight:#949494;--text-link:#0a7092;--text-warning:#b14202;--text-sec-d:#092e3a;--border-default:#cdcdcd;--border-warning:#f36719;box-sizing:border-box;width:390px;min-height:100%;padding:56px 24px 32px;background:var(--surface-base);color:var(--text-primary);font-family:Nunito,system-ui,sans-serif;display:flex;flex-direction:column;gap:24px}
+.logo{width:48px;height:48px;border-radius:16px;background:var(--surface-sec-xd);color:#fff;display:grid;place-items:center;font:700 12px/1 Nunito,sans-serif}
+.h1{margin:0;font:700 32px/38px "Titillium Web",sans-serif}
+.sub{margin:4px 0 0;font-size:16px;line-height:24px;color:var(--text-secondary)}
+.banner{display:flex;gap:12px;align-items:flex-start;padding:16px;border-radius:16px;background:var(--surface-warningLight);border:1px solid var(--border-warning);color:var(--text-primary);font-size:16px;line-height:22px}
+.banner .ico{flex:none;width:20px;height:20px;margin-top:1px;color:var(--text-warning)}
+.banner-body{flex:1;display:flex;flex-direction:column;gap:12px}
+.banner-title{margin:0;font-weight:700}
+.banner p{margin:0}
+.btn-sm{align-self:flex-start;height:36px;padding:0 16px;border-radius:360px;border:1px solid var(--text-primary);background:none;font:700 14px/1 Nunito,sans-serif;color:var(--text-primary);cursor:pointer}
+.link{font:700 16px/24px Nunito,sans-serif;color:var(--text-link);text-decoration:none;background:none;border:0;padding:0;cursor:pointer}
+.btn{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:48px;box-sizing:border-box;padding:0 20px;border-radius:360px;border:1px solid var(--border-default);background:var(--surface-base);color:var(--text-primary);font:700 16px/1 Nunito,sans-serif;cursor:pointer}
+.btn .ico{position:absolute;left:20px;width:18px;height:18px}
+.btn-primary{background:var(--surface-primary);border-color:var(--surface-primary);color:#fff;font-size:19px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.divider{display:flex;align-items:center;gap:12px;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border-default)}
+.form{display:flex;flex-direction:column;gap:16px}
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl-row{display:flex;justify-content:space-between;align-items:baseline}
+.lbl{font:600 16px/24px Nunito,sans-serif}
+.input{box-sizing:border-box;width:100%;height:48px;padding:0 14px;border:1px solid var(--border-default);border-radius:4px;background:var(--surface-base);font:16px Nunito,sans-serif;color:var(--text-primary)}
+.input::placeholder{color:var(--text-extraLight)}
+.foot{margin-top:auto;text-align:center;font-size:16px;line-height:24px;color:var(--text-secondary)}
+</style>
+<main class="screen">
+  <div class="logo" aria-label="Your app logo">LOGO</div>
+  <div>
+    <h1 class="h1">Sign in</h1>
+    <p class="sub">Choose how you want to sign in.</p>
+  </div>
+
+  <div class="banner" role="alert">
+    <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"></path><path d="M12 10v4M12 17h.01"></path></svg>
+    <div class="banner-body">
+      <p class="banner-title">You already have an account</p>
+      <p>That email is already used with a password. Sign in with email, then link GitHub from Security.</p>
+      <button class="btn-sm" type="button">Sign in with email</button>
+    </div>
+  </div>
+
+  <div class="stack">
+    <button class="btn" type="button">
+      <svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"></path></svg>
+      Continue with Google
+    </button>
+    <button class="btn" type="button">
+      <svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"></path></svg>
+      Continue with Apple
+    </button>
+    <button class="btn" type="button">
+      <svg class="ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"></path></svg>
+      Continue with GitHub
+    </button>
+    <button class="btn" type="button">
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"></circle><path d="M10.7 12.3 21 2M17 6l3 3M14.5 8.5l2.5 2.5"></path></svg>
+      Sign in with a passkey
+    </button>
+  </div>
+
+  <div class="divider">or use your email</div>
+
+  <form class="form">
+    <div class="field">
+      <label class="lbl" for="nl-email">Email</label>
+      <input class="input" id="nl-email" type="email" placeholder="you@example.com" autocomplete="username webauthn">
+    </div>
+    <div class="field">
+      <div class="lbl-row">
+        <label class="lbl" for="nl-pw">Password</label>
+        <a class="link" href="#" style="font-size: 14px">Forgot password?</a>
+      </div>
+      <input class="input" id="nl-pw" type="password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+
+  <p class="foot">New here? <a href="#">Create an account</a></p>
+</main>
+</body>
+</html>

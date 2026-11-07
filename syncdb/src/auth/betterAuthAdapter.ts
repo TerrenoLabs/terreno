@@ -17,7 +17,7 @@ export interface BetterAuthAdapterOptions {
   clearIntervalFn?: (handle: unknown) => void;
   /**
    * Synchronous bearer-token reader, for clients that keep the session token locally
-   * (for example rtk's `getBetterAuthBearerToken` in web bearer mode). When it returns a
+   * (for example `getBetterAuthBearerToken` from `@terreno/syncdb/auth` in web bearer mode). When it returns a
    * token, `getToken` uses it without calling `getSession()`. A null or empty result, or a
    * throw, falls back to reading `getSession()`. `getUserId`, `onAuthChange` and `refresh`
    * always read the session.

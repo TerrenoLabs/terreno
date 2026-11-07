@@ -1,13 +1,13 @@
 /**
  * Process-global catalog of modelRouter collections, keyed by routePath
- * (e.g. `/todos`). MCP, realtime, and Sync read this Map instead of each
+ * (e.g. `/todos`). MCP and Sync read this Map instead of each
  * keeping their own list. `modelRouter` is the writer; surface `register*`
  * / `update*` / `clear*` helpers are wrappers around this module.
  *
  * TerrenoApp later injects `accessControl` into options. That patch goes
- * through replaceCollectionOptions so all three surfaces see one options
+ * through replaceCollectionOptions so every surface sees one options
  * object. Surface flags stay sticky (OR) so a later replace cannot drop
- * mcp/realtime/sync once enabled. First-time sync enable still runs schema
+ * mcp/sync once enabled. First-time sync enable still runs schema
  * and index guards in registrationSideEffects — not here — so catalog
  * writes stay a Map update.
  */
@@ -36,7 +36,6 @@ const applyAdminBroadcastDefault = (options: ModelRouterOptions<unknown>): void 
 
 interface CollectionSurfaces {
   mcp: boolean;
-  realtime: boolean;
   sync: boolean;
 }
 
@@ -55,7 +54,6 @@ const deriveSurfaces = (
   existing?: CollectionSurfaces
 ): CollectionSurfaces => ({
   mcp: Boolean(options.mcp) || (existing?.mcp ?? false),
-  realtime: Boolean(options.realtime) || (existing?.realtime ?? false),
   sync: Boolean(options.sync) || (existing?.sync ?? false),
 });
 

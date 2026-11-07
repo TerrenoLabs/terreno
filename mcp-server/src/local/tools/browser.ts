@@ -69,6 +69,11 @@ interface BrowserViewOptions {
 
 type CreateBrowserView = (options: BrowserViewOptions) => BrowserView;
 
+type WebViewWithNativeHistory = Bun.WebView & {
+  goBack?: () => Promise<void>;
+  goForward?: () => Promise<void>;
+};
+
 const PAGE_SNAPSHOT_EXPRESSION = `(() => {
   const isVisible = (element) => {
     const style = globalThis.getComputedStyle(element);
@@ -119,9 +124,14 @@ const CURSOR_ARTIFACTS_ROOT = "/opt/cursor/artifacts";
  * @returns A view that delegates to the WebView and uses native history navigation.
  */
 const wrapWebViewAsBrowserView = (webview: Bun.WebView): BrowserView => {
+  const historyWebview = webview as WebViewWithNativeHistory;
   return {
-    back: (): Promise<void> => {
-      return webview.goBack();
+    back: async (): Promise<void> => {
+      if (typeof historyWebview.goBack === "function") {
+        await historyWebview.goBack();
+        return;
+      }
+      await webview.evaluate("history.back()");
     },
     click: (selector: string, options?: Bun.WebView.ClickSelectorOptions): Promise<void> => {
       return webview.click(selector, options);
@@ -132,8 +142,12 @@ const wrapWebViewAsBrowserView = (webview: Bun.WebView): BrowserView => {
     evaluate: <T = unknown>(code: string): Promise<T> => {
       return webview.evaluate(code);
     },
-    forward: (): Promise<void> => {
-      return webview.goForward();
+    forward: async (): Promise<void> => {
+      if (typeof historyWebview.goForward === "function") {
+        await historyWebview.goForward();
+        return;
+      }
+      await webview.evaluate("history.forward()");
     },
     navigate: (url: string): Promise<void> => {
       return webview.navigate(url);

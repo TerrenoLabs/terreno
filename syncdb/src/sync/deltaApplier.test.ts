@@ -59,6 +59,61 @@ describe("applyDelta", () => {
     expect(getCursor({store, stream: STREAM})).toBe(3);
   });
 
+  it("applies the server's doc for an own create whose ACK already stamped the same seq", () => {
+    const store = makeStore();
+    // releaseEntity stamps seq and awaitingServerDelta before the server's delta arrives.
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
+    const result = applyDelta({
+      delta: makeDelta({data: {_id: "t1", ownerId: "u1", title: "Optimistic"}, seq: 4}),
+      store,
+    });
+    expect(result.applied).toBe(true);
+    const entity = store.getEntity({collection: "todos", id: "t1"});
+    expect(entity?.data).toEqual({_id: "t1", ownerId: "u1", title: "Optimistic"});
+    expect(entity?.stream).toBe(STREAM);
+    expect(entity?.awaitingServerDelta).toBeUndefined();
+  });
+
+  it("skips an equal-seq delta once a later local edit has cleared the ACK marker", () => {
+    const store = makeStore();
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
+    store.upsertEntity({collection: "todos", data: {title: "Edited after ACK"}, id: "t1"});
+    const result = applyDelta({
+      delta: makeDelta({data: {_id: "t1", title: "Optimistic"}, seq: 4}),
+      store,
+    });
+    expect(result.applied).toBe(false);
+    expect(store.getEntity({collection: "todos", id: "t1"})?.data).toEqual({
+      title: "Edited after ACK",
+    });
+  });
+
+  it("still skips an older delta for an ACK-stamped row with no stream", () => {
+    const store = makeStore();
+    store.upsertEntity({
+      awaitingServerDelta: true,
+      collection: "todos",
+      data: {title: "Optimistic"},
+      id: "t1",
+      seq: 4,
+    });
+    const result = applyDelta({delta: makeDelta({data: {title: "Stale"}, seq: 3}), store});
+    expect(result.applied).toBe(false);
+    expect(store.getEntity({collection: "todos", id: "t1"})?.data).toEqual({title: "Optimistic"});
+  });
+
   it("skips an out-of-order older delta without rewinding entity or cursor", () => {
     const store = makeStore();
     applyDelta({delta: makeDelta({data: {title: "v5"}, seq: 5}), store});

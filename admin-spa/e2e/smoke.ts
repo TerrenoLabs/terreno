@@ -4,9 +4,10 @@
  *
  * The smoke re-runs this file with `serve` as a child process: an Express server on a free port
  * that registers the compiled `AdminSpaServeApp` with its default bundle location, the way a
- * backend serves the SPA. The parent then checks over real HTTP that the mounted index loads its
- * bundle, the runtime config merges the consumer's overrides, and a deep route falls back to the
- * SPA. Exits non-zero on the first failed check.
+ * backend serves the SPA. The parent then checks over real HTTP that the login page is
+ * server-rendered with the brand and form, that the page and the site-root login loader are sent
+ * `Cache-Control: no-store, private`, that the bundle and runtime config load, and that an
+ * anonymous protected page redirects to login. Exits non-zero on the first failed check.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -15,8 +16,9 @@ import {freePort, type SpawnedProcess, spawnUntilReady} from "@terreno/test";
 const SERVE_ARG = "serve";
 const BASE_PATH = "/console";
 const BRAND_NAME = "Terreno Admin (smoke)";
-const INDEX_HTML = path.resolve(__dirname, "../dist/index.html");
+const SERVER_BUILD = path.resolve(__dirname, "../dist/server/_expo/routes.json");
 const FETCH_TIMEOUT_MS = 5000;
+const NO_STORE_PRIVATE = "no-store, private";
 
 /**
  * Child: a plain Express server with the compiled plugin registered, the way `TerrenoApp`
@@ -34,32 +36,28 @@ const serve = async (): Promise<void> => {
   });
 };
 
-const fetchOk = async (url: string): Promise<Response> => {
-  const res = await fetch(url, {signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)});
-  if (res.status !== 200) {
-    throw new Error(`GET ${url}: expected 200, got ${res.status}: ${await res.text()}`);
+const fetchStatus = async (url: string, expected: number): Promise<Response> => {
+  const res = await fetch(url, {redirect: "manual", signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)});
+  if (res.status !== expected) {
+    throw new Error(`GET ${url}: expected ${expected}, got ${res.status}: ${await res.text()}`);
   }
   return res;
 };
 
-const expectSpaIndex = async (res: Response, route: string): Promise<string> => {
-  const contentType = res.headers.get("content-type");
-  if (!contentType?.includes("text/html")) {
-    throw new Error(`GET ${route}: expected HTML, got ${contentType}`);
+const expectNoStorePrivate = (res: Response, route: string): void => {
+  const cacheControl = res.headers.get("cache-control");
+  if (cacheControl !== NO_STORE_PRIVATE) {
+    throw new Error(
+      `GET ${route}: expected Cache-Control ${NO_STORE_PRIVATE}, got ${cacheControl}`
+    );
   }
-  const html = await res.text();
-  const baseGlobal = `window.__ADMIN_SPA_BASE__=${JSON.stringify(BASE_PATH)}`;
-  if (!html.includes("<html") || !html.includes(baseGlobal)) {
-    throw new Error(`GET ${route}: expected the SPA index with ${baseGlobal}, got ${html}`);
-  }
-  return html;
 };
 
 /** Parent: boots the child and walks the SPA's routes over HTTP. */
 const run = async (): Promise<void> => {
   const startedAt = performance.now();
-  if (!fs.existsSync(INDEX_HTML)) {
-    throw new Error(`No web export at ${INDEX_HTML}. Run \`bun run build:web\` first.`);
+  if (!fs.existsSync(SERVER_BUILD)) {
+    throw new Error(`No server build at ${SERVER_BUILD}. Run \`bun run build:web\` first.`);
   }
 
   const port = await freePort();
@@ -74,19 +72,30 @@ const run = async (): Promise<void> => {
       url: `${baseUrl}${BASE_PATH}/app-config.json`,
     });
 
-    const indexHtml = await expectSpaIndex(
-      await fetchOk(`${baseUrl}${BASE_PATH}/`),
-      `${BASE_PATH}/`
-    );
-    console.info(`✅ GET ${BASE_PATH}/ serves the index with the base path injected`);
+    const loginRoute = `${BASE_PATH}/login`;
+    const loginRes = await fetchStatus(`${baseUrl}${loginRoute}`, 200);
+    if (!loginRes.headers.get("content-type")?.includes("text/html")) {
+      throw new Error(
+        `GET ${loginRoute}: expected HTML, got ${loginRes.headers.get("content-type")}`
+      );
+    }
+    expectNoStorePrivate(loginRes, loginRoute);
+    const loginHtml = await loginRes.text();
+    const baseGlobal = `window.__ADMIN_SPA_BASE__=${JSON.stringify(BASE_PATH)}`;
+    for (const expected of [BRAND_NAME, "admin-spa-login-email", baseGlobal]) {
+      if (!loginHtml.includes(expected)) {
+        throw new Error(`GET ${loginRoute}: the server-rendered page does not contain ${expected}`);
+      }
+    }
+    console.info(`✅ GET ${loginRoute} is server-rendered with the brand and login form`);
 
-    const entryUrl = indexHtml.match(
+    const entryUrl = loginHtml.match(
       new RegExp(`${BASE_PATH}/_expo/static/js/web/entry-[^"]+\\.js`)
     )?.[0];
     if (!entryUrl) {
-      throw new Error(`GET ${BASE_PATH}/: no entry bundle under ${BASE_PATH}/_expo/ in the index`);
+      throw new Error(`GET ${loginRoute}: no entry bundle under ${BASE_PATH}/_expo/ in the page`);
     }
-    const entryRes = await fetchOk(`${baseUrl}${entryUrl}`);
+    const entryRes = await fetchStatus(`${baseUrl}${entryUrl}`, 200);
     if (!entryRes.headers.get("content-type")?.includes("javascript")) {
       throw new Error(
         `GET ${entryUrl}: expected JavaScript, got ${entryRes.headers.get("content-type")}`
@@ -94,10 +103,15 @@ const run = async (): Promise<void> => {
     }
     console.info(`✅ GET ${entryUrl} serves the JS bundle`);
 
-    const config = (await (await fetchOk(`${baseUrl}${BASE_PATH}/app-config.json`)).json()) as {
-      brandName?: string;
-      providers?: string[];
-    };
+    // Expo 58's client fetches loader data from the site root, whatever the baked baseUrl.
+    const loaderRoute = "/_expo/loaders/login";
+    const loaderRes = await fetchStatus(`${baseUrl}${loaderRoute}`, 200);
+    expectNoStorePrivate(loaderRes, loaderRoute);
+    console.info(`✅ GET ${loaderRoute} answers no-store, private`);
+
+    const config = (await (
+      await fetchStatus(`${baseUrl}${BASE_PATH}/app-config.json`, 200)
+    ).json()) as {brandName?: string; providers?: string[]};
     if (config.brandName !== BRAND_NAME || config.providers?.join() !== "email") {
       throw new Error(
         `GET ${BASE_PATH}/app-config.json: expected brandName ${BRAND_NAME} and default ` +
@@ -106,9 +120,16 @@ const run = async (): Promise<void> => {
     }
     console.info(`✅ GET ${BASE_PATH}/app-config.json merges overrides over the defaults`);
 
-    const deepRoute = `${BASE_PATH}/User/123`;
-    await expectSpaIndex(await fetchOk(`${baseUrl}${deepRoute}`), deepRoute);
-    console.info(`✅ GET ${deepRoute} falls back to the SPA index`);
+    const protectedRoute = `${BASE_PATH}/User/123`;
+    const protectedRes = await fetchStatus(`${baseUrl}${protectedRoute}`, 302);
+    const expectedLocation = `${BASE_PATH}/login?returnTo=%2FUser%2F123`;
+    if (protectedRes.headers.get("location") !== expectedLocation) {
+      throw new Error(
+        `GET ${protectedRoute}: expected a redirect to ${expectedLocation}, got ` +
+          `${protectedRes.headers.get("location")}`
+      );
+    }
+    console.info(`✅ GET ${protectedRoute} redirects an anonymous visitor to login`);
   } catch (error: unknown) {
     if (server) {
       console.error(`--- server output ---\n${server.output()}`);
@@ -117,7 +138,6 @@ const run = async (): Promise<void> => {
   } finally {
     await server?.stop();
   }
-
   console.info(`admin-spa smoke passed in ${Math.round(performance.now() - startedAt)} ms`);
 };
 

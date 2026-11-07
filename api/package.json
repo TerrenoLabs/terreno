@@ -80,8 +80,19 @@
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
+    },
+    "./testing/openApi": {
+      "default": "./dist/tests/openApiResponseSchema.js",
+      "types": "./dist/tests/openApiResponseSchema.d.ts"
     }
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "src/**/*",
+    ".ai/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "rest",
@@ -137,5 +148,5 @@
     "updateSnapshot": "bun test --update-snapshots"
   },
   "types": "dist/index.d.ts",
-  "version": "57.22.0"
+  "version": "58.0.0"
 }

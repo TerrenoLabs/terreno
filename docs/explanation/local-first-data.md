@@ -1,6 +1,6 @@
 # Local-first data in Terreno
 
-Terreno's default frontend data path is **local-first**: the on-device store is what your UI reads and writes, and the server reconciles changes asynchronously. This is a different mental model from request/response fetching with RTK Query.
+Terreno's default frontend data path is **local-first**: the on-device store is what your UI reads and writes, and the server reconciles changes asynchronously. This is a different mental model from request/response fetching.
 
 ## What local-first means here
 
@@ -10,8 +10,8 @@ There is no server-first mode and no opt-in flag: if you use syncdb, you adopt t
 
 ## Mental model shift
 
-| Server-first (RTK Query) | Local-first (syncdb) |
-|--------------------------|----------------------|
+| Server-first (request/response) | Local-first (syncdb) |
+|---------------------------------|----------------------|
 | UI reads from cache filled by HTTP | UI reads from the local store |
 | Writes call the API, then invalidate/refetch | Writes apply locally, then reconcile |
 | Loading spinners track request lifecycle | Sync status tracks outbox + connectivity |
@@ -27,10 +27,12 @@ Think **apply locally, then reconcile** instead of **request, wait, update cache
 3. **Refetch orchestration** — `invalidatesTags`, `refetch()`, and list/detail cache coordination after mutations.
 4. **Treating the network as the read path** — list screens blocked on `isLoading` for every navigation.
 
-RTK Query remains appropriate for **non-synced generated** endpoints such as
-`/auth/me` and AI routes. Built-in admin RPC stays request/response through its
-host-bound fetch client; ObjectId/API-only admin CRUD keeps RTK compatibility in
-Terreno 57.
+Routes that are not collections — `/auth/me`, modelRouter actions, AI, consents —
+stay request/response. They go through the syncdb request client
+(`@terreno/syncdb/api`) and its generated hooks in `store/apiSdk.ts`, which share the
+sync client's `AuthProvider`. Built-in admin RPC and ObjectId/API-only admin CRUD use
+admin-frontend's host-bound fetch client. Terreno 58 removed `@terreno/rtk` and Redux;
+syncdb is the only frontend data layer.
 
 ## What you start doing
 
@@ -54,12 +56,12 @@ belong in `queryCollections` instead.
 
 **Gains:** instant UI, offline writes with a durable outbox, simpler screen code, and one write path on the server (sync and REST share `modelRouter`).
 
-**Costs:** larger conceptual surface (conflicts, sync status, local storage), mandatory replica-set MongoDB for realtime, and migration work for existing RTK Query screens.
+**Costs:** larger conceptual surface (conflicts, sync status, local storage), mandatory replica-set MongoDB for realtime, and migration work for screens that fetched collections over request/response.
 
 Server-first fetching is simpler when you only need online CRUD with no offline requirement — but Terreno's blessed path for collection data is local-first.
 
 ## Related docs
 
 - [syncdb reference](../reference/syncdb.md) — API ground truth
-- [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md) — step-by-step migration
+- [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md) — the Terreno 58 upgrade path
 - [Authentication architecture](authentication.md) — Better Auth + socket sessions

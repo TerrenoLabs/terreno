@@ -39,7 +39,6 @@ const COVERAGE_PACKAGES: Record<string, string> = {
   "run-feature-flags": "feature-flags",
   "run-jobs": "jobs",
   "run-mcp-server": "mcp-server",
-  "run-rtk": "rtk",
   "run-syncdb": "syncdb",
   "run-test-package": "test",
   "run-ui": "ui",
@@ -48,6 +47,8 @@ const COVERAGE_PACKAGES: Record<string, string> = {
 /** Parameters whose CI jobs need infrastructure a laptop run should not assume. */
 const CI_ONLY_HINTS: Record<string, string> = {
   "run-admin-spa": "cd admin-spa && bun run test:e2e (Playwright)",
+  "run-admin-spa-image-smoke":
+    "docker build -f example-backend/Dockerfile ., run it with ADMIN_SPA_ENABLED=true, then scripts/admin-spa-image-smoke.sh <base-url>",
   "run-admin-spa-integration":
     "cd admin-spa && bun run test:integration (needs Mongo + example-backend)",
   "run-circleci-config": "config-only change; CircleCI validates the continuation config",
@@ -76,7 +77,7 @@ const DEPLOY_PARAMETERS = [
 /** GitHub Actions-only checks that the CircleCI mapping does not cover. */
 const EXTRA_MAPPINGS: Mapping[] = [
   {parameter: "run-cli", regex: "cli/.*"},
-  {parameter: "run-docs-api-reference", regex: "(api|rtk)/src/.*"},
+  {parameter: "run-docs-api-reference", regex: "api/src/.*"},
   {
     parameter: "run-docs-site",
     regex: "(docs|website)/.*|ui/src/.*|demo/story-config/.*|demo/demoConfig\\.tsx",

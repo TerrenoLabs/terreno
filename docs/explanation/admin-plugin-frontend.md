@@ -18,7 +18,7 @@ registry into `AdminProvider`; `@terreno/admin-frontend` only owns first-party T
 
 Opening the admin UI is a separate decision from what an operator may do inside it. The page
 gate is `admin:access` (`GET /admin/config` 403 without it). Host apps should hide admin
-navigation with the same check (`canOpenAdminPage` from `@terreno/rtk`).
+navigation with the same check (`canOpenAdminPage` from `@terreno/syncdb/app`).
 
 `AdminApp` then resolves authorization before returning `/admin/config`. The response only contains
 models and custom screens the caller may read, includes effective write capabilities, and exposes

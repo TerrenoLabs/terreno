@@ -225,4 +225,27 @@ describe("createKeyProviderCodec", () => {
     expect(getKey).toHaveBeenCalledTimes(1);
     expect(getKey).toHaveBeenCalledWith({userId: "u1"});
   });
+
+  it("prepare() resolves the key so later encodes need no provider call", async () => {
+    const inner = createLocalKeyProvider({cacheDbName: uniqueDbName()});
+    const getKey = mock(({userId}: {userId: string}) => inner.getKey({userId}));
+    const codec = createKeyProviderCodec({keyProvider: {getKey}, userId: "u1"});
+    await codec.prepare?.();
+    expect(getKey).toHaveBeenCalledTimes(1);
+    await codec.decode(await codec.encode("prepared"));
+    expect(getKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries key resolution after a failure instead of failing every later call", async () => {
+    const inner = createLocalKeyProvider({cacheDbName: uniqueDbName()});
+    let isOnline = false;
+    const getKey = mock(({userId}: {userId: string}) =>
+      isOnline ? inner.getKey({userId}) : Promise.reject(new Error("offline"))
+    );
+    const codec = createKeyProviderCodec({keyProvider: {getKey}, userId: "u1"});
+    await expect(codec.prepare?.()).rejects.toThrow("offline");
+    isOnline = true;
+    expect(await codec.decode(await codec.encode("after retry"))).toBe("after retry");
+    expect(getKey).toHaveBeenCalledTimes(2);
+  });
 });

@@ -103,7 +103,10 @@ const restoreDocument = (): void => {
 };
 
 const flattenStyle = (style: unknown): {pointerEvents?: string; zIndex?: number} => {
-  return StyleSheet.flatten(style) as {pointerEvents?: string; zIndex?: number};
+  return StyleSheet.flatten(style as Parameters<typeof StyleSheet.flatten>[0]) as {
+    pointerEvents?: string;
+    zIndex?: number;
+  };
 };
 
 const portalContainerFor = (node: ReactTestInstance): unknown => {

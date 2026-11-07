@@ -11,6 +11,11 @@ export interface PayloadCodec {
   encode(plaintext: string): Promise<Uint8Array>;
   /** Decrypt/decode a previously encoded binary payload. */
   decode(payload: Uint8Array): Promise<string>;
+  /**
+   * Resolve whatever `encode`/`decode` need (e.g. a key fetched from the server)
+   * ahead of the first save, so a later flush never needs the network.
+   */
+  prepare?(): Promise<void>;
 }
 
 /**

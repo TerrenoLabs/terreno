@@ -14,7 +14,6 @@ import {
 const ALL_PACKAGES: GuidelinePackageId[] = [
   "api",
   "ui",
-  "rtk",
   "syncdb",
   "admin-backend",
   "admin-frontend",
@@ -83,11 +82,11 @@ describe("package guideline markdown", () => {
 
   it("loads trimmed guideline bodies and joins only the packages that have one", (): void => {
     writeGuideline("api", "\n# API rules\n\n");
-    writeGuideline("rtk", "# RTK rules\n");
+    writeGuideline("syncdb", "# SyncDB rules\n");
 
     expect(loadPackageGuidelineMarkdown("api")).toBe("# API rules");
-    expect(composePackageGuidelinesForRules(["api", "ui", "rtk"])).toBe(
-      "# API rules\n\n---\n\n# RTK rules"
+    expect(composePackageGuidelinesForRules(["api", "ui", "syncdb"])).toBe(
+      "# API rules\n\n---\n\n# SyncDB rules"
     );
   });
 });

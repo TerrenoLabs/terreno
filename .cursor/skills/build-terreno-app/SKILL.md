@@ -44,10 +44,10 @@ When you hit a wall, the correct response is to **record the gap and find a publ
 
 ### Stack mode
 
-Terreno's frontend data layer is mid-migration. Detect which applies before writing any client code:
+Detect which applies before writing any client code:
 
-- **syncdb + Better Auth** — the supported platform. Use `@terreno/syncdb` for data and Better Auth for auth.
-- **RTK Query + JWT** — legacy. Only if the installed Terreno version predates the syncdb release.
+- **syncdb + Better Auth** — the supported platform and the only option on Terreno 58+. Use `@terreno/syncdb` for data, requests, and session, and Better Auth for auth.
+- **RTK Query + JWT** — legacy. Only if the installed Terreno version is 57.x or older (`@terreno/rtk` was removed in 58).
 
 Determine this from the installed version and the public reference docs, not from memory. Record which mode you used in the friction log, because the log's findings are only valid for that stack.
 

@@ -31,7 +31,6 @@ export interface AiObservabilityChromeProps extends AdminScreenWidgetProps {
 
 export const AiObservabilityChrome: React.FC<AiObservabilityChromeProps> = ({
   actions,
-  api,
   backHref,
   children,
   description,
@@ -64,12 +63,7 @@ export const AiObservabilityChrome: React.FC<AiObservabilityChromeProps> = ({
       <Box gap={5} maxWidth={1240} width="100%">
         <Box alignItems="center" direction="row" gap={3} justifyContent="between" wrap>
           <AdminBreadcrumbs segments={breadcrumbs} />
-          <AiObservabilityStatusChip
-            api={api}
-            error={error}
-            isLoading={isLoading}
-            status={status}
-          />
+          <AiObservabilityStatusChip error={error} isLoading={isLoading} status={status} />
         </Box>
         {hideHeader ? null : (
           <ObservabilityPageHeader

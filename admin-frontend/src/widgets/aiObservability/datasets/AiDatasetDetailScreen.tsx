@@ -11,12 +11,12 @@ import {unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
 import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
 
 export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useCreateItemMutation, useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {useCreateItemMutation, useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
   const statusQuery = useStatusQuery();
   const status = unwrapObservabilityStatus(statusQuery.data);
   const canAddItem = observabilityActionAllowed({
@@ -78,7 +78,7 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
           },
           datasetId: id,
         }).unwrap();
-        refetchItems();
+        void refetchItems();
         return undefined;
       } catch (error) {
         if (error instanceof SyntaxError) {

@@ -79,7 +79,7 @@ Prompts provide detailed requirements, example code patterns, and step-by-step s
 - Terreno overview documentation
 - @terreno/api documentation
 - @terreno/ui documentation
-- @terreno/rtk documentation
+- @terreno/syncdb documentation
 - Patterns and best practices
 
 Resources are loaded from markdown files with dynamic path resolution.

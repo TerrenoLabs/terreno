@@ -26,7 +26,7 @@ import {
 import {useAiObservabilityExperimentsApi} from "./useAiObservabilityExperimentsApi";
 
 export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{
     datasetId?: string | string[];
     pipeline?: string | string[];
@@ -36,11 +36,11 @@ export const AiExperimentNewScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   const initialPipeline = parsePipeline(
     Array.isArray(params.pipeline) ? params.pipeline[0] : params.pipeline
   );
-  const {useCreateMutation, useEstimateMutation} = useAiObservabilityExperimentsApi(api);
-  const {useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi(api);
+  const {useCreateMutation, useEstimateMutation} = useAiObservabilityExperimentsApi();
+  const {useListQuery: useDatasetsQuery} = useAiObservabilityDatasetsApi();
   const {useListQuery: usePromptsQuery, useDetailQuery: usePromptDetailQuery} =
-    useAiObservabilityPromptsApi(api);
-  const {useListQuery: useEvaluatorsQuery} = useAiObservabilityEvaluatorsApi(api);
+    useAiObservabilityPromptsApi();
+  const {useListQuery: useEvaluatorsQuery} = useAiObservabilityEvaluatorsApi();
   const [createExperiment, createState] = useCreateMutation();
   const [estimateExperiment, estimateState] = useEstimateMutation();
   const {data: datasetsRaw} = useDatasetsQuery();

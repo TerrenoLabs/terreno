@@ -414,6 +414,8 @@ Renders as ActionSheet on mobile, centered dialog on web.
 
 Column types: `text`, `date`, `number`, `boolean`, `custom`. Supports pinned columns, sorting indicators, pagination controls.
 
+Column `width` is optional. Omit it and the column sizes itself from its title and sampled content, then grows to fill the table; a set `width` is always kept. See `docs/reference/ui.md` (DataTable column widths).
+
 ## Card
 
 Simple Box wrapper with defaults:

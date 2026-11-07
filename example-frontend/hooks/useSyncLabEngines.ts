@@ -6,8 +6,9 @@
  * running while navigating between screens. Multiple subscribers are still
  * supported (first starts timers, last tears them down).
  */
-import {baseUrl} from "@terreno/rtk";
+
 import {generateMutationId, type SyncDb} from "@terreno/syncdb";
+import {baseUrl} from "@terreno/syncdb/config";
 import {useSyncDbClient} from "@terreno/syncdb/react";
 import {useEffect, useState} from "react";
 import {

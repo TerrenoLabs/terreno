@@ -9,7 +9,7 @@ import {
 import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import {createRef} from "react";
-import type {Text as NativeText, TextProps} from "react-native";
+import type {TextInstance, TextProps} from "react-native";
 import {ThemeProvider} from "../Theme";
 import {TimezonePicker} from "../TimezonePicker";
 import {elementProps, findAllByHostType, renderWithTheme} from "../test-utils";
@@ -67,7 +67,7 @@ const ARCHIVE_INPUT: ConfirmAskInput = {
 
 const REPORT_INPUT: ConfirmAskInput = {prompt: "Send the weekly report to the team now?"};
 
-const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "confirm", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const DRAFT = "# We're live\n\nToday we launched.";
@@ -82,7 +82,7 @@ const DRAFT_INPUT: MarkdownAskInput = {
   title: "Launch announcement",
 };
 
-const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "markdown", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const INVOICE_INPUT: FormAskInput = {
@@ -145,7 +145,7 @@ const DEFAULTS_INPUT: FormAskInput = {
   prompt: "Check the details.",
 };
 
-const pendingForm = (input: FormAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingForm = (input: FormAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "form", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const renderCard = (props: Partial<AskCardProps> & Pick<AskCardProps, "ask">) =>
@@ -1010,12 +1010,14 @@ describe("AskCard", () => {
       assert.isNull(card.queryByText("Enter a complete time, or clear it."));
       assert.isNull(card.queryByText("Enter a complete date and time, or clear it."));
       await press(card.getByTestId("ask-card-submit"));
-      const response = onSubmit.mock.calls[0]?.[0]?.response;
-      const values = response?.action === "accept" ? response.content.values : undefined;
-      assert.deepInclude((values ?? {}) as Record<string, unknown>, {
-        meeting: "2026-10-01T09:30:00Z",
-        reminder: "10:30",
-      });
+      assert.deepInclude(
+        (
+          onSubmit.mock.calls[0]?.[0]?.response as unknown as {
+            content: {values: Record<string, unknown>};
+          }
+        )?.content?.values ?? {},
+        {meeting: "2026-10-01T09:30:00Z", reminder: "10:30"}
+      );
     });
 
     it("keeps Submit disabled when the hour of an on-the-hour time is cleared, and keeps the time", async () => {
@@ -1303,7 +1305,7 @@ describe("AskCard", () => {
   });
 
   it("shows the question as an accessible header the host can focus through promptRef", () => {
-    const promptRef = createRef<NativeText>();
+    const promptRef = createRef<TextInstance>();
     const prompt = {focus: (): void => {}};
     const {getByRole} = render(
       <AskCard ask={pendingAsk(PLAN_INPUT)} onSubmit={async () => {}} promptRef={promptRef} />,
@@ -1315,7 +1317,7 @@ describe("AskCard", () => {
     );
 
     assert.isOk(getByRole("header", {name: "Which plan should I set up for your workspace?"}));
-    assert.strictEqual(promptRef.current, prompt as unknown as NativeText);
+    assert.strictEqual(promptRef.current, prompt as unknown as TextInstance);
   });
 
   it("disables its controls when the host takes no answers", () => {

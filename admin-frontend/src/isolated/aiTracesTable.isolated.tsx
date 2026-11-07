@@ -4,14 +4,22 @@ import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
-import {AiTracesScreenWidget} from "../widgets/aiObservability/traces/AiTracesListScreen";
+import type {AdminConfigResponse} from "../types";
+import {AiTracesScreenWidget as AiTracesScreenWidgetBase} from "../widgets/aiObservability/traces/AiTracesListScreen";
 import {
   AiTracesListView,
   type AiTracesListViewProps,
 } from "../widgets/aiObservability/traces/AiTracesListView";
 import type {TraceListItem} from "../widgets/aiObservability/traces/traceTypes";
-import type {TraceListQueryArgs} from "../widgets/aiObservability/traces/useAiObservabilityTracesApi";
+import {
+  createObservabilityServer,
+  type FakeObservabilityRequest,
+  type FakeObservabilityServer,
+  flushObservabilityRequests,
+  withObservabilityServer,
+} from "./observabilityFakeApi.isolated";
+
+const AiTracesScreenWidget = withObservabilityServer(AiTracesScreenWidgetBase);
 
 mock.module("expo-router", () => ({
   router: {push: (_href: string): void => undefined},
@@ -35,22 +43,23 @@ const trace = (overrides: Partial<TraceListItem>): TraceListItem => ({
   ...overrides,
 });
 
-const listCalls: TraceListQueryArgs[] = [];
+const TRACES_ROUTE = "GET /ai/observability/traces";
 
-const createApi = (rows: TraceListItem[]): AdminApi => {
-  const mutation = (): unknown[] => [
-    mock(() => ({unwrap: async () => ({})})),
-    {isError: false, isLoading: false},
-  ];
-  const hooks = {
-    useAddTracesToAiObservabilityDatasetMutation: mutation,
-    useAiObservabilityDatasetsQuery: () => ({data: [], isLoading: false}),
-    useAiObservabilityEvaluatorsQuery: () => ({data: [], isLoading: false}),
-    useAiObservabilityPromptsQuery: () => ({
-      data: [{folder: "ops", latestVersion: 1, name: "summarize", production: 1, type: "text"}],
-      isLoading: false,
+const createServer = (rows: TraceListItem[]): FakeObservabilityServer => {
+  return createObservabilityServer({
+    [TRACES_ROUTE]: (request: FakeObservabilityRequest) => ({
+      data: rows,
+      limit: 20,
+      more: true,
+      page: Number(request.query.page ?? 1),
+      total: 60,
     }),
-    useAiObservabilityStatusQuery: () => ({
+    "GET /ai/observability/datasets": {data: []},
+    "GET /ai/observability/evaluators": {data: []},
+    "GET /ai/observability/prompts": {
+      data: [{folder: "ops", latestVersion: 1, name: "summarize", production: 1, type: "text"}],
+    },
+    "GET /ai/observability/status": {
       data: {
         localOn: false,
         plugins: [],
@@ -61,31 +70,15 @@ const createApi = (rows: TraceListItem[]): AdminApi => {
           reviewQueue: "local",
         },
       },
-      isError: false,
-      isLoading: false,
-    }),
-    useAiObservabilityTracesQuery: (args: TraceListQueryArgs) => {
-      listCalls.push(args);
-      return {
-        data: {data: rows, limit: 20, more: true, page: args.page ?? 1, total: 60},
-        isError: false,
-        isLoading: false,
-      };
     },
-    useEnqueueAiObservabilityReviewMutation: mutation,
-    useRunAiObservabilityTestMultiStageMutation: mutation,
-  };
-  const api: AdminApi = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: () => hooks,
-  } as unknown as AdminApi;
-  return api;
+  });
 };
 
-const lastCall = (): TraceListQueryArgs => {
-  const call = listCalls[listCalls.length - 1];
+/** Query params of the newest traces list request, with repeated keys kept as arrays. */
+const lastListQuery = (server: FakeObservabilityServer): URLSearchParams => {
+  const call = server.callsTo(TRACES_ROUTE).at(-1);
   assert.isDefined(call);
-  return call as TraceListQueryArgs;
+  return new URL(String(call?.url)).searchParams;
 };
 
 const viewProps = (overrides: Partial<AiTracesListViewProps> = {}): AiTracesListViewProps => ({
@@ -229,7 +222,7 @@ describe("AiTracesListView table", () => {
       ["Tokens", "12,345,678"],
       ["Latency", "123.4 s"],
     ] as const) {
-      assert.isAtLeast(columnByTitle(columns, title).width, 32 + value.length * 9, title);
+      assert.isAtLeast(columnByTitle(columns, title).width ?? 0, 32 + value.length * 9, title);
     }
   });
 
@@ -295,61 +288,59 @@ describe("AiTracesListView table", () => {
 
 describe("AiTracesScreenWidget table query", () => {
   it("sends sort and column filters to the list query and resets to page 1", async () => {
-    listCalls.length = 0;
+    const server = createServer([trace({})]);
     const view = renderWithTheme(
       <AiTracesScreenWidget
-        api={createApi([trace({})])}
         config={config}
         routeBase="/admin"
         screenName="ai-traces"
+        server={server}
       />
     );
-    assert.equal(lastCall().sort, "-startedAt");
-    assert.equal(lastCall().page, 1);
+    await flushObservabilityRequests();
+    assert.equal(lastListQuery(server).get("sort"), "-startedAt");
+    assert.equal(lastListQuery(server).get("page"), "1");
 
     const table = (): ReturnType<typeof view.getByTestId> => view.getByTestId("ai-traces-table");
-    await act(async () => {
-      fireEvent(table(), "setPage", 3);
-      await Promise.resolve();
-    });
-    assert.equal(lastCall().page, 3);
+    const fireTable = async (event: string, value: unknown): Promise<void> => {
+      await act(async () => {
+        fireEvent(table(), event, value);
+        await Promise.resolve();
+      });
+      await flushObservabilityRequests();
+    };
 
-    await act(async () => {
-      fireEvent(table(), "setSortColumn", {column: 6, direction: "desc"});
-      await Promise.resolve();
-    });
-    assert.equal(lastCall().sort, "-cost");
-    assert.equal(lastCall().page, 1);
+    await fireTable("setPage", 3);
+    assert.equal(lastListQuery(server).get("page"), "3");
+
+    await fireTable("setSortColumn", {column: 6, direction: "desc"});
+    assert.equal(lastListQuery(server).get("sort"), "-cost");
+    assert.equal(lastListQuery(server).get("page"), "1");
     assert.deepEqual(findTable(view.UNSAFE_root).props.sortColumn, {
       column: 6,
       direction: "desc",
     });
 
-    await act(async () => {
-      fireEvent(table(), "setPage", 2);
-      await Promise.resolve();
-    });
-    await act(async () => {
-      fireEvent(table(), "filterValuesChange", {
-        hasScore: false,
-        prompt: ["summarize"],
-        sensitive: true,
-        sessionId: "sess-1",
-        startedAt_gte: "2026-09-01T00:00:00.000Z",
-        startedAt_lte: "2026-09-02T23:59:59.999Z",
-        status: ["error"],
-        userId: "user-1",
-      });
-      await Promise.resolve();
-    });
-    const filtered = lastCall();
-    assert.equal(filtered.page, 1);
-    assert.equal(filtered.sort, "-cost");
-    assert.deepInclude(filtered, {
-      from: "2026-09-01T00:00:00.000Z",
+    await fireTable("setPage", 2);
+    assert.equal(lastListQuery(server).get("page"), "2");
+    await fireTable("filterValuesChange", {
       hasScore: false,
-      prompts: ["summarize"],
+      prompt: ["summarize", "safety"],
       sensitive: true,
+      sessionId: "sess-1",
+      startedAt_gte: "2026-09-01T00:00:00.000Z",
+      startedAt_lte: "2026-09-02T23:59:59.999Z",
+      status: ["error"],
+      userId: "user-1",
+    });
+    const filtered = lastListQuery(server);
+    assert.equal(filtered.get("page"), "1");
+    assert.equal(filtered.get("sort"), "-cost");
+    assert.deepEqual(filtered.getAll("prompt"), ["summarize", "safety"]);
+    assert.deepInclude(Object.fromEntries(filtered.entries()), {
+      from: "2026-09-01T00:00:00.000Z",
+      hasScore: "false",
+      sensitive: "true",
       sessionId: "sess-1",
       status: "error",
       to: "2026-09-02T23:59:59.999Z",
@@ -357,7 +348,7 @@ describe("AiTracesScreenWidget table query", () => {
     });
     assert.deepEqual(findTable(view.UNSAFE_root).props.filterValues, {
       hasScore: false,
-      prompt: ["summarize"],
+      prompt: ["summarize", "safety"],
       sensitive: true,
       sessionId: "sess-1",
       startedAt_gte: "2026-09-01T00:00:00.000Z",
@@ -366,10 +357,12 @@ describe("AiTracesScreenWidget table query", () => {
       userId: "user-1",
     });
 
-    await act(async () => {
-      fireEvent(table(), "filterValuesChange", {});
-      await Promise.resolve();
+    await fireTable("filterValuesChange", {});
+    // Cleared filters drop out of the request; sort and paging remain.
+    assert.deepEqual(Object.fromEntries(lastListQuery(server).entries()), {
+      limit: "20",
+      page: "1",
+      sort: "-cost",
     });
-    assert.deepInclude(lastCall(), {from: "", prompts: [], status: "", to: "", userId: ""});
   });
 });

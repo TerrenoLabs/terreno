@@ -26,7 +26,7 @@ describe("Link", () => {
   });
 
   it("opens URL when href is provided and pressed", () => {
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve());
 
     const {getByText} = renderWithTheme(<Link href="https://example.com" text="External Link" />);
 
@@ -38,7 +38,7 @@ describe("Link", () => {
 
   it("prefers onClick over href when both are provided", () => {
     const handleClick = mock(() => {});
-    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve(true));
+    const openURLSpy = spyOn(Linking, "openURL").mockImplementation(() => Promise.resolve());
 
     // LinkProps forbids href with onClick; untyped callers can still pass both.
     const bothActionProps = {

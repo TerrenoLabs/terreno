@@ -26,7 +26,6 @@ interface PackageTarget {
 
 const PACKAGE_TARGETS: PackageTarget[] = [
   {entryFile: "src/index.ts", id: "api", packageDir: "api", title: "@terreno/api"},
-  {entryFile: "src/index.ts", id: "rtk", packageDir: "rtk", title: "@terreno/rtk"},
 ];
 
 const compileWorkspaceDeps = (): void => {

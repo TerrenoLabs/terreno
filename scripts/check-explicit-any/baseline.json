@@ -39,8 +39,6 @@
     "example-backend/src/models/modelPlugins.ts": 4,
     "example-backend/src/models/user.test.ts": 5,
     "example-backend/src/services/userService.test.ts": 3,
-    "rtk/src/authSlice.ts": 5,
-    "rtk/src/offlineMiddleware.test.ts": 8,
     "syncdb/src/client.test.ts": 2,
     "syncdb/src/storage/idb.test.ts": 2,
     "test/src/logging/silenceLogs.ts": 3,
@@ -57,13 +55,12 @@
     "api": 775,
     "demo": 2,
     "example-backend": 23,
-    "rtk": 13,
     "syncdb": 4,
     "test": 49,
     "ui": 19
   },
   "byRemediationStatus": {
-    "fully-documented": 911,
+    "fully-documented": 898,
     "file-blanket": 0,
     "out-of-scope": 0,
     "suppressed-only": 0,
@@ -74,9 +71,9 @@
   "ratchet": {
     "undocumented": 0,
     "violations": 0,
-    "totalUsages": 911
+    "totalUsages": 898
   },
-  "totalFiles": 59,
-  "totalUsages": 911,
+  "totalFiles": 57,
+  "totalUsages": 898,
   "version": 2
 }

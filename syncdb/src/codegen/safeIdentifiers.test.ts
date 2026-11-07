@@ -30,6 +30,26 @@ describe("assertSyncCollectionName", () => {
     );
   });
 
+  it("accepts collection tags derived from nested route paths", () => {
+    assert.equal(
+      assertSyncCollectionName({label: "collection", value: "gpt/histories"}),
+      "gpt/histories"
+    );
+    assert.equal(
+      assertSyncCollectionName({label: "collection", value: "mcp/service-tokens"}),
+      "mcp/service-tokens"
+    );
+  });
+
+  it("rejects empty, leading, trailing, and doubled path segments", () => {
+    for (const value of ["/gpt", "gpt/", "gpt//histories", "gpt/../histories", ""]) {
+      assert.throws(
+        () => assertSyncCollectionName({label: "collection", value}),
+        /not a valid sync collection name/
+      );
+    }
+  });
+
   it("rejects unsafe collection names", () => {
     assert.throws(
       () =>

@@ -29,15 +29,21 @@ const decodeData = <TData>(raw: string | undefined): TData => {
   }
 };
 
-const rowToEntity = <TData>(id: string, row: Partial<EntityRow>): SyncEntity<TData> => ({
-  data: decodeData<TData>(row.data),
-  deleted: Boolean(row.deleted),
-  deletedAt: row.deletedAt ? row.deletedAt : undefined,
-  id,
-  pendingMutationId: row.pendingMutationId ? row.pendingMutationId : undefined,
-  seq: row.seq ?? 0,
-  stream: row.stream ? row.stream : undefined,
-});
+const rowToEntity = <TData>(id: string, row: Partial<EntityRow>): SyncEntity<TData> => {
+  const entity: SyncEntity<TData> = {
+    data: decodeData<TData>(row.data),
+    deleted: Boolean(row.deleted),
+    deletedAt: row.deletedAt ? row.deletedAt : undefined,
+    id,
+    pendingMutationId: row.pendingMutationId ? row.pendingMutationId : undefined,
+    seq: row.seq ?? 0,
+    stream: row.stream ? row.stream : undefined,
+  };
+  if (row.awaitingServerDelta) {
+    entity.awaitingServerDelta = true;
+  }
+  return entity;
+};
 
 interface UpsertEntityArgs {
   collection: string;
@@ -51,6 +57,12 @@ interface UpsertEntityArgs {
   pendingMutationId?: string;
   /** C2: the stream this entity was written under; omitted = preserve existing. */
   stream?: string;
+  /**
+   * True when this write is the mutation ACK stamping `seq` ahead of the
+   * server delta. False clears it. Omitted keeps it, unless `data` or
+   * `deleted` changed, which means a newer local edit and clears it.
+   */
+  awaitingServerDelta?: boolean;
 }
 
 interface CompactTombstonesResult {
@@ -179,8 +191,19 @@ export const createSyncStore = ({
       ? (raw.getRow(args.collection, args.id) as Partial<EntityRow>)
       : undefined;
     const deleted = args.deleted ?? existing?.deleted ?? false;
+    const encodedData = encodeData(args.data);
+    const contentChanged =
+      existing !== undefined &&
+      (encodedData !== (existing.data ?? "null") || deleted !== Boolean(existing.deleted));
+    const awaitingServerDelta =
+      args.awaitingServerDelta !== undefined
+        ? args.awaitingServerDelta
+        : contentChanged
+          ? false
+          : Boolean(existing?.awaitingServerDelta);
     const row: EntityRow = {
-      data: encodeData(args.data),
+      awaitingServerDelta,
+      data: encodedData,
       deleted,
       // E5: stamp deletedAt the moment a row FIRST becomes a tombstone (not
       // on every subsequent upsert while it stays deleted, and never on a

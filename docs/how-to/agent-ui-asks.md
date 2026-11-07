@@ -248,9 +248,9 @@ use uploads, or lower the per-file cap with `asks: {maxFileSizeBytes: 5_000_000}
    <GPTChat resolveAskFiles={resolveAskFiles} {...chatProps} />;
    ```
 
-   `postFilesUpload` is an RTK Query mutation in `example-frontend/store/sdk.ts` whose body is a
-   `FormData` with a `file` part; the base query sends it with the session token. The generated
-   SDK has no file endpoints, because `/files/*` exists only on a server with a bucket.
+   `usePostFilesUploadMutation` is a generated hook in `example-frontend/store/apiSdk.ts` whose
+   body is a `FormData` with a `file` part; the request client sends it with the session token.
+   `/files/*` exists only on a server with a bucket.
    `createAskFileUploader` (in `gptAsks.ts`) returns `undefined` on 404, the upload's `id` and
    `size` on success, and throws with the server's detail otherwise (such as 401 when the session
    has ended), so the ask stays open. See `example-frontend/app/(tabs)/ai.tsx`.
@@ -297,9 +297,9 @@ answer as two rows, and ratings are sent by message index.
 
 A turn can stream only `{done}`, for example when the server cancels a second ask because one is
 already pending. Reload the conversation with `GET /gpt/histories/:id` when a turn streamed nothing
-visible, or when `done.pendingAsk` names an ask the stream did not send. The `@terreno/rtk` base
-query returns the `data` of single-document responses, so an RTK query for that route resolves to
-the history itself, not `{data}` (see [emptyApi](../reference/legacy/rtk.md#emptyapi--emptysplitapi)).
+visible, or when `done.pendingAsk` names an ask the stream did not send. The `@terreno/syncdb/api`
+request client unwraps the `data` of single-document responses, so `apiClient.request` for that
+route resolves to the history itself, not `{data}` (see [API client](../reference/syncdb.md#api-client)).
 
 Refetch the history list after a turn that streams ask events or reloads the conversation. The
 example app reopens a conversation from the list's cached rows, which still hold the pending ask.

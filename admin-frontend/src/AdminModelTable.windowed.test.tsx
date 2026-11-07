@@ -5,8 +5,11 @@ import {assert} from "chai";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
 
 const setOptions = mock((_: unknown) => {});
 mock.module("expo-router", () => ({
@@ -29,13 +32,12 @@ mock.module("./useAdminConfig", () => ({
 const listState: {data: {data: Array<Record<string, unknown>>; total: number}} = {
   data: {data: [], total: 0},
 };
-// Refetch results are RTK Query envelopes: data on success, error/isError on failure, or empty.
-interface RefetchResult {
-  data?: typeof listState.data;
-  error?: unknown;
+interface ListRefetchResult {
+  data?: unknown;
+  error?: {data: string; status: number};
   isError?: boolean;
 }
-const listRefetch = mock(async (): Promise<RefetchResult> => ({data: listState.data}));
+const listRefetch = mock(async (): Promise<ListRefetchResult> => ({data: listState.data}));
 const bulkPatchFn = mock(() => ({unwrap: async () => ({updated: 1})}));
 
 mock.module("./useAdminBackgroundTask", () => ({
@@ -168,14 +170,13 @@ const renderWindowed = (
 ): ReturnType<typeof renderWithTheme> => {
   const view = renderWithTheme(
     <AdminProvider
-      api={{} as unknown as AdminApi}
       apiBase="/admin"
       getAuthHeaders={() => ({})}
       routeBase="/admin"
       syncConflicts={syncConflicts}
       syncDb={syncDb}
     >
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="Todo" />
+      <AdminModelTable baseUrl="/admin" modelName="Todo" />
     </AdminProvider>
   );
   mountedViews.push(view);
@@ -190,8 +191,8 @@ describe("AdminModelTable windowed path", () => {
   });
 
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useBulkPatchMutation: () => [bulkPatchFn, {isLoading: false}],
       useCreateMutation: () => [mock(() => ({unwrap: async () => ({})})), {isLoading: false}],
       useDeleteMutation: () => [mock(() => ({unwrap: async () => ({})})), {isLoading: false}],
@@ -659,7 +660,7 @@ describe("AdminModelTable windowed path", () => {
     assert.isTrue(listRefetch.mock.calls.length > 0);
   });
 
-  it("treats an RTK refetch error envelope as a Refresh failure", async () => {
+  it("treats a refetch error result as a Refresh failure", async () => {
     const {hydrateWindow, syncDb} = createFakeSyncDb();
     listState.data = {
       data: [{_id: "todo-1", title: "Alpha"}],
@@ -758,14 +759,14 @@ describe("AdminModelTable windowed path", () => {
     assert.deepEqual(lastCall.ids, ["todo-1"]);
   });
 
-  it("keeps the RTK path when only api is provided", () => {
+  it("keeps the REST-only path when no syncDb is provided", () => {
     configState.config = windowedConfig;
     listState.data = {
       data: [{_id: "todo-1", title: "Alpha"}],
       total: 1,
     };
     const {queryByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminModelTable api={{} as unknown as AdminApi} baseUrl="/admin" modelName="Todo" />
+      <AdminModelTable baseUrl="/admin" modelName="Todo" />
     );
     assert.isNull(queryByTestId("admin-table-refresh"));
     assert.deepEqual(collectTitleTexts(UNSAFE_root), ["Alpha"]);
@@ -818,7 +819,7 @@ describe("AdminModelTable windowed path", () => {
     });
   });
 
-  it("uses the fetch client for bulk patch in the windowed path", async () => {
+  it("sends windowed bulk patch through the model bulk-patch mutation", async () => {
     configState.config = {
       ...windowedConfig,
       models: windowedConfig.models.map((model) => ({
@@ -830,42 +831,23 @@ describe("AdminModelTable windowed path", () => {
       data: [{_id: "todo-1", title: "Alpha"}],
       total: 1,
     };
-    const originalFetch = globalThis.fetch;
-    const fetchMock = mock(
-      async (_input: string | URL | Request, _init?: RequestInit) =>
-        new Response(JSON.stringify({updated: 1}), {
-          headers: {"Content-Type": "application/json"},
-          status: 200,
-        })
+    const {mutate, syncDb} = createFakeSyncDb();
+    const {UNSAFE_root, getByTestId} = renderWindowed(syncDb);
+    await act(async () => {
+      await Promise.resolve();
+      fireEvent.press(getByTestId("admin-table-select-all"));
+    });
+    const actionMenu = UNSAFE_root.find(
+      (node: ReactTestInstance) => typeof node.props?.onRunAction === "function"
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-    try {
-      const {mutate, syncDb} = createFakeSyncDb();
-      const {UNSAFE_root, getByTestId} = renderWindowed(syncDb);
-      await act(async () => {
-        await Promise.resolve();
-        fireEvent.press(getByTestId("admin-table-select-all"));
-      });
-      const actionMenu = UNSAFE_root.find(
-        (node: ReactTestInstance) => typeof node.props?.onRunAction === "function"
-      );
-      await act(async () => {
-        await actionMenu.props.onRunAction("activate");
-      });
+    await act(async () => {
+      await actionMenu.props.onRunAction("activate");
+    });
 
-      assert.equal(fetchMock.mock.calls.length, 1);
-      assert.equal(fetchMock.mock.calls[0]?.[0], "/admin/todos/bulk-patch");
-      const request = fetchMock.mock.calls[0]?.[1];
-      assert.equal(request?.method, "POST");
-      assert.deepEqual(JSON.parse(String(request?.body)), {
-        ids: ["todo-1"],
-        patch: {active: true},
-      });
-      assert.equal(bulkPatchFn.mock.calls.length, 0);
-      assert.equal(mutate.mock.calls.length, 0);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+    assert.deepEqual(bulkPatchFn.mock.calls as unknown[], [
+      [{ids: ["todo-1"], patch: {active: true}}],
+    ]);
+    assert.equal(mutate.mock.calls.length, 0);
   });
 
   it("drops a selected row that a live tombstone removed from the window", async () => {

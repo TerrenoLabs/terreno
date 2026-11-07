@@ -1,10 +1,16 @@
 import {CommsMessageDetail} from "@terreno/admin-frontend";
-import {useLocalSearchParams} from "expo-router";
+import {useLoaderData, useLocalSearchParams} from "expo-router";
 import React from "react";
 import {AdminSpaShell} from "../../components/AdminSpaShell";
-import {terrenoApi} from "../../store/sdk";
+import {RecordNotFound} from "../../components/RecordNotFound";
+import {RouteSeed} from "../../components/RouteSeed";
+import {createJobsCommsLoader} from "../../server/jobsCommsRoutes";
+
+/** Server loader: the screen's reads, fetched so its data is in the first HTML. */
+export const loader = createJobsCommsLoader("/comms/[id]");
 
 const CommsMessageAdminRoute: React.FC = () => {
+  const isNotFound = Boolean((useLoaderData() as {notFound?: boolean} | undefined)?.notFound);
   const {id} = useLocalSearchParams<{id: string}>();
   const messageId = Array.isArray(id) ? id[0] : (id ?? "");
 
@@ -16,7 +22,13 @@ const CommsMessageAdminRoute: React.FC = () => {
         {label: "Message"},
       ]}
     >
-      <CommsMessageDetail api={terrenoApi} messageId={messageId} routeBase="" />
+      {isNotFound ? (
+        <RecordNotFound backHref="/comms" message={`No message with id "${messageId}".`} />
+      ) : (
+        <RouteSeed>
+          <CommsMessageDetail messageId={messageId} routeBase="" />
+        </RouteSeed>
+      )}
     </AdminSpaShell>
   );
 };

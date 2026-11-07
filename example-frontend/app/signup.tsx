@@ -1,4 +1,4 @@
-import {useAuthMethods} from "@terreno/rtk";
+import {useAuthMethods, useSession} from "@terreno/syncdb/auth";
 import type {SignUpScreenProps} from "@terreno/ui";
 import {SignUpScreen, simplePasswordRequirements} from "@terreno/ui";
 import {useRouter} from "expo-router";
@@ -10,11 +10,11 @@ import {
   brandedOAuthProviders,
   signInWithSocial,
 } from "@/lib/betterAuth";
-import {syncBetterAuthSession, useAppDispatch} from "@/store/index";
 
 const SignUp: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
+  // Re-read the session right after sign-in so the root layout sees the new user before navigating.
+  const {refresh: refreshSession} = useSession();
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -33,7 +33,7 @@ const SignUp: React.FC = () => {
           setErrorMessage(result.error.message ?? "Sign up failed.");
           return;
         }
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch {
         setErrorMessage("Sign up failed. Please try again.");
@@ -41,7 +41,7 @@ const SignUp: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const handleSocialLogin = useCallback(
@@ -54,7 +54,7 @@ const SignUp: React.FC = () => {
           // The page is leaving for the provider; the session is read when it comes back.
           return;
         }
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch {
         setErrorMessage("Sign up failed. Please try again.");
@@ -64,7 +64,7 @@ const SignUp: React.FC = () => {
         setSocialLoading(null);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const oauthProviders = useMemo((): SignUpScreenProps["oauthProviders"] => {

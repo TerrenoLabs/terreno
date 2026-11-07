@@ -6,6 +6,7 @@ description: >-
   implement with terreno-2-pick and roast against that comment. Trigger with
   /work-github-issues or phrases like "work recent issues", "pick a GitHub
   issue", "plan which issues to solve".
+disable-model-invocation: true
 ---
 # Work GitHub issues
 

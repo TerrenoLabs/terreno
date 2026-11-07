@@ -35,7 +35,7 @@ const REPOSITORY_ARCHITECTURE_CONTEXT = `
 Terreno is a monorepo of shared packages for building full-stack React Native + Express/Mongoose applications. The top-level workspaces are:
 - api/: @terreno/api — REST API framework on Express/Mongoose (modelRouter, permissions, auth, OpenAPI generation, logging).
 - ui/: @terreno/ui — React Native component library (Box, Button, TextField, theming via TerrenoProvider) that must support React Native Web.
-- rtk/: @terreno/rtk — Redux Toolkit Query utilities (generateAuthSlice, emptyApi, token storage) for api backends.
+- syncdb/: @terreno/syncdb — local-first data layer plus the frontend request client, generated API hooks, auth session, feature flags, and app utilities for api backends.
 - ai/: @terreno/ai — provider-agnostic AI service layer (AIService, GPT routes, request logging).
 - admin-backend/ and admin-frontend/: @terreno/admin-backend and @terreno/admin-frontend — admin panel plugin and screens for api backends.
 - admin-spa/: @terreno/admin-spa — standalone admin SPA plus an Express plugin to serve it.
@@ -43,12 +43,12 @@ Terreno is a monorepo of shared packages for building full-stack React Native + 
 - demo/: UI component demo app. example-frontend/ and example-backend/: example apps that double as integration tests and documentation.
 
 Important repo conventions:
-- The example-frontend SDK files (example-frontend/store/openApiSdk.ts) are generated from the backend OpenAPI spec via "bun run sdk" and are never edited by hand.
+- The example-frontend SDK files (example-frontend/store/apiSdk.ts and store/syncDbSdk.ts) are generated from the backend OpenAPI spec by syncdb codegen ("bun run sdk" / "bun run sync-sdk") and are never edited by hand.
 - Backend (api) model or route changes usually require matching interface/OpenAPI/SDK follow-through and updates to the example apps.
 - Frontend packages must use functional React (React.FC), import hooks directly, and always support React Native Web.
 - Backend code uses logger.info/warn/error/debug (never console.log) and throws APIError with explicit status codes.
 - Prefer conservative, explicit patterns over clever abstractions. Flag duplication when it creates maintenance risk, not merely stylistic repetition.
-- Focus on architectural boundaries between api/ui/rtk/ai/admin packages, ownership of responsibilities, coupling, rollout risk, missing follow-through (e.g. SDK regeneration, example app updates), and plan drift.
+- Focus on architectural boundaries between api/ui/syncdb/ai/admin packages, ownership of responsibilities, coupling, rollout risk, missing follow-through (e.g. SDK regeneration, example app updates), and plan drift.
 `.trim();
 const IMPLEMENTATION_PLAN_CONTEXT = `
 Implementation plans live in docs/implementationPlans/.
@@ -64,7 +64,7 @@ const ARCHITECTURAL_REVIEW_PROMPT = `
 You are Terreno's architectural pull request reviewer.
 
 Review this PR holistically, looking for the kinds of issues a narrow bug-finding bot might miss:
-- architectural boundary violations between the api/ui/rtk/ai/admin packages and the example apps,
+- architectural boundary violations between the api/ui/syncdb/ai/admin packages and the example apps,
 - duplicated logic or schema/config patterns that should be shared,
 - responsibilities placed in the wrong module or layer,
 - partial implementations that missed required follow-through in adjacent layers,

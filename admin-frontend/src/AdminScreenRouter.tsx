@@ -23,7 +23,6 @@ export interface AdminScreenRouterProps extends AdminScreenProps {
  */
 export const AdminScreenRouter: React.FC<AdminScreenRouterProps> = ({
   name,
-  api,
   baseUrl,
   apiBase,
   routeBase,
@@ -33,7 +32,7 @@ export const AdminScreenRouter: React.FC<AdminScreenRouterProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, error, isLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, error, isLoading} = useAdminConfig(resolvedApiBase);
   const registry = useAdminWidgetRegistry();
 
   const model = useMemo(() => {
@@ -61,21 +60,16 @@ export const AdminScreenRouter: React.FC<AdminScreenRouterProps> = ({
   }
 
   if (name === "__scripts") {
-    return <AdminScriptList api={api} apiBase={resolvedApiBase} routeBase={resolvedRouteBase} />;
+    return <AdminScriptList apiBase={resolvedApiBase} routeBase={resolvedRouteBase} />;
   }
 
   if (name === "__migrations") {
-    return <AdminMigrations api={api} apiBase={resolvedApiBase} routeBase={resolvedRouteBase} />;
+    return <AdminMigrations apiBase={resolvedApiBase} routeBase={resolvedRouteBase} />;
   }
 
   if (model) {
     return (
-      <AdminModelTable
-        api={api}
-        apiBase={resolvedApiBase}
-        modelName={name}
-        routeBase={resolvedRouteBase}
-      />
+      <AdminModelTable apiBase={resolvedApiBase} modelName={name} routeBase={resolvedRouteBase} />
     );
   }
 
@@ -83,7 +77,6 @@ export const AdminScreenRouter: React.FC<AdminScreenRouterProps> = ({
   if (ScreenWidget) {
     return (
       <ScreenWidget
-        api={api}
         apiBase={resolvedApiBase}
         config={config}
         routeBase={resolvedRouteBase}

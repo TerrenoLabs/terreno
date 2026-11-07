@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Two-factor: backup code</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&amp;family=Titillium+Web:wght@600;700&amp;display=swap">
+<style>
+body{margin:0;background:#e9eef0;display:flex;justify-content:center;padding:24px 0}
+a{color:#0a7092}a:hover{color:#095a75}
+.screen{--surface-base:#ffffff;--surface-primary:#0e9dcd;--surface-sec-xl:#f2f9fa;--text-primary:#1c1c1c;--text-secondary:#686868;--text-extraLight:#949494;--text-link:#0a7092;--text-sec-d:#092e3a;--border-default:#cdcdcd;--border-focus:#73cae8;box-sizing:border-box;width:390px;min-height:100%;padding:24px 24px 32px;background:var(--surface-base);color:var(--text-primary);font-family:Nunito,system-ui,sans-serif;display:flex;flex-direction:column;gap:24px}
+.back{display:inline-flex;align-items:center;gap:4px;height:44px;align-self:flex-start;margin-left:-8px;padding:0 8px;border:0;background:none;font:700 16px/1 Nunito,sans-serif;color:var(--text-link);cursor:pointer}
+.back svg{width:20px;height:20px}
+.badge{width:56px;height:56px;border-radius:16px;display:grid;place-items:center;background:var(--surface-sec-xl);color:var(--text-sec-d)}
+.badge svg{width:28px;height:28px}
+.h1{margin:0;font:700 32px/38px "Titillium Web",sans-serif}
+.sub{margin:8px 0 0;font-size:16px;line-height:24px;color:var(--text-secondary)}
+.field{display:flex;flex-direction:column;gap:6px}
+.lbl{font:600 16px/24px Nunito,sans-serif}
+.input{box-sizing:border-box;width:100%;height:48px;padding:0 14px;border:1px solid var(--surface-primary);box-shadow:0 0 0 3px var(--border-focus);border-radius:4px;background:var(--surface-base);font:600 18px "SFMono-Regular",Menlo,Consolas,monospace;letter-spacing:2px;color:var(--text-primary)}
+.input::placeholder{color:var(--text-extraLight);font-weight:400}
+.help{margin:0;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.check{display:flex;gap:12px;align-items:flex-start;font-size:16px;line-height:22px;cursor:pointer}
+.check input{flex:none;width:20px;height:20px;margin:1px 0 0;accent-color:#0e9dcd}
+.check small{display:block;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;height:48px;box-sizing:border-box;border-radius:360px;border:1px solid var(--border-default);background:var(--surface-base);color:var(--text-primary);font:700 16px/1 Nunito,sans-serif;cursor:pointer}
+.btn-primary{background:var(--surface-primary);border-color:var(--surface-primary);color:#fff;font-size:19px}
+.alt{display:flex;flex-direction:column;align-items:center}
+.link{font:700 16px/24px Nunito,sans-serif;color:var(--text-link);text-decoration:none;background:none;border:0;padding:10px 0;cursor:pointer}
+.foot{margin-top:auto;text-align:center}
+</style>
+<main class="screen">
+  <button class="back" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"></path></svg>
+    Back
+  </button>
+
+  <div class="badge" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path><path d="M12 14.5v2.5"></path></svg>
+  </div>
+
+  <div>
+    <h1 class="h1">Use a backup code</h1>
+    <p class="sub">Enter one of the backup codes you saved when you turned on two-factor sign-in. Each code works once.</p>
+  </div>
+
+  <form style="display: flex; flex-direction: column; gap: 24px">
+    <div class="field">
+      <label class="lbl" for="bc-code">Backup code</label>
+      <input class="input" id="bc-code" type="text" placeholder="xxxxx-xxxxx" autocomplete="one-time-code" spellcheck="false">
+      <p class="help">Dashes and spaces are optional.</p>
+    </div>
+
+    <label class="check">
+      <input type="checkbox">
+      <span>Trust this device<small>We won't ask for a code here for 30 days.</small></span>
+    </label>
+
+    <button class="btn btn-primary" type="submit">Verify</button>
+  </form>
+
+  <div class="alt">
+    <button class="link" type="button">Use your authenticator app</button>
+  </div>
+
+  <div class="foot">
+    <button class="link" type="button" style="color: #686868">Sign in a different way</button>
+  </div>
+</main>
+</body>
+</html>

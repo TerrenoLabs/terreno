@@ -5,7 +5,7 @@ import {useCallback, useMemo, useState} from "react";
 import {submitPasswordReset} from "@/lib/authRecoveryActions";
 import {parseAuthTokenFromRouteParam} from "@/lib/authRecoveryParams";
 import {resetPasswordWithToken} from "@/lib/betterAuth";
-import {useResetPasswordMutation} from "@/store/sdk";
+import {usePostResetPasswordMutation} from "@/store/apiSdk";
 
 const ResetPasswordScreen: React.FC = () => {
   const router = useRouter();
@@ -18,7 +18,7 @@ const ResetPasswordScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [resetPassword] = useResetPasswordMutation();
+  const [resetPassword] = usePostResetPasswordMutation();
 
   const canSubmit = Boolean(token) && password.length >= 6;
 
@@ -31,7 +31,7 @@ const ResetPasswordScreen: React.FC = () => {
       const result = await submitPasswordReset({
         password,
         resetJwtPassword: async ({password: nextPassword, token: resetToken}) => {
-          await resetPassword({email: "", password: nextPassword, token: resetToken}).unwrap();
+          await resetPassword({password: nextPassword, token: resetToken}).unwrap();
         },
         resetPasswordWithToken,
         token,

@@ -19,7 +19,6 @@ export const SCAN_ROOTS = [
   "feature-flags/src",
   "jobs/src",
   "mcp-server/src",
-  "rtk/src",
   "test/src",
   "ui/src",
 ] as const;
@@ -49,7 +48,6 @@ export const PACKAGE_PUBLIC_ENTRIES: Record<string, string> = {
   "@terreno/feature-flags": resolve(REPO_ROOT, "feature-flags/src/index.ts"),
   "@terreno/jobs": resolve(REPO_ROOT, "jobs/src/index.ts"),
   "@terreno/mcp": resolve(REPO_ROOT, "mcp-server/src/index.ts"),
-  "@terreno/rtk": resolve(REPO_ROOT, "rtk/src/index.ts"),
   "@terreno/test": resolve(REPO_ROOT, "test/src/index.ts"),
   "@terreno/ui": resolve(REPO_ROOT, "ui/src/index.tsx"),
 };

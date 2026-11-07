@@ -1,4 +1,4 @@
-import {openapi} from "./sdk";
+import {useApiMutation, useApiQuery} from "@terreno/syncdb/react";
 
 /** What `GET /oauth/authorize/:request` returns (the `{data}` envelope is unwrapped). */
 interface McpOAuthRequest {
@@ -17,37 +17,24 @@ interface McpOAuthDecision {
   redirectUrl: string;
 }
 
-/**
- * MCP OAuth consent endpoints from `@terreno/api`. They ride the SPA's cookie-session API,
- * so the Better Auth session cookie authenticates them on the same origin, with no bearer.
- */
-const mcpOAuthConsentApi = openapi.injectEndpoints({
-  endpoints: (build) => ({
-    approveMcpOAuthRequest: build.mutation<McpOAuthDecision, string>({
-      query: (requestId) => ({
-        method: "POST",
-        url: `/oauth/authorize/${encodeURIComponent(requestId)}/approve`,
-      }),
-    }),
-    denyMcpOAuthRequest: build.mutation<McpOAuthDecision, string>({
-      query: (requestId) => ({
-        method: "POST",
-        url: `/oauth/authorize/${encodeURIComponent(requestId)}/deny`,
-      }),
-    }),
-    getMcpOAuthRequest: build.query<McpOAuthRequest, string>({
-      // A pending request changes state when decided elsewhere; never serve it from cache.
-      keepUnusedDataFor: 0,
-      query: (requestId) => ({
-        method: "GET",
-        url: `/oauth/authorize/${encodeURIComponent(requestId)}`,
-      }),
-    }),
-  }),
-});
+const requestUrl = (requestId: string): string =>
+  `/oauth/authorize/${encodeURIComponent(requestId)}`;
 
-export const {
-  useApproveMcpOAuthRequestMutation,
-  useDenyMcpOAuthRequestMutation,
-  useGetMcpOAuthRequestQuery,
-} = mcpOAuthConsentApi;
+/**
+ * MCP OAuth consent endpoints from `@terreno/api`. They ride the SPA's same-origin request
+ * client, so the Better Auth session cookie authenticates them with no bearer.
+ */
+export const useGetMcpOAuthRequestQuery = (requestId: string | undefined) =>
+  useApiQuery<McpOAuthRequest>(requestId ? {method: "GET", url: requestUrl(requestId)} : null);
+
+export const useApproveMcpOAuthRequestMutation = () =>
+  useApiMutation<string, McpOAuthDecision>((requestId) => ({
+    method: "POST",
+    url: `${requestUrl(requestId)}/approve`,
+  }));
+
+export const useDenyMcpOAuthRequestMutation = () =>
+  useApiMutation<string, McpOAuthDecision>((requestId) => ({
+    method: "POST",
+    url: `${requestUrl(requestId)}/deny`,
+  }));

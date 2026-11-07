@@ -4,11 +4,13 @@
  * doubles.
  */
 
-import type {
-  SendMutationBatchResult,
-  SendMutationResult,
-  SyncTransport,
-  TransportStatus,
+import {
+  isReservedSocketEvent,
+  type SendMutationBatchResult,
+  type SendMutationResult,
+  type SocketEventHandler,
+  type SyncTransport,
+  type TransportStatus,
 } from "../sync/transport";
 import type {
   SyncAck,
@@ -39,6 +41,10 @@ export interface FakeTransport extends SyncTransport {
   readonly subscribedCollections: string[];
   /** Deliver a server delta to all onDelta listeners. */
   deliverDelta: (delta: SyncDelta) => void;
+  /** Deliver an app-level server event (e.g. `featureFlagsChanged`) to onEvent listeners. */
+  emitEvent: (event: string, ...args: unknown[]) => void;
+  /** Number of onEvent listeners currently bound to `event`. */
+  eventListenerCount: (event: string) => number;
   /** Deliver a `sync:subscribed` confirmation to all onSubscribed listeners. */
   confirmSubscribed: (subscribed: SyncSubscribed) => void;
   /** Simulate a connect/disconnect; notifies status listeners on change. */
@@ -81,6 +87,7 @@ export const createFakeTransport = (): FakeTransport => {
   const deltaListeners = new Set<(delta: SyncDelta) => void>();
   const subscribedListeners = new Set<(subscribed: SyncSubscribed) => void>();
   const statusListeners = new Set<(status: TransportStatus) => void>();
+  const eventListeners = new Map<string, Set<SocketEventHandler>>();
   const responderQueue: FakeMutationResponder[] = [];
   let connected = false;
   let nextSeq = 0;
@@ -144,10 +151,34 @@ export const createFakeTransport = (): FakeTransport => {
         listener({authExpired: true, connected: false});
       }
     },
+    emitEvent: (event: string, ...args: unknown[]): void => {
+      for (const handler of [...(eventListeners.get(event) ?? [])]) {
+        handler(...args);
+      }
+    },
+    eventListenerCount: (event: string): number => eventListeners.get(event)?.size ?? 0,
     onDelta: (callback: (delta: SyncDelta) => void): (() => void) => {
       deltaListeners.add(callback);
       return () => {
         deltaListeners.delete(callback);
+      };
+    },
+    onEvent: (event: string, handler: SocketEventHandler): (() => void) => {
+      if (isReservedSocketEvent(event)) {
+        throw new Error(`onSocketEvent: "${event}" is reserved by the sync protocol`);
+      }
+      // Wrap so the same handler can be registered twice and removed independently.
+      const listener: SocketEventHandler = (...args) => {
+        handler(...args);
+      };
+      const listeners = eventListeners.get(event) ?? new Set<SocketEventHandler>();
+      listeners.add(listener);
+      eventListeners.set(event, listeners);
+      return () => {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          eventListeners.delete(event);
+        }
       };
     },
     onStatusChange: (callback: (status: TransportStatus) => void): (() => void) => {

@@ -56,9 +56,11 @@ export const YesNoControl: React.FC<YesNoControlProps> = ({onChange, testID, val
     >
       {YES_NO_OPTIONS.map((option) => {
         const isSelected = value === option.answer;
-        const keyDownProps: {onKeyDown?: (event: AnswerKeyEvent) => void} = {
-          onKeyDown: handleKeyDown,
-        };
+        // RN web hands Pressable the DOM keyboard event (with `key`), not RN 0.88's native KeyEvent.
+        const keyDownProps = {onKeyDown: handleKeyDown} as unknown as Pick<
+          React.ComponentProps<typeof Pressable>,
+          "onKeyDown"
+        >;
         return (
           <Pressable
             {...keyDownProps}

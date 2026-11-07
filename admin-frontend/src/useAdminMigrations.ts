@@ -1,6 +1,9 @@
-import {useMemo} from "react";
-import {asDynamicHookApi} from "./dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "./types";
+import {
+  type AdminRpcQueryState,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "./useAdminRpc";
 
 interface MigrationStatusRecord {
   appliedAt?: string;
@@ -19,59 +22,38 @@ interface AdminMigrationStatus {
   pending: Array<{checksum: string; id: string}>;
 }
 
-interface MigrationQueryResult {
-  data: AdminMigrationStatus | undefined;
-  error: unknown;
-  isLoading: boolean;
-  refetch?: () => void;
+const MIGRATION_TAGS = ["admin_migrations"] as const;
+
+export interface AdminMigrationsApi {
+  useGetMigrationsQuery: (
+    arg?: undefined,
+    options?: {skip?: boolean; pollingInterval?: number}
+  ) => AdminRpcQueryState<AdminMigrationStatus>;
+  useRunMigrationsMutation: () => [
+    (args: {wetRun: boolean}) => {unwrap: () => Promise<{taskId: string}>},
+    {isLoading: boolean},
+  ];
 }
 
-const EMPTY_STATUS_HOOK = (): MigrationQueryResult => ({
-  data: undefined,
-  error: null,
-  isLoading: false,
-});
-
-export const useAdminMigrations = (api: AdminApi, apiBase: string) => {
-  const enhancedApi = useMemo(() => {
-    if (typeof api?.injectEndpoints !== "function") {
-      return null;
-    }
-    return api.enhanceEndpoints({addTagTypes: ["admin_migrations"]}).injectEndpoints({
-      endpoints: (build: EndpointBuilder) => ({
-        adminGetMigrations: build.query({
-          providesTags: ["admin_migrations"],
-          query: () => ({
-            method: "GET",
-            url: `${apiBase}/migrations/status`,
-          }),
-        }),
-        adminRunMigrations: build.mutation({
-          invalidatesTags: ["admin_migrations"],
-          query: ({wetRun}: {wetRun: boolean}) => ({
-            method: "POST",
-            url: `${apiBase}/migrations/run?wetRun=${wetRun}`,
-          }),
-        }),
-      }),
-      overrideExisting: true,
-    });
-  }, [api, apiBase]);
-
-  const enhanced = asDynamicHookApi(enhancedApi);
-
+/** Migration status and run hooks for `{apiBase}/migrations/*`. */
+export const useAdminMigrations = (apiBase: string): AdminMigrationsApi => {
+  const rpc = useAdminRpc();
   return {
-    useGetMigrationsQuery: (enhanced?.useAdminGetMigrationsQuery ?? EMPTY_STATUS_HOOK) as (
-      arg?: undefined,
-      options?: {skip?: boolean; pollingInterval?: number}
-    ) => MigrationQueryResult,
-    useRunMigrationsMutation: (enhanced?.useAdminRunMigrationsMutation ??
-      (() => [
-        () => ({unwrap: () => Promise.resolve({taskId: ""})}),
-        {isLoading: false},
-      ])) as () => [
-      (args: {wetRun: boolean}) => {unwrap: () => Promise<{taskId: string}>},
-      {isLoading: boolean},
-    ],
+    useGetMigrationsQuery: (_arg, options) =>
+      useAdminRpcQuery<AdminMigrationStatus>({
+        pollingInterval: options?.pollingInterval,
+        providesTags: MIGRATION_TAGS,
+        rpc,
+        skip: Boolean(options?.skip),
+        url: `${apiBase}/migrations/status`,
+      }),
+    useRunMigrationsMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, {invalidatesTags: MIGRATION_TAGS});
+      return [
+        ({wetRun}: {wetRun: boolean}) =>
+          trigger({method: "POST", url: `${apiBase}/migrations/run?wetRun=${wetRun}`}),
+        meta,
+      ] as ReturnType<AdminMigrationsApi["useRunMigrationsMutation"]>;
+    },
   };
 };

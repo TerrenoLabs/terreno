@@ -58,6 +58,7 @@ if (isTracingEnabled) {
 
 // Initialize Sentry after trace agent
 import * as Sentry from "@sentry/bun";
+import {SENTRY_V10_DATA_COLLECTION} from "@terreno/api";
 
 const sentryDsn = process.env.SENTRY_DSN;
 
@@ -70,6 +71,7 @@ if (!sentryDsn && process.env.NODE_ENV === "production") {
 if (sentryDsn) {
   Sentry.init({
     // @sentry/bun's default integrations call Bun.serve, which does not exist on Vercel's Node runtime.
+    dataCollection: SENTRY_V10_DATA_COLLECTION,
     defaultIntegrations: isVercel ? false : undefined,
     dsn: sentryDsn,
     environment: process.env.APP_ENV ?? "development",

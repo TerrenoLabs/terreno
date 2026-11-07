@@ -425,6 +425,7 @@ export type BetterAuthClient = ReactAuthClient<{
  *
  * The expo plugin is typed by the narrow {@link ExpoAuthClientPlugin} (it adds only `getCookie`),
  * because the generic `BetterAuthClientPlugin` would widen every namespace to `any`.
+ *
  */
 export type BetterAuthClientWithFeatures<Features extends BetterAuthClientFeatures> =
   ReactAuthClient<{

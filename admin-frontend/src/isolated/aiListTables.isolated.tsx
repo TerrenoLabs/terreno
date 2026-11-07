@@ -1,21 +1,30 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import type {DataTableProps} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
+import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
+import type {AdminConfigResponse} from "../types";
 import {AiDatasetsListView} from "../widgets/aiObservability/datasets/AiDatasetsListView";
 import type {DatasetRecord} from "../widgets/aiObservability/datasets/datasetTypes";
 import {AiEvaluatorsListView} from "../widgets/aiObservability/evaluators/AiEvaluatorsListView";
 import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
-import {AiExperimentsScreenWidget} from "../widgets/aiObservability/experiments/AiExperimentsListScreen";
+import {AiExperimentsScreenWidget as AiExperimentsScreenWidgetBase} from "../widgets/aiObservability/experiments/AiExperimentsListScreen";
 import {AiExperimentsListView} from "../widgets/aiObservability/experiments/AiExperimentsListView";
 import type {ExperimentRecord} from "../widgets/aiObservability/experiments/experimentTypes";
 import {AiReviewBatchesView} from "../widgets/aiObservability/review/AiReviewBatchesView";
 import {AiReviewQueueView} from "../widgets/aiObservability/review/AiReviewQueueView";
 import type {ReviewBatchListItem} from "../widgets/aiObservability/review/batchTypes";
 import type {ReviewListItem} from "../widgets/aiObservability/review/reviewTypes";
+import {
+  createObservabilityServer,
+  type FakeObservabilityServer,
+  flushObservabilityRequests,
+  withObservabilityServer,
+} from "./observabilityFakeApi.isolated";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
+
+const AiExperimentsScreenWidget = withObservabilityServer(AiExperimentsScreenWidgetBase);
 
 const routerPush = mock((_href: string) => undefined);
 
@@ -246,42 +255,48 @@ describe("AiExperimentsListView table", () => {
   });
 });
 
+const EXPERIMENTS_ROUTE = "GET /ai/observability/experiments";
+
+const createExperimentsServer = ({
+  datasets = [],
+  listResponse,
+}: {
+  datasets?: unknown[];
+  listResponse: unknown;
+}): FakeObservabilityServer => {
+  return createObservabilityServer({
+    [EXPERIMENTS_ROUTE]: {data: listResponse},
+    "GET /ai/observability/datasets": {data: datasets},
+    "GET /ai/observability/status": {data: operatorObservabilityStatus()},
+  });
+};
+
+const renderExperimentsScreen = async (server: FakeObservabilityServer): Promise<View> => {
+  const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+  const view = renderWithTheme(
+    <AiExperimentsScreenWidget
+      config={config}
+      routeBase="/admin"
+      screenName="ai-experiments"
+      server={server}
+    />
+  );
+  await flushObservabilityRequests();
+  return view;
+};
+
 describe("AiExperimentsScreenWidget dataset names", () => {
   beforeEach(() => {
     routerPush.mockClear();
   });
 
   it("resolves dataset ids to names and opens a sorted row", async () => {
-    const api = {
-      enhanceEndpoints: () => api,
-      injectEndpoints: () => ({
-        useAiObservabilityDatasetsQuery: () => ({
-          data: [{counts: {}, id: "ds-gold", name: "example-summarize-gold", tags: []}],
-          isError: false,
-          isLoading: false,
-        }),
-        useAiObservabilityExperimentsQuery: () => ({
-          data: EXPERIMENTS,
-          isError: false,
-          isLoading: false,
-          refetch: () => undefined,
-        }),
-        useAiObservabilityStatusQuery: () => ({
-          data: operatorObservabilityStatus,
-          isError: false,
-          isLoading: false,
-        }),
-      }),
-    };
-    const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
-    const view = renderWithTheme(
-      <AiExperimentsScreenWidget
-        api={api as unknown as AdminApi}
-        config={config}
-        routeBase="/admin"
-        screenName="ai-experiments"
-      />
-    );
+    const server = createExperimentsServer({
+      datasets: [{counts: {}, id: "ds-gold", name: "example-summarize-gold", tags: []}],
+      listResponse: EXPERIMENTS,
+    });
+    const view = await renderExperimentsScreen(server);
+    assert.equal(server.callsTo("GET /ai/observability/datasets").length, 1);
     expect(view.getAllByText("example-summarize-gold").length).toBe(2);
     expect(view.getByText("ds-jokes")).toBeTruthy();
     sortBy(view, "ai-experiments-table", 0, "asc");
@@ -295,48 +310,27 @@ describe("AiExperimentsScreenWidget dataset names", () => {
 });
 
 describe("AiExperimentsScreenWidget truncation", () => {
-  const renderScreen = (listResponse: unknown, listArgs: unknown[]): View => {
-    const api = {
-      enhanceEndpoints: () => api,
-      injectEndpoints: () => ({
-        useAiObservabilityDatasetsQuery: () => ({data: [], isError: false, isLoading: false}),
-        useAiObservabilityExperimentsQuery: (args: unknown) => {
-          listArgs.push(args);
-          return {data: listResponse, isError: false, isLoading: false, refetch: () => undefined};
-        },
-        useAiObservabilityStatusQuery: () => ({
-          data: operatorObservabilityStatus,
-          isError: false,
-          isLoading: false,
-        }),
-      }),
-    };
-    const config: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
-    return renderWithTheme(
-      <AiExperimentsScreenWidget
-        api={api as unknown as AdminApi}
-        config={config}
-        routeBase="/admin"
-        screenName="ai-experiments"
-      />
-    );
-  };
-
-  it("requests the newest 100 experiments and notes when more exist", () => {
-    const listArgs: unknown[] = [];
-    const view = renderScreen(
-      {data: EXPERIMENTS, limit: 100, more: true, page: 1, total: 240},
-      listArgs
-    );
-    expect(listArgs[0]).toEqual({limit: 100});
+  it("requests the newest 100 experiments and notes when more exist", async () => {
+    const server = createExperimentsServer({
+      listResponse: {data: EXPERIMENTS, limit: 100, more: true, page: 1, total: 240},
+    });
+    const view = await renderExperimentsScreen(server);
+    const calls = server.callsTo(EXPERIMENTS_ROUTE);
+    assert.isAtLeast(calls.length, 1);
+    assert.deepEqual(calls[0]?.query, {limit: "100"});
     expect(view.getByTestId("ai-experiments-truncated-note")).toBeTruthy();
     expect(
       view.getByText("Showing the newest 100 experiments; filters and sorting apply to these.")
     ).toBeTruthy();
   });
 
-  it("hides the note when every experiment fits", () => {
-    const view = renderScreen({data: EXPERIMENTS, limit: 100, more: false, page: 1, total: 3}, []);
+  it("hides the note when every experiment fits", async () => {
+    const server = createExperimentsServer({
+      listResponse: {data: EXPERIMENTS, limit: 100, more: false, page: 1, total: 3},
+    });
+    const view = await renderExperimentsScreen(server);
+    // The rows loaded, so the missing note is not just a missing response.
+    expect(view.getByTestId("ai-experiment-open-e1")).toBeTruthy();
     expect(view.queryByTestId("ai-experiments-truncated-note")).toBeNull();
   });
 });

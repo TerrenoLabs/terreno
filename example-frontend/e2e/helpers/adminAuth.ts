@@ -62,8 +62,8 @@ export const getAdminToken = async (request: APIRequestContext): Promise<string>
 };
 
 export const loginAsAdmin = async (page: Page): Promise<void> => {
-  // Promote before the browser session's first /auth/me so RTK does not cache a
-  // forbidden admin layout from a pre-superadmin grant set.
+  // Promote before the browser session's first /auth/me so the request client does not
+  // cache a forbidden admin layout from a pre-superadmin grant set.
   await setUserAdmin(ADMIN_USER.email);
   await loginAs(page, ADMIN_USER);
 };

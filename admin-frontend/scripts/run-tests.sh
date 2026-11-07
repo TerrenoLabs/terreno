@@ -14,7 +14,7 @@ run_test_file() {
     args=(--only-failures)
   fi
 
-  if [[ "$file" == "./src/isolated/hooks.isolated.tsx" ]]; then
+  if [[ "$file" == "./src/isolated/hooks.isolated.tsx" || "$file" == "./src/isolated/adminModelTable.ssr.isolated.tsx" || "$file" == "./src/isolated/adminModelForm.ssr.isolated.tsx" || "$file" == "./src/isolated/adminModelTable.windowedSeed.isolated.tsx" || "$file" == "./src/isolated/adminRouteSeeds.ssr.isolated.tsx" || "$file" == "./src/isolated/jobsCommsRouteSeeds.ssr.isolated.tsx" || "$file" == "./src/isolated/orgsRouteSeeds.ssr.isolated.tsx" ]]; then
     ADMIN_USE_REAL_API=1 AGENT="${AGENT:-}" bun test "${args[@]}" "$file"
     return
   fi

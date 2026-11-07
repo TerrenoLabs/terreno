@@ -1,4 +1,4 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use loosely typed hook doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {describe, expect, it, mock} from "bun:test";
 import React from "react";
@@ -6,10 +6,9 @@ import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminFieldRenderer} from "./AdminFieldRenderer";
 import {AdminFieldRendererCore} from "./AdminFieldRendererCore";
-import type {AdminApi, AdminFieldConfig, RefFieldRendererProps} from "./types";
+import type {AdminFieldConfig, RefFieldRendererProps} from "./types";
 
-const api = {} as unknown as AdminApi;
-const base = {api, baseUrl: "/admin", onChange: () => {}};
+const base = {baseUrl: "/admin", onChange: () => {}};
 
 describe("AdminFieldRenderer (main)", () => {
   it("renders boolean", () => {

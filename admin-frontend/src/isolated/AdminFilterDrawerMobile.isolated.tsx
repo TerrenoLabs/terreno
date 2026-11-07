@@ -116,7 +116,6 @@ describe("AdminFilterDrawer mobile", () => {
   it("opens the sheet, applies a draft, and closes it", () => {
     const {getByTestId, queryByTestId, UNSAFE_root} = render(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{email: {required: false, type: "string"}}}
         filters={[{field: "email", kind: "string"}]}
@@ -145,7 +144,6 @@ describe("AdminFilterDrawer mobile", () => {
   it("dismisses changes and clears applied filters", () => {
     const {getByTestId, queryByTestId, UNSAFE_root} = render(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{email: "existing@example.com"}}
         fields={{email: {required: false, type: "string"}}}
         filters={[{field: "email", kind: "string"}]}

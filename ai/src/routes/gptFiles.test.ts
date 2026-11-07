@@ -181,7 +181,7 @@ describe("/gpt/prompt files asks", () => {
   afterEach(async () => {
     await AIRequest.deleteMany({});
     await FileAttachment.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("with data URLs", () => {

@@ -36,6 +36,8 @@ const COMPACT_ERRORS_BY_FIXTURE: Record<string, {code: AskErrorCode; path: strin
     {code: "UNKNOWN_KEY", path: "minSelected"},
     {code: "INVALID_ENUM", path: "select"},
   ],
+  // Zod 4.6.7+ rejects an oversized options array before parsing its items, so label
+  // errors surface only once the list fits.
   "choice-many-options-default-label-collides": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-no-buttons": [{code: "TOO_MANY", path: "options"}],
   "choice-many-options-no-default": [{code: "TOO_MANY", path: "options"}],

@@ -74,7 +74,7 @@ describe("/gpt/prompt asks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("pausing on an ask", () => {
@@ -1730,6 +1730,18 @@ describe("/gpt/prompt asks", () => {
       expect(res.status).toBe(404);
       expect(res.body.title).toBe("History not found");
     });
+
+    it("returns 400 for a history id that is not an ObjectId hex string", async () => {
+      const model = createScriptedModel({steps: []});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      for (const historyId of [crypto.randomUUID(), "abcdefghijkl", {$ne: null}]) {
+        const res = await agent.post("/gpt/prompt").send({historyId, prompt: "Hi"});
+        expect(res.status).toBe(400);
+        expect(res.body.title).toBe("historyId is not valid");
+      }
+      expect(model.doStream).not.toHaveBeenCalled();
+    });
   });
 
   describe("a prompt while an ask is pending", () => {
@@ -3002,7 +3014,7 @@ describe("/gpt/prompt uiBlocks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("leaves the prompt and the event list unchanged when uiBlocks is off", async () => {

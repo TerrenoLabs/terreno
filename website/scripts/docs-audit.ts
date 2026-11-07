@@ -37,9 +37,6 @@ export const referencePageForPackage = (packageDir: string): string => {
   if (pluginReference) {
     return pluginReference;
   }
-  if (packageDir === "rtk") {
-    return "docs/reference/legacy/rtk.md";
-  }
   if (packageDir === "mcp-server") {
     return "docs/reference/mcp-server.md";
   }

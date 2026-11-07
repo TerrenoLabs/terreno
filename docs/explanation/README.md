@@ -36,6 +36,7 @@ Understanding-oriented documentation: concepts, architecture, and context.
 - [Positioning](positioning.md) — Canonical copy blocks and the honest Django/Rails comparison
 - [Versioning policy](versioning-policy.md) — Lockstep `@terreno/*` versions, pre-1.0 breaks, deprecation window
 - [How admin interfaces are shaped](admin-interface.md) — Screens, sidebar, `apiBase` vs `routeBase`
+- [Server-rendering the admin SPA](admin-spa-ssr.md) — How `AdminSpaServeApp` renders pages in Express, and the Expo 58 constraints it works around
 - [Admin plugin frontend widgets](admin-plugin-frontend.md) — Widget IDs from backend plugins
 - [Consent forms](consent-forms.md) — Versions, responses, the consent gate, and why provisional signatures don't clear it
 - [Consent admin migration](admin-consent-migration.md) — Which consent screens stay hand-written

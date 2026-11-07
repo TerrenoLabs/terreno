@@ -30,11 +30,40 @@ const gcsKeyParam = (req: express.Request): string => {
 const requestUserId = (req: express.Request): mongoose.Types.ObjectId =>
   (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id as mongoose.Types.ObjectId;
 
+/**
+ * A storage service, or a function that returns the current one. Pass a function when storage
+ * can be configured or cleared at runtime: the routes stay mounted (and documented in OpenAPI)
+ * and answer 503 while it returns `undefined`.
+ */
+export type FileStorageServiceSource = FileStorageService | (() => FileStorageService | undefined);
+
+const resolveFileStorageService = (source: FileStorageServiceSource): FileStorageService => {
+  const service = typeof source === "function" ? source() : source;
+  if (!service) {
+    throw new APIError({status: 503, title: "File storage is not configured"});
+  }
+  return service;
+};
+
+const uploadResultSchema = {
+  filename: {type: "string"},
+  gcsKey: {
+    description: "Storage key; GET or DELETE /files/<gcsKey> reads or removes the file",
+    type: "string",
+  },
+  id: {description: "The FileAttachment id", type: "string"},
+  mimeType: {type: "string"},
+  size: {description: "Size in bytes", type: "number"},
+  url: {type: "string"},
+};
+
 export const addFileRoutes = (
   router: express.Router,
-  options: FileRouteOptions & {fileStorageService: FileStorageService}
+  options: FileRouteOptions & {fileStorageService: FileStorageServiceSource}
 ): void => {
-  const {fileStorageService, maxFileSize = DEFAULT_MAX_FILE_SIZE} = options;
+  const {maxFileSize = DEFAULT_MAX_FILE_SIZE} = options;
+  const fileStorageService = (): FileStorageService =>
+    resolveFileStorageService(options.fileStorageService);
 
   const upload = multer({
     fileFilter: (_req, file, cb) => {
@@ -52,22 +81,46 @@ export const addFileRoutes = (
     "/files/upload",
     [
       authenticateMiddleware(),
+      // Fail before multer buffers the upload when no storage is configured.
+      (_req: express.Request, _res: express.Response, next: express.NextFunction): void => {
+        try {
+          fileStorageService();
+          next();
+        } catch (error) {
+          next(error);
+        }
+      },
       upload.single("file"),
       createOpenApiBuilder(options.openApiOptions ?? {})
         .withTags(["files"])
         .withSummary("Upload a file")
-        .withResponse(200, {
-          filename: {type: "string"},
-          gcsKey: {type: "string"},
-          id: {type: "string"},
-          mimeType: {type: "string"},
-          size: {type: "number"},
-          url: {type: "string"},
-        })
+        .withDescription(
+          `Send the file as multipart/form-data in the \`file\` field. Allowed types: ${[
+            ...ALLOWED_MIME_TYPES,
+          ].join(", ")}. Maximum size: ${maxFileSize} bytes.`
+        )
+        .withRequestBody(
+          {file: {format: "binary", required: true, type: "string"}},
+          {mediaType: "multipart/form-data"}
+        )
+        .withResponse(
+          200,
+          {
+            data: {
+              properties: uploadResultSchema,
+              required: Object.keys(uploadResultSchema),
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
+        // Multer puts the file on req.file, not req.body, so JSON body validation must stay off.
+        .withValidation({enabled: false})
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
       await assertFileUploadsEnabled(req, options.fileUploadsEnabled);
+      const storage = fileStorageService();
       const file = (req as express.Request & {file?: Express.Multer.File}).file;
       const userId = requestUserId(req);
 
@@ -75,7 +128,7 @@ export const addFileRoutes = (
         throw new APIError({status: 400, title: "No file provided"});
       }
 
-      const result = await fileStorageService.upload({
+      const result = await storage.upload({
         buffer: file.buffer,
         filename: file.originalname,
         mimeType: file.mimetype,
@@ -94,10 +147,21 @@ export const addFileRoutes = (
         .withTags(["files"])
         .withSummary("Get file URL")
         .withPathParameter("gcsKey", {type: "string"})
-        .withResponse(200, {url: {type: "string"}})
+        .withResponse(
+          200,
+          {
+            data: {
+              properties: {url: {description: "Signed URL for the file", type: "string"}},
+              required: ["url"],
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
+      const storage = fileStorageService();
       const gcsKey = gcsKeyParam(req);
 
       // Another user's file is "not found", so keys cannot be probed.
@@ -110,7 +174,7 @@ export const addFileRoutes = (
         throw new APIError({status: 404, title: "File not found"});
       }
 
-      const url = await fileStorageService.getSignedUrl(gcsKey);
+      const url = await storage.getSignedUrl(gcsKey);
       return res.json({data: {url}});
     })
   );
@@ -123,10 +187,21 @@ export const addFileRoutes = (
         .withTags(["files"])
         .withSummary("Delete a file")
         .withPathParameter("gcsKey", {type: "string"})
-        .withResponse(200, {success: {type: "boolean"}})
+        .withResponse(
+          200,
+          {
+            data: {
+              properties: {success: {type: "boolean"}},
+              required: ["success"],
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
+      const storage = fileStorageService();
       const gcsKey = gcsKeyParam(req);
       const userId = requestUserId(req);
 
@@ -139,7 +214,7 @@ export const addFileRoutes = (
         throw new APIError({status: 403, title: "Not authorized to delete this file"});
       }
 
-      await fileStorageService.delete(gcsKey);
+      await storage.delete(gcsKey);
       return res.json({data: {success: true}});
     })
   );

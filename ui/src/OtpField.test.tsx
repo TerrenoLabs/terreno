@@ -30,6 +30,28 @@ const renderWithFocusSpy = (ui: ReactElement): ReturnType<typeof render> & {focu
   return Object.assign(result, {focused});
 };
 
+const renderWithSynchronousFocus = (
+  ui: ReactElement
+): ReturnType<typeof render> & {getFocusedCell: () => number} => {
+  let focusedCell = 1;
+  const result = render(ui, {
+    createNodeMock: (element: ReactElement) => {
+      const props = element.props as {onFocus?: () => void; testID?: string};
+      const match = /-cell-(\d+)$/.exec(props.testID ?? "");
+      return {
+        focus: (): void => {
+          if (match) {
+            focusedCell = Number(match[1]);
+            props.onFocus?.();
+          }
+        },
+      };
+    },
+    wrapper: ThemeProvider,
+  });
+  return Object.assign(result, {getFocusedCell: (): number => focusedCell});
+};
+
 const cellValues = (getByTestId: (id: string) => {props: {value?: string}}, length = 6): string[] =>
   Array.from({length}, (_, index) => getByTestId(`otp-cell-${index + 1}`).props.value ?? "");
 
@@ -248,6 +270,28 @@ describe("OtpField", () => {
     fireEvent.changeText(getByTestId("otp-cell-2"), "2");
     expect(focused).toEqual([2, 3]);
   });
+
+  it.each(["uncontrolled", "controlled"])(
+    "typing a full code digit by digit works when focus fires synchronously (%s)",
+    (mode): void => {
+      const onComplete = mock((_code: string) => {});
+      const ui =
+        mode === "controlled" ? (
+          <ControlledOtp onComplete={onComplete} />
+        ) : (
+          <OtpField onComplete={onComplete} testID="otp" />
+        );
+      const {getByTestId, getFocusedCell} = renderWithSynchronousFocus(ui);
+
+      "123456".split("").forEach((digit): void => {
+        fireEvent.changeText(getByTestId(`otp-cell-${getFocusedCell()}`), digit);
+      });
+
+      expect(cellValues(getByTestId)).toEqual(["1", "2", "3", "4", "5", "6"]);
+      expect(onComplete).toHaveBeenCalledTimes(1);
+      expect(onComplete).toHaveBeenCalledWith("123456");
+    }
+  );
 
   it("pasting a full code moves focus to the last cell", () => {
     const {getByTestId, focused} = renderWithFocusSpy(<ControlledOtp />);

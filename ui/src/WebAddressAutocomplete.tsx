@@ -1,5 +1,5 @@
 import {type ReactElement, useEffect, useRef, useState} from "react";
-import type {TextInput} from "react-native";
+import type {TextInputInstance} from "react-native";
 
 import type {AddressAutocompleteProps} from "./Common";
 import {GOOGLE_PLACES_API_RESTRICTIONS} from "./Constants";
@@ -37,7 +37,7 @@ export const WebAddressAutocomplete = ({
   handleAutoCompleteChange,
 }: AddressAutocompleteProps): ReactElement => {
   const [scriptLoaded, setScriptLoaded] = useState(true);
-  const autocompleteInputRef = useRef<TextInput | null>(null);
+  const autocompleteInputRef = useRef<TextInputInstance | null>(null);
 
   // Load the Google Maps script and initialize the autocomplete.
   useEffect(() => {
@@ -83,7 +83,7 @@ export const WebAddressAutocomplete = ({
       disabled={disabled}
       inputRef={
         scriptLoaded
-          ? (ref: TextInput | null): void => {
+          ? (ref: TextInputInstance | null): void => {
               autocompleteInputRef.current = ref;
             }
           : undefined

@@ -20,7 +20,6 @@
     "@expo-google-fonts/titillium-web": "catalog:",
     "@expo/vector-icons": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
-    "@react-native-community/blur": "^4.4.0",
     "@react-native-community/datetimepicker": "catalog:",
     "@react-native-community/slider": "catalog:",
     "@react-native-picker/picker": "catalog:",
@@ -51,10 +50,6 @@
     "lodash": "catalog:",
     "luxon": "catalog:",
     "pressto": "catalog:",
-    "react-app-polyfill": "^3.0.0",
-    "react-date-picker": "^12.0.1",
-    "react-datetime-picker": "^7.0.1",
-    "react-dev-utils": "^12.0.1",
     "react-dom": "catalog:",
     "react-keyed-flatten-children": "catalog:",
     "react-native": "catalog:",
@@ -65,8 +60,7 @@
     "react-native-google-places-autocomplete": "^2.6.4",
     "react-native-markdown-display": "catalog:",
     "react-native-modalize": "catalog:",
-    "react-native-permissions": "^5.4.4",
-    "react-native-picker-select": "^9.1.3",
+    "react-native-permissions": "^5.6.2",
     "react-native-qrcode-svg": "6.3.26",
     "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "catalog:",
@@ -74,8 +68,7 @@
     "react-native-svg": "catalog:",
     "react-native-swiper-flatlist": "catalog:",
     "react-native-web": "catalog:",
-    "react-native-webview": "catalog:",
-    "react-time-picker": "^8.0.2"
+    "react-native-webview": "catalog:"
   },
   "description": "React Native UI component library for iOS, Android, and web — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
@@ -86,7 +79,6 @@
     "@types/d3-shape": "^3.2.0",
     "@types/lodash": "catalog:",
     "@types/luxon": "catalog:",
-    "@types/mdurl": "^2.0.0",
     "@types/react": "catalog:",
     "expo-modules-core": "catalog:",
     "mdurl": "catalog:",
@@ -125,7 +117,7 @@
   "peerDependencies": {
     "react": "catalog:",
     "react-dom": "^19.2.0",
-    "react-native": "~0.86.0"
+    "react-native": "0.88.0"
   },
   "peerDependenciesMeta": {
     "react-dom": {
@@ -167,7 +159,7 @@
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "types": "bun typedoc"
   },
-  "version": "57.22.0",
+  "version": "58.0.0",
   "bugs": {
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },

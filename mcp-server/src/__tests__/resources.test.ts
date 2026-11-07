@@ -17,8 +17,9 @@ describe("resources", () => {
     expect(resourceUris).toContain("terreno://docs/overview");
     expect(resourceUris).toContain("terreno://docs/api");
     expect(resourceUris).toContain("terreno://docs/ui");
-    expect(resourceUris).toContain("terreno://docs/rtk");
+    expect(resourceUris).toContain("terreno://docs/syncdb");
     expect(resourceUris).toContain("terreno://docs/patterns");
+    expect(resourceUris).not.toContain("terreno://docs/rtk");
   });
 
   test("should have valid resource structure", () => {
@@ -39,7 +40,7 @@ describe("resources", () => {
       expect(overview?.content).toContain("Terreno");
       expect(overview?.content).toContain("@terreno/api");
       expect(overview?.content).toContain("@terreno/ui");
-      expect(overview?.content).toContain("@terreno/rtk");
+      expect(overview?.content).toContain("@terreno/syncdb");
     });
 
     test("should contain development commands", () => {
@@ -110,22 +111,22 @@ describe("resources", () => {
     });
   });
 
-  describe("rtk resource", () => {
-    const rtk = resources.find((r) => r.uri === "terreno://docs/rtk");
+  describe("syncdb resource", () => {
+    const syncdb = resources.find((r) => r.uri === "terreno://docs/syncdb");
 
-    test("should contain RTK Query setup", () => {
-      expect(rtk?.content).toContain("emptyApi");
-      expect(rtk?.content).toContain("RTK Query");
+    test("covers the request client, generated hooks, and session", () => {
+      expect(syncdb?.content).toContain("createApiClient");
+      expect(syncdb?.content).toContain("--api-out store/apiSdk.ts");
+      expect(syncdb?.content).toContain("useGetAuthMeQuery");
+      expect(syncdb?.content).toContain("SessionProvider");
+      expect(syncdb?.content).toContain('from "@terreno/syncdb/config"');
     });
 
-    test("should contain auth documentation", () => {
-      expect(rtk?.content).toContain("authSlice");
-      expect(rtk?.content).toContain("useEmailLoginMutation");
-    });
-
-    test("should contain token documentation", () => {
-      expect(rtk?.content).toContain("token");
-      expect(rtk?.content).toContain("refresh");
+    test("does not teach RTK Query or Redux setup", () => {
+      for (const resource of resources) {
+        expect(resource.content).not.toContain('from "@terreno/rtk"');
+        expect(resource.content).not.toContain("@/store/openApiSdk");
+      }
     });
   });
 
@@ -146,7 +147,7 @@ describe("resources", () => {
       expect(patterns?.content).toContain('from "@terreno/syncdb/react"');
       expect(patterns?.content).toContain('useQuery<Todo>("todos"');
       expect(patterns?.content).toContain('useMutate("todos")');
-      expect(patterns?.content).toContain('sync: {scope: {type: "owner"}}');
+      expect(patterns?.content).toContain("modelRouter `sync` config");
       expect(patterns?.content).not.toContain("useGetTodosQuery");
       expect(patterns?.content).not.toContain("useCreateTodoMutation");
     });

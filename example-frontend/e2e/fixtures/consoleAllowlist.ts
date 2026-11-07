@@ -10,16 +10,6 @@ export const GLOBAL_CONSOLE_ALLOWLIST: ReadonlyArray<string | RegExp> = [
   // react-native-modalize, react-native-calendars).
   "props.pointerEvents is deprecated. Use style.pointerEvents",
 
-  // react-redux memoization warning. Some selectors in the dependency tree
-  // return new array/object references each call. TODO(rtk/example-frontend):
-  // audit selectors and wrap with createSelector where appropriate.
-  "Selector unknown returned a different result when called with the same parameters",
-
-  // Feature-flags RTK query (terrenoFlagConfiguration) rejects until auth tokens
-  // exist — expected on signup/login flows (e.g. duplicate-email signup) before a
-  // token is available. Broad substring covers the "No token found" message too.
-  "terrenoFlagConfiguration rejected query",
-
   // @terreno/syncdb is started globally by the root layout on every authenticated
   // login (see app/_layout.tsx), not just in syncdb-focused specs. Its startup
   // reconcile and the realtime socket's token warmup race the app's own auth-state
@@ -28,9 +18,8 @@ export const GLOBAL_CONSOLE_ALLOWLIST: ReadonlyArray<string | RegExp> = [
   // just the syncdb suite (which additionally uses allowSyncDbNoise() for its
   // offline-simulation-specific messages).
   /\[syncdb\] (startup|reconnect) reconcile failed/,
-  "[SocketConnection] Attempting to connect socket, but getAuthToken returned no token.",
-  // @terreno/rtk realtime cache-patching helpers (`realtimeList`,
-  // `realtimeDocument`, `setRealtimeSocket`) are deprecated and removed in
-  // Terreno 58. The example app still wires them until that deletion.
-  "[@terreno/rtk] realtimeList, realtimeDocument, and setRealtimeSocket are deprecated",
+
+  // React Native Web dev builds only: Animated has no native module on web and falls back to JS.
+  // The cross-site specs run against `expo start` (a dev bundle); CI's static export never logs it.
+  "`useNativeDriver` is not supported because the native animated module is missing",
 ];

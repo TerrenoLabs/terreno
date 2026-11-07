@@ -2,16 +2,15 @@ import {afterAll, beforeAll, beforeEach, describe, expect, it, mock} from "bun:t
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {useLocalSearchParams} from "expo-router";
 import React from "react";
-import {Provider} from "react-redux";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 
 type MockableUseLocalSearchParams = typeof useLocalSearchParams & {
   mockImplementation?: (impl: typeof useLocalSearchParams) => void;
 };
 
-interface EndpointDefinition {
-  keepUnusedDataFor?: number;
-  query: (requestId: string) => {method: string; url: string};
+interface RequestArgs {
+  method: string;
+  url: string;
 }
 
 interface QueryState {
@@ -21,7 +20,6 @@ interface QueryState {
 }
 
 const consentApiUrl = new URL("../../store/mcpOAuthConsentApi.ts", import.meta.url);
-const sdkPath = new URL("./sdk.ts", consentApiUrl).pathname;
 const consentApiPath = consentApiUrl.pathname;
 
 const PENDING_REQUEST = {
@@ -34,63 +32,34 @@ const PENDING_REQUEST = {
   scope: "mcp:read mcp:write",
 };
 
-// A fake store is enough: the screen only reads the Better Auth user.
-// getState must return the same object every call, or useSelector re-renders forever.
-const fakeStore = (email?: string): Parameters<typeof Provider>[0]["store"] => {
-  const state = {betterAuth: {user: email ? {email} : null}};
-  return {
-    dispatch: (action: unknown) => action,
-    getState: () => state,
-    subscribe: () => () => undefined,
-  } as unknown as Parameters<typeof Provider>[0]["store"];
-};
-
 describe("mcpOAuthConsentApi", () => {
-  const captured: {endpoints?: Record<string, EndpointDefinition>} = {};
+  const captured: {
+    queryArgs?: RequestArgs | null;
+    toRequests: Array<(requestId: string) => RequestArgs>;
+  } = {toRequests: []};
 
   beforeAll(async () => {
-    // Same export names as the sdk mock in adminSpaUiCoverage.test.tsx: bun keeps the first
-    // mock's names for a module, so both mocks must declare every export.
-    mock.module(sdkPath, () => ({
-      openapi: {
-        injectEndpoints: ({
-          endpoints,
-        }: {
-          endpoints: (build: unknown) => Record<string, EndpointDefinition>;
-        }) => {
-          const build = {
-            mutation: (definition: EndpointDefinition) => definition,
-            query: (definition: EndpointDefinition) => definition,
-          };
-          captured.endpoints = endpoints(build);
-          return {
-            useApproveMcpOAuthRequestMutation: () => undefined,
-            useDenyMcpOAuthRequestMutation: () => undefined,
-            useGetMcpOAuthRequestQuery: () => undefined,
-          };
-        },
+    mock.module("@terreno/syncdb/react", () => ({
+      useApiMutation: (toRequest: (requestId: string) => RequestArgs) => {
+        captured.toRequests.push(toRequest);
+        return [];
       },
-      terrenoApi: {reducerPath: "terreno-admin-spa-test-api"},
-      useGetAdminSpaProfileQuery: () => ({data: undefined}),
+      useApiQuery: (args: RequestArgs | null) => {
+        captured.queryArgs = args;
+        return {};
+      },
     }));
-    await import(consentApiPath);
+    const api = await import(consentApiPath);
+    api.useGetMcpOAuthRequestQuery("a/b");
+    api.useApproveMcpOAuthRequestMutation();
+    api.useDenyMcpOAuthRequestMutation();
   });
 
   it("reads, approves, and denies by encoded request id over the session API", () => {
-    const endpoints = captured.endpoints ?? {};
-    expect(endpoints.getMcpOAuthRequest.query("a/b")).toEqual({
-      method: "GET",
-      url: "/oauth/authorize/a%2Fb",
-    });
-    expect(endpoints.getMcpOAuthRequest.keepUnusedDataFor).toBe(0);
-    expect(endpoints.approveMcpOAuthRequest.query("req-1")).toEqual({
-      method: "POST",
-      url: "/oauth/authorize/req-1/approve",
-    });
-    expect(endpoints.denyMcpOAuthRequest.query("req-1")).toEqual({
-      method: "POST",
-      url: "/oauth/authorize/req-1/deny",
-    });
+    expect(captured.queryArgs).toEqual({method: "GET", url: "/oauth/authorize/a%2Fb"});
+    const [approve, deny] = captured.toRequests;
+    expect(approve("req-1")).toEqual({method: "POST", url: "/oauth/authorize/req-1/approve"});
+    expect(deny("req-1")).toEqual({method: "POST", url: "/oauth/authorize/req-1/deny"});
   });
 });
 
@@ -106,17 +75,17 @@ describe("OAuthConsentScreen", () => {
   const originalWindow = globals.window;
   let OAuthConsentScreen: React.FC;
 
-  const renderScreen = (email?: string): ReturnType<typeof renderWithTheme> =>
-    renderWithTheme(
-      <Provider store={fakeStore(email)}>
-        <OAuthConsentScreen />
-      </Provider>
-    );
+  const session: {email?: string} = {};
+
+  const renderScreen = (email?: string): ReturnType<typeof renderWithTheme> => {
+    session.email = email;
+    return renderWithTheme(<OAuthConsentScreen />);
+  };
 
   beforeAll(async () => {
-    // The real @terreno/rtk pulls in Expo native modules; the screen only needs this selector.
-    mock.module("@terreno/rtk", () => ({
-      selectBetterAuthUser: (state: {betterAuth: {user: unknown}}) => state.betterAuth.user,
+    // The real @terreno/syncdb/auth pulls in Expo native modules; the screen only reads the user.
+    mock.module("@terreno/syncdb/auth", () => ({
+      useSession: () => ({user: session.email ? {email: session.email} : null}),
     }));
     mock.module(consentApiPath, () => ({
       useApproveMcpOAuthRequestMutation: () => [decisions.approve],

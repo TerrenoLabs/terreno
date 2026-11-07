@@ -1,100 +1,74 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
+import {describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
 
-import type {SubmitConsentBody} from "./useSubmitConsent";
+import {createFakeRequestClient, fakeHttpError} from "./test-utils";
 import {useSubmitConsent} from "./useSubmitConsent";
 
-type SubmitConsentApi = Parameters<typeof useSubmitConsent>[0];
-
-interface MockMutationDef {
-  query: (body: SubmitConsentBody) => {method: string; url: string};
-}
-
-interface MockInjectOpts {
-  endpoints: (build: {mutation: (def: MockMutationDef) => string}) => Record<string, unknown>;
-}
-
 describe("useSubmitConsent", () => {
-  const buildApi = () => {
-    const unwrap = mock(async () => ({success: true}));
-    const submitMutation = mock(() => ({unwrap}));
-    const useSubmitConsentResponseMutation = mock(() => [
-      submitMutation,
-      {error: undefined, isLoading: false},
-    ]);
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock((opts: MockInjectOpts) => {
-          const build = {
-            mutation: mock((def: MockMutationDef) => {
-              // Exercise the query builder
-              const result = def.query({
-                agreed: true,
-                consentFormId: "f1",
-                locale: "en",
-              });
-              expect(result.method).toBe("POST");
-              expect(result.url).toContain("/consents/respond");
-              return "submit-mutation";
-            }),
-          };
-          opts.endpoints(build);
-          return {useSubmitConsentResponseMutation};
-        }),
-      })),
-    };
-    return {api, submitMutation, unwrap};
-  };
-
-  it("returns submit function and state", () => {
-    const {api} = buildApi();
-    const {result} = renderHook(() => useSubmitConsent(api as unknown as SubmitConsentApi));
-    expect(typeof result.current.submit).toBe("function");
+  it("starts idle", () => {
+    const {client} = createFakeRequestClient({});
+    const {result} = renderHook(() => useSubmitConsent(client));
     expect(result.current.isSubmitting).toBe(false);
     expect(result.current.error).toBeUndefined();
+    expect(typeof result.current.submit).toBe("function");
   });
 
-  it("calls submit mutation when submit is invoked", async () => {
-    const {api, submitMutation, unwrap} = buildApi();
-    const {result} = renderHook(() => useSubmitConsent(api as unknown as SubmitConsentApi, "/api"));
-    const response = await result.current.submit({
-      agreed: true,
-      consentFormId: "f1",
-      locale: "en",
+  it("posts the consent response to /consents/respond under baseUrl", async () => {
+    const {client, calls} = createFakeRequestClient({
+      "POST /api/consents/respond": () => ({agreed: true, id: "response-1"}),
     });
-    expect(submitMutation).toHaveBeenCalled();
-    expect(unwrap).toHaveBeenCalled();
-    // submit resolves to void; it awaits unwrap() internally and does not surface the payload.
-    expect(response).toBeUndefined();
-  });
-
-  it("uses empty baseUrl when none provided", () => {
-    const {api} = buildApi();
-    const {result} = renderHook(() => useSubmitConsent(api as unknown as SubmitConsentApi));
-    expect(result.current.submit).toBeDefined();
-  });
-
-  it("injects the submit endpoint only once per (api, baseUrl)", () => {
-    let injectCallCount = 0;
-    const unwrap = mock(async () => ({}));
-    const submitMutation = mock(() => ({unwrap}));
-    const useSubmitConsentResponseMutation = mock(() => [
-      submitMutation,
-      {error: undefined, isLoading: false},
-    ]);
-    const api = {
-      enhanceEndpoints: () => ({
-        injectEndpoints: () => {
-          injectCallCount += 1;
-          return {useSubmitConsentResponseMutation};
+    const {result} = renderHook(() => useSubmitConsent(client, "/api"));
+    await act(async () => {
+      await result.current.submit({
+        agreed: true,
+        checkboxValues: {"0": true},
+        consentFormId: "form-1",
+        locale: "en",
+        signature: "sig",
+      });
+    });
+    expect(calls).toEqual([
+      {
+        body: {
+          agreed: true,
+          checkboxValues: {"0": true},
+          consentFormId: "form-1",
+          locale: "en",
+          signature: "sig",
         },
-      }),
-    };
-    const {rerender} = renderHook(() => useSubmitConsent(api as unknown as SubmitConsentApi));
-    rerender(undefined);
-    rerender(undefined);
-    // The hook reuses the cached enhanced api after the first render so the
-    // dev-mode RTK warning about re-injecting endpoints never fires.
-    expect(injectCallCount).toBe(1);
+        method: "POST",
+        url: "/api/consents/respond",
+      },
+    ]);
+    expect(result.current.isSubmitting).toBe(false);
+  });
+
+  it("uses no prefix when baseUrl is omitted", async () => {
+    const {client, calls} = createFakeRequestClient({"POST /consents/respond": () => ({})});
+    const {result} = renderHook(() => useSubmitConsent(client));
+    await act(async () => {
+      await result.current.submit({agreed: false, consentFormId: "form-1", locale: "en"});
+    });
+    expect(calls[0]?.url).toBe("/consents/respond");
+  });
+
+  it("rejects and exposes the error when the request fails", async () => {
+    const failure = fakeHttpError(400, "Invalid");
+    const {client} = createFakeRequestClient({
+      "POST /consents/respond": () => {
+        throw failure;
+      },
+    });
+    const {result} = renderHook(() => useSubmitConsent(client));
+    let caught: unknown;
+    await act(async () => {
+      await result.current
+        .submit({agreed: true, consentFormId: "form-1", locale: "en"})
+        .catch((error: unknown) => {
+          caught = error;
+        });
+    });
+    expect(caught).toBe(failure);
+    expect(result.current.error).toBe(failure);
   });
 });

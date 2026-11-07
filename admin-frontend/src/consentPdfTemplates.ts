@@ -32,6 +32,7 @@ export interface ConsentResponseData {
   signedAt?: string;
   userAgent?: string;
   userId?: {_id?: string; email?: string; id?: string; name?: string} | string;
+  voidReason?: string;
   voidedAt?: string;
 }
 

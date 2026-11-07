@@ -1,93 +1,89 @@
 # Auth and Tokens — Terreno
 
-## generateAuthSlice
+Session state lives in `@terreno/syncdb/auth`. There is no Redux store. Reference:
+`docs/reference/syncdb.md#auth`, `example-frontend/lib/betterAuth.ts`, `app/login.tsx`.
 
-`generateAuthSlice(api)` from `@terreno/rtk` creates:
+## Better Auth client
 
-- `authReducer` — tracks `userId`, `error`, `lastTokenRefreshTimestamp`
-- `logout` action — clears tokens from secure storage
-- `middleware` — stores tokens on login, removes on logout
-- Built-in endpoints: `emailLogin`, `emailSignUp`, `googleLogin`, `resetPassword`
+```tsx
+// lib/betterAuth.ts
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+
+export const betterAuthClient = createBetterAuthClient({
+  baseURL: baseUrl,
+  scheme: "myapp",
+  storagePrefix: "myapp",
+});
+```
+
+Storage is `expo-secure-store` on native and AsyncStorage on web. Never store tokens in
+plain AsyncStorage on native or in `EXPO_PUBLIC_*` env vars.
+
+## Session provider
+
+```tsx
+<SessionProvider authClient={betterAuthClient} syncDbs={[syncDb]} onLogout={() => apiClient.reset()}>
+  <App />
+</SessionProvider>
+```
+
+```tsx
+import {useSession} from "@terreno/syncdb/auth";
+
+const {userId, user, isAuthenticated, isLoading, error, logout, refresh} = useSession();
+```
 
 ## Login
 
 ```tsx
-import {useEmailLoginMutation} from "@/store/sdk";
-import {useSelectCurrentUserId} from "@terreno/rtk";
+const {refresh} = useSession();
 
-const [login, {isLoading, error}] = useEmailLoginMutation();
-
-await login({email, password}).unwrap();
-// Tokens stored automatically; setUserId dispatched
+const result = await betterAuthClient.signIn.email({email, password});
+if (!result.error) {
+  await refresh(); // resolve userId now instead of waiting for the session atom
+}
 ```
+
+Use `SocialLoginButton` from `@terreno/ui` with `betterAuthClient.signIn.social({provider})`
+for OAuth.
 
 ## Logout
 
 ```tsx
-import {useAppDispatch, logout} from "../store/index.ts";
-
-const dispatch = useAppDispatch();
-dispatch(logout());
-// Clears AUTH_TOKEN and REFRESH_TOKEN from storage
+const {logout} = useSession();
+await logout();
 ```
 
-## Token storage
-
-- **Native:** `expo-secure-store` (encrypted)
-- **Web:** `@react-native-async-storage/async-storage` (SSR-safe wrapper)
-
-Never store tokens in plain AsyncStorage on native or in `EXPO_PUBLIC_*` env vars.
+`logout()` signs out each `syncDbs` client first (wiping local rows when created with
+`wipeOnSignOut: true`), then the auth server, then runs `onLogout`.
 
 ## Token refresh
 
-`emptyApi` from `@terreno/rtk` automatically:
+`betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient))` is the shared
+`AuthProvider` for `createSyncDb` and `createApiClient`. The request client adds
+`Authorization: Bearer`, and on a 401 calls `authProvider.refresh()` once and retries.
+No manual refresh logic in app code. Code outside the client (SSE streams, `AdminProvider`
+`getAuthHeaders`) reads `authProvider.getToken()`.
 
-- Refreshes access token when < 2 minutes from expiry
-- Retries failed requests after 401 with refreshed token
-- Uses a mutex to prevent concurrent refresh storms
+## JWT backends (legacy)
 
-No manual refresh logic needed in app code.
-
-## Better Auth (optional)
-
-For apps using Better Auth instead of JWT/Passport:
-
-```tsx
-import {createBetterAuthClient, generateBetterAuthSlice, setTokenSource} from "@terreno/rtk";
-import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb";
-
-const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL,
-  scheme: "myapp", // deep-link scheme, required
-});
-
-// {reducer, middleware, actions, slice, syncSession}; mount reducer at `betterAuth`
-const betterAuth = generateBetterAuthSlice({authClient});
-
-// One token source for syncdb and every rtk consumer, registered once at startup
-export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
-setTokenSource(authProvider);
-```
-
-With the source registered, `emptySplitApi` sends the Better Auth token, sends no
-`authorization` header when there is none, and logs out only after a 401 survives one
-`refresh()`. Do not fork the base query to read the session. Without `setTokenSource`, rtk
-uses the JWT tokens in storage (`jwtTokenSource`).
-
-Use `SocialLoginButton` from `@terreno/ui` for OAuth providers.
+Apps on `@terreno/api` JWT routes use `jwtAuthAdapter` as both the `authProvider` and the
+`SessionProvider` `source`, plus `useJwtAuth({adapter})` for `login`, `signup`,
+`googleLogin`, `resetPassword`. It refreshes when under 130 s remain and on a 401, with one
+shared refresh in flight. See `docs/reference/syncdb.md#jwt-auth-legacy`.
 
 ## Current user
 
 ```tsx
-import {useSelectCurrentUserId} from "@terreno/rtk";
-import {useReadProfile} from "@/hooks/useReadProfile"; // app-specific
+import {useGetAuthMeQuery} from "@/store/apiSdk";
 
-const userId = useSelectCurrentUserId();
-const {data: profile} = useReadProfile(); // GET /auth/me via sdk.ts
+const {userId} = useSession();
+const {data: me} = useGetAuthMeQuery(undefined, {skip: !userId});
 ```
 
 ## Protected routes
 
-Gate navigation on `userId` in root `_layout.tsx`. Redirect unauthenticated users to `/login`.
-
-For admin routes, also check `user.admin === true` and redirect non-admins.
+Gate navigation on `useSession().userId` in root `_layout.tsx`. Redirect unauthenticated
+users to `/login`. For admin routes, check `canOpenAdminPage({admin: me?.admin, permissions:
+me?.permissions})` from `@terreno/syncdb/app`.

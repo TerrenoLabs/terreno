@@ -42,6 +42,8 @@ Sizes: `sm`, `md`, `lg`, `xl`, `2xl` (responsive web/mobile values).
 />
 ```
 
+Column `width` is optional. Omit it and the column sizes itself from its title and sampled content, then grows to fill the table; a set `width` is always kept. See `docs/reference/ui.md` (DataTable column widths).
+
 Column types: `text`, `date`, `number`, `boolean`, `custom`.
 
 For admin tables, prefer `AdminModelTable` from `@terreno/admin-frontend`.

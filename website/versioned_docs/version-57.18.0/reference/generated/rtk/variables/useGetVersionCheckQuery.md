@@ -1,1 +1,0 @@
-> **useGetVersionCheckQuery**: `UseQuery`\<`QueryDefinition`\<\{ `platform`: `string`; `version`: `number`; \}, `BaseQueryFn`\<`string` \| `FetchArgs`, `unknown`, `FetchBaseQueryError` \| \{ `error`: `string`; `status`: `string`; \}, `object` & `RetryOptions`, \{ \}\>, `never`, [`VersionCheckResponse`](../interfaces/VersionCheckResponse.md), `"terreno-rtk"`, `unknown`\>\>

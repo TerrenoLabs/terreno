@@ -1,6 +1,6 @@
 import type {FC, ReactElement, ReactNode} from "react";
 import {useCallback, useEffect, useRef, useState} from "react";
-import {Platform, Pressable, type TextInput, View} from "react-native";
+import {Platform, Pressable, type TextInputInstance, View} from "react-native";
 
 import {Avatar} from "../Avatar";
 import {Box} from "../Box";
@@ -276,7 +276,7 @@ export const LoginScreen: FC<LoginScreenProps> = ({
   }, []);
 
   const formRef = useRef<FormContainerHandle>(null);
-  const inputRefs = useRef<Record<string, TextInput | null>>({});
+  const inputRefs = useRef<Record<string, TextInputInstance | null>>({});
   const isSubmittingRef = useRef(false);
 
   const handlePasskeyPress = useCallback(async (): Promise<void> => {

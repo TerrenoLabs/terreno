@@ -20,7 +20,6 @@ export interface UseHarnessApprovalsResult {
     reason?: string;
   }) => Promise<HarnessApprovalRow>;
   error: unknown;
-  isAvailable: boolean;
   isDeciding: boolean;
   isFetching: boolean;
   isLoading: boolean;
@@ -44,7 +43,6 @@ export const useHarnessApprovals = ({
   const query = useAdminRpcQuery<unknown>({
     providesTags: INVALIDATES,
     rpc,
-    skip: !rpc,
     url: `${root}/approvals?limit=${HARNESS_APPROVALS_PAGE_SIZE}`,
   });
   const [trigger, {isLoading: isDeciding}] = useAdminRpcMutation(rpc, {
@@ -77,7 +75,6 @@ export const useHarnessApprovals = ({
     decide,
     error: query.error,
     hasMore: Boolean((query.data as {more?: unknown} | undefined)?.more),
-    isAvailable: Boolean(rpc),
     isDeciding,
     isFetching: query.isFetching,
     isLoading: query.isLoading,

@@ -17,8 +17,10 @@ Help debug an issue in a Terreno application.
 ### Frontend Issues
 1. **Check console**: Look for errors in browser/React Native console
 2. **Network requests**: Verify API calls in Network tab
-3. **Redux state**: Check Redux DevTools for state changes
-4. **SDK regeneration**: Run `bun run sdk` after backend changes
+3. **Local data state**: Inspect synced collections, the outbox, and conflicts with the
+   `get_syncdb_state` local MCP tool (or `terreno state`); the client needs `debug: true`
+4. **SDK regeneration**: Run `bun run api-sdk` (request hooks in `store/apiSdk.ts`) after backend
+   changes
 5. **Component props**: Verify required props are passed
 
 ### Common Issues
@@ -40,7 +42,7 @@ Help debug an issue in a Terreno application.
 
 #### "Network request failed"
 - Check backend is running
-- Verify `baseUrl` in RTK config
+- Verify `baseUrl` from `@terreno/syncdb/config` (`EXPO_PUBLIC_API_URL`, `extra.BASE_URL`)
 - Check CORS settings
 
 #### Form validation errors
@@ -50,7 +52,7 @@ Help debug an issue in a Terreno application.
 
 ### Debugging Tools
 - **Backend**: Use `logger.debug()` for detailed logging
-- **Frontend**: Use React DevTools and Redux DevTools
+- **Frontend**: Use React DevTools, `get_syncdb_state` / `syncdb_snapshot`, and `read_logs`
 - **API**: Use Postman or curl to test endpoints directly
 - **Database**: Use MongoDB Compass to inspect data
 

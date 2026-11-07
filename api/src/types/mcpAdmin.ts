@@ -20,7 +20,7 @@ export interface McpRequestLogDocument extends mongoose.Document {
   oauthClientId?: string;
   oauthFamilyId?: string;
   outcome: McpRequestLogOutcome;
-  serviceTokenId?: mongoose.Types.ObjectId;
+  serviceTokenId?: string;
   toolName: string;
   updated: Date;
   userId?: mongoose.Types.ObjectId;

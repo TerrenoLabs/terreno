@@ -147,6 +147,27 @@ export const isExecutorConflictError = (error: unknown): error is ExecutorConfli
 const stubRequest = (user?: User): express.Request => ({user}) as unknown as express.Request;
 
 /**
+ * The request a hook sees for an update or delete of `id`. Over HTTP it is the real request. Over
+ * sync it is a stub (or the socket's `{user}` object) with no `params`, so `params.id` is filled
+ * in, as in the REST routes: hooks that read `req.params.id` must work over sync too.
+ */
+const requestForId = ({
+  id,
+  req,
+  user,
+}: {
+  id: string;
+  req?: express.Request;
+  user?: User;
+}): express.Request => {
+  const request = req ?? stubRequest(user);
+  if (request.params === undefined) {
+    request.params = {id};
+  }
+  return request;
+};
+
+/**
  * True for the Mongoose error thrown when an `optimisticConcurrency` save matched no
  * document (its `__v` filter failed) — i.e. another write landed since the load.
  * Name-checked rather than `instanceof` for the same ES5-dist reason as
@@ -523,7 +544,7 @@ export const executeUpdate = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&
@@ -805,7 +826,7 @@ export const executeDelete = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&

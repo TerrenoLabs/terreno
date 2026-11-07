@@ -1,6 +1,6 @@
 import {DemoCard} from "@components/DemoCard";
 import {DemoCatalogFilters} from "@components/DemoCatalogFilters";
-import {DemoConfig} from "@config";
+import {ListedDemoConfig} from "@config";
 import {Box, Button, Heading, Text} from "@terreno/ui";
 import {router, useNavigation} from "expo-router";
 import type React from "react";
@@ -18,7 +18,7 @@ export const DemoHomePage: React.FC<{
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const visibleConfigs = useMemo(
-    () => DemoConfig.filter((config) => matchesDemoSearch(config, query, category)),
+    () => ListedDemoConfig.filter((config) => matchesDemoSearch(config, query, category)),
     [category, query]
   );
   // Keep the browser title aligned with the demo index route.

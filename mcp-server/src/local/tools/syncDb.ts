@@ -78,11 +78,6 @@ const getLocalRegistry = (): SyncDbBridgeRegistry | undefined => {
   ).__TERRENO_SYNCDB__;
 };
 
-/** True when a SyncDB debug registry lives in this process (no CDP needed). */
-export const hasLocalSyncDbRegistry = (): boolean => {
-  return getLocalRegistry() !== undefined;
-};
-
 const redactValue = (value: unknown, key?: string): unknown => {
   if (key && SENSITIVE_FIELD_PATTERN.test(key)) {
     return REDACTED_VALUE;
@@ -192,10 +187,10 @@ const inspectOptions = (args: GetSyncDbStateArgs): Record<string, unknown> => ({
   ...(typeof args.limit === "number" ? {limit: args.limit} : {}),
 });
 
-export type SyncDbStateProbe = {found: true; state: unknown} | {found: false; reason: string};
+type SyncDbStateProbe = {found: true; state: unknown} | {found: false; reason: string};
 
 /** Reads redacted SyncDB state in-process or over CDP, reporting why when no client is reachable. */
-export const probeSyncDbState = async (args: GetSyncDbStateArgs): Promise<SyncDbStateProbe> => {
+const probeSyncDbState = async (args: GetSyncDbStateArgs): Promise<SyncDbStateProbe> => {
   try {
     const {result} = await callBridge({
       args: inspectOptions(args),

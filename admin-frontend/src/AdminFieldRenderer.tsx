@@ -31,7 +31,6 @@ export const AdminFieldRenderer: React.FC<AdminFieldRendererProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   modelConfigs,
   parentFormState,
   refRenderers,
@@ -43,7 +42,6 @@ export const AdminFieldRenderer: React.FC<AdminFieldRendererProps> = ({
   if (fieldConfig.type === "array" && fieldConfig.items) {
     return (
       <AdminNestedArrayField
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
@@ -65,7 +63,6 @@ export const AdminFieldRenderer: React.FC<AdminFieldRendererProps> = ({
   if (isNestedObjectField(fieldConfig) && fieldConfig.items) {
     const renderSubField = (sub: AdminNestedObjectSubFieldArgs): React.ReactElement => (
       <AdminFieldRenderer
-        api={api}
         apiBase={apiBase}
         autocompleteFields={autocompleteFields}
         baseUrl={baseUrl}
@@ -98,7 +95,6 @@ export const AdminFieldRenderer: React.FC<AdminFieldRendererProps> = ({
 
   return (
     <AdminFieldRendererCore
-      api={api}
       apiBase={apiBase}
       autocompleteFields={autocompleteFields}
       baseUrl={baseUrl}

@@ -1,6 +1,14 @@
 import type React from "react";
 import {useMemo, useRef} from "react";
-import {Platform, Pressable, Text as RNText, ScrollView, TextInput, View} from "react-native";
+import {
+  Platform,
+  Pressable,
+  Text as RNText,
+  ScrollView,
+  TextInput,
+  type TextInputInstance,
+  View,
+} from "react-native";
 
 import {Box} from "./Box";
 import type {ErrorTextProps, HelperTextProps} from "./Common";
@@ -55,7 +63,7 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
 }) => {
   const {theme} = useTheme();
   const isWeb = Platform.OS === "web";
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputInstance>(null);
 
   const monoFont = useMemo(
     () => (isWeb ? "monospace" : Platform.select({android: "monospace", ios: "Menlo"})),

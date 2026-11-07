@@ -183,7 +183,7 @@ describe("AI Routes", () => {
   beforeAll(async () => {
     await ensureTestUsers();
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   beforeEach(() => {
@@ -206,7 +206,7 @@ describe("AI Routes", () => {
     resetObservabilityApp();
     await AIRequest.deleteMany({});
     await FileAttachment.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("GPT History routes", () => {
@@ -1781,9 +1781,10 @@ describe("AI Routes", () => {
         .patch(`/gpt/histories/${historyId}`)
         .send({"prompts.0.content.1.gcsKey": plantedKey});
       expect(dotted.status).toBe(200);
-      const prompt = await agent
-        .post(`/gpt/histories/${historyId}/prompts`)
-        .send({prompts: {content: [plantedPart], text: "g", type: "user"}});
+      const latest = await agent.get(`/gpt/histories/${historyId}`);
+      const prompt = await agent.patch(`/gpt/histories/${historyId}`).send({
+        prompts: [...latest.body.data.prompts, {content: [plantedPart], text: "g", type: "user"}],
+      });
       expect(prompt.status).toBe(200);
 
       const history = await GptHistory.findById(historyId);

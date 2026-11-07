@@ -1,7 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
-import {fakeFetch} from "../../__tests__/fakeFetch.js";
 import {lastError, readLogs} from "../tools/readLogs.js";
-import {getClientState, navigate} from "../tools/runtime.js";
+import {navigate} from "../tools/runtime.js";
 import {
   cdpRuntimeEvaluate,
   ensureCdpConnected,
@@ -54,15 +53,7 @@ class FakeWebSocket {
       method: string;
       params?: {expression?: string};
     };
-    const evaluateValue = request.params?.expression?.includes("__TERRENO_STORE__")
-      ? {
-          ok: true,
-          state: {
-            betterAuth: {userId: "cdp-user"},
-            "terreno-rtk": {mutations: {}, queries: {}},
-          },
-        }
-      : 2;
+    const evaluateValue = 2;
     const result =
       request.method === "Runtime.evaluate"
         ? {result: {result: {value: evaluateValue}}}
@@ -91,18 +82,16 @@ describe("Metro development session", () => {
     FakeWebSocket.instances = [];
     process.env.TERRENO_METRO_URL = "http://localhost:8082";
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
-    globalThis.fetch = fakeFetch(
-      async (): Promise<Response> =>
-        new Response(
-          JSON.stringify([
-            {
-              title: "Hermes app",
-              webSocketDebuggerUrl: "ws://localhost:8082/cdp",
-            },
-          ]),
-          {status: 200}
-        )
-    );
+    globalThis.fetch = (async (): Promise<Response> =>
+      new Response(
+        JSON.stringify([
+          {
+            title: "Hermes app",
+            webSocketDebuggerUrl: "ws://localhost:8082/cdp",
+          },
+        ]),
+        {status: 200}
+      )) as unknown as typeof fetch;
   });
 
   afterEach((): void => {
@@ -155,12 +144,6 @@ describe("Metro development session", () => {
     expect(entry).toMatchObject({level: "warn", message: "hello", source: "app"});
 
     expect(await cdpRuntimeEvaluate("1 + 1", true)).toEqual({value: 2});
-    const state = JSON.parse(await getClientState({slice: "auth"})) as {
-      layer?: string;
-      rtk?: {auth?: {userId?: string}};
-    };
-    expect(state.layer).toBe("rtk");
-    expect(state.rtk?.auth?.userId).toBe("cdp-user");
     const logs = JSON.parse(await readLogs({sources: ["app"]})) as {
       entries: Array<{message?: string}>;
     };
@@ -171,9 +154,8 @@ describe("Metro development session", () => {
   });
 
   it("reports an unreachable Metro target", async (): Promise<void> => {
-    globalThis.fetch = fakeFetch(
-      async (): Promise<Response> => new Response("unavailable", {status: 503})
-    );
+    globalThis.fetch = (async (): Promise<Response> =>
+      new Response("unavailable", {status: 503})) as unknown as typeof fetch;
     const result = await ensureCdpConnected();
     expect(result.ok).toBe(false);
     expect(result.detail).toContain("503");

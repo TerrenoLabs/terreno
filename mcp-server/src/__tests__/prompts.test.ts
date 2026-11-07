@@ -189,6 +189,7 @@ describe("prompts", () => {
 
       expect(content).toContain("CreateProductScreen");
       expect(content).toContain("useCreateProductMutation");
+      expect(content).toContain('from "@/store/apiSdk"');
       expect(content).toContain("title: text");
       expect(content).toContain("price: number");
       expect(content).toContain("description: textarea");
@@ -257,10 +258,14 @@ describe("prompts", () => {
 
       const content = result.messages[0].content.text;
 
-      expect(content).toContain("generateBetterAuthSlice");
-      expect(content).toContain("selectBetterAuthUserId");
-      expect(content).toContain("syncBetterAuthSession");
+      expect(content).toContain('import {useSession} from "@terreno/syncdb/auth";');
+      expect(content).toContain("SessionProvider");
+      expect(content).toContain("createApiClient");
+      expect(content).toContain("await refresh();");
+      expect(content).toContain("await logout();");
       expect(content).toContain("isAuthenticated");
+      expect(content).not.toContain("@terreno/rtk");
+      expect(content).not.toContain("generateBetterAuthSlice");
     });
   });
 

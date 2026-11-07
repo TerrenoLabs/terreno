@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in: manage accounts</title>
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&amp;family=Titillium+Web:wght@600;700&amp;display=swap">
+<style>
+body{margin:0;background:#e9eef0;display:flex;justify-content:center;padding:24px 0}
+a{color:#0a7092}a:hover{color:#095a75}
+.screen{--surface-base:#ffffff;--surface-alt:#f2f2f2;--surface-primary:#0e9dcd;--surface-sec-xl:#f2f9fa;--surface-sec-l:#b6cdd5;--surface-sec-xd:#092e3a;--text-primary:#1c1c1c;--text-secondary:#686868;--text-extraLight:#949494;--text-link:#0a7092;--text-error:#bd1111;--text-success:#1a7f36;--text-sec-d:#092e3a;--border-default:#cdcdcd;--border-hover:#d9d9d9;--status-active:#3ea45c;box-sizing:border-box;width:390px;min-height:100%;padding:56px 24px 32px;background:var(--surface-base);color:var(--text-primary);font-family:Nunito,system-ui,sans-serif;display:flex;flex-direction:column;gap:24px}
+.logo{width:48px;height:48px;border-radius:16px;background:var(--surface-sec-xd);color:#fff;display:grid;place-items:center;font:700 12px/1 Nunito,sans-serif}
+.h1{margin:0;font:700 32px/38px "Titillium Web",sans-serif}
+.sub{margin:4px 0 0;font-size:16px;line-height:24px;color:var(--text-secondary)}
+.sec-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.sec-title{margin:0;font:700 16px/24px "Titillium Web",sans-serif}
+.link{font:700 16px/24px Nunito,sans-serif;color:var(--text-link);text-decoration:none;background:none;border:0;padding:0;cursor:pointer}
+.list{border:1px solid var(--border-default);border-radius:16px;overflow:hidden}
+.acct{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:12px 8px 12px 16px;box-sizing:border-box;background:var(--surface-base)}
+.acct+.acct{border-top:1px solid var(--border-hover)}
+.avatar{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:#fff;font:700 18px/1 "Titillium Web",sans-serif}
+.acct-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.acct-name{font-weight:700;font-size:16px;line-height:22px}
+.acct-meta{font-size:12px;line-height:16px;color:var(--text-secondary);display:flex;align-items:center;gap:6px}
+.remove{flex:none;height:44px;padding:0 12px;border:0;border-radius:360px;background:none;font:700 16px/1 Nunito,sans-serif;color:var(--text-error);cursor:pointer}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--status-active)}
+.signed{flex:none;padding:0 12px;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.note{margin:0;font-size:12px;line-height:16px;color:var(--text-secondary)}
+.foot{margin-top:auto;text-align:center;font-size:16px;line-height:24px;color:var(--text-secondary)}
+</style>
+<main class="screen">
+  <div class="logo" aria-label="Your app logo">LOGO</div>
+  <div>
+    <h1 class="h1">Welcome back</h1>
+    <p class="sub">Pick up where you left off.</p>
+  </div>
+
+  <section aria-labelledby="ma-acc">
+    <div class="sec-head">
+      <h2 id="ma-acc" class="sec-title">Accounts on this device</h2>
+      <button class="link" type="button">Done</button>
+    </div>
+    <div class="list">
+      <div class="acct">
+        <span class="avatar" style="background: #0a7092" aria-hidden="true">J</span>
+        <span class="acct-body">
+          <span class="acct-name">Josh Gachnang</span>
+          <span class="acct-meta"><span class="dot" aria-hidden="true"></span>Signed in · j***@n***.io</span>
+        </span>
+        <span class="signed">Can't remove</span>
+      </div>
+      <div class="acct">
+        <span class="avatar" style="background: #2b6072" aria-hidden="true">J</span>
+        <span class="acct-body">
+          <span class="acct-name">Josh Gachnang</span>
+          <span class="acct-meta">Apple · j***@n***.io</span>
+        </span>
+        <button class="remove" type="button" aria-label="Remove Josh Gachnang, Apple, from this device">Remove</button>
+      </div>
+      <div class="acct">
+        <span class="avatar" style="background: #b14202" aria-hidden="true">J</span>
+        <span class="acct-body">
+          <span class="acct-name">Josh Gachnang</span>
+          <span class="acct-meta">Google · j***@g***.com</span>
+        </span>
+        <button class="remove" type="button" aria-label="Remove Josh Gachnang, Google, from this device">Remove</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="note">Removing an account only forgets it on this device. It doesn't sign you out anywhere else or delete the account.</p>
+
+  <p class="foot">New here? <a href="#">Create an account</a></p>
+</main>
+</body>
+</html>

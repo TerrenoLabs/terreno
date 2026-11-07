@@ -21,7 +21,7 @@
 #
 # This workflow performs test enhancements for the Terreno monorepo by systematically improving
 # test quality and coverage. The repo is a Bun/TypeScript monorepo with workspace packages:
-# api (Express/Mongoose), ui (React Native components), rtk (Redux Toolkit Query), demo,
+# api (Express/Mongoose), ui (React Native components), syncdb (local-first data layer and request client), demo,
 # example-frontend (Expo), example-backend (Express), and mcp-server.
 # Operates in three phases: research testing landscape and create coverage plan, infer build
 # and coverage steps, then implement new tests targeting untested code. Generates coverage
@@ -1113,7 +1113,7 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           WORKFLOW_NAME: "Daily Test Improver"
-          WORKFLOW_DESCRIPTION: "This workflow performs test enhancements for the Terreno monorepo by systematically improving\ntest quality and coverage. The repo is a Bun/TypeScript monorepo with workspace packages:\napi (Express/Mongoose), ui (React Native components), rtk (Redux Toolkit Query), demo,\nexample-frontend (Expo), example-backend (Express), and mcp-server.\nOperates in three phases: research testing landscape and create coverage plan, infer build\nand coverage steps, then implement new tests targeting untested code. Generates coverage\nreports, identifies gaps, creates comprehensive test suites, and submits draft PRs."
+          WORKFLOW_DESCRIPTION: "This workflow performs test enhancements for the Terreno monorepo by systematically improving\ntest quality and coverage. The repo is a Bun/TypeScript monorepo with workspace packages:\napi (Express/Mongoose), ui (React Native components), syncdb (local-first data layer and request client), demo,\nexample-frontend (Expo), example-backend (Express), and mcp-server.\nOperates in three phases: research testing landscape and create coverage plan, infer build\nand coverage steps, then implement new tests targeting untested code. Generates coverage\nreports, identifies gaps, creates comprehensive test suites, and submits draft PRs."
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |

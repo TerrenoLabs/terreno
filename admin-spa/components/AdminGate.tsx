@@ -1,20 +1,19 @@
-import {useAdminConfig} from "@terreno/admin-frontend";
-import {selectBetterAuthIsAuthenticated, selectBetterAuthIsLoading} from "@terreno/rtk";
+import {type AdminConfigResponse, useAdminRpc, useAdminRpcQuery} from "@terreno/admin-frontend";
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Spinner} from "@terreno/ui";
 import {useGlobalSearchParams, usePathname, useRouter} from "expo-router";
 import React, {useEffect, useMemo} from "react";
-import {useDispatch, useSelector} from "react-redux";
-import {terrenoApi} from "../store/sdk";
 import {useAppConfig} from "./AppConfigGate";
+import {AdminGateConfigProvider} from "./adminGateConfig";
 import {
   type AdminGateDecision,
   buildRoutePath,
   isForbiddenAdminConfigError,
   resolveAdminGate,
 } from "./adminGateUtils";
-import {useAuth} from "./StoreProvider";
+import {useSsrPayload} from "./ssrPayload";
 
-interface RtkError {
+interface AdminRequestError {
   status?: number;
 }
 
@@ -30,39 +29,54 @@ const LoadingScreen: React.FC = () => (
 );
 
 /**
- * Auth + authorization gate. Syncs the better-auth session on mount, then:
- * - unauthenticated → redirect to /login
+ * Auth + authorization gate. Reads the Better Auth session from `SessionProvider` (which
+ * syncs it on mount and whenever Better Auth's session signal fires), then:
+ * - unauthenticated → redirect to /login (signed-in-only routes keep a `returnTo`)
  * - authenticated but NOT an admin (admin API returns 403) → redirect to /forbidden
- * - authenticated admin sitting on /login or /forbidden → redirect to /
- * - authenticated user on /login?returnTo=<in-app path> → redirect to that path
- * - signed-in-only routes (MCP OAuth consent) → any signed-in user, no admin check;
- *   signed-out users go to /login?returnTo=<this route> and come back
+ * - signed in on /login with a safe `returnTo` → go there; an admin otherwise → /
+ * - a server render that already found this session forbidden skips the probe
  *
  * Admin status is determined by the backend's own authorization on `${adminApiBase}/config`
  * (200 = admin, 403 = forbidden), since the better-auth session does not carry the
  * Terreno `admin` flag.
  */
 export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => {
-  const dispatch = useDispatch();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const {appConfig} = useAppConfig();
-  const {syncSession} = useAuth();
-
-  const isAuthLoading = useSelector(selectBetterAuthIsLoading);
-  const isAuthenticated = useSelector(selectBetterAuthIsAuthenticated);
+  const {isAuthenticated, isLoading: isAuthLoading, userId} = useSession();
+  const payload = useSsrPayload();
+  // The server already found this session forbidden: no need to probe `/admin/config` again.
+  const isForbiddenByServer =
+    isAuthenticated &&
+    payload?.adminConfigStatus === 403 &&
+    payload.session?.userId !== undefined &&
+    payload.session.userId === userId;
 
   const apiBase = appConfig.adminApiBasePath ?? "/admin";
-  const {config, isLoading: isConfigLoading, error} = useAdminConfig(terrenoApi, apiBase);
-  const status = (error as RtkError | undefined)?.status;
-  const isForbidden = isForbiddenAdminConfigError({
-    error,
-    isAuthenticated,
-    isConfigLoading,
-    status,
+  const rpc = useAdminRpc();
+  // Probe `/admin/config` only with a session so signing in starts a fresh request.
+  const configQuery = useAdminRpcQuery<AdminConfigResponse>({
+    rpc,
+    skip: !isAuthenticated || isForbiddenByServer,
+    url: `${apiBase}/config`,
   });
+  const {data: config, error} = configQuery;
+  // A signed-in session has no answer yet until the probe resolves or fails.
+  const isConfigLoading =
+    !isForbiddenByServer && (configQuery.isLoading || (isAuthenticated && !config && !error));
+  const status = (error as AdminRequestError | null | undefined)?.status;
+  const isForbidden =
+    isForbiddenByServer ||
+    isForbiddenAdminConfigError({
+      error,
+      isAuthenticated,
+      isConfigLoading,
+      status,
+    });
   const isAdmin = isAuthenticated && !isConfigLoading && !error && Boolean(config);
+
   const currentPath = buildRoutePath({params: searchParams, pathname});
   const decision = useMemo(
     (): AdminGateDecision =>
@@ -90,11 +104,6 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
     ]
   );
 
-  // Sync the better-auth session into Redux once on mount.
-  useEffect(() => {
-    void syncSession(dispatch);
-  }, [dispatch, syncSession]);
-
   // Drive redirects from auth + authorization state.
   useEffect(() => {
     if (decision.kind === "redirect") {
@@ -103,10 +112,20 @@ export const AdminGate: React.FC<{children: React.ReactNode}> = ({children}) => 
   }, [decision, router]);
 
   if (decision.kind === "loading") {
-    return <LoadingScreen />;
+    // The server-rendered login form stays on screen while the session resolves.
+    return pathname === "/login" ? (
+      <AdminGateConfigProvider config={null}>{children}</AdminGateConfigProvider>
+    ) : (
+      <LoadingScreen />
+    );
   }
   if (decision.kind === "redirect" && !decision.render) {
     return <LoadingScreen />;
   }
-  return children;
+  // Only a loaded config is shared; login, forbidden, and signed-in-only routes get none.
+  return (
+    <AdminGateConfigProvider config={isAdmin ? (config ?? null) : null}>
+      {children}
+    </AdminGateConfigProvider>
+  );
 };

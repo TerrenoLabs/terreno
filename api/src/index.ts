@@ -114,10 +114,14 @@ export {generateInputSchema, generateToolDescription} from "./mcp/schemaGenerato
 export {type MCPServerOptions, mountMCPServer} from "./mcp/server";
 export {
   addMcpServiceTokenRoutes,
+  createMcpServiceTokenRouter,
   MAX_ACTIVE_MCP_SERVICE_TOKENS,
+  MCP_SERVICE_TOKENS_ROUTE_PATH,
+  MCP_SERVICE_TOKENS_SYNC_COLLECTION,
   type McpServiceTokenRoutesOptions,
   type McpServiceTokensAppOption,
   resolveMcpServiceTokensOption,
+  toPublicMcpServiceToken,
 } from "./mcp/serviceTokens";
 export {
   generateAllTools,
@@ -134,6 +138,7 @@ export type {
   MCPToolResult,
 } from "./mcp/types";
 export * from "./middleware";
+export * from "./migrations/builtin/mcpServiceTokenStringIds";
 export * from "./migrations/generate";
 export * from "./migrations/load";
 export * from "./migrations/lock";
@@ -254,30 +259,10 @@ export {
 } from "./realtime/changeStreamWatcher";
 export {matchesQuery} from "./realtime/queryMatcher";
 export {
-  addQuerySubscription,
-  clearQueryStore,
-  computeQueryId,
-  getQuerySubscriptionsForCollection,
-  removeAllSocketQueries,
-  removeQuerySubscription,
-} from "./realtime/queryStore";
-export {
   installRealtimeSocketHandlers,
-  MAX_DOCUMENT_SUBSCRIPTIONS,
-  MAX_MODEL_SUBSCRIPTIONS,
-  MAX_QUERY_SUBSCRIPTIONS,
   RealtimeApp,
   type RealtimeSocketLike,
 } from "./realtime/realtimeApp";
-export {
-  clearRealtimeRegistry,
-  findRegistryEntryByCollection,
-  findRegistryEntryByRoutePath,
-  getRealtimeRegistry,
-  type RealtimeRegistryEntry,
-  registerRealtime,
-  updateRealtimeRegistryOptions,
-} from "./realtime/registry";
 export {
   DEFAULT_SESSION_REVALIDATION_INTERVAL_MS,
   loadFullUserForSocket,
@@ -304,14 +289,7 @@ export {
   type SocketDataBag,
   type SocketWithDecodedToken,
 } from "./realtime/socketUser";
-export type {
-  ChangeStreamConfig,
-  DocumentSubscription,
-  QuerySubscription,
-  RealtimeAppOptions,
-  RealtimeConfig,
-  RealtimeEvent,
-} from "./realtime/types";
+export type {ChangeStreamConfig, RealtimeAppOptions} from "./realtime/types";
 export * from "./requestContext";
 export {
   type DescribeModelForRouterOptions,
@@ -333,6 +311,7 @@ export * from "./scriptRunner";
 export {adminBodyFieldsToStrip, scrubAdminFields, stripAdminBodyFields} from "./scrubAdminFields";
 export * from "./secretProviders";
 export * from "./seedRunner";
+export * from "./sentryV10DataCollection";
 export * from "./sync/adminBroadcastScope";
 export * from "./sync/adminWindowMutation";
 export * from "./sync/executors";

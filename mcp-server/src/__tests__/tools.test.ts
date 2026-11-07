@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {assert} from "chai";
-import {handleToolCall, tools} from "../tools.js";
+import {handleToolCall, toCollectionName, tools} from "../tools.js";
 
 // Run the CLI source with bun so the test does not depend on install-time bin links.
 const blocksCli = fileURLToPath(new URL("../../../blocks/src/cli.ts", import.meta.url));
@@ -212,11 +212,13 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductListScreen");
-      expect(content).toContain("useGetProductsQuery");
-      expect(content).toContain("isLoading");
-      expect(content).toContain("error");
-      expect(content).toContain("refetch");
-      expect(content).toContain("ScrollView");
+      expect(content).toContain('import { useQuery, useSyncStatus } from "@terreno/syncdb/react";');
+      expect(content).toContain('useQuery<ProductRow>("products")');
+      expect(content).toContain("item.title");
+      expect(content).toContain("isSyncing");
+      expect(content).not.toContain("openApiSdk");
+      expect(content).toContain("SYNC_COLLECTIONS");
+      expect(content).toContain("@/store/apiSdk");
     });
 
     test("should generate form screen", async () => {
@@ -230,7 +232,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("CreateProductScreen");
-      expect(content).toContain("useCreateProductMutation");
+      expect(content).toContain('const {create} = useMutate("products");');
+      expect(content).toContain("create({data: { title, description }});");
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useState");
       expect(content).toContain("TextField");
       expect(content).toContain("handleSubmit");
@@ -248,7 +252,8 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductDetailScreen");
-      expect(content).toContain("useGetProductQuery");
+      expect(content).toContain('useEntity<ProductRow>("products", id ?? "")');
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useLocalSearchParams");
       expect(content).toContain("item.title");
       expect(content).toContain("item.price");
@@ -646,6 +651,26 @@ describe("tools", () => {
     });
   });
 
+  describe("toCollectionName", () => {
+    test("derives kebab-case plural collection names from model names", () => {
+      expect(toCollectionName("Product")).toBe("products");
+      expect(toCollectionName("TodoItem")).toBe("todo-items");
+      expect(toCollectionName("Category")).toBe("categories");
+      expect(toCollectionName("Day")).toBe("days");
+      expect(toCollectionName("Settings")).toBe("settings");
+    });
+
+    test("screen tool honors an explicit collection", async () => {
+      const result = await handleToolCall("terreno_generate_screen", {
+        collection: "catalog-products",
+        modelName: "Product",
+        name: "Catalog",
+        type: "list",
+      });
+      expect(result.content[0].text).toContain('useQuery<ProductRow>("catalog-products")');
+    });
+  });
+
   describe("terreno_install_admin", () => {
     test("should generate admin panel files and instructions", async () => {
       const result = await handleToolCall("terreno_install_admin", {
@@ -667,6 +692,14 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("# Install Admin Panel");
+      expect(content).toContain("frontend/app/(tabs)/admin/_layout.tsx");
+      expect(content).toContain("<AdminProvider");
+      expect(content).toContain("getAuthHeaders={getAdminAuthHeaders}");
+      expect(content).toContain('import {baseUrl} from "@terreno/syncdb/config";');
+      expect(content).toContain('import {authProvider} from "@/store/syncdb";');
+      expect(content).toContain("await authProvider.getToken()");
+      expect(content).not.toContain("@terreno/rtk");
+      expect(content).not.toContain("api={");
       expect(content).toContain("frontend/app/(tabs)/admin/index.tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model].tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model]/create.tsx");

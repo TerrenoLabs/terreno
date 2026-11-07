@@ -317,7 +317,7 @@ Expo plugin. The provider still returns to the backend's own
    `@better-auth/expo`, which serves `GET {basePath}/expo-authorization-proxy`. The app opens
    that URL in the browser; it sets the OAuth state cookie there and redirects to the provider.
 2. **Give the app a scheme.** Set `expo.scheme` in `app.json` (`frontend` in the example) and
-   pass the same value to `createBetterAuthClient({scheme})` from `@terreno/rtk`.
+   pass the same value to `createBetterAuthClient({scheme})` from `@terreno/syncdb/auth`.
 3. **List the scheme in `trustedOrigins`**, as `frontend://`. After the callback, the backend
    redirects the browser to the app's `callbackURL` (`frontend://.../login`), with the session in
    a `cookie` query parameter. Better Auth refuses a callback URL that matches no trusted origin.

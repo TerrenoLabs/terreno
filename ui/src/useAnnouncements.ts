@@ -1,5 +1,7 @@
-import {getAnnouncementBuildVersion} from "./announcementBuildVersion";
-import {getAnnouncementPlatform} from "./announcementPlatform";
+import {useCallback} from "react";
+
+import {buildAnnouncementParams} from "./announcementPlatform";
+import {type TerrenoRequestClient, unwrapDataEnvelope, useClientQuery} from "./requestClient";
 
 export type AnnouncementDisplayMode = "banner" | "feed" | "modal";
 
@@ -23,128 +25,70 @@ export interface PendingAnnouncementsResponse {
   remainingCount: number;
 }
 
-interface AnnouncementsResponse<T> {
-  data?: T;
-}
-
-interface AnnouncementsQueryBuilder {
-  query: (options: {
-    providesTags?: string[];
-    query: (args?: {page?: number; limit?: number}) => string;
-  }) => unknown;
-}
-
-interface AnnouncementsHookState<T> {
-  data?: T | AnnouncementsResponse<T>;
+export interface UseAnnouncementsResult {
+  /** Error from the pending-announcement request (the feed reports `feedError`). */
   error: unknown;
+  feed: AnnouncementPublic[];
+  feedError: unknown;
+  isFeedLoading: boolean;
   isLoading: boolean;
-  refetch: () => void | Promise<void>;
+  isPendingLoading: boolean;
+  pending: PendingAnnouncementsResponse | undefined;
+  refetch: () => Promise<void>;
+  refetchFeed: () => Promise<void>;
 }
 
-interface AnnouncementsEnhancedApi {
-  useGetPendingAnnouncementsQuery: () => AnnouncementsHookState<PendingAnnouncementsResponse>;
-  useGetAnnouncementFeedQuery: (args?: {
-    page?: number;
-    limit?: number;
-  }) => AnnouncementsHookState<AnnouncementPublic[]>;
-}
-
-interface AnnouncementsApiWithTags {
-  injectEndpoints: (options: {
-    endpoints: (build: AnnouncementsQueryBuilder) => {
-      getAnnouncementFeed: unknown;
-      getPendingAnnouncements: unknown;
-    };
-    overrideExisting: boolean;
-  }) => AnnouncementsEnhancedApi;
-}
-
-interface AnnouncementsApi {
-  enhanceEndpoints: (options: {addTagTypes: string[]}) => AnnouncementsApiWithTags;
-}
-
-const enhancedApiCache = new WeakMap<AnnouncementsApi, Map<string, AnnouncementsEnhancedApi>>();
-
-const buildAnnouncementQuerySuffix = (): string => {
-  const platform = getAnnouncementPlatform();
-  const version = getAnnouncementBuildVersion();
-  const versionParam = version === undefined ? "" : `&version=${version}`;
-  return `platform=${platform}${versionParam}`;
-};
-
-const getEnhancedApi = (api: AnnouncementsApi, base: string): AnnouncementsEnhancedApi => {
-  let byBase = enhancedApiCache.get(api);
-  if (!byBase) {
-    byBase = new Map();
-    enhancedApiCache.set(api, byBase);
-  }
-  const cached = byBase.get(base);
-  if (cached) {
-    return cached;
-  }
-  const apiWithTags = api.enhanceEndpoints({
-    addTagTypes: ["PendingAnnouncements", "AnnouncementFeed"],
-  });
-  const enhanced = apiWithTags.injectEndpoints({
-    endpoints: (build) => ({
-      getAnnouncementFeed: build.query({
-        providesTags: ["AnnouncementFeed"],
-        query: (args?: {page?: number; limit?: number}) => {
-          const page = args?.page ?? 1;
-          const limit = args?.limit ?? 20;
-          return `${base}/announcements/feed?page=${page}&limit=${limit}&${buildAnnouncementQuerySuffix()}`;
-        },
-      }),
-      getPendingAnnouncements: build.query({
-        providesTags: ["PendingAnnouncements"],
-        query: () => {
-          return `${base}/announcements/pending?${buildAnnouncementQuerySuffix()}`;
-        },
-      }),
-    }),
-    overrideExisting: false,
-  });
-  byBase.set(base, enhanced);
-  return enhanced;
-};
-
+/**
+ * Fetch the current pending announcement (`GET /announcements/pending`) and the
+ * announcement feed (`GET /announcements/feed`).
+ */
 export const useAnnouncements = (
-  api: AnnouncementsApi,
+  client: TerrenoRequestClient,
   baseUrl?: string,
   feedOptions?: {page?: number; limit?: number}
-) => {
+): UseAnnouncementsResult => {
   const base = baseUrl || "";
-  const enhancedApi = getEnhancedApi(api, base);
-  const {
-    data: pendingData,
-    isLoading: isPendingLoading,
-    error: pendingError,
-    refetch: refetchPending,
-  } = enhancedApi.useGetPendingAnnouncementsQuery();
-  const {
-    data: feedData,
-    isLoading: isFeedLoading,
-    error: feedError,
-    refetch: refetchFeed,
-  } = enhancedApi.useGetAnnouncementFeedQuery(feedOptions);
+  const page = feedOptions?.page ?? 1;
+  const limit = feedOptions?.limit ?? 20;
 
-  const pendingPayload =
-    (pendingData as AnnouncementsResponse<PendingAnnouncementsResponse> | undefined)?.data ??
-    (pendingData as PendingAnnouncementsResponse | undefined);
-  const feedPayload =
-    (feedData as AnnouncementsResponse<AnnouncementPublic[]> | undefined)?.data ??
-    (feedData as AnnouncementPublic[] | undefined) ??
-    [];
+  const fetchPending = useCallback(async (): Promise<PendingAnnouncementsResponse | undefined> => {
+    const result = await client.request<unknown>({
+      params: buildAnnouncementParams(),
+      url: `${base}/announcements/pending`,
+    });
+    return unwrapDataEnvelope<PendingAnnouncementsResponse>(result);
+  }, [base, client]);
+
+  const fetchFeed = useCallback(async (): Promise<AnnouncementPublic[]> => {
+    const result = await client.request<AnnouncementPublic[] | {data?: AnnouncementPublic[]}>({
+      params: {limit, page, ...buildAnnouncementParams()},
+      url: `${base}/announcements/feed`,
+    });
+    return Array.isArray(result) ? result : (result?.data ?? []);
+  }, [base, client, limit, page]);
+
+  const {
+    data: pending,
+    error,
+    isLoading: isPendingLoading,
+    refetch,
+  } = useClientQuery({client, fetcher: fetchPending, providesTag: "PendingAnnouncements"});
+  const {
+    data: feed,
+    error: feedError,
+    isLoading: isFeedLoading,
+    refetch: refetchFeed,
+  } = useClientQuery({client, fetcher: fetchFeed});
 
   return {
-    error: pendingError,
-    feed: feedPayload,
+    error,
+    feed: feed ?? [],
     feedError,
     isFeedLoading,
     isLoading: isPendingLoading,
     isPendingLoading,
-    pending: pendingPayload,
-    refetch: refetchPending,
+    pending,
+    refetch,
     refetchFeed,
   };
 };

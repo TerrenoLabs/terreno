@@ -16,8 +16,9 @@ export interface ApplyDeltaResult {
 /**
  * Apply a server delta to the local store, idempotently:
  *
- * - a delta at or below the entity's applied seq is skipped (duplicate /
- *   out-of-order delivery);
+ * - a delta below the entity's applied seq is skipped (out-of-order delivery),
+ *   and so is one at that seq unless the row is still waiting for the server
+ *   doc from its own ACK (`awaitingServerDelta`);
  * - an entity with a pending outbox mutation is never overwritten — its
  *   optimistic state is protected until conflict resolution decides;
  * - create/update writes data + seq; tombstones set `deleted: true` (keeping
@@ -53,7 +54,17 @@ export const applyDelta = ({
     };
 
     const existing = store.getEntity({collection: delta.collection, id: delta.id});
-    if (existing && delta.seq <= existing.seq) {
+    // An equal-seq delta is the server's canonical doc only while the row is
+    // marked by its own ACK (`releaseEntity` sets `awaitingServerDelta`). A
+    // missing `stream` is not that signal: a later local edit also has no
+    // stream until a delta lands, and taking the old delta would overwrite it.
+    // Skipping the awaited delta would leave the row without server-added
+    // fields such as `_id`, and the cursor advance below means it is never
+    // fetched again.
+    if (
+      existing &&
+      (delta.seq < existing.seq || (delta.seq === existing.seq && !existing.awaitingServerDelta))
+    ) {
       advanceCursor();
       return {applied: false, seqJump};
     }
@@ -78,6 +89,7 @@ export const applyDelta = ({
 
     const deleted = delta.deleted === true || delta.method === "delete";
     store.upsertEntity({
+      awaitingServerDelta: false,
       collection: delta.collection,
       // Tombstone deltas omit data; keep the last known payload for conflict UIs.
       data: delta.data !== undefined ? delta.data : (existing?.data ?? null),

@@ -1,11 +1,11 @@
-// noExplicitAny: hook doubles expose dynamic RTK Query results to the component.
+// noExplicitAny: hook doubles expose loosely typed query results to the component.
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse, ScriptRun} from "../types";
+import type {AdminConfigResponse, ScriptRun} from "../types";
 
 const config: AdminConfigResponse = {
   models: [],
@@ -65,7 +65,7 @@ describe("AdminScriptList history", () => {
 
   it("renders the latest run and opens per-script history", async () => {
     const {UNSAFE_root, getByTestId, getByText} = renderWithTheme(
-      <AdminScriptList api={{} as AdminApi} baseUrl="/admin" />
+      <AdminScriptList baseUrl="/admin" />
     );
 
     expect(getByText(/Last run/)).toBeDefined();
@@ -89,7 +89,7 @@ describe("AdminScriptList history", () => {
 
   it("switches to global history, loads more, and clears a script filter", async () => {
     const {UNSAFE_root, getByTestId, getByText} = renderWithTheme(
-      <AdminScriptList api={{} as AdminApi} baseUrl="/admin" />
+      <AdminScriptList baseUrl="/admin" />
     );
     const segmentedControls = UNSAFE_root.findAll(
       (node: ReactTestInstance) =>

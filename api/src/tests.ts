@@ -56,3 +56,10 @@ export const authAsUser = async (
 };
 
 export {loadTestData} from "./tests/mongoTestSetup";
+export {
+  type DocumentedResponseOptions,
+  type DocumentedResponseResult,
+  expectDocumentedResponse,
+  type OpenApiResponseSpec,
+  validateDocumentedResponse,
+} from "./tests/openApiResponseSchema";

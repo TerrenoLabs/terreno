@@ -8,7 +8,7 @@ import {type BrowserContext, type Route, request} from "@playwright/test";
 
 export const CROSS_SITE_API_URL = "http://127.0.0.1:4000";
 
-// Mirrors lib/betterAuth.ts's storage prefix and rtk's `${storagePrefix}_bearer_token` key.
+// Mirrors lib/betterAuth.ts's storage prefix and syncdb's `${storagePrefix}_bearer_token` key.
 export const BEARER_TOKEN_KEY = "terreno-example_bearer_token";
 
 // Response headers the proxy drops: the cookie under test, and the encoding headers that no

@@ -1,8 +1,8 @@
 import {describe, it} from "bun:test";
-import {assert} from "chai";
 import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {assert} from "chai";
 
 import {
   collectSourceRuleViolations,
@@ -10,9 +10,10 @@ import {
   isScopedProductionFile,
 } from "./lib";
 
-const fixture = (relativePath: string, source: string): ReturnType<
-  typeof collectSourceRuleViolationsInFile
-> => {
+const fixture = (
+  relativePath: string,
+  source: string
+): ReturnType<typeof collectSourceRuleViolationsInFile> => {
   return collectSourceRuleViolationsInFile({relativePath, source});
 };
 
@@ -23,7 +24,7 @@ const rulesOf = (source: string): string[] => {
 describe("source-rules scanner", () => {
   it("skips tests, isolated files, and generated SDKs", () => {
     assert.isFalse(isScopedProductionFile("api/src/foo.test.ts"));
-    assert.isFalse(isScopedProductionFile("rtk/src/isolated/emptyApi.isolated.ts"));
+    assert.isFalse(isScopedProductionFile("ai/src/isolated/gptStream.isolated.ts"));
     assert.isFalse(isScopedProductionFile("example-frontend/app/index.tsx"));
     assert.isFalse(isScopedProductionFile("demo/stories/Button.tsx"));
     assert.isFalse(isScopedProductionFile("scripts/check-source-rules/lib.ts"));
@@ -153,9 +154,15 @@ export const load = async (): Promise<void> => {
     const root = mkdtempSync(join(tmpdir(), "terreno-source-rules-"));
     try {
       mkdirSync(join(root, "api/src"), {recursive: true});
-      writeFileSync(join(root, "api/src/ok.ts"), "export const ping = (): string => \"ok\";\n");
-      writeFileSync(join(root, "api/src/bad.ts"), "export function boom() { throw new Error(\"x\"); }\n");
-      writeFileSync(join(root, "api/src/ok.test.ts"), "export function testHelper() { Date.now(); }\n");
+      writeFileSync(join(root, "api/src/ok.ts"), 'export const ping = (): string => "ok";\n');
+      writeFileSync(
+        join(root, "api/src/bad.ts"),
+        'export function boom() { throw new Error("x"); }\n'
+      );
+      writeFileSync(
+        join(root, "api/src/ok.test.ts"),
+        "export function testHelper() { Date.now(); }\n"
+      );
 
       const violations = collectSourceRuleViolations(root);
       assert.equal(violations.length, 2);

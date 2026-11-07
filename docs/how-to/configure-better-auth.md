@@ -4,7 +4,7 @@ Set up Better Auth as the **default** authentication provider for new Terreno ap
 
 ## Overview
 
-Better Auth is the recommended authentication system for new Terreno frontends. Register `BetterAuthApp` on the backend, set `AUTH_PROVIDER=better-auth`, and wire `createBetterAuthClient` + `generateBetterAuthSlice` on the client. Pair with `betterAuthAdapter` when using `@terreno/syncdb`.
+Better Auth is the recommended authentication system for new Terreno frontends. Register `BetterAuthApp` on the backend, set `AUTH_PROVIDER=better-auth`, and on the client create the client with `createBetterAuthClient` and wrap the app in `SessionProvider`, both from `@terreno/syncdb/auth`. Pass the same client to `betterAuthAdapter` for `createSyncDb` and the API client.
 
 JWT/Passport remains available for legacy deployments (`AUTH_PROVIDER=jwt`). Both can run in parallel during migration.
 
@@ -378,17 +378,22 @@ const userSchema = new mongoose.Schema(
 ### 1. Create Better Auth Client
 
 ``````typescript
-import {createBetterAuthClient} from "@terreno/rtk";
+// lib/betterAuth.ts
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 
 // `scheme` is the app's deep-link scheme (required).
 export const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
-  scheme: "yourapp",
+  baseURL: baseUrl,
+  scheme: "yourapp", // app.json "scheme", for OAuth deep links
+  storagePrefix: "yourapp",
 });
 ``````
 
-On web the client authenticates with Better Auth's session cookie. When the web frontend and
-the API are on different sites, use [bearer mode](#frontend-and-api-on-different-sites).
+The client stores its session in `expo-secure-store` on native and AsyncStorage on web.
+Install them in the app with `bunx expo install expo-secure-store @react-native-async-storage/async-storage`.
+
+Install them in the app with `bunx expo install expo-secure-store @react-native-async-storage/async-storage`.
 
 A cookie-authenticated `POST`, `PUT`, `PATCH`, or `DELETE` to any Terreno route is
 authenticated only when its `Origin` (or, without one, its `Referer`) is in `trustedOrigins` or
@@ -406,7 +411,7 @@ the matching Better Auth client plugins and their typed methods:
 
 ``````typescript
 import {router} from "expo-router";
-import {createBetterAuthClient} from "@terreno/rtk";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
 
 export const authClient = createBetterAuthClient({
   baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
@@ -447,27 +452,54 @@ Notes:
 - **Server first.** A client feature only adds client methods. Turn the feature on in
   `BetterAuthConfig` too, or its calls answer 404.
 
-### 2. Add Session Redux Slice
+### 2. Provide the Session
+
+Wrap the app in `SessionProvider` and read the session with `useSession()`. No Redux store is
+needed.
+
+``````tsx
+// app/_layout.tsx
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {authClient} from "@/lib/betterAuth";
+import {syncDb} from "@/store/syncdb";
+
+const RootLayout = (): React.ReactElement => (
+  <SessionProvider authClient={authClient} syncDbs={[syncDb]}>
+    <RootNavigator />
+  </SessionProvider>
+);
+
+const RootNavigator = (): React.ReactElement => {
+  const {userId, isLoading} = useSession();
+  if (isLoading) {
+    return <Spinner />;
+  }
+  return userId ? <AppTabs /> : <LoginScreen />;
+};
+``````
+
+The provider reads the session on start and follows Better Auth's session signal, so a
+sign-in or sign-out updates `useSession()` on its own. `logout()` from `useSession()` signs
+out of Better Auth, signs out each `syncDbs` client (create it with `wipeOnSignOut: true` to
+wipe local data), runs `onLogout`, and clears the session.
+
+After an email sign-in, call `refresh()` to resolve the user right away:
 
 ``````typescript
-import {generateBetterAuthSlice} from "@terreno/rtk";
-import {configureStore} from "@reduxjs/toolkit";
-import {authClient} from "./authClient";
-import {api} from "./sdk"; // the app's generated RTK Query API
+const {refresh} = useSession();
 
-// Purge the SDK's cached responses on logout or user switch.
-const betterAuth = generateBetterAuthSlice({apisToReset: [api], authClient});
+const result = await authClient.signIn.email({email, password});
+if (!result.error) {
+  await refresh();
+}
+``````
 
-export const store = configureStore({
-  reducer: {
-    betterAuth: betterAuth.reducer, // selectors read `state.betterAuth`
-    // ... other reducers
-  },
-  middleware: (getDefault) => getDefault().concat(...betterAuth.middleware),
-});
+For `@terreno/syncdb`, build the auth provider from the same client:
 
-// Call after sign-in, sign-out, and at app startup to copy the session into Redux
-void betterAuth.syncSession(store.dispatch);
+``````typescript
+import {betterAuthAdapter, bridgeBetterAuthReactClient} from "@terreno/syncdb/auth";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient));
 ``````
 
 ### 3. Add Social Login UI
@@ -476,7 +508,7 @@ Use the SocialLoginButton component:
 
 ``````typescript
 import {SocialLoginButton, Box} from "@terreno/ui";
-import {authClient} from "@/store/authClient";
+import {authClient} from "@/lib/betterAuth";
 
 const LoginScreen = () => {
   return (
@@ -524,7 +556,7 @@ Better Auth's `lastLoginMethod`, which reads a backend cookie that a cross-site 
 see.
 
 ``````typescript
-import {createRememberedAccountsStore, toLoginAccountOptions, useRememberedAccounts} from "@terreno/rtk";
+import {createRememberedAccountsStore, toLoginAccountOptions, useRememberedAccounts} from "@terreno/syncdb/auth";
 import {LoginScreen} from "@terreno/ui";
 
 // One store per app, at module scope.
@@ -606,7 +638,7 @@ only the sign-in methods the server enables, and it records each sign-in in the
 [remembered accounts](#4-remember-accounts-on-this-device) store.
 
 ``````typescript
-import {createRememberedAccountsStore, TerrenoLoginScreen} from "@terreno/rtk";
+import {createRememberedAccountsStore, TerrenoLoginScreen} from "@terreno/syncdb/auth";
 import {useLocalSearchParams, useRouter} from "expo-router";
 
 export const rememberedAccounts = createRememberedAccountsStore({rememberIdentity: false});
@@ -670,18 +702,19 @@ What it does:
   the screen has to see the returned session to record it, and it navigates on by itself. Pass
   `onStepChange` to catch the screen landing on its `login` step while your app already holds a
   session (the live-session check failed), and navigate away there; example-frontend's
-  `app/login.tsx` does both, and skips re-syncing Redux in `onSignedIn` when it already holds the
-  user.
-- **Signing out.** Dispatch `generateBetterAuthSlice`'s `logout()`. It keeps the session until
-  `authClient.signOut()` answers, then clears it, so the login screen never opens while the old
-  session is still live. Meanwhile `selectBetterAuthIsSigningOut` is true: show it on the
-  sign-out control. `logout()` leaves `isLoading` alone, so the screen stays put; if your
-  navigator shows a spinner on `selectBetterAuthIsLoading`, show it only while no user is
-  loaded (`isLoading && !userId`), or a session refresh would remount the navigator on its
-  first tab. A sign-out that cannot reach the server leaves a cookie or native session in place
-  and sets the slice's `error` (`SIGN_OUT_FAILED_MESSAGE`); show it. Stop anything that calls the
-  API with the session first: example-frontend's `logout` in `store/index.ts` stops syncdb,
-  then dispatches `logout()`, and its profile screen shows both.
+  `app/login.tsx` does both, and skips `refresh()` in `onSignedIn` when the session already holds
+  the user.
+- **Signing out.** Call `logout()` from `useSession()`. It keeps the session until
+  `authClient.signOut()` answers, then signs out each `syncDbs` client (wiping local data when
+  `wipeOnSignOut` is set) and clears the session, so the login screen never opens while the old
+  session is still live. Meanwhile `isSigningOut` is true: show it on the sign-out control.
+  `logout()` leaves `isLoading` alone, so the screen stays put; if your navigator shows a
+  spinner on `isLoading`, show it only while no user is loaded (`isLoading && !userId`), or a
+  session refresh would remount the navigator on its first tab. A sign-out that cannot reach the
+  server (or that the server refuses, or that outlasts `signOutTimeoutMs`, 10 seconds by default)
+  leaves a cookie or native session in place, wipes nothing, and sets `error` to
+  `SIGN_OUT_FAILED_MESSAGE`; show it. A bearer client that has dropped its token before the
+  request signs out locally. example-frontend's profile screen shows both states.
 - **Sign-up.** The sign-up link hides when the server's sign-up is closed (`signUp: false`).
 - **No email and password.** When the server has `emailPassword` off, the form, the Sign in
   button, and the forgot-password link are left out (`LoginScreen` with `fields={[]}`), and a
@@ -765,7 +798,7 @@ every card to the Better Auth client. Each card shows only when the server's
 [`/terreno/methods`](../reference/api.md#better-auth-authentication) turns its feature on.
 
 ``````typescript
-import {TerrenoAccountSecurityScreen} from "@terreno/rtk";
+import {TerrenoAccountSecurityScreen} from "@terreno/syncdb/auth";
 import {useLocalSearchParams} from "expo-router";
 
 const Security = (): React.ReactElement => {
@@ -869,10 +902,11 @@ Safari block it. The user signs in and is signed out on the next request.
 Use bearer mode in that case. Keep cookie mode when the frontend and API share a site.
 
 ``````typescript
-import {createBetterAuthClient} from "@terreno/rtk";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 
 export const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  baseURL: baseUrl,
   scheme: "yourapp",
   webAuth: "bearer",
 });
@@ -904,14 +938,23 @@ Content-Security-Policy. `localStorage` is readable by any XSS on the frontend's
 outlives the tab, so a stolen or forgotten token stays usable after the person closes it.
 
 Read the stored token outside the client, without a network call, with
-`getBetterAuthBearerToken({storagePrefix?, bearerStorage?})`. Pass the same options the client
-was created with.
+`getBetterAuthBearerToken({storagePrefix?, bearerStorage?})` from `@terreno/syncdb/auth`. Pass
+the same options the client was created with. Pass it to `betterAuthAdapter` as
+`getBearerToken` so the shared `authProvider` reads the token locally instead of calling
+`get-session` on every request:
+
+``````typescript
+import {betterAuthAdapter, bridgeBetterAuthReactClient, getBetterAuthBearerToken} from "@terreno/syncdb/auth";
+
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(authClient), {
+  getBearerToken: () => getBetterAuthBearerToken({storagePrefix: "yourapp"}),
+});
+``````
 
 example-frontend shows the whole setup. `EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` turns on
 bearer mode in `lib/betterAuth.ts`. `store/syncdb.ts` passes the stored token to
-`betterAuthAdapter` as `getBearerToken`, and `store/index.ts` registers that adapter with
-`setTokenSource` before it creates the store, so RTK Query, the socket and MCP tools send the
-same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an API on
+`betterAuthAdapter` as `getBearerToken`, and that one `authProvider` feeds syncdb (and its
+socket), the request client, and MCP tools, so they all send the same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an API on
 `127.0.0.1:4000` with every `set-cookie` header stripped, then reloads.
 
 ### Server requirements
@@ -938,7 +981,7 @@ same token. `e2e/crossSiteBearer.spec.ts` signs in from `localhost:8082` to an A
 ### Social sign-in in bearer mode
 
 The server adds a single-use, three-minute token to the OAuth callback's redirect, in the URL
-fragment, and the web app exchanges it for the bearer. rtk binds each exchange to a random
+fragment, and the web app exchanges it for the bearer. syncdb binds each exchange to a random
 nonce the tab stored when it started the sign-in, so a token planted in a link is never sent.
 
 1. On the server, list the web app's origin and the one page that reads the token. The origin
@@ -965,7 +1008,7 @@ nonce the tab stored when it started the sign-in, so a token planted in a link i
    navigation, never with `fetch`, an `<img>`, or an `<iframe>`:
 
    ``````typescript
-   import {signInSocialWithHandoff} from "@terreno/rtk";
+   import {signInSocialWithHandoff} from "@terreno/syncdb/auth";
 
    <SocialLoginButton
      provider="google"
@@ -988,10 +1031,12 @@ nonce the tab stored when it started the sign-in, so a token planted in a link i
    before Sentry, analytics, or other third-party scripts start:
 
    ``````typescript
-   import {completeBetterAuthOAuthHandoff} from "@terreno/rtk";
+   import {completeBetterAuthOAuthHandoff} from "@terreno/syncdb/auth";
 
-   await completeBetterAuthOAuthHandoff({client: authClient});
-   await betterAuth.syncSession(store.dispatch);
+   const stored = await completeBetterAuthOAuthHandoff({client: authClient});
+   if (stored) {
+     await refresh(); // useSession().refresh(): SessionProvider read the session before the exchange
+   }
    initSentry();
    ``````
 
@@ -1005,7 +1050,10 @@ nonce the tab stored when it started the sign-in, so a token planted in a link i
 
 4. Show sign-in errors from the query. A failed start or callback comes back with
    `?error=provider_not_found`, `?error=sign_in_failed`, or one of Better Auth's own `error=`
-   codes. The function resolves `false` and leaves `error` in the URL.
+   codes. The function resolves `false` and leaves `error` in the URL. On better-auth 1.6 (the
+   version Terreno 58 pins), a generic OAuth provider's own error (such as `access_denied`)
+   goes to the API's `{basePath}/error` page instead of `errorCallbackURL`.
+   No token is issued either way.
 
 The return page must not redirect, on the server or in the browser, before the function has
 run. A browser carries the fragment through a redirect that has none of its own, so a redirect
@@ -1018,14 +1066,14 @@ the handoff only, so a token never goes to a page on the visitor's own machine, 
 start when no other origin is left in `CORS_ORIGINS`. CORS and `trustedOrigins` keep them.
 `app/login.tsx` renders `TerrenoLoginScreen` with `callbackURL="/login"` in bearer mode, so its
 social buttons start with `signInSocialWithHandoff` and come back to the same screen, which finds
-the session and records the method. `app/_layout.tsx` syncs the session only after the exchange
+the session and records the method. `app/_layout.tsx` refreshes the session only after the exchange
 resolves, and leaves a signed-in user on `/login` so the screen can record the sign-in before it
 navigates on.
 
 In an Expo Router app, run the exchange from the entry file, not from a layout. Expo Router
 copies the URL, fragment included, as soon as it is imported, and writes that copy back into
 the address bar when it routes, which would put `ott` and `handoff` back. Importing
-`@terreno/rtk` imports Expo Router too (through `@terreno/ui`). example-frontend's `index.js`
+`@terreno/ui` imports Expo Router too. example-frontend's `index.js`
 first imports `lib/oauthHandoffUrl.ts`, which has no imports and hides `handoff` and `ott` from
 the URL, then `lib/oauthHandoff.ts`, which puts the URL back and calls
 `completeBetterAuthOAuthHandoff` in the same synchronous step, then `expo-router/entry`.
@@ -1049,12 +1097,12 @@ must refuse.
 A signed-in user links Google, GitHub, or a generic OAuth provider from the Security screen. In
 cookie mode `authClient.linkSocial` does this. In bearer mode it can't: its
 `POST /link-social` fetch comes from another site, so the OAuth state cookie it needs on the
-API's origin is never set. Use `linkSocialWithHandoff` from `@terreno/rtk` instead. It needs
+API's origin is never set. Use `linkSocialWithHandoff` from `@terreno/syncdb/auth` instead. It needs
 the same `oauthHandoff` server config as social sign-in, and account linking must be on
 (`accountLinking.mode` other than `never`).
 
 ``````typescript
-import {linkSocialWithHandoff} from "@terreno/rtk";
+import {linkSocialWithHandoff} from "@terreno/syncdb/auth";
 
 const {error} = await linkSocialWithHandoff({
   callbackURL: "/settings/security", // any page on a web origin; sent as an absolute URL
@@ -1125,7 +1173,7 @@ const sessionStorageOrDefault = (): Storage | undefined => {
 };
 
 export const authClient = createBetterAuthClient({
-  baseURL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:4000",
+  baseURL: baseUrl,
   bearerStorage: sessionStorageOrDefault(),
   scheme: "yourapp",
   webAuth: "bearer",
@@ -1176,6 +1224,11 @@ Verify the callback URLs in your OAuth provider settings match your `BETTER_AUTH
 
 Check that `trustedOrigins` in your Better Auth config includes your app's deep link scheme (e.g., `"yourapp://"`).
 
+On native, if every request fails before it is sent after an app update, the stored cookie jar
+may hold an entry the Expo plugin cannot read. `createBetterAuthClient` drops such entries on
+read and logs `Discarded … unreadable Better Auth cookie entry`; sign in again to restore the
+session.
+
 ### Social login opens browser but doesn't redirect back
 
 Ensure your mobile app has the proper deep link configuration in `app.json`:
@@ -1220,5 +1273,6 @@ so new accounts cannot be created through the legacy `/auth/signup`.
 
 - [Authentication Architecture](../explanation/authentication.md)
 - [@terreno/api Reference](../reference/api.md#better-auth)
-- [@terreno/rtk Reference (legacy)](../reference/legacy/rtk.md#better-auth-integration)
+- [@terreno/syncdb Reference: Auth](../reference/syncdb.md#auth)
+- [Upgrade from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md)
 - [Better Auth Documentation](https://better-auth.com/)

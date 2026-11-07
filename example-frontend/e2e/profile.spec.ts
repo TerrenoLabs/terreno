@@ -110,21 +110,14 @@ test.describe("Profile", () => {
     page,
   }) => {
     // The sign-out and the session check after it both fail, as they do offline. A cookie
-    // session may still be live on the server, so the app keeps it rather than showing the
-    // login screen.
+    // session may still be live on the server, so the session keeps its user and its local data
+    // (syncdb keeps running) rather than showing the login screen.
     consoleGuard.allow("Failed to load resource");
-    consoleGuard.allow("Better Auth: Error signing out");
-    consoleGuard.allow("Better Auth: Could not check the session after a failed sign out");
+    consoleGuard.allow("[terreno/syncdb] Error signing out");
+    consoleGuard.allow("[terreno/syncdb] Could not check the session after a failed sign out");
     await page.route("**/api/auth/sign-out", (route) => route.abort("connectionrefused"));
     await page.route("**/api/auth/get-session**", (route) => route.abort("connectionrefused"));
 
-    // The failed sign-out leaves the user signed in, so syncdb starts again, offline: it cannot
-    // read a session to connect with, and says so (the documented offline start).
-    const offlineStart = "[syncdb] transport connect failed; starting offline";
-    consoleGuard.allow(offlineStart);
-    const syncDbRestarted = page.waitForEvent("console", (message) =>
-      message.text().includes(offlineStart)
-    );
     await page.getByTestId("profile-logout-button").first().click();
 
     await expect(page.getByTestId("profile-logout-error").first()).toBeVisible();
@@ -134,7 +127,6 @@ test.describe("Profile", () => {
     await expect(page).toHaveURL(/\/profile$/);
     await expect(page.getByTestId("profile-logged-in-as").first()).toContainText(TEST_USER.email);
     await expect(page.getByTestId("login-screen")).toHaveCount(0);
-    await syncDbRestarted;
   });
 
   test("logout redirects to login", async ({page}) => {

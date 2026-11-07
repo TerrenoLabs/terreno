@@ -205,6 +205,7 @@ describe("seedDefaultData", () => {
 describe("seedDefaultDataOnBoot", () => {
   afterEach(() => {
     Reflect.deleteProperty(process.env, "SEED_DEFAULTS");
+    Reflect.deleteProperty(process.env, "MONGO_DB_NAME");
   });
 
   it("does not seed when SEED_DEFAULTS is unset", async () => {
@@ -234,5 +235,15 @@ describe("seedDefaultDataOnBoot", () => {
 
     assert.isUndefined(result);
     assert.equal(await User.countDocuments({}), 0);
+  });
+
+  it("seeds a deployed PR preview database", async () => {
+    process.env.SEED_DEFAULTS = "true";
+    process.env.MONGO_DB_NAME = "terreno-example-pr-1664";
+
+    const result = await seedDefaultDataOnBoot({isDeployed: true});
+
+    assert.exists(result);
+    assert.exists(await User.findByEmail("admin@example.com"));
   });
 });

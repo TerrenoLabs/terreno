@@ -1,15 +1,27 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
+import {assert} from "chai";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse} from "../types";
+import type {AdminConfigResponse} from "../types";
 import type {EvaluatorRecord} from "../widgets/aiObservability/evaluators/evaluatorTypes";
-import {AiReviewBatchesScreenWidget} from "../widgets/aiObservability/review/AiReviewBatchesScreen";
+import {AiReviewBatchesScreenWidget as AiReviewBatchesScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewBatchesScreen";
 import {AiReviewBatchesView} from "../widgets/aiObservability/review/AiReviewBatchesView";
-import {AiReviewBatchScreenWidget} from "../widgets/aiObservability/review/AiReviewBatchScreen";
+import {AiReviewBatchScreenWidget as AiReviewBatchScreenWidgetBase} from "../widgets/aiObservability/review/AiReviewBatchScreen";
 import type {ReviewBatchDetail} from "../widgets/aiObservability/review/batchTypes";
 import type {ObservabilityStatusPayload} from "../widgets/aiObservability/shell/aiObservabilityNav";
+import {
+  createObservabilityServer,
+  type FakeObservabilityHandler,
+  type FakeObservabilityRoute,
+  type FakeObservabilityServer,
+  flushObservabilityRequests,
+  withObservabilityServer,
+} from "./observabilityFakeApi.isolated";
 import {operatorObservabilityStatus} from "./observabilityStatusFixtures.isolated";
+
+const AiReviewBatchesScreenWidget = withObservabilityServer(AiReviewBatchesScreenWidgetBase);
+const AiReviewBatchScreenWidget = withObservabilityServer(AiReviewBatchScreenWidgetBase);
 
 const routerPush = mock((_href: string) => undefined);
 const searchParams: {current: Record<string, string>} = {current: {}};
@@ -30,6 +42,7 @@ const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<vo
     fireEvent.press(element);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
+  await flushObservabilityRequests();
 };
 
 const QUESTIONS = [
@@ -119,56 +132,55 @@ const BATCH: ReviewBatchDetail = {
   name: "Recent summaries",
 };
 
-interface QueryState {
-  data?: unknown;
-  isError: boolean;
-  isLoading: boolean;
-  refetch: () => void;
-}
+const BATCH_ROUTE = "GET /ai/observability/review/batches/:id";
+const BATCHES_ROUTE = "GET /ai/observability/review/batches";
+const CREATE_ROUTE = "POST /ai/observability/review/batches";
+const JUDGE_ROUTE = "POST /ai/observability/review/batches/:id/judgeRuns";
 
-const query = (data: unknown, overrides: Partial<QueryState> = {}): QueryState => ({
-  data,
-  isError: false,
-  isLoading: false,
-  refetch: mock(() => {}),
-  ...overrides,
-});
+const PROMPTS = [
+  {folder: "chat", latestVersion: 1, name: "example-summarize", production: 1, type: "chat"},
+  {
+    folder: "evaluators",
+    latestVersion: 1,
+    name: "eval-judge-summary-questions",
+    production: 1,
+    type: "chat",
+  },
+];
 
-const createApi = (params: {
-  batch?: QueryState;
-  batches?: QueryState;
-  create?: (body: unknown) => Promise<unknown>;
+const createServer = (params: {
+  batch?: FakeObservabilityRoute;
+  batches?: FakeObservabilityRoute;
+  create?: FakeObservabilityHandler;
   evaluators?: EvaluatorRecord[];
-  runJudge?: (body: unknown) => Promise<unknown>;
+  runJudge?: FakeObservabilityHandler;
   status?: ObservabilityStatusPayload;
-}): AdminApi => {
-  const hooks = {
-    useAiObservabilityEvaluatorsQuery: () => query(params.evaluators ?? EVALUATORS),
-    useAiObservabilityPromptsQuery: () =>
-      query([
-        {folder: "chat", latestVersion: 1, name: "example-summarize", production: 1, type: "chat"},
-        {
-          folder: "evaluators",
-          latestVersion: 1,
-          name: "eval-judge-summary-questions",
-          production: 1,
-          type: "chat",
-        },
-      ]),
-    useAiObservabilityReviewBatchesQuery: () => params.batches ?? query([]),
-    useAiObservabilityReviewBatchQuery: () => params.batch ?? query(BATCH),
-    useAiObservabilityStatusQuery: () => query(params.status ?? operatorObservabilityStatus()),
-    useCreateAiObservabilityReviewBatchMutation: () => [
-      (body: unknown) => ({unwrap: () => (params.create ?? (async () => BATCH))(body)}),
-      {isError: false, isLoading: false},
-    ],
-    useRunAiObservabilityReviewBatchJudgeMutation: () => [
-      (body: unknown) => ({unwrap: () => (params.runJudge ?? (async () => BATCH))(body)}),
-      {isError: false, isLoading: false},
-    ],
+}): FakeObservabilityServer =>
+  createObservabilityServer({
+    [BATCH_ROUTE]: params.batch ?? {data: BATCH},
+    [BATCHES_ROUTE]: params.batches ?? {data: {data: [], more: false}},
+    [CREATE_ROUTE]: params.create ?? (() => BATCH),
+    "GET /ai/observability/evaluators": {data: params.evaluators ?? EVALUATORS},
+    "GET /ai/observability/prompts": {data: PROMPTS},
+    "GET /ai/observability/status": {data: params.status ?? operatorObservabilityStatus()},
+    [JUDGE_ROUTE]: params.runJudge ?? (() => BATCH),
+  });
+
+/**
+ * Make `fetch` reject (a transport failure, no response body) for requests whose path ends with
+ * `pathSuffix`, so screens fall back to their generic error copy. Returns a restore function.
+ */
+const failTransportFor = (pathSuffix: string): (() => void) => {
+  const previous = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (new URL(String(input)).pathname.endsWith(pathSuffix)) {
+      throw new TypeError("Network request failed");
+    }
+    return previous(input, init);
+  }) as typeof fetch;
+  return (): void => {
+    globalThis.fetch = previous;
   };
-  const api = {enhanceEndpoints: () => api, injectEndpoints: () => hooks};
-  return api as unknown as AdminApi;
 };
 
 describe("AiReviewBatchScreenWidget", () => {
@@ -177,40 +189,47 @@ describe("AiReviewBatchScreenWidget", () => {
     routerPush.mockClear();
   });
 
-  const renderScreen = (
-    api: AdminApi,
-    props: Partial<React.ComponentProps<typeof AiReviewBatchScreenWidget>> = {}
-  ): ReturnType<typeof renderWithTheme> =>
-    renderWithTheme(
+  const renderScreen = async (
+    server: FakeObservabilityServer,
+    props: Partial<React.ComponentProps<typeof AiReviewBatchScreenWidgetBase>> = {}
+  ): Promise<ReturnType<typeof renderWithTheme>> => {
+    const view = renderWithTheme(
       <AiReviewBatchScreenWidget
-        api={api}
         config={config}
         routeBase="/admin/"
         screenName="ai-review-batch"
+        server={server}
         {...props}
       />
     );
+    await flushObservabilityRequests();
+    return view;
+  };
 
   it("asks for a batch id, shows loading, and retries a failed load", async () => {
     searchParams.current = {};
-    const missing = renderScreen(createApi({}));
+    const missingServer = createServer({});
+    const missing = await renderScreen(missingServer);
     expect(missing.getByText("Missing batch id. Open a batch from Review batches.")).toBeTruthy();
+    assert.equal(missingServer.callsTo(BATCH_ROUTE).length, 0);
     missing.unmount();
 
     searchParams.current = {id: "b1"};
-    const loading = renderScreen(createApi({batch: query(undefined, {isLoading: true})}));
+    const loading = await renderScreen(createServer({batch: {isLoading: true}}));
     expect(loading.getByTestId("ai-review-batch-loading")).toBeTruthy();
     loading.unmount();
 
-    const failed = query(undefined, {isError: true});
-    const errored = renderScreen(createApi({batch: failed}));
+    const failedServer = createServer({batch: {isError: true}});
+    const errored = await renderScreen(failedServer);
     expect(errored.getByText("Could not load this batch.")).toBeTruthy();
+    assert.equal(failedServer.callsTo(BATCH_ROUTE).length, 1);
+    assert.deepEqual(failedServer.callsTo(BATCH_ROUTE)[0]?.params, {id: "b1"});
     await press(errored.getByTestId("ai-review-batch-error-retry"));
-    expect(failed.refetch).toHaveBeenCalled();
+    assert.isAtLeast(failedServer.callsTo(BATCH_ROUTE).length, 2);
   });
 
   it("offers judges that share questions and opens the next pending item", async () => {
-    const view = renderScreen(createApi({}), {apiKey: "key-1"});
+    const view = await renderScreen(createServer({}), {apiKey: "key-1"});
     expect(view.getByTestId("observability-page-header-title").props.children).toBe(
       "Recent summaries"
     );
@@ -224,53 +243,65 @@ describe("AiReviewBatchScreenWidget", () => {
   });
 
   it("runs the first judge that has not run yet with the caller key", async () => {
-    const runJudge = mock(async (_body: unknown) => ({
-      ...BATCH,
-      judgeCount: 2,
-      judges: [judgeSummary("careful", 1), judgeSummary("quick", 0.75)],
-    }));
-    const view = renderScreen(
-      createApi({
-        runJudge,
-        status: operatorObservabilityStatus({playgroundAi: {source: "server"}}),
+    const server = createServer({
+      runJudge: () => ({
+        ...BATCH,
+        judgeCount: 2,
+        judges: [judgeSummary("careful", 1), judgeSummary("quick", 0.75)],
       }),
-      {apiKey: "key-1"}
-    );
+      status: operatorObservabilityStatus({playgroundAi: {source: "server"}}),
+    });
+    const view = await renderScreen(server, {apiKey: "key-1"});
     await press(view.getByTestId("ai-review-batch-run-judge"));
-    expect(runJudge).toHaveBeenCalledWith({apiKey: "key-1", batchId: "b1", evaluatorId: "quick"});
+    const runs = server.callsTo(JUDGE_ROUTE);
+    assert.equal(runs.length, 1);
+    assert.deepEqual(runs[0]?.params, {id: "b1"});
+    assert.deepEqual(runs[0]?.body, {evaluatorId: "quick"});
+    assert.equal(runs[0]?.headers["x-ai-api-key"], "key-1");
     expect(view.queryByTestId("ai-review-batch-run-error")).toBeNull();
   });
 
   it("reports judge runs with nothing to compare and run failures", async () => {
-    const noAnswers = mock(async (_body: unknown) => ({
-      ...BATCH,
-      judges: [judgeSummary("careful", 1), judgeSummary("quick")],
-    }));
-    const ran = renderScreen(createApi({runJudge: noAnswers}), {apiKey: "key-1"});
+    // Without a saved caller key the run sends no `x-ai-api-key` header.
+    const ranServer = createServer({
+      runJudge: () => ({...BATCH, judges: [judgeSummary("careful", 1), judgeSummary("quick")]}),
+    });
+    const ran = await renderScreen(ranServer);
     await press(ran.getByTestId("ai-review-batch-run-judge"));
-    expect(noAnswers).toHaveBeenCalled();
+    const runs = ranServer.callsTo(JUDGE_ROUTE);
+    assert.equal(runs.length, 1);
+    assert.notProperty(runs[0]?.headers ?? {}, "x-ai-api-key");
+    expect(ran.queryByTestId("ai-review-batch-run-error")).toBeNull();
     ran.unmount();
 
-    const failing = mock(async (_body: unknown) => {
-      throw {data: {title: "Judge prompt has no production output schema"}};
-    });
-    const failed = renderScreen(createApi({runJudge: failing}), {apiKey: "key-1"});
+    const failed = await renderScreen(
+      createServer({
+        runJudge: () => {
+          throw {data: {title: "Judge prompt has no production output schema"}};
+        },
+      }),
+      {apiKey: "key-1"}
+    );
     await press(failed.getByTestId("ai-review-batch-run-judge"));
     expect(failed.getByTestId("ai-review-batch-run-error")).toBeTruthy();
     expect(failed.getByText("Judge prompt has no production output schema")).toBeTruthy();
     failed.unmount();
 
-    const untitled = mock(async (_body: unknown) => {
-      throw new Error("network");
-    });
-    const generic = renderScreen(createApi({runJudge: untitled}), {apiKey: "key-1"});
-    await press(generic.getByTestId("ai-review-batch-run-judge"));
+    const generic = await renderScreen(createServer({}), {apiKey: "key-1"});
+    const restore = failTransportFor("/judgeRuns");
+    try {
+      await press(generic.getByTestId("ai-review-batch-run-judge"));
+    } finally {
+      restore();
+    }
     expect(generic.getByText("Could not run the judge.")).toBeTruthy();
   });
 
-  it("explains why judges cannot run without AI", () => {
-    const noServer = renderScreen(
-      createApi({status: operatorObservabilityStatus({playgroundAi: {source: "unavailable"}})})
+  it("explains why judges cannot run without AI", async () => {
+    const noServer = await renderScreen(
+      createServer({
+        status: operatorObservabilityStatus({playgroundAi: {source: "unavailable"}}),
+      })
     );
     expect(
       noServer.getByText("No AI service is configured on the server, so judges cannot run.")
@@ -278,13 +309,13 @@ describe("AiReviewBatchScreenWidget", () => {
     noServer.unmount();
 
     const requestKey = operatorObservabilityStatus({playgroundAi: {source: "request-key"}});
-    const hinted = renderScreen(createApi({status: requestKey}), {
+    const hinted = await renderScreen(createServer({status: requestKey}), {
       apiKeyHint: "Save a Gemini key.",
     });
     expect(hinted.getByText("Save a Gemini key.")).toBeTruthy();
     hinted.unmount();
 
-    const fallback = renderScreen(createApi({status: requestKey}));
+    const fallback = await renderScreen(createServer({status: requestKey}));
     expect(fallback.getByText("Save an AI API key to run judges.")).toBeTruthy();
   });
 });
@@ -294,30 +325,41 @@ describe("AiReviewBatchesScreenWidget", () => {
     routerPush.mockClear();
   });
 
-  const renderScreen = (api: AdminApi): ReturnType<typeof renderWithTheme> =>
-    renderWithTheme(
+  const renderScreen = async (
+    server: FakeObservabilityServer
+  ): Promise<ReturnType<typeof renderWithTheme>> => {
+    const view = renderWithTheme(
       <AiReviewBatchesScreenWidget
-        api={api}
         config={config}
         routeBase="/admin"
         screenName="ai-review-batches"
+        server={server}
       />
     );
+    await flushObservabilityRequests();
+    return view;
+  };
 
   it("creates a batch from the widest question set and opens it", async () => {
-    const create = mock(async (_body: unknown) => BATCH);
-    const batches = query([
-      {
-        counts: BATCH.counts,
-        created: BATCH.created,
-        evaluatorId: "qs",
-        evaluatorName: "summary-questions",
-        id: "b1",
-        judgeCount: 0,
-        name: "Recent summaries",
+    const server = createServer({
+      batches: {
+        data: {
+          data: [
+            {
+              counts: BATCH.counts,
+              created: BATCH.created,
+              evaluatorId: "qs",
+              evaluatorName: "summary-questions",
+              id: "b1",
+              judgeCount: 0,
+              name: "Recent summaries",
+            },
+          ],
+          more: false,
+        },
       },
-    ]);
-    const view = renderScreen(createApi({batches, create}));
+    });
+    const view = await renderScreen(server);
     const props = view.UNSAFE_root.findByType(AiReviewBatchesView).props;
     expect(props.questionSetId).toBe("qs");
     expect(props.questionSetOptions.map((option: {label: string}) => option.label)).toEqual([
@@ -331,7 +373,9 @@ describe("AiReviewBatchesScreenWidget", () => {
       props.onPromptChange("example-summarize");
     });
     await press(view.getByTestId("ai-review-batch-grab-recent"));
-    expect(create).toHaveBeenCalledWith({
+    const creates = server.callsTo(CREATE_ROUTE);
+    assert.equal(creates.length, 1);
+    assert.deepEqual(creates[0]?.body, {
       evaluatorId: "qs",
       limit: 10,
       name: "My batch",
@@ -344,24 +388,27 @@ describe("AiReviewBatchesScreenWidget", () => {
   });
 
   it("shows create errors and requires a question set", async () => {
-    const create = mock(async (_body: unknown) => {
+    const titled = () => {
       throw {data: {title: "No recent traces that are not already in a batch"}};
-    });
-    const view = renderScreen(createApi({create}));
+    };
+    const view = await renderScreen(createServer({create: titled}));
     await press(view.getByTestId("ai-review-batch-grab-recent"));
     expect(view.getByText("No recent traces that are not already in a batch")).toBeTruthy();
+    view.unmount();
 
-    const untitled = mock(async (_body: unknown) => {
-      throw new Error("network");
-    });
-    const generic = renderScreen(createApi({create: untitled}));
-    await press(generic.getByTestId("ai-review-batch-grab-recent"));
+    const generic = await renderScreen(createServer({}));
+    const restore = failTransportFor("/review/batches");
+    try {
+      await press(generic.getByTestId("ai-review-batch-grab-recent"));
+    } finally {
+      restore();
+    }
     expect(generic.getByText("Could not create the batch.")).toBeTruthy();
-
     generic.unmount();
 
     // With no human evaluators there is nothing to batch against.
-    const empty = renderScreen(createApi({create, evaluators: []}));
+    const emptyServer = createServer({create: titled, evaluators: []});
+    const empty = await renderScreen(emptyServer);
     // The header button is disabled without a question set; call its handler to cover the guard.
     const grab = empty.UNSAFE_root.find(
       (node) => node.props.testID === "ai-review-batch-grab-recent" && "onClick" in node.props
@@ -374,5 +421,6 @@ describe("AiReviewBatchesScreenWidget", () => {
     expect(
       empty.getByText("Create a human evaluator with one score per question first.")
     ).toBeTruthy();
+    assert.equal(emptyServer.callsTo(CREATE_ROUTE).length, 0);
   });
 });

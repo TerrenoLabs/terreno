@@ -2,7 +2,6 @@ import {Box, Button, SelectField, Spinner, Text} from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
 import React, {useCallback, useEffect} from "react";
-import type {AdminApi} from "../types";
 import {normalizeListData} from "./normalizeListData";
 import type {OrganizationSummary} from "./OrgDirectoryScreen";
 import {sortOrganizations} from "./sortOrganizations";
@@ -10,7 +9,6 @@ import {useOrganizationsApi} from "./useOrganizationsApi";
 import {useOrgContext} from "./useOrgContext";
 
 export interface OrgSwitcherProps {
-  api: AdminApi;
   basePath?: string;
   routeBase?: string;
 }
@@ -22,10 +20,10 @@ const isForbiddenMineQuery = (error: unknown): boolean => {
   return (error as {status?: number}).status === 403;
 };
 
-export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({api, basePath, routeBase = "/admin"}) => {
+export const OrgSwitcher: React.FC<OrgSwitcherProps> = ({basePath, routeBase = "/admin"}) => {
   const {organization, selectOrganization} = useOrgContext();
-  const {useMineQuery} = useOrganizationsApi(api, basePath);
-  const {data, error, isLoading} = useMineQuery();
+  const {useMineQuery} = useOrganizationsApi(basePath);
+  const {data, error, isLoading} = useMineQuery<OrganizationSummary>();
   const organizations = normalizeListData<OrganizationSummary>(data);
 
   const handleChange = useCallback(

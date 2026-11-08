@@ -213,6 +213,7 @@ deploy_tasks() {
     "--project=$GCP_PROJECT_ID" \
     "--region=$GCP_BACKEND_REGION" \
     "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY" \
+    --no-traffic \
     --quiet
   args+=(
     "--set-env-vars=$env_vars"

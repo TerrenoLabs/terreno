@@ -195,16 +195,27 @@ deploy_tasks() {
   )
   if [ "$tag" = "prod" ]; then
     args+=("--tag=$tag")
-  else
-    # Deploy untagged, then tag the new revision (same pattern as deploy_backend).
-    revision_suffix="pr${PR_NUMBER}-tasks-${CIRCLE_BUILD_NUM:-$(date +%s)}"
-    args+=(--no-traffic "--revision-suffix=$revision_suffix")
-    env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},PR_NUMBER=${PR_NUMBER}"
+    args+=(
+      "--set-env-vars=$env_vars"
+      "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
+    )
+    gcloud "${args[@]}"
+    return
   fi
+
+  # Deploy untagged, then tag the new revision (same pattern as deploy_backend).
+  revision_suffix="pr${PR_NUMBER}-tasks-${CIRCLE_BUILD_NUM:-$(date +%s)}"
+  args+=(--no-traffic "--revision-suffix=$revision_suffix")
+  env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},PR_NUMBER=${PR_NUMBER}"
+  .github/workflows/scripts/rebuild-cloud-run-ready-traffic.sh "$GCP_TASKS_SERVICE" "$GCP_BACKEND_REGION"
+  # Langfuse was removed in 57.22; gcloud allows one secrets flag per deploy.
+  gcloud run services update "$GCP_TASKS_SERVICE" \
+    "--project=$GCP_PROJECT_ID" \
+    "--region=$GCP_BACKEND_REGION" \
+    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY" \
+    --quiet
   args+=(
     "--set-env-vars=$env_vars"
-    # Langfuse was removed in 57.22; drop stale mounts before setting MONGO_URI.
-    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY"
     "--update-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   )
   gcloud "${args[@]}"

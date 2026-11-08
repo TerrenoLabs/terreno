@@ -200,6 +200,8 @@ deploy_tasks() {
   args+=(
     "--set-env-vars=$env_vars"
     "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
+    # Langfuse was removed in 57.22; preview tasks revisions still inherit stale mounts.
+    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY"
   )
   gcloud "${args[@]}"
 }

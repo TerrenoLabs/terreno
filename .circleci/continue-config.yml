@@ -1920,6 +1920,7 @@ jobs:
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
+            NODE_OPTIONS: "--max-old-space-size=8192"
           command: bun run export
       - run:
           name: Archive dist trees

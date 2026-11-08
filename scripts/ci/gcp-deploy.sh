@@ -179,12 +179,12 @@ deploy_tasks() {
   docker push "$image"
 
   local env_vars="NODE_ENV=production,BACKEND_SERVICE=tasks,FLOURISH_SERVICE=${GCP_TASKS_SERVICE},JOBS_START_WORKER=false,$(jobs_env_vars "$tag")"
+  local revision_suffix=""
   local args=(
     run deploy "$GCP_TASKS_SERVICE"
     "--project=$GCP_PROJECT_ID"
     "--region=$GCP_BACKEND_REGION"
     "--image=$image"
-    "--tag=$tag"
     "--port=3000"
     "--memory=512Mi"
     "--min-instances=0"
@@ -193,22 +193,28 @@ deploy_tasks() {
     "--timeout=1800"
     --no-allow-unauthenticated
   )
-  if [ "$tag" != "prod" ]; then
-    args+=(--no-traffic)
+  if [ "$tag" = "prod" ]; then
+    args+=("--tag=$tag")
+  else
+    # Deploy untagged, then tag the new revision (same pattern as deploy_backend).
+    revision_suffix="pr${PR_NUMBER}-tasks-${CIRCLE_BUILD_NUM:-$(date +%s)}"
+    args+=(--no-traffic "--revision-suffix=$revision_suffix")
     env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},PR_NUMBER=${PR_NUMBER}"
   fi
-  # Langfuse was removed in 57.22; preview tasks revisions still inherit stale mounts.
-  # gcloud deploy accepts only one secrets mutation flag per invocation.
-  gcloud run services update "$GCP_TASKS_SERVICE" \
-    "--project=$GCP_PROJECT_ID" \
-    "--region=$GCP_BACKEND_REGION" \
-    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY" \
-    --quiet || true
   args+=(
     "--set-env-vars=$env_vars"
-    "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
+    # Langfuse was removed in 57.22; drop stale mounts before setting MONGO_URI.
+    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY"
+    "--update-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   )
   gcloud "${args[@]}"
+  if [[ "$tag" == pr-* ]]; then
+    gcloud run services update-traffic "$GCP_TASKS_SERVICE" \
+      "--project=$GCP_PROJECT_ID" \
+      "--region=$GCP_BACKEND_REGION" \
+      "--update-tags=${tag}=${GCP_TASKS_SERVICE}-${revision_suffix}" \
+      --quiet
+  fi
 }
 
 case "$action" in

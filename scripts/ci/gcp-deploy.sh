@@ -197,11 +197,16 @@ deploy_tasks() {
     args+=(--no-traffic)
     env_vars+=",MONGO_DB_NAME=terreno-example-pr-${PR_NUMBER},PR_NUMBER=${PR_NUMBER}"
   fi
+  # Langfuse was removed in 57.22; preview tasks revisions still inherit stale mounts.
+  # gcloud deploy accepts only one secrets mutation flag per invocation.
+  gcloud run services update "$GCP_TASKS_SERVICE" \
+    "--project=$GCP_PROJECT_ID" \
+    "--region=$GCP_BACKEND_REGION" \
+    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY" \
+    --quiet || true
   args+=(
     "--set-env-vars=$env_vars"
     "--set-secrets=MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
-    # Langfuse was removed in 57.22; preview tasks revisions still inherit stale mounts.
-    "--remove-secrets=LANGFUSE_SECRET_KEY,LANGFUSE_PUBLIC_KEY"
   )
   gcloud "${args[@]}"
 }

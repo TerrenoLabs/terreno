@@ -18,6 +18,9 @@ on:
   # (fix-code-scanning-alerts skill).
   pull_request:
     branches: [ master ]
+  # PR scans are diff-informed (only changed lines). Dispatch on a branch for a
+  # full scan that proves fixes clear alerts in untouched lines too.
+  workflow_dispatch:
   schedule:
     - cron: '29 10 * * 4'
 

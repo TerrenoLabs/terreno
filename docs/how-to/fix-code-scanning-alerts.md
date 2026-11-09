@@ -19,7 +19,7 @@ Dismissals wait for the merge so a reviewer approves each one, and the Security 
 ## Pieces
 
 - `.github/codeql/codeql-config.yml`: CodeQL configuration. Test files are ignored, so their alerts close on the next `master` scan.
-- `.github/workflows/codeql-analysis.yml`: also runs on pull requests, so a PR shows whether its fixes clear their alerts before merge.
+- `.github/workflows/codeql-analysis.yml`: also runs on pull requests (diff-informed: only changed lines) and on manual dispatch. Dispatch it on a branch for a full scan that proves each fix clears its alert before merge.
 - `.github/code-scanning/dismissals.json`: the dismissal ledger. Each entry has `alert`, `rule`, `path`, `reason` (`false positive`, `won't fix`, or `used in tests`), and a `comment` of 280 characters or fewer.
 - `.github/workflows/code-scanning-dismissals.yml`: runs on `master` when the ledger changes, and on manual dispatch.
 - `scripts/ci/codeScanning/applyDismissals.ts`: applies the ledger. It dismisses an entry only when the live alert is still open and its rule and path still match. A mismatch fails the job.

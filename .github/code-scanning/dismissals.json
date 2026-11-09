@@ -463,6 +463,20 @@
       "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
     },
     {
+      "alert": 325,
+      "rule": "js/stack-trace-exposure",
+      "path": "admin-frontend/src/AdminScreenRouter.test.tsx",
+      "reason": "used in tests",
+      "comment": "Test-only render of a thrown error; the CodeQL config ignores test files."
+    },
+    {
+      "alert": 326,
+      "rule": "js/stack-trace-exposure",
+      "path": "admin-frontend/src/AdminVersionConfig.test.tsx",
+      "reason": "used in tests",
+      "comment": "Test-only render of a thrown error; the CodeQL config ignores test files."
+    },
+    {
       "alert": 327,
       "rule": "js/missing-rate-limiting",
       "path": "announcements/src/announcementsApp.ts",

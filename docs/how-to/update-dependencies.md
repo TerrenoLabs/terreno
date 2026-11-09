@@ -60,4 +60,4 @@ CircleCI attributes a pipeline to the GitHub user whose token pushed it and emai
 
 ## Dependabot security PRs
 
-`.github/dependabot.yml` sets `open-pull-requests-limit: 0` on every block, so Dependabot opens no version-update PRs. Security updates still open, grouped per block, and skip ignored native/Expo names. `dependabot-auto-merge.yml` approves them and enables squash auto-merge, so a green security PR merges without this skill. A red one gets its bump folded into the rolling PR. A security fix for an ignored native package is a manual release task (`release` + `upgrading-expo`).
+`.github/dependabot.yml` sets `open-pull-requests-limit: 0` on every block, so Dependabot opens no version-update PRs. Security updates still open, one PR per advisory, and skip ignored native/Expo names. `dependabot-auto-merge.yml` approves them and enables squash auto-merge, so a green security PR merges without this skill. A red one gets its bump folded into the rolling PR. A security fix for an ignored native package is a manual release task (`release` + `upgrading-expo`).

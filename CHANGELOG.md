@@ -20,6 +20,17 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.0.1] - 2026-11-09
+
+### Added
+
+- `@terreno/api/sentry` exports `SENTRY_V10_DATA_COLLECTION`, a Sentry 11 `dataCollection` setting that keeps Sentry 10's privacy defaults: no cookies, user info, database query data, HTTP bodies, or AI inputs and outputs, and IP-like headers and query params denied. Pass it to `Sentry.init({dataCollection})`. (#1687)
+
+### Fixed
+
+- Patch security advisories in Terreno's dependencies: Better Auth 1.7.7 (critical), multer 2.5.0, `@modelcontextprotocol/node` 2.1.2, `@modelcontextprotocol/sdk` 1.32.2, markdown-it 14.3.3, `@hono/node-server` 2.1.3, smol-toml 1.9.1, csv-parse 7, plus in-range lockfile fixes (undici, zod, dompurify, body-parser, qs, follow-redirects, and others). `bun audit` drops from 111 advisories to 15, all in transitive build and dev tooling. (#1687)
+- Upgrade to Sentry 11 and Biome 2.5.13. (#1687)
+
 ## [58.0.0] - 2026-11-06
 
 ### Breaking

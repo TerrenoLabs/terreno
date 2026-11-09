@@ -2,13 +2,9 @@
   "rulesync": {
     "Stop": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".rulesync/hooks/quality-check.sh antigravity-cli",
-            "timeout": 300
-          }
-        ]
+        "type": "command",
+        "command": ".rulesync/hooks/quality-check.sh antigravity-cli",
+        "timeout": 300
       }
     ],
     "PostToolUse": [

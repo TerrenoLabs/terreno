@@ -1451,6 +1451,19 @@ Delete the `@terreno/rtk` package and every Redux dependency from the monorepo. 
 
 ---
 
+## syncdb-high-churn-fields
+
+**Title:** `SyncDB: high-churn fields without a sequence claim per write`
+
+**Labels:** `area:api`, `type:feature`  
+**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`syncdb-high-churn-fields`, Status=`Shaping`
+
+A synced document can carry fields that change every few seconds (a gauge, a heartbeat, a progress counter) without each change costing three replicated writes and a round trip through the stream's counter document.
+
+- **Implementation plan:** [syncdb-high-churn-fields.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/syncdb-high-churn-fields.md)
+
+---
+
 # Shipped, umbrella, and declined IPs
 
 Tracking issues created for IPs that previously lacked a `**Roadmap issue:**` header.

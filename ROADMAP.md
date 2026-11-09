@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-11-06T18:32:24.375Z.
+> dates are promised. Last updated: 2026-11-09T22:24:15.777Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -30,6 +30,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 - [Comms adapter — Twilio SMS](https://github.com/TerrenoLabs/terreno/issues/1020) (Feature, Shipped) — IP: [comms-adapter-twilio-sms](docs/implementationPlans/comms-adapter-twilio-sms.md) · Tasks: [comms-adapter-twilio-sms](docs/tasks/comms-adapter-twilio-sms.md)
 - [Invitations and seat management](https://github.com/TerrenoLabs/terreno/issues/1173) (Feature, Planned)
 - [Stripe billing and subscriptions](https://github.com/TerrenoLabs/terreno/issues/1025) (Feature, Planned) — IP: [billing-stripe](docs/implementationPlans/billing-stripe.md) · Tasks: [billing-stripe](docs/tasks/billing-stripe.md)
+- [SyncDB: high-churn fields without a sequence claim per write](https://github.com/TerrenoLabs/terreno/issues/1696) (Feature, Shaping) — IP: [syncdb-high-churn-fields](docs/implementationPlans/syncdb-high-churn-fields.md)
 
 ### ui
 

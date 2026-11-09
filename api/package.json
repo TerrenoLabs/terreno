@@ -77,6 +77,10 @@
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./sentry": {
+      "default": "./dist/sentryV10DataCollection.js",
+      "types": "./dist/sentryV10DataCollection.d.ts"
+    },
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
@@ -148,5 +152,5 @@
     "updateSnapshot": "bun test --update-snapshots"
   },
   "types": "dist/index.d.ts",
-  "version": "58.0.0"
+  "version": "58.0.2"
 }

@@ -20,6 +20,12 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.0.2] - 2026-11-09
+
+### Fixed
+
+- Patch the remaining critical and high security advisories in Terreno's dependency tree. `@terreno/ui` now asks for `@react-navigation/native` `^7.5.1`, whose `@react-navigation/core` no longer pulls in the vulnerable `decode-uri-component` (#1693). The docs site moves to tinypool 2.2.0 (critical) and serialize-javascript 7.1.4 (#1690, #1691), Metro's stale nested copy no longer brings in image-size 1.x (#1694), and rulesync 43.8.0 drops its pinned zod 4.6.5 (#1695). Dependabot now opens one security PR per advisory instead of one grouped PR per package block (#1689). Expo tooling still carries zod 3.25.76, which has no fixed 3.x release.
+
 ## [58.0.1] - 2026-11-09
 
 ### Added

@@ -24,6 +24,16 @@ describe("answersAgree", () => {
     expect(answersAgree({...tone, range: undefined}, 0.5, 0.55)).toBe(true);
   });
 
+  it("reads a numeric range in linear time on a long digit run", () => {
+    const tone = QUESTIONS[2] as EvaluatorDimension;
+    const started = performance.now();
+    // No separator, so the span falls back to 1.
+    expect(answersAgree({...tone, range: "0".repeat(100_000)}, 0.5, 0.55)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(answersAgree({...tone, range: "1 .. 5"}, 2, 2.4)).toBe(true);
+    expect(answersAgree({...tone, range: "1 .. 5"}, 2, 2.5)).toBe(false);
+  });
+
   it("matches categorical answers case-insensitively", () => {
     const dimension: EvaluatorDimension = {dataType: "categorical", key: "c", required: true};
     expect(answersAgree(dimension, "Warm", " warm ")).toBe(true);

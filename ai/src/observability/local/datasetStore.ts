@@ -426,7 +426,13 @@ export class LocalDatasetStore {
     datasetId: string,
     includeUnproofread: boolean
   ): Promise<DatasetItemView[]> {
-    const filter: Record<string, unknown> = {datasetId};
+    // Estimate passes the request body through, so reject operator objects before querying.
+    if (typeof datasetId !== "string" || !mongoose.Types.ObjectId.isValid(datasetId)) {
+      throw new APIError({status: 400, title: "datasetId must be an object id"});
+    }
+    const filter: Record<string, unknown> = {
+      datasetId: new mongoose.Types.ObjectId(datasetId),
+    };
     if (!includeUnproofread) {
       filter.proofread = true;
     }

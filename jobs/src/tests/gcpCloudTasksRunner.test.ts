@@ -306,6 +306,25 @@ describe("GcpCloudTasksRunner", () => {
     );
   });
 
+  it("trims a long run of trailing slashes from basePath quickly", async (): Promise<void> => {
+    const fake = createFakeClient();
+    const start = performance.now();
+    const runner = new GcpCloudTasksRunner(
+      baseConfig({
+        basePath: `/background${"/".repeat(100_000)}`,
+        client: fake.client,
+      })
+    );
+    assert.isBelow(performance.now() - start, 100);
+
+    await runner.enqueue(buildJob());
+
+    assert.equal(
+      fake.calls[0].request.task.httpRequest?.url,
+      "https://api.example.com/background/execute"
+    );
+  });
+
   it("startWorker ticks due schedules into Cloud Tasks without claiming Mongo jobs", async (): Promise<void> => {
     const fake = createFakeClient();
     const jobsApp = new JobsApp({

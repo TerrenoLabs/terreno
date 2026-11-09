@@ -1,4 +1,4 @@
-import {afterEach, beforeEach, describe, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 
@@ -226,5 +226,13 @@ describe("LocalDatasetStore", () => {
       traceId: String(trace._id),
     });
     assert.equal(single.sourceTraceId, String(trace._id));
+  });
+
+  it("rejects an operator object as the experiment dataset id", async () => {
+    const operator = {$ne: null} as unknown as string;
+    await expect(store.listExperimentItems(operator, true)).rejects.toMatchObject({status: 400});
+    await expect(store.listExperimentItems("not-an-id", true)).rejects.toMatchObject({
+      status: 400,
+    });
   });
 });

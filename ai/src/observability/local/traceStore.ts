@@ -172,9 +172,30 @@ export const parseTraceListSort = (value?: string): TraceListSort => {
   return {direction: descending ? -1 : 1, key};
 };
 
+/** Rejects non-string query values so an operator object never reaches a Mongo filter. */
+const optionalString = (value: unknown, label: string): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new APIError({status: 400, title: `${label} must be a string`});
+  }
+  return value;
+};
+
 const promptNames = (prompt?: string | string[]): string[] => {
-  const values = Array.isArray(prompt) ? prompt : prompt === undefined ? [] : [prompt];
-  return values.map((entry) => entry.trim()).filter((entry) => entry !== "");
+  const values: unknown[] = Array.isArray(prompt) ? prompt : prompt === undefined ? [] : [prompt];
+  const names: string[] = [];
+  for (const entry of values) {
+    if (typeof entry !== "string") {
+      throw new APIError({status: 400, title: "prompt must be a string or a list of strings"});
+    }
+    const trimmed = entry.trim();
+    if (trimmed !== "") {
+      names.push(trimmed);
+    }
+  }
+  return names;
 };
 
 /** Count rows in `from` whose traceId matches the trace, for span and score sorts. */
@@ -351,17 +372,27 @@ export class LocalTraceStore {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? Math.min(query.limit, 100) : 20;
     const filter: Record<string, unknown> = {};
-    if (query.status) {
-      filter.status = query.status;
+    // LocalTraceStore is exported, so library callers get the same guards the route applies.
+    const status = optionalString(query.status, "status");
+    if (status) {
+      filter.status = status;
     }
-    if (query.sessionId) {
-      filter.sessionId = query.sessionId;
+    const sessionId = optionalString(query.sessionId, "sessionId");
+    if (sessionId) {
+      filter.sessionId = sessionId;
     }
-    if (query.scope) {
-      filter.scope = query.scope;
+    const scope = optionalString(query.scope, "scope");
+    if (scope) {
+      filter.scope = scope;
     }
     const sort = parseTraceListSort(query.sort);
     const prompts = promptNames(query.prompt);
+    if (
+      query.promptVersion !== undefined &&
+      (typeof query.promptVersion !== "number" || !Number.isInteger(query.promptVersion))
+    ) {
+      throw new APIError({status: 400, title: "promptVersion must be an integer"});
+    }
     if (query.promptVersion !== undefined && prompts.length === 0) {
       throw new APIError({status: 400, title: "prompt is required when promptVersion is set"});
     }
@@ -378,10 +409,10 @@ export class LocalTraceStore {
       filter["prompts.name"] = {$in: prompts};
     }
     if (query.sensitive !== undefined) {
-      filter.sensitive = query.sensitive;
+      filter.sensitive = query.sensitive === true;
     }
     if (query.flaggedForDataset !== undefined) {
-      filter.flaggedForDataset = query.flaggedForDataset;
+      filter.flaggedForDataset = query.flaggedForDataset === true;
     }
     const userId = objectIdOrUndefined(query.userId);
     if (query.userId) {

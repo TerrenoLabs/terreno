@@ -19,6 +19,8 @@ import {LocalTraceStore} from "./traceStore";
 
 export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 
+const REVIEW_STATUSES: readonly unknown[] = ["done", "in_progress", "pending", "skipped"];
+
 export interface ReviewListItem {
   assigneeId?: string;
   batchId?: string;
@@ -120,6 +122,13 @@ export class LocalReviewStore {
     counts: Record<ReviewStatus, number>;
     data: ReviewListItem[];
   }> {
+    // The route forwards the raw query value, so only the four known statuses reach the filter.
+    if (status !== undefined && !REVIEW_STATUSES.includes(status)) {
+      throw new APIError({
+        status: 400,
+        title: "status must be done, in_progress, pending, or skipped",
+      });
+    }
     const ObsReviewItem = registerObsReviewItem();
     const scope = options.batchId ? {batchId: objectId(options.batchId, "batchId")} : {};
     const counts = {

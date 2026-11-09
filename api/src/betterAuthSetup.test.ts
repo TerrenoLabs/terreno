@@ -16,6 +16,7 @@ import {
   createBetterAuth,
   createBetterAuthEmailHooks,
   createBetterAuthSessionMiddleware,
+  extractBearerToken,
   getBetterAuthSession,
   getMongoClientFromMongoose,
   hasBetterAuthSession,
@@ -1586,5 +1587,31 @@ describe("setupBetterAuthUserSync", () => {
     const auth = createBetterAuth({config, mongoClient: getClient()});
 
     expect(() => setupBetterAuthUserSync(auth, asUserModel(TestUser))).not.toThrow();
+  });
+});
+
+describe("extractBearerToken", () => {
+  it("reads the token after the case-insensitive Bearer scheme", () => {
+    expect(extractBearerToken("Bearer abc.def")).toBe("abc.def");
+    expect(extractBearerToken("bearer abc")).toBe("abc");
+    expect(extractBearerToken("BEARER\tabc")).toBe("abc");
+    expect(extractBearerToken("Bearer    abc   ")).toBe("abc");
+  });
+
+  it("returns undefined for missing, empty, or non-Bearer headers", () => {
+    expect(extractBearerToken(undefined)).toBeUndefined();
+    expect(extractBearerToken("")).toBeUndefined();
+    expect(extractBearerToken("Bearer")).toBeUndefined();
+    expect(extractBearerToken("Bearer    ")).toBeUndefined();
+    expect(extractBearerToken("Bearerabc")).toBeUndefined();
+    expect(extractBearerToken("Basic abc")).toBeUndefined();
+  });
+
+  it("parses a long run of whitespace in linear time", () => {
+    const header = `bearer ${" ".repeat(200_000)}x`;
+    const start = performance.now();
+    expect(extractBearerToken(header)).toBe("x");
+    expect(extractBearerToken(`bearer ${" ".repeat(200_000)}`)).toBeUndefined();
+    expect(performance.now() - start).toBeLessThan(500);
   });
 });

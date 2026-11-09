@@ -8,7 +8,7 @@ import {createLocalObservabilityPlugin} from "./localPlugin";
 import {registerObsEvaluator} from "./models/obsEvaluator";
 import {registerObsReviewItem} from "./models/obsReviewItem";
 import {registerObsTrace} from "./models/obsTrace";
-import {LocalReviewStore} from "./reviewStore";
+import {LocalReviewStore, type ReviewStatus} from "./reviewStore";
 import {LocalTraceStore, MemoryScoreSink} from "./traceStore";
 
 describe("LocalReviewStore", () => {
@@ -160,5 +160,11 @@ describe("LocalReviewStore", () => {
     assert.deepInclude(trace.scores[0], {name: "correct", value: true});
     assert.lengthOf(trace.scores, 1);
     assert.equal((await reviewStore.getDetail(item.id)).status, "done");
+  });
+
+  it("rejects a status that is not one of the review statuses", async () => {
+    const operator = {$ne: "done"} as unknown as ReviewStatus;
+    await expect(reviewStore.list(operator)).rejects.toMatchObject({status: 400});
+    await expect(reviewStore.list("pending")).resolves.toHaveProperty("counts");
   });
 });

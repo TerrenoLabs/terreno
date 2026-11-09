@@ -247,6 +247,23 @@ describe("parseAiJson", () => {
   });
 });
 
+describe("parseAiJson fences", () => {
+  it("strips a fence with a language tag and surrounding blank lines", () => {
+    const r = parseAiJson<{a: number}>('```JSON\n\n{"a":1}\n```');
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data).toEqual({a: 1});
+    }
+  });
+
+  it("fails fast on an opening fence followed by a long run of spaces", () => {
+    const started = performance.now();
+    const r = parseAiJson(`\`\`\`${" ".repeat(50_000)}x`);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(r.success).toBe(false);
+  });
+});
+
 describe("normalizeLlmJsonTextForStructuredOutput", () => {
   it("returns JSON.stringify output on success", () => {
     expect(normalizeLlmJsonTextForStructuredOutput(`Yep: [1,2]`)).toBe("[1,2]");

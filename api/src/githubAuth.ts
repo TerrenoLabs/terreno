@@ -322,7 +322,11 @@ export const setupGitHubAuth = (
           // The link target comes only from state issued by /auth/github/link, never from an
           // ambient session or token on the callback request.
           const linkUserId = verifiedLinkTargets.get(req);
-          const linkUser = linkUserId ? await userModel.findById(linkUserId) : null;
+          // Only a string id reaches the query, so a crafted state value cannot become an operator.
+          const linkUser =
+            typeof linkUserId === "string" && linkUserId
+              ? await userModel.findById(linkUserId)
+              : null;
           if (linkUserId && !linkUser) {
             return done(new APIError({status: 404, title: "User not found"}));
           }

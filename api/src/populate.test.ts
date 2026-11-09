@@ -1,4 +1,4 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 import mongoose, {type Document, type HydratedDocument, Schema} from "mongoose";
 
@@ -62,6 +62,25 @@ describe("populate functions", () => {
     expect(populated.likesIds[0].userId?.name).toBeUndefined();
     expect(populated.likesIds[1].userId.toString()).toBe(notAdmin.id);
     expect(populated.likesIds[1].userId.name).toBeUndefined();
+  });
+
+  describe("unpopulate prototype safety", () => {
+    afterEach(() => {
+      delete (Object.prototype as Record<string, unknown>).__terrenoProbe;
+    });
+
+    it("does not assign onto Object.prototype through a __proto__ path", () => {
+      Object.defineProperty(Object.prototype, "__terrenoProbe", {
+        configurable: true,
+        enumerable: false,
+        value: {_id: "probe-id"},
+        writable: true,
+      });
+      const doc = {name: "plain"} as unknown as Document<unknown>;
+      expect(unpopulate(doc, "__proto__.__terrenoProbe")).toBe(doc);
+      expect(unpopulate(doc, "constructor.prototype.__terrenoProbe")).toBe(doc);
+      expect(({} as Record<string, unknown>).__terrenoProbe).toEqual({_id: "probe-id"});
+    });
   });
 });
 

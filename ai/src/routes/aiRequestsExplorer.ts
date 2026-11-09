@@ -67,8 +67,12 @@ export const addAiRequestsExplorerRoutes = (
       } else if (requestTypes.length > 1) {
         match.requestType = {$in: requestTypes};
       }
-      if (req.query.model) {
-        match.aiModel = req.query.model;
+      const model: unknown = req.query.model;
+      if (model !== undefined && typeof model !== "string") {
+        throw new APIError({status: 400, title: "model must be a string"});
+      }
+      if (model) {
+        match.aiModel = model;
       }
       if (req.query.startDate || req.query.endDate) {
         match.created = {};

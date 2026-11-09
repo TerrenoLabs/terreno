@@ -181,7 +181,9 @@ export const resolveMcpOAuthOption = (
  * get exactly the RFC-defined members.
  */
 export const sendProtocolJson = (res: Response, status: number, body: unknown): void => {
-  res.status(status).type("application/json").send(JSON.stringify(body));
+  // An explicit JSON content type keeps reflected request values from rendering as HTML.
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.status(status).send(JSON.stringify(body));
 };
 
 /** RFC 9728 protected-resource metadata. */

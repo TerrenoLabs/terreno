@@ -36,6 +36,16 @@ describe("normalizeAdminRoutePath", () => {
     expect(normalizeAdminRoutePath("/users/")).toBe("/users");
     expect(normalizeAdminRoutePath("users")).toBe("/users");
   });
+
+  it("keeps the root path and strips long runs of trailing slashes quickly", () => {
+    expect(normalizeAdminRoutePath("/")).toBe("/");
+    expect(normalizeAdminRoutePath("")).toBe("/");
+    expect(normalizeAdminRoutePath("/users///")).toBe("/users");
+    const input = `/users${"/".repeat(100_000)}x`;
+    const start = performance.now();
+    expect(normalizeAdminRoutePath(input)).toBe(input);
+    expect(performance.now() - start).toBeLessThan(100);
+  });
 });
 
 describe("aggregateAdminContributions", () => {

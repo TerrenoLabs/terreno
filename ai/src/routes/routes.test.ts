@@ -2495,6 +2495,13 @@ describe("AI Routes", () => {
       expect(res.body.data[0].aiModel).toBe("claude-3");
     });
 
+    it("rejects an operator object as the model filter", async () => {
+      const agent = await authAsUser(app, "admin");
+      const res = await agent.get("/aiRequestsExplorer?model[$ne]=claude-3");
+
+      expect(res.status).toBe(400);
+    });
+
     it("filters by startDate query parameter", async () => {
       const old = await AIRequest.create({
         aiModel: "gpt-4",

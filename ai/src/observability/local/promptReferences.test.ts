@@ -125,4 +125,16 @@ describe("resolvePromptReferences", () => {
       resolvePromptReferences({ancestors: ["p0"], lookup: lookupFrom(bodies), text: tag("p1")})
     ).rejects.toThrow("Prompt references nested too deeply");
   });
+
+  it("scans a long run of unclosed tag starts in linear time", async () => {
+    const text = "{{{{>|".repeat(50_000);
+    const started = performance.now();
+    const resolved = await resolvePromptReferences({
+      ancestors: ["caller"],
+      lookup: lookupFrom({}),
+      text,
+    });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(resolved).toEqual({includes: [], text});
+  });
 });

@@ -6,7 +6,8 @@ import type {ObsPromptRef} from "../../types/observability";
  * A reference to another registry prompt, written like a template partial:
  * `{{> base-rules}}`, `{{> base-rules label=staging}}`, or `{{> base-rules version=3}}`.
  */
-const PROMPT_REFERENCE = /\{\{>([^}]*)\}\}/g;
+// Excluding `{` from the body keeps the scan linear: a match attempt stops at the next tag start.
+const PROMPT_REFERENCE = /\{\{>([^{}]*)\}\}/g;
 
 const MAX_PROMPT_REFERENCE_DEPTH = 5;
 

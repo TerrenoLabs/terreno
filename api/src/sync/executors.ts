@@ -188,7 +188,10 @@ const reloadDocForConflict = async <T>(
   id: string
 ): Promise<ExecutorDoc<T> | undefined> => {
   try {
-    const found = await model.find({_id: id, deleted: {$in: [true, false]}} as never).limit(1);
+    // $eq pins the id to an equality match so a client-supplied object cannot add operators.
+    const found = await model
+      .find({_id: {$eq: id}, deleted: {$in: [true, false]}} as never)
+      .limit(1);
     return found[0] as ExecutorDoc<T> | undefined;
   } catch {
     return undefined;
@@ -854,7 +857,9 @@ export const executeDelete = async <T>({
         (error.meta as {deleted?: string} | undefined)?.deleted === "true";
       if (alreadyDeleted) {
         // Hydrate the tombstone bypassing the isDeletedPlugin find filter.
-        const tombstone = await model.find({_id: id, deleted: {$in: [true, false]}}).limit(1);
+        const tombstone = await model
+          .find({_id: {$eq: id}, deleted: {$in: [true, false]}} as never)
+          .limit(1);
         const resolved = tombstone[0] as ExecutorDoc<T> & {deleted?: boolean};
         if (!resolved) {
           throw error;

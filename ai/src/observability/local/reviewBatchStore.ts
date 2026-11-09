@@ -643,8 +643,12 @@ export class LocalReviewBatchStore {
       output: {$exists: true, $ne: null},
       status: "ok",
     };
-    if (params.promptName) {
-      filter["prompts.name"] = params.promptName;
+    const promptName: unknown = params.promptName;
+    if (promptName !== undefined && typeof promptName !== "string") {
+      throw new APIError({status: 400, title: "promptName must be a string"});
+    }
+    if (promptName) {
+      filter["prompts.name"] = promptName;
     }
     const traces = await registerObsTrace()
       .find(filter)

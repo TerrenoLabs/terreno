@@ -1139,7 +1139,7 @@ describe("GitHub OAuth state binding", () => {
   });
 
   describe("signed state link targets", () => {
-    const signedStateCookie = (state: string, linkUserId: unknown): string => {
+    const signedStateCookie = (state: string | null, linkUserId: unknown): string => {
       const payload = Buffer.from(
         JSON.stringify({expiresAt: Date.now() + 60_000, linkUserId, nonce: state})
       ).toString("base64url");

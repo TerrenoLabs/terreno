@@ -139,7 +139,7 @@
     "luxon": "catalog:",
     "pixelmatch": "^7.2.0",
     "pngjs": "^7.0.0",
-    "rulesync": "^17.1.0",
+    "rulesync": "^43.8.0",
     "simple-git-hooks": "^2.14.0",
     "zod": "catalog:"
   },

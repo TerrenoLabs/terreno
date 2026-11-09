@@ -25,6 +25,7 @@ import {
   rangeWithoutZero,
   toggle,
   toProps,
+  trimTrailingSlashes,
   union,
 } from "./Utilities";
 
@@ -63,6 +64,20 @@ describe("Utilities", () => {
 
     it("returns falsy for undefined profile", () => {
       expect(isTestUser(undefined)).toBeFalsy();
+    });
+
+    it("returns true for a subdomain of a test domain", () => {
+      expect(isTestUser({email: "qa@mail.example.com"} as unknown as BaseProfile)).toBe(true);
+      expect(isTestUser({email: "QA@NANG.IO"} as unknown as BaseProfile)).toBe(true);
+    });
+
+    it("returns false when a test domain only appears as a substring", () => {
+      expect(isTestUser({email: "user@evil-example.com"} as unknown as BaseProfile)).toBe(false);
+      expect(isTestUser({email: "user@example.com.evil.net"} as unknown as BaseProfile)).toBe(
+        false
+      );
+      expect(isTestUser({email: "example.com@company.com"} as unknown as BaseProfile)).toBe(false);
+      expect(isTestUser({email: "user@notnang.io"} as unknown as BaseProfile)).toBe(false);
     });
 
     it("returns falsy for profile without email", () => {
@@ -471,5 +486,20 @@ describe("Utilities", () => {
         createBoxShadow({blurRadius: 12, color: "#1C1C1C", offsetX: 1, offsetY: 4, opacity: 0.15})
       ).toBe("1px 4px 12px rgba(28, 28, 28, 0.15)");
     });
+  });
+});
+
+describe("trimTrailingSlashes", () => {
+  it("drops every trailing slash and keeps the rest", () => {
+    expect(trimTrailingSlashes("/todos///")).toBe("/todos");
+    expect(trimTrailingSlashes("/")).toBe("");
+    expect(trimTrailingSlashes("/todos/1")).toBe("/todos/1");
+  });
+
+  it("stays fast on a long run of slashes that does not end the string", () => {
+    const input = `/todos${"/".repeat(100_000)}x`;
+    const start = performance.now();
+    expect(trimTrailingSlashes(input)).toBe(input);
+    expect(performance.now() - start).toBeLessThan(100);
   });
 });

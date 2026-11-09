@@ -4,9 +4,9 @@ import {assert} from "chai";
 import {getAiSessionId} from "./aiSession";
 
 describe("getAiSessionId", () => {
-  it("returns the same id for every call in one app run", () => {
+  it("returns the same random UUID for every call in one app run", () => {
     const first = getAiSessionId();
-    assert.isNotEmpty(first);
+    assert.match(first, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     assert.equal(getAiSessionId(), first);
   });
 });

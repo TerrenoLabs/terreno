@@ -75,12 +75,21 @@ export const serializeParams = (params: Record<string, unknown> | undefined): st
   return search.toString();
 };
 
+/** Drop trailing `/`s. A loop instead of `/\/+$/` keeps this linear on long runs of slashes. */
+export const trimTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
 /** Prefix a relative URL with `baseUrl`; absolute and protocol-relative URLs are kept. */
 export const resolveApiUrl = ({baseUrl, url}: {baseUrl?: string; url: string}): string => {
   if (!baseUrl || /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("//")) {
     return url;
   }
-  const trimmed = baseUrl.replace(/\/+$/, "");
+  const trimmed = trimTrailingSlashes(baseUrl);
   return `${trimmed}${url.startsWith("/") ? url : `/${url}`}`;
 };
 

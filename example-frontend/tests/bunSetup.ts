@@ -1,4 +1,5 @@
 import {mock} from "bun:test";
+import {randomUUID as nodeRandomUUID} from "node:crypto";
 import React from "react";
 
 // Loaded after tests/testPreload.ts registers the @terreno/test Expo environment (which mocks
@@ -96,6 +97,9 @@ const syncDbSdkMocks = {
   ...actualSyncDbSdk,
   useTodos: () => ({data: []}),
 };
+
+// expo-crypto's native module does not load under Bun; Node's crypto is the same secure source.
+mock.module("expo-crypto", () => ({randomUUID: nodeRandomUUID}));
 
 mock.module("@/store/syncDbSdk", () => syncDbSdkMocks);
 mock.module("../store/syncDbSdk.ts", () => syncDbSdkMocks);

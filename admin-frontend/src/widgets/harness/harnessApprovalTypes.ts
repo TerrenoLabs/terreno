@@ -32,6 +32,8 @@ export const unwrapApprovalList = (raw: unknown): HarnessApprovalRow[] => {
   return [];
 };
 
+const isDigit = (char: string): boolean => char >= "0" && char <= "9";
+
 /**
  * `definitionKey` is `name@version:key`; the task label is `name@version`. Falls back to the
  * whole key when it does not have that shape.
@@ -40,8 +42,24 @@ export const taskLabel = (definitionKey?: string): string => {
   if (!definitionKey) {
     return "Unknown task";
   }
-  const match = /^(.+@\d+):.+$/.exec(definitionKey);
-  return match ? match[1] : definitionKey;
+  // The old `/^(.+@\d+):.+$/` match never crossed a line break; keep that.
+  if (/[\n\r\u2028\u2029]/.test(definitionKey)) {
+    return definitionKey;
+  }
+  // Scan colons right to left (the regex's greedy `.+`) for `<non-empty>@<digits>:<non-empty>`.
+  // A regex here backtracks quadratically on keys like `a@0:a@0:a@0:…`.
+  let colon = definitionKey.lastIndexOf(":", definitionKey.length - 2);
+  while (colon > 0) {
+    let at = colon;
+    while (at > 0 && isDigit(definitionKey[at - 1])) {
+      at -= 1;
+    }
+    if (at < colon && at > 1 && definitionKey[at - 1] === "@") {
+      return definitionKey.slice(0, colon);
+    }
+    colon = definitionKey.lastIndexOf(":", colon - 1);
+  }
+  return definitionKey;
 };
 
 /** "3 minutes ago" for an ISO time; empty when missing or invalid. */

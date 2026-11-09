@@ -149,10 +149,79 @@ export const displayReviewValue = (value: unknown): string => {
   return JSON.stringify(value, null, 2);
 };
 
+interface ParsedNumber {
+  end: number;
+  // Where the next match attempt starts when no range follows: the fraction can begin a number.
+  retryFrom: number;
+  value: number;
+}
+
+const isDigit = (char: string | undefined): boolean =>
+  char !== undefined && char >= "0" && char <= "9";
+
+const isSpace = (char: string | undefined): boolean => char !== undefined && /\s/.test(char);
+
+// Reads `-?\d+(\.\d+)?` at `start`.
+const readNumber = (text: string, start: number): ParsedNumber | undefined => {
+  let index = text[start] === "-" ? start + 1 : start;
+  const digitsStart = index;
+  while (isDigit(text[index])) {
+    index += 1;
+  }
+  if (index === digitsStart) {
+    return undefined;
+  }
+  let retryFrom = index;
+  if (text[index] === "." && isDigit(text[index + 1])) {
+    index += 1;
+    retryFrom = index;
+    while (isDigit(text[index])) {
+      index += 1;
+    }
+  }
+  return {end: index, retryFrom, value: Number(text.slice(start, index))};
+};
+
+const skipSpaces = (text: string, start: number): number => {
+  let index = start;
+  while (isSpace(text[index])) {
+    index += 1;
+  }
+  return index;
+};
+
+// Finds the first `<number> - <number>` or `<number> .. <number>` in one left-to-right pass.
+// A regex here backtracks quadratically on long digit runs with no separator.
+const findNumericRange = (text: string): {max: number; min: number} | undefined => {
+  let index = 0;
+  while (index < text.length) {
+    const first = readNumber(text, index);
+    if (!first) {
+      index += 1;
+      continue;
+    }
+    let cursor = skipSpaces(text, first.end);
+    if (text[cursor] === "-") {
+      cursor += 1;
+    } else if (text.startsWith("..", cursor)) {
+      cursor += 2;
+    } else {
+      index = first.retryFrom;
+      continue;
+    }
+    const second = readNumber(text, skipSpaces(text, cursor));
+    if (second) {
+      return {max: second.value, min: first.value};
+    }
+    index = first.retryFrom;
+  }
+  return undefined;
+};
+
 export const numericRange = (range?: string): {max: number; min: number; step: number} => {
-  const matches = range?.match(/(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)/);
-  const min = matches?.[1] ? Number(matches[1]) : 0;
-  const max = matches?.[2] ? Number(matches[2]) : 1;
+  const found = range ? findNumericRange(range) : undefined;
+  const min = found?.min ?? 0;
+  const max = found?.max ?? 1;
   return {max, min, step: max - min <= 1 ? 0.1 : 1};
 };
 

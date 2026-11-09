@@ -27,6 +27,7 @@ Comment: `TerrenoApp mounts createRateLimitMiddleware app-wide before every plug
 
 CodeQL-recognized sanitizers:
 - `typeof value === "string"` (or `Number.isFinite`) guard before use, rejecting with `APIError` 400
+  - Put the use inside the **positive** branch (`if (typeof v === "string") {match.f = {$eq: v}}`). A negative guard that throws (`if (v !== undefined && typeof v !== "string") throw …`) is correct but CodeQL did not accept it as a sanitizer (alert #38).
 - wrap equality matches: `{field: {$eq: value}}`
 - cast through a validated primitive (`String(value)` after a type check, `new mongoose.Types.ObjectId(value)` after `isValidObjectId`)
 

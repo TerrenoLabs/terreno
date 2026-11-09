@@ -1729,6 +1729,23 @@ app.use(sentryAppVersionMiddleware);
 
 **Use case:** Filter Sentry errors by app version to identify version-specific bugs.
 
+### SENTRY_V10_DATA_COLLECTION
+
+`@sentry/bun` 11 collects more request and user data by default than 10 did. Pass this
+baseline as `dataCollection` to keep the 10.x behavior: no cookies, bodies, user info, query
+data, or AI inputs/outputs, and IP-like headers denied.
+
+Import it from the `@terreno/api/sentry` subpath, not the package root. That module has no
+runtime imports, so your instrument file can read it before `Sentry.init` without loading
+express or mongoose first, which would stop Sentry from patching them.
+
+``````typescript
+import * as Sentry from "@sentry/bun";
+import {SENTRY_V10_DATA_COLLECTION} from "@terreno/api/sentry";
+
+Sentry.init({dataCollection: SENTRY_V10_DATA_COLLECTION, dsn: process.env.SENTRY_DSN});
+``````
+
 ## Logging & Tracing
 
 @terreno/api ships a Winston-based logger plus two helpers — **scoped loggers** and

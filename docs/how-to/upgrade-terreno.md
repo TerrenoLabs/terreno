@@ -2,6 +2,10 @@
 
 Bump every `@terreno/*` package together. Mixing versions is unsupported ([versioning policy](../explanation/versioning-policy.md)).
 
+`@terreno/cli` and `@terreno/mcp` require Bun `>=1.4.4`. Install that before upgrading those packages. Bun 1.4.0–1.4.3 is affected by CVE-2026-111497 (Brotli decoder out-of-bounds write); 1.4.4 patches the decoder. Apps scaffolded earlier should set `FROM oven/bun:1.4.4-slim` and rebuild. A `bun build --compile` binary embeds the builder's Bun and stays on the old decoder until that rebuild.
+
+EAS build profiles in this repository stay on Bun 1.3.10. That pin is part of the Expo fingerprint, so changing it forces a native rebuild. Those profiles remain on an affected Bun release until that rebuild is scheduled.
+
 ## 1. Check current versions
 
 From the app root:
@@ -10,7 +14,7 @@ From the app root:
 bun pm ls --all | rg '@terreno/'
 ```
 
-Or call MCP `application_info` (`terreno-mcp-local`) and read each `package.json`. Record the lowest `@terreno/*` version as `fromVersion` and the target as `toVersion` (usually the latest tag on [GitHub Releases](https://github.com/FlourishHealth/terreno/releases)).
+Or call MCP `application_info` (`terreno-mcp-local`) and read each `package.json`. Record the lowest `@terreno/*` version as `fromVersion` and the target as `toVersion` (usually the latest tag on [GitHub Releases](https://github.com/TerrenoLabs/terreno/releases)).
 
 ## 2. Fetch notes for the range
 
@@ -27,8 +31,8 @@ Or browse [`mcp-server/src/docs/upgrades/`](../../mcp-server/src/docs/upgrades/)
 | Clean git tree, work on a branch | Rollback is `git checkout -- .` / `git reset --hard` on that branch. |
 | Backend `@terreno/*` first | `/openapi.json` is the contract the frontend typed client is generated from. Regenerating against an old backend omits new routes; screens fail at compile. |
 | Backend compile + tests | Catch API breaks before touching Expo or UI. |
-| Expo SDK (if the Terreno major tracks a new Expo) | `@terreno/ui` pins `react-native` (for example `~0.86.0` on the 57 line in `ui/package.json` `peerDependencies`). Installing Terreno frontend packages before Expo leaves unmet peers. |
-| Frontend `@terreno/*` | UI, syncdb, admin-frontend, admin-spa, rtk. |
+| Expo SDK (if the Terreno major tracks a new Expo) | `@terreno/ui` pins `react-native` (for example `0.88.0-rc.1` on the 58 line in `ui/package.json` `peerDependencies`). Installing Terreno frontend packages before Expo leaves unmet peers. |
+| Frontend `@terreno/*` | UI, syncdb, admin-frontend, admin-spa. |
 | Regenerate typed client | Only after the **upgraded** backend is running. |
 | Compile, lint, tests | Whole app. |
 | Run the app | UI verification. |
@@ -38,13 +42,23 @@ Maintainers watching the next SDK beta use `track-upstream-expo` / [`track-upstr
 
 ### Backend vs frontend packages
 
-From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa`.
+From `publish-on-tag.yml`: **backend** `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp`. **frontend** `ui`, `syncdb`, `admin-frontend`, `admin-spa`. `blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
 
-## 4. RTK → syncdb is not a version bump
+## 4. Crossing 58 removes `@terreno/rtk`
 
-If the range includes the syncdb release (`56.0.0-beta.2` and later), treat collection CRUD as a **platform migration**. Follow [migrate-rtk-to-syncdb.md](migrate-rtk-to-syncdb.md) in a separate change from the routine lockstep bump. Keep `@terreno/rtk` for the OpenAPI SDK, Better Auth, feature flags, and sockets until that migration is done.
+If the range crosses `58.0.0`, the app must drop `@terreno/rtk` and Redux: there is no 58 release of `@terreno/rtk`. Follow [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](migrate-rtk-to-syncdb.md) as part of the upgrade. Run the 58 data migrations before deploying 58 frontends.
 
-## 5. Manual steps
+## 5. Langfuse is removed from `@terreno/ai`
+
+If the range includes the release that removes Langfuse, move off it before or with the bump:
+
+1. Register `ObservabilityApp` with `createLocalObservabilityPlugin()` for prompts, traces, and review. See [observe-llm-calls.md](observe-llm-calls.md).
+2. Recreate the prompts you kept in Langfuse in the built-in prompt registry.
+3. Replace `addGptRoutes({langfuseSystemPromptName})` with `systemPromptName` (and optionally `systemPromptLabel`).
+4. Remove imports of the deleted exports (`LangfuseApp`, `getPrompt`, `compilePrompt`, `initTracing`, and the rest listed in the release notes) and of the `@terreno/ai/langfuseApp` and `@terreno/ai/langfuseClient` subpaths. `ControlPrimary` is now only `"local"`.
+5. Drop the `LANGFUSE_*` environment variables. Deploy a backend revision that no longer mounts the Langfuse secrets **before** deleting those secrets (for example with `terraform apply`), or the running revision fails to start.
+
+## 6. Manual steps
 
 1. Branch from a clean tree. Confirm tests pass on HEAD so later failures are from the upgrade.
 2. Print `fromVersion`, `toVersion`, notes, affected packages, and this order. **Stop until the human confirms.**
@@ -57,13 +71,13 @@ If the range includes the syncdb release (`56.0.0-beta.2` and later), treat coll
 
 Stop at the first failed compile or test. Do not continue. Compile is a typecheck (`tsc --noEmit`); a bundler that ignores types is not enough.
 
-## 6. Verification
+## 7. Verification
 
 - Every `@terreno/*` version in the lockfile is `toVersion`.
 - `terreno_get_upgrade_guide` verification sections for notes in the range all pass.
 - App boots; auth and one write path work.
 
-## 7. Rollback
+## 8. Rollback
 
 On the upgrade branch, with no extra uncommitted work you need:
 
@@ -76,3 +90,7 @@ bun install
 ```
 
 If you already committed, `git revert` the upgrade commit or reset the branch to the pre-upgrade SHA before it was pushed. Do not leave a half-upgraded lockfile on `master`.
+
+## 8. Automate it
+
+To have an agent open the upgrade pull request on a schedule, see [Automate Terreno upgrades](automate-terreno-upgrades.md).

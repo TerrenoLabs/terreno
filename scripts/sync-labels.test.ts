@@ -1,5 +1,5 @@
-import {assert} from "chai";
 import {describe, it} from "bun:test";
+import {assert} from "chai";
 import {buildLabelCommand, findDuplicateNames, parseLabelsYaml} from "./sync-labels.ts";
 
 describe("parseLabelsYaml", () => {
@@ -78,7 +78,7 @@ describe("buildLabelCommand", () => {
   it("passes the description as a single argv entry rather than shell text", () => {
     const command = buildLabelCommand({
       label: {color: "1D76DB", description: "Auth, sessions, JWT", name: "area:auth"},
-      repo: "FlourishHealth/terreno",
+      repo: "TerrenoLabs/terreno",
     });
 
     assert.include(command, "Auth, sessions, JWT");

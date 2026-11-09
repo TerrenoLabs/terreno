@@ -1,7 +1,12 @@
-import {describe, expect, it} from "bun:test";
+import {afterAll, describe, expect, it} from "bun:test";
+import {assert} from "chai";
+import mongoose from "mongoose";
 
 import {
   Announcement,
+  AnnouncementAcknowledgement,
+  AnnouncementClickEvent,
+  AnnouncementImpression,
   AnnouncementsApp,
   excerptBody,
   isAnnouncementPendingForUser,
@@ -9,10 +14,25 @@ import {
   toAnnouncementPublic,
 } from "../index";
 
+const CONSUMER_MODEL_NAMES = [
+  "Announcement",
+  "AnnouncementAcknowledgement",
+  "AnnouncementClickEvent",
+  "AnnouncementImpression",
+] as const;
+
+afterAll(() => {
+  for (const modelName of CONSUMER_MODEL_NAMES) {
+    if (mongoose.models[modelName]) {
+      mongoose.deleteModel(modelName);
+    }
+  }
+});
+
 describe("@terreno/announcements package exports", () => {
   it("re-exports the announcements plugin surface", () => {
     expect(typeof AnnouncementsApp).toBe("function");
-    expect(Announcement.modelName).toBe("Announcement");
+    expect(Announcement.modelName).toBe("TerrenoAnnouncement");
     expect(excerptBody("hello world")).toBe("hello world");
     expect(
       isAnnouncementPendingForUser({
@@ -53,5 +73,26 @@ describe("@terreno/announcements package exports", () => {
     expect(toAnnouncementPublic(dismissOnly).requiresAcknowledgement).toBe(false);
     expect(toAnnouncementPublic(omittedPolicy, "required").requiresAcknowledgement).toBe(true);
     expect(resolveAcknowledgementPolicy({announcement: dismissOnly})).toBe("dismiss-only");
+  });
+
+  it("uses namespaced model names while preserving collections", () => {
+    const models = [
+      [Announcement, "TerrenoAnnouncement", "announcements"],
+      [
+        AnnouncementAcknowledgement,
+        "TerrenoAnnouncementAcknowledgement",
+        "announcementacknowledgements",
+      ],
+      [AnnouncementClickEvent, "TerrenoAnnouncementClickEvent", "announcementclickevents"],
+      [AnnouncementImpression, "TerrenoAnnouncementImpression", "announcementimpressions"],
+    ] as const;
+
+    for (const [model, modelName, collectionName] of models) {
+      assert.equal(model.modelName, modelName);
+      assert.equal(model.collection.collectionName, collectionName);
+    }
+    for (const modelName of CONSUMER_MODEL_NAMES) {
+      assert.doesNotThrow(() => mongoose.model(modelName, new mongoose.Schema({})));
+    }
   });
 });

@@ -1,7 +1,7 @@
 # Implementation Plan: Public Roadmap on GitHub
 
 **Status:** Complete
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1004
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1004
 **Priority:** High
 **Effort:** Small batch
 **Owner:** unassigned

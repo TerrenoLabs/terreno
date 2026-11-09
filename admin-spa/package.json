@@ -1,14 +1,13 @@
 {
   "author": "Josh Gachnang",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@better-auth/expo": "^1.6.25",
     "@expo/vector-icons": "catalog:",
     "@react-native-async-storage/async-storage": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
     "@terreno/admin-frontend": "workspace:*",
-    "@terreno/rtk": "workspace:*",
     "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "better-auth": "catalog:",
@@ -16,11 +15,14 @@
     "expo-constants": "catalog:",
     "expo-font": "catalog:",
     "expo-linking": "catalog:",
+    "expo-network": "catalog:",
     "expo-router": "catalog:",
+    "expo-secure-store": "catalog:",
+    "expo-server": "catalog:",
     "expo-splash-screen": "catalog:",
     "expo-status-bar": "catalog:",
     "express": "catalog:",
-    "http-proxy-middleware": "^3.0.3",
+    "http-proxy-middleware": "^4.2.0",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-native": "catalog:",
@@ -29,15 +31,14 @@
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
     "react-native-web": "catalog:",
-    "react-native-worklets": "catalog:",
-    "react-redux": "catalog:",
-    "redux-persist": "catalog:"
+    "react-native-worklets": "catalog:"
   },
   "description": "Standalone admin SPA (Expo Router web) plus Express serve plugin — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@playwright/test": "catalog:",
     "@terreno/api": "workspace:*",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/express": "catalog:",
     "@types/luxon": "catalog:",
@@ -61,10 +62,11 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "src/dist/**",
     "dist/**"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "admin",
     "api",
@@ -84,25 +86,26 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "build:web": "expo export --platform web --output-dir dist",
     "compile": "tsc -p tsconfig.server.json",
     "compile:watch": "tsc -p tsconfig.server.json -w",
     "dev": "expo start --web --port 8083",
-    "lint": "biome check ./src ./app ./store ./components ./e2e playwright.config.ts playwright.integration.config.ts",
-    "lint:fix": "biome check --write ./src ./app ./store ./components ./e2e playwright.config.ts playwright.integration.config.ts",
+    "lint": "biome check ./src ./app ./store ./components ./server ./e2e playwright.config.ts playwright.integration.config.ts",
+    "lint:fix": "biome check --write ./src ./app ./store ./components ./server ./e2e playwright.config.ts playwright.integration.config.ts",
     "smoke": "bun e2e/smoke.ts",
     "start": "expo start",
-    "test": "bun test ./src ./store ./components",
-    "test:agent": "AGENT=1 bun test --only-failures ./src ./store ./components",
-    "test:ci": "bun test ./src ./store ./components",
+    "test": "bun test ./src ./store ./components ./server",
+    "test:agent": "AGENT=1 bun test --only-failures ./src ./store ./components ./server",
+    "test:ci": "bun test ./src ./store ./components ./server",
     "test:coverage": "bun run ../scripts/check-coverage.ts",
     "test:e2e": "playwright test",
     "test:integration": "playwright test --config playwright.integration.config.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "web": "expo start --web --port 8083"
   },
   "types": "./src/dist/index.d.ts",
-  "version": "57.3.0"
+  "version": "58.0.0"
 }

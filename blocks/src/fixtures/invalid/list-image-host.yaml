@@ -1,0 +1,12 @@
+v: 1
+blocks:
+  - type: list
+    items:
+      - title: Roast leg of lamb
+        image:
+          src: file:roast-lamb
+          alt: Roast leg of lamb
+      - title: Honey carrots
+        image:
+          src: https://images.example.com/carrots.jpg
+          alt: Glazed carrots

@@ -157,6 +157,33 @@ describe("MCP handlers", () => {
     });
   });
 
+  describe("list sort allowlist", () => {
+    it("rejects sorting on excluded or undeclared fields", async () => {
+      await NoteModel.create({ownerId: owner._id, secret: "b", title: "One"});
+      await NoteModel.create({ownerId: owner._id, secret: "a", title: "Two"});
+      const redacted: MCPRegistryEntry = {
+        ...createEntry({queryFields: ["title", "secret"], sortFields: ["body"]}),
+        config: {...entry.config, excludeFields: ["secret"]},
+      };
+
+      assert.include(
+        errorText(await handleList(redacted, {sort: "secret"}, asUser(owner))),
+        "secret is not an allowed sort field"
+      );
+      assert.include(
+        errorText(await handleList(redacted, {sort: "title -ownerId"}, asUser(owner))),
+        "ownerId is not an allowed sort field"
+      );
+
+      const byTitle = await handleList(redacted, {sort: "-title"}, asUser(owner));
+      assert.notEqual(byTitle.isError, true);
+      const titles = (parseResult(byTitle).data as Array<{title: string}>).map((d) => d.title);
+      assert.deepEqual(titles, ["Two", "One"]);
+      const byBody = await handleList(redacted, {sort: "body"}, asUser(owner));
+      assert.notEqual(byBody.isError, true);
+    });
+  });
+
   describe("queryFilter", () => {
     it("returns an empty page when queryFilter resolves to null", async () => {
       await NoteModel.create({ownerId: owner._id, title: "Hidden"});

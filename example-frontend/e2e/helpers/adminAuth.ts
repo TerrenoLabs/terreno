@@ -21,6 +21,38 @@ export const setUserAdmin = async (email: string): Promise<void> => {
   }
 };
 
+/** Grants an RBAC role to the app User, such as `operator` for platform account recovery. */
+export const addUserRole = async (email: string, role: string): Promise<void> => {
+  const client = new MongoClient(MONGO_URI);
+  try {
+    await client.connect();
+    await client
+      .db()
+      .collection("users")
+      .updateOne({email}, {$addToSet: {roles: role}});
+  } finally {
+    await client.close();
+  }
+};
+
+/**
+ * Marks the Better Auth user's email verified, the way a seeded account starts, so account
+ * linking (`verified-email` mode) treats it as the email's owner. The app User's own
+ * `emailVerified` (the profile banner) is left alone.
+ */
+export const setBetterAuthEmailVerified = async (email: string): Promise<void> => {
+  const client = new MongoClient(MONGO_URI);
+  try {
+    await client.connect();
+    await client
+      .db()
+      .collection("user")
+      .updateOne({email: email.toLowerCase()}, {$set: {emailVerified: true}});
+  } finally {
+    await client.close();
+  }
+};
+
 export const getAdminToken = async (request: APIRequestContext): Promise<string> => {
   return signUpOrSignInBetterAuth(request, {
     email: ADMIN_USER.email,
@@ -30,8 +62,8 @@ export const getAdminToken = async (request: APIRequestContext): Promise<string>
 };
 
 export const loginAsAdmin = async (page: Page): Promise<void> => {
-  // Promote before the browser session's first /auth/me so RTK does not cache a
-  // forbidden admin layout from a pre-superadmin grant set.
+  // Promote before the browser session's first /auth/me so the request client does not
+  // cache a forbidden admin layout from a pre-superadmin grant set.
   await setUserAdmin(ADMIN_USER.email);
   await loginAs(page, ADMIN_USER);
 };

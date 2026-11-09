@@ -1,5 +1,5 @@
 import type React from "react";
-import {useCallback} from "react";
+import {useCallback, useEffect, useState} from "react";
 
 import {Badge} from "./Badge";
 import {Box} from "./Box";
@@ -7,9 +7,18 @@ import {Box} from "./Box";
 /** Queued count above which the banner switches to a numeric drain-progress display. */
 const PROGRESS_THRESHOLD = 20;
 
+/** Default time connectivity must stay lost before the offline badge appears. */
+const DEFAULT_OFFLINE_GRACE_MS = 3000;
+
 export interface SyncStatusBannerProps {
   /** Whether the client currently has connectivity. */
   isOnline: boolean;
+  /**
+   * How long (ms) `isOnline` must stay false before the offline badge shows. Absorbs the
+   * not-yet-connected window at startup and sub-second socket blips so the badge does not
+   * flash. Going back online hides it immediately. Defaults to 3000; pass 0 to show at once.
+   */
+  offlineGraceMs?: number;
   /** Number of mutations waiting in the durable outbox. */
   queuedCount: number;
   /**
@@ -45,7 +54,7 @@ export interface SyncStatusBannerProps {
 
 /**
  * Compact, presentational sync-state banner for local-first (e.g. @terreno/syncdb) screens:
- * offline indicator, queued mutation count (with drain progress once the queue grows past
+ * offline indicator (shown only after a short grace period), queued mutation count (with drain progress once the queue grows past
  * {@link PROGRESS_THRESHOLD}), a paused-for-auth indicator, a pressable failed count, and a
  * pressable conflict badge. Initial bootstrap "Syncing…" is intentionally not shown here —
  * apps should surface that as a one-shot toast on launch (see SyncHealthToast). It is
@@ -54,6 +63,7 @@ export interface SyncStatusBannerProps {
  */
 export const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({
   isOnline,
+  offlineGraceMs = DEFAULT_OFFLINE_GRACE_MS,
   queuedCount,
   isSyncing: _isSyncing,
   conflictCount,
@@ -67,6 +77,22 @@ export const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({
   onOpenFailed,
   testID = "sync-status-banner",
 }) => {
+  const [isOfflineSettled, setIsOfflineSettled] = useState(!isOnline && offlineGraceMs <= 0);
+
+  // Only surface "Offline" once connectivity has stayed lost for the grace period.
+  useEffect(() => {
+    if (isOnline) {
+      setIsOfflineSettled(false);
+      return;
+    }
+    if (offlineGraceMs <= 0) {
+      setIsOfflineSettled(true);
+      return;
+    }
+    const timer = setTimeout(() => setIsOfflineSettled(true), offlineGraceMs);
+    return (): void => clearTimeout(timer);
+  }, [isOnline, offlineGraceMs]);
+
   const handleOpenConflicts = useCallback((): void => {
     onOpenConflicts?.();
   }, [onOpenConflicts]);
@@ -83,7 +109,7 @@ export const SyncStatusBanner: React.FC<SyncStatusBannerProps> = ({
 
   return (
     <Box direction="row" gap={2} marginBottom={4} minHeight={20} testID={testID} wrap>
-      {!isOnline && (
+      {!isOnline && isOfflineSettled && (
         <Box alignItems="center" direction="row" gap={1} testID="sync-offline-indicator">
           <Badge status="error" value="Offline" />
         </Box>

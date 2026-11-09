@@ -1,4 +1,5 @@
-import {describe, expect, it} from "bun:test";
+import {afterEach, describe, expect, it} from "bun:test";
+import {logger} from "@terreno/api";
 import {deterministicHash, evaluateAllFlags, evaluateFlag} from "../evaluate";
 import type {FeatureFlagDocument, FeatureFlagModel, SegmentFunction} from "../types";
 
@@ -512,6 +513,60 @@ describe("evaluateFlag", () => {
         }
       }
     });
+  });
+});
+
+describe("evaluation diagnostics", () => {
+  const originalDebugEnv = process.env.FEATURE_FLAGS_DEBUG;
+  const originalInfo = logger.info;
+  const originalDebug = logger.debug;
+
+  const captureLogs = (): string[] => {
+    const lines: string[] = [];
+    logger.info = ((message: string) => {
+      lines.push(message);
+    }) as typeof logger.info;
+    logger.debug = ((message: string) => {
+      lines.push(message);
+    }) as typeof logger.debug;
+    return lines;
+  };
+
+  const emailRuleFlag = (): FeatureFlagDocument =>
+    createFlag({
+      key: "staff-only",
+      rolloutPercentage: 0,
+      rules: [{enabled: true, field: "email", operator: "contains", value: "@staff.example"}],
+    });
+
+  afterEach(() => {
+    logger.info = originalInfo;
+    logger.debug = originalDebug;
+    if (originalDebugEnv === undefined) {
+      delete process.env.FEATURE_FLAGS_DEBUG;
+    } else {
+      process.env.FEATURE_FLAGS_DEBUG = originalDebugEnv;
+    }
+  });
+
+  it("logs nothing about a user's attributes by default", () => {
+    delete process.env.FEATURE_FLAGS_DEBUG;
+    const lines = captureLogs();
+
+    evaluateFlag(emailRuleFlag(), "user1", {email: "dummy-user@example.com"}, noSegments);
+
+    expect(lines.join("\n")).not.toContain("dummy-user@example.com");
+  });
+
+  it("never logs the user's attribute value when debug logging is on", () => {
+    process.env.FEATURE_FLAGS_DEBUG = "true";
+    const lines = captureLogs();
+
+    evaluateFlag(emailRuleFlag(), "user1", {email: "dummy-user@example.com"}, noSegments);
+
+    const combined = lines.join("\n");
+    expect(combined).not.toContain("dummy-user@example.com");
+    expect(combined).toContain("user.email contains");
   });
 });
 

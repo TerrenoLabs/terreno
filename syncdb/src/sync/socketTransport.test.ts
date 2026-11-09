@@ -349,6 +349,41 @@ describe("createSocketTransport", () => {
     expect(seen).toHaveLength(1);
   });
 
+  it("coalesces deltas delivered across tasks until the next animation frame", async () => {
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    let flushFrame: FrameRequestCallback | undefined;
+    globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number => {
+      flushFrame = callback;
+      return 1;
+    };
+    try {
+      const receiver = makeTransport();
+      const batches: SyncDelta[][] = [];
+      receiver.onDeltaBatch?.((deltas) => batches.push(deltas));
+      await receiver.connect();
+
+      const first: SyncDelta = {
+        collection: "todos",
+        data: {title: "first"},
+        id: "t1",
+        method: "create",
+        seq: 1,
+        stream: "todos|owner:u1",
+      };
+      const second: SyncDelta = {...first, data: {title: "second"}, id: "t2", seq: 2};
+      server.sockets[0]?.emit("sync:delta", first);
+      await waitUntil(() => flushFrame !== undefined);
+      server.sockets[0]?.emit("sync:delta", second);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(batches).toEqual([]);
+      flushFrame?.(0);
+      expect(batches).toEqual([[first, second]]);
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+  });
+
   it("sendMutationBatch resolves results from the Socket.io ack callback (FIX 5)", async () => {
     server.mutateBatchHandler = (request, socket, ack) => {
       socket.emit("sync:batchReceived", {batchId: request.batchId});
@@ -468,5 +503,54 @@ describe("createSocketTransport", () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
 
     expect(statuses[statuses.length - 1]).toEqual({connected: false});
+  });
+
+  it("delivers app-level server events to onEvent listeners across reconnects", async () => {
+    const connecting = makeTransport();
+    const received: unknown[][] = [];
+    const unsubscribe = connecting.onEvent?.("featureFlagsChanged", (...args: unknown[]) => {
+      received.push(args);
+    });
+    await connecting.connect();
+
+    server.io.emit("featureFlagsChanged", {key: "dark-mode"});
+    await waitUntil(() => received.length === 1);
+    expect(received).toEqual([[{key: "dark-mode"}]]);
+
+    // Listeners are bound to the socket, so they survive a disconnect + reconnect.
+    connecting.disconnect();
+    await connecting.connect();
+    server.io.emit("featureFlagsChanged", {key: "beta"});
+    await waitUntil(() => received.length === 2);
+    expect(received[1]).toEqual([{key: "beta"}]);
+
+    unsubscribe?.();
+    server.io.emit("featureFlagsChanged", {key: "ignored"});
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(received).toHaveLength(2);
+  });
+
+  it("unbinds only the listener whose unsubscribe was called", async () => {
+    const connecting = makeTransport();
+    const calls: string[] = [];
+    const handler = (): void => {
+      calls.push("shared");
+    };
+    const first = connecting.onEvent?.("ping", handler);
+    connecting.onEvent?.("ping", handler);
+    await connecting.connect();
+
+    first?.();
+    server.io.emit("ping");
+    await waitUntil(() => calls.length === 1);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(calls).toEqual(["shared"]);
+  });
+
+  it("rejects sync protocol and Socket.io lifecycle event names", () => {
+    const connecting = makeTransport();
+    expect(() => connecting.onEvent?.("sync:delta", () => {})).toThrow("reserved");
+    expect(() => connecting.onEvent?.("connect", () => {})).toThrow("reserved");
+    expect(() => connecting.onEvent?.("disconnect", () => {})).toThrow("reserved");
   });
 });

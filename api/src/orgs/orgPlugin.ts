@@ -61,7 +61,7 @@ export const orgScopedPlugin = (schema: Schema): void => {
     organizationId: {
       description: "Organization this document belongs to",
       index: true,
-      ref: "Organization",
+      ref: "TerrenoOrganization",
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },

@@ -1,23 +1,17 @@
 {
   "compilerOptions": {
-    "allowSyntheticDefaultImports": true,
     "declaration": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "ignoreDeprecations": "6.0",
-    "lib": ["es2022", "dom"],
-    "module": "commonjs",
-    "moduleResolution": "node",
-    "noEmit": false,
+    "isolatedModules": true,
+    "lib": ["es2023"],
+    "module": "nodenext",
     "noImplicitReturns": true,
-    "noImplicitThis": true,
     "outDir": "./src/dist",
     "rootDir": "./src",
-    "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "es2022"
+    "target": "es2023",
+    "types": ["node"]
   },
   "exclude": ["node_modules", "src/dist", "src/**/*.test.ts"],
-  "include": ["src/index.ts", "src/serve.ts", "src/appConfig.ts"]
+  "include": ["src/index.ts", "src/serve.ts", "src/appConfig.ts", "src/serverContext.ts", "src/routesManifest.ts", "src/gate.ts", "src/returnTo.ts"]
 }

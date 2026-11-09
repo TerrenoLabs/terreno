@@ -1,0 +1,20 @@
+v: 1
+datasets:
+  signups:
+    columns:
+      - {name: month, type: string}
+      - {name: count, type: number}
+    rows:
+      - [Jan, 120]
+      - [Feb, 145]
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    data: signups
+    x: month
+    y: count
+    title: Signups by month
+  - type: table
+    data: signups
+    columns: [month, count]

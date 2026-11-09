@@ -1,0 +1,21 @@
+appId: ${APP_ID}
+---
+# Returns to the home screen from a stack screen opened off home.
+# Android: system back. iOS has no system back, so restart the app; the dev client reloads the
+# last Metro bundle and the session persists. (A cold relaunch on Android leaves the dev client
+# on a blank screen.)
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - stopApp
+      - launchApp
+- extendedWaitUntil:
+    visible:
+      id: ${HOME_SCREEN_ID}
+    timeout: 60000

@@ -58,10 +58,11 @@ webhookReceiptSchema.plugin(findExactlyOne);
 
 export const getWebhookReceiptModel = (): WebhookReceiptModel => {
   return (
-    (mongoose.models.WebhookReceipt as WebhookReceiptModel | undefined) ??
+    (mongoose.models.TerrenoWebhookReceipt as WebhookReceiptModel | undefined) ??
     mongoose.model<WebhookReceiptDocument, WebhookReceiptModel>(
-      "WebhookReceipt",
-      webhookReceiptSchema
+      "TerrenoWebhookReceipt",
+      webhookReceiptSchema,
+      WEBHOOK_RECEIPTS_COLLECTION
     )
   );
 };

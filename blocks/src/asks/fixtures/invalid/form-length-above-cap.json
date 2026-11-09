@@ -1,0 +1,30 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "title",
+        "type": "text",
+        "label": "Title",
+        "maxLength": 2001
+      },
+      {
+        "id": "body",
+        "type": "textarea",
+        "label": "Body",
+        "maxLength": 10001
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].maxLength",
+      "code": "RANGE_INVALID"
+    },
+    {
+      "path": "fields[1].maxLength",
+      "code": "RANGE_INVALID"
+    }
+  ]
+}

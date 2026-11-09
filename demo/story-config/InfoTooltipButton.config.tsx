@@ -3,6 +3,7 @@ import {InfoTooltipButtonDemo, InfoTooltipButtonLong} from "@stories/InfoTooltip
 import {InfoTooltipButton} from "@terreno/ui";
 
 export const InfoTooltipButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {InfoTooltipButton} from \"@terreno/ui\";\n\n<InfoTooltipButton />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",

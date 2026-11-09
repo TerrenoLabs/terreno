@@ -417,3 +417,42 @@ describe("fieldDescriptionToZodType", () => {
     ).toEqual({note: "hello"});
   });
 });
+
+const conditionalRequiredSchema = new Schema({
+  flagged: {default: false, description: "Whether the record is flagged", type: Boolean},
+  kind: {description: "Record kind", required: true, type: String},
+  note: {
+    description: "Only required for flagged records",
+    required: [
+      function (this: {flagged?: boolean}): boolean {
+        return this.flagged === true;
+      },
+      "note is required when flagged",
+    ],
+    type: String,
+  },
+});
+
+const ConditionalRequiredModel =
+  mongoose.models.SchemaMetadataConditionalRequired ??
+  mongoose.model("SchemaMetadataConditionalRequired", conditionalRequiredSchema);
+
+describe("conditionally required fields", () => {
+  it("are not marked required, so clients do not expect them on every document", () => {
+    const description = describeModel(ConditionalRequiredModel);
+    expect(description.fields.kind?.required).toBe(true);
+    expect(description.fields.note?.required).toBe(false);
+
+    const {required} = modelDescriptionToOpenApiSpec(description);
+    expect(required).toContain("kind");
+    expect(required).not.toContain("note");
+  });
+
+  it("still enforce the requirement when saving", async () => {
+    const doc = new ConditionalRequiredModel({flagged: true, kind: "alert"});
+    const error = await doc.validate().catch((validationError: unknown) => validationError);
+    expect((error as mongoose.Error.ValidationError).errors.note?.message).toBe(
+      "note is required when flagged"
+    );
+  });
+});

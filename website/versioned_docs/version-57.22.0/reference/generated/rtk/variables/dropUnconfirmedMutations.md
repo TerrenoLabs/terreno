@@ -1,0 +1,1 @@
+> **dropUnconfirmedMutations**: `ActionCreatorWithoutPayload`\<`"offline/dropUnconfirmedMutations"`\>

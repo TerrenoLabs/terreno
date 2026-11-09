@@ -1,7 +1,7 @@
 # Tasks: Durable background jobs
 
 IP: [job-queues.md](../implementationPlans/job-queues.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1188
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1188
 
 **Feature profile:** false (full IP)
 

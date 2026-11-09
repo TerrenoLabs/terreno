@@ -172,6 +172,11 @@ describe("isDeleted", () => {
     stuff = await StuffModel.findOne({deleted: true});
     expect(stuff?.name).toBe("Things");
   });
+
+  it('filters out deleted documents from "countDocuments" unless deleted is explicit', async () => {
+    expect(await StuffModel.countDocuments({})).toBe(1);
+    expect(await StuffModel.countDocuments({deleted: true})).toBe(1);
+  });
 });
 
 describe("findOneOrNone", () => {

@@ -1,0 +1,33 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "name",
+        "type": "text",
+        "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "helperText": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+      },
+      {
+        "id": "other",
+        "type": "text",
+        "label": " "
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].helperText",
+      "code": "TOO_LONG"
+    },
+    {
+      "path": "fields[0].label",
+      "code": "TOO_LONG"
+    },
+    {
+      "path": "fields[1].label",
+      "code": "TOO_SHORT"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "kind": "markdown",
+  "input": {
+    "prompt": "  ",
+    "initial": 5,
+    "placeholder": "   ",
+    "language": "md"
+  },
+  "errors": [
+    {
+      "path": "initial",
+      "code": "INVALID_TYPE"
+    },
+    {
+      "path": "language",
+      "code": "UNKNOWN_KEY"
+    },
+    {
+      "path": "placeholder",
+      "code": "TOO_SHORT"
+    },
+    {
+      "path": "prompt",
+      "code": "TOO_SHORT"
+    }
+  ]
+}

@@ -1,28 +1,16 @@
 name: Example Frontend Deploy
 
-# Dual-run with CircleCI until `terreno-netlify` has NETLIFY_* values.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-    paths:
-      - "example-frontend/**"
-      - "ui/**"
-      - "rtk/**"
-      - "ai/**"
-      - "admin-frontend/**"
-      - "bun.lock"
-      - ".github/workflows/frontend-example-deploy.yml"
-  pull_request:
-    paths:
-      - "example-frontend/**"
-      - "ui/**"
-      - "rtk/**"
-      - "ai/**"
-      - "admin-frontend/**"
-      - "bun.lock"
-      - ".github/workflows/frontend-example-deploy.yml"
-  workflow_dispatch:
+    branches-ignore:
+      - "**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-changes:
@@ -31,7 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.check.outputs.has_changes }}
-      has_backend_changes: ${{ steps.check.outputs.has_backend_changes }}
     steps:
       - uses: actions/checkout@v6.0.3
 
@@ -39,10 +26,8 @@ jobs:
         id: check
         run: |
           FILES=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          CHANGES=$(echo "$FILES" | grep -cE '^(example-frontend/|ui/|rtk/|admin-frontend/)' || true)
-          BACKEND_CHANGES=$(echo "$FILES" | grep -cE '^(example-backend/|api/|api-health/|admin-backend/|ai/)' || true)
+          CHANGES=$(echo "$FILES" | grep -cE '^(example-frontend/|ui/|syncdb/|admin-frontend/)' || true)
           echo "has_changes=$( [ "$CHANGES" -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
-          echo "has_backend_changes=$( [ "$BACKEND_CHANGES" -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -64,15 +49,12 @@ jobs:
           bun run --filter '@terreno/admin-frontend' --filter '@terreno/api' --filter '@terreno/ai' compile
 
       - name: Set BASE_URL for deploy
-        env:
-          HAS_BACKEND_CHANGES: ${{ needs.check-changes.outputs.has_backend_changes }}
         run: |
           PROD_URL="https://prod---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
           if [ "${{ github.ref }}" = "refs/heads/master" ]; then
             URL="$PROD_URL"
-          elif [ -n "${{ github.event.pull_request.number }}" ] && [ "$HAS_BACKEND_CHANGES" = "true" ]; then
-            # Backend preview is only deployed when the PR touches backend files
-            # (see deploy-example-gcp.yml check-changes). Otherwise fall back to prod.
+          elif [ -n "${{ github.event.pull_request.number }}" ]; then
+            # Every frontend PR preview receives an isolated backend preview from cd.yml.
             URL="https://pr-${{ github.event.pull_request.number }}---terreno-backend-example-7knxlrnpqq-uc.a.run.app"
           else
             URL="$PROD_URL"
@@ -395,6 +377,13 @@ jobs:
               state: 'in_progress',
               description: 'Deploying example frontend preview to Netlify'
             });
+
+      - name: Wait for preview backend health
+        run: |
+          scripts/ci/wait-cloud-run-health.sh \
+            "https://pr-${{ github.event.pull_request.number }}---terreno-backend-example-7knxlrnpqq-uc.a.run.app" \
+            1200
+        timeout-minutes: 25
 
       - name: Deploy to Netlify
         id: netlify

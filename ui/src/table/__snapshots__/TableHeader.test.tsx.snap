@@ -285,7 +285,7 @@ exports[`TableHeader renders correctly with children 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -522,7 +522,7 @@ exports[`TableHeader renders with tableHeaderGroup display (default) 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -759,7 +759,7 @@ exports[`TableHeader renders with visuallyHidden display 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -996,7 +996,7 @@ exports[`TableHeader renders with custom color 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },

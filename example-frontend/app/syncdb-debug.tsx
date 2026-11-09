@@ -1,8 +1,8 @@
 /**
  * SyncDB Debugger — a Redux-DevTools-style live view over the @terreno/syncdb
- * debug event log. Left column streams events (newest first); the right column
- * inspects the selected event as JSON. Designed to run side-by-side (open in a
- * second browser window): local mutations, outbound sends, inbound server deltas
+ * debug event log. The event list and the JSON inspector sit side by side at or
+ * above the desktop floor, and stack below it. Open it in a second browser
+ * window: local mutations, outbound sends, inbound server deltas
  * ("patches"), acks/nacks, conflicts, reconcile/replay and connectivity all
  * stream in live.
  *
@@ -24,6 +24,7 @@ import {
   formatConflictFieldLabel,
   formatConflictFieldValue,
   getChangedConflictFields,
+  isSupportedDesktopWidth,
   NO_CONFLICT_DIFF_FIELDS,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
@@ -35,6 +36,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {useOpenSyncLab} from "@/hooks/useOpenSyncLab";
@@ -306,6 +308,8 @@ const SyncDebugContent: React.FC = () => {
   const [frozen, setFrozen] = useState<SyncDebugEvent[]>([]);
   const [activeTypes, setActiveTypes] = useState<Set<SyncDebugEventType>>(new Set());
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const {width: windowWidth} = useWindowDimensions();
+  const isDesktopLayout = isSupportedDesktopWidth({width: windowWidth});
 
   const togglePause = useCallback((): void => {
     setPaused((prev) => {
@@ -505,7 +509,7 @@ const SyncDebugContent: React.FC = () => {
       </View>
 
       {/* Split: event stream + detail */}
-      <View style={{flex: 1, flexDirection: "row"}}>
+      <View style={{flex: 1, flexDirection: isDesktopLayout ? "row" : "column"}}>
         <View style={{borderRightColor: PALETTE.border, borderRightWidth: 1, flex: 3}}>
           {displayed.length === 0 ? (
             <View style={{alignItems: "center", flex: 1, justifyContent: "center"}}>

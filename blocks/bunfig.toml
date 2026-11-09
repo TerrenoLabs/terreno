@@ -1,0 +1,6 @@
+[test]
+root = "./src"
+# `scripts/` holds dev-only generators (`bun run schemas`). `src/asks/jsonSchema.test.ts` fails
+# when their committed output is stale, and the new-file coverage gate reads this list.
+coveragePathIgnorePatterns = ["**/dist/**", "**/*.test.ts", "**/tests/**", "**/node_modules/**", "../**", "scripts/**"]
+coverageThreshold = { line = 95, function = 95 }

@@ -3,6 +3,7 @@ import {SwiperDemo, SwiperEmpty} from "@stories/Swiper.stories";
 import {Swiper} from "@terreno/ui";
 
 export const SwiperConfiguration: DemoConfiguration = {
+  usageExample: "import {Swiper} from \"@terreno/ui\";\n\n<Swiper />",
   a11yNotes: ["Pagination dots should remain reachable; empty pages render nothing."],
   additionalDocumentation: [],
   category: "Pattern",

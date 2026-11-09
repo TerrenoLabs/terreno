@@ -63,6 +63,7 @@ notificationSchema.plugin(findOneOrNone);
 notificationSchema.plugin(syncPlugin);
 
 export const Notification = mongoose.model<NotificationDocument, NotificationModel>(
-  "Notification",
-  notificationSchema
+  "TerrenoInboxNotification",
+  notificationSchema,
+  "notifications"
 );

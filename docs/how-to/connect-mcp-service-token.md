@@ -2,7 +2,7 @@
 
 Mint a personal `mcp_…` Bearer key, then paste the MCP URL and key into Perplexity, Cursor, VS Code, or Claude Code.
 
-This is the **static-key** path for the consumer app's `POST /mcp`. It is not the hosted `@terreno/mcp` codegen server. For exposing tools, see [Expose MCP tools](expose-mcp-tools.md). Interactive OAuth for remote clients is a separate plan ([app MCP server](../implementationPlans/app-mcp-server.md)); do not send these keys in a query string.
+This is the **static-key** path for the consumer app's `POST /mcp`. It is not the hosted `@terreno/mcp` codegen server. For exposing tools, see [Expose MCP tools](expose-mcp-tools.md). Interactive OAuth for remote clients such as Claude.ai and ChatGPT is [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md); do not send these keys in a query string.
 
 ## 1. Enable the flag
 
@@ -35,13 +35,13 @@ Cap is **10** active tokens per user. List rows show prefix (`mcp_` + eight hex 
 Use a session or JWT. A service token cannot mint another token.
 
 ```bash
-curl -X POST "$API/mcp/service-tokens" \
+curl -X POST "$API/mcp/service-tokens/create" \
   -H "Authorization: Bearer $JWT" \
   -H "Content-Type: application/json" \
   -d '{"name":"Perplexity"}'
 ```
 
-Read `data.token` and `data.mcpUrl` from the JSON. List and revoke never return `token`. Do not log the secret.
+Read `data.token` and `data.mcpUrl` from the JSON. Only this create response carries `token`. List, read, revoke, and the synced `mcp/service-tokens` collection never return `token` or `tokenHash`. Do not log the secret.
 
 ## 4. Perplexity custom connector
 
@@ -104,7 +104,17 @@ The token acts as the owning user on **MCP only**. It cannot mint or list tokens
 
 ## 7. Revoke
 
-- **Owner:** Profile → MCP connections → **Revoke** on the row (`DELETE /mcp/service-tokens/:id`).
-- **Admin:** Admin → MCP service tokens (`/admin/mcp-service-tokens`). Create and update are off. Delete sets `revokedAt`; it does not hard-delete the row.
+- **Owner:** Profile → MCP connections → **Revoke** on the row (`POST /mcp/service-tokens/:id/revoke`).
+- **Admin:** Admin → MCP service tokens (`/admin/mcp-service-tokens`). Create and update are off. Delete sets `revokedAt`; it does not hard-delete or tombstone the row.
+
+The token list is a synced collection (`mcp/service-tokens`, owner-scoped), so a revoke from another device or the admin panel shows up on the owner's list as a `revokedAt` update.
 
 Revoked and expired keys fail `tools/call` immediately. Disabled user accounts are refused the same way as over HTTP.
+
+## Upgrading from 57.x
+
+58.0.0 gives `McpServiceToken` String ids. Before deploying, add the `mcp-service-token-string-ids` framework migration to your `migrations/` directory and apply it. Existing tokens keep working and keep their ids as hex strings. See [Run MongoDB migrations](run-mongodb-migrations.md#framework-migrations).
+
+A password reset, Better Auth password change, or "sign out everywhere" (`revoke-sessions` / `revoke-other-sessions`) bumps the user's `tokenEpoch` and ends every key minted before it. The keys show as revoked in the list; mint a new one for each client you still use.
+
+To put `/mcp` on the public internet behind a Cloudflare Tunnel, see [Expose an MCP server safely](expose-mcp-server-safely.md).

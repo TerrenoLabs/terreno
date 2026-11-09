@@ -72,8 +72,14 @@ export const serializeCommsDashboardSearchParams = (
 
 const DEFAULT_STATS_DAYS = 7;
 
+/**
+ * The default 7-day window, ending at the next whole minute. A whole-minute boundary makes the
+ * range (and so the request URL) identical for a server render and the browser that hydrates it
+ * within the same minute, so the server's seeded data is reused; ending at the *next* minute
+ * still covers every message sent so far.
+ */
 const defaultCommsDashboardDateRange = (): {endDate: string; startDate: string} => {
-  const endDate = DateTime.utc();
+  const endDate = DateTime.utc().startOf("minute").plus({minutes: 1});
   const startDate = endDate.minus({days: DEFAULT_STATS_DAYS});
   return {
     endDate: endDate.toISO() ?? "",

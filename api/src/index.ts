@@ -1,8 +1,24 @@
+export {ISSUE_SIGN_IN_LINK_PERMISSION} from "./accountSecurity/accessActions";
+export * from "./accountSecurity/accountSecurityApp";
+export * from "./accountSecurity/accountSecurityService";
+export {suspendMembershipAction} from "./accountSecurity/membershipActions";
+export {
+  createOrgSecurityAuthorizer,
+  mountOrgSecurityRoutes,
+  type OrgRecoveryOptions,
+} from "./accountSecurity/orgSecurityRoutes";
+export {
+  createSecurityEventsPlugin,
+  recordSelfSecurityAction,
+} from "./accountSecurity/securityEventHooks";
+export * from "./accountSecurity/securityEvents";
+export * from "./accountSecurity/securityNotifications";
 export * from "./actions";
 export * from "./adminTypes";
 export * from "./api";
 export {AuditApp, type AuditAppOptions} from "./audit/auditApp";
 export {
+  AUDIT_EVENT_SOURCES,
   type AuditEventDocument,
   type AuditEventModel,
   type AuditEventOperation,
@@ -35,18 +51,57 @@ export * from "./authRecovery";
 export * from "./authTokens";
 export * from "./betterAuth";
 export * from "./betterAuthApp";
+export * from "./betterAuthChallengeHeaders";
+export * from "./betterAuthFeatures";
+export * from "./betterAuthMethods";
 export * from "./betterAuthSetup";
+export * from "./browserLogsRoute";
 export * from "./config";
 export * from "./configurationApp";
 export * from "./configurationPlugin";
 export * from "./consentApp";
+export {
+  type ConsentStatus,
+  type ConsentStatusForm,
+  type ConsentStatusProvisional,
+  type ConsentStatusRow,
+  type ConsentStatusSigner,
+  getConsentStatuses,
+  type ResolveConsentForms,
+} from "./consentStatus";
 export * from "./envConfigurationPlugin";
 export * from "./errors";
 export * from "./expressServer";
+export {
+  FRAMEWORK_MODEL_PUBLIC_NAMES,
+  type FrameworkModelCompiledName,
+  type FrameworkModelPublicName,
+  publicFrameworkModelName,
+} from "./frameworkModelNames";
 export * from "./githubAuth";
 export * from "./httpClient";
 export * from "./logger";
-export {extractUserFromHeaders, type MCPAuthContext} from "./mcp/auth";
+export {
+  type McpRequestLogAppOption,
+  type ResolvedMcpRequestLogOptions,
+  resolveMcpRequestLogOption,
+} from "./mcp/adminTracking";
+export {
+  extractAuthFromHeaders,
+  extractUserFromHeaders,
+  type MCPAuthContext,
+  type MCPAuthResult,
+} from "./mcp/auth";
+export {addMcpOAuthRoutes, type McpOAuthRoutesOptions} from "./mcp/oauth";
+export {
+  buildAuthorizationServerMetadata,
+  buildProtectedResourceMetadata,
+  type McpOAuthAppOption,
+  type McpOAuthOptions,
+  type ResolvedMcpOAuthOptions,
+  resolveMcpOAuthOption,
+  sendMcpOAuthChallenge,
+} from "./mcp/oauthMetadata";
 export type {MCPCustomTool} from "./mcp/registry";
 export {
   clearMCPRegistry,
@@ -59,10 +114,14 @@ export {generateInputSchema, generateToolDescription} from "./mcp/schemaGenerato
 export {type MCPServerOptions, mountMCPServer} from "./mcp/server";
 export {
   addMcpServiceTokenRoutes,
+  createMcpServiceTokenRouter,
   MAX_ACTIVE_MCP_SERVICE_TOKENS,
+  MCP_SERVICE_TOKENS_ROUTE_PATH,
+  MCP_SERVICE_TOKENS_SYNC_COLLECTION,
   type McpServiceTokenRoutesOptions,
   type McpServiceTokensAppOption,
   resolveMcpServiceTokensOption,
+  toPublicMcpServiceToken,
 } from "./mcp/serviceTokens";
 export {
   generateAllTools,
@@ -79,6 +138,7 @@ export type {
   MCPToolResult,
 } from "./mcp/types";
 export * from "./middleware";
+export * from "./migrations/builtin/mcpServiceTokenStringIds";
 export * from "./migrations/generate";
 export * from "./migrations/load";
 export * from "./migrations/lock";
@@ -87,7 +147,13 @@ export * from "./migrations/schemaCatalog";
 export * from "./migrations/types";
 export * from "./models/consentForm";
 export * from "./models/consentResponse";
+export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
+export {McpOAuthClient} from "./models/mcpOAuthClient";
+export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
+export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
+export {McpRequestLog} from "./models/mcpRequestLog";
 export * from "./models/mcpServiceToken";
+export {McpToolSetting} from "./models/mcpToolSetting";
 export * from "./models/notification";
 export * from "./models/notificationPreference";
 export * from "./models/versionConfig";
@@ -111,6 +177,7 @@ export {
 } from "./notifications/notificationsBeforeSend";
 export * from "./notifiers/googleChatNotifier";
 export * from "./notifiers/slackNotifier";
+export * from "./notifiers/slackWebApi";
 export * from "./notifiers/zoomNotifier";
 export * from "./openApiBuilder";
 export * from "./openApiCompat";
@@ -125,6 +192,10 @@ export * from "./orgs/orgsApp";
 export * from "./permissions";
 export * from "./plugins";
 export * from "./populate";
+export {
+  createRouteRateLimitMiddleware,
+  type RouteRateLimitOptions,
+} from "./rateLimit/routeRateLimit";
 export type {
   RateLimitLimits,
   RateLimitOptions,
@@ -172,6 +243,14 @@ export * from "./rbac/statements";
 export * from "./rbac/types";
 export * from "./rbac/userPlugin";
 export {
+  assertCanWriteTargetUser,
+  assertCanWriteUserIdentity,
+  isRbacUserModelName,
+  isWriteKeyForField,
+  USER_IDENTITY_FIELDS,
+  USER_UPDATE_IDENTITY_ACTION,
+} from "./rbac/userWriteGuards";
+export {
   type AuthorizedEmitEntry,
   emitPayloadToAuthorizedRoom,
   emitSyncDeltaForChange,
@@ -180,30 +259,10 @@ export {
 } from "./realtime/changeStreamWatcher";
 export {matchesQuery} from "./realtime/queryMatcher";
 export {
-  addQuerySubscription,
-  clearQueryStore,
-  computeQueryId,
-  getQuerySubscriptionsForCollection,
-  removeAllSocketQueries,
-  removeQuerySubscription,
-} from "./realtime/queryStore";
-export {
   installRealtimeSocketHandlers,
-  MAX_DOCUMENT_SUBSCRIPTIONS,
-  MAX_MODEL_SUBSCRIPTIONS,
-  MAX_QUERY_SUBSCRIPTIONS,
   RealtimeApp,
   type RealtimeSocketLike,
 } from "./realtime/realtimeApp";
-export {
-  clearRealtimeRegistry,
-  findRegistryEntryByCollection,
-  findRegistryEntryByRoutePath,
-  getRealtimeRegistry,
-  type RealtimeRegistryEntry,
-  registerRealtime,
-  updateRealtimeRegistryOptions,
-} from "./realtime/registry";
 export {
   DEFAULT_SESSION_REVALIDATION_INTERVAL_MS,
   loadFullUserForSocket,
@@ -230,14 +289,7 @@ export {
   type SocketDataBag,
   type SocketWithDecodedToken,
 } from "./realtime/socketUser";
-export type {
-  ChangeStreamConfig,
-  DocumentSubscription,
-  QuerySubscription,
-  RealtimeAppOptions,
-  RealtimeConfig,
-  RealtimeEvent,
-} from "./realtime/types";
+export type {ChangeStreamConfig, RealtimeAppOptions} from "./realtime/types";
 export * from "./requestContext";
 export {
   type DescribeModelForRouterOptions,
@@ -280,6 +332,16 @@ export * from "./terrenoPlugin";
 export * from "./transformers";
 export * from "./types/consentForm";
 export * from "./types/consentResponse";
+export type * from "./types/mcpAdmin";
+export type {
+  McpOAuthAuthorizationDocument,
+  McpOAuthAuthorizationStatus,
+  McpOAuthClientDocument,
+  McpOAuthConfidentialClientOptions,
+  McpOAuthRevokedFamilyDocument,
+  McpOAuthTokenDocument,
+  McpOAuthTokenEndpointAuthMethod,
+} from "./types/mcpOAuth";
 export * from "./utils";
 export * from "./versionCheckPlugin";
 export type {

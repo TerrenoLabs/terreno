@@ -12,7 +12,7 @@ interface VersionInfo {
 
 /** @internal */
 export interface VersionInfoInputs {
-  appEnv?: string;
+  appEnv?: VersionInfo["environment"];
   configVersion?: string;
   isDev: boolean;
   manifestChannel?: string;

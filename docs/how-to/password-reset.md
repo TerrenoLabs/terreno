@@ -20,6 +20,8 @@ Set `publicAppUrl` and `sendMail`. Forgot-password always returns 202.
 ```typescript
 authOptions: {
   publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+  // Set false if the host already owns POST /resetPassword.
+  legacyResetPasswordRoute: false,
   sendMail: async (message) => {
     await getCommsService().sendMail(message);
   },
@@ -27,12 +29,19 @@ authOptions: {
 }
 ```
 
+Pass the `message` through unchanged. Recovery mail carries `sensitive: true`, and `@terreno/comms` stores no payload for a sensitive message, so the reset or verify link never reaches the `CommsMessage` log or the admin Comms Dashboard. If you send through another transport, do not log or store the content of a message with `sensitive: true`.
+
 | Action | Path | Body |
 | --- | --- | --- |
 | Forgot | `POST /auth/forgotPassword` | `{email}` → 202 |
 | Reset | `POST /auth/resetPassword` or `POST /resetPassword` | `{token, password}` or `{token, newPassword}` |
 | Send verify | `POST /auth/sendVerification` | authenticated → 202 after delivery; 501 if `publicAppUrl` is missing |
 | Verify | `POST /auth/verifyEmail` | `{token}` |
+
+Recovery routes default on for compatibility. Set `authOptions.passwordReset: false` to omit
+both password-reset routes and forgot-password. Set `authOptions.emailVerification: false` to
+omit both verification routes. Set `authOptions.legacyResetPasswordRoute: false` when the host
+owns `POST /resetPassword`; `POST /auth/resetPassword` remains registered.
 
 Reset links: `${publicAppUrl}/resetPassword?token=...`. Verify links: `${publicAppUrl}/verifyEmail?token=...`.
 
@@ -60,10 +69,14 @@ On `BetterAuthConfig` set the same `publicAppUrl`, `sendMail`, and `renderAuthMa
 
 1. Pass `onForgotPassword` (or `onForgotPasswordPress`) to `LoginScreen`.
 2. Add `/forgotPassword` (email form) and `/resetPassword` that reads `token` from the query string.
-3. On Better Auth apps, request reset with `authClient.requestPasswordReset` and submit with `authClient.resetPassword({newPassword, token})`. JWT apps use `POST /auth/forgotPassword` and the RTK `resetPassword` mutation (`POST /resetPassword`). The example app falls back to the JWT request or reset route when Better Auth rejects the operation, so either auth mode can complete.
+3. On Better Auth apps, request reset with `authClient.requestPasswordReset` and submit with `authClient.resetPassword({newPassword, token})`. JWT apps call `POST /auth/forgotPassword` and `POST /resetPassword` through the generated `usePostAuthForgotPasswordMutation` / `usePostResetPasswordMutation` hooks (`store/apiSdk.ts`), or `useJwtAuth().resetPassword` from `@terreno/syncdb/auth`. The example app falls back to the JWT request or reset route when Better Auth rejects the operation, so either auth mode can complete.
 4. Show a profile banner when `emailVerified` is false, with Resend calling `POST /auth/sendVerification`.
 5. Add `/verifyEmail` that reads `token` from the query string. JWT apps call `POST /auth/verifyEmail`. Better Auth apps try `GET /verify-email?token=...` first, then the JWT route so either token type can complete.
 
-A new `issueFor` for the same user and type invalidates earlier unused tokens of that type. Changing the mailbox through `PATCH /auth/me` invalidates unused `passwordReset` tokens even when the User schema has no `emailVerified` field. When `emailVerificationPlugin` is applied, mailbox change also sets `emailVerified` to false and invalidates unused `emailVerification` tokens. Letter casing alone does not count as a mailbox change. `emailVerified` and `tokenEpoch` are privileged user fields: signup and `PATCH /auth/me` drop them.
+A new `issueFor` for the same user and type invalidates earlier unused tokens of that type. Changing the mailbox through `PATCH /auth/me` invalidates unused `passwordReset` tokens even when the User schema has no `emailVerified` field. When `emailVerificationPlugin` is applied, mailbox change also sets `emailVerified` to false and invalidates unused `emailVerification` tokens. Letter casing alone does not count as a mailbox change. `emailVerified` and `tokenEpoch` are privileged user fields: signup and `PATCH /auth/me` drop them, along with the password fields `hash` and `salt`.
 
-Better Auth password reset revokes that user's Better Auth sessions (`revokeSessionsOnPasswordReset`) and, when an app User exists, updates the JWT password and `tokenEpoch` so `POST /auth/login` cannot keep the old passport hash. JWT `POST /auth/resetPassword` does the reverse for Better Auth when `BetterAuthApp` is registered: it updates the Better Auth password and deletes Better Auth sessions. Console mail in development prints length only; check `CommsMessage` / console adapter logs for delivery, not the raw token in logger output. Request logs redact `password`, `newPassword`, `oldPassword`, `token`, and `refreshToken` in bodies and in URL query strings.
+To set a password from your own server code (for example an admin action), call `changeUserPassword(user, password, {adminId, app: req.app})` from `@terreno/api` so the change revokes sessions the same way a reset does. The example backend's `POST /users/:id/password` uses it.
+
+Either reset path also ends the user's MCP credentials: `mcp_` service tokens and MCP OAuth grants issued before the reset stop working, because they are bound to `tokenEpoch`. With `CommsApp` registered, push also stops going to devices the user registered before the reset until each device registers again.
+
+Better Auth password reset revokes that user's Better Auth sessions (`revokeSessionsOnPasswordReset`) and, when an app User exists, updates the JWT password and `tokenEpoch` so `POST /auth/login` cannot keep the old passport hash. JWT `POST /auth/resetPassword` does the reverse for Better Auth when `BetterAuthApp` is registered: it updates the Better Auth password and deletes Better Auth sessions. With `BetterAuthApp` registered, the JWT routes only replace an existing JWT password, because `POST /auth/login` has no second factor: `POST /auth/forgotPassword` mails no link to an app User without one (the response is still 202), and `POST /auth/resetPassword` refuses that User's token with 400 `legacy-password-reset-unavailable`, setting no password. That account (for example a social-only one) resets through Better Auth. Without Better Auth, the JWT routes still let any user set a password. Console mail in development prints length only; check `CommsMessage` / console adapter logs for delivery, not the raw token in logger output. Request logs redact password, token, secret, and code fields (any key name, any depth) in bodies and in URL query strings.

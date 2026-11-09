@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "When should the meeting start?",
+    "fields": [
+      {
+        "id": "starts",
+        "type": "datetime",
+        "label": "Starts at",
+        "required": true,
+        "default": "2026-10-01T16:30:00Z"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "starts": "2026-10-01T16:30:00Z"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "When should the meeting start?",
+    "toolCallId": "call_fixture"
+  }
+}

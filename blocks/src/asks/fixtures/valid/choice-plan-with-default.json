@@ -1,0 +1,42 @@
+{
+  "kind": "choice",
+  "input": {
+    "title": "Choose a plan",
+    "prompt": "Which plan should I set up?",
+    "select": "one",
+    "options": [
+      {"id": "starter", "label": "Starter", "description": "$0, one seat"},
+      {"id": "team", "label": "Team", "description": "$20 per seat"},
+      {"id": "enterprise", "label": "Enterprise"}
+    ],
+    "default": ["team"],
+    "submitLabel": "Set up plan"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "title": "Choose a plan",
+    "text": "Which plan should I set up?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "option:team",
+        "label": "Team",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["team"]}}
+      },
+      {
+        "id": "option:starter",
+        "label": "Starter",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["starter"]}}
+      },
+      {
+        "id": "option:enterprise",
+        "label": "Enterprise",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["enterprise"]}}
+      }
+    ]
+  }
+}

@@ -4,6 +4,7 @@ import {MarkdownView} from "@terreno/ui";
 import React from "react";
 
 export const MarkdownViewConfiguration: DemoConfiguration = {
+  usageExample: "import {MarkdownView} from \"@terreno/ui\";\n\n<MarkdownView />",
   name: "MarkdownView",
   component: MarkdownView,
   related: ["Text", "Heading", "Link"],

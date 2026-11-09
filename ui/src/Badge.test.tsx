@@ -102,7 +102,7 @@ describe("Badge", () => {
     const customColors = {
       customBackgroundColor: "#123456",
       customBorderColor: "#654321",
-      customIconColor: "#ffcc00",
+      customIconColor: "accent" as const,
       customTextColor: "#ffffff",
     };
 

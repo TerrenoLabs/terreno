@@ -9,7 +9,7 @@ import {Text, useWindowDimensions} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import type {AdminApi, AdminConfigResponse, AdminModelConfig} from "./types";
+import type {AdminConfigResponse, AdminModelConfig} from "./types";
 
 const mockRouterPush = mock((_href: string) => {});
 
@@ -59,7 +59,7 @@ const setWindowWidth = (width: number): (() => void) => {
     useWindowDimensionsMock.mockImplementation(dimensionsImpl);
 
     return (): void => {
-      useWindowDimensionsMock.mockImplementation(getScaledSize(375));
+      useWindowDimensionsMock.mockImplementation?.(getScaledSize(375));
     };
   }
 
@@ -95,8 +95,6 @@ const platformModel = ({
   routePath,
 });
 
-const mockApi = {} as unknown as AdminApi;
-
 describe("AdminShell", () => {
   let restoreWindowWidth: (() => void) | undefined;
 
@@ -113,12 +111,26 @@ describe("AdminShell", () => {
     restoreWindowWidth = undefined;
   });
 
+  it("keeps the hamburger header between the old 768 cutoff and the desktop floor", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(800);
+
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminShell apiBase="/admin" routeBase="/admin">
+        <React.Fragment />
+      </AdminShell>
+    );
+
+    expect(queryByTestId("admin-shell-sidebar")).toBeNull();
+    expect(getByTestId("admin-shell-mobile-header")).toBeTruthy();
+  });
+
   it("shows the fixed sidebar on desktop widths", () => {
     restoreWindowWidth?.();
     restoreWindowWidth = setWindowWidth(1024);
 
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -133,7 +145,6 @@ describe("AdminShell", () => {
     restoreWindowWidth = setWindowWidth(1024);
     const operator = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         isOrganizationOperator
         organizationDirectoryPath="/orgs"
@@ -147,7 +158,6 @@ describe("AdminShell", () => {
 
     const orgAdmin = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         isOrganizationOperator={false}
         organizationDirectoryPath="/orgs"
@@ -166,7 +176,7 @@ describe("AdminShell", () => {
     restoreWindowWidth = setWindowWidth(1024);
 
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -179,7 +189,7 @@ describe("AdminShell", () => {
   it("shows loading and generic error states", () => {
     configState.isLoading = true;
     let rendered = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -190,16 +200,16 @@ describe("AdminShell", () => {
     configState.config = null;
     configState.error = new Error("network");
     rendered = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
     expect(rendered.getByTestId("admin-shell-error")).toBeTruthy();
   });
 
-  it("hides the fixed sidebar and shows a hamburger header below 768px", () => {
+  it("hides the fixed sidebar and shows a hamburger header below the desktop floor", () => {
     const {getByTestId, getByLabelText, queryByTestId, UNSAFE_root} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -213,7 +223,7 @@ describe("AdminShell", () => {
 
   it("opens and closes the navigation drawer from the hamburger menu", async () => {
     const {getByTestId, getByLabelText, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -237,7 +247,7 @@ describe("AdminShell", () => {
 
   it("closes the drawer when the backdrop is pressed", async () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -256,7 +266,7 @@ describe("AdminShell", () => {
 
   it("closes the drawer after selecting a navigation item", async () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -296,7 +306,6 @@ describe("AdminShell", () => {
 
     const {getByTestId, queryByTestId, queryByText} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/roles"
@@ -351,7 +360,6 @@ describe("AdminShell", () => {
 
     const {getByTestId, queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/admin/roles"
@@ -379,7 +387,6 @@ describe("AdminShell", () => {
 
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/admin/roles"
@@ -402,7 +409,6 @@ describe("AdminShell", () => {
 
     const {queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/admin/roles"
@@ -424,7 +430,6 @@ describe("AdminShell", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         breadcrumbs={[{href: "/admin", label: "Home"}, {label: "Todos"}]}
         configurationPath="/configuration"
@@ -478,7 +483,6 @@ describe("AdminShell", () => {
 
     const {queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         customScreens={[{displayName: "Denied local screen", name: "denied"}]}
@@ -517,7 +521,6 @@ describe("AdminShell", () => {
 
     const {getByTestId, queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/roles"
@@ -555,7 +558,7 @@ describe("AdminShell", () => {
     };
 
     const {getByText, queryByText} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -579,7 +582,7 @@ describe("AdminShell", () => {
     };
 
     const {getByTestId, queryByTestId, queryByText} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -601,7 +604,7 @@ describe("AdminShell", () => {
     configState.isLoading = true;
 
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -617,7 +620,7 @@ describe("AdminShell", () => {
     configState.isLoading = false;
 
     const {getByTestId, queryByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -632,7 +635,7 @@ describe("AdminShell", () => {
     restoreWindowWidth = setWindowWidth(1024);
 
     const {getByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <Text testID="admin-shell-child">Child content</Text>
       </AdminShell>
     );
@@ -647,7 +650,6 @@ describe("AdminShell", () => {
 
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         footer={<Text testID="admin-shell-footer">Signed in</Text>}
         routeBase="/admin"
@@ -664,7 +666,7 @@ describe("AdminShell", () => {
     restoreWindowWidth = setWindowWidth(1024);
 
     const {getByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin" sidebarVariant="clinical">
+      <AdminShell apiBase="/admin" routeBase="/admin" sidebarVariant="clinical">
         <React.Fragment />
       </AdminShell>
     );
@@ -679,7 +681,6 @@ describe("AdminShell", () => {
 
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         breadcrumbs={[{href: "/admin", label: "Admin"}, {label: "Todos"}]}
         headerActions={<Text testID="admin-shell-header-action">Create</Text>}
@@ -700,7 +701,6 @@ describe("AdminShell", () => {
 
     const {getByTestId, queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         headerActions={<Text testID="admin-shell-header-only">Save</Text>}
         routeBase="/admin"
@@ -730,7 +730,6 @@ describe("AdminShell", () => {
 
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         configurationPath="/admin/configuration"
         rolesPath="/roles"
@@ -783,7 +782,6 @@ describe("AdminShell", () => {
 
     const {getByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         customScreens={[{displayName: "Local screen", name: "local-screen"}]}
         routeBase="/admin"
@@ -813,7 +811,6 @@ describe("AdminShell", () => {
 
     const {getByTestId, queryByTestId} = renderWithTheme(
       <AdminShell
-        api={mockApi}
         apiBase="/admin"
         customScreens={[{displayName: "Local screen", name: "local-screen"}]}
         routeBase="/admin"
@@ -859,7 +856,7 @@ describe("AdminShell", () => {
     };
 
     const {getByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -900,7 +897,7 @@ describe("AdminShell", () => {
     };
 
     const {getByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -940,7 +937,7 @@ describe("AdminShell", () => {
     };
 
     const {getByText, getByTestId} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -951,9 +948,36 @@ describe("AdminShell", () => {
     assert.isNotNull(getByTestId("admin-shell-nav-model-Todo-clickable"));
   });
 
+  it("renders grouped custom screens separately from ungrouped Screens", () => {
+    restoreWindowWidth?.();
+    restoreWindowWidth = setWindowWidth(1024);
+    configState.config = {
+      ...buildConfig(),
+      customScreens: [
+        {displayName: "AI Requests", name: "ai-requests"},
+        {displayName: "Prompts", group: "AI Observability", name: "ai-prompts"},
+        {displayName: "Traces", group: "AI Observability", name: "ai-traces"},
+        {displayName: "Review queue", group: "AI Observability", name: "ai-review"},
+      ],
+    };
+
+    const {getByTestId, getByText} = renderWithTheme(
+      <AdminShell apiBase="/admin" routeBase="/admin">
+        <React.Fragment />
+      </AdminShell>
+    );
+
+    expect(getByTestId("admin-shell-nav-group-ai-observability")).toBeTruthy();
+    expect(getByText("AI Observability")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-prompts-clickable")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-review-clickable")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screens")).toBeTruthy();
+    expect(getByTestId("admin-shell-nav-screen-ai-requests-clickable")).toBeTruthy();
+  });
+
   it("closes the mobile drawer when the viewport expands to desktop width", async () => {
     const {getByTestId, queryByTestId, rerender} = renderWithTheme(
-      <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+      <AdminShell apiBase="/admin" routeBase="/admin">
         <React.Fragment />
       </AdminShell>
     );
@@ -968,7 +992,7 @@ describe("AdminShell", () => {
 
     await act(async () => {
       rerender(
-        <AdminShell api={mockApi} apiBase="/admin" routeBase="/admin">
+        <AdminShell apiBase="/admin" routeBase="/admin">
           <React.Fragment />
         </AdminShell>
       );

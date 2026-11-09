@@ -1,26 +1,37 @@
 import {AccordionConfiguration} from "@story-config/Accordion.config";
+import {AccountSecurityScreenConfiguration} from "@story-config/AccountSecurityScreen.config";
 import {ActionSheetConfiguration} from "@story-config/ActionSheet.config";
 import {AddressFieldConfiguration} from "@story-config/AddressField.config";
 import {AIRequestExplorerConfiguration} from "@story-config/AIRequestExplorer.config";
 import {AiSuggestionBoxConfiguration} from "@story-config/AiSuggestionBox.config";
+import {AreaChartConfiguration} from "@story-config/AreaChart.config";
+import {AskCardConfiguration} from "@story-config/AskCard.config";
 import {AttachmentPreviewConfiguration} from "@story-config/AttachmentPreview.config";
 import {AvatarConfiguration} from "@story-config/Avatar.config";
 import {BadgeConfiguration} from "@story-config/Badge.config";
 import {BannerConfiguration} from "@story-config/Banner.config";
+import {BarChartConfiguration} from "@story-config/BarChart.config";
+import {BlocksPlaygroundConfiguration} from "@story-config/BlocksPlayground.config";
+import {BlocksViewConfiguration} from "@story-config/BlocksView.config";
 import {BodyConfiguration} from "@story-config/Body.config";
 import {BooleanFieldConfiguration} from "@story-config/BooleanField.config";
 import {BoxConfiguration} from "@story-config/Box.config";
 import {ButtonConfiguration} from "@story-config/Button.config";
 import {CardConfiguration} from "@story-config/Card.config";
+import {ChartCardConfiguration} from "@story-config/ChartCard.config";
 import {CheckBoxConfiguration} from "@story-config/CheckBox.config";
 import {ConflictSheetConfiguration} from "@story-config/ConflictSheet.config";
 import {ConsentFormScreenConfiguration} from "@story-config/ConsentFormScreen.config";
 import {CustomSelectFieldConfiguration} from "@story-config/CustomSelectField.config";
+import {DashboardGridConfiguration} from "@story-config/DashboardGrid.config";
+import {DashboardGridItemConfiguration} from "@story-config/DashboardGridItem.config";
 import {DataTableConfiguration} from "@story-config/DataTable.config";
 import {DateTimeFieldConfiguration} from "@story-config/DateTimeField.config";
 import {DecimalRangeActionSheetConfiguration} from "@story-config/DecimalRangeActionSheet.config";
 import {DismissButtonConfiguration} from "@story-config/DismissButton.config";
+import {DonutChartConfiguration} from "@story-config/DonutChart.config";
 import {DraggableListConfiguration} from "@story-config/DraggableList.config";
+import {DropdownPanelConfiguration} from "@story-config/DropdownPanel.config";
 import {EditableCardConfiguration} from "@story-config/EditableCard.config";
 import {EmailFieldConfiguration} from "@story-config/EmailField.config";
 import {EmojiSelectorConfiguration} from "@story-config/EmojiSelector.config";
@@ -28,18 +39,22 @@ import {ErrorBoundaryConfiguration} from "@story-config/ErrorBoundary.config";
 import {ErrorPageConfiguration} from "@story-config/ErrorPage.config";
 import {FieldConfiguration} from "@story-config/Field.config";
 import {FilePickerButtonConfiguration} from "@story-config/FilePickerButton.config";
-import {FilterConfiguration} from "@story-config/Filter.config";
+import {FormContainerConfiguration} from "@story-config/FormContainer.config";
 import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
 import {HeightFieldConfiguration} from "@story-config/HeightField.config";
+import {HtmlFrameConfiguration} from "@story-config/HtmlFrame.config";
 import {IconConfiguration} from "@story-config/Icon.config";
 import {IconButtonConfiguration} from "@story-config/IconButton.config";
 import {ImageConfiguration} from "@story-config/Image.config";
 import {ImageBackgroundConfiguration} from "@story-config/ImageBackground.config";
 import {InfoModalIconConfiguration} from "@story-config/InfoModalIcon.config";
 import {InfoTooltipButtonConfiguration} from "@story-config/InfoTooltipButton.config";
+import {LineChartConfiguration} from "@story-config/LineChart.config";
 import {LinkConfiguration} from "@story-config/Link.config";
+import {LinkedAccountsCardConfiguration} from "@story-config/LinkedAccountsCard.config";
+import {ListDetailLayoutConfiguration} from "@story-config/ListDetailLayout.config";
 import {LoginScreenConfiguration} from "@story-config/LoginScreen.config";
 import {MarkdownEditorConfiguration} from "@story-config/MarkdownEditor.config";
 import {MarkdownEditorFieldConfiguration} from "@story-config/MarkdownEditorField.config";
@@ -47,22 +62,28 @@ import {MarkdownViewConfiguration} from "@story-config/MarkdownView.config";
 import {MobileAddressAutocompleteConfiguration} from "@story-config/MobileAddressAutocomplete.config";
 import {ModalConfiguration} from "@story-config/Modal.config";
 import {MultiselectFieldConfiguration} from "@story-config/MultiselectField.config";
+import {NativeModulesConfiguration} from "@story-config/NativeModules.config";
 import {NumberFieldConfiguration} from "@story-config/NumberField.config";
 import {NumberPickerActionSheetConfiguration} from "@story-config/NumberPickerActionSheet.config";
 import {OAuthButtonsConfiguration} from "@story-config/OAuthButtons.config";
 import {OfflineBannerConfiguration} from "@story-config/OfflineBanner.config";
+import {OtpFieldConfiguration} from "@story-config/OtpField.config";
 import {PageConfiguration} from "@story-config/Page.config";
 import {PaginationConfiguration} from "@story-config/Pagination.config";
+import {PasskeysCardConfiguration} from "@story-config/PasskeysCard.config";
+import {PasswordCardConfiguration} from "@story-config/PasswordCard.config";
 import {PasswordFieldConfiguration} from "@story-config/PasswordField.config";
 import {PasswordRequirementsConfiguration} from "@story-config/PasswordRequirements.config";
 import {PhoneNumberConfiguration} from "@story-config/PhoneNumberField.config";
 import {PopoverConfiguration} from "@story-config/Popover.config";
 import {RadioConfiguration} from "@story-config/Radio.config";
 import {RadioFieldConfiguration} from "@story-config/RadioField.config";
+import {ScorecardConfiguration} from "@story-config/Scorecard.config";
 import {SectionDividerConfiguration} from "@story-config/SectionDivider.config";
 import {SegmentedControlConfiguration} from "@story-config/SegmentedControl.config";
 import {SelectBadgeConfiguration} from "@story-config/SelectBadge.config";
 import {SelectFieldConfiguration} from "@story-config/SelectField.config";
+import {SessionsCardConfiguration} from "@story-config/SessionsCard.config";
 import {
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
@@ -72,9 +93,12 @@ import {SignatureConfiguration} from "@story-config/Signature.config";
 import {SignatureCaptureFieldConfiguration} from "@story-config/SignatureCaptureField.config";
 import {SignatureFieldConfiguration} from "@story-config/SignatureField.config";
 import {SignUpScreenConfiguration} from "@story-config/SignUpScreen.config";
+import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
+import {SkeletonConfiguration} from "@story-config/Skeleton.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
+import {SparklineChartConfiguration} from "@story-config/SparklineChart.config";
 import {SpinnerConfiguration} from "@story-config/Spinner.config";
 import {SplitPageConfiguration} from "@story-config/SplitPage.config";
 import {SwiperConfiguration} from "@story-config/Swiper.config";
@@ -95,13 +119,18 @@ import {ThemeConfiguration} from "@story-config/Theme.config";
 import {ThumbsUpDownFeedbackConfiguration} from "@story-config/ThumbsUpDownFeedback.config";
 import {ToastConfiguration} from "@story-config/Toast.config";
 import {TooltipConfiguration} from "@story-config/Tooltip.config";
+import {TwoFactorChallengeScreenConfiguration} from "@story-config/TwoFactorChallengeScreen.config";
+import {TwoFactorSettingsCardConfiguration} from "@story-config/TwoFactorSettingsCard.config";
 import {TypedSignatureFieldConfiguration} from "@story-config/TypedSignatureField.config";
 import {UnifiedAddressAutoCompleteFieldConfiguration} from "@story-config/UnifiedAddressAutoCompleteField.config";
 import {UpgradeRequiredScreenConfiguration} from "@story-config/UpgradeRequiredScreen.config";
 import {UserInactivityConfiguration} from "@story-config/UserInactivity.config";
 import {WebAddressAutocompleteConfiguration} from "@story-config/WebAddressAutocomplete.config";
+import {WhatsNewBannerConfiguration} from "@story-config/WhatsNewBanner.config";
 import type {FieldProps} from "@terreno/ui";
 import type React from "react";
+import type {DemoInteractionStep} from "./catalogContract";
+import {catalogIssues} from "./catalogContract";
 import {OpenAPIContextDemo, OpenAPIContextStories} from "./stories/OpenAPIContext.stories";
 
 export type DemoConfigStatus = "planned" | "inProgress" | "ready" | "notSupported";
@@ -114,7 +143,7 @@ interface TypedocNode {
 }
 const PropsJSON: {children: TypedocNode[]} = require("./ui-types-documentation.json");
 
-type Categories = "Foundation" | "Component" | "Pattern" | "Data Entry" | "Form";
+type Categories = "Foundation" | "Component" | "Pattern" | "Form";
 
 interface DemoConfigurationBase {
   name: string;
@@ -144,6 +173,8 @@ interface DemoConfigurationBase {
   // noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   // biome-ignore lint/suspicious/noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   demo: (props: any) => React.ReactElement;
+  // Hidden configs stay routable (deep links, dev mode) but are left out of catalog lists.
+  hidden?: boolean;
   demoOptions: {
     // On large screens, "md" will either generate a smaller box with controls to the right
     // or just a small box. On small screens, it will be full width with controls below.
@@ -157,11 +188,15 @@ interface DemoConfigurationBase {
       >;
     };
   };
+  usageExample?: string;
   // Stories represent different states of the component and different examples of using it.
   stories: {
     [name: string]: {
       description?: string;
-      showInDemo?: boolean; // TODO filter in Demo site
+      excludeReason?: string;
+      interactions?: DemoInteractionStep[];
+      showInDemo?: boolean;
+      stability?: "stable" | "exclude";
       render: () => React.ReactElement | null;
     };
   };
@@ -195,7 +230,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // represents messages in conversation threads, mimicking speech bubbles for intuitive
 // communication.", a11yNotes: [ "Chat bubbles are wonderfully accessible as-is.",
 // "Make sure to use colors that are accessible. The current design is accessible.", ], category:
-// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23454&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23981",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [{name: "Github demo
 // link", link: "https://github.com/gestalt/gestalt"}], interfaceName: "ChatBubbleProps", usage: {
 // do: [ "Use the appropriate colors for each user group.",
@@ -208,7 +243,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // FilteredItem, related: ["Pills"], description: "A component that shows members, pods,
 // etc that have been filtered into a list. Users can interact with this component by dismissing it
 // (removing the filter) or occasionally, editing it.", a11yNotes: [], category: ["Filter",
-// "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23503&mode=design&t=iCiJI3xbrm6rrXPg-1",
+// "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23985",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "FilteredItemProps", usage: { do: [ "Allow 8pt of space between each filtered item.",
 // "Use the same component between desktop and mobile.", "Truncate the text if it’s too long.", ],
@@ -220,7 +255,7 @@ export interface DemoConfiguration extends DemoConfigurationBase {
 // const MessageConfiguration: DemoConfiguration = { name: "Message", component: Message, related:
 // ["Avatar", "Chat bubble"], description: "This component allows the user to click into a specific
 // chat. There are separate variants for both devices and user groups.", a11yNotes: [], category:
-// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23418&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+// ["Communication", "Feedback"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23978",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "MessageProps", usage: { do: [ "Use the patient variant for the member portal,
 // and the staff variant for the staff portal.", "Use the appropriate icons for the user groups in
@@ -239,7 +274,7 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     "Loads backend OpenAPI metadata and exposes model field descriptions through useOpenAPISpec.",
   interfaceName: "OpenAPIProviderProps",
   name: "OpenAPI Context",
-  related: ["TerrenoProvider"],
+  related: ["Theme"],
   status: {
     android: "ready",
     documentation: "ready",
@@ -256,34 +291,47 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
     ],
     doNot: ["Fetch OpenAPI specs manually in every field component."],
   },
+  usageExample: `import {OpenAPIProvider, useOpenAPISpec} from "@terreno/ui";
+
+<OpenAPIProvider url="/openapi.json">{children}</OpenAPIProvider>`,
 };
 
 const Config: DemoConfigurationBase[] = [
   AccordionConfiguration,
+  AccountSecurityScreenConfiguration,
   ActionSheetConfiguration,
   AIRequestExplorerConfiguration,
   AiSuggestionBoxConfiguration,
+  AreaChartConfiguration,
+  AskCardConfiguration,
   AvatarConfiguration,
   AddressFieldConfiguration,
   AttachmentPreviewConfiguration,
   BadgeConfiguration,
   BannerConfiguration,
+  BarChartConfiguration,
+  BlocksPlaygroundConfiguration,
+  BlocksViewConfiguration,
   BodyConfiguration,
   BooleanFieldConfiguration,
   BoxConfiguration,
-  FilterConfiguration,
   ButtonConfiguration,
   CardConfiguration,
+  ChartCardConfiguration,
   // ChatBubbleConfiguration,
   CheckBoxConfiguration,
   ConflictSheetConfiguration,
   ConsentFormScreenConfiguration,
   CustomSelectFieldConfiguration,
+  DashboardGridConfiguration,
+  DashboardGridItemConfiguration,
   DataTableConfiguration,
   DateTimeFieldConfiguration,
   DecimalRangeActionSheetConfiguration,
   DismissButtonConfiguration,
+  DonutChartConfiguration,
   DraggableListConfiguration,
+  DropdownPanelConfiguration,
   EditableCardConfiguration,
   EmailFieldConfiguration,
   EmojiSelectorConfiguration,
@@ -291,9 +339,11 @@ const Config: DemoConfigurationBase[] = [
   ErrorPageConfiguration,
   FieldConfiguration,
   FilePickerButtonConfiguration,
+  FormContainerConfiguration,
   GPTChatConfiguration,
   GPTMemoryModalConfiguration,
   HeadingConfiguration,
+  HtmlFrameConfiguration,
   HeightFieldConfiguration,
   IconConfiguration,
   IconButtonConfiguration,
@@ -301,7 +351,10 @@ const Config: DemoConfigurationBase[] = [
   ImageBackgroundConfiguration,
   InfoModalIconConfiguration,
   InfoTooltipButtonConfiguration,
+  LineChartConfiguration,
   LinkConfiguration,
+  LinkedAccountsCardConfiguration,
+  ListDetailLayoutConfiguration,
   LoginScreenConfiguration,
   MarkdownEditorConfiguration,
   MarkdownEditorFieldConfiguration,
@@ -311,33 +364,42 @@ const Config: DemoConfigurationBase[] = [
   ModalConfiguration,
   MobileAddressAutocompleteConfiguration,
   MultiselectFieldConfiguration,
+  NativeModulesConfiguration,
   NumberFieldConfiguration,
   NumberPickerActionSheetConfiguration,
   OAuthButtonsConfiguration,
   OfflineBannerConfiguration,
+  OtpFieldConfiguration,
   OpenAPIContextConfiguration,
   PageConfiguration,
   PaginationConfiguration,
+  PasskeysCardConfiguration,
+  PasswordCardConfiguration,
   PasswordFieldConfiguration,
   PasswordRequirementsConfiguration,
   PopoverConfiguration,
   PhoneNumberConfiguration,
   RadioConfiguration,
   RadioFieldConfiguration,
+  ScorecardConfiguration,
   SectionDividerConfiguration,
   SegmentedControlConfiguration,
   SelectBadgeConfiguration,
   SelectFieldConfiguration,
+  SessionsCardConfiguration,
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
   SideDrawerConfiguration,
   SignUpScreenConfiguration,
+  SimpleAskCardConfiguration,
   SimpleContentConfiguration,
   SignatureConfiguration,
   SignatureCaptureFieldConfiguration,
   SignatureFieldConfiguration,
+  SkeletonConfiguration,
   SliderConfiguration,
   SocialLoginButtonConfiguration,
+  SparklineChartConfiguration,
   SpinnerConfiguration,
   SplitPageConfiguration,
   SwiperConfiguration,
@@ -358,11 +420,14 @@ const Config: DemoConfigurationBase[] = [
   ThumbsUpDownFeedbackConfiguration,
   ToastConfiguration,
   TooltipConfiguration,
+  TwoFactorChallengeScreenConfiguration,
+  TwoFactorSettingsCardConfiguration,
   TypedSignatureFieldConfiguration,
   UnifiedAddressAutoCompleteFieldConfiguration,
   UpgradeRequiredScreenConfiguration,
   UserInactivityConfiguration,
   WebAddressAutocompleteConfiguration,
+  WhatsNewBannerConfiguration,
 ];
 
 // Ensure consistent alphabetical sorting
@@ -372,6 +437,9 @@ export const DemoConfig: DemoConfiguration[] = Config.map((c) => ({
     .flatMap((mod) => mod.children ?? [])
     .find((json) => json.name === c.interfaceName),
 })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** Configs shown in the demo and dev catalog lists (hidden diagnostics pages excluded). */
+export const ListedDemoConfig: DemoConfiguration[] = DemoConfig.filter((c) => !c.hidden);
 
 const normalizeComponentName = (name: string): string =>
   name.trim().toLowerCase().replace(/\s+/g, " ");
@@ -390,3 +458,6 @@ export const findDemoConfig = (component?: string): DemoConfiguration | undefine
   const normalized = normalizeComponentName(component);
   return DemoConfig.find((c) => normalizeComponentName(c.name) === normalized);
 };
+
+/** Catalog contract validation for the demo workshop and CI health checks. */
+export const getDemoCatalogIssues = (): string[] => catalogIssues(DemoConfig);

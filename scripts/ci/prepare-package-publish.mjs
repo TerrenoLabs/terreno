@@ -1,4 +1,4 @@
-import {readFileSync, writeFileSync} from "node:fs";
+import {copyFileSync, existsSync, readFileSync, writeFileSync} from "node:fs";
 import {resolve} from "node:path";
 
 const [packageDirectory, version, dependencyMode = "release"] = process.argv.slice(2);
@@ -48,3 +48,16 @@ for (const dependencyType of ["dependencies", "devDependencies", "peerDependenci
 }
 
 writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);
+
+// The changelog lives at the repository root; ship the tagged copy in every tarball
+// so consumers read the release notes for the exact version they installed.
+copyFileSync(resolve("CHANGELOG.md"), resolve(packageDirectory, "CHANGELOG.md"));
+
+// Claude Code versions an npm plugin by its manifest `version` (the generated manifest
+// has none), so stamp the release into the published copy for update detection.
+const pluginManifestPath = resolve(packageDirectory, ".claude-plugin/plugin.json");
+if (existsSync(pluginManifestPath)) {
+  const pluginManifest = JSON.parse(readFileSync(pluginManifestPath, "utf8"));
+  pluginManifest.version = version;
+  writeFileSync(pluginManifestPath, `${JSON.stringify(pluginManifest, null, 2)}\n`);
+}

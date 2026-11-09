@@ -1,0 +1,1 @@
+> **AuthTokenType** = `"passwordReset"` \| `"emailVerification"`

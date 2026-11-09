@@ -6,9 +6,10 @@ name: Reconcile roadmap with IPs
 #   IP headers + task files  ─▶  roadmap-seed-issues.md  ─▶  board  ─▶  ROADMAP.md
 #     roadmap:reconcile --fix      (committed here)      roadmap:sync   roadmap:generate
 #
-# Only forward status moves and supersessions are applied. Anything needing
-# judgment — a plan with no roadmap entry, a board that is ahead of a stale IP
-# header, task checkboxes disagreeing with the declared status — lands in the job
+# Forward status moves, supersessions, and a scaffolded entry for every new IP
+# are applied; sync then opens a tracking issue for each new IP-backed entry.
+# Anything else needing judgment — a board that is ahead of a stale IP header,
+# task checkboxes disagreeing with the declared status — lands in the job
 # summary for a maintainer instead of being guessed at.
 
 on:
@@ -113,7 +114,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/explanation/roadmap-seed-issues.md
-          git commit -m "Advance roadmap status from implementation plan headers"
+          git commit -m "Reconcile roadmap entries with implementation plans"
           # master moves while this job runs, so a first push can be rejected as
           # non-fast-forward; rebasing onto the new tip and retrying is safe
           # because this job only ever touches the seed document.
@@ -121,12 +122,14 @@ jobs:
           trap 'bash .github/scripts/git-auth-roadmap-pat.sh clear' EXIT
           git push || (git pull --rebase origin "$GITHUB_REF_NAME" && git push)
 
-      - name: Push status onto the board
+      # New IP entries get their public tracking issue here; entries with no
+      # plan behind them are never opened automatically.
+      - name: Push status and new entries onto the board
         if: inputs.dry_run != true
         env:
           GH_TOKEN: ${{ secrets.ROADMAP_PROJECT_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.ROADMAP_PROJECT_TOKEN }}
-        run: bun run roadmap:sync
+        run: bun run roadmap:sync --create-missing-ip-issues
 
       - name: Regenerate ROADMAP.md
         if: inputs.dry_run != true

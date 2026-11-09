@@ -30,8 +30,7 @@ publish-feature-flags:
     expect(parsePublishWorkingDirectories(yaml)).toEqual(["api", "feature-flags", "ui"]);
   });
 
-  it("maps rtk and mcp-server to their reference pages", () => {
-    expect(referencePageForPackage("rtk")).toBe("docs/reference/legacy/rtk.md");
+  it("maps mcp-server and other packages to their reference pages", () => {
     expect(referencePageForPackage("mcp-server")).toBe("docs/reference/mcp-server.md");
     expect(referencePageForPackage("feature-flags")).toBe("docs/reference/feature-flags.md");
   });
@@ -45,7 +44,7 @@ publish-feature-flags:
   it("detects internal leakage strings", () => {
     expect(findInternalLeakageHits("see .cursor/rules/api")).toEqual([".cursor/rules"]);
     expect(findInternalLeakageHits("project flourish-terreno")).toEqual(["flourish-terreno"]);
-    expect(findInternalLeakageHits("https://github.com/FlourishHealth/terreno")).toEqual([]);
+    expect(findInternalLeakageHits("https://github.com/TerrenoLabs/terreno")).toEqual([]);
     expect(findInternalLeakageHits("Slack webhook")).toEqual([]);
   });
 

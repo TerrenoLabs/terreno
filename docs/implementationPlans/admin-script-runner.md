@@ -1,7 +1,7 @@
 # Admin Script Runner — Maintenance Scripts via `AdminApp`
 
 **Status:** Implemented (ships with Admin UI v2 work; documented here as its own IP)  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1077
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1077
 **Related:** [`admin-ui-v2-django-parity.md`](./admin-ui-v2-django-parity.md) (home `scriptRunner` widget, background-task patterns)  
 **Primary packages:** `@terreno/api` (`BackgroundTask`, script types), `@terreno/admin-backend`, `@terreno/admin-frontend`, `admin-spa`, `example-backend`
 

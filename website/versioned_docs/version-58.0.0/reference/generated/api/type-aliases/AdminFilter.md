@@ -1,0 +1,1 @@
+> **AdminFilter** = [`AdminFilterBoolean`](../interfaces/AdminFilterBoolean.md) \| [`AdminFilterChoice`](../interfaces/AdminFilterChoice.md) \| [`AdminFilterDateRange`](../interfaces/AdminFilterDateRange.md) \| [`AdminFilterRef`](../interfaces/AdminFilterRef.md) \| [`AdminFilterText`](../interfaces/AdminFilterText.md)

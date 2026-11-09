@@ -90,25 +90,68 @@ const shouldUseReplSet = (options: MongoServerOptions): boolean => {
   return process.env.TERRENO_TEST_USE_REPLSET === "true";
 };
 
-const startMemoryServer = async (useReplSet: boolean): Promise<string> => {
+const DEFAULT_LAUNCH_TIMEOUT_MS = 60000;
+const MEMORY_SERVER_START_ATTEMPTS = 2;
+
+/**
+ * How long one mongod may take to start. mongodb-memory-server defaults to 10s, which loaded
+ * CI hosts and sandboxed VMs exceed when starting a replica set.
+ * Override with `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS`.
+ */
+export const resolveMongoLaunchTimeoutMs = (): number => {
+  const raw = process.env.TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS?.trim();
+  const parsed = raw ? Number(raw) : Number.NaN;
+  // mongodb-memory-server ignores launch timeouts below one second
+  if (Number.isInteger(parsed) && parsed >= 1000) {
+    return parsed;
+  }
+  return DEFAULT_LAUNCH_TIMEOUT_MS;
+};
+
+const startMemoryServerOnce = async (
+  useReplSet: boolean,
+  launchTimeout: number
+): Promise<MemoryMongoHandle> => {
   if (useReplSet) {
     const {MongoMemoryReplSet} = await import("mongodb-memory-server-global");
-    const replSet = await MongoMemoryReplSet.create({
+    const replSet = new MongoMemoryReplSet({
+      instanceOpts: [{launchTimeout}],
       replSet: {
         args: ["--wiredTigerCacheSizeGB", "0.25"],
         count: 1,
         storageEngine: "wiredTiger",
       },
     });
-    await replSet.waitUntilRunning();
-    memoryMongo = replSet;
-    return replSet.getUri();
+    try {
+      await replSet.start();
+      await replSet.waitUntilRunning();
+    } catch (error: unknown) {
+      await replSet.stop({doCleanup: true, force: true}).catch(() => false);
+      throw error;
+    }
+    return replSet;
   }
 
   const {MongoMemoryServer} = await import("mongodb-memory-server");
-  const server = await MongoMemoryServer.create();
-  memoryMongo = server;
-  return server.getUri();
+  return MongoMemoryServer.create({instance: {launchTimeout}});
+};
+
+const startMemoryServer = async (useReplSet: boolean): Promise<string> => {
+  const launchTimeout = resolveMongoLaunchTimeoutMs();
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MEMORY_SERVER_START_ATTEMPTS; attempt++) {
+    try {
+      const handle = await startMemoryServerOnce(useReplSet, launchTimeout);
+      memoryMongo = handle;
+      return handle.getUri();
+    } catch (error: unknown) {
+      lastError = error;
+      testLogger.warn(
+        `[mongoServer] In-memory MongoDB failed to start (attempt ${attempt}/${MEMORY_SERVER_START_ATTEMPTS}): ${String(error)}`
+      );
+    }
+  }
+  throw lastError;
 };
 
 /**

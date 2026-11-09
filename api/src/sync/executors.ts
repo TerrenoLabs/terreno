@@ -32,8 +32,9 @@ import {
   passthroughOrWrap,
   passthroughOrWrapWrite,
 } from "../errors";
-import {checkPermissions} from "../permissions";
-import {validateAccessWritePayload} from "../rbac/modelRouterAccess";
+import {checkPermissions, type PermissionMethod, Permissions} from "../permissions";
+import {buildAccessPermissions, validateAccessWritePayload} from "../rbac/modelRouterAccess";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "../rbac/userWriteGuards";
 import {transform} from "../transformers";
 
 /** A hydrated mongoose document joined with the router's base type. */
@@ -146,6 +147,27 @@ export const isExecutorConflictError = (error: unknown): error is ExecutorConfli
 const stubRequest = (user?: User): express.Request => ({user}) as unknown as express.Request;
 
 /**
+ * The request a hook sees for an update or delete of `id`. Over HTTP it is the real request. Over
+ * sync it is a stub (or the socket's `{user}` object) with no `params`, so `params.id` is filled
+ * in, as in the REST routes: hooks that read `req.params.id` must work over sync too.
+ */
+const requestForId = ({
+  id,
+  req,
+  user,
+}: {
+  id: string;
+  req?: express.Request;
+  user?: User;
+}): express.Request => {
+  const request = req ?? stubRequest(user);
+  if (request.params === undefined) {
+    request.params = {id};
+  }
+  return request;
+};
+
+/**
  * True for the Mongoose error thrown when an `optimisticConcurrency` save matched no
  * document (its `__v` filter failed) — i.e. another write landed since the load.
  * Name-checked rather than `instanceof` for the same ES5-dist reason as
@@ -171,6 +193,133 @@ const reloadDocForConflict = async <T>(
   } catch {
     return undefined;
   }
+};
+
+/**
+ * True for legacy permissions whose object check binds a document to its owner. Read lazily:
+ * `permissions` and this module import each other.
+ */
+const isOwnerIdentityPermission = (permission: unknown): boolean =>
+  permission === Permissions.IsOwner || permission === Permissions.IsOwnerOrReadOnly;
+
+/**
+ * Owner and scope checks that must hold for the document as written, not only as loaded.
+ *
+ * - RBAC routers (`access` + `accessControl`): the framework-built role and scope checks for
+ *   the method (the role grant evaluated against the document, plus the router `access.scope`),
+ *   and any owner-identity entries in `access.also`. Other `also` entries are left out so
+ *   state-dependent consumer checks keep running only against the pre-write document.
+ * - Legacy routers: `IsOwner` when the method's permissions use an owner-identity check.
+ */
+const getWriteScopeChecks = <T>(
+  options: ModelRouterOptions<T>,
+  method: "create" | "update"
+): PermissionMethod<T>[] => {
+  if (options.access && options.accessControl) {
+    const scoped = buildAccessPermissions<T>(options.accessControl, {
+      ...options.access,
+      also: undefined,
+    })[method];
+    const alsoOwner = ((options.access.also?.[method] ?? []) as PermissionMethod<T>[]).filter(
+      isOwnerIdentityPermission
+    );
+    return [...scoped, ...alsoOwner];
+  }
+  if (method === "update") {
+    return (options.permissions?.update ?? []).some(isOwnerIdentityPermission)
+      ? [Permissions.IsOwner as PermissionMethod<T>]
+      : [];
+  }
+  // A create is owner-scoped when any method on the router binds documents to their owner.
+  const lists = [
+    options.permissions?.create,
+    options.permissions?.read,
+    options.permissions?.update,
+    options.permissions?.delete,
+  ];
+  if (!lists.some((list) => (list ?? []).some(isOwnerIdentityPermission))) {
+    return [];
+  }
+  // Only a named owner is checked, so a create that leaves the owner for a hook or default
+  // to fill keeps working.
+  return [
+    (method_, user, obj) =>
+      (obj as {ownerId?: unknown} | undefined)?.ownerId == null ||
+      Permissions.IsOwner(method_, user, obj),
+  ];
+};
+
+/**
+ * Reject a write whose resulting document would fall outside the caller's owner or RBAC scope,
+ * for example a create naming another user as owner or an update that moves the owner field.
+ * Runs on REST, MCP and sync writes alike because they share these executors.
+ */
+const assertWriteStaysInScope = async <T>({
+  doc,
+  method,
+  model,
+  options,
+  user,
+}: {
+  doc: unknown;
+  method: "create" | "update";
+  model: Model<T>;
+  options: ModelRouterOptions<T>;
+  user?: User;
+}): Promise<void> => {
+  const checks = getWriteScopeChecks(options, method);
+  for (const check of checks) {
+    if (!(await check(method, user, doc as T))) {
+      throw new APIError({
+        status: 403,
+        title: `Write scope violation on ${model.modelName}`,
+      });
+    }
+  }
+};
+
+/**
+ * Hydrate a create body item without saving it, so owner checks see defaults and virtuals the
+ * way they see a loaded document. Returns undefined when the item cannot be cast; `create`
+ * then reports the same validation error.
+ */
+const hydrateCreateCandidate = <T>(model: Model<T>, item: unknown): unknown => {
+  try {
+    return new (model as unknown as new (doc: unknown) => unknown)(item);
+  } catch {
+    return undefined;
+  }
+};
+
+/** Sync bookkeeping that `syncPlugin` stamps on every write; clients never set it. */
+const SYNC_STAMP_FIELDS = ["_syncSeq", "_syncPrevStream"];
+
+/**
+ * Remove fields that only the server may set from a client write body:
+ * - `deleted` on a soft-delete model is set only by the delete operation, so update authority
+ *   cannot soft-delete a record without delete permission, `preDelete` / `postDelete`, and the
+ *   delete audit.
+ * - `_syncSeq` / `_syncPrevStream` order the sync streams, so a client cannot pin a document's
+ *   seq and hide it from other members' snapshots and deltas.
+ * Server hooks (`preCreate` / `preUpdate`) run after this and may still set `deleted`.
+ */
+const stripServerOwnedFields = <T>(model: Model<T>, body: unknown): unknown => {
+  if (Array.isArray(body)) {
+    return body.map((item) => stripServerOwnedFields(model, item));
+  }
+  if (!body || typeof body !== "object") {
+    return body;
+  }
+  const isSoftDeleteModel = model.schema.path("deleted")?.instance === "Boolean";
+  const fields = isSoftDeleteModel ? [...SYNC_STAMP_FIELDS, "deleted"] : SYNC_STAMP_FIELDS;
+  if (!fields.some((field) => Object.hasOwn(body, field))) {
+    return body;
+  }
+  const rest = {...(body as Record<string, unknown>)};
+  for (const field of fields) {
+    delete rest[field];
+  }
+  return rest;
 };
 
 /**
@@ -223,7 +372,12 @@ export const executeCreate = async <T>({
 
   let cleanedBody: Partial<T> | (Partial<T> | undefined)[] | null | undefined;
   try {
-    cleanedBody = transform<T>(options, body as Partial<T> | Partial<T>[], "create", user);
+    cleanedBody = transform<T>(
+      options,
+      stripServerOwnedFields(model, body) as Partial<T> | Partial<T>[],
+      "create",
+      user
+    );
   } catch (error: unknown) {
     throw passthroughOrWrap(error, {
       code: "transform-error",
@@ -276,6 +430,15 @@ export const executeCreate = async <T>({
     phase: "create",
     user,
   });
+  if (!skipPermissionChecks) {
+    const items = Array.isArray(cleanedBody) ? cleanedBody : [cleanedBody];
+    for (const item of items) {
+      const candidate = item ? hydrateCreateCandidate(model, item) : undefined;
+      if (candidate) {
+        await assertWriteStaysInScope({doc: candidate, method: "create", model, options, user});
+      }
+    }
+  }
   let data: ExecutorDoc<T>;
   try {
     data = (await model.create(cleanedBody as T)) as ExecutorDoc<T>;
@@ -381,7 +544,7 @@ export const executeUpdate = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&
@@ -406,9 +569,22 @@ export const executeUpdate = async <T>({
     });
   }
 
+  // Runs even for admin-window writes that skip modelRouter permissions.
+  await assertCanWriteTargetUser({
+    accessControl: options.accessControl,
+    actor: user,
+    modelName: writeModelName ?? model.modelName,
+    target: doc,
+  });
+
   let cleanedBody: Partial<T> | T | null | undefined;
   try {
-    cleanedBody = transform<T>(options, body as Partial<T>, "update", user) as Partial<T>;
+    cleanedBody = transform<T>(
+      options,
+      stripServerOwnedFields(model, body) as Partial<T>,
+      "update",
+      user
+    ) as Partial<T>;
   } catch (error: unknown) {
     throw passthroughOrWrap(error, {
       code: "transform-error",
@@ -453,6 +629,15 @@ export const executeUpdate = async <T>({
       });
     }
   }
+
+  // Checked before the privileged-field strip so identity writes are rejected, not dropped.
+  await assertCanWriteUserIdentity({
+    accessControl: options.accessControl,
+    actor: user,
+    body: cleanedBody,
+    modelName: writeModelName ?? model.modelName,
+    target: doc,
+  });
 
   cleanedBody = omitUserRolesFromWriteBody(
     writeModelName ?? model.modelName,
@@ -533,6 +718,10 @@ export const executeUpdate = async <T>({
   // updates. We won't wind up with corrupted data, just an API error.
   try {
     doc.set(cleanedBody);
+    // The pre-write document passed the update checks; the written state must stay in scope too.
+    if (!skipPermissionChecks) {
+      await assertWriteStaysInScope({doc, method: "update", model, options, user});
+    }
     await doc.save();
   } catch (error: unknown) {
     // Task 9.13: `syncPlugin` enables Mongoose `optimisticConcurrency` on synced schemas, so
@@ -637,7 +826,7 @@ export const executeDelete = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&
@@ -694,6 +883,13 @@ export const executeDelete = async <T>({
       title: `Access to GET on ${model.modelName}:${id} denied for ${user?.id}`,
     });
   }
+
+  await assertCanWriteTargetUser({
+    accessControl: options.accessControl,
+    actor: user,
+    modelName: model.modelName,
+    target: doc,
+  });
 
   if (options.preDelete) {
     let body: T | null | undefined;

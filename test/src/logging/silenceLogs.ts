@@ -22,8 +22,6 @@ export interface SilenceLogsController {
 const getApiWinstonLogger = (): winston.Logger | undefined => {
   try {
     // Runtime-only so @terreno/test compiles without @terreno/api.
-    // noExplicitAny: optional peer resolved at preload time
-    // biome-ignore lint/suspicious/noExplicitAny: optional peer resolved at preload time
     const api = require("@terreno/api") as any;
     return api.winstonLogger as winston.Logger | undefined;
   } catch {

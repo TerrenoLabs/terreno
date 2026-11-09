@@ -3,11 +3,12 @@
     "create-terreno-app": "./dist/cli.js"
   },
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "description": "Scaffold a deployable Terreno full-stack app — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/node": "catalog:",
     "chai": "catalog:",
@@ -25,10 +26,11 @@
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist",
     "README.md"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "create-app",
     "scaffold",
@@ -42,18 +44,20 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "compile": "tsc",
     "compile:watch": "tsc -w",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
+    "lint": "biome check src/ e2e/",
+    "lint:fix": "biome check --write src/ e2e/",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun run compile && bun test src/",
     "test:agent": "AGENT=1 bun test --only-failures src/",
     "test:ci": "bun run compile && bun test src/",
-    "test:coverage": "bun run compile && bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run compile && bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "type": "module",
-  "version": "57.3.0"
+  "version": "58.0.0"
 }

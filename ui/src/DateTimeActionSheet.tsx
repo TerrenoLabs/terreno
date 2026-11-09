@@ -1,4 +1,4 @@
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {Picker} from "@react-native-picker/picker";
 import {getCalendars} from "expo-localization";
 import range from "lodash/range";
@@ -11,13 +11,13 @@ import {Calendar} from "react-native-calendars";
 import {Box} from "./Box";
 import type {DateTimeActionSheetProps, IconName} from "./Common";
 import {Heading} from "./Heading";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Modal} from "./Modal";
 import {SelectField} from "./SelectField";
 import {useTheme} from "./Theme";
 import {TimezonePicker} from "./TimezonePicker";
+import {getTimePickerLayout} from "./timePickerLayout";
 
-const TIME_PICKER_HEIGHT = 104;
 const INPUT_HEIGHT = 40;
 
 const hours = range(1, 13).map((n) => String(n));
@@ -207,28 +207,25 @@ const MobileTime = ({
   setAmPm,
 }: TimeProps): React.ReactElement => {
   const {theme} = useTheme();
-  // Match picker surface to the app theme. A fixed white background with `theme.text.primary`
-  // (light in dark mode) produced invisible labels on Android; `itemStyle` is iOS-only and is
-  // omitted on Android to avoid broken / blank spinner rendering on some OS versions.
+  // Match the picker surface and item color to the app theme. A fixed white background with
+  // `theme.text.primary` (light in dark mode) produced invisible labels on Android, and items
+  // with no color use the system label color on iOS, which is white on a dark-mode phone.
+  const textColor = theme.text.primary as string;
+  const layout = getTimePickerLayout({os: Platform.OS, textColor});
+  const amPmItemStyle = getTimePickerLayout({fontSize: 16, os: Platform.OS, textColor}).itemStyle;
   const pickerStyle = {
     backgroundColor: theme.surface.base,
-    height: TIME_PICKER_HEIGHT,
-    ...(Platform.OS === "android" ? {color: theme.text.primary} : {}),
+    height: layout.height,
+    ...(Platform.OS === "android" ? {color: textColor} : {}),
   };
-  const androidItemColor = Platform.OS === "android" ? (theme.text.primary as string) : undefined;
+  const itemColor = layout.itemColor;
 
   return (
     <Box>
       <Box direction="row" width="100%">
         <Box paddingY={2} width="30%">
           <Picker
-            itemStyle={
-              Platform.OS === "ios"
-                ? {
-                    height: TIME_PICKER_HEIGHT,
-                  }
-                : undefined
-            }
+            itemStyle={layout.itemStyle}
             onValueChange={(itemValue) => {
               const n = typeof itemValue === "number" ? itemValue : Number(itemValue);
               setHour(n);
@@ -237,24 +234,13 @@ const MobileTime = ({
             style={pickerStyle}
           >
             {hours.map((n) => (
-              <Picker.Item
-                color={androidItemColor}
-                key={String(n)}
-                label={String(n)}
-                value={Number(n)}
-              />
+              <Picker.Item color={itemColor} key={String(n)} label={String(n)} value={Number(n)} />
             ))}
           </Picker>
         </Box>
         <Box paddingY={2} width="30%">
           <Picker
-            itemStyle={
-              Platform.OS === "ios"
-                ? {
-                    height: TIME_PICKER_HEIGHT,
-                  }
-                : undefined
-            }
+            itemStyle={layout.itemStyle}
             onValueChange={(itemValue) => {
               const n = typeof itemValue === "number" ? itemValue : Number(itemValue);
               setMinute(n);
@@ -263,31 +249,19 @@ const MobileTime = ({
             style={pickerStyle}
           >
             {minutes.map((n) => (
-              <Picker.Item
-                color={androidItemColor}
-                key={String(n)}
-                label={String(n)}
-                value={Number(n)}
-              />
+              <Picker.Item color={itemColor} key={String(n)} label={String(n)} value={Number(n)} />
             ))}
           </Picker>
         </Box>
         <Box paddingY={2} width="40%">
           <Picker
-            itemStyle={
-              Platform.OS === "ios"
-                ? {
-                    fontSize: 16,
-                    height: TIME_PICKER_HEIGHT,
-                  }
-                : undefined
-            }
+            itemStyle={amPmItemStyle}
             onValueChange={(itemValue) => setAmPm(itemValue as "am" | "pm")}
             selectedValue={amPm}
             style={pickerStyle}
           >
-            <Picker.Item color={androidItemColor} key="am" label="am" value="am" />
-            <Picker.Item color={androidItemColor} key="pm" label="pm" value="pm" />
+            <Picker.Item color={itemColor} key="am" label="am" value="am" />
+            <Picker.Item color={itemColor} key="pm" label="pm" value="pm" />
           </Picker>
         </Box>
       </Box>
@@ -591,14 +565,14 @@ export const DateTimeActionSheet = ({
     >
       <View style={{display: "flex", justifyContent: "center", width: "100%"}}>
         {Boolean(type === "date") && <DateCalendar {...dateProps} />}
-        {Boolean(type === "time" && isMobileDevice()) && <MobileTime {...timeProps} />}
-        {Boolean(type === "time" && !isMobileDevice()) && <WebTime {...timeProps} />}
+        {Boolean(type === "time" && isNarrowViewport()) && <MobileTime {...timeProps} />}
+        {Boolean(type === "time" && !isNarrowViewport()) && <WebTime {...timeProps} />}
         {Boolean(type === "datetime") && (
           <Box>
             <Box marginBottom={2}>
               <DateCalendar {...dateProps} />
             </Box>
-            {isMobileDevice() ? <MobileTime {...timeProps} /> : <WebTime {...timeProps} />}
+            {isNarrowViewport() ? <MobileTime {...timeProps} /> : <WebTime {...timeProps} />}
           </Box>
         )}
       </View>

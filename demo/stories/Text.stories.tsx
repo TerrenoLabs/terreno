@@ -52,7 +52,7 @@ export const Texts = (): React.ReactElement => {
         {renderText("bold italic accent", {bold: true, color: "accent", italic: true})}
 
         {renderText("center", {align: "center"})}
-        <Link href="https://github.com/FlourishHealth/@terreno/ui" text="Linked Text" />
+        <Link href="https://github.com/TerrenoLabs/terreno" text="Linked Text" />
       </Box>
     </StorybookContainer>
   );

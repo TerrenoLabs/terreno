@@ -1,0 +1,44 @@
+---
+title: "Popover"
+description: "Popover previews a single document next to the thing that references it: a header with the document title and date, the document body, and a footer with an Open action and optional thumbs up / thumbs down feedback. It renders a loading spinner or a retryable error message based on status. Positioning is left to the consumer."
+sidebar_label: "Popover"
+slug: /reference/components/popover
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Popover
+
+Popover previews a single document next to the thing that references it: a header with the document title and date, the document body, and a footer with an Open action and optional thumbs up / thumbs down feedback. It renders a loading spinner or a retryable error message based on status. Positioning is left to the consumer.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `PopoverProps`  
+**Story source:** [`demo/stories/Popover.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Popover.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Popover" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onClose` | `reflection` | Yes | Called when the close button is pressed. |
+| `children` | `ReactNode` |  | The body of the document, rendered under the header when status is "loaded". Use this for rich content; prefer  |
+| `errorText` | `string` |  | Supporting copy shown under the error title. |
+| `errorTitle` | `string` |  | Title shown in the error state. |
+| `feedback` | `ThumbsUpDownFeedbackValue` |  | The currently selected feedback on the document. Only shown when  |
+| `height` | `NumberOrPercentage` |  | Height of the popover. The popover is the same height in every status: the body scrolls when it overflows, and the spinner and error message are centered in the remaining space. |
+| `loadingText` | `string` |  | Header text shown while the document is loading. |
+| `onFeedbackChange` | `reflection` |  | Called with the newly selected feedback, or undefined when the current value is deselected. When omitted, the thumbs up/down controls are hidden. |
+| `onOpen` | `reflection` |  | Called when the "Open" action is pressed. When omitted, the action is hidden. |
+| `onRetry` | `reflection` |  | Called when the "Try again" button is pressed in the error state. When omitted, the button is hidden. |
+| `openText` | `string` |  | Text of the action that opens the full document. |
+| `retryText` | `string` |  | Text of the button that retries loading in the error state. |
+| `status` | `PopoverStatus` |  | The state of the document being previewed. |
+| `subtitle` | `string` |  | Secondary header line, usually the document's date. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `text` | `string` |  | A plain text summary of the document, rendered when no  |
+| `title` | `string` |  | The document's title, shown in the header when status is "loaded". |
+| `width` | `NumberOrPercentage` |  | Width of the popover. |

@@ -2,6 +2,7 @@
 flows:
   - "login.yaml"
   - "create-todo.yaml"
+  - "todo-browser.yaml"
   - "demo/*"
 
 executionOrder:
@@ -9,5 +10,6 @@ executionOrder:
   flowsOrder:
     - login
     - create-todo
+    - todo-browser
     - demo-home
     - demo-button

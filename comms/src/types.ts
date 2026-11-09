@@ -20,6 +20,11 @@ export interface MailMessage {
   html?: string;
   metadata?: Record<string, string>;
   replyTo?: string;
+  /**
+   * The message carries a secret, such as a password-reset or email-verification link. Its
+   * payload is never stored in the message log. Auth recovery mail from `@terreno/api` sets it.
+   */
+  sensitive?: boolean;
   subject: string;
   templateId?: string;
   text?: string;
@@ -113,6 +118,11 @@ export interface OptOutEvent {
   to: string;
 }
 
+/** The app's user model, as far as push delivery reads it. */
+export interface CommsUserModel {
+  findById: (id: mongoose.Types.ObjectId | string) => PromiseLike<unknown>;
+}
+
 export interface CommsOptions {
   beforeSend?: (context: CommsHookContext) => Promise<BeforeSendResult | undefined>;
   defaultFrom?: string;
@@ -128,6 +138,12 @@ export interface CommsOptions {
   redactRecipients?: boolean;
   retainPayloadDays?: number;
   sms?: SmsProvider;
+  /**
+   * The app's user model. When set, push goes only to users that exist and are not disabled or
+   * deleted, and only to devices registered under the user's current `tokenEpoch`; the other
+   * devices are released. `CommsApp` sets it from `TerrenoApp` when omitted.
+   */
+  userModel?: CommsUserModel;
   verification?: VerificationProvider;
 }
 
@@ -135,6 +151,8 @@ export interface CommsSendOptions {
   extraMetadata?: Record<string, unknown>;
   isRetry?: boolean;
   retriedFromId?: string;
+  /** Never store this message's payload in the log, as for `MailMessage.sensitive`. */
+  sensitive?: boolean;
   userId?: mongoose.Types.ObjectId | string;
 }
 

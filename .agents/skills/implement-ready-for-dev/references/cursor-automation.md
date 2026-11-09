@@ -13,7 +13,7 @@ This file is the **dashboard paste**. Runtime procedure stays in [`../SKILL.md`]
 | Field | Value |
 | --- | --- |
 | Trigger | **Scheduled** cron, e.g. `*/30 * * * *` (every 30 minutes). Optionally add **GitHub → Issue label changed** for `status:ready-for-dev` if that trigger is in the UI. Multiple triggers: any fire starts a run. |
-| Repositories | **Single repository**: `FlourishHealth/terreno` (required for code changes) |
+| Repositories | **Single repository**: `TerrenoLabs/terreno` (required for code changes) |
 | Tools | **Pull request creation** on. Do **not** enable Memories (issue text is untrusted). MCP GitHub optional; `gh` is enough. |
 | Model | Team default capable of implementation; automations use the model's max context (no toggle) |
 | Permissions | **Private** (creator GitHub identity) so Pick-plan comments count as `OWNER` / `MEMBER` / `COLLABORATOR`. Team Owned posts as `cursor`; a later run must not trust that plan without a pin. |

@@ -1,5 +1,6 @@
 import {FlashList, type ListRenderItemInfo} from "@shopify/flash-list";
 import {generateMutationId} from "@terreno/syncdb";
+import {useSession} from "@terreno/syncdb/auth";
 import {useEntityIds, useSyncStatus} from "@terreno/syncdb/react";
 import {
   Box,
@@ -11,7 +12,9 @@ import {
   SyncStatusBanner,
   Text,
   TextField,
+  WhatsNewBanner,
 } from "@terreno/ui";
+import {useRouter} from "expo-router";
 import {DateTime} from "luxon";
 import type React from "react";
 import {memo, useCallback, useMemo, useState} from "react";
@@ -19,8 +22,10 @@ import {useSafeAreaInsets} from "react-native-safe-area-context";
 import {NotificationCenterBell} from "@/components/NotificationCenter";
 import {useSyncConflictsController} from "@/components/SyncConflictsController";
 import {SyncDevPanel} from "@/components/SyncDevPanel";
+import {TodoSummaryCard} from "@/components/TodoSummaryCard";
+import {WHATS_NEW_RELEASES} from "@/constants/whatsNew";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
-import {logout, useAppDispatch} from "@/store/index";
+import {betterAuthClient} from "@/lib/betterAuth";
 import {
   type CreateTodoBody,
   type Todo,
@@ -261,7 +266,7 @@ const SyncTodosScreen: React.FC = () => {
   // The app mounts exactly one ConflictSheet (owned by SyncHealthToast in _layout.tsx);
   // the banner's conflict badge requests it rather than rendering a second copy.
   const {openConflicts} = useSyncConflictsController();
-  const dispatch = useAppDispatch();
+  const {refresh: refreshSession} = useSession();
   const insets = useSafeAreaInsets();
   const listBottomPadding = insets.bottom + TAB_BAR_OVERLAP_PADDING;
 
@@ -355,10 +360,19 @@ const SyncTodosScreen: React.FC = () => {
 
   // Replay is paused until this user re-authenticates, and the session we hold is no
   // longer usable — clearing it sends the root layout's redirect effect to /login, and a
-  // successful sign-in resumes the queued mutations for the same user.
+  // successful sign-in resumes the queued mutations for the same user. This deliberately
+  // skips useSession().logout, which wipes local data and would drop those queued writes.
   const handleAuthRequired = useCallback((): void => {
-    dispatch(logout());
-  }, [dispatch]);
+    const endSession = async (): Promise<void> => {
+      try {
+        await betterAuthClient.signOut();
+      } catch (error: unknown) {
+        console.warn("[SyncTodos] Sign out after auth pause failed", error);
+      }
+      await refreshSession();
+    };
+    void endSession();
+  }, [refreshSession]);
 
   const keyExtractor = useCallback((item: TodoListRow): string => {
     if (item.type === "section") {
@@ -392,18 +406,50 @@ const SyncTodosScreen: React.FC = () => {
     return `${noun} · ${incompleteIds.length} remaining · ${completedIds.length} completed`;
   }, [completedIds.length, incompleteIds.length, totalCount]);
 
+  const router = useRouter();
+  const handleOpenWindows = useCallback((): void => {
+    router.push("/todo-windows");
+  }, [router]);
+  const handleOpenBrowser = useCallback((): void => {
+    router.push("/todo-browser");
+  }, [router]);
+
   const listHeader = useMemo(
     (): React.ReactElement => (
       <Box>
         <SyncDevPanel />
-        <Box alignItems="center" direction="row" justifyContent="between" marginBottom={6}>
+        {/* Stacked on phones: the title and three controls do not fit one row below `lg`. */}
+        <Box
+          alignItems="start"
+          direction="column"
+          gap={3}
+          justifyContent="between"
+          lgDirection="row"
+          marginBottom={6}
+        >
           <Box flex="grow">
             <Heading size="xl">My Todos</Heading>
             <Text color="secondaryLight" size="sm">
               Local-first via @terreno/syncdb
             </Text>
           </Box>
-          <NotificationCenterBell />
+          <Box alignItems="center" direction="row" gap={2} wrap>
+            <Button
+              iconName="filter"
+              onClick={handleOpenWindows}
+              testID="todos-open-windows"
+              text="Query windows"
+              variant="muted"
+            />
+            <Button
+              iconName="table-columns"
+              onClick={handleOpenBrowser}
+              testID="todos-browse-button"
+              text="Browse"
+              variant="muted"
+            />
+            <NotificationCenterBell />
+          </Box>
         </Box>
         <Box alignItems="center" direction="row" gap={1} marginBottom={6} wrap>
           <Text color="secondaryLight" size="sm" testID="todos-count">
@@ -414,9 +460,10 @@ const SyncTodosScreen: React.FC = () => {
           </Text>
         </Box>
         <NewTodoForm disabled={!isSyncDbReady} onCreate={handleCreate} />
+        <TodoSummaryCard />
       </Box>
     ),
-    [countSummary, handleCreate, isSyncDbReady, totalCount]
+    [countSummary, handleCreate, handleOpenBrowser, handleOpenWindows, isSyncDbReady, totalCount]
   );
 
   const listEmpty = useMemo(
@@ -450,6 +497,7 @@ const SyncTodosScreen: React.FC = () => {
         sentThisDrain={syncStatus.sentThisDrain}
         totalThisDrain={syncStatus.totalThisDrain}
       />
+      <WhatsNewBanner releases={WHATS_NEW_RELEASES} testID="todos-whats-new-banner" />
       <FlashList
         contentContainerStyle={{paddingBottom: listBottomPadding}}
         contentInsetAdjustmentBehavior="automatic"

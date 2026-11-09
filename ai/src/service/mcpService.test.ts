@@ -1,15 +1,18 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
 
 const clientImpl = {
   close: mock(async () => {}),
   tools: mock(async () => ({search: {description: "Search"}})),
 };
-const createMCPClientMock = mock(async () => clientImpl);
+const createMCPClientMock = mock(async (_opts: Record<string, unknown>) => clientImpl);
 mock.module("@ai-sdk/mcp", () => ({
   createMCPClient: (opts: Record<string, unknown>) => createMCPClientMock(opts),
 }));
 
-const {MCPService} = await import("./mcpService");
+let MCPService: typeof import("./mcpService.js").MCPService;
+beforeAll(async () => {
+  ({MCPService} = await import("./mcpService.js"));
+});
 
 const makeConfig = (overrides?: Partial<Record<string, unknown>>) => ({
   name: "test-server",
@@ -59,6 +62,16 @@ describe("MCPService", () => {
       await service.connect();
       const tools = await service.getTools();
       expect(Object.keys(tools)).toContain("search");
+    });
+
+    it("keeps the first server's tool when a later server uses the same name", async () => {
+      const service = new MCPService([makeConfig(), makeConfig({name: "second-server"})]);
+      await service.connect();
+      clientImpl.tools
+        .mockImplementationOnce(async () => ({search: {description: "First"}}))
+        .mockImplementationOnce(async () => ({search: {description: "Second"}}));
+      const tools = await service.getTools();
+      expect((tools.search as {description?: string}).description).toBe("First");
     });
 
     it("returns empty object when no servers are connected", async () => {

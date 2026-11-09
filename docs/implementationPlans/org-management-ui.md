@@ -1,7 +1,7 @@
 # Implementation Plan: Organizations as a first-class primitive (admin UI + RBAC)
 
-**Status:** Approved
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1024 (absorbs `orgs-and-teams`; retitle on approve)
+**Status:** Complete
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1024 (absorbs `orgs-and-teams`; retitle on approve)
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

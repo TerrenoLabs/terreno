@@ -4,28 +4,27 @@ CircleCI CI/CD source of truth. See
 [`docs/implementationPlans/migrate-cicd-to-circleci.md`](../implementationPlans/migrate-cicd-to-circleci.md).
 
 **Status:** CircleCI owns package CI, repo policies, Playwright e2e, Maestro web
-e2e, architectural PR review, and semver-tag npm releases. Path filters start
-CircleCI Netlify and GCP production/preview jobs, but those jobs **skip green**
-until `terreno-netlify` and `terreno-gcp` are filled. GitHub Actions still
-owns live Netlify/GCP deploys in this window. Do not leave both applying
-terraform once CircleCI GCP deploys succeed — set the GHA deploy workflows
-back to `on: []` in the same change. GitHub-native security, Cursor GitHub App
-checks (Approval / Security / Bugbot), and repository automation remain
-enabled. EAS PR updates and the fingerprint gate are temporarily disabled;
-manual EAS development dispatch remains available in CircleCI. Preview
-**cleanup** on PR close is GitHub `preview-cleanup.yml` plus the manual
-CircleCI `run-preview-cleanup` parameter.
+e2e, architectural PR review, semver-tag npm releases, and all continuous
+deploys (Netlify demo / example frontend / docs, GCP terraform, Cloud Run
+backend + tasks, MCP). The GitHub Actions deploy workflows are disabled and
+kept only for rollback. CircleCI deploy jobs **fail** when `terreno-netlify`
+or `terreno-gcp` is missing a value; they never skip green. GitHub-native
+security, Cursor GitHub App checks (Approval / Security / Bugbot), and
+repository automation remain enabled. EAS PR updates and the fingerprint gate
+are temporarily disabled; manual EAS development dispatch remains available in
+CircleCI. Preview **cleanup** on PR close is a thin GitHub
+`preview-cleanup.yml` hook that starts a CircleCI `run-preview-cleanup`
+pipeline.
 
 ## Project setup (maintainers)
 
-1. Link `FlourishHealth/terreno` in CircleCI (GitHub App).
+1. Link `TerrenoLabs/terreno` in CircleCI (GitHub App).
 2. Default branch: `master`.
 3. Enable **dynamic config** / setup workflows for the project (required for
    `.circleci/config.yml` `setup: true`).
 4. Create the contexts below (`terreno-netlify`, `terreno-gcp`, and the rest).
-   Copy Netlify and GCP values from GitHub Actions secrets/vars. Until they
-   are set, CircleCI deploy jobs skip with exit 0 and GHA remains the live
-   deployer.
+   Copy Netlify and GCP values from GitHub Actions secrets/vars. CircleCI is
+   the only deployer, so deploy jobs fail until these are set.
 5. Set project Environment Variable `CODECOV_TOKEN` (Codecov upload token) so
    package CI can upload `coverage/lcov.info`. Uploads skip when it is unset.
    Mirror the same secret as GitHub Actions `CODECOV_TOKEN` for retained twins.
@@ -34,9 +33,9 @@ CircleCI `run-preview-cleanup` parameter.
 6. Build forked PRs if you want DCO + rulesync on forks.
 
 GitHub App org/project slug (API and CLI):
-`circleci/6UHiK7pThPXbhnNi3umQNe/W3HZeMJujyMB2sYiUXaQbs`.
+`circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2`.
 
-Do not query `gh/FlourishHealth/terreno` — that slug returns `404 Project not found`.
+Do not query `gh/TerrenoLabs/terreno` — that slug returns `404 Project not found`.
 Cloud agents use `CIRCLECI_TOKEN` (accepted alias of CircleCI's `CIRCLE_TOKEN`). Send
 it as the `Circle-Token` header. Confirm with `GET https://circleci.com/api/v2/me`, then
 list pipelines on the slug above.
@@ -47,6 +46,32 @@ list pipelines on the slug above.
 |------|------|
 | `.circleci/config.yml` | Setup workflow + `path-filtering` (this is the live config) |
 | `.circleci/continue-config.yml` | Real jobs/workflows gated by those params |
+
+## Bun version is pinned
+
+`install_bun_and_deps` pins Bun with `node/install-bun` `version`. Bun 1.4.4 reports
+lower line coverage than 1.4.2 for the same tests, which fails the 95% package
+coverage gates. Bump the pin together with the local toolchain and re-run
+`bun run test:coverage` in each package first.
+
+## Bun install is uncached
+
+`install_bun_and_deps` runs `bun install --frozen-lockfile` with
+`node/install-packages` `with-cache: false`. Do not restore `~/.bun/install/cache`.
+Measured on CircleCI (pipeline 1968 miss, 1969 exact lockfile hit, branch
+`chore/update-dependencies`):
+
+| Path | Restore | `bun install` | Save | Restore + install |
+| --- | --- | --- | --- | --- |
+| Cold (cache miss) | ~0.3s | ~11–21s (2488 packages) | ~17s on one job; others skip | **~12–21s** |
+| Warm (exact lockfile hit) | ~15–17s | ~6–7s | skip | **~21–24s** |
+| Stale fallback hit | ~22–73s | ~8–9s | skip | **~30–81s** |
+
+Cache restore costs more than it saves. First jobs on a branch miss because
+`include-branch-in-cache-key` was true. Parallel jobs cannot reuse a cache
+saved later in the same pipeline. GitHub Actions twins use
+`.github/actions/setup-bun-workspace` the same way (Bun pin + install, no
+package cache). Keep Playwright, Docusaurus, and fingerprint caches.
 
 Fork-only `dco` and PR `architectural-pr-review` always start on continuation
 (review skips before checkout when the agentic/GitHub contexts are empty).
@@ -62,14 +87,15 @@ for `.circleci/**`); the kitchen-sink does not start a second copy. If the same
 pipeline already set `run-api`, `run-ui`, `run-e2e`, `run-example-backend`, or
 `run-admin-spa`, that kitchen-sink workflow is skipped so jobs are not doubled.
 `comms/**` also sets `run-example-backend` and `run-example-backend-script`,
-matching the GitHub Actions twins.
+matching the GitHub Actions twins. `blocks/**` sets `run-blocks` plus every
+parameter `ai/**` sets, because `@terreno/ai` depends on `@terreno/blocks`.
 
 The example-backend Docker job runs only when its image recipe changes
 (`Dockerfile`, `.dockerignore`, package manifests, or `bun.lock`). API/source
 changes are covered by preview CD builds and do not start a duplicate image job.
 
-UI, RTK, and admin-frontend changes do **not** start `example-backend-ci`.
-Those packages are covered by `ui-ci` / `rtk-ci` / `packages-ci` plus e2e and
+UI, syncdb, and admin-frontend changes do **not** start `example-backend-ci`.
+Those packages are covered by `ui-ci` / `syncdb-ci` / `packages-ci` plus e2e and
 admin-spa. `new-file-coverage` starts on package `src/` (and example app
 runtime paths including `example-frontend/components/`), not on every `*.ts`
 file in the repo (Playwright specs no longer compile the world). Package CI
@@ -87,11 +113,14 @@ when the package imports them. Coverage-script unit tests run in the cheap
 Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 `admin-table`, `syncdb`) instead of one container per spec file. Each shard
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. Repository
+file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+which builds its own web bundle and backend (`playwright.config.ts` with
+`E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
-Require `repo-policies` in branch protection. Require `e2e-auth` /
+The `typecheck` job runs in the same workflow: it compiles every package, then
+runs `bun run typecheck`. Require `repo-policies` and `typecheck` in branch protection. Require `e2e-auth` /
 `e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
 as the smoke shard and do not run the other four. Do not require the old
 `no-barrel-imports` / `e2e-login` names.
@@ -147,28 +176,64 @@ non-PR branch builds.
 | Path (examples) | Parameter | PR job | `master` job |
 | --- | --- | --- | --- |
 | `demo/**`, `ui/**` | `run-deploy-demo` | `deploy-demo-preview` | `deploy-demo` |
-| `example-frontend/**`, `admin-frontend/**`, `rtk/**` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
+| `example-frontend/**`, `admin-frontend/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
-| `example-backend/**`, `api/**`, `comms/**` | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `terraform/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
-| `mcp-server/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` |
+| `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
+| `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
-Until `terreno-netlify` is populated, GitHub Actions `docs-deploy` /
-`demo-deploy` / `frontend-example-deploy` publish the live sites (including
-PR aliases). CircleCI `deploy-*-preview` jobs still start from path filters
-and skip when `NETLIFY_AUTH_TOKEN` or the site id is missing. The same skip
-applies to `gcp-cd-*` when `terreno-gcp` lacks WIF or SA emails, so GitHub
-`cd.yml` remains the live GCP writer. GitHub `terraform-preview` and
-`backend-deploy-preview` run only when
-`github.event.pull_request.head.repo.full_name == github.repository`.
-Terraform preview always describes the Infra Manager preview (state,
-`errorCode`, `errorLogs`) before delete, including when `previews create`
-fails. Fork PRs still present `repository: FlourishHealth/terreno` on the
-OIDC token, so
-WIF would accept them if those jobs ran. Netlify GHA jobs fail closed on
-forks (secrets withheld). After filling a context, confirm a CircleCI deploy
-URL, then set the matching GHA workflows to `on: []`. Turn off Netlify's
-GitHub auto-build so only one system publishes.
+The backend image bundles the admin SPA (ui, admin-frontend, syncdb), so
+those paths redeploy the backend too. Every frontend PR preview therefore gets
+an isolated `pr-N` backend: `deploy-frontend-preview` always points
+`EXPO_PUBLIC_API_URL` at it (the prod backend rejects preview CORS) and waits
+up to 20 minutes for its `/health` before publishing, because `gcp-cd-preview`
+runs in a separate workflow.
+
+Those backend deploys set `GCS_BUCKET` to `flourish-terreno-example-documents` (override with `GCP_DOCUMENTS_BUCKET`). Preview revisions also set `GCS_FOLDER_PREFIX=pr-<number>/` so each PR keeps its own folder. Without `GCS_BUCKET`, `GET /documents/` returns 503 and the Files section shows “Storage is not configured.”
+
+Backend previews prune not-Ready tagged revisions from traffic
+(`rebuild-cloud-run-ready-traffic.sh`), deploy untagged with
+`--revision-suffix`, then point the `pr-N` tag at that revision. Terraform
+preview always describes the Infra Manager preview (state, `errorCode`,
+`errorLogs`) before delete, including when `previews create` fails. Fork PRs
+still present `repository: TerrenoLabs/terreno` on the OIDC token, so WIF
+would accept them if those jobs ran. Preview jobs halt on fork PRs, where CircleCI withholds contexts.
+GitHub App builds do not set `CIRCLE_PR_USERNAME` / `CIRCLE_PR_REPONAME`;
+`skip_if_fork_deploy` asks the pulls API and halts before
+`require_*_context` would fail on those withheld secrets.
+
+### GitHub Deployment records
+
+Deploy scripts wrap the publish step in `with_github_deployment`
+(`scripts/ci/github-deployment-lib.sh`): the deployment is created as
+`in_progress` with the CircleCI job as `log_url`, then set to `success`
+(with the environment URL) or `failure`. PR previews are transient; the rest
+are production environments. Environment names match the retired GitHub
+workflows, so history stays continuous:
+
+| Job | Environment | URL |
+| --- | --- | --- |
+| `deploy-demo` / `deploy-demo-preview` | `demo` / `demo-preview-pr-N` | `terreno-demo.netlify.app` / `pr-N--terreno-demo.netlify.app` |
+| `deploy-frontend` / `deploy-frontend-preview` | `example-frontend` / `example-frontend-preview-pr-N` | `terreno-frontend.netlify.app` / `pr-N--terreno-frontend.netlify.app` |
+| `deploy-docs` / `deploy-docs-preview` | `docs` / `docs-preview-pr-N` | `terreno-docs.netlify.app` / `docs-pr-N--terreno-docs.netlify.app` |
+| `gcp-cd-prod` backend / `gcp-cd-preview` | `example-backend-production` / `example-backend-preview-pr-N` | Cloud Run URL / `pr-N---` tag URL |
+| `gcp-cd-prod` MCP | `mcp-production` | Cloud Run `terreno-mcp` URL |
+
+Records are posted to `GITHUB_REPOSITORY` when that is set, otherwise
+`TerrenoLabs/terreno`. CircleCI does not set `GITHUB_REPOSITORY`, and
+`CIRCLE_PROJECT_USERNAME` can still be the pre-transfer `FlourishHealth`
+project link, so the script does not use it. Recording is best-effort: an
+unset `GITHUB_DEPLOYMENTS_TOKEN` or a GitHub API error prints a warning and
+never fails the deploy. Terraform applies are not recorded. PR close
+deactivates the preview environments (`preview-cleanup.yml`). The token lives
+in its own context so the GitHub write scope is limited to deployments.
+Same-repo PR pipelines can read every context their jobs attach, so keep this
+token scoped to deployments.
+
+Each deploy job has a `serial-group`: production jobs queue per target, and
+previews queue per branch, so two master merges never apply terraform or roll
+Cloud Run at the same time. Turn off Netlify's GitHub auto-build so only
+CircleCI publishes.
 
 ## Contexts (create empty shells, then fill)
 
@@ -184,28 +249,37 @@ restrict `terreno-release` and `terreno-npm` to tag/manual release pipelines.
 | `terreno-e2e` | `E2E_TOKEN_SECRET`, `E2E_REFRESH_TOKEN_SECRET`, `E2E_SESSION_SECRET` | `e2e`, `admin-spa-integration`, `maestro-e2e` |
 | `terreno-release` | `REPO_ADMIN_TOKEN`, `ZOOM_WEBHOOK_URL`, `ZOOM_WEBHOOK_TOKEN` | stable version bump + release notification |
 | `terreno-agentic` | `CURSOR_API_KEY`, optional `CURSOR_MODEL` | `architectural-pr-review` |
-| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review` |
+| `terreno-github-api` | PAT (`pull-requests`, `contents`, …) | `dco`, `architectural-pr-review`, `approve` |
+| `terreno-approve` | `TERRENO_APP_ID`, `TERRENO_APP_PRIVATE_KEY` (the terreno-approval-agent GitHub App), `ANTHROPIC_API_KEY` | `approve` |
+| `terreno-github-deployments` | `GITHUB_DEPLOYMENTS_TOKEN`: fine-grained PAT on `TerrenoLabs/terreno` with **Deployments: read/write** and **Pull requests: read** only | GitHub Deployment records + preview PR lookup in every Netlify/GCP deploy job |
 
 Until contexts exist, e2e jobs may use **project env vars for `E2E_*` secrets only**
 (or the in-job `ci-e2e-*-secret` fallbacks). **Do not** put `GITHUB_TOKEN` (or any
 GitHub PAT) in project env vars — those are injected into every job, including
-`bun` scripts from the PR. Create `terreno-github-api`, restrict it to this
-project, leave fork-PR secret passing off, and attach that context **only** to
-`dco` and `architectural-pr-review`. DCO skips if `GITHUB_TOKEN` is unset.
+`bun` scripts from the PR. `terreno-github-api` must hold the PAT as
+`GITHUB_TOKEN`; restrict it to this project and leave fork-PR secret passing off.
+The `always` workflow attaches it **only** to `dco`, `architectural-pr-review`
+(which also gets `terreno-agentic`), and `approve` (which also gets `terreno-approve`).
+DCO skips if `GITHUB_TOKEN` is unset.
 `architectural-pr-review` also skips if `GITHUB_TOKEN` or `CURSOR_API_KEY` is
 unset, and it skips fork PRs. The job checks out `origin/master` before running
 the review script so a PR cannot rewrite the reviewer.
 
-Netlify and GCP jobs **halt as the first step** when `terreno-netlify` /
-`terreno-gcp` are empty, before checkout or `bun install`. Path filters still
-start those jobs so filling the context turns deploys on without a config
-change; skip-green no longer pays for a full `large` install. Docker Layer
-Caching is off (200 credits per job). The docs Netlify target disables
-Docusaurus minification so the build stays within the 8 GB `large` executor.
+Netlify and GCP jobs **validate their context as the first step** and fail,
+before checkout or `bun install`, listing the missing variables. Preview jobs
+halt earlier on fork PRs, where CircleCI withholds contexts. Docker Layer
+Caching is off (200 credits per job). The docs Netlify target builds only the
+current docs tree, disables Docusaurus minification, and pins SSG to one worker
+thread so the build peaks near 3 GB and fits the 4 GB `medium` executor.
+Released versions are not rebuilt: `archive-docs-version` (in `publish-release`,
+`X.Y.0` tags only) builds each version once, uploads it to its **draft** GitHub
+release, publishes the release, and then commits the docs snapshot to master, so
+the `deploy-docs` run that commit starts can unpack the archive under
+`/<version>/`. See `website/README.md`.
 
 `terreno-gcp` uses CircleCI OIDC (`CIRCLE_OIDC_TOKEN_V2`), never a JSON service
 account key. Set `circleci_org_id`, `circleci_project_id`, and
-`circleci_gcp_context_id` in `terraform/terraform.tfvars`, apply once with an
+`circleci_gcp_context_id` in `infra/flourish/terraform.tfvars`, apply once with an
 existing Terraform admin identity, then copy `circleci_workload_identity_provider`
 into the context as `GCP_WIF_PROVIDER_PROD`. The WIF condition requires the
 `terreno-gcp` context UUID so a PR job without that context cannot exchange the
@@ -216,7 +290,7 @@ ambient OIDC token for GCP impersonation.
 Branch protection must require the CircleCI job names below. Remove disabled
 GitHub check names or pull requests will wait for checks that can no longer run.
 
-Dedicated package jobs (`api-ci`, `ai-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
+Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `ui-ci`, `syncdb-ci`,
 `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run `bun run test:coverage`
 (`scripts/check-coverage.ts`, 95% functions and lines). Isolated `syncdb` tests
 are included by that script. Published packages without a dedicated workflow
@@ -224,18 +298,20 @@ are included by that script. Published packages without a dedicated workflow
 the same commands through the parameterized `packages-ci` job, gated by
 `run-admin-backend`, `run-admin-frontend`, `run-api-health`,
 `run-feature-flags`, and `run-test-package`. The retained
-`.github/workflows/packages-ci.yml` matrix twin stays `on: []`.
+`.github/workflows/packages-ci.yml` matrix twin stays `push.branches-ignore: ["**"]`.
 
 | GHA job `name:` / workflow | CircleCI job |
 |----------------------------|--------------|
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
+| (none) — every package's `typecheck` (src + tests) | `typecheck` (runs with `run-repo-policies`) |
 | `dco` | `dco` |
+| (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |
 | Admin backend lint, compile, coverage | `packages-ci` (`admin-backend`) |
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
 | Run all tests (AI CI) | `ai-ci` |
-| RTK Lint and Build | `rtk-ci` |
+| Lint, compile, and test blocks | `blocks-ci` |
 | Syncdb Lint, Build, and Tests | `syncdb-ci` |
 | UI Lint, Build, Types, and Tests + demo typecheck | `ui-ci` |
 | Demo Lint and TypeScript Check | `ui-demo-ci` (demo-only PRs) |
@@ -248,8 +324,10 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Run admin script CLI (when backend CI did not already run) | `example-backend-script-runner` |
 | Build backend Docker image | `example-backend-docker` |
 | Admin SPA Build and E2E | `admin-spa-ci` |
+| (none) | `smoke` (every workspace `smoke` script; any package change) |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
+| _(cross-site bearer specs, not required)_ | `e2e-cross-site` (after `e2e-prepare`; also the explicit-linking pass) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |
@@ -265,16 +343,56 @@ the same commands through the parameterized `packages-ci` job, gated by
 
 CD replacement map:
 
-| GHA job `name:` / workflow (not yet ported) | Planned CircleCI job |
+| GHA job `name:` / workflow | CircleCI job |
 |---------------------------------------------|----------------------|
 | Fingerprint gate (`fingerprint-gate.yml`) | Temporarily disabled; no CircleCI automatic gate |
 | EAS PR update/build (`eas-pr.yml`) | Temporarily disabled; use manual EAS dispatch |
 | EAS dev build (`eas-dev-build.yml`) | CircleCI manual `eas-dev-target` |
 | CD terraform / Cloud Run (`cd.yml`) | `gcp-cd-prod` (master) and `gcp-cd-preview` (PRs) |
-| Preview cleanup (`preview-cleanup.yml`) | CircleCI manual `run-preview-cleanup` |
+| Preview cleanup (`preview-cleanup.yml`) | `preview-cleanup`, started by the GitHub PR-close hook |
 | Netlify demo / frontend / docs deploys | production + `*-preview` jobs |
 | Publish on tag (`publish-on-tag.yml`) | `publish-release` |
 | Appium Android / iOS | Not ported (Maestro web is `maestro-e2e`) |
+
+## Approval agent
+
+`approve` runs `brewery approve` from
+[joshgachnang/brewery](https://github.com/joshgachnang/brewery) on every same-repo PR
+pipeline and posts one review as the **terreno-approval-agent** GitHub App plus a
+`terreno/approve` check run. Policy lives in `.brewery.json` (`approve` block: levels
+the App may approve, path rules that floor, cap, or forbid approval; when a file matches
+both a floor and a lower ceiling, the floor wins) and
+`docs/approval-rubric.md` (what the model scores). Both are read from `origin/master`,
+so a PR cannot change the rules it is judged by, and a PR that edits either file is
+never approved. The job resets its working tree to `origin/master` right after
+checkout, so the PR-number script, `bunfig.toml`, and the agent's working directory all
+come from master and nothing from the PR tree runs while the App key is in the
+environment; brewery reads the head through `git show <sha>:`. Brewery itself is
+pinned to a commit (`BREWERY_REF`) and cloned into `$HOME`; the model runs read-only
+with an allowlisted environment that holds no GitHub or App credential. The job waits
+(`--wait-checks`, up to 45 minutes) for every other check on the head before judging,
+ignoring its own `ci/circleci: approve` check (`selfChecks` in `.brewery.json`), and
+skips a red or still-pending head without spending a model, so it runs once per push,
+last.
+
+To teach the agent from what reviewers actually say, run
+`brewery calibrate TerrenoLabs/terreno` (optionally `--reviewer <login>` or `--notes
+<file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
+path rules from the review comments since the last pass.
+
+Levels and human approvals (defined in `docs/approval-rubric.md`):
+
+| Level | Human approvals | Examples |
+| --- | --- | --- |
+| low | None once automated review and security checks are green | docs, copy, internal-only features, additive changes behind a flag |
+| medium | One person | ordinary product changes, and sensitive areas such as caching, app updates, and AI system prompts |
+| high | One person | security-related code: auth, permissions, secrets, crypto, PHI handling |
+
+`approveLevels` is `["low"]`, so the App's approval satisfies master's one-review rule
+for low PRs. Medium and high PRs get a `COMMENT` review that says the risk level and
+why, and a human approves. The prompts and answers behind each
+verdict are stored as the `brewery-approve` job artifact. Full reference:
+[brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
 
 ## Manual pipelines
 
@@ -299,26 +417,65 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`scripts/ci/publish-package.sh` pins `workspace:*` to the tag version for the
-tarball, then compiles and tests against the root workspace install. It must
-not `bun install` after that pin: sibling `@terreno/*` packages are not on npm
-yet, so bun would look up `@terreno/test@X.Y.Z` (and similar) on the registry
-and fail the whole job. Tests use `test:ci` when that script exists, not
-`test`. `@terreno/ui`'s `test` is `bun test --watch` and would hang the
-publish step after the suite finishes. `publish-release` uses a 20-minute
-no-output timeout as a backstop. If a package's tag version is already on npm,
-`publish-package.sh` skips it so a recut of the same tag can finish the rest.
+`publish-release` first requires the tag to be on `master` with its assembled
+`CHANGELOG.md` section ([release automation](release-automation.md)), then
+compiles the lockstep packages once with
+`bun run --filter ... compile` (dependency order), then runs
+`scripts/ci/publish-package.sh` for all of them in parallel with
+`TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
+already passed CI on master, and rerunning every suite per package made
+releases take 20+ minutes. The job has no Mongo sidecar. Each publish writes
+its own temporary npmrc (`NPM_CONFIG_USERCONFIG`) so parallel publishes do not
+remove each other's token.
 
-Only stable tags (`57.3.0`) run `deploy-demo` after publish. Use
+`publish-package.sh` pins `workspace:*` to the tag version for the tarball.
+It must not `bun install` after that pin: sibling `@terreno/*` packages are
+not on npm yet, so bun would look up `@terreno/test@X.Y.Z` (and similar) on
+the registry and fail the whole job. Without `TERRENO_PUBLISH_PREBUILT` (the
+manual single-package publish), it compiles the package and its workspace
+dependencies and runs `test:ci` when that script exists, not `test`.
+`@terreno/ui`'s `test` is `bun test --watch` and would hang. If a package's
+tag version is already on npm, `publish-package.sh` skips it so a recut of
+the same tag can finish the rest.
+
+The **Bot merge** workflow (or the release skill, when a human merges) pushes
+the tag and creates the GitHub release with `gh release create --draft`. The repository has immutable releases on: a
+published release cannot take new assets (GitHub answers `422`). So CI publishes
+the draft last with `scripts/ci/github-release.sh publish`.
+`archive-docs-version` does it right after the upload on `X.Y.0` tags.
+`publish-github-release` does it after `publish-release` on every other tag.
+Both wait up to 10 minutes for the draft and are safe to rerun: a rerun skips
+an upload that already landed on a published release and a snapshot already on
+master. A
+release still in draft after the pipeline means one of them failed.
+
+Only stable tags (`57.3.0`) run `deploy-demo`. It builds the demo from source,
+so it runs alongside `publish-release` instead of waiting for it. Use
 `{"run-demo-deploy":true}` on `master` if a prerelease must also refresh the
 demo site.
 
-PR preview **cleanup** is manual because CircleCI does not receive GitHub
-`pull_request.closed` events. Configure a GitHub App/webhook to call
-`run-preview-cleanup` if automatic lifecycle cleanup is required. Path-filtered
+`scripts/ci/netlify-deploy.sh` builds each site itself and calls
+`netlify deploy --no-build`. Without `--no-build`, netlify-cli runs the root
+`netlify.toml` docs build (wipe `node_modules`, reinstall, full Docusaurus),
+which added about 3.5 minutes to every demo and frontend deploy.
+
+CircleCI does not receive GitHub `pull_request.closed` events, so
+`.github/workflows/preview-cleanup.yml` forwards them: it runs master's
+`scripts/ci/trigger-circleci-pipeline.sh` with `{"run-preview-cleanup":"<PR>"}`
+and deactivates the PR's old GitHub Deployments. The manual GHA publisher
+(`publish-on-tag.yml`) uses the same script to start `{"run-demo-deploy":true}`
+on `master`. Both need the GitHub secret `CIRCLECI_TOKEN` (a CircleCI personal
+or project API token) and the repository variable
+`CIRCLECI_PIPELINE_DEFINITION_ID` (Project Settings → Pipelines, or
+`GET /api/v2/projects/<project id>/pipeline-definitions`; the project id comes from
+`GET /api/v2/project/<slug>`). Set the
+optional variable `CIRCLECI_PROJECT_SLUG` if re-linking the project changes
+its slug. Path-filtered
 preview **deploys** run on open PRs from this repository; fork PRs are skipped.
 If `CIRCLE_PULL_REQUEST` is unset (GitHub App `push` pipelines), the job looks
-up the open PR for `CIRCLE_BRANCH` via the GitHub API.
+up the open PR for `CIRCLE_BRANCH` via the GitHub API on `TerrenoLabs/terreno`
+(`GITHUB_REPOSITORY` when set). It does not use `CIRCLE_PROJECT_USERNAME`,
+which can still be the pre-transfer `FlourishHealth` project link.
 
 `mcp-server-docker` is push-only, matching GitHub Actions. It uses
 `resolve-preview-pr.sh` for that lookup and skips when a PR exists. Its
@@ -329,8 +486,7 @@ tree.
 ## Path-filter parity guard
 
 `bun run check:circleci-parity` guards active GitHub/CircleCI twins. Deploy
-workflows are dual-run until CircleCI contexts are filled; they are not in
-the parity mapping. New CircleCI-only path rules still belong in
+workflows are disabled on GitHub, so they are not in the parity mapping. New CircleCI-only path rules still belong in
 `.circleci/config.yml` and config tests. The checker prefers live `config.yml`
 when `setup: true`.
 
@@ -380,14 +536,81 @@ circleci config validate .circleci/config.yml
 circleci config validate .circleci/continue-config.yml
 ```
 
+## Measure PR CI speed
+
+```bash
+bun run ci:wall-clock                                  # last 60 merged PRs
+bun run ci:wall-clock --limit 20 --max-directories 3   # rolling window used by the speed loop
+bun run ci:wall-clock --json                           # per-PR rows for a ledger
+```
+
+The command needs an authenticated `gh`. It reads each merged PR's head-commit
+statuses and reports the median, p25, and p75 wall clock for average PRs and
+for all PRs. It also lists which job finished last.
+
+| Term | Definition |
+| --- | --- |
+| Wall clock | First `ci/circleci:` status to the last terminal status of a test or build job |
+| Not counted as the end | `approve`, `architectural-pr-review`, `dco`, `deploy-*`, `*-preview`, `serial-*` |
+| Average PR | Touches at most `--max-directories` top-level directories, not counting `docs/`, `website/`, dot-directories, or root files |
+| Rerun job | Its newest status counts; a job whose newest status is pending makes the PR unmeasured |
+| PRs over 100 files | Directories are counted from the first 100 files (`gh pr list` limit) |
+
+The speed goal and loop that use this metric are in
+[`circleci-pr-speed-loop.md`](../implementationPlans/circleci-pr-speed-loop.md).
+
+## Benchmark a CI change
+
+```bash
+bun run ci:bench --branch origin/master --label baseline           # master only
+bun run ci:bench --branch ci-speed/1-cache --label iter1           # control vs treatment
+bun run ci:bench --branch ci-speed/1-cache --label iter1 --cases api-only --runs 1
+bun run ci:bench --suggest-cases                                   # replayable cases for cases.ts
+```
+
+The command needs an authenticated `gh` and push access. The branch under test
+must contain `origin/master`; otherwise it would run an older job set. For each
+case in `scripts/ci/bench/cases.ts`, run by run, it:
+
+1. Builds `ci-bench/<label>/<case>-<run>-control` from `master` and
+   `…-treatment` from the branch under test, in a temporary worktree. Both
+   reverse-apply the case PR's diff, so the replay touches the same files with
+   real code and keeps later work in those files. `docs/`, `changelog/`, and
+   `website/` are left out: they only drive the docs preview. A case whose code
+   no longer reverts cleanly on `master` is refused before anything is pushed. The control also
+   appends a comment to each file the branch under test changes, so path
+   filtering starts the same workflows for both. A file `master` does not have
+   yet maps to the nearest existing file with comment syntax in the same
+   directory or a parent. If there is none, the touch is skipped. This mirror
+   is best-effort: a touch that lands in a parent directory can start a
+   different set of path filters than the new file does.
+2. Opens both as draft PRs labelled `ci-bench`. Preview deploys,
+   `architectural-pr-review`, and `approve` skip `ci-bench/*` branches.
+3. Waits until every counted job has finished and no status has changed for
+   3 minutes (time out at 60 minutes). Then it measures each with the
+   [PR CI speed](#measure-pr-ci-speed) metric.
+4. Closes both PRs and deletes their branches, even on failure. A branch whose
+   PR never opened is deleted directly. A cleanup that still fails is
+   reported as `cleanupError` on the results, so you can remove it by hand.
+
+| Result | Meaning |
+| --- | --- |
+| `ok` | Every counted job succeeded; the run counts |
+| `invalid` | A counted job failed, usually because later code depends on what the replay reverted. Swap the case in `cases.ts` |
+| `timeout` / `error` | CI never settled, or git or `gh` failed. Three failed status reads in a row end that role only; the other role keeps measuring |
+| role `case` | The case failed before either role ran: it no longer reverts, has no code to replay, or a PR could not open |
+
+Results append to `.terreno/ci-bench/<label>.jsonl` (git-ignored). The summary
+compares the median of per-case medians for control and treatment. Only `ok`
+runs count.
+
 ## Disabled GitHub workflows
 
-Package CI, e2e, and npm tag workflows stay `on: []`. Netlify/GCP deploy
-workflows are **re-enabled** until CircleCI contexts have the same secrets.
-After a successful CircleCI production or preview deploy, set
-`docs-deploy.yml`, `demo-deploy.yml`, `frontend-example-deploy.yml`, `cd.yml`,
-and `preview-cleanup.yml` back to `on: []` in the same PR. Never enable both
-npm tag publishers. Never leave both GCP terraform applies enabled.
+Package CI, e2e, npm tag, and deploy workflows (`docs-deploy.yml`,
+`demo-deploy.yml`, `frontend-example-deploy.yml`, `cd.yml`) stay
+`push.branches-ignore: ["**"]` for rollback. `preview-cleanup.yml` stays live
+only as the PR-close trigger. Never enable both npm tag publishers. Never
+re-enable `cd.yml` while CircleCI deploys: both would apply terraform.
 
 ## Cursor GitHub App checks
 

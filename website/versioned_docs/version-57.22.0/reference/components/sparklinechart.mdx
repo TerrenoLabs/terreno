@@ -1,0 +1,31 @@
+---
+title: "SparklineChart"
+description: "Plot-only line for a KPI. The solid line is the current period and the dotted line is the previous period, scaled to the data range."
+sidebar_label: "SparklineChart"
+slug: /reference/components/sparklinechart
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# SparklineChart
+
+Plot-only line for a KPI. The solid line is the current period and the dotted line is the previous period, scaled to the data range.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `SparklineChartProps`  
+**Story source:** [`demo/stories/SparklineChart.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/SparklineChart.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="SparklineChart" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `data` | `array` | Yes | Current labeled numeric values. |
+| `accessibilityLabel` | `string` |  | Summary announced for the whole sparkline. |
+| `comparisonData` | `array` |  | Optional previous-period values drawn as a dotted line. |
+| `height` | `number` |  | Whole sparkline height in pixels. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

@@ -49,7 +49,7 @@ describe("findDedicatedJobsMissingCoverage", () => {
       `    command: ${COVERAGE_COMMAND} ${NEW_FILE_LCOV_CIRCLE_COMMAND}`,
       "  ai-ci:",
       "    command: bun run test",
-      "  rtk-ci:",
+      "  blocks-ci:",
       `    command: ${COVERAGE_COMMAND} ${NEW_FILE_LCOV_CIRCLE_COMMAND}`,
       "  ui-ci:",
       "    command: bun run test:ci",

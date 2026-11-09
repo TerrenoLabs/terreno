@@ -1,6 +1,6 @@
 # `can()` as the permission seam
 
-**Status:** Approved — 2026-08-24  
+**Status:** Complete  
 **Branch:** `cursor/architecture-ips-a7ec`  
 **Owner:** —  
 **Created:** 2026-08-24  

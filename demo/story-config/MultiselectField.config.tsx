@@ -3,21 +3,22 @@ import {MultiselectFieldDemo, MultiselectVariants} from "@stories/MultiselectFie
 import {MultiselectField} from "@terreno/ui";
 
 export const MultiselectFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {MultiselectField} from \"@terreno/ui\";\n\n<MultiselectField />",
   name: "Multiselect Field",
   component: MultiselectField,
-  related: ["Checkbox microcomponent"],
+  related: ["CheckBox"],
   description:
     "Also called 'checkbox field'. This component is a list of checkable items. In this case, a user can choose one, many, all, or no options.",
   a11yNotes: [
     "Screen readers should know when a set of checkboxes is related.",
     "When a user clicks the checkbox label, they should be able to interact with the checkbox. Learn more about that here.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23587&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23992",
     ios: "ready",
     android: "ready",
     web: "ready",

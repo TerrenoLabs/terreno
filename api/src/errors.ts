@@ -478,6 +478,53 @@ export const mongooseErrorToAPIError = (err: Error): APIError | null => {
   return null;
 };
 
+// Stable titles for the client errors body-parser (express.json / express.urlencoded) raises
+// before a route runs. The parser's own status and message are kept; only the title is mapped.
+const BODY_PARSER_ERROR_TITLES: {[type: string]: string} = {
+  "charset.unsupported": "Unsupported request body encoding",
+  "encoding.unsupported": "Unsupported request body encoding",
+  "entity.parse.failed": "Malformed request body",
+  "entity.too.large": "Request body too large",
+  "parameters.too.many": "Request body too large",
+  "request.aborted": "Request body incomplete",
+  "request.size.invalid": "Request body incomplete",
+};
+
+interface BodyParserError extends Error {
+  expose: boolean;
+  status: number;
+  type: string;
+}
+
+const isBodyParserClientError = (err: Error): err is BodyParserError => {
+  const candidate = err as Partial<BodyParserError>;
+  return (
+    typeof candidate.type === "string" &&
+    candidate.expose === true &&
+    typeof candidate.status === "number" &&
+    candidate.status >= 400 &&
+    candidate.status < 500
+  );
+};
+
+/**
+ * Converts a body-parser client error (malformed JSON, oversized body, unsupported charset) into
+ * an APIError with the parser's 4xx status. Returns null for anything else, including parser
+ * errors body-parser marks as not exposable (server faults).
+ */
+export const bodyParserErrorToAPIError = (err: Error): APIError | null => {
+  if (!isBodyParserClientError(err)) {
+    return null;
+  }
+  return new APIError({
+    cause: err,
+    detail: err.message,
+    disableExternalErrorTracking: true,
+    status: err.status,
+    title: BODY_PARSER_ERROR_TITLES[err.type] ?? "Invalid request body",
+  });
+};
+
 /**
  * Picks the error to throw for something caught in a hook, transformer, or Mongoose middleware.
  * An `APIError` is passed through untouched so its status, code, detail, and meta reach the client;
@@ -544,7 +591,9 @@ export const apiErrorMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  const apiError = isAPIError(err) ? err : mongooseErrorToAPIError(err);
+  const apiError = isAPIError(err)
+    ? err
+    : (mongooseErrorToAPIError(err) ?? bodyParserErrorToAPIError(err));
   if (!apiError) {
     next(err);
     return;

@@ -11,8 +11,8 @@ import {useSyncExternalStore} from "react";
 export const SYNC_LAB_COLLECTION = "todos";
 export const SYNC_LAB_TICK_MS = 1_000;
 
-/** Default: show the SyncDB dev panel in development builds. */
-const DEFAULT_SHOW_DEV_PANEL = typeof __DEV__ !== "undefined" ? Boolean(__DEV__) : false;
+/** The SyncDB dev panel is opt-in from the admin Sync Lab. */
+const DEFAULT_SHOW_DEV_PANEL = false;
 
 /**
  * Rate presets → target ops PER SECOND, indexed by the selected option.

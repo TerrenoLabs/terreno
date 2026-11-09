@@ -4,6 +4,7 @@ import {join} from "node:path";
 
 import {askUpdateHelp, getUpdateNote, searchUpdateNotes} from "../help/updateNotes.js";
 import {getUpgradeGuideMarkdown} from "../upgradeGuide.js";
+import {fakeFetch} from "./fakeFetch.js";
 
 describe("getUpgradeGuideMarkdown", () => {
   test("returns bundled notes for a semver range when upgrade files exist", () => {
@@ -149,7 +150,7 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_TOKEN = "test-token";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input, init) => {
+    globalThis.fetch = fakeFetch(async (input, init) => {
       const url = String(input);
       expect(url).toContain("q=billing");
       expect(url).toContain("q=webhooks");
@@ -170,7 +171,7 @@ describe("updateNotes help", () => {
         }),
         {status: 200}
       );
-    };
+    });
 
     const {hits, sources} = await searchUpdateNotes({
       queries: ["billing", "webhooks"],
@@ -193,15 +194,17 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_URL = "http://localhost:4000";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          data: [
-            {excerpt: "Product note", id: "live1", status: "published", title: "Billing update"},
-          ],
-        }),
-        {status: 200}
-      );
+    globalThis.fetch = fakeFetch(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {excerpt: "Product note", id: "live1", status: "published", title: "Billing update"},
+            ],
+          }),
+          {status: 200}
+        )
+    );
 
     const {hits} = await searchUpdateNotes({limit: 5, queries: ["billing"], source: "auto"});
     globalThis.fetch = originalFetch;
@@ -214,7 +217,7 @@ describe("updateNotes help", () => {
     process.env.TERRENO_HELP_API_URL = "http://localhost:4000";
 
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input) => {
+    globalThis.fetch = fakeFetch(async (input) => {
       expect(String(input)).toContain("/announcements/help/abc123");
       return new Response(
         JSON.stringify({
@@ -227,7 +230,7 @@ describe("updateNotes help", () => {
         }),
         {status: 200}
       );
-    };
+    });
 
     const detail = await getUpdateNote({id: "announcement:abc123"});
     globalThis.fetch = originalFetch;
@@ -244,5 +247,101 @@ describe("updateNotes help", () => {
   test("formats empty askUpdateHelp questions", async () => {
     const answer = await askUpdateHelp({question: "   "});
     expect(answer).toContain("non-empty");
+  });
+
+  test("keeps bundled hits and reports the error when the help API fails", async () => {
+    const tmpDir = join("/tmp", `terreno-mcp-help-api-error-${Date.now()}`);
+    mkdirSync(join(tmpDir, "upgrades"), {recursive: true});
+    writeFileSync(join(tmpDir, "upgrades", "57.5.0.md"), "Billing portal moved.");
+    process.env.TERRENO_MCP_DOCS_DIR = tmpDir;
+    process.env.TERRENO_HELP_API_URL = "http://localhost:4000/";
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fakeFetch(async (input) => {
+      expect(String(input)).toStartWith("http://localhost:4000/announcements/help/search?");
+      return new Response("help api unavailable", {status: 503});
+    });
+    try {
+      const {hits, sources} = await searchUpdateNotes({queries: ["billing"], source: "auto"});
+      expect(sources).toEqual([
+        "bundled-upgrades",
+        "announcements-api-error:Help API 503: help api unavailable",
+      ]);
+      expect(hits.map((hit) => hit.id)).toEqual(["upgrade:57.5.0"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  test("passes includeArchived to the help API and keeps typed announcement fields", async () => {
+    process.env.TERRENO_HELP_API_URL = "http://localhost:4000";
+
+    const originalFetch = globalThis.fetch;
+    const requested: string[] = [];
+    globalThis.fetch = fakeFetch(async (input) => {
+      const url = String(input);
+      requested.push(url);
+      if (url.includes("/announcements/help/search")) {
+        return new Response(
+          JSON.stringify({
+            data: [{archivedAt: "2026-01-02", excerpt: 3, id: "old1", version: 4}],
+          }),
+          {status: 200}
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          data: {
+            archivedAt: "2026-01-02",
+            expiresAt: "2026-02-01",
+            id: "old1",
+            platforms: ["web", 7, "ios"],
+            publishedAt: "2026-01-01",
+            version: 4,
+          },
+        }),
+        {status: 200}
+      );
+    });
+    try {
+      const {hits, sources} = await searchUpdateNotes({
+        includeArchived: true,
+        queries: ["billing"],
+        source: "announcement",
+      });
+      expect(sources).toEqual(["announcements-api"]);
+      expect(hits).toEqual([
+        {
+          archivedAt: "2026-01-02",
+          excerpt: "",
+          id: "announcement:old1",
+          kind: "announcement",
+          publishedAt: undefined,
+          status: undefined,
+          title: "Announcement",
+          version: "4",
+        },
+      ]);
+
+      const detail = await getUpdateNote({id: "old1", includeArchived: true});
+      expect(detail).toEqual({
+        archivedAt: "2026-01-02",
+        body: "",
+        expiresAt: "2026-02-01",
+        id: "announcement:old1",
+        kind: "announcement",
+        platforms: ["web", "ios"],
+        publishedAt: "2026-01-01",
+        status: undefined,
+        title: "Announcement",
+        version: "4",
+      });
+      expect(requested).toEqual([
+        "http://localhost:4000/announcements/help/search?limit=10&includeArchived=true&q=billing",
+        "http://localhost:4000/announcements/help/old1?includeArchived=true",
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

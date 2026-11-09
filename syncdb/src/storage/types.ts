@@ -35,11 +35,23 @@ export const KNOWN_STREAMS_TABLE = "_knownStreams";
  */
 export const NEEDS_REPAIR_TABLE = "_needsRepair";
 
+/**
+ * Server query-window membership (see `query/queryWindows.ts`); rowId = window key.
+ * Holds ordered member ids only — the rows themselves live in the shared entity table.
+ */
+export const QUERY_WINDOWS_TABLE = "_queryWindows";
+
 /** Prefix marking reserved (non-collection) tables. */
 export const RESERVED_TABLE_PREFIX = "_";
 
 /** Primitive row shape for a `{collection}` entity table; rowId = entity id. */
 export interface EntityRow {
+  /**
+   * True only after this row's own mutation ACK stamped `seq` and the matching
+   * server delta has not been applied yet. Absent on rows written before the
+   * cell existed; readers treat that the same as false.
+   */
+  awaitingServerDelta: boolean;
   /** JSON-encoded entity payload. */
   data: string;
   /** Soft-delete tombstone flag. */
@@ -137,6 +149,11 @@ export interface ConflictRow {
 
 /** Decoded, application-facing entity record returned by store accessors. */
 export interface SyncEntity<TData = unknown> {
+  /**
+   * True when this row's seq was stamped by its own ACK and the server delta
+   * at that seq has not been applied yet. Omitted when false.
+   */
+  awaitingServerDelta?: boolean;
   /** Decoded entity payload. */
   data: TData;
   /** Soft-delete tombstone flag. */

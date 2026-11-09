@@ -13,6 +13,8 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 [`documentation contract`](../../references/documentation-contract.md),
 [`PR deployments`](../../references/pr-deployments.md),
 [`pick-roast loop`](../../references/pick-roast-loop.md),
+[`testing plan`](../../references/testing-plan.md),
+[`user guide`](../../references/user-guide.md),
 [`testing guidance`](references/testing.md),
 [`mocking guidance`](references/mocking.md), and
 [`subagent briefing`](../../references/subagent-briefing.md).
@@ -37,6 +39,12 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 1. **Reconstruct.** Verify the approved plan, current task, branch/head, prior result, and
    already-verified behavior. Do not redo completed work. Resume the inner loop at the
    next unblocked incomplete task, or at the same task when retrying a Roast `FAIL`.
+   When a harness pushed earlier slices automatically and product CI on that pushed
+   head reports a branch-caused failure, fixing it is the current task.
+   Do not start or continue another slice on a red head. Never wait on pending CI;
+   read the latest terminal results and keep building. Record flaky, infrastructure,
+   or other failures the branch did not cause in execution state for Taste; they do
+   not block the next slice. After Brew, CI reactions belong to Taste.
 2. **Read architecture docs.** Load the current architecture and domain docs for the
    files/seams in this slice. Implement against that design; if the slice changes it,
    update those docs in the same slice.
@@ -46,9 +54,21 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 4. **Focus retries.** Convert prior failure evidence into a hypothesis and the smallest
    safe change. Record attempted approaches; do not repeat one without new evidence.
 5. **Specify.** State one caller-visible behavior and the highest public seam that proves
-   it.
+   it. List its edge cases before writing code: empty, missing, and error inputs;
+   loading and disabled states; boundaries; permissions; web versus native. Take them
+   from the acceptance criteria and repository test rules. Each one becomes a test in
+   this slice, so Roast proves them instead of discovering them. Read the IP's
+   `## E2E tests` rows whose `Written in` names this task, and the e2e guide at the
+   path the testing plan resolves. Each such row is a spec this slice writes. When a
+   row's path or layer no longer fits the code or the guide, edit that row in the IP,
+   add a one-line reason naming the row ID below the table (never a new column), and
+   update any `## Regression cases` `Automated by` cell that names the old path; never
+   skip a row silently. An IP that lacks the section follows the testing-plan legacy rule.
 6. **Encode.** Add one failing test and run the repository's closest test command. Confirm
-   it fails for the intended product reason.
+   it fails for the intended product reason. When the behavior has a planned row from
+   step 5, write that spec in this cycle at the row's path, following the e2e guide's
+   location, selector, and waiting rules for its layer. Run it when this stage can
+   reach that layer; otherwise record it `deferred` per the testing-plan deferral rule.
 7. **Fulfill.** Implement the minimum code that passes. Prefer real integrations and
    narrow injected fakes at true external boundaries.
 8. **Clean the Kitchen.** Once the vertical slice is green, refactor names/structure,
@@ -63,16 +83,32 @@ Read the shared [`lifecycle contract`](../../references/lifecycle-contract.md),
 10. **Check drift, docs, and runtime.** Compare the diff to the current task/IP. Update
     architecture and public docs in this slice using the documentation contract. Run any
     mandatory runtime/UI/safety verification declared by repository instructions or
-    supporting skills. Missing mandatory capability is `BLOCKED`, not skipped.
-    Missing docs for a user-visible or architectural change is `FAIL`.
-11. **Record.** Mark only the completed task/slice, update execution state with commands,
-    evidence, artifacts, docs files, and attempts.
+    supporting skills; for a user-facing change that is `verify-ui-changes` (own stack,
+    adversarial steps, the required checks, the Maestro flow for mobile-focused work or
+    direct simulator commands when the app has no Maestro, evidence outside the tree). Missing mandatory capability is `BLOCKED`, not skipped.
+    Missing docs for a user-visible or architectural change is `FAIL`. Write or edit
+    each user guide page whose `## User guide` row names this task, at the row's path,
+    in the user-guide page format, from the behavior this slice shipped; update the
+    guide index in the same slice. When a row's page path or change no longer fits,
+    edit that row in the IP with a one-line reason naming the row ID below the table;
+    never skip a guide row silently. Skip this when the repository opts out of the
+    user guide; an IP that lacks the section follows the user-guide legacy rule.
+11. **Record.** Record the completed task/slice in execution state with commands,
+    evidence, artifacts, docs files, attempts, each planned spec written (row ID
+    and path), and each user guide page written (row ID and path). Do not commit a separate task-file edit to mark progress; the
+    task-file mark rides in this slice's commit (step 13).
 12. **Prove this task.** Invoke Roast to prove this task only. Prefer a fresh context
     and pass the same task-scoped briefing. Roast must not spawn two unconstrained
     reviewers. Roast must return after classifying this task. Roast never invokes Pick.
     Do not start the next task until Roast PASS.
     Exactly one driver continues — that driver is this Pick.
-13. **Continue or stop.** After Roast `PASS`, if unblocked incomplete tasks remain,
+13. **Commit once.** After Roast `PASS`, make one behavior-scoped commit for the task:
+    code, tests, docs, the task-file mark, and any fixes Roast forced. Fold Roast-driven
+    fixes into the task's unpushed commit instead of adding "harden", "strengthen", or
+    "mark roasted" follow-ups. Do not push during Pick; Brew pushes. When the harness
+    pushes every commit automatically, commit only after Roast `PASS` for the same
+    reason. Follow the [commit and push rules](../../references/pick-roast-loop.md#commits-and-pushes).
+14. **Continue or stop.** After Roast `PASS`, if unblocked incomplete tasks remain,
     reconstruct the next frontier task and repeat from Reconstruct so architecture docs
     and supporting skills are rediscovered for that slice. If none remain, emit
     `PASS` with `next: brew`. Roast `FAIL` retries this task from Focus retries. Emit
@@ -93,6 +129,10 @@ generated-code workflows, and repository gotchas.
 
 - Files/behavior completed for each task this invocation finished
 - Red and green test evidence plus required lint/type/build/runtime results
+- Each `## E2E tests` row this task owns, with the spec path written or the edited row
+  and its reason
+- Each `## User guide` row this task owns, with the page written or the edited row and
+  its reason
 - Internal review results
 - Drift decision and artifact references
 - Attempted-approach summary (especially on retries)
@@ -104,6 +144,9 @@ generated-code workflows, and repository gotchas.
 - Every in-scope task this invocation reached has Roast `PASS` on the recorded head.
 - Required repository checks/runtime gates pass for the current head.
 - No unresolved internal review findings or plan drift remain on completed tasks.
+- Every `## E2E tests` row a completed task owns has a spec at the row's path.
+- Every `## User guide` row a completed task owns has its page written, edited, or
+  retired at the row's path.
 - When unblocked tasks remain, continue the loop rather than exiting.
 - When none remain, emit `PASS` with `next: brew`.
 

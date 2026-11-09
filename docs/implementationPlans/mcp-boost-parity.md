@@ -1,6 +1,6 @@
 # Implementation Plan: MCP Server — Boost Parity (Docs Search, Local Runtime Tools, Per-Package Guidelines, Upgrade Prompts)
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1085  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1085  
 **Status:** In progress
 
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
@@ -113,7 +113,7 @@ Boost keys guidelines by package major version (`.ai/laravel/11/`, `12/`). Terre
 ```jsonc
 {
   "mcpServers": {
-    "terreno": { "type": "http", "url": "https://mcp.terreno.flourish.health/mcp" },
+    "terreno": { "type": "http", "url": "https://mcp.terreno.app/mcp" },
     "terreno-local": { "command": "bunx", "args": ["terreno-mcp-local"] }
   }
 }

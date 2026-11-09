@@ -1,25 +1,29 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {assert} from "chai";
 import jwt from "jsonwebtoken";
+import {DateTime} from "luxon";
 import mongoose, {Schema} from "mongoose";
 
 import type {UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
+import {McpOAuthToken} from "../models/mcpOAuthToken";
 import {McpServiceToken} from "../models/mcpServiceToken";
 import {findOneOrNone} from "../plugins";
-import {extractUserFromHeaders} from "./auth";
+import {extractAuthFromHeaders, extractUserFromHeaders} from "./auth";
 
 interface MCPAuthUserFields {
   _id: mongoose.Types.ObjectId;
   betterAuthId?: string;
   disabled?: boolean;
   email?: string;
+  tokenEpoch?: number;
 }
 
 const userSchema = new Schema({
   betterAuthId: {description: "Better Auth user id", index: true, type: String},
   disabled: {default: false, description: "Whether the account is disabled", type: Boolean},
   email: {description: "User email", type: String},
+  tokenEpoch: {description: "Credential generation", type: Number},
 });
 userSchema.plugin(findOneOrNone);
 
@@ -48,7 +52,7 @@ const signToken = (payload: Record<string, unknown>, secret = "test-token-secret
 describe("extractUserFromHeaders", () => {
   beforeEach(async () => {
     await UserTestModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     process.env.TOKEN_SECRET = "test-token-secret";
   });
 
@@ -84,8 +88,12 @@ describe("extractUserFromHeaders", () => {
 
     assert.equal(String((user as unknown as MCPAuthUserFields)?._id), created._id.toString());
 
-    await Bun.sleep(10);
-    const usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    // lastUsedAt is written without awaiting the request, so poll for it.
+    let usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    for (let attempt = 0; attempt < 50 && !usedToken?.lastUsedAt; attempt++) {
+      await Bun.sleep(20);
+      usedToken = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    }
     assert.isDefined(usedToken?.lastUsedAt);
   });
 
@@ -100,6 +108,43 @@ describe("extractUserFromHeaders", () => {
     );
 
     assert.isUndefined(user);
+  });
+
+  it("treats a service token stored without tokenEpoch as epoch 0", async () => {
+    const created = await UserTestModel.create({email: "legacy-mcp-token@example.com"});
+    const issued = await McpServiceToken.issueFor({_id: created._id}, {name: "Legacy"});
+    await McpServiceToken.updateOne({_id: issued.mcpServiceToken._id}, {$unset: {tokenEpoch: 1}});
+    const headers = {authorization: `Bearer ${issued.token}`};
+
+    const before = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+    await UserTestModel.updateOne({_id: created._id}, {$set: {tokenEpoch: 1}});
+    const after = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+
+    assert.equal(String((before as unknown as MCPAuthUserFields)?._id), created._id.toString());
+    assert.isUndefined(after);
+    const stored = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    assert.isDefined(stored?.revokedAt);
+  });
+
+  it("rejects and revokes a service token issued under an earlier tokenEpoch", async () => {
+    const created = await UserTestModel.create({
+      email: "epoch-mcp-token@example.com",
+      tokenEpoch: 2,
+    });
+    const issued = await McpServiceToken.issueFor(
+      {_id: created._id, tokenEpoch: 2},
+      {name: "Epoch"}
+    );
+    const headers = {authorization: `Bearer ${issued.token}`};
+
+    const before = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+    await UserTestModel.updateOne({_id: created._id}, {$inc: {tokenEpoch: 1}});
+    const after = await extractUserFromHeaders(headers, {mcpServiceTokens: true, userModel});
+
+    assert.isDefined(before);
+    assert.isUndefined(after);
+    const stored = await McpServiceToken.findById(issued.mcpServiceToken._id);
+    assert.isDefined(stored?.revokedAt);
   });
 
   it("rejects MCP service tokens belonging to disabled users", async () => {
@@ -234,11 +279,116 @@ describe("extractUserFromHeaders", () => {
     expect(user).toBeUndefined();
   });
 
+  it("returns undefined when the JWT references a user that no longer exists", async () => {
+    const token = signToken({id: new mongoose.Types.ObjectId().toString()});
+
+    const user = await extractUserFromHeaders({authorization: `Bearer ${token}`}, {userModel});
+
+    assert.isUndefined(user);
+  });
+
+  it("still resolves the MCP service token owner when the last-used update fails", async () => {
+    const created = await UserTestModel.create({email: "last-used-fails@example.com"});
+    const issued = await McpServiceToken.issueFor({_id: created._id}, {name: "Flaky"});
+    const updateSpy = spyOn(McpServiceToken, "updateOne").mockImplementation(
+      () =>
+        ({
+          catch: (handler: (error: unknown) => void) => {
+            handler(new Error("write failed"));
+          },
+        }) as unknown as ReturnType<typeof McpServiceToken.updateOne>
+    );
+
+    try {
+      const user = await extractUserFromHeaders(
+        {authorization: `Bearer ${issued.token}`},
+        {mcpServiceTokens: true, userModel}
+      );
+
+      assert.equal(String((user as unknown as MCPAuthUserFields)?._id), created._id.toString());
+      assert.equal(updateSpy.mock.calls.length, 1);
+    } finally {
+      updateSpy.mockRestore();
+    }
+  });
+
   it("returns undefined when Better Auth has no session and no JWT is present", async () => {
     const betterAuth = fakeBetterAuth(async () => null);
 
     const user = await extractUserFromHeaders({}, {betterAuth, userModel});
 
     expect(user).toBeUndefined();
+  });
+});
+
+describe("extractAuthFromHeaders", () => {
+  beforeEach(async () => {
+    await UserTestModel.deleteMany({});
+    await McpOAuthToken.deleteMany({});
+    process.env.TOKEN_SECRET = "test-token-secret";
+  });
+
+  const issueOAuthToken = async (userId: mongoose.Types.ObjectId): Promise<string> => {
+    const issued = await McpOAuthToken.issue({
+      accessTokenTtlSeconds: 60,
+      clientId: "client",
+      refreshTokenTtlSeconds: 600,
+      userId,
+    });
+    return issued.accessToken;
+  };
+
+  it("reports jwt for a JWT bearer", async () => {
+    const created = await UserTestModel.create({email: "jwt@example.com"});
+
+    const auth = await extractAuthFromHeaders(
+      {authorization: `Bearer ${signToken({id: String(created._id)})}`},
+      {userModel}
+    );
+
+    expect(auth?.credential).toBe("jwt");
+    expect(String(auth?.user._id)).toBe(String(created._id));
+  });
+
+  it("reports better-auth-session for a Better Auth session", async () => {
+    await UserTestModel.create({betterAuthId: "ba-1", email: "ba@example.com"});
+    const betterAuth = fakeBetterAuth(async () => ({session: {id: "s"}, user: {id: "ba-1"}}));
+
+    const auth = await extractAuthFromHeaders({cookie: "session=1"}, {betterAuth, userModel});
+
+    expect(auth?.credential).toBe("better-auth-session");
+  });
+
+  it("resolves an OAuth access token to its user only when mcpOAuth is on", async () => {
+    const created = await UserTestModel.create({email: "oauth@example.com"});
+    const token = await issueOAuthToken(created._id);
+    const headers = {authorization: `Bearer ${token}`};
+
+    const off = await extractAuthFromHeaders(headers, {userModel});
+    const on = await extractAuthFromHeaders(headers, {mcpOAuth: true, userModel});
+
+    expect(off).toBeUndefined();
+    expect(on?.credential).toBe("oauth");
+    expect(String(on?.user._id)).toBe(String(created._id));
+  });
+
+  it("rejects a revoked OAuth access token and a disabled user's token", async () => {
+    const revokedUser = await UserTestModel.create({email: "revoked@example.com"});
+    const revokedToken = await issueOAuthToken(revokedUser._id);
+    await McpOAuthToken.updateMany({}, {$set: {revokedAt: DateTime.now().toJSDate()}});
+    const disabledUser = await UserTestModel.create({disabled: true, email: "off@example.com"});
+    const disabledToken = await issueOAuthToken(disabledUser._id);
+
+    const revoked = await extractAuthFromHeaders(
+      {authorization: `Bearer ${revokedToken}`},
+      {mcpOAuth: true, userModel}
+    );
+    const disabled = await extractAuthFromHeaders(
+      {authorization: `Bearer ${disabledToken}`},
+      {mcpOAuth: true, userModel}
+    );
+
+    expect(revoked).toBeUndefined();
+    expect(disabled).toBeUndefined();
   });
 });

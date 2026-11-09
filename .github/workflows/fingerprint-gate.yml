@@ -14,7 +14,11 @@ name: Fingerprint Gate
 # inside the sticky PR comment.
 
 # Disabled during the CircleCI cutover; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 permissions:
   contents: read
@@ -54,15 +58,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
-
-      - name: Cache bun install cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-fp-${{ runner.os }}-${{ hashFiles('pr/bun.lock') }}
-          restore-keys: |
-            bun-fp-${{ runner.os }}-
+          bun-version: 1.4.4
 
       - uses: expo/expo-github-action@v9
         with:

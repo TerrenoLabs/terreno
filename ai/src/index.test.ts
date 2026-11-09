@@ -18,19 +18,10 @@ describe("@terreno/ai public exports", () => {
     "addMcpRoutes",
     "addProjectRoutes",
     "assertVertexModelsEnabled",
-    "compilePrompt",
-    "createPrompt",
-    "createTelemetryConfig",
+    "createAskTools",
     "createVertexProvider",
-    "getCached",
+    "findAgentBlock",
     "getMCPTools",
-    "getLangfuseClient",
-    "getPrompt",
-    "initLangfuseClient",
-    "initTracing",
-    "invalidateCache",
-    "invalidatePromptCache",
-    "isLangfuseInitialized",
     "isVertexModelAllowed",
     "jsonSchema",
     "listEnabledVertexModels",
@@ -39,12 +30,13 @@ describe("@terreno/ai public exports", () => {
     "normalizeLlmJsonTextForStructuredOutput",
     "normalizeVertexModelId",
     "parseAiJson",
-    "preparePromptForAI",
-    "setCached",
-    "shutdownLangfuseClient",
-    "shutdownTracing",
+    "getObservabilityApp",
+    "resetObservabilityApp",
+    "resolveObservabilityControl",
+    "runBufferedChatTurn",
+    "validateObservabilityConfig",
     "verifyVertexModelsEnabled",
-  ] as const;
+  ];
 
   const expectedClasses = [
     "AIRequest",
@@ -53,24 +45,30 @@ describe("@terreno/ai public exports", () => {
     "FileAttachment",
     "FileStorageService",
     "GptHistory",
-    "LangfuseApp",
-    "LangfuseCache",
     "MCPService",
+    "MemoryScoreSink",
+    "MemoryTraceSink",
+    "ObservabilityApp",
     "Project",
-  ] as const;
+  ];
 
   const expectedConstants = [
+    "COMPACT_SURFACE_SYSTEM_PROMPT",
     "CONTENT_SUMMARY_PROMPT",
     "DEFAULT_GPT_MEMORY",
+    "DEFAULT_OBSERVABILITY_CONTROL",
     "DEFAULT_VERTEX_LOCATION",
     "GEMINI_API_BASE_URL",
     "JSON_VALUE_SYSTEM_PROMPT",
     "Output",
     "REMIX_PROMPT",
+    "TERRENO_ASKS_SYSTEM_PROMPT",
+    "scaleStepperHostAction",
     "TITLE_GENERATION_PROMPT",
+    "toggleChecklistHostAction",
     "TRANSLATION_PROMPT",
     "TemperaturePresets",
-  ] as const;
+  ];
 
   it.each(expectedFunctions)("exports %s as a function", (name) => {
     expect(typeof exported[name]).toBe("function");
@@ -98,6 +96,8 @@ describe("@terreno/ai public exports", () => {
       "remix",
       "summarization",
       "translation",
+      "ui_action",
+      "ui_blocks",
     ]);
   });
 });

@@ -1,0 +1,36 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Send the weekly report to the team now?"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "confirm",
+    "text": "Send the weekly report to the team now?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Confirm",
+        "style": "primary",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": true
+          }
+        }
+      },
+      {
+        "id": "deny",
+        "label": "Cancel",
+        "style": "cancel",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": false
+          }
+        }
+      }
+    ]
+  }
+}

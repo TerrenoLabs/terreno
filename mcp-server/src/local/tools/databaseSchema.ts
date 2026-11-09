@@ -2,6 +2,7 @@ import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
 import {resolveTerrenoProjectRoot} from "../projectRoot.js";
+import {withLocalMongoDb} from "./localMongo.js";
 
 interface DatabaseSchemaArgs {
   collectionFilter?: string;
@@ -57,43 +58,36 @@ export const databaseSchema = async (args: DatabaseSchemaArgs): Promise<string> 
     readEnvValue(envPath, "MONGO_URI") ||
     readEnvValue(envPath, "MONGODB_URI");
 
+  const lines: string[] = ["# Database schema", ""];
+  const modelsDir = join(root, "backend", "src", "models");
+  lines.push("## Declared models (static scan of `backend/src/models/*.ts`)");
+  lines.push("");
+  const modelBlocks = parseModelFiles(modelsDir);
+  if (modelBlocks.length === 0) {
+    lines.push("_(No model files found.)_");
+  } else if (args.summary) {
+    lines.push(
+      `Found ${modelBlocks.length} model file(s). Re-run with \`summary: false\` for excerpts.`
+    );
+  } else {
+    lines.push(...modelBlocks);
+  }
+  lines.push("");
+  lines.push("## Live MongoDB");
+  lines.push("");
+
   if (!mongoUri) {
-    return "No Mongo URI found. Set `MONGO_URI` in `backend/.env` or export `MONGO_URI`, or set `TERRENO_PROJECT_ROOT` to your app root.";
+    lines.push(
+      "_Unavailable: set `MONGO_URI` in `backend/.env` or export `MONGO_URI` to include live collections._"
+    );
+    return lines.join("\n");
   }
 
-  const mongoose = await import("mongoose");
-  try {
-    if (mongoose.connection.readyState !== 1) {
-      await mongoose.connect(mongoUri);
-    }
-
-    const db = mongoose.connection.db;
-    if (!db) {
-      return "Connected to Mongo but `connection.db` is not available.";
-    }
-
+  return withLocalMongoDb(mongoUri, async (db) => {
     const filter = args.collectionFilter?.toLowerCase().trim();
     const names = (await db.listCollections().toArray())
       .map((c) => c.name)
       .filter((n) => !filter || n.toLowerCase().includes(filter));
-
-    const lines: string[] = ["# Database schema", ""];
-    const modelsDir = join(root, "backend", "src", "models");
-    lines.push("## Declared models (static scan of `backend/src/models/*.ts`)");
-    lines.push("");
-    const modelBlocks = parseModelFiles(modelsDir);
-    if (modelBlocks.length === 0) {
-      lines.push("_(No model files found.)_");
-    } else if (args.summary) {
-      lines.push(
-        `Found ${modelBlocks.length} model file(s). Re-run with \`summary: false\` for excerpts.`
-      );
-    } else {
-      lines.push(...modelBlocks);
-    }
-    lines.push("");
-    lines.push("## Live MongoDB");
-    lines.push("");
 
     for (const name of names.sort()) {
       const coll = db.collection(name);
@@ -111,7 +105,5 @@ export const databaseSchema = async (args: DatabaseSchemaArgs): Promise<string> 
     }
 
     return lines.join("\n");
-  } finally {
-    await mongoose.disconnect().catch(() => undefined);
-  }
+  });
 };

@@ -1,7 +1,11 @@
 name: Example Backend Docker Build
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 jobs:
   build-image:

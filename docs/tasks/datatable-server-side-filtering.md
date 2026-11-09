@@ -2,7 +2,7 @@
 
 Plan: [`docs/implementationPlans/datatable-server-side-filtering.md`](../implementationPlans/datatable-server-side-filtering.md)  
 **Status:** Pick complete — tasks 1.1–4.1 implemented
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1177
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1177
 
 **Feature profile:** false (full IP)
 

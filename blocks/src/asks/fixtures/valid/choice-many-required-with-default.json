@@ -1,0 +1,29 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which channels should get the release notes?",
+    "select": "many",
+    "options": [
+      {"id": "email", "label": "Email"},
+      {"id": "slack", "label": "Slack"},
+      {"id": "blog", "label": "Blog"},
+      {"id": "changelog", "label": "Changelog"}
+    ],
+    "default": ["email", "changelog"],
+    "allowDecline": false
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which channels should get the release notes?",
+    "handoff": true,
+    "buttons": [
+      {
+        "id": "use-default",
+        "label": "Use suggested",
+        "style": "primary",
+        "response": {"action": "accept", "content": {"selected": ["email", "changelog"]}}
+      }
+    ]
+  }
+}

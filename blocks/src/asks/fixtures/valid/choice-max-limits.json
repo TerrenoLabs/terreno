@@ -1,0 +1,245 @@
+{
+  "kind": "choice",
+  "input": {
+    "title": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+    "prompt": "pppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp",
+    "select": "one",
+    "options": [
+      {
+        "description": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "label": "llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll"
+      },
+      {
+        "id": "option-2",
+        "label": "Option 2"
+      },
+      {
+        "id": "option-3",
+        "label": "Option 3"
+      },
+      {
+        "id": "option-4",
+        "label": "Option 4"
+      },
+      {
+        "id": "option-5",
+        "label": "Option 5"
+      },
+      {
+        "id": "option-6",
+        "label": "Option 6"
+      },
+      {
+        "id": "option-7",
+        "label": "Option 7"
+      },
+      {
+        "id": "option-8",
+        "label": "Option 8"
+      },
+      {
+        "id": "option-9",
+        "label": "Option 9"
+      },
+      {
+        "id": "option-10",
+        "label": "Option 10"
+      },
+      {
+        "id": "option-11",
+        "label": "Option 11"
+      },
+      {
+        "id": "option-12",
+        "label": "Option 12"
+      },
+      {
+        "id": "option-13",
+        "label": "Option 13"
+      },
+      {
+        "id": "option-14",
+        "label": "Option 14"
+      },
+      {
+        "id": "option-15",
+        "label": "Option 15"
+      },
+      {
+        "id": "option-16",
+        "label": "Option 16"
+      },
+      {
+        "id": "option-17",
+        "label": "Option 17"
+      },
+      {
+        "id": "option-18",
+        "label": "Option 18"
+      },
+      {
+        "id": "option-19",
+        "label": "Option 19"
+      },
+      {
+        "id": "option-20",
+        "label": "Option 20"
+      },
+      {
+        "id": "option-21",
+        "label": "Option 21"
+      },
+      {
+        "id": "option-22",
+        "label": "Option 22"
+      },
+      {
+        "id": "option-23",
+        "label": "Option 23"
+      },
+      {
+        "id": "option-24",
+        "label": "Option 24"
+      },
+      {
+        "id": "option-25",
+        "label": "Option 25"
+      },
+      {
+        "id": "option-26",
+        "label": "Option 26"
+      },
+      {
+        "id": "option-27",
+        "label": "Option 27"
+      },
+      {
+        "id": "option-28",
+        "label": "Option 28"
+      },
+      {
+        "id": "option-29",
+        "label": "Option 29"
+      },
+      {
+        "id": "option-30",
+        "label": "Option 30"
+      },
+      {
+        "id": "option-31",
+        "label": "Option 31"
+      },
+      {
+        "id": "option-32",
+        "label": "Option 32"
+      },
+      {
+        "id": "option-33",
+        "label": "Option 33"
+      },
+      {
+        "id": "option-34",
+        "label": "Option 34"
+      },
+      {
+        "id": "option-35",
+        "label": "Option 35"
+      },
+      {
+        "id": "option-36",
+        "label": "Option 36"
+      },
+      {
+        "id": "option-37",
+        "label": "Option 37"
+      },
+      {
+        "id": "option-38",
+        "label": "Option 38"
+      },
+      {
+        "id": "option-39",
+        "label": "Option 39"
+      },
+      {
+        "id": "option-40",
+        "label": "Option 40"
+      },
+      {
+        "id": "option-41",
+        "label": "Option 41"
+      },
+      {
+        "id": "option-42",
+        "label": "Option 42"
+      },
+      {
+        "id": "option-43",
+        "label": "Option 43"
+      },
+      {
+        "id": "option-44",
+        "label": "Option 44"
+      },
+      {
+        "id": "option-45",
+        "label": "Option 45"
+      },
+      {
+        "id": "option-46",
+        "label": "Option 46"
+      },
+      {
+        "id": "option-47",
+        "label": "Option 47"
+      },
+      {
+        "id": "option-48",
+        "label": "Option 48"
+      },
+      {
+        "id": "option-49",
+        "label": "Option 49"
+      },
+      {
+        "id": "option-50",
+        "label": "Option 50"
+      }
+    ],
+    "default": [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "submitLabel": "ssssssssssssssssssssssss"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "title": "ttttttttttttttttttttttttttttttttttttttt…",
+    "text": "ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp…",
+    "handoff": true,
+    "buttons": [
+      {
+        "id": "use-default",
+        "label": "Use \"lllllllllllll…\"",
+        "style": "primary",
+        "response": {
+          "action": "accept",
+          "content": {
+            "selected": [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            ]
+          }
+        }
+      },
+      {
+        "id": "skip",
+        "label": "Skip",
+        "style": "cancel",
+        "response": {
+          "action": "decline"
+        }
+      }
+    ]
+  }
+}

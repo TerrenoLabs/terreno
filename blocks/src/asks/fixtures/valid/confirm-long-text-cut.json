@@ -1,0 +1,40 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Send the weekly report to all 48 people on the Operations, Finance, and Support lists now? They will get it by email, and a copy goes to the shared drive, where anyone in the company can read it.",
+    "title": "Weekly report for the Operations and Finance teams",
+    "confirmLabel": "Send to 48 people",
+    "denyLabel": "Not yet"
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "confirm",
+    "title": "Weekly report for the Operations and…",
+    "text": "Send the weekly report to all 48 people on the Operations, Finance, and Support lists now? They will get it by email, and a copy goes to…",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "approve",
+        "label": "Send to 48 people",
+        "style": "primary",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": true
+          }
+        }
+      },
+      {
+        "id": "deny",
+        "label": "Not yet",
+        "style": "cancel",
+        "response": {
+          "action": "accept",
+          "content": {
+            "confirmed": false
+          }
+        }
+      }
+    ]
+  }
+}

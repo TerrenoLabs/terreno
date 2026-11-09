@@ -1,10 +1,8 @@
-import {AdminRolesList} from "@terreno/admin-frontend";
 import React from "react";
-import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {terrenoApi} from "@/store/sdk";
+import {AppRolesList} from "@/components/AppRolesList";
 
 const AdminRolesScreen: React.FC = () => {
-  return <AdminRolesList api={terrenoApi} apiBase={ADMIN_ROUTE} routeBase={ADMIN_ROUTE} />;
+  return <AppRolesList />;
 };
 
 export default AdminRolesScreen;

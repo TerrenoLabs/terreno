@@ -11,17 +11,18 @@ import {
 import {TextField} from "@terreno/ui";
 
 export const TextFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {TextField} from \"@terreno/ui\";\n\n<TextField />",
   name: "Text field",
   component: TextField, // Replace with actual component reference
   related: ["Text area"],
   description: "Use the text field to allow a user to input a single line of text.",
   a11yNotes: ["The user should be able to use tab to navigate between elements."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23515&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23986",
     ios: "ready",
     android: "ready",
     web: "ready",

@@ -10,8 +10,8 @@ const REPO_ROOT = resolve(WEBSITE_ROOT, "..");
 const OUTPUT_ROOT = join(REPO_ROOT, "docs/reference/generated");
 
 // Resolve the workspace-installed typedoc binary explicitly rather than relying on `bunx`,
-// which can resolve a fresh dependency tree (and an older TypeScript peer) that rejects the
-// `ignoreDeprecations: "6.0"` set in the package tsconfigs. Running the installed typedoc
+// which can resolve a fresh dependency tree with an older TypeScript peer that does not
+// understand the TypeScript 6 settings in the package tsconfigs. Running the installed typedoc
 // guarantees it uses the single workspace TypeScript (6.x). typedoc's `exports` map blocks
 // resolving the bin subpath directly, so derive it from the resolvable package.json.
 const require = createRequire(import.meta.url);
@@ -26,7 +26,6 @@ interface PackageTarget {
 
 const PACKAGE_TARGETS: PackageTarget[] = [
   {entryFile: "src/index.ts", id: "api", packageDir: "api", title: "@terreno/api"},
-  {entryFile: "src/index.ts", id: "rtk", packageDir: "rtk", title: "@terreno/rtk"},
 ];
 
 const compileWorkspaceDeps = (): void => {

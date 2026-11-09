@@ -1,7 +1,7 @@
 # Repository settings (maintainers)
 
 Some GitHub settings cannot be committed to the repo. Enable these manually in
-the [Terreno repository settings](https://github.com/FlourishHealth/terreno/settings).
+the [Terreno repository settings](https://github.com/TerrenoLabs/terreno/settings).
 
 ## Discussions
 
@@ -43,7 +43,7 @@ Package CI, policy, Playwright, Maestro web, architectural review, deploy, and
 release workflows run under `.circleci/` (see
 [how-to/circleci.md](../how-to/circleci.md)). Require the path-filtered CircleCI
 check names. Remove required GitHub Action checks for workflow files whose
-trigger is `on: []`; those checks cannot report anymore. Do not require the
+trigger is `push.branches-ignore: ["**"]`; those checks cannot report anymore. Do not require the
 config-only `circleci-config` workflow. Keep Cursor Approval / Security / Bugbot
 as GitHub App checks; they are not CircleCI jobs.
 
@@ -51,11 +51,18 @@ as GitHub App checks; they are not CircleCI jobs.
 
 **Path:** Settings → Environments
 
-Same-repo PR jobs in `cd.yml` (`Terraform preview`, `Tasks deploy (preview)`,
-`Backend deploy (preview)`) skip when `head.repo.full_name != github.repository`.
-Also restrict the `gcp-cd-preview` environment (create it on first deploy if missing) with a
-**deployment branch policy** or **required reviewers** so a fork that edits
-`cd.yml` cannot mint a prod WIF token.
+`cd.yml` is disabled; CircleCI `gcp-cd-preview` performs GCP previews and
+halts on fork PRs. While the GitHub WIF provider still exists, keep the
+`gcp-cd-preview` environment restricted with a **deployment branch policy** or
+**required reviewers** so a fork that re-enables `cd.yml` cannot mint a prod
+WIF token.
+
+### Actions secrets for CircleCI hooks
+
+`preview-cleanup.yml` (PR close) and `publish-on-tag.yml` (manual publish demo
+redeploy) start CircleCI pipelines. Set the secret `CIRCLECI_TOKEN` and the
+variable `CIRCLECI_PIPELINE_DEFINITION_ID` under Settings → Secrets and
+variables → Actions.
 
 ## Merge settings
 

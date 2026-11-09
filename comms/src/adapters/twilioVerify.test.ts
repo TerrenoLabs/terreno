@@ -1,4 +1,4 @@
-import {describe, it} from "bun:test";
+import {afterEach, describe, it} from "bun:test";
 import {assert} from "chai";
 import {evaluateRetryBlock} from "../commsRetry";
 import {CommsService} from "../commsService";
@@ -203,5 +203,175 @@ describe("TwilioVerifyProvider", () => {
     assert.equal(onErrorCalls.length, 1);
     assert.equal(onErrorCalls[0]?.errorClass, "config");
     assert.equal(block?.code, "comms-retry-not-retryable");
+  });
+  describe("credentials", () => {
+    afterEach((): void => {
+      Reflect.deleteProperty(process.env, "TWILIO_ACCOUNT_SID");
+      Reflect.deleteProperty(process.env, "TWILIO_AUTH_TOKEN");
+      Reflect.deleteProperty(process.env, "TWILIO_VERIFY_SERVICE_SID");
+    });
+
+    it("fails fast when the account SID or auth token is missing", (): void => {
+      assert.throws(
+        (): TwilioVerifyProvider => new TwilioVerifyProvider({client: createMockClient()}),
+        /TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN/
+      );
+      assert.throws(
+        (): TwilioVerifyProvider =>
+          new TwilioVerifyProvider({accountSid: "ACtest", client: createMockClient()}),
+        /TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN/
+      );
+    });
+
+    it("reads credentials and the service SID from the environment", async (): Promise<void> => {
+      process.env.TWILIO_ACCOUNT_SID = "ACenv";
+      process.env.TWILIO_AUTH_TOKEN = "env-token";
+      process.env.TWILIO_VERIFY_SERVICE_SID = "VAenv";
+      const services: string[] = [];
+      const client = createMockClient();
+      const provider = new TwilioVerifyProvider({
+        client: {
+          verify: {
+            v2: {
+              services: (serviceSid: string) => {
+                services.push(serviceSid);
+                return client.verify.v2.services(serviceSid);
+              },
+            },
+          },
+        },
+      });
+
+      const result = await provider.startVerification({channel: "sms", to: "+14155552671"});
+
+      assert.deepEqual(services, ["VAenv"]);
+      assert.include(String(result.metadata?.consoleUrl), "/VAenv");
+    });
+  });
+
+  describe("start failure classification", () => {
+    const startWith = async (thrown: unknown) => {
+      const client: TwilioVerifyClient = {
+        verify: {
+          v2: {
+            services: () => ({
+              verificationChecks: {
+                create: async (): Promise<{status: string}> => ({status: "approved"}),
+              },
+              verifications: {
+                create: async (): Promise<{sid: string; status: string}> => {
+                  throw thrown;
+                },
+              },
+            }),
+          },
+        },
+      };
+      return new TwilioVerifyProvider(providerOptions(client)).startVerification({
+        channel: "sms",
+        to: "+14155552671",
+      });
+    };
+
+    const twilioError = (fields: {
+      code?: number;
+      message?: string;
+      moreInfo?: string;
+      status?: number;
+    }): Error => Object.assign(new Error(fields.message ?? "Twilio failure"), fields);
+
+    it("marks invalid-destination codes as permanent failures", async (): Promise<void> => {
+      const result = await startWith(
+        twilioError({
+          code: 60200,
+          message: "Invalid parameter",
+          moreInfo: "https://www.twilio.com/docs/errors/60200",
+          status: 400,
+        })
+      );
+
+      assert.isFalse(result.accepted);
+      assert.equal(result.errorClass, "permanent");
+      assert.equal(result.errorCode, "60200");
+      assert.isTrue(result.isPermanentFailure);
+      assert.equal(result.error, "Invalid parameter");
+      assert.deepEqual(result.metadata?.twilioError, {
+        code: 60200,
+        message: "Invalid parameter",
+        moreInfo: "https://www.twilio.com/docs/errors/60200",
+        status: 400,
+      });
+    });
+
+    it("treats rate limits and Twilio server errors as transient", async (): Promise<void> => {
+      const rateLimited = await startWith(twilioError({code: 20429, status: 429}));
+      const throttled = await startWith(twilioError({code: 12345, status: 429}));
+      const unavailable = await startWith(twilioError({status: 503}));
+      const unknownCode = await startWith(twilioError({code: 99999, status: 400}));
+
+      assert.deepEqual(
+        [rateLimited, throttled, unavailable, unknownCode].map((result) => [
+          result.errorClass,
+          result.errorCode,
+          result.isPermanentFailure,
+        ]),
+        [
+          ["transient", "20429", false],
+          ["transient", "12345", false],
+          ["transient", "twilio-503", false],
+          ["transient", "99999", false],
+        ]
+      );
+    });
+
+    it("falls back to a network failure when the error has no Twilio fields", async (): Promise<void> => {
+      const blankMessage = await startWith(twilioError({message: ""}));
+      const plainObject = await startWith({message: 42});
+      const thrownString = await startWith("socket hang up");
+
+      assert.equal(blankMessage.errorCode, "twilio-network");
+      assert.equal(blankMessage.error, "");
+      assert.equal(plainObject.errorCode, "twilio-network");
+      assert.equal(plainObject.error, "Twilio Verify request failed");
+      assert.deepEqual(plainObject.metadata?.twilioError, {
+        message: "Twilio Verify request failed",
+      });
+      assert.equal(thrownString.errorClass, "transient");
+      assert.equal(thrownString.errorCode, "twilio-network");
+      assert.equal(thrownString.error, "Twilio Verify request failed");
+      assert.deepEqual(thrownString.metadata?.twilioError, {error: "socket hang up"});
+    });
+  });
+
+  it("reports a failed check as invalid with the Twilio message", async (): Promise<void> => {
+    const client: TwilioVerifyClient = {
+      verify: {
+        v2: {
+          services: () => ({
+            verificationChecks: {
+              create: async (): Promise<{status: string}> => {
+                throw Object.assign(new Error("Verification not found"), {
+                  code: 20404,
+                  status: 404,
+                });
+              },
+            },
+            verifications: {
+              create: async (): Promise<{sid: string; status: string}> => ({
+                sid: "VE1",
+                status: "pending",
+              }),
+            },
+          }),
+        },
+      },
+    };
+
+    const result = await new TwilioVerifyProvider(providerOptions(client)).checkVerification({
+      code: "000000",
+      to: "+14155552671",
+    });
+
+    assert.deepEqual(result, {error: "Verification not found", valid: false});
   });
 });

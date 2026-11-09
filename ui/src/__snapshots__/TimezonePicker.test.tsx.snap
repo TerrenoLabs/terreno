@@ -99,7 +99,7 @@ exports[`TimezonePicker renders correctly with default props 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -445,7 +445,7 @@ exports[`TimezonePicker renders correctly with default props 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -490,7 +490,7 @@ exports[`TimezonePicker renders correctly with default props 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],
@@ -605,7 +605,7 @@ exports[`TimezonePicker hides title when hideTitle is true 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -951,7 +951,7 @@ exports[`TimezonePicker hides title when hideTitle is true 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -996,7 +996,7 @@ exports[`TimezonePicker hides title when hideTitle is true 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],
@@ -1126,7 +1126,7 @@ exports[`TimezonePicker renders with selected timezone 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -1472,7 +1472,7 @@ exports[`TimezonePicker renders with selected timezone 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -1517,7 +1517,7 @@ exports[`TimezonePicker renders with selected timezone 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],
@@ -1647,7 +1647,7 @@ exports[`TimezonePicker renders USA timezones by default 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -1993,7 +1993,7 @@ exports[`TimezonePicker renders USA timezones by default 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -2038,7 +2038,7 @@ exports[`TimezonePicker renders USA timezones by default 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],
@@ -2168,7 +2168,7 @@ exports[`TimezonePicker renders with short timezone labels 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -2514,7 +2514,7 @@ exports[`TimezonePicker renders with short timezone labels 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -2559,7 +2559,7 @@ exports[`TimezonePicker renders with short timezone labels 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],
@@ -2689,7 +2689,7 @@ exports[`TimezonePicker calls onChange when timezone is selected 1`] = `
                               "current": null,
                             },
                             "style": {
-                              "borderColor": "#9A9A9A",
+                              "borderColor": "#949494",
                               "borderRadius": 4,
                               "borderWidth": 1,
                               "color": "#1C1C1C",
@@ -3035,7 +3035,7 @@ exports[`TimezonePicker calls onChange when timezone is selected 1`] = `
                   "props": {
                     "style": {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                       "borderRadius": 4,
                       "borderWidth": 1,
                       "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -3080,7 +3080,7 @@ exports[`TimezonePicker calls onChange when timezone is selected 1`] = `
               },
               {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
               },
               false,
             ],

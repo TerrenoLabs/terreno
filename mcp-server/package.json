@@ -4,32 +4,73 @@
     "terreno-mcp-local": "./dist/local/index.js"
   },
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/express": "^2.0.1",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",
     "@terreno/api": "workspace:*",
+    "@terreno/blocks": "workspace:*",
     "express": "catalog:",
+    "luxon": "catalog:",
     "minisearch": "^7.2.0",
     "mongoose": "catalog:"
   },
   "description": "MCP server that gives coding agents Terreno docs, codegen tools, and prompts — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
     "@biomejs/biome": "catalog:",
+    "@modelcontextprotocol/client": "catalog:",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
+    "@types/luxon": "catalog:",
     "@types/node": "catalog:",
     "chai": "catalog:",
     "typescript": "catalog:"
   },
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "exports": {
+    ".": {
+      "bun": "./dist/index.js",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./bootstrap": {
+      "bun": "./dist/bootstrap.js",
+      "default": "./dist/bootstrap.js",
+      "types": "./dist/bootstrap.d.ts"
+    },
+    "./local-tools": {
+      "bun": "./dist/local/localTools.js",
+      "default": "./dist/local/localTools.js",
+      "types": "./dist/local/localTools.d.ts"
+    },
+    "./search": {
+      "bun": "./dist/search/docIndex.js",
+      "default": "./dist/search/docIndex.js",
+      "types": "./dist/search/docIndex.d.ts"
+    },
+    "./tools": {
+      "bun": "./dist/tools.js",
+      "default": "./dist/tools.js",
+      "types": "./dist/tools.d.ts"
+    },
+    "./upgrade": {
+      "bun": "./dist/upgradeGuide.js",
+      "default": "./dist/upgradeGuide.js",
+      "types": "./dist/upgradeGuide.d.ts"
+    }
+  },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist",
     "src/docs"
   ],
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "mcp",
     "terreno",
@@ -45,16 +86,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 bun run sync-ui-docs && NODE_OPTIONS=--max-old-space-size=8192 bun run sync-versioned-docs && NODE_OPTIONS=--max-old-space-size=8192 bun run sync-package-guidelines && NODE_OPTIONS=--max-old-space-size=8192 tsc && cp -r src/docs dist/",
-    "compile": "NODE_OPTIONS=--max-old-space-size=8192 bun run sync-ui-docs && NODE_OPTIONS=--max-old-space-size=8192 bun run sync-versioned-docs && NODE_OPTIONS=--max-old-space-size=8192 bun run sync-package-guidelines && NODE_OPTIONS=--max-old-space-size=8192 tsc && cp -r src/docs dist/",
+    "build": "bun run sync-ui-docs && bun run sync-versioned-docs && bun run sync-package-guidelines && NODE_OPTIONS=--max-old-space-size=8192 tsc && cp -r src/docs dist/",
+    "compile": "NODE_OPTIONS=--max-old-space-size=8192 tsc",
     "compile:watch": "tsc -w",
     "dev": "bun --watch src/index.ts",
-    "lint": "biome check src/",
-    "lint:fix": "biome check --write src/",
-    "lint:unsafefix": "biome check --fix --unsafe src/",
+    "lint": "biome check src/ e2e/",
+    "lint:fix": "biome check --write src/ e2e/",
+    "lint:unsafefix": "biome check --fix --unsafe src/ e2e/",
+    "prepublishOnly": "bun run build",
+    "smoke": "bun e2e/smoke.ts",
     "start": "bun dist/index.js",
     "sync-package-guidelines": "bun run scripts/sync-package-guidelines.ts",
     "sync-ui-docs": "cp ../demo/ui-types-documentation.json src/docs/ 2>/dev/null || true",
@@ -62,8 +105,9 @@
     "test": "bun test --max-concurrency=1 src/",
     "test:agent": "AGENT=1 bun test --only-failures --max-concurrency=1 src/",
     "test:ci": "bun test --max-concurrency=1 src/",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.typecheck.json"
   },
   "type": "module",
-  "version": "57.3.0"
+  "version": "58.0.0"
 }

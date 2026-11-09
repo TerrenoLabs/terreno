@@ -1,0 +1,58 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "How should I ship it?",
+    "fields": [
+      {
+        "id": "speed",
+        "type": "select",
+        "label": "Shipping speed",
+        "required": true,
+        "default": "standard",
+        "options": [
+          {
+            "id": "standard",
+            "label": "Standard (5-7 days)"
+          },
+          {
+            "id": "express",
+            "label": "Express (2 days)"
+          },
+          {
+            "id": "overnight",
+            "label": "Overnight"
+          }
+        ]
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "speed": "standard"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "How should I ship it?",
+    "toolCallId": "call_fixture"
+  }
+}

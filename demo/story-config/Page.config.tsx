@@ -3,6 +3,7 @@ import {PageDemo, PageLoadingBoolean, PageLoadingText} from "@stories/Page.stori
 import {Page} from "@terreno/ui";
 
 export const PageConfiguration: DemoConfiguration = {
+  usageExample: "import {Page} from \"@terreno/ui\";\n\n<Page />",
   name: "Page",
   component: Page,
   related: ["Box", "Spinner"],

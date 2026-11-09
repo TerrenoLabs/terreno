@@ -10,13 +10,19 @@ import {
   ConfirmationButton,
   FullWidthButtons,
   MultilineButtons,
+  WrapTextButtons,
 } from "@stories/Button.stories";
 import {Button} from "@terreno/ui";
+
+const BUTTON_USAGE_EXAMPLE = `import {Button} from "@terreno/ui";
+
+<Button onClick={() => {}} text="Save" />`;
 
 export const ButtonConfiguration: DemoConfiguration = {
   name: "Button",
   component: Button,
-  related: ["Cards", "Modals", "Table icon buttons"],
+  related: ["Card", "Modal", "Table icon button"],
+  usageExample: BUTTON_USAGE_EXAMPLE,
   description:
     "Buttons allow users to perform actions within a surface. They can be used alone for immediate action. Also known as CTA (call to action).",
   a11yNotes: [
@@ -30,7 +36,7 @@ export const ButtonConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23358&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=301-4654&t=J847q9JMSjR8oQmN-1",
     ios: "ready",
     android: "ready",
     web: "ready",
@@ -110,6 +116,10 @@ export const ButtonConfiguration: DemoConfiguration = {
         type: "boolean",
         defaultValue: false,
       },
+      wrapText: {
+        type: "boolean",
+        defaultValue: false,
+      },
       size: {
         type: "select",
         defaultValue: "default",
@@ -121,7 +131,13 @@ export const ButtonConfiguration: DemoConfiguration = {
     },
   },
   stories: {
-    Variants: {render: () => <ButtonVariants />},
+    Variants: {
+      interactions: [
+        {action: "expectText", value: "Default/Primary"},
+        {action: "press", targetTestID: "button-variant-primary"},
+      ],
+      render: () => <ButtonVariants />,
+    },
     States: {render: () => <ButtonStates />},
     Sizes: {render: () => <ButtonSizes />},
     IconPosition: {render: () => <ButtonIconPosition />},
@@ -129,6 +145,7 @@ export const ButtonConfiguration: DemoConfiguration = {
     Confirmation: {render: () => <ConfirmationButton />},
     FullWidth: {render: () => <FullWidthButtons />},
     PressAnimations: {render: () => <ButtonPressAnimations />},
-    Multiline: {render: () => <MultilineButtons />},
+    Multiline: {render: () => <MultilineButtons />, showInDemo: false},
+    WrapText: {render: () => <WrapTextButtons />},
   },
 };

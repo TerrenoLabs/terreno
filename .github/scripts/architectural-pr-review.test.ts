@@ -633,7 +633,7 @@ describe("renderFindingComment", () => {
           },
         ],
       },
-      linkContext: {headSha: "abc123", owner: "FlourishHealth", repo: "terreno"},
+      linkContext: {headSha: "abc123", owner: "TerrenoLabs", repo: "terreno"},
     });
 
     assert.include(comment, "<!-- architectural-pr-review-finding -->");
@@ -641,14 +641,14 @@ describe("renderFindingComment", () => {
     assert.include(comment, "Plan backfill step missing");
     assert.include(comment, "`plan`");
     assert.include(comment, "**Recommendation:**");
-    assert.include(comment, "https://github.com/FlourishHealth/terreno/blob/abc123/docs/implementationPlans/Forgot-Password.md#L68-L90");
+    assert.include(comment, "https://github.com/TerrenoLabs/terreno/blob/abc123/docs/implementationPlans/Forgot-Password.md#L68-L90");
   });
 });
 
 describe("parseCirclePullRequestUrl", () => {
   it("parses a GitHub pull request URL from CircleCI", (): void => {
-    assert.deepEqual(parseCirclePullRequestUrl("https://github.com/FlourishHealth/terreno/pull/1199"), {
-      owner: "FlourishHealth",
+    assert.deepEqual(parseCirclePullRequestUrl("https://github.com/TerrenoLabs/terreno/pull/1199"), {
+      owner: "TerrenoLabs",
       pullRequestNumber: 1199,
       repo: "terreno",
     });
@@ -656,7 +656,7 @@ describe("parseCirclePullRequestUrl", () => {
 
   it("rejects a non-GitHub pull request URL", (): void => {
     assert.throws(
-      () => parseCirclePullRequestUrl("https://app.circleci.com/pipelines/github/FlourishHealth/terreno/1"),
+      () => parseCirclePullRequestUrl("https://app.circleci.com/pipelines/github/TerrenoLabs/terreno/1"),
       /not a GitHub pull request URL/
     );
   });
@@ -669,7 +669,7 @@ describe("pullRequestEventFromApi", () => {
         ref: "master",
         repo: {
           default_branch: "master",
-          full_name: "FlourishHealth/terreno",
+          full_name: "TerrenoLabs/terreno",
           name: "terreno",
           owner: {login: "FlourishHealth"},
         },
@@ -678,7 +678,7 @@ describe("pullRequestEventFromApi", () => {
       body: "PR body",
       draft: false,
       head: {ref: "feature", sha: "head-sha"},
-      html_url: "https://github.com/FlourishHealth/terreno/pull/1199",
+      html_url: "https://github.com/TerrenoLabs/terreno/pull/1199",
       number: 1199,
       title: "Move architectural review",
       user: {login: "alice"},

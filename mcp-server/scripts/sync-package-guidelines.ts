@@ -13,7 +13,7 @@ const repoRoot = join(mcpServerRoot, "..");
 const PACKAGES_WITH_AI = [
   "api",
   "ui",
-  "rtk",
+  "syncdb",
   "admin-backend",
   "admin-frontend",
 ] as const;

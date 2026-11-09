@@ -12,12 +12,35 @@ copy as `terreno` (see [Hosts](#hosts)):
 | 2 | **Pick** (`terreno-2-pick`) | Build one slice, roast it, then pick the next until the list is done |
 | 3 | **Roast** (`terreno-3-roast`) | Prove the current task, then continue the pick-roast inner loop |
 | 4 | **Brew** (`terreno-4-brew`) | Final checks, commit/push, PR/evidence, confirm product CI on every discovered host, wait for review bots, then exit |
-| 5 | **Taste** (`terreno-5-taste`) | Wait for review bots and product CI, one current-head reaction; record last-run failed tests and re-verify them locally before push; pull latest `master`, then run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then push and watch |
+| 5 | **Taste** (`terreno-5-taste`) | Wait for review bots and product CI, one current-head reaction; record last-run failed tests and re-verify them locally before push; fetch latest `master` (merge only when needed), then run root `prepush` when present (otherwise affected-package checks) in a no-context subagent, then push and watch; invoked directly, repeats bounded reactions until terminal |
+
+**PRD** (`terreno-prd`, `/terreno:prd` in Claude Code) runs ahead of Grow. It interviews the
+app owner with Grow's grilling procedure, then writes and publishes a full product PRD —
+problem, why now, solution, user stories, success metrics and guardrails, constraints,
+rollout, out of scope — sized for one owner and one or two developers. Every metric is
+concrete and measurable, or `TBD` with who decides, so Grow inherits criteria it can
+verify. It forks the product half of Matt Pocock's `to-spec`, adds the interview and
+measurable-metric rule from awesome-copilot's `prd` skill, and is explicit-invoke only. It
+is not a stage.
 
 Stages and outer loops are model-invocable; descriptions keep Pick/Brew/Taste from firing
 on casual chat. Grow, Brew, and Taste never own the full orchestration. Pick and Roast own
 the inner loop that implements one task, roasts it, then picks the next until the list is
 done.
+
+Every IP carries a testing plan ([`references/testing-plan.md`](terreno-planning/references/testing-plan.md)):
+required `## E2E tests` and `## Regression cases` sections, the e2e guide at
+`docs/testing/e2e.md`, and one regression suite per area under `docs/regression/`. A repo
+overrides those paths with a `## Testing conventions` table in AGENTS.md or CLAUDE.md.
+Grow plans the rows, Pick writes each spec, Roast runs them, Brew gates on them and
+merges the cases into the suite with the next free ID, and Taste re-checks both after
+fixes and renumbers ID collisions.
+
+Every IP also plans its end-user guide pages ([`references/user-guide.md`](terreno-planning/references/user-guide.md)):
+a required `## User guide` section, one page per feature under `docs/user-guide/`, which
+chat agents read to answer "how do I…" questions. Pick writes each page with its feature,
+Roast checks it against the shipped screens, Brew gates on it, and Taste keeps it current.
+A repo opts out with `User guide | none` in a `## User guide conventions` table.
 
 Three additional skills are **outer loops**, not stages. They invoke the five transitions
 and persist state:
@@ -28,25 +51,25 @@ and persist state:
 | **Planning loop** (`terreno-planning-loop`) | Walk Grow/Pick/Brew/Taste. Default Grow once, then Pick once (Pick owns pick-roast). Pass `phases=` to restrict. |
 | **Taste sweep** (`terreno-taste-sweep`) | Find the author's open non-draft PRs that are conflicting or failing, isolate each one, and reinvoke Taste until mergeable or blocked. |
 
-## `terreno-scan` — goal-driven code scans
+## `terreno-loop` — goal-driven code scans
 
 An optional second plugin that turns a long-term outcome into measured work. It depends
 on `terreno-planning`: scan stages discover and shape, the lifecycle implements and ships.
 
 | # | Stage | Contract |
 | --- | --- | --- |
-| 1 | **Aim** (`terreno-scan-1-aim`) | Charter the goal: metric, measured baseline, dry-run detection rules, exclusions, validity rule, severity rubric, slice policy, budget |
-| 2 | **Sweep** (`terreno-scan-2-sweep`) | Run the rules, shard the hits deterministically, map fresh parallel workers into candidate findings |
-| 3 | **Sift** (`terreno-scan-3-sift`) | Dedupe, adversarially verify, drop what does not reproduce, rank, write the findings report |
-| 4 | **Plot** (`terreno-scan-4-plot`) | Slice findings into PR-sized units with standalone Grow briefs, then hand the top slice to the lifecycle |
-| 5 | **Track** (`terreno-scan-5-track`) | Re-measure the metric, close or reopen findings with evidence, record the round, choose the next move |
+| 1 | **Aim** (`terreno-loop-1-aim`) | Charter the goal: metric, measured baseline, dry-run detection rules, exclusions, validity rule, severity rubric, slice policy, budget |
+| 2 | **Sweep** (`terreno-loop-2-sweep`) | Run the rules, shard the hits deterministically, map fresh parallel workers into candidate findings |
+| 3 | **Sift** (`terreno-loop-3-sift`) | Dedupe, adversarially verify, drop what does not reproduce, rank, write the findings report |
+| 4 | **Plot** (`terreno-loop-4-plot`) | Slice findings into PR-sized units with standalone Grow briefs, then hand the top slice to the lifecycle |
+| 5 | **Track** (`terreno-loop-5-track`) | Re-measure the metric, close or reopen findings with evidence, record the round, choose the next move |
 
 Two outer loops drive them:
 
 | Skill | Loop |
 | --- | --- |
-| **Scan campaign** (`terreno-scan-campaign`) | Aim once, then Sweep → Sift → Plot → lifecycle → Track, round after round, until the metric hits target, the budget is spent, or a genuine human decision is required. Stops at each gate. |
-| **Scan loop** (`terreno-scan-loop`) | Resident session: keeps the campaign moving **and** heartbeats over open campaign PRs — route, answer review through Taste, fix red CI, Track merges — refilling work up to `wipLimit`. Quiet ticks print nothing; each comment is answered exactly once. |
+| **Scan campaign** (`terreno-loop-campaign`) | Aim once, then Sweep → Sift → Plot → lifecycle → Track, round after round, until the metric hits target, the budget is spent, or a genuine human decision is required. Stops at each gate. |
+| **Scan loop** (`terreno-loop-run`) | Resident session: keeps the campaign moving **and** heartbeats over open campaign PRs — route, answer review through Taste, fix red CI, Track merges — refilling work up to `wipLimit`. Quiet ticks print nothing; each comment is answered exactly once. |
 
 Aim settles who reviews the PRs before any PR exists (`fixed`, `codeowners`, `blame`,
 `round-robin`, or an explicit `none`), verifies the handles, and records the `review`
@@ -65,14 +88,14 @@ Aim PASS → Sweep → Sift
 
 No scan stage edits product code, commits, or opens a PR. Contracts and schemas:
 
-- [`references/scan-contract.md`](terreno-scan/references/scan-contract.md)
-- [`references/mapreduce.md`](terreno-scan/references/mapreduce.md)
-- [`references/goal-tracking.md`](terreno-scan/references/goal-tracking.md)
-- [`references/heartbeat.md`](terreno-scan/references/heartbeat.md)
-- [`references/pr-routing.md`](terreno-scan/references/pr-routing.md)
-- [`scan-result.schema.json`](terreno-scan/references/scan-result.schema.json)
-- [`scan-state.schema.json`](terreno-scan/references/scan-state.schema.json)
-- [`finding.schema.json`](terreno-scan/references/finding.schema.json)
+- [`references/scan-contract.md`](terreno-loop/references/scan-contract.md)
+- [`references/mapreduce.md`](terreno-loop/references/mapreduce.md)
+- [`references/goal-tracking.md`](terreno-loop/references/goal-tracking.md)
+- [`references/heartbeat.md`](terreno-loop/references/heartbeat.md)
+- [`references/pr-routing.md`](terreno-loop/references/pr-routing.md)
+- [`scan-result.schema.json`](terreno-loop/references/scan-result.schema.json)
+- [`scan-state.schema.json`](terreno-loop/references/scan-state.schema.json)
+- [`finding.schema.json`](terreno-loop/references/finding.schema.json)
 
 Reference docs: [`docs/reference/scan-plugin.md`](../docs/reference/scan-plugin.md).
 
@@ -105,6 +128,8 @@ The shared result/state format and outer state machine live in:
 - [`references/loop-engineering.md`](terreno-planning/references/loop-engineering.md)
 - [`references/github-attention-contract.md`](terreno-planning/references/github-attention-contract.md)
 - [`references/pr-deployments.md`](terreno-planning/references/pr-deployments.md)
+- [`references/testing-plan.md`](terreno-planning/references/testing-plan.md)
+- [`references/user-guide.md`](terreno-planning/references/user-guide.md)
 - [`stage-result.schema.json`](terreno-planning/references/stage-result.schema.json)
 - [`execution-state.schema.json`](terreno-planning/references/execution-state.schema.json)
 
@@ -144,7 +169,7 @@ one driver continues after each current-task Roast. Brew and Taste wait until Bu
 CodeQL, and similar review bots on the current head have reported, preferring provider
 CLI watch hooks or harness event subscriptions over sleep polling, then continue. Taste
 then waits in a loop for product CI using GitHub CLI or CircleCI CLI until jobs are
-terminal or the wait times out. Before any push, Taste always pulls latest `master`,
+terminal or the wait times out. Before any push, Taste fetches latest `master` (merging it only when needed),
 then spawns a fresh subagent with no parent conversation. It records last-run failed
 tests from the CI snapshot and re-verifies them locally, then runs the root `prepush`
 package script when present; otherwise it falls back to lint, typecheck, and locally
@@ -164,7 +189,7 @@ under `.rulesync/skills/` and are generated for supported agent ecosystems with
 Install the generated skill set directly with:
 
 ```bash
-npx skills add FlourishHealth/terreno
+npx skills add TerrenoLabs/terreno
 bun run skills:sync
 ```
 
@@ -204,10 +229,10 @@ are removed; invoke the canonical stages directly.
 | Codex | `terreno-planning` | [`.agents/plugins/marketplace.json`](../.agents/plugins/marketplace.json) | `$terreno-pick-roast-loop` |
 | Claude Code | `terreno` | [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json) | `/terreno:pick-roast-loop` |
 
-The scan plugin publishes from the same marketplaces as `terreno-scan` on every host.
-Bounded rounds: `/terreno-scan-campaign` (Cursor), `$terreno-scan-campaign` (Codex),
-`/terreno-scan:campaign` (Claude Code, from the generated `terreno-scan-claude/`).
-Resident loop: `/terreno-scan-loop`, `$terreno-scan-loop`, `/terreno-scan:loop`.
+The scan plugin publishes from the same marketplaces as `terreno-loop` on every host.
+Bounded rounds: `/terreno-loop-campaign` (Cursor), `$terreno-loop-campaign` (Codex),
+`/terreno-loop:campaign` (Claude Code, from the generated `terreno-loop-claude/`).
+Resident loop: `/terreno-loop-run`, `$terreno-loop-run`, `/terreno-loop:run`.
 
 All three hosts ship continuous Pick–Roast, phase-planning, and Taste-sweep outer loops.
 Cursor and Claude Code also load the bundled `pre-commit` and `ui-verifier` agents;
@@ -216,16 +241,30 @@ Codex currently consumes the combined skills without plugin-defined agents.
 Claude Code install:
 
 ```text
-/plugin marketplace add FlourishHealth/terreno
+/plugin marketplace add TerrenoLabs/terreno
 /plugin install terreno@terreno-plugins
 ```
 
 Codex install:
 
 ```text
-codex plugin marketplace add FlourishHealth/terreno
+codex plugin marketplace add TerrenoLabs/terreno
 codex plugin install terreno-planning --source terreno-plugins
 ```
+
+Claude Code has three channels: master (above), a pinned release
+(`/plugin marketplace add TerrenoLabs/terreno#<version>`), and the latest stable release
+from npm (`/plugin marketplace add https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json`, then
+`/plugin install terreno@terreno-releases`). Register one. See
+[Install agent skills](../docs/how-to/install-agent-skills.md#pick-a-channel).
+
+The npm channel publishes `terreno-claude/` as `@terreno/agent-plugin` and
+`terreno-loop-claude/` as `@terreno/agent-plugin-loop` from the CircleCI
+`publish-release` job. `bun run skills:sync` generates each `package.json` (committed at
+`0.0.0`) and [`claude-release/.claude-plugin/marketplace.json`](claude-release/.claude-plugin/marketplace.json).
+`scripts/ci/prepare-package-publish.mjs` stamps the release into `package.json` and
+`.claude-plugin/plugin.json` at publish. The committed manifest has no `version`, so
+git installs are versioned by commit SHA and receive every change.
 
 Claude Code's installer collides when the marketplace `name` matches the plugin `name`.
 The marketplace is `terreno-plugins`; the plugin stays `terreno` so Grow is `/terreno:1-grow`.
@@ -236,5 +275,6 @@ directory. Claude Code resolves a plugin skill's command from the frontmatter `n
 its shortened names cannot live in the shared stage files. `terreno-claude/` is a
 **generated** Claude-only copy: same procedure, stage names shortened to `1-grow` …
 `5-taste`, outer loops shortened to `pick-roast-loop`, `planning-loop`, and
-`taste-sweep`, published under the plugin name `terreno`. Regenerate it with
+`taste-sweep`, the pre-Grow skill shortened to `prd`, published under the plugin name
+`terreno`. Regenerate it with
 `bun run skills:sync`; never hand-edit it.

@@ -5,6 +5,8 @@ import {Box} from "./Box";
 import {Button} from "./Button";
 import type {CardProps} from "./Common";
 import {Heading} from "./Heading";
+import {isSupportedDesktopWidth} from "./MediaQuery";
+import {SkeletonCard} from "./Skeleton";
 import {Text} from "./Text";
 
 const DEFAULT_DISPLAY_CARD_WIDTH = 600;
@@ -13,7 +15,6 @@ const MOBILE_ROW_IMAGE_WIDTH = 100;
 const DESKTOP_ROW_IMAGE_WIDTH = 160;
 const MOBILE_LARGE_IMAGE_HEIGHT = 300;
 const TITLE_DESCRIPTION_GAP = 2;
-const MOBILE_BREAKPOINT = 768;
 
 const getDisplayCardWidth = ({
   isMobile,
@@ -50,6 +51,7 @@ const DisplayCard = ({
   imageAlt,
   imageHeight = 160,
   isMobile,
+  loadingComponent,
   maxWidth = "100%",
   minWidth = 0,
   overflow = "hidden",
@@ -91,6 +93,15 @@ const DisplayCard = ({
       rounding="md"
       width={cardWidth ?? (isMobile ? "100%" : undefined)}
       {...rest}
+      loadingComponent={
+        loadingComponent ?? (
+          <SkeletonCard
+            mediaHeight={columnImageHeight}
+            showAvatar={false}
+            showMedia={Boolean(imageUri)}
+          />
+        )
+      }
     >
       {imageUri && (
         <Image
@@ -175,7 +186,7 @@ const ContainerCard = ({
 
 export const Card = ({variant = "container", ...props}: CardProps): React.ReactElement => {
   const {width: windowWidth} = useWindowDimensions();
-  const isMobile = windowWidth <= MOBILE_BREAKPOINT;
+  const isMobile = !isSupportedDesktopWidth({width: windowWidth});
 
   if (variant === "display") {
     return <DisplayCard {...props} isMobile={isMobile} variant={variant} />;

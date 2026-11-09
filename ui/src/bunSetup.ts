@@ -1,4 +1,5 @@
 import {beforeEach, mock} from "bun:test";
+import {DateTime} from "luxon";
 import React from "react";
 
 type MockComponentProps = Record<string, unknown> & {
@@ -11,11 +12,11 @@ type MockPresstoPressableProps = MockComponentProps & {
   onPress?: (...args: unknown[]) => unknown;
 };
 type MockStyleValue = unknown;
-type MockAnimation = {
+interface MockAnimation {
   start?: (callback?: (result: {finished: boolean}) => void) => void;
   stop?: () => void;
   reset?: () => void;
-};
+}
 type EasingFn = (t: number) => number;
 type MockColor = string | number | null | undefined;
 type MockAssetSource = {height?: number; uri?: string; width?: number} | null | undefined;
@@ -43,13 +44,13 @@ const rnGlobals = globalThis as typeof globalThis & {
   __BUNDLE_START_TIME__?: number;
 };
 rnGlobals.__DEV__ = true;
-rnGlobals.__BUNDLE_START_TIME__ = Date.now();
+rnGlobals.__BUNDLE_START_TIME__ = DateTime.now().toMillis();
 
-type MockFlatListRenderItemInfo = {
+interface MockFlatListRenderItemInfo {
   item: unknown;
   index: number;
   separators: {highlight: () => void; unhighlight: () => void};
-};
+}
 
 type MockFlatListProps = MockComponentProps & {
   data?: unknown[];
@@ -132,7 +133,7 @@ const createMockFlatListScrollRef = (
 };
 
 const createSimpleFlatList = () => {
-  return React.forwardRef(function SimpleFlatList(props: MockFlatListProps, ref) {
+  return React.forwardRef((props: MockFlatListProps, ref) => {
     const {data, renderItem, keyExtractor, onScroll, ...restProps} = props;
     const scrollRef = createMockFlatListScrollRef(onScroll);
     React.useImperativeHandle(ref, () => ({
@@ -157,7 +158,7 @@ const createSimpleFlatList = () => {
 const createVirtualizedFlatList = (): React.ForwardRefExoticComponent<
   MockFlatListProps & React.RefAttributes<unknown>
 > =>
-  React.forwardRef(function VirtualizedFlatList(props, ref) {
+  React.forwardRef((props: MockFlatListProps, ref) => {
     const {
       data,
       renderItem,
@@ -210,7 +211,7 @@ const shouldUseVirtualizedFlatList = (props: MockFlatListProps): boolean => {
   return Boolean(props.getItemLayout && dataLength > 100);
 };
 
-const FlatListRouter = React.forwardRef(function FlatListRouter(props, ref) {
+const FlatListRouter = React.forwardRef((props, ref) => {
   if (shouldUseVirtualizedFlatList(props)) {
     return React.createElement(VirtualizedFlatList, {...props, ref});
   }
@@ -661,28 +662,106 @@ if (typeof globalThis.expo === "undefined") {
     EventEmitter: EventEmitterClass,
     NativeModule: class NativeModule {},
     SharedObject: class SharedObject {},
+    SharedRef: class SharedRef {},
     // noExplicitAny: globalThis.expo is typed by expo-modules-core with many native-only APIs
     // that aren't needed for these mocks, so we cast through unknown to satisfy the type.
   } as unknown as typeof globalThis.expo;
 }
 
+// Expo 58's published expo-modules-core compiles the type-only SharedRef
+// declaration to `export {}`. Real expo-router internals (Screen → useNavigation)
+// require expo-constants, which then imports expo-modules-core and crashes bun.
+// Mock both packages so tests never load that empty module.
+const MockCodedError = class CodedError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+};
+const MockSharedRef = class SharedRef {};
+mock.module("expo-constants", () => ({
+  default: {
+    executionEnvironment: "bare",
+    expoConfig: {extra: {router: {}}},
+  },
+  ExecutionEnvironment: {
+    Bare: "bare",
+    Standalone: "standalone",
+    StoreClient: "storeClient",
+  },
+}));
+mock.module("expo-modules-core", () => ({
+  CodedError: MockCodedError,
+  EventEmitter: class EventEmitter {},
+  NativeModule: class NativeModule {},
+  requireNativeModule: mock(() => ({})),
+  requireOptionalNativeModule: mock(() => null),
+  SharedObject: class SharedObject {},
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-modules-core/build/ts-declarations/SharedRef", () => ({
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-router/build/views/Screen", () => ({
+  isScreen: mock(() => false),
+  Screen: ({children, ...props}: MockComponentProps) =>
+    React.createElement("Screen", props, children),
+}));
+
 // Mock expo-router
+const mockNavigationFonts = {
+  bold: {fontFamily: "System", fontWeight: "600"},
+  heavy: {fontFamily: "System", fontWeight: "700"},
+  medium: {fontFamily: "System", fontWeight: "500"},
+  regular: {fontFamily: "System", fontWeight: "400"},
+};
 mock.module("expo-router", () => ({
+  DarkTheme: {
+    colors: {
+      background: "rgb(1, 1, 1)",
+      border: "rgb(39, 39, 41)",
+      card: "rgb(18, 18, 18)",
+      notification: "rgb(255, 69, 58)",
+      primary: "rgb(10, 132, 255)",
+      text: "rgb(229, 229, 231)",
+    },
+    dark: true,
+    fonts: mockNavigationFonts,
+  },
+  DefaultTheme: {
+    colors: {
+      background: "rgb(242, 242, 242)",
+      border: "rgb(216, 216, 216)",
+      card: "rgb(255, 255, 255)",
+      notification: "rgb(255, 59, 48)",
+      primary: "rgb(0, 122, 255)",
+      text: "rgb(28, 28, 30)",
+    },
+    dark: false,
+    fonts: mockNavigationFonts,
+  },
   Link: ({children, ...props}: MockComponentProps) => React.createElement("Link", props, children),
   Navigator: ({children, ...props}: MockComponentProps) =>
     React.createElement("Navigator", props, children),
   router: {
     back: mock(() => {}),
     canGoBack: mock(() => true),
+    dismissTo: mock(() => {}),
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   },
   Slot: ({children, ...props}: MockComponentProps) => React.createElement("Slot", props, children),
   Stack: ({children, ...props}: MockComponentProps) =>
     React.createElement("Stack", props, children),
   Tabs: ({children, ...props}: MockComponentProps) => React.createElement("Tabs", props, children),
+  ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
+  useGlobalSearchParams: mock(() => ({})),
+  // Route loader data is absent in unit tests; a screen falls back to fetching on the client.
+  useLoaderData: mock(() => undefined),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),
@@ -697,6 +776,7 @@ mock.module("expo-router", () => ({
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
+    setParams: mock(() => {}),
   })),
   useSearchParams: mock(() => ({})),
   useSegments: mock(() => []),
@@ -726,6 +806,8 @@ mock.module("@react-native-async-storage/async-storage", () => ({
   setItem: mock(() => Promise.resolve()),
 }));
 
+const mockPortalContext = React.createContext<unknown>(null);
+
 // Mock the portal host. The real `Host` wraps children in an extra View
 // whose presence makes snapshots brittle, and individual tests already mock
 // this to render inline; hoisting the mock to setup keeps test ordering from
@@ -736,6 +818,10 @@ mock.module("./PortalHost", () => ({
     React.createElement("View", {testID: "portal-host"}, children),
   Portal: ({children}: MockComponentProps) =>
     React.createElement("View", {testID: "portal"}, children),
+  // Components that only portal when a host is mounted read this context. It defaults to
+  // null (no host) so they keep rendering inline; tests that want the portal path wrap the
+  // tree in `PortalContext.Provider`.
+  PortalContext: mockPortalContext,
 }));
 
 // Mock IconButton component
@@ -827,10 +913,7 @@ mock.module("./DateTimeActionSheet", () => ({
 // This keeps opened content assertable while still letting tests verify the closed/hidden state.
 mock.module("react-native-actions-sheet", () => ({
   __esModule: true,
-  default: React.forwardRef(function ActionSheetMock(
-    {children}: {children?: React.ReactNode},
-    ref: React.Ref<unknown>
-  ) {
+  default: React.forwardRef(({children}: {children?: React.ReactNode}, ref: React.Ref<unknown>) => {
     const [isVisible, setIsVisible] = React.useState(false);
     React.useImperativeHandle(ref, () => ({
       hide: () => setIsVisible(false),
@@ -844,10 +927,13 @@ mock.module("react-native-actions-sheet", () => ({
   }),
 }));
 
-// Mock MediaQuery
+// Mock MediaQuery. Desktop floor is 1024pt on web and native; keep this aligned with
+// isSupportedDesktopWidth in ResponsiveBreakpoint.tsx.
 mock.module("./MediaQuery", () => ({
-  isMobileDevice: mock(() => false),
+  isNarrowViewport: mock(() => false),
+  isSupportedDesktopWidth: ({width}: {width: number}): boolean => width >= 1024,
   mediaQueryLargerThan: mock(() => false),
+  mediaQuerySmallerThan: mock(() => false),
 }));
 
 // Mock expo-image-manipulator
@@ -891,7 +977,17 @@ mock.module("expo-haptics", () => ({
 mock.module("expo-clipboard", () => ({
   getStringAsync: mock(() => Promise.resolve("")),
   hasStringAsync: mock(() => Promise.resolve(false)),
+  setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
+}));
+
+// Mock expo-print (native print and PDF export). Tests drive these mocks through
+// `import * as Print from "expo-print"` instead of registering their own module mock.
+mock.module("expo-print", () => ({
+  printAsync: mock(async (_options: {html?: string}): Promise<void> => {}),
+  printToFileAsync: mock(
+    async (_options: {html?: string}): Promise<{uri: string}> => ({uri: "file:///tmp/consent.pdf"})
+  ),
 }));
 
 // Mock expo-localization
@@ -921,12 +1017,6 @@ mock.module("expo-localization", () => ({
   locale: "en-US",
   locales: ["en-US"],
   timezone: "America/New_York",
-}));
-
-// Mock @expo/vector-icons
-mock.module("@expo/vector-icons", () => ({
-  default: mock(() => null),
-  FontAwesome6: mock(() => null),
 }));
 
 // Mock @expo/vector-icons/FontAwesome6
@@ -1430,12 +1520,6 @@ mock.module("@react-native-picker/picker", () => ({
   PickerIOS: PickerComponent,
 }));
 
-// Mock react-native-picker-select
-mock.module("react-native-picker-select", () => ({
-  default: ({children, ...props}: MockComponentProps) =>
-    React.createElement("RNPickerSelect", props, children),
-}));
-
 // Mock @react-native-community/datetimepicker
 mock.module("@react-native-community/datetimepicker", () => ({
   DateTimePickerAndroid: {
@@ -1481,9 +1565,9 @@ mock.module("react-native/Libraries/Image/AssetSourceResolver", () => ({
 mock.module("react-native-gesture-handler", () => {
   const GestureHandler = ({children}: MockComponentProps) => children;
 
-  type ChainableGesture = {
+  interface ChainableGesture {
     [method: string]: (...args: unknown[]) => ChainableGesture;
-  };
+  }
   // Create a chainable gesture object that returns itself for all method calls
   const createChainableGesture = (): ChainableGesture => {
     const gesture = {} as ChainableGesture;
@@ -1677,6 +1761,6 @@ mock.module("expo-modules-core/src/uuid/uuid.web", () => ({
 // Reset mock date before each test
 beforeEach(() => {
   // Set a fixed date for testing
-  const fixedDate = new Date("2023-05-15T10:30:00.000Z");
-  global.Date.now = mock(() => fixedDate.getTime());
+  const fixedDate = DateTime.fromISO("2023-05-15T10:30:00.000Z");
+  global.Date.now = mock(() => fixedDate.toMillis());
 });

@@ -5,6 +5,8 @@
     "src/tests.ts",
     "src/tests/**",
     "**/*.test.ts",
+    "**/*.isolated.ts",
+    "src/isolated",
     "src/sync/loadHarness.ts",
     "src/migrations/cli.ts"
   ]

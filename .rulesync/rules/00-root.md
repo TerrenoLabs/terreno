@@ -30,12 +30,13 @@ deploy.
 
 - **api/** - REST API framework built on Express/Mongoose (`@terreno/api`)
 - **ui/** - React Native UI component library (`@terreno/ui`)
-- **rtk/** - Redux Toolkit Query utilities for API backends (`@terreno/rtk`)
-- **syncdb/** - Local-first data layer (TinyBase store, durable outbox, delta sync) for @terreno/api backends (`@terreno/syncdb`)
+- **syncdb/** - Frontend data layer for @terreno/api backends: local-first collections (TinyBase store, durable outbox, delta sync), request client + generated API hooks, auth session, feature flags, and app utilities (`@terreno/syncdb`)
 - **admin-backend/** - Admin panel backend plugin for @terreno/api (`@terreno/admin-backend`)
 - **admin-frontend/** - Admin panel frontend screens for @terreno/api backends (`@terreno/admin-frontend`)
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
+- **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
 - **comms/** - Pluggable transactional communications (`@terreno/comms`)
+- **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
 - **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` + `terreno-mcp-local`)
 - **demo/** - Demo app for showcasing and testing UI components
@@ -46,10 +47,11 @@ deploy.
 
 The reusable planning plugin uses five bounded transitions:
 **Grow** (shape) → **Pick** (build) ⇄ **Roast** (prove) until tasks are done →
-**Brew** (submit) → **Taste** (react once). Pick owns the inner loop: one task, roast
+**Brew** (submit) → **Taste** (react once; invoked directly, it repeats bounded
+reactions until a terminal verdict and never tells you to run it later). Pick owns the inner loop: one task, roast
 it, next task. Roast never invokes Pick. The outer loop owns state persistence,
 retry, stop, and escalation. Taste waits in-process for review bots and for product
-CI (`gh` / `circleci` watch loop). Before any push it always pulls latest `master`,
+CI (`gh` / `circleci` watch loop). Before any push it fetches latest `master` (merging it only when needed),
 records last-run failed tests and re-verifies them locally, then
 spawns a no-context subagent to run the root `prepush` package script when present
 (otherwise lint, typecheck, and locally affected tests in affected packages), then
@@ -69,12 +71,12 @@ Human-facing docs are the architecture source. Before changing code, read the
 explanation and reference pages for the affected area. Update those pages in the
 same slice using the `update-docs` skill. Missing docs for a user-visible or
 architectural change fails the slice. Install the published skill set with
-`npx skills add FlourishHealth/terreno`; regenerate `skills/` with
+`npx skills add TerrenoLabs/terreno`; regenerate `skills/` with
 `bun run skills:sync`. The combined lifecycle and Terreno app skill set installs as the Cursor plugin
 `terreno-planning` from `.cursor-plugin/marketplace.json` (invoke `/terreno-1-grow`),
 as the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json`
 (invoke `$terreno-1-grow`), or as the Claude Code plugin `terreno` via
-`/plugin marketplace add FlourishHealth/terreno` then
+`/plugin marketplace add TerrenoLabs/terreno` then
 `/plugin install terreno@terreno-plugins` (invoke `/terreno:1-grow`). The Claude copy under
 `plugins/terreno-claude/` is generated; never hand-edit it.
 
@@ -87,7 +89,8 @@ bun run bootstrap        # Install dependencies + compile all packages (dev-read
 bun run bootstrap:update # Reinstall + recompile after pulling changes or switching branches
 bun install              # Install dependencies
 bun run compile          # Compile all packages
-bun run lint             # Lint all packages
+bun run lint             # Lint all packages (ends with typecheck)
+bun run typecheck        # Typecheck all packages, src + tests (run compile first)
 bun run lint:fix         # Fix lint issues
 bun run test             # Run all workspace test suites
 bun run test:agent       # Run all tests with passing cases suppressed
@@ -127,6 +130,28 @@ keeps a ratcheted baseline; run `bun run analyze:dependency-baseline` only after
 an intentional repository-wide dependency-graph change. See
 `docs/explanation/static-analysis.md`.
 
+## Testing conventions
+
+Lifecycle skills read this table to find the e2e guide, the manual regression suites,
+and the smoke command. Terreno uses the planning plugin's default paths and declares
+`bun run smoke:local` as its smoke command: it builds what the smokes test, then runs `bun run smoke`.
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke:local |
+
+## User guide conventions
+
+Lifecycle skills read this table to find the end-user guide that chat agents read to
+answer "how do I…" questions. Terreno keeps the guide for the example app at the planning
+plugin's default path. Set the value to `none — <reason>` to opt a repository out.
+
+| Key | Value |
+| --- | --- |
+| User guide | docs/user-guide/ |
+
 ## How the Packages Work Together
 
 The three core packages form a complete full-stack framework:
@@ -142,32 +167,33 @@ The three core packages form a complete full-stack framework:
               |                               |
      /openapi.json                    sync protocol
               |                               |
-     RTK Query SDK Codegen            @terreno/syncdb
-     (non-synced routes)              (collection CRUD)
+     terreno-syncdb-codegen            terreno-syncdb-codegen
+     --api-out (non-synced routes)    --out (synced collections)
               |                               |
                            FRONTEND
-  @terreno/rtk                         @terreno/syncdb
-  - Generated hooks (auth, admin, AI)  - useQuery / useMutate (local-first)
-  - Better Auth session Redux          - Offline outbox + conflict UI
-  - Feature flags + sockets
+                       @terreno/syncdb
+  /api + /react: request client,       /react: useQuery / useMutate
+    generated hooks (auth, AI, actions)  (local-first), outbox, conflicts
+  /auth: SessionProvider, useSession   /flags: flags over the sync socket
+  /config, /app: base URLs, upgrade check, permissions, MCP tools
                               +
   @terreno/ui
   - React Native components (Box, Button, TextField, etc.)
   - TerrenoProvider for theming
 ```
 
-> **Legacy:** `@terreno/rtk` RTK Query hooks for **collection CRUD** are deprecated — use syncdb. See [migrate-rtk-to-syncdb.md](../../docs/how-to/migrate-rtk-to-syncdb.md). `modelRouter` `realtime` and RTK `realtimeList` / `realtimeDocument` are removed in Terreno 58; `RealtimeApp` stays for sync sockets.
+> **Removed in Terreno 58:** `@terreno/rtk` and Redux. Never add `@terreno/rtk`, `@reduxjs/toolkit`, `react-redux`, `redux-persist`, or `@rtk-query/codegen-openapi`. Upgrade path: [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md). `RealtimeApp` stays as the sync socket host.
 
 ### Integration Flow
 
 1. **Backend (api)**: Define Mongoose models with `syncPlugin` + `isDeletedPlugin`; use `modelRouter` with a `sync` config; register `SyncApp` and `RealtimeApp`
 2. **OpenAPI Generation**: `setupServer` generates `/openapi.json` for non-synced routes
-3. **SDK Codegen**: Frontend runs `bun run sdk` for auth, admin, AI, and custom endpoints — **not** for synced collections
-4. **Frontend (syncdb + ui)**: Use `useQuery` / `useMutate` for synced data; use generated SDK hooks only for non-synced routes; Better Auth via `@terreno/rtk`
+3. **SDK Codegen**: Frontend runs `bun run sdk` (`terreno-syncdb-codegen --api-out` → `store/apiSdk.ts`) for auth, AI, actions, and custom endpoints, and `bun run sync-sdk` (→ `store/syncDbSdk.ts`) for synced collections
+4. **Frontend (syncdb + ui)**: Use `useQuery` / `useMutate` for synced data; use generated `store/apiSdk.ts` hooks for non-synced routes; session via `SessionProvider` / `useSession` from `@terreno/syncdb/auth`
 
 ## Example Apps (Keep These Updated!)
 
-The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, syncdb, or rtk:
+The `example-frontend/` and `example-backend/` directories serve as both documentation and integration tests. When adding features to api, ui, or syncdb:
 
 1. **Add examples** demonstrating new features
 2. **Update SDK** after backend changes: `cd example-frontend && bun run sdk`
@@ -194,7 +220,7 @@ bun run frontend:web
 - Use camelCase directories (e.g., `components/authWizard`)
 - Favor named exports
 - Use the RORO pattern (Receive an Object, Return an Object)
-- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](../docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
+- **No barrel imports** — import concrete module files, not directory `index` re-export barrels. See [no-barrel-imports.md](docs/explanation/no-barrel-imports.md). Cross-package `@terreno/*` package roots are allowed; internal barrel `index.ts` files are banned (Biome `noBarrelFile` override) and paths like `../models`, `@/store`, or `@components` without a file are not allowed. Enforced by Biome lint and `bun run check:no-barrel-imports` in CI.
 
 ### Dates and Time
 - Always use Luxon instead of Date or dayjs
@@ -319,7 +345,7 @@ auth/health/version plugins, SSE.
 
 React Native UI component library (a large component library):
 
-- **Layout**: Box, Page, SplitPage, Card
+- **Layout**: Box, Page, ListDetailLayout, SplitPage, Card
 - **Forms**: TextField, SelectField, DateTimeField, CheckBox
 - **Display**: Text, Heading, Badge, DataTable
 - **Actions**: Button, IconButton, Link
@@ -391,31 +417,35 @@ Modals:
 - Don't use raw `View`/`Text` when `Box`/@terreno/ui `Text` are available
 - Don't forget loading and error states
 - Don't use `style` prop when equivalent props exist (`padding`, `margin`)
-- Never modify `openApiSdk.ts` manually
+- Never modify generated `store/apiSdk.ts` or `store/syncDbSdk.ts` manually
 
 ### @terreno/syncdb
 
-Local-first data layer (primary path for collection CRUD):
+The only frontend data layer: local-first collections plus every request/response call.
 
 - **createSyncDb**: Client with durable outbox, socket sync, encrypted persistence
-- **React hooks**: `useQuery`, `useEntity`, `useMutate`, `useSyncStatus`, `useConflicts`
-- **betterAuthAdapter**: Session auth for sync sockets
+- **React hooks**: `useQuery`, `useEntity`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSocketEvent`
+- **Request client** (`/api` + `/react`): `createApiClient`, `ApiClientProvider`, `useApiQuery`, `useApiMutation`; generated hooks in `store/apiSdk.ts`
+- **Auth** (`/auth`): `createBetterAuthClient`, `SessionProvider`, `useSession`, `betterAuthAdapter`, `jwtAuthAdapter`
+- **Config, flags, app, MCP** (`/config`, `/flags`, `/app`, `/mcp`): `baseUrl`, `useTerrenoFeatureFlags`, `useUpgradeCheck`, `canOpenAdminPage`, `useMCPTools` (`/mcp`, needs `@modelcontextprotocol/client`)
 
 Key imports:
 ```typescript
 import {createSyncDb, betterAuthAdapter} from "@terreno/syncdb";
-import {SyncDbProvider, useQuery, useMutate} from "@terreno/syncdb/react";
+import {createApiClient} from "@terreno/syncdb/api";
+import {SessionProvider, useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {ApiClientProvider, SyncDbProvider, useMutate, useQuery} from "@terreno/syncdb/react";
 ```
 
-### @terreno/rtk (legacy data sync; still required for SDK + auth)
+One `authProvider` feeds `createSyncDb` and `createApiClient`. Use generated SDK hooks
+for non-synced routes — never use `axios` or `fetch` directly in screens.
 
-Redux Toolkit Query integration for **non-synced** routes and session state:
-
-- **generateBetterAuthSlice**: Better Auth session Redux (default for new apps)
-- **emptyApi**: Base RTK Query API for OpenAPI codegen
-- **useTerrenoFeatureFlags**, **useSocketConnection**: Feature flags and realtime
-
-Use generated SDK hooks for non-synced routes only — never use `axios` or `request` directly.
+For running-app SyncDB bugs, invoke the `debug-syncdb-with-mcp` skill and use
+`get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
+`terreno-mcp-local`. Enable the client with `debug: true`; set
+`TERRENO_MCP_EVAL=1` only for state-changing actions. See
+`docs/how-to/debug-with-mcp.md`.
 
 ## React Best Practices (Frontend Packages)
 
@@ -507,7 +537,7 @@ Installs workspace dependencies and compiles all packages (`bun install && bun r
 
 ### Cloud VM toolchain
 
-Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno/terraform details: `terraform/README.md`.
+Shared install script (in **flourish** repo): `bash /agent/repos/flourish/scripts/install-cloud-dev-tools.sh` then `source ~/.cloud-dev-tools.env`. Provides **terraform**, **gcloud**, **gh**, **Playwright** (after `bun bootstrap` in packages with `@playwright/test`), **Appium**, and **Android emulator** helpers. Terreno GCP infrastructure details: `infra/flourish/README.md`; reusable modules: `terraform/README.md`.
 
 ### Example full stack
 
@@ -540,7 +570,7 @@ Seed login users with `bun run backend:seed` (same env vars): creates `test@exam
 ### Tests and lint
 
 Every CircleCI test job has a local command. Map and run them with
-[`docs/how-to/run-tests-locally.md`](../../docs/how-to/run-tests-locally.md).
+[`docs/how-to/run-tests-locally.md`](docs/how-to/run-tests-locally.md).
 
 ```bash
 bun run test              # every workspace test:ci (including example-frontend)
@@ -548,7 +578,7 @@ bun run test:agent        # same suites; passing cases suppressed
 bun run frontend:test     # example-frontend unit tests
 bun run frontend:e2e      # Playwright (needs replica-set mongod; starts backend+web)
 bun run maestro:test      # Maestro web flows
-bun run prepush           # lint + compile + analyze:full
+bun run prepush           # local mirror of every CI job this branch triggers
 ```
 
 Install Playwright browsers once: `cd example-frontend && bunx playwright install --with-deps chromium`.
@@ -572,8 +602,8 @@ When present, `SENTRY_CLIENT_SECRET` is injected as an environment variable hold
 
 When present, `CIRCLECI_TOKEN` is a CircleCI personal API token (`CIRCLE_TOKEN` is the
 CLI name). Use it to list jobs and fetch logs for Taste. Project slug:
-`circleci/6UHiK7pThPXbhnNi3umQNe/W3HZeMJujyMB2sYiUXaQbs` (not `gh/FlourishHealth/terreno`).
-See [`docs/how-to/circleci.md`](../../docs/how-to/circleci.md).
+`circleci/6UHiK7pThPXbhnNi3umQNe/LdjghuhydHjFMyFjcEXMA2` (not `gh/TerrenoLabs/terreno`).
+See [`docs/how-to/circleci.md`](docs/how-to/circleci.md).
 
 ### Gotchas
 

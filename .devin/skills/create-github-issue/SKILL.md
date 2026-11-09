@@ -5,6 +5,8 @@ description: >-
   non-scope, acceptance, affected package) so work-github-issues can plan and
   roast it. Trigger with /create-github-issue or phrases like "create a GitHub
   issue", "file a ticket", "open an issue with context".
+triggers:
+  - user
 ---
 # Create GitHub issue
 
@@ -71,7 +73,7 @@ value, body is under 400 words.
 Prefer the GitHub form when the user will paste:
 
 ```text
-https://github.com/FlourishHealth/terreno/issues/new?template=work_item.yml
+https://github.com/TerrenoLabs/terreno/issues/new?template=work_item.yml
 ```
 
 ### 4. Validate labels

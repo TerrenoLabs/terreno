@@ -6,7 +6,7 @@ import type {MultiselectFieldProps} from "./Common";
 import {FieldError} from "./fieldElements/FieldError";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
 import {Heading} from "./Heading";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {Text} from "./Text";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
 
@@ -66,7 +66,7 @@ export const MultiselectField: FC<MultiselectFieldProps> = ({
   testID,
   testIDs,
 }) => {
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
   const isDefault = variant === "leftText";
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
   const selectedItems = value ?? [];

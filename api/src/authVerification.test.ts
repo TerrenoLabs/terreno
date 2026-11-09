@@ -8,7 +8,7 @@ import supertest from "supertest";
 import type {UserModel as AuthUserModel} from "./auth";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
-import {setupDb, UserModel} from "./tests";
+import {authUserModel, setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
@@ -44,7 +44,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     openApp = new TerrenoApp({
@@ -55,7 +55,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
   });
 
@@ -99,6 +99,28 @@ describe("email verification gating", () => {
       .expect(200);
   });
 
+  it("does not issue an unusable verification token on signup when routes are disabled", async () => {
+    const noVerificationRoutesApp = new TerrenoApp({
+      authOptions: {
+        emailVerification: false,
+        publicAppUrl: "https://app.example.com",
+        sendMail: async (message) => {
+          openMail.push(message);
+        },
+      },
+      skipListen: true,
+      userModel: authUserModel,
+    }).build();
+
+    await supertest(noVerificationRoutesApp)
+      .post("/auth/signup")
+      .send({email: "custom-verification@example.com", password: "password"})
+      .expect(200);
+
+    assert.equal(openMail.length, 0);
+    assert.equal(await AuthToken.countDocuments({type: "emailVerification"}), 0);
+  });
+
   it("resends verification mail for an authenticated unverified user", async () => {
     const login = await supertest(openApp)
       .post("/auth/login")
@@ -122,7 +144,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(failingApp)
       .post("/auth/login")
@@ -143,7 +165,7 @@ describe("email verification gating", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(noUrlApp)
       .post("/auth/login")
@@ -207,7 +229,7 @@ describe("email verification gating", () => {
     await supertest(openApp)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-mailbox@example.com"})
+      .send({currentPassword: "password", email: "new-mailbox@example.com"})
       .expect(200);
 
     await supertest(openApp).post("/auth/verifyEmail").send({token: issued.token}).expect(400);
@@ -228,7 +250,7 @@ describe("email verification gating", () => {
     await supertest(openApp)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-mailbox@example.com"})
+      .send({currentPassword: "password", email: "new-mailbox@example.com"})
       .expect(200);
 
     await supertest(openApp)
@@ -253,7 +275,7 @@ describe("email verification gating", () => {
       }
     );
     const JwtResetOnlyUser = (mongoose.models.JwtResetOnlyUser ??
-      mongoose.model("JwtResetOnlyUser", jwtResetOnlySchema)) as AuthUserModel;
+      mongoose.model("JwtResetOnlyUser", jwtResetOnlySchema)) as unknown as AuthUserModel;
     await JwtResetOnlyUser.deleteMany({});
     const registerable = JwtResetOnlyUser as unknown as {
       register: (
@@ -281,7 +303,7 @@ describe("email verification gating", () => {
     await supertest(app)
       .patch("/auth/me")
       .set("authorization", `Bearer ${accessToken}`)
-      .send({email: "new-reset-only@example.com"})
+      .send({currentPassword: "password", email: "new-reset-only@example.com"})
       .expect(200);
 
     await supertest(app)

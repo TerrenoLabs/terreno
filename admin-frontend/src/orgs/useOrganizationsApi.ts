@@ -1,6 +1,13 @@
-import {useMemo} from "react";
-import {asDynamicHookApi} from "../dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "../types";
+import {asJsonBody} from "../adminRpc";
+import {
+  type AdminRpcQueryState,
+  unwrapAdminEnvelope,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "../useAdminRpc";
+import type {ListQueryData} from "./normalizeListData";
+import {adminOrganizationHeaders} from "./organizationHeaders";
 
 interface OrganizationMutation {
   id: string;
@@ -11,108 +18,149 @@ interface MembershipMutation extends OrganizationMutation {
   memberId: string;
 }
 
-const organizationHeaders = (organizationId?: string): Record<string, string> | undefined => {
-  if (!organizationId) {
-    return undefined;
-  }
-  return {"X-Organization-Id": organizationId};
-};
+interface QueryOptions {
+  skip?: boolean;
+}
 
-/** RTK Query hooks for the framework OrgsApp routes. */
-export const useOrganizationsApi = (api: AdminApi, basePath = "/orgs", organizationId?: string) => {
-  const enhancedApi = useMemo(
-    () =>
-      api
-        .enhanceEndpoints({addTagTypes: ["organizations", "organization-members"]})
-        .injectEndpoints({
-          endpoints: (build: EndpointBuilder) => ({
-            orgCreate: build.mutation({
-              invalidatesTags: ["organizations"],
-              query: (body: Record<string, unknown>) => ({
-                body,
-                method: "POST",
-                url: basePath,
-              }),
-            }),
-            orgDelete: build.mutation({
-              invalidatesTags: ["organizations"],
-              query: (id: string) => ({method: "DELETE", url: `${basePath}/${id}`}),
-            }),
-            orgList: build.query({
-              providesTags: ["organizations"],
-              query: () => ({method: "GET", url: basePath}),
-            }),
-            orgMemberAttach: build.mutation({
-              invalidatesTags: ["organization-members"],
-              query: ({body, id}: OrganizationMutation) => ({
-                body,
-                headers: organizationHeaders(id),
-                method: "POST",
-                url: `${basePath}/${id}/members`,
-              }),
-            }),
-            orgMemberRemove: build.mutation({
-              invalidatesTags: ["organization-members"],
-              query: ({id, memberId}: MembershipMutation) => ({
-                headers: organizationHeaders(id),
-                method: "DELETE",
-                url: `${basePath}/${id}/members/${memberId}`,
-              }),
-            }),
-            orgMembers: build.query({
-              providesTags: ["organization-members"],
-              query: (id: string) => ({
-                headers: organizationHeaders(id),
-                method: "GET",
-                url: `${basePath}/${id}/members`,
-              }),
-            }),
-            orgMemberUpdate: build.mutation({
-              invalidatesTags: ["organization-members"],
-              query: ({body, id, memberId}: MembershipMutation) => ({
-                body,
-                headers: organizationHeaders(id),
-                method: "PATCH",
-                url: `${basePath}/${id}/members/${memberId}`,
-              }),
-            }),
-            orgMine: build.query({
-              providesTags: ["organizations"],
-              query: () => ({method: "GET", url: `${basePath}/mine`}),
-            }),
-            orgRead: build.query({
-              providesTags: ["organizations"],
-              query: (id: string) => ({
-                headers: organizationHeaders(id),
-                method: "GET",
-                url: `${basePath}/${id}`,
-              }),
-            }),
-            orgUpdate: build.mutation({
-              invalidatesTags: ["organizations"],
-              query: ({body, id}: OrganizationMutation) => ({
-                body,
-                headers: organizationHeaders(id),
-                method: "PATCH",
-                url: `${basePath}/${id}`,
-              }),
-            }),
-          }),
-          overrideExisting: true,
-        }),
-    [api, basePath, organizationId]
-  );
-  const hooks = asDynamicHookApi(enhancedApi);
+type Mutation<Arg> = [(arg: Arg) => {unwrap: () => Promise<unknown>}, {isLoading: boolean}];
+
+const ORGANIZATION_TAGS = ["organizations"] as const;
+const MEMBER_TAGS = ["organization-members"] as const;
+
+/** Single-organization read: the document, or `{data}` when a host keeps the envelope. */
+type OrganizationReadData = Record<string, unknown> & {data?: unknown};
+
+export interface OrganizationsApi {
+  useCreateMutation: () => Mutation<Record<string, unknown>>;
+  useDeleteMutation: () => Mutation<string>;
+  useListQuery: <T = Record<string, unknown>>(
+    arg?: undefined,
+    options?: QueryOptions
+  ) => AdminRpcQueryState<ListQueryData<T>>;
+  useMemberAttachMutation: () => Mutation<OrganizationMutation>;
+  /** `body` is ignored; kept so callers can share the membership mutation shape. */
+  useMemberRemoveMutation: () => Mutation<
+    Omit<MembershipMutation, "body"> & {body?: Record<string, unknown>}
+  >;
+  useMembersQuery: <T = Record<string, unknown>>(
+    id: string,
+    options?: QueryOptions
+  ) => AdminRpcQueryState<ListQueryData<T>>;
+  useMemberUpdateMutation: () => Mutation<MembershipMutation>;
+  useMineQuery: <T = Record<string, unknown>>(
+    arg?: undefined,
+    options?: QueryOptions
+  ) => AdminRpcQueryState<ListQueryData<T>>;
+  useReadQuery: (id: string, options?: QueryOptions) => AdminRpcQueryState<OrganizationReadData>;
+  useUpdateMutation: () => Mutation<OrganizationMutation>;
+}
+
+const ORGANIZATION_MUTATION = {
+  invalidatesTags: ORGANIZATION_TAGS,
+  transformResponse: unwrapAdminEnvelope,
+};
+const MEMBER_MUTATION = {invalidatesTags: MEMBER_TAGS, transformResponse: unwrapAdminEnvelope};
+
+/** Hooks for the framework OrgsApp routes over the host-bound admin fetch client. */
+export const useOrganizationsApi = (basePath = "/orgs"): OrganizationsApi => {
+  const rpc = useAdminRpc();
   return {
-    useCreateMutation: hooks.useOrgCreateMutation,
-    useDeleteMutation: hooks.useOrgDeleteMutation,
-    useListQuery: hooks.useOrgListQuery,
-    useMemberAttachMutation: hooks.useOrgMemberAttachMutation,
-    useMemberRemoveMutation: hooks.useOrgMemberRemoveMutation,
-    useMembersQuery: hooks.useOrgMembersQuery,
-    useMemberUpdateMutation: hooks.useOrgMemberUpdateMutation,
-    useMineQuery: hooks.useOrgMineQuery,
-    useReadQuery: hooks.useOrgReadQuery,
-    useUpdateMutation: hooks.useOrgUpdateMutation,
+    useCreateMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, ORGANIZATION_MUTATION);
+      return [
+        (body: Record<string, unknown>) =>
+          trigger({body: asJsonBody(body), method: "POST", url: basePath}),
+        meta,
+      ];
+    },
+    useDeleteMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, ORGANIZATION_MUTATION);
+      return [(id: string) => trigger({method: "DELETE", url: `${basePath}/${id}`}), meta];
+    },
+    useListQuery: <T = Record<string, unknown>>(_arg?: undefined, options?: QueryOptions) =>
+      useAdminRpcQuery<ListQueryData<T>>({
+        providesTags: ORGANIZATION_TAGS,
+        rpc,
+        skip: Boolean(options?.skip),
+        transformResponse: unwrapAdminEnvelope,
+        url: basePath,
+      }),
+    useMemberAttachMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, MEMBER_MUTATION);
+      return [
+        ({body, id}: OrganizationMutation) =>
+          trigger({
+            body: asJsonBody(body),
+            headers: adminOrganizationHeaders(id),
+            method: "POST",
+            url: `${basePath}/${id}/members`,
+          }),
+        meta,
+      ];
+    },
+    useMemberRemoveMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, MEMBER_MUTATION);
+      return [
+        ({id, memberId}: Omit<MembershipMutation, "body">) =>
+          trigger({
+            headers: adminOrganizationHeaders(id),
+            method: "DELETE",
+            url: `${basePath}/${id}/members/${memberId}`,
+          }),
+        meta,
+      ];
+    },
+    useMembersQuery: <T = Record<string, unknown>>(id: string, options?: QueryOptions) =>
+      useAdminRpcQuery<ListQueryData<T>>({
+        headers: adminOrganizationHeaders(id),
+        providesTags: MEMBER_TAGS,
+        rpc,
+        skip: Boolean(options?.skip),
+        transformResponse: unwrapAdminEnvelope,
+        url: `${basePath}/${id}/members`,
+      }),
+    useMemberUpdateMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, MEMBER_MUTATION);
+      return [
+        ({body, id, memberId}: MembershipMutation) =>
+          trigger({
+            body: asJsonBody(body),
+            headers: adminOrganizationHeaders(id),
+            method: "PATCH",
+            url: `${basePath}/${id}/members/${memberId}`,
+          }),
+        meta,
+      ];
+    },
+    useMineQuery: <T = Record<string, unknown>>(_arg?: undefined, options?: QueryOptions) =>
+      useAdminRpcQuery<ListQueryData<T>>({
+        providesTags: ORGANIZATION_TAGS,
+        rpc,
+        skip: Boolean(options?.skip),
+        transformResponse: unwrapAdminEnvelope,
+        url: `${basePath}/mine`,
+      }),
+    useReadQuery: (id, options) =>
+      useAdminRpcQuery<OrganizationReadData>({
+        headers: adminOrganizationHeaders(id),
+        providesTags: ORGANIZATION_TAGS,
+        rpc,
+        skip: Boolean(options?.skip),
+        transformResponse: unwrapAdminEnvelope,
+        url: `${basePath}/${id}`,
+      }),
+    useUpdateMutation: () => {
+      const [trigger, meta] = useAdminRpcMutation(rpc, ORGANIZATION_MUTATION);
+      return [
+        ({body, id}: OrganizationMutation) =>
+          trigger({
+            body: asJsonBody(body),
+            headers: adminOrganizationHeaders(id),
+            method: "PATCH",
+            url: `${basePath}/${id}`,
+          }),
+        meta,
+      ];
+    },
   };
 };

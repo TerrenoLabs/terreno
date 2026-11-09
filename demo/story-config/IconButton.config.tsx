@@ -13,9 +13,10 @@ import {
 import {IconButton} from "@terreno/ui";
 
 export const IconButtonConfiguration: DemoConfiguration = {
+  usageExample: "import {IconButton} from \"@terreno/ui\";\n\n<IconButton />",
   name: "IconButton",
   component: IconButton,
-  related: ["Buttons", "Icons", "Actions"],
+  related: ["Button", "Icon"],
   description: "Icon buttons allow users to take actions and make choices with a single tap.",
   a11yNotes: [
     "Ensure that each IconButton has an appropriate accessibilityLabel that describes the action it performs.",
@@ -27,7 +28,7 @@ export const IconButtonConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23358&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=1805-12627&t=J847q9JMSjR8oQmN-1",
     ios: "ready",
     android: "ready",
     web: "ready",

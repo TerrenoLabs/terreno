@@ -28,7 +28,7 @@ const foodRouter = modelRouter("/food", FoodModel, {
   },
 });
 
-const buildApp = (rateLimit?: RateLimitOptions): Application => {
+const buildApp = (rateLimit?: RateLimitOptions | false): Application => {
   return new TerrenoApp({
     configureApp: (app) => {
       app.get("/health", (_req, res) => {
@@ -44,13 +44,22 @@ const buildApp = (rateLimit?: RateLimitOptions): Application => {
     .start();
 };
 
+const loginUpToAuthMax = async (app: Application): Promise<void> => {
+  for (let i = 0; i < DEFAULT_AUTH_MAX; i++) {
+    const res = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"});
+    assert.equal(res.status, 200, `login ${i} should be under the auth cap`);
+  }
+};
+
 describe("HTTP rate limiting", () => {
   beforeEach(async () => {
     await setupTestData();
   });
 
-  it("does not 429 burst logins when rateLimit is omitted", async () => {
-    const app = buildApp();
+  it("does not 429 burst logins when rateLimit is false", async () => {
+    const app = buildApp(false);
     for (let i = 0; i < 25; i++) {
       const res = await supertest(app)
         .post("/auth/login")
@@ -59,14 +68,20 @@ describe("HTTP rate limiting", () => {
     }
   }, 30_000);
 
-  it("returns 429 on the 21st POST /auth/login with default auth max", async () => {
+  it("limits by default: 429 on the 21st POST /auth/login when rateLimit is omitted", async () => {
+    const app = buildApp();
+    await loginUpToAuthMax(app);
+    const limited = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"});
+    assert.equal(limited.status, 429);
+    assert.equal(limited.body.code, "rate-limit-exceeded");
+    assert.include(limited.headers.ratelimit, `limit=${DEFAULT_AUTH_MAX}`);
+  }, 30_000);
+
+  it("returns 429 on the 21st POST /auth/login with rateLimit {}", async () => {
     const app = buildApp({});
-    for (let i = 0; i < DEFAULT_AUTH_MAX; i++) {
-      const res = await supertest(app)
-        .post("/auth/login")
-        .send({email: "notAdmin@example.com", password: "password"});
-      assert.equal(res.status, 200, `login ${i} should be under the auth cap`);
-    }
+    await loginUpToAuthMax(app);
     const limited = await supertest(app)
       .post("/auth/login")
       .send({email: "notAdmin@example.com", password: "password"});
@@ -145,6 +160,12 @@ describe("HTTP rate limiting", () => {
       "/api/auth/send-verification-email",
       "/api/auth/verify-email?token=secret",
       "/api/auth/callback/github",
+      "/api/auth/oauth-handoff/start?provider=google",
+      "/api/auth/one-time-token/verify",
+      "/oauth/register",
+      "/oauth/authorize?client_id=abc",
+      "/oauth/token",
+      "/oauth/revoke",
     ];
     for (const originalUrl of authPaths) {
       assert.equal(
@@ -154,6 +175,13 @@ describe("HTTP rate limiting", () => {
       );
     }
     assert.equal(classifyRateLimitPolicy({method: "GET", originalUrl: "/auth/me"} as never), "api");
+    assert.equal(
+      classifyRateLimitPolicy({
+        method: "POST",
+        originalUrl: "/oauth/authorize/req/approve",
+      } as never),
+      "api"
+    );
     assert.equal(
       classifyRateLimitPolicy({method: "PATCH", originalUrl: "/auth/me"} as never),
       "api"
@@ -200,6 +228,34 @@ describe("HTTP rate limiting", () => {
         req.originalUrl.startsWith("/food")
       )
     );
+  });
+
+  it("classifies dot-segment variants of credential paths as auth", () => {
+    const variants = [
+      "/api/auth/%2e/sign-in/email",
+      "/api/auth/%2E/sign-in/email",
+      "/api/auth/./sign-in/email",
+      "/api/auth/x/../sign-in/email",
+      "/api/auth/x/%2e%2e/reset-password",
+      "/auth/./login",
+      "/x/../oauth/token",
+    ];
+    for (const path of variants) {
+      assert.equal(classifyRateLimitPolicy({method: "POST", path} as never), "auth", path);
+    }
+  });
+
+  it("does not skip rate limiting for non-canonical paths that resolve elsewhere", () => {
+    assert.isFalse(
+      shouldSkipRateLimit({
+        method: "POST",
+        path: "/openapi.json/../api/auth/sign-in/email",
+      } as never)
+    );
+    assert.isFalse(
+      shouldSkipRateLimit({method: "POST", path: "/swagger/%2e%2e/api/auth/sign-in/email"} as never)
+    );
+    assert.isTrue(shouldSkipRateLimit({method: "GET", path: "/openapi.json"} as never));
   });
 
   it("honors rateLimit.skip for extra paths", async () => {

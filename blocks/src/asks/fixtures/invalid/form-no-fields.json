@@ -1,0 +1,13 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": []
+  },
+  "errors": [
+    {
+      "path": "fields",
+      "code": "TOO_FEW"
+    }
+  ]
+}

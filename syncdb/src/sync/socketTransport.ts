@@ -11,8 +11,10 @@ import type {
 } from "../types";
 import {
   DEFAULT_MUTATION_TIMEOUT_MS,
+  isReservedSocketEvent,
   type SendMutationBatchResult,
   type SendMutationResult,
+  type SocketEventHandler,
   type SyncTransport,
   type TransportStatus,
 } from "./transport";
@@ -109,6 +111,7 @@ export const createSocketTransport = ({
 }: SocketTransportConfig): SyncTransport => {
   const deltaListeners = new Set<(delta: SyncDelta) => void>();
   const subscribedListeners = new Set<(subscribed: SyncSubscribed) => void>();
+  const deltaBatchListeners = new Set<(deltas: SyncDelta[]) => void>();
   const statusListeners = new Set<(status: TransportStatus) => void>();
   const pending = new Map<string, PendingMutation>();
   const pendingBatches = new Map<
@@ -127,6 +130,33 @@ export const createSocketTransport = ({
   let nextBatchId = 1;
   const subscribed = new Set<string>();
   const subscribeMode = new Map<string, "window">();
+  const inboundDeltaBatches = new Map<(deltas: SyncDelta[]) => void, SyncDelta[]>();
+  let isInboundDeltaBatchScheduled = false;
+
+  const scheduleInboundDeltaBatchFlush = (): void => {
+    if (isInboundDeltaBatchScheduled) {
+      return;
+    }
+    isInboundDeltaBatchScheduled = true;
+    // Socket.IO can deliver a high-volume stream in separate tasks. Deferring to
+    // the next paint coalesces that stream into one store transaction, so React
+    // does not render once per delta. Non-DOM environments retain microtask
+    // semantics for SSR and transport tests.
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      globalThis.requestAnimationFrame(flushInboundDeltaBatch);
+      return;
+    }
+    queueMicrotask(flushInboundDeltaBatch);
+  };
+
+  const flushInboundDeltaBatch = (): void => {
+    isInboundDeltaBatchScheduled = false;
+    const batches = [...inboundDeltaBatches];
+    inboundDeltaBatches.clear();
+    for (const [listener, deltas] of batches) {
+      listener(deltas);
+    }
+  };
 
   const socket: Socket = io(baseUrl, {
     auth: (callback) => {
@@ -191,6 +221,15 @@ export const createSocketTransport = ({
     for (const listener of deltaListeners) {
       listener(delta);
     }
+    if (deltaBatchListeners.size === 0) {
+      return;
+    }
+    for (const listener of deltaBatchListeners) {
+      const batch = inboundDeltaBatches.get(listener) ?? [];
+      batch.push(delta);
+      inboundDeltaBatches.set(listener, batch);
+    }
+    scheduleInboundDeltaBatchFlush();
   });
   socket.on(
     "sync:subscribed",
@@ -427,6 +466,26 @@ export const createSocketTransport = ({
       deltaListeners.add(callback);
       return () => {
         deltaListeners.delete(callback);
+      };
+    },
+    onDeltaBatch: (callback: (deltas: SyncDelta[]) => void): (() => void) => {
+      deltaBatchListeners.add(callback);
+      return () => {
+        deltaBatchListeners.delete(callback);
+        inboundDeltaBatches.delete(callback);
+      };
+    },
+    onEvent: (event: string, handler: SocketEventHandler): (() => void) => {
+      if (isReservedSocketEvent(event)) {
+        throw new Error(`onSocketEvent: "${event}" is reserved by the sync protocol`);
+      }
+      // Wrap so the same handler can be registered twice and removed independently.
+      const listener = (...args: unknown[]): void => {
+        handler(...args);
+      };
+      socket.on(event, listener);
+      return () => {
+        socket.off(event, listener);
       };
     },
     onStatusChange: (callback: (status: TransportStatus) => void): (() => void) => {

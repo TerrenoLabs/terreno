@@ -6,6 +6,7 @@ import {
   KNOWN_STREAMS_TABLE,
   NEEDS_REPAIR_TABLE,
   OUTBOX_TABLE,
+  QUERY_WINDOWS_TABLE,
 } from "./types";
 
 /**
@@ -20,6 +21,12 @@ import {
 export const SYNC_SCHEMA_VERSION = 3;
 
 const ENTITY_TABLE_SCHEMA: Record<string, CellSchema> = {
+  /**
+   * Set by the mutation ACK until the equal-seq server delta is applied.
+   * Absent on older rows means false. Not a schema-version bump: a bump wipes
+   * the store, and a missing cell is already the false state.
+   */
+  awaitingServerDelta: {type: "boolean"},
   data: {type: "string"},
   deleted: {type: "boolean"},
   /** E5: stamped when a tombstone is first applied; "" otherwise. */
@@ -88,6 +95,18 @@ export const buildTablesSchema = ({collections}: {collections: string[]}): Table
       operation: {type: "string"},
       status: {type: "string"},
       userId: {type: "string"},
+    },
+    [QUERY_WINDOWS_TABLE]: {
+      collection: {type: "string"},
+      /** JSON-encoded {id: seq} of cached rows the last full fetch proved stale for the window. */
+      excluded: {type: "string"},
+      fetchedAt: {type: "string"},
+      hasMore: {type: "boolean"},
+      /** JSON-encoded ordered member ids. */
+      ids: {type: "string"},
+      pages: {type: "number"},
+      /** Server total, or -1 when the endpoint did not report one. */
+      total: {type: "number"},
     },
   };
   for (const collection of collections) {

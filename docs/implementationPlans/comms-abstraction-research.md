@@ -45,4 +45,4 @@ Non-breaking choices for a published package:
 - `comms/src/types.ts`, `commsService.ts`, `models/commsMessage.ts`
 - [comms-admin-dashboard.md](comms-admin-dashboard.md)
 - [comms-adapter-sendgrid.md](comms-adapter-sendgrid.md)
-- Roadmap: https://github.com/FlourishHealth/terreno/issues/1018
+- Roadmap: https://github.com/TerrenoLabs/terreno/issues/1018

@@ -2,7 +2,7 @@ import {describe, expect, it} from "bun:test";
 import {normalizeListData} from "./normalizeListData";
 
 describe("normalizeListData", () => {
-  it("returns a bare array from the RTK-unwrapped shape", () => {
+  it("returns a bare array from the already-unwrapped shape", () => {
     expect(normalizeListData([{_id: "org-1"}])).toEqual([{_id: "org-1"}]);
   });
 

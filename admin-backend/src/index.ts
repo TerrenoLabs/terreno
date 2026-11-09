@@ -48,6 +48,14 @@ export {DocumentStorageApp} from "./documentStorageApp";
 export type {ParseAdminListFiltersResult} from "./filterParser";
 export {parseAdminListFilters} from "./filterParser";
 export {convertLegacyModelConfig, resetLegacyDeprecationWarningsForTests} from "./legacy";
+export {
+  MCP_ADMIN_GROUP,
+  type McpAdminModelsOptions,
+  mcpAdminModels,
+  mcpAdminScripts,
+  mcpAdminStatements,
+  mcpSignOutEverywhere,
+} from "./mcpAdmin";
 export type {AdminModelSource, ResolvedAdminModel} from "./resolvedAdminModel";
 export {resolvedModelFromAdminConfig} from "./resolvedAdminModel";
 export {normalizeAdminRoutePath} from "./routePath";

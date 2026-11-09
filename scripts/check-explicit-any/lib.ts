@@ -14,6 +14,7 @@ export const SCAN_ROOTS = [
   "ai/src",
   "api/src",
   "api-health/src",
+  "blocks/src",
   "comms/src",
   "demo",
   "example-backend/src",
@@ -21,7 +22,6 @@ export const SCAN_ROOTS = [
   "feature-flags/src",
   "jobs/src",
   "mcp-server/src",
-  "rtk/src",
   "scripts",
   "syncdb/src",
   "test/src",
@@ -44,9 +44,9 @@ const IGNORED_DIR_NAMES = new Set([
 const BIOME_IGNORE_LINE_PATTERN = /biome-ignore(?:-all)?\s+lint\/suspicious\/noExplicitAny/;
 const NO_EXPLICIT_ANY_PATTERN = /\/\/\s*noExplicitAny:/;
 
-const DEFAULT_EXCLUDED_FILE_NAMES = new Set(["commsOpenApiSdk.ts", "openApiSdk.ts"]);
+const DEFAULT_EXCLUDED_FILE_NAMES = new Set(["apiSdk.ts", "syncDbSdk.ts"]);
 
-const DEFAULT_EXCLUDED_FILE_PATTERNS = [/\.template\.tsx?$/, /\/openApiSdk\.ts$/];
+const DEFAULT_EXCLUDED_FILE_PATTERNS = [/\.template\.tsx?$/];
 
 type AnyUsageKind = "annotation" | "cast" | "generic" | "index-signature";
 

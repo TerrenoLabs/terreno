@@ -2,7 +2,7 @@
 
 **Status:** In progress — CI, release, Netlify/GCP production path deploys, and PR previews landed; EAS PR/fingerprint temporarily disabled; GitHub-native maintenance remains  
 **Discussion:** _(none)_  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1088
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1088
 **Linear:** _(none)_  
 **Priority:** High  
 **Effort:** Large (cross-cutting infra; many workflows)  
@@ -112,7 +112,7 @@ Prefer extending the module (`circleci_oidc` or rename to `ci_oidc` with multipl
 
 ### GitHub ↔ CircleCI integration
 
-- CircleCI GitHub App (or OAuth) on `FlourishHealth/terreno`.
+- CircleCI GitHub App (or OAuth) on `TerrenoLabs/terreno`.
 - Status checks reported to GitHub for branch protection (job names documented in `docs/explanation/repository-settings.md`).
 - PR comments / labels / Deployments API: call GitHub REST via `gh` or `curl` with `terreno-github-api` context (replaces `GITHUB_TOKEN` action privileges).
 - Tag + schedule triggers: CircleCI pipeline triggers (or GitHub → CircleCI API webhook) for cron jobs currently on GHA.
@@ -168,7 +168,7 @@ Implemented: production and PR preview jobs exist on CircleCI. GitHub Actions
 is the live Netlify/GCP writer until `terreno-netlify` / `terreno-gcp` are
 populated; CircleCI deploy scripts skip (exit 0) when those variables are
 missing. After a successful CircleCI deploy, set GHA deploy workflows back to
-`on: []` in the same change. Preview cleanup on PR close is GHA
+`push.branches-ignore: ["**"]` in the same change. Preview cleanup on PR close is GHA
 `preview-cleanup.yml` plus the manual CircleCI parameter.
 
 ### Phase 5 — EAS + fingerprint (v1)
@@ -177,7 +177,7 @@ missing. After a successful CircleCI deploy, set GHA deploy workflows back to
 - PR comment + `fingerprint-acknowledged` label via GitHub API.
 
 Manual EAS dispatch is implemented. EAS PR updates and fingerprint
-acknowledgement are retained with `on: []` until CircleCI comment/label parity
+acknowledgement are retained with `push.branches-ignore: ["**"]` until CircleCI comment/label parity
 is implemented.
 
 ### Phase 6 — GCP CD + OIDC (v1)
@@ -204,7 +204,7 @@ are ported.
 
 ### Phase 8 — Mobile runners (post-v1 / still required for full cutover)
 
-- Maestro web/Chrome (`maestro-e2e`) is implemented on CircleCI Linux browsers + Mongo replica set. GHA `maestro-e2e.yml` is `on: []`.
+- Maestro web/Chrome (`maestro-e2e`) is implemented on CircleCI Linux browsers + Mongo replica set. GHA `maestro-e2e.yml` is `push.branches-ignore: ["**"]`.
 - Appium Android on Linux VM and Appium iOS on CircleCI macOS remain unported.
 
 ### Phase 9 — GitHub-native + agentic replacements (full cutover)
@@ -214,8 +214,8 @@ are ported.
 | `codeql-analysis` | CircleCI job uploading SARIF to GitHub Code Scanning API **or** third-party SAST orb; preserve Security tab if possible |
 | `dependabot-auto-merge` | Keep Dependabot PRs on GitHub; auto-merge via CircleCI on Dependabot branches **or** Renovate on CircleCI |
 | `triage.yml` | CircleCI pipeline trigger on `issues` via GitHub Apps webhook → CircleCI API, or GitHub Action **stub** only if product accepts residual GHA (conflicts with CC1 — prefer webhook) |
-| `roadmap-generate` | Scheduled CircleCI job with `ROADMAP_PROJECT_TOKEN` |
-| `architectural-pr-review` | Implemented: CircleCI job + `CURSOR_API_KEY` / `GITHUB_TOKEN`. Checks out `origin/master`, skips forks. GHA workflow is `on: []`. |
+| `roadmap-generate`, `roadmap-sync`, `roadmap-reconcile` | **Stay on GitHub Actions** (decided 2026-09-26). They only talk to GitHub (issues, Projects v2, `master` commits via `ROADMAP_PROJECT_TOKEN`), so moving them buys nothing. Exception to CC1. |
+| `architectural-pr-review` | Implemented: CircleCI job + `CURSOR_API_KEY` / `GITHUB_TOKEN`. Checks out `origin/master`, skips forks. GHA workflow is `push.branches-ignore: ["**"]`. |
 | Cursor Approval / Security / Bugbot | **Cannot move.** Cursor GitHub App automations, not repo workflows. |
 | `agentics-maintenance` + `*.lock.yml` gh-aw | Re-home to CircleCI scheduled pipelines calling the same scripts **or** retire features; do not leave gh-aw as the only runner if CC1 holds |
 | `docs-audit` | Scheduled CircleCI job |

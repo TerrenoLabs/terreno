@@ -9,6 +9,7 @@ import {
   type ModelRouterOptions,
   modelRouter,
   type OpenApiMiddleware,
+  type OpenApiSchemaProperty,
   type PermissionMethod,
   Permissions,
   type TerrenoPlugin,
@@ -19,7 +20,7 @@ import type {Model} from "mongoose";
 import {registerAnnouncementHelpRoutes} from "./helpRoutes";
 import {Announcement, toAnnouncementPublic} from "./models/announcement";
 import {AnnouncementAcknowledgement} from "./models/announcementAcknowledgement";
-import {AnnouncementClickEvent, isValidClickAction} from "./models/announcementClickEvent";
+import {AnnouncementClickEvent} from "./models/announcementClickEvent";
 import {AnnouncementImpression, isValidPlatform} from "./models/announcementImpression";
 import {fetchAnnouncementOverview, parseOverviewPagination} from "./overview";
 import {
@@ -31,6 +32,17 @@ import {
   passesMinBuildNumber,
   selectPendingAnnouncements,
 } from "./pending";
+import {
+  announcementReleaseImportSchema,
+  importAnnouncementRelease,
+  requireAnnouncementUploadAccess,
+} from "./releaseImport";
+import {
+  announcementClickBodySchema,
+  announcementClickPlatformSchema,
+  announcementImpressionBodySchema,
+  parseAnnouncementBody,
+} from "./requestBodies";
 import type {
   AcknowledgementPolicy,
   AnnouncementDocument,
@@ -96,16 +108,6 @@ const hasPrimaryAction = (announcement: AnnouncementDocument): boolean => {
   return Boolean(label && url);
 };
 
-const resolveClickPlatform = (req: Request, bodyPlatform: unknown): AnnouncementPlatform => {
-  if (bodyPlatform !== undefined && bodyPlatform !== null) {
-    if (!isValidPlatform(bodyPlatform)) {
-      throw new APIError({status: 400, title: "Invalid platform"});
-    }
-    return bodyPlatform;
-  }
-  return parsePlatform(req);
-};
-
 const requireVisibleAnnouncement = async ({
   announcement,
   isStaff,
@@ -139,6 +141,43 @@ const requireVisibleAnnouncement = async ({
 
   return announcement;
 };
+
+/** `AnnouncementPublic`: the shape user-facing announcement routes return. */
+const announcementPublicOpenApiSchema: OpenApiSchemaProperty = {
+  properties: {
+    body: {description: "Markdown body", type: "string"},
+    displayMode: {enum: ["modal", "banner", "feed"], type: "string"},
+    id: {type: "string"},
+    primaryAction: {
+      properties: {label: {type: "string"}, url: {type: "string"}},
+      required: ["label", "url"],
+      type: "object",
+    },
+    priority: {type: "number"},
+    publishedAt: {format: "date-time", type: "string"},
+    requiresAcknowledgement: {type: "boolean"},
+    title: {type: "string"},
+    version: {type: "number"},
+  },
+  required: [
+    "body",
+    "displayMode",
+    "id",
+    "priority",
+    "requiresAcknowledgement",
+    "title",
+    "version",
+  ],
+  type: "object",
+};
+
+const platformQueryParameter: OpenApiSchemaProperty = {
+  enum: ["ios", "android", "web"],
+  type: "string",
+};
+
+const PLATFORM_QUERY_DESCRIPTION = "Client platform. Defaults from the User-Agent, then web.";
+const VERSION_QUERY_DESCRIPTION = "Client build number, compared with each announcement's minimum.";
 
 export class AnnouncementsApp implements TerrenoPlugin {
   private options: AnnouncementsOptions;
@@ -254,6 +293,22 @@ export class AnnouncementsApp implements TerrenoPlugin {
 
     const routerOptions: ModelRouterOptions<AnnouncementDocument> = {
       ...(openApi ? {openApi: openApi as OpenApiMiddleware} : {}),
+      collectionActions: {
+        "import-release": {
+          allowAnonymous: true,
+          body: announcementReleaseImportSchema,
+          description:
+            "Idempotently create or update a release pack. Defaults to drafts; set publish=true to publish.",
+          handler: async ({body, req}) => {
+            requireAnnouncementUploadAccess({req, uploadToken: this.options.uploadToken});
+            return importAnnouncementRelease({input: body});
+          },
+          method: "POST",
+          permissions: [Permissions.IsAny],
+          summary: "Import a product release announcement pack",
+          tag: "announcements",
+        },
+      },
       permissions: {
         create: [Permissions.IsAdmin],
         delete: [Permissions.IsAdmin],
@@ -266,11 +321,45 @@ export class AnnouncementsApp implements TerrenoPlugin {
       sort: "-priority,-publishedAt",
     };
 
+    const routeOpenApi = openApi ? {openApi: openApi as OpenApiMiddleware} : undefined;
+    // User routes: documentation only. Validation stays off; the handlers parse their own input.
+    const userRouteDocs = (): ReturnType<typeof createOpenApiBuilder> =>
+      createOpenApiBuilder(routeOpenApi ?? {})
+        .withTags(["announcements"])
+        .withValidation({enabled: false});
+    const recordedResponse = (field: string): Record<string, OpenApiSchemaProperty> => ({
+      data: {properties: {[field]: {type: "boolean"}}, required: [field], type: "object"},
+    });
+
     const userRouter = Router();
 
     userRouter.get(
       "/pending",
       authenticateMiddleware(),
+      userRouteDocs()
+        .withSummary("Get the next announcement the current user should see")
+        .withQueryParameter("platform", platformQueryParameter, {
+          description: PLATFORM_QUERY_DESCRIPTION,
+        })
+        .withQueryParameter("version", {type: "integer"}, {description: VERSION_QUERY_DESCRIPTION})
+        .withResponse(
+          200,
+          {
+            data: {
+              properties: {
+                current: {...announcementPublicOpenApiSchema, nullable: true},
+                remainingCount: {
+                  description: "Pending announcements after the current one",
+                  type: "number",
+                },
+              },
+              required: ["current", "remainingCount"],
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
+        .build(),
       asyncHandler(async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) {
@@ -332,6 +421,29 @@ export class AnnouncementsApp implements TerrenoPlugin {
     userRouter.get(
       "/feed",
       authenticateMiddleware(),
+      userRouteDocs()
+        .withSummary("List announcements visible to the current user")
+        .withQueryParameter("platform", platformQueryParameter, {
+          description: PLATFORM_QUERY_DESCRIPTION,
+        })
+        .withQueryParameter("version", {type: "integer"}, {description: VERSION_QUERY_DESCRIPTION})
+        .withQueryParameter(
+          "limit",
+          {type: "integer"},
+          {description: "Page size, 1 to 100 (default 20)"}
+        )
+        .withQueryParameter("page", {type: "integer"}, {description: "Page number, from 1"})
+        .withResponse(
+          200,
+          {
+            data: {items: announcementPublicOpenApiSchema, type: "array"},
+            more: {description: "Whether a later page has more announcements", type: "boolean"},
+            page: {type: "number"},
+            total: {description: "Visible announcements across all pages", type: "number"},
+          },
+          {required: ["data", "more", "page", "total"]}
+        )
+        .build(),
       asyncHandler(async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) {
@@ -380,6 +492,7 @@ export class AnnouncementsApp implements TerrenoPlugin {
 
         return res.json({
           data: pageItems,
+          more: start + limit < sorted.length,
           page,
           total: sorted.length,
         });
@@ -389,6 +502,15 @@ export class AnnouncementsApp implements TerrenoPlugin {
     userRouter.post(
       "/:id/acknowledge",
       authenticateMiddleware(),
+      userRouteDocs()
+        .withSummary("Acknowledge an announcement for the current user")
+        .withPathParameter("id", {type: "string"}, {description: "Announcement id"})
+        .withQueryParameter("platform", platformQueryParameter, {
+          description: PLATFORM_QUERY_DESCRIPTION,
+        })
+        .withQueryParameter("version", {type: "integer"}, {description: VERSION_QUERY_DESCRIPTION})
+        .withResponse(200, recordedResponse("acknowledged"), {required: ["data"]})
+        .build(),
       asyncHandler(async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) {
@@ -427,6 +549,16 @@ export class AnnouncementsApp implements TerrenoPlugin {
     userRouter.post(
       "/:id/impression",
       authenticateMiddleware(),
+      userRouteDocs()
+        .withSummary("Record that the current user saw an announcement")
+        .withPathParameter("id", {type: "string"}, {description: "Announcement id"})
+        .withQueryParameter("platform", platformQueryParameter, {
+          description: "Used when the body has no platform. Defaults from the User-Agent.",
+        })
+        .withQueryParameter("version", {type: "integer"}, {description: VERSION_QUERY_DESCRIPTION})
+        .withRequestBody({platform: platformQueryParameter}, {required: false})
+        .withResponse(200, recordedResponse("recorded"), {required: ["data"]})
+        .build(),
       asyncHandler(async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) {
@@ -434,8 +566,11 @@ export class AnnouncementsApp implements TerrenoPlugin {
         }
 
         const userId = getUserId(user as {_id?: unknown; id?: string});
-        const bodyPlatform = (req.body as {platform?: unknown})?.platform;
-        const platform = isValidPlatform(bodyPlatform) ? bodyPlatform : parsePlatform(req);
+        const body = parseAnnouncementBody({
+          body: req.body,
+          schema: announcementImpressionBodySchema,
+        });
+        const platform = body.platform ?? parsePlatform(req);
         const announcement = await requireVisibleAnnouncement({
           announcement: await Announcement.findById(req.params.id),
           isStaff,
@@ -460,6 +595,19 @@ export class AnnouncementsApp implements TerrenoPlugin {
     userRouter.post(
       "/:id/click",
       authenticateMiddleware(),
+      userRouteDocs()
+        .withSummary("Record that the current user clicked an announcement's primary action")
+        .withPathParameter("id", {type: "string"}, {description: "Announcement id"})
+        .withQueryParameter("platform", platformQueryParameter, {
+          description: "Used when the body has no platform. Defaults from the User-Agent.",
+        })
+        .withQueryParameter("version", {type: "integer"}, {description: VERSION_QUERY_DESCRIPTION})
+        .withRequestBody({
+          action: {enum: ["primaryAction"], required: true, type: "string"},
+          platform: platformQueryParameter,
+        })
+        .withResponse(200, recordedResponse("recorded"), {required: ["data"]})
+        .build(),
       asyncHandler(async (req: Request, res: Response) => {
         const user = req.user;
         if (!user) {
@@ -467,8 +615,11 @@ export class AnnouncementsApp implements TerrenoPlugin {
         }
 
         const userId = getUserId(user as {_id?: unknown; id?: string});
-        const body = req.body as {action?: unknown; platform?: unknown};
-        const platform = resolveClickPlatform(req, body.platform);
+        const {platform: bodyPlatform} = parseAnnouncementBody({
+          body: req.body,
+          schema: announcementClickPlatformSchema,
+        });
+        const platform = bodyPlatform ?? parsePlatform(req);
         const announcement = await requireVisibleAnnouncement({
           announcement: await Announcement.findById(req.params.id),
           isStaff,
@@ -478,9 +629,7 @@ export class AnnouncementsApp implements TerrenoPlugin {
           user,
         });
 
-        if (!isValidClickAction(body.action)) {
-          throw new APIError({status: 400, title: "Invalid click action"});
-        }
+        const body = parseAnnouncementBody({body: req.body, schema: announcementClickBodySchema});
 
         if (!hasPrimaryAction(announcement)) {
           throw new APIError({status: 400, title: "Announcement has no primary action"});
@@ -500,7 +649,6 @@ export class AnnouncementsApp implements TerrenoPlugin {
     );
 
     const adminRouter = Router();
-    const routeOpenApi = openApi ? {openApi: openApi as OpenApiMiddleware} : undefined;
 
     adminRouter.get(
       "/config",

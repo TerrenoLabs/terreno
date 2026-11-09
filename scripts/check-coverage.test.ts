@@ -1,9 +1,13 @@
 import {describe, expect, it} from "bun:test";
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 
 import {
   evaluateCoverage,
   formatLcov,
   isBunCoverageThresholdExit,
+  listCoveredSourceFiles,
   mergeIsolatedLcov,
   mergeLcov,
   normalizeLcovPath,
@@ -13,6 +17,7 @@ import {
   parseLcov,
   stripAnsi,
   summarizeLcov,
+  summaryFromCompleteLcov,
 } from "./check-coverage";
 
 const ESC = String.fromCharCode(27);
@@ -432,6 +437,73 @@ describe("summarizeLcov", () => {
     mergeLcov(merged, withFn);
     expect(merged.get("src/foo.ts")?.hasFnRecords).toBe(true);
     expect(summarizeLcov(merged)).toEqual({functions: 100, lines: 100});
+  });
+});
+
+describe("summaryFromCompleteLcov", () => {
+  const writePackage = (files: Record<string, string>): string => {
+    const cwd = mkdtempSync(join(tmpdir(), "coverage-lcov-"));
+    for (const [path, contents] of Object.entries(files)) {
+      const fullPath = join(cwd, path);
+      mkdirSync(join(fullPath, ".."), {recursive: true});
+      writeFileSync(fullPath, contents);
+    }
+    return cwd;
+  };
+
+  it("lists non-test source files and skips tests and isolated files", () => {
+    const cwd = writePackage({
+      "src/asks/schema.ts": "export const schema = 1;\n",
+      "src/isolated/hook.isolated.ts": "export const isolated = 1;\n",
+      "src/schema.test.ts": "export const test = 1;\n",
+      "src/tests/askFixtures.ts": "export const fixture = 1;\n",
+    });
+    try {
+      expect(listCoveredSourceFiles(cwd)).toEqual(["src/asks/schema.ts"]);
+    } finally {
+      rmSync(cwd, {force: true, recursive: true});
+    }
+  });
+
+  it("summarizes a report that names every source file", () => {
+    const cwd = writePackage({
+      "coverage/lcov.info": [
+        "SF:src/asks/schema.ts",
+        "FNF:1",
+        "FNH:1",
+        "DA:1,1",
+        "end_of_record",
+        "",
+      ].join("\n"),
+      "src/asks/schema.ts": "export const schema = 1;\n",
+    });
+    try {
+      expect(summaryFromCompleteLcov(cwd)).toEqual({functions: 100, lines: 100});
+    } finally {
+      rmSync(cwd, {force: true, recursive: true});
+    }
+  });
+
+  it("returns null when a source file is missing from the report", () => {
+    const cwd = writePackage({
+      "coverage/lcov.info": ["SF:src/asks/schema.ts", "DA:1,1", "end_of_record", ""].join("\n"),
+      "src/asks/schema.ts": "export const schema = 1;\n",
+      "src/other.ts": "export const other = 1;\n",
+    });
+    try {
+      expect(summaryFromCompleteLcov(cwd)).toBeNull();
+    } finally {
+      rmSync(cwd, {force: true, recursive: true});
+    }
+  });
+
+  it("returns null when the report is missing", () => {
+    const cwd = writePackage({"src/asks/schema.ts": "export const schema = 1;\n"});
+    try {
+      expect(summaryFromCompleteLcov(cwd)).toBeNull();
+    } finally {
+      rmSync(cwd, {force: true, recursive: true});
+    }
   });
 });
 

@@ -1,46 +1,53 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles
-// biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
-import React from "react";
+import type React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import type {AdminApi} from "./types";
+import {AdminProvider} from "./AdminProvider";
 
 interface OverviewState {
   data: unknown;
-  error: unknown;
+  error: boolean;
   isLoading: boolean;
 }
 
-const overviewState: OverviewState = {data: undefined, error: null, isLoading: false};
-const querySpecs: unknown[] = [];
-const queryDefinitions: Array<Record<string, unknown>> = [];
+const overviewState: OverviewState = {data: undefined, error: false, isLoading: false};
+const requests: Array<{method: string; url: string}> = [];
+const originalFetch = globalThis.fetch;
 
-const makeApi = () => {
-  const api = {
-    enhanceEndpoints: () => api,
-    injectEndpoints: ({endpoints}: {endpoints: (b: unknown) => Record<string, unknown>}) => {
-      endpoints({
-        query: (spec: Record<string, unknown>) => {
-          queryDefinitions.push(spec);
-          if (typeof spec?.query === "function") {
-            querySpecs.push(spec.query({limit: 20, page: 1}));
-          }
-          return spec;
-        },
-      });
-      return {
-        useAnnouncementOverviewQuery: () => ({
-          data: overviewState.data,
-          error: overviewState.error,
-          isLoading: overviewState.isLoading,
-        }),
-      };
-    },
-  };
-  return api;
+const installFetch = (): void => {
+  globalThis.fetch = ((url: string, init?: RequestInit) => {
+    requests.push({method: init?.method ?? "GET", url: String(url)});
+    if (overviewState.isLoading) {
+      return new Promise<Response>(() => {});
+    }
+    const body = overviewState.error ? {title: "failed"} : (overviewState.data ?? {});
+    return Promise.resolve(
+      new Response(JSON.stringify(body), {
+        headers: {"Content-Type": "application/json"},
+        status: overviewState.error ? 500 : 200,
+      })
+    );
+  }) as unknown as typeof fetch;
+};
+
+const flush = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, 0));
+  });
+};
+
+const renderOverview = async (
+  element: React.ReactElement
+): Promise<ReturnType<typeof renderWithTheme>> => {
+  const view = renderWithTheme(
+    <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+      {element}
+    </AdminProvider>
+  );
+  await flush();
+  return view;
 };
 
 import {AnnouncementOverview} from "./AnnouncementOverview";
@@ -55,43 +62,37 @@ const press = async (el: ReactTestInstance): Promise<void> => {
 describe("AnnouncementOverview", () => {
   beforeEach(() => {
     overviewState.data = undefined;
-    overviewState.error = null;
+    overviewState.error = false;
     overviewState.isLoading = false;
-    querySpecs.length = 0;
-    queryDefinitions.length = 0;
+    requests.length = 0;
+    installFetch();
   });
 
-  it("wires the overview query to GET /announcements/overview", () => {
-    renderWithTheme(
-      <AnnouncementOverview api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
-    assert.deepEqual(querySpecs[0], {
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  it("wires the overview query to GET /announcements/overview", async () => {
+    await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
+    assert.deepEqual(requests[0], {
       method: "GET",
       url: "/announcements/overview?page=1&limit=20",
     });
-    assert.deepEqual(queryDefinitions[0]?.providesTags, [
-      "AnnouncementOverview",
-      "admin_Announcement",
-    ]);
   });
 
-  it("renders loading state", () => {
+  it("renders loading state", async () => {
     overviewState.isLoading = true;
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementOverview api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
     assert.exists(getByTestId("announcement-overview-loading"));
   });
 
-  it("renders error state", () => {
-    overviewState.error = new Error("failed");
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementOverview api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+  it("renders error state", async () => {
+    overviewState.error = true;
+    const {getByTestId} = await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
     assert.exists(getByTestId("announcement-overview-error"));
   });
 
-  it("renders summary cards and table rows with metrics", () => {
+  it("renders summary cards and table rows with metrics", async () => {
     overviewState.data = {
       data: [
         {
@@ -120,12 +121,8 @@ describe("AnnouncementOverview", () => {
     };
 
     const onEdit = mock((_id: string) => {});
-    const {getByTestId, getByText} = renderWithTheme(
-      <AnnouncementOverview
-        api={makeApi() as unknown as AdminApi}
-        baseUrl="/admin"
-        onEdit={onEdit}
-      />
+    const {getByTestId, getByText} = await renderOverview(
+      <AnnouncementOverview baseUrl="/admin" onEdit={onEdit} />
     );
 
     assert.exists(getByTestId("announcement-overview-summary"));
@@ -165,13 +162,8 @@ describe("AnnouncementOverview", () => {
 
     const onCreate = mock(() => {});
     const onEdit = mock((_id: string) => {});
-    const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AnnouncementOverview
-        api={makeApi() as unknown as AdminApi}
-        baseUrl="/admin"
-        onCreate={onCreate}
-        onEdit={onEdit}
-      />
+    const {getByTestId, UNSAFE_root} = await renderOverview(
+      <AnnouncementOverview baseUrl="/admin" onCreate={onCreate} onEdit={onEdit} />
     );
 
     await press(getByTestId("announcement-overview-create-button"));
@@ -189,7 +181,7 @@ describe("AnnouncementOverview", () => {
     assert.strictEqual(onEdit.mock.calls[0]?.[0], "a1");
   });
 
-  it("omits the actions column when onEdit is not provided", () => {
+  it("omits the actions column when onEdit is not provided", async () => {
     overviewState.data = {
       data: [
         {
@@ -217,9 +209,7 @@ describe("AnnouncementOverview", () => {
       },
     };
 
-    const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementOverview api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {UNSAFE_root} = await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
     const editButtons = UNSAFE_root.findAll(
       (node: ReactTestInstance) => node.props?.accessibilityLabel === "Edit announcement"
     );
@@ -261,9 +251,8 @@ describe("AnnouncementOverview", () => {
     const onOpenAcknowledgements = mock(() => {});
     const onOpenImpressions = mock(() => {});
     const onOpenClickEvents = mock(() => {});
-    const {getByTestId, getByText, UNSAFE_root} = renderWithTheme(
+    const {getByTestId, getByText, UNSAFE_root} = await renderOverview(
       <AnnouncementOverview
-        api={makeApi() as unknown as AdminApi}
         baseUrl="/admin"
         onOpenAcknowledgements={onOpenAcknowledgements}
         onOpenClickEvents={onOpenClickEvents}
@@ -291,15 +280,19 @@ describe("AnnouncementOverview", () => {
     assert.strictEqual((tables[0] as ReactTestInstance).props.page, 2);
   });
 
-  it("reuses the injected overview endpoint across renders", () => {
-    const api = makeApi() as unknown as AdminApi;
-    const {rerender} = renderWithTheme(<AnnouncementOverview api={api} baseUrl="/admin" />);
-    querySpecs.length = 0;
-    rerender(<AnnouncementOverview api={api} baseUrl="/admin" />);
-    assert.lengthOf(querySpecs, 0);
+  it("does not refetch when rerendered with the same page", async () => {
+    const view = await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
+    requests.length = 0;
+    view.rerender(
+      <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+        <AnnouncementOverview baseUrl="/admin" />
+      </AdminProvider>
+    );
+    await flush();
+    assert.lengthOf(requests, 0);
   });
 
-  it("renders empty state when overview has no rows", () => {
+  it("renders empty state when overview has no rows", async () => {
     overviewState.data = {
       data: [],
       limit: 20,
@@ -317,9 +310,7 @@ describe("AnnouncementOverview", () => {
       },
     };
 
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementOverview api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = await renderOverview(<AnnouncementOverview baseUrl="/admin" />);
     assert.exists(getByTestId("announcement-overview-empty"));
   });
 });

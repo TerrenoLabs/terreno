@@ -1,11 +1,10 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use loosely typed hook doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi} from "../types";
 
 // Mock @terreno/ui so the Modal renders its children inline. The real Modal
 // portal isn't mounted by the test renderer, which hides the cancel button.
@@ -87,8 +86,6 @@ mock.module("../useAdminScripts", () => ({
 
 import {AdminScriptRunModal} from "../AdminScriptRunModal";
 
-const mockApi = {} as unknown as AdminApi;
-
 const waitTicks = async (ms = 40): Promise<void> => {
   await act(async () => {
     await new Promise((r) => setTimeout(r, ms));
@@ -114,7 +111,6 @@ describe("AdminScriptRunModal", () => {
   it("renders without crashing when not visible", () => {
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="test-script"
@@ -128,7 +124,6 @@ describe("AdminScriptRunModal", () => {
   it("shows confirm-phase Dry Run, Run, and Cancel buttons when visible", () => {
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => undefined}
         scriptName="my-script"
@@ -146,13 +141,7 @@ describe("AdminScriptRunModal", () => {
     const onDismiss = mock(() => undefined);
 
     const {getByTestId} = renderWithTheme(
-      <AdminScriptRunModal
-        api={mockApi}
-        baseUrl="/admin"
-        onDismiss={onDismiss}
-        scriptName="my-script"
-        visible
-      />
+      <AdminScriptRunModal baseUrl="/admin" onDismiss={onDismiss} scriptName="my-script" visible />
     );
 
     await act(async () => {
@@ -166,7 +155,6 @@ describe("AdminScriptRunModal", () => {
   it("starts a dry run when Dry Run is pressed", async () => {
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => undefined}
         scriptName="my-script"
@@ -183,7 +171,6 @@ describe("AdminScriptRunModal", () => {
   it("starts a wet run when the Run button is pressed", async () => {
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => undefined}
         scriptName="my-script"
@@ -203,7 +190,6 @@ describe("AdminScriptRunModal", () => {
   it("hides the wet-run button when dryRunOnly is true", () => {
     const {getByTestId, queryByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         dryRunOnly
         onDismiss={() => undefined}
@@ -220,7 +206,6 @@ describe("AdminScriptRunModal", () => {
   it("renders the script description in the confirm phase", () => {
     const {getByText} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => undefined}
         scriptDescription="Migrates legacy records"
@@ -246,7 +231,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="my-script"
@@ -265,7 +249,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="zero-pct"
@@ -289,7 +272,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="done-script"
@@ -310,7 +292,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="fail-script"
@@ -329,7 +310,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="cancelled-script"
@@ -345,7 +325,6 @@ describe("AdminScriptRunModal", () => {
     state.task = {data: undefined, error: null, isLoading: false};
     const {getByTestId, queryByTestId, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="wet-script"
@@ -372,7 +351,6 @@ describe("AdminScriptRunModal", () => {
     };
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="wet-script"
@@ -390,7 +368,6 @@ describe("AdminScriptRunModal", () => {
     state.task = {data: undefined, error: null, isLoading: false};
     const {getByTestId, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -407,7 +384,6 @@ describe("AdminScriptRunModal", () => {
     };
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -441,7 +417,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {getByTestId, queryByTestId, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -450,7 +425,6 @@ describe("AdminScriptRunModal", () => {
     );
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -463,7 +437,6 @@ describe("AdminScriptRunModal", () => {
     // the previous run's results.
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -472,7 +445,6 @@ describe("AdminScriptRunModal", () => {
     );
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -487,13 +459,7 @@ describe("AdminScriptRunModal", () => {
 
   it("early-returns when scriptName is null", async () => {
     const {getByTestId} = renderWithTheme(
-      <AdminScriptRunModal
-        api={mockApi}
-        baseUrl="/admin"
-        onDismiss={() => {}}
-        scriptName={null}
-        visible={true}
-      />
+      <AdminScriptRunModal baseUrl="/admin" onDismiss={() => {}} scriptName={null} visible={true} />
     );
     await act(async () => {
       fireEvent.press(getByTestId("admin-script-dry-run-button"));
@@ -510,7 +476,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="cancel-me"
@@ -534,7 +499,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="cancel-fail"
@@ -555,7 +519,6 @@ describe("AdminScriptRunModal", () => {
     });
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="failing"
@@ -572,7 +535,6 @@ describe("AdminScriptRunModal", () => {
     });
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="title-only"
@@ -589,7 +551,6 @@ describe("AdminScriptRunModal", () => {
     });
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="no-payload"
@@ -613,7 +574,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {toJSON} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="long-results"
@@ -635,7 +595,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="pending"
@@ -667,7 +626,6 @@ describe("AdminScriptRunModal", () => {
     };
     const {getByText} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         historyTaskId="hist-99"
         onDismiss={() => {}}
@@ -684,7 +642,6 @@ describe("AdminScriptRunModal", () => {
     state.task = {data: undefined, error: null, isLoading: false};
     const {getByPlaceholderText, getByTestId, getByText, queryByText, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="filter-script"
@@ -705,7 +662,6 @@ describe("AdminScriptRunModal", () => {
     };
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="filter-script"
@@ -754,7 +710,6 @@ describe("AdminScriptRunModal", () => {
 
     const {getByTestId, getByText, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="export-script"
@@ -775,7 +730,6 @@ describe("AdminScriptRunModal", () => {
     };
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="export-script"
@@ -806,7 +760,6 @@ describe("AdminScriptRunModal", () => {
     state.task = {data: undefined, error: null, isLoading: false};
     const {getByTestId, getByText, rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -823,7 +776,6 @@ describe("AdminScriptRunModal", () => {
     };
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="migrate"
@@ -844,7 +796,6 @@ describe("AdminScriptRunModal", () => {
   it("renders without error when visible flips from true→false (reset cycle)", async () => {
     const {rerender} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="reset-cycle"
@@ -854,7 +805,6 @@ describe("AdminScriptRunModal", () => {
     await waitTicks();
     rerender(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         onDismiss={() => {}}
         scriptName="reset-cycle"
@@ -898,7 +848,6 @@ describe("AdminScriptRunModal", () => {
 
     const {getByTestId, getByText} = renderWithTheme(
       <AdminScriptRunModal
-        api={mockApi}
         baseUrl="/admin"
         historyTaskId="history-1"
         onDismiss={() => undefined}

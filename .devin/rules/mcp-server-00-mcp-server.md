@@ -8,11 +8,17 @@ Model Context Protocol (MCP) server that provides tools, prompts, and resources 
 ## Commands
 
 ```bash
-bun run build            # Build the server
+bun run compile          # Type-check only (tsc) — no doc bundling; used by the monorepo build
+bun run build            # Full shippable artifact: sync docs + tsc + copy docs into dist/
 bun run dev              # Development mode
-bun run start            # Start the server
+bun run start            # Start the server (needs dist/docs — run `bun run build` first)
 bun run lint             # Lint code
 ```
+
+> `compile` is type-check only so the monorepo `bun run compile` stays fast and free of the
+> `sync-versioned-docs` filesystem race under concurrent builds. `prepublishOnly` runs
+> `bun run build` on every `npm publish` (GitHub Actions and CircleCI alike), so the
+> published `@terreno/mcp` always bundles `dist/docs` (versioned + guidelines + ui-types).
 
 ## Architecture
 
@@ -36,9 +42,21 @@ src/
 | `terreno_generate_screen` | Creates React Native screens (list, detail, form, empty types) |
 | `terreno_generate_form_fields` | Generates form field components with validation |
 | `terreno_validate_model_schema` | Validates schemas against Terreno conventions |
+| `terreno_validate_ui_blocks` | Validates a whole-reply block document; same report as `terreno-blocks validate` |
 | `terreno_install_admin` | Generates admin panel integration files and instructions |
 
 Each tool returns generated code wrapped with file path instructions and additional setup steps.
+
+The local stdio server also exposes runtime diagnostics. For SyncDB use:
+
+| Tool | Description |
+|------|-------------|
+| `get_syncdb_state` | Read entities, outbox, conflicts, cursors, streams, repair markers, status, and debug events |
+| `syncdb_snapshot` | Capture, list, read, compare, and delete in-memory snapshots |
+| `syncdb_action` | Mutate or directly edit local state, flush, reconcile/resync, resolve/retry, toggle offline, clear events, and merge snapshots |
+
+SyncDB state changes require `TERRENO_MCP_EVAL=1`. Read and snapshot operations
+remain available without that opt-in. Follow `docs/how-to/debug-with-mcp.md`.
 
 ## Available Prompts
 
@@ -60,7 +78,7 @@ Prompts provide detailed requirements, example code patterns, and step-by-step s
 - Terreno overview documentation
 - @terreno/api documentation
 - @terreno/ui documentation
-- @terreno/rtk documentation
+- @terreno/syncdb documentation
 - Patterns and best practices
 
 Resources are loaded from markdown files with dynamic path resolution.

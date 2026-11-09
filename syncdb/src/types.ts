@@ -89,6 +89,13 @@ export interface SyncAck {
 
 export type SyncNackCode = "conflict" | "unauthorized" | "validation" | "error" | "rate_limited";
 
+/**
+ * Why a `validation` nack rejected a mutation, when the cause is the entity id itself.
+ * `id_collision`: a create named an `_id` that already exists. `invalid_id`: the id is not a
+ * 24-character hex ObjectId for an ObjectId-keyed collection.
+ */
+export type SyncNackReason = "id_collision" | "invalid_id";
+
 /** Rejected mutation. Conflict nacks carry the canonical server document. */
 export interface SyncNack {
   mutationId: string;
@@ -106,6 +113,8 @@ export interface SyncNack {
    */
   serverDeleted?: boolean;
   message?: string;
+  /** Set on `validation` nacks caused by the entity id (see {@link SyncNackReason}). */
+  reason?: SyncNackReason;
   /**
    * Minimum time (ms) the client should wait before retrying, filled by the
    * server with the remaining rate-limit window (`rate_limited` nacks only).
@@ -177,6 +186,29 @@ export interface SyncSnapshotResponse {
    * verbatim until absent (stratum exhausted), then paging proceeds by seq.
    */
   legacyCursor?: string;
+}
+
+/** Body of `POST /sync/snapshot/batch`: one page request per stream. */
+export interface SyncSnapshotBatchRequest {
+  streams: {stream: string; cursor: number; legacyCursor?: string}[];
+  /** Entity budget for the whole response, shared across `streams`; server default when omitted. */
+  limit?: number;
+}
+
+/** Response of `POST /sync/snapshot/batch`: one page per requested stream. */
+export interface SyncSnapshotBatchResponse {
+  pages: SyncSnapshotResponse[];
+}
+
+/** Response shape of a `modelRouter` list endpoint (`GET /{collection}`), used by query windows. */
+export interface ListResponse {
+  data: unknown[];
+  /** True when more pages exist past this one. */
+  more?: boolean;
+  /** Total matching documents across all pages. */
+  total?: number;
+  /** The page size the server applied (lower than requested when `maxLimit` clamped it). */
+  limit?: number;
 }
 
 /** One stream a user currently belongs to, from `GET /sync/streams`. */

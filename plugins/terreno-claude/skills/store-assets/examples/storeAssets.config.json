@@ -1,0 +1,44 @@
+{
+  "api": {
+    "port": 4000,
+    "probe": {"method": "POST", "path": "/auth/login", "body": "{}"},
+    "startCommand": "cd backend && bun run dev"
+  },
+  "homeScreenTestId": "home-screen",
+  "devClientProfiles": {"ios": "development:simulator", "android": "development"},
+  "brand": {
+    "surface": "<primary color token, e.g. #RRGGBB>",
+    "onSurface": "<text color on primary, e.g. #FFFFFF>",
+    "capsuleBackground": "<light neutral token>",
+    "capsuleText": "<dark text token>",
+    "border": "<default border token>",
+    "headingFont": "<brand heading font family>",
+    "bodyFont": "<brand body font family>",
+    "googleFontsQuery": "family=<Heading+Font>:wght@700;900&family=<Body+Font>:wght@400;700",
+    "logoSvg": "<appDir>/assets/images/<logo>.svg",
+    "logoRecolor": {"<logo color>": "<onSurface>", "<logo cutout color>": "<surface>"},
+    "logoHeight": 30,
+    "iconSvg": "<appDir>/assets/images/<logo or mark>.svg",
+    "iconPathCount": 4,
+    "iconViewBox": "0 0 64 64",
+    "iconRecolor": ["<mark color>"],
+    "bannerDecorations": [
+      {"src": "<optional decorative image>.png", "style": "width:72px;right:24px;top:20px"}
+    ]
+  },
+  "apps": {
+    "<appKey>": {
+      "appDir": "<appDir>",
+      "metroPort": 8081,
+      "devices": ["iphone", "ipad", "android"],
+      "account": {"email": "<seeded test user email>", "password": "<seeded test password>"},
+      "preferredIosSimulator": "iPhone 17",
+      "banner": {
+        "headline": "<short benefit-led headline>",
+        "body": "<one sentence on what the app does>",
+        "capsules": ["<Feature>", "<Feature>", "<Feature>"],
+        "screenshots": ["01-home.png", "02-<second screen>.png"]
+      }
+    }
+  }
+}

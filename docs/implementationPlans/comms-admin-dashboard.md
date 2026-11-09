@@ -1,7 +1,7 @@
 # Implementation Plan: Comms admin dashboard (errors, retries, log digging)
 
-**Status:** Approved
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1091
+**Status:** Complete
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1091
 **Priority:** High
 **Effort:** Medium batch
 **Owner:** unassigned
@@ -25,8 +25,9 @@ uses (`addAiRequestsExplorerRoutes`) but with mutation (retry) and much richer f
 
 - Building the messages themselves (comms-abstraction) or provider integrations (adapter
   IPs).
-- Charts beyond simple count cards — themed chart components arrive with
-  `charts-and-dashboards`; the stats endpoint is designed so charts can be added then.
+- Charts beyond simple count cards — themed chart components are in
+  [`charts-and-dashboards.md`](charts-and-dashboards.md); the stats endpoint is designed so
+  those primitives can be added later.
 - Broadcast/bulk *composition* from admin (sending new messages, campaign tooling).
 - User-facing notification history (`notification-center` item).
 - Cross-service log aggregation (Sentry/Cloud Logging stay the deep-debug tools; the
@@ -145,7 +146,7 @@ Every retry is itself a `CommsMessage` row (with `retriedFromId` and the acting 
 
 - Failure-rate alerting (Slack/Google Chat notifier when a provider's failure rate spikes)
   — small follow-up once `/comms/stats` exists.
-- Charts on the stats endpoint (`charts-and-dashboards`).
+- Charts on the stats endpoint — consume [`charts-and-dashboards`](charts-and-dashboards.md) primitives.
 - Editing a message before retry ("retry with edits").
 - Automatic scheduled retries with backoff — arrives with `job-queues`; this IP is
   explicitly *manual, admin-driven* retry.

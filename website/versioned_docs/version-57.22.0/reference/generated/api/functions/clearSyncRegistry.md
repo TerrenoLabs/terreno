@@ -1,0 +1,5 @@
+> **clearSyncRegistry**(): `void`
+
+## Returns
+
+`void`

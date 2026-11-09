@@ -3,11 +3,10 @@ import type {AdminScreenWidgetProps, ScreenWidgetComponent} from "../types";
 import {JobsDashboardScreen} from "./JobsDashboardScreen";
 import {useJobsDashboardUrlFilters} from "./useJobsDashboardUrlFilters";
 
-export const JobsDashboardScreenWidget: React.FC<AdminScreenWidgetProps> = ({api, routeBase}) => {
+export const JobsDashboardScreenWidget: React.FC<AdminScreenWidgetProps> = ({routeBase}) => {
   const {filters, onFiltersChange} = useJobsDashboardUrlFilters(routeBase);
   return (
     <JobsDashboardScreen
-      api={api}
       filters={filters}
       onFiltersChange={onFiltersChange}
       routeBase={routeBase}

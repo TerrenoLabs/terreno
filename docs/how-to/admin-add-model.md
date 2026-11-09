@@ -49,4 +49,7 @@ Common fields:
   sentinel is consumed before Mongo receives the query.
 - `fieldsets`: grouped form sections.
 - `readonlyFields` / `hiddenFields`: display-only or omitted form fields.
-- `adminPermissions`: optional admin-specific permission methods.
+- `adminPermissions`: optional per-action (`list`, `read`, `create`, `update`, `delete`)
+  permission methods. They run in addition to the admin check (`admin:access` plus the model's
+  RBAC action, or `IsAdmin`), so they can only restrict access. An empty array disables that
+  action, including `list` and `read`.

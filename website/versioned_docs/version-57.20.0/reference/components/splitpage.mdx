@@ -1,0 +1,53 @@
+---
+title: "SplitPage"
+description: "Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane. On web, opt in to a minimum column width, a labeled narrow pager, or a custom shrink width."
+sidebar_label: "SplitPage"
+slug: /reference/components/splitpage
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# SplitPage
+
+Master-detail layout. On large screens the list and detail sit side by side. On small screens, selecting a list item replaces the list with the detail pane. On web, opt in to a minimum column width, a labeled narrow pager, or a custom shrink width.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `SplitPageProps`  
+**Story source:** [`demo/stories/SplitPage.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/SplitPage.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="SplitPage" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `listViewData` | `array` | Yes |  |
+| `renderListViewItem` | `reflection` | Yes |  |
+| `bottomNavBarHeight` | `number` |  |  |
+| `childColumnRounding` | `Rounding` |  | Web only. The native SplitPage ignores this prop. Border radius applied to each desktop detail child pane. The list column is excluded. The pane clips to this radius; the column ScrollView inside it does not, so the column still scrolls. Uses the same rounding scale as  |
+| `children` | `union` |  | can accept either one React Child or any array of ReactChild. If this is not provided, renderContent must return one or many ReactChild. |
+| `color` | `keyof SurfaceTheme` |  |  |
+| `desktopChildrenMinWidth` | `number` |  | Web only. The native SplitPage ignores this prop. Minimum width, in pixels, of each child in the desktop side-by-side layout. Applies only when the viewport is not narrow and there are 1 or 2 non-null children. When omitted, that layout stays a flex row. When there are more than 2 children, the segmented-control layout is used and this prop is ignored. |
+| `keyboardOffset` | `number` |  |  |
+| `listViewExtraData` | `unknown` |  |  |
+| `listViewMaxWidth` | `number` |  |  |
+| `listViewWidth` | `number` |  |  |
+| `loading` | `boolean` |  | When true, renders  |
+| `loadingAnimation` | `SkeletonAnimation` |  | Animation for skeletons inside  |
+| `loadingComponent` | `ReactNode` |  | Placeholder rendered while  |
+| `loadingLabel` | `string` |  | Screen reader label announced while loading. |
+| `narrowBelowWidth` | `number` |  | Web only. The native SplitPage ignores this prop. Use the narrow layout when the window width is less than or equal to this many pixels. When omitted, the narrow layout follows  |
+| `narrowViewportChildLabels` | `array` |  | Web only. The native SplitPage ignores this prop. Opt-in labels for the narrow-viewport full-width pager, one per non-null child, in child order. The pager is active only when the narrow layout is active, a detail view is active, there is more than one non-null child, and this array's length equals that child count. Otherwise the dotted swiper is used. A length mismatch is ignored and falls back to the dotted swiper. |
+| `narrowViewportListButtonLabel` | `string` |  | Web only. The native SplitPage ignores this prop. When set on the opt-in narrow pager, show a return-to-list button that clears the internal selection and calls onSelectionChange with undefined. When omitted, that button is not rendered. |
+| `narrowViewportSelectionActive` | `boolean` |  | Web only. The native SplitPage ignores this prop. When true, the narrow detail view is active even if the internal list selection is unset. Detail is active when the internal selection is set or this flag is true. Showing the list clears only the internal selection. The parent turns this flag off. |
+| `narrowViewportSelectionKey` | `string` |  | Web only. The native SplitPage ignores this prop. Identity of the record the parent selected. When this string changes, the narrow pager resets to the first child. Width and layout measurement changes do not reset it. |
+| `onSelectionChange` | `reflection` |  |  |
+| `renderChild` | `reflection` |  |  |
+| `renderContent` | `reflection` |  |  |
+| `renderListViewHeader` | `reflection` |  |  |
+| `selectLimit` | `number` |  |  |
+| `showItemList` | `boolean` |  |  |
+| `tabs` | `array` |  | The names of the tabs that will be generated per ReactChild provided. Tabs will not be generated if renderContent is provided in place of children |

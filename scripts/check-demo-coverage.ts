@@ -165,7 +165,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "AnnouncementNavigator",
     reason:
-      "Requires a consumer RTK Query `api` and pending queue; exercise in example-frontend, not the isolated UI demo",
+      "Requires a consumer request `client` and pending queue; exercise in example-frontend, not the isolated UI demo",
   },
   {
     name: "AnnouncementScreen",
@@ -174,12 +174,13 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {
     name: "BarsFilterIcon",
-    reason: "SVG used inside Filter; the Icon and Filter stories already show the glyph",
+    reason:
+      "SVG used inside DropdownPanel; the Icon and DropdownPanel stories already show the glyph",
   },
   {
     name: "ConsentNavigator",
     reason:
-      "Requires a consumer RTK Query `api` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
+      "Requires a consumer request `client` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
   },
   {
     name: "DateTimeActionSheet",
@@ -187,19 +188,19 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {
     name: "FilterAccordion",
-    reason: "Filter story already mounts accordion sections",
+    reason: "DropdownPanel story already mounts accordion sections",
   },
   {
     name: "FilterBoolean",
-    reason: "Filter story already mounts boolean filter rows",
+    reason: "DropdownPanel story already mounts boolean filter rows",
   },
   {
     name: "FilterChangesBadge",
-    reason: "Filter story already shows the applied-filter count badge",
+    reason: "DropdownPanel story already shows the applied-filter count badge",
   },
   {
     name: "FilterSelectMenu",
-    reason: "Filter story already mounts select menus",
+    reason: "DropdownPanel story already mounts select menus",
   },
   {
     name: "FlatList",
@@ -211,6 +212,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {name: "Host", reason: "Portal host is application shell, not a visual story"},
   {name: "IconRegistryProvider", reason: "Icon registry is application shell"},
+  {name: "ListDetailIndex", reason: "Covered by the ListDetailLayout story"},
   {
     name: "NotificationBell",
     reason:
@@ -229,10 +231,23 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {name: "Portal", reason: "Portal is a host primitive, not a visual story"},
   {name: "PortalContext", reason: "React context object, not a visual component"},
   {
+    name: "ProvisionalConsentSigner",
+    reason:
+      "Requires a consumer RTK Query `api` and a ConsentApp backend; example-frontend /consent-sign/[userId] exercises it",
+  },
+  {
     name: "ScrollView",
     reason: "Thin React Native ScrollView re-export, not a Terreno visual component",
   },
   {name: "SidebarNavigationPanel", reason: "Covered by the Sidebar navigation stories"},
+  {name: "SkeletonCard", reason: "Skeleton story Shapes and Animations sections render it"},
+  {name: "SkeletonCircle", reason: "Skeleton story Shapes section renders it"},
+  {
+    name: "SkeletonGroup",
+    reason: "Loading containers wrap loadingComponent in it; the Skeleton loading stories run it",
+  },
+  {name: "SkeletonList", reason: "Skeleton story Shapes section and Box loading story render it"},
+  {name: "SkeletonText", reason: "Skeleton story Shapes section renders it"},
   {name: "TableContextProvider", reason: "Table stories already wrap table context"},
   {name: "TableHeader", reason: "Table story already renders header rows"},
   {name: "TableHeaderCell", reason: "Table story already renders header cells"},

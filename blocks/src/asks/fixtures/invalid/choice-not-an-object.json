@@ -1,0 +1,5 @@
+{
+  "kind": "choice",
+  "input": "Pick one: red or blue",
+  "errors": [{"path": "", "code": "INVALID_TYPE"}]
+}

@@ -1,7 +1,7 @@
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {DateTime} from "luxon";
 import React, {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {Pressable, TextInput, View} from "react-native";
+import {Pressable, TextInput, type TextInputInstance, View} from "react-native";
 
 import type {ActionSheet} from "./ActionSheet";
 import {Box} from "./Box";
@@ -11,12 +11,19 @@ import {FieldError} from "./fieldElements/FieldError";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
 import {FieldTitle} from "./fieldElements/FieldTitle";
 import {IconButton} from "./IconButton";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {SelectField} from "./SelectField";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {TimezonePicker} from "./TimezonePicker";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
+
+/** The state each segment index edits, per field type. */
+const SEGMENT_NAMES = {
+  date: ["month", "day", "year"],
+  datetime: ["month", "day", "year", "hour", "minute"],
+  time: ["hour", "minute"],
+} as const;
 
 interface SeparatorProps {
   type: "date" | "time";
@@ -40,7 +47,7 @@ interface DateTimeSegmentProps {
   getFieldValue: (index: number) => string;
   handleFieldChange: (index: number, text: string, config: FieldConfig) => void;
   onBlur: (override?: {amPm?: "am" | "pm"; timezone?: string}) => void;
-  onRef: (ref: TextInput | null, index: number) => void;
+  onRef: (ref: TextInputInstance | null, index: number) => void;
   index: number;
   error?: string;
 }
@@ -67,7 +74,7 @@ const DateTimeSegment: FC<DateTimeSegmentProps> = ({
       style={{
         alignItems: "center",
         backgroundColor: "transparent",
-        borderColor: error ? theme.border.error : "transparent",
+        borderColor: error ? theme.field.borderError : "transparent",
         flexDirection: "row",
         flexShrink: 1,
         height: 40,
@@ -230,7 +237,7 @@ const MobileTimeDisplay: FC<MobileTimeDisplayProps> = ({
         paddingVertical: showBorder ? 8 : 4,
         ...(showBorder
           ? {
-              backgroundColor: disabled ? theme.surface.disabled : theme.surface.base,
+              backgroundColor: disabled ? theme.surface.disabled : theme.field.background,
               borderColor,
               borderRadius: 4,
               borderWidth: 1,
@@ -418,6 +425,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   title,
   value,
   onChange,
+  onEntryStatusChange,
   timezone: providedTimezone,
   onTimezoneChange,
   errorText,
@@ -436,25 +444,39 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   const [year, setYear] = useState("");
   const [hour, setHour] = useState("");
   const [minute, setMinute] = useState("");
+  // Whether the minute's "00" came from the user clearing the segment rather than from a value.
+  const isMinuteClearedRef = useRef(false);
+  // The last value this field emitted, so a controlled parent passing it back is not taken as
+  // an external change.
+  const lastEmittedRef = useRef<string | undefined>(undefined);
+  const emitChange = useCallback(
+    (next: string): void => {
+      lastEmittedRef.current = next;
+      onChange(next);
+    },
+    [onChange]
+  );
   const [fieldErrors, setFieldErrors] = useState<Record<number, string | undefined>>({});
   const [localTimezone, setLocalTimezone] = useState(
     providedTimezone ?? DateTime.local().zoneName ?? "UTC"
   );
 
-  const breakpoint = 395; // Breakpoint for switching to action sheet
+  // Parent width, in pt, below which inline controls do not fit. This is the field's own
+  // minimum, not a viewport breakpoint.
+  const inlineControlsMinWidth = 395;
   let minimumWidth = 230; // Minimum width for the field container
   if (type === "date") {
     minimumWidth = 200;
   }
 
-  let maximumWidth = breakpoint; // Maximum width for the field container
+  let maximumWidth = inlineControlsMinWidth; // Maximum width for the field container
   if (["date", "time"].includes(type)) {
     maximumWidth = minimumWidth + 10;
   }
 
   const [parentWidth, setParentWidth] = useState<number | null>(null);
   const parentIsLessThanBreakpointOrIsMobile =
-    (parentWidth !== null && parentWidth < breakpoint) || isMobileDevice();
+    (parentWidth !== null && parentWidth < inlineControlsMinWidth) || isNarrowViewport();
 
   // We need to store the pending value in a ref because the state changes don't trigger
   // immediately, so onBlur may use stale values.
@@ -473,13 +495,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
   // Use provided timezone if available, otherwise use local
   const timezone = providedTimezone ?? localTimezone;
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
-  let borderColor = theme.border.dark;
+  let borderColor = theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (errorText || Object.values(fieldErrors).some((error) => error !== undefined)) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
 
   /** Builds the ordered array of {@link FieldConfig} for each input segment based on the field type. */
@@ -574,10 +596,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const hourVal = override?.hour ?? hour;
       let date: DateTime;
       if (type === "datetime") {
-        if (!monthVal || !dayVal || !yearVal || !hour || !minuteVal) {
+        if (!monthVal || !dayVal || !yearVal || !hourVal || !minuteVal) {
           return undefined;
         }
         let hourNum = parseInt(hourVal, 10);
+        if (Number.isNaN(hourNum)) {
+          return undefined;
+        }
         if (ampPmVal === "pm" && hourNum !== 12) {
           hourNum += 12;
         } else if (ampPmVal === "am" && hourNum === 12) {
@@ -616,10 +641,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           }
         );
       } else {
-        if (!hour || !minuteVal) {
+        if (!hourVal || !minuteVal) {
           return undefined;
         }
-        let hourNum = parseInt(hour, 10);
+        let hourNum = parseInt(hourVal, 10);
+        if (Number.isNaN(hourNum)) {
+          return undefined;
+        }
         if (ampPmVal === "pm" && hourNum !== 12) {
           hourNum += 12;
         } else if (ampPmVal === "am" && hourNum === 12) {
@@ -648,6 +676,37 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
   );
 
   /**
+   * Tells `onEntryStatusChange` what the segments hold after a typed change: nothing, an entry
+   * that is unfinished or has a segment error, or a complete value. Clearing the minute segment
+   * resets it to "00", so a "00" minute counts as empty only when the user cleared it; the "00"
+   * of an on-the-hour value is still part of the entry.
+   */
+  const reportEntryStatus = useCallback(
+    (
+      override: {day?: string; hour?: string; minute?: string; month?: string; year?: string},
+      errors: Record<number, string | undefined>
+    ): void => {
+      if (!onEntryStatusChange) {
+        return;
+      }
+      const next = {day, hour, minute, month, year, ...override};
+      const dateParts = type === "time" ? [] : [next.month, next.day, next.year];
+      const timeParts = type === "date" ? [] : [next.hour];
+      const hasMinute =
+        type !== "date" &&
+        next.minute !== "" &&
+        !(next.minute === "00" && isMinuteClearedRef.current);
+      if (![...dateParts, ...timeParts].some(Boolean) && !hasMinute) {
+        onEntryStatusChange("empty");
+        return;
+      }
+      const hasError = Object.values(errors).some((error) => error !== undefined);
+      onEntryStatusChange(!hasError && getISOFromFields(override) ? "valid" : "invalid");
+    },
+    [onEntryStatusChange, day, hour, minute, month, year, type, getISOFromFields]
+  );
+
+  /**
    * Handles text changes in any {@link DateTimeSegment} input.
    * Strips non-numeric characters, validates the value, updates local state,
    * and emits the ISO value via onChange when all required fields are complete.
@@ -665,14 +724,21 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         // This lets users freely edit or clear the minute field without breaking the time format.
         const finalValue = numericValue === "" ? "00" : numericValue.slice(-2);
         const minuteNum = parseInt(finalValue, 10);
+        isMinuteClearedRef.current = numericValue === "";
 
         // Update the minute state so the UI reflects the latest input,
         // even if it's temporarily invalid
         // This allows the user to freely edit or clear the field.
         setMinute(finalValue);
 
+        const isValidMinute = !Number.isNaN(minuteNum) && minuteNum >= 0 && minuteNum <= 59;
+        reportEntryStatus(
+          {minute: finalValue},
+          {...fieldErrors, [index]: isValidMinute ? undefined : "Minute must be between 0 and 59"}
+        );
+
         // Only update ref and result if it's a valid minute value
-        if (!Number.isNaN(minuteNum) && minuteNum >= 0 && minuteNum <= 59) {
+        if (isValidMinute) {
           pendingValueRef.current = {minute: finalValue};
           setFieldErrors((prev) => ({...prev, [index]: undefined}));
 
@@ -681,7 +747,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           if (result) {
             const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
             if (result !== currentValueUTC) {
-              onChange(result);
+              emitChange(result);
             }
           }
         } else {
@@ -700,6 +766,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
       const error = validateField(index, finalValue);
       setFieldErrors((prev) => ({...prev, [index]: error}));
+      const segmentName = SEGMENT_NAMES[type][index];
+      if (segmentName) {
+        reportEntryStatus({[segmentName]: finalValue}, {...fieldErrors, [index]: error});
+      }
 
       if (type === "date" || type === "datetime") {
         if (index === 0) {
@@ -744,7 +814,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           if (result) {
             const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
             if (result !== currentValueUTC) {
-              onChange(result);
+              emitChange(result);
             }
           }
         }
@@ -756,7 +826,19 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         inputRefs.current[index + 1]?.focus();
       }
     },
-    [type, getFieldConfigs, getISOFromFields, onChange, value, validateField, month, day, year]
+    [
+      type,
+      getFieldConfigs,
+      getISOFromFields,
+      emitChange,
+      value,
+      validateField,
+      month,
+      day,
+      year,
+      fieldErrors,
+      reportEntryStatus,
+    ]
   );
 
   /**
@@ -768,7 +850,8 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     (inputDate: string) => {
       // Handle clear case - empty string should clear the field
       if (!inputDate || inputDate === "") {
-        onChange("");
+        emitChange("");
+        onEntryStatusChange?.("empty");
         setShowDate(false);
         return;
       }
@@ -794,6 +877,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         hourNum = hourNum === 0 ? 12 : hourNum;
         setHour(hourNum.toString().padStart(2, "0"));
         setMinute(parsedDate.minute.toString().padStart(2, "0"));
+        isMinuteClearedRef.current = false;
       }
 
       // Normalize emitted value to ISO (UTC for date-only)
@@ -804,10 +888,11 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
               .set({millisecond: 0, second: 0})
               .toISO()
           : parsedDate.set({millisecond: 0, second: 0}).toUTC().toISO();
-      onChange(normalized ?? "");
+      emitChange(normalized ?? "");
+      onEntryStatusChange?.("valid");
       setShowDate(false);
     },
-    [onChange, type]
+    [emitChange, onEntryStatusChange, type]
   );
 
   /**
@@ -820,13 +905,14 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       // Compare in UTC to avoid timezone issues
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
+      reportEntryStatus({...pendingValueRef.current}, fieldErrors);
 
       // Clear the pending value after processing
       pendingValueRef.current = undefined;
     },
-    [getISOFromFields, onChange, value]
+    [getISOFromFields, emitChange, value, reportEntryStatus, fieldErrors]
   );
 
   // Handle external value changes
@@ -865,6 +951,12 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       hourNum = hourNum === 0 ? 12 : hourNum;
       setHour(hourNum.toString().padStart(2, "0"));
       setMinute(parsedDate.minute.toString().padStart(2, "0"));
+      const lastEmitted = lastEmittedRef.current
+        ? DateTime.fromISO(lastEmittedRef.current)
+        : undefined;
+      if (!lastEmitted?.isValid || lastEmitted.toMillis() !== parsedDate.toMillis()) {
+        isMinuteClearedRef.current = false;
+      }
     }
   }, [value, type, timezone]);
 
@@ -901,10 +993,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     getFieldValue,
     handleFieldChange,
     onBlur,
-    onRef: (el: TextInput | null, i: number) => (inputRefs.current[i] = el),
+    onRef: (el: TextInputInstance | null, i: number) => (inputRefs.current[i] = el),
   };
 
-  const isMobile = isMobileDevice();
+  const isMobile = isNarrowViewport();
   const isMobileTimeOnly = isMobile && type === "time";
   const isMobileDatetime = isMobile && type === "datetime";
   const showDateSection = type === "date" || type === "datetime";
@@ -936,10 +1028,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const iso = getISOFromFields({amPm: newAmPm});
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
     },
-    [getISOFromFields, value, onChange]
+    [getISOFromFields, value, emitChange]
   );
 
   /** Handles timezone changes from the TimezonePicker, recomputes and emits the ISO value. */
@@ -953,10 +1045,10 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
       const iso = getISOFromFields({timezone: tz});
       const currentValueUTC = value ? DateTime.fromISO(value).toUTC().toISO() : undefined;
       if (iso && iso !== currentValueUTC) {
-        onChange(iso);
+        emitChange(iso);
       }
     },
-    [getISOFromFields, value, onChange, onTimezoneChange]
+    [getISOFromFields, value, emitChange, onTimezoneChange]
   );
 
   const openActionSheet = useCallback((): void => {
@@ -990,7 +1082,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           onPress={openActionSheet}
           style={{
             alignItems: parentIsLessThanBreakpointOrIsMobile ? "stretch" : "center",
-            backgroundColor: theme.surface.base,
+            backgroundColor: theme.field.background,
             borderColor,
             borderRadius: 4,
             borderWidth: 1,

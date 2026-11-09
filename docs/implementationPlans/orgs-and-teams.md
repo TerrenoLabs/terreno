@@ -2,7 +2,7 @@
 
 **Status:** Superseded — 2026-08-24
 **Superseded by:** [org-management-ui](org-management-ui.md) (backend primitive + RBAC + admin UI)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1024
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1024
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned

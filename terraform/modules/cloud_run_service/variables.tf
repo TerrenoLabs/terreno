@@ -78,6 +78,12 @@ variable "timeout_seconds" {
   default     = 300
 }
 
+variable "session_affinity" {
+  description = "Route each client to the same instance. Socket.IO needs this when more than one instance runs. Null leaves the Cloud Run default (off)."
+  type        = bool
+  default     = null
+}
+
 variable "allow_unauthenticated" {
   description = "If true, grants roles/run.invoker to allUsers AND sets invoker_iam_disabled on the service (matches the live Cloud Run behavior — IAM is bypassed, so the binding is informational but harmless). If false, IAM is enforced normally."
   type        = bool

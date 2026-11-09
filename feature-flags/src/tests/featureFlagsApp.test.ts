@@ -5,9 +5,16 @@ import {
   apiErrorMiddleware,
   apiUnauthorizedMiddleware,
   setupAuth,
+  TerrenoApp,
   type UserModel as UserModelType,
 } from "@terreno/api";
-import {authAsUser, getBaseServer, setupDb, UserModel} from "@terreno/api/testing";
+import {
+  authAsUser,
+  expectDocumentedResponse,
+  getBaseServer,
+  setupDb,
+  UserModel,
+} from "@terreno/api/testing";
 import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -230,7 +237,7 @@ describe("FeatureFlagsApp", () => {
       await unauth.get("/feature-flags/flagConfiguration").expect(401);
     });
 
-    it("returns OpenFeature-shaped entries for enabled flags and omits disabled and archived", async () => {
+    it("returns OpenFeature-shaped entries and resolves disabled boolean flags to off", async () => {
       await FeatureFlag.create({
         enabled: true,
         key: "bool-active",
@@ -281,7 +288,11 @@ describe("FeatureFlagsApp", () => {
       expect(data.profile?.disabled).toBe(false);
       expect(["compact", "detailed"].includes(data.profile?.defaultVariant ?? "")).toBe(true);
       expect(data.profile?.variants.compact).toBe("compact");
-      expect(data["disabled-one"]).toBeUndefined();
+      expect(data["disabled-one"]).toEqual({
+        defaultVariant: "off",
+        disabled: false,
+        variants: {off: false, on: true},
+      });
       expect(data["archived-one"]).toBeUndefined();
     });
 
@@ -299,6 +310,74 @@ describe("FeatureFlagsApp", () => {
       const res = await adminAgent.get("/feature-flags/flagConfiguration").expect(200);
       expect(res.body.data["resolved-bool"].defaultVariant).toBe("on");
       expect(res.body.data["resolved-bool"].variants.on).toBe(true);
+    });
+  });
+
+  describe("OpenAPI", () => {
+    it("documents GET /feature-flags/flagConfiguration as a map of flag definitions", async () => {
+      const terrenoApp = new TerrenoApp({
+        rateLimit: false,
+        skipListen: true,
+        userModel: UserModel as unknown as UserModelType,
+      })
+        .register(new FeatureFlagsApp())
+        .build();
+
+      const res = await supertest(terrenoApp).get("/openapi.json").expect(200);
+      const operation = res.body.paths["/feature-flags/flagConfiguration"]?.get;
+      expect(operation?.tags).toEqual(["feature-flags"]);
+      const schema = operation.responses["200"].content["application/json"].schema;
+      expect(schema.required).toEqual(["data"]);
+      const definition = schema.properties.data.additionalProperties;
+      expect(definition.required).toEqual(["defaultVariant", "disabled", "variants"]);
+      expect(definition.properties.disabled.type).toBe("boolean");
+      expect(definition.properties.variants.additionalProperties.oneOf).toEqual([
+        {type: "boolean"},
+        {type: "string"},
+      ]);
+
+      await FeatureFlag.create({
+        enabled: true,
+        key: "documented-flag",
+        name: "Documented",
+        rolloutPercentage: 100,
+        type: "boolean",
+      });
+      await FeatureFlag.create({
+        defaultVariant: "compact",
+        enabled: true,
+        key: "documented-variant",
+        name: "Documented variant",
+        rules: [],
+        type: "variant",
+        variants: [
+          {key: "compact", weight: 50},
+          {key: "detailed", weight: 50},
+        ],
+      });
+      await FeatureFlag.create({
+        enabled: false,
+        key: "documented-off",
+        name: "Documented off",
+        rolloutPercentage: 100,
+        type: "boolean",
+      });
+      const agent = await authAsUser(terrenoApp, "notAdmin");
+      const configRes = await agent.get("/feature-flags/flagConfiguration").expect(200);
+      expect(Object.keys(configRes.body.data).sort()).toEqual([
+        "documented-flag",
+        "documented-off",
+        "documented-variant",
+      ]);
+      expectDocumentedResponse({
+        method: "get",
+        path: "/feature-flags/flagConfiguration",
+        response: configRes,
+        spec: res.body,
+      });
+      expect(Object.keys(definition.properties)).toEqual(
+        expect.arrayContaining(Object.keys(configRes.body.data["documented-flag"]))
+      );
     });
   });
 

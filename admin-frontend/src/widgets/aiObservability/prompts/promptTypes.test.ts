@@ -1,0 +1,201 @@
+import {describe, expect, it} from "bun:test";
+import {
+  appendPromptReference,
+  filterPrompts,
+  folderCounts,
+  formatPlaygroundMetrics,
+  formatProduction,
+  judgeOutputSchemaFromDetail,
+  latestVersionFromDetail,
+  nextVersionFromDetail,
+  outgoingProductionCopy,
+  type PromptDetail,
+  type PromptListItem,
+  type PromptVersionDetail,
+  productionVersionFromDetail,
+  schemaSummary,
+  templateVariableKeys,
+  unwrapPromptDetail,
+  unwrapPromptList,
+  variableNamesFromVersion,
+} from "./promptTypes";
+
+const sample: PromptListItem[] = [
+  {
+    folder: "examples",
+    latestVersion: 2,
+    name: "summarize",
+    production: 1,
+    type: "chat",
+    usage7d: {calls: 4, costUsd: 0.0123},
+  },
+  {folder: "ops", latestVersion: 1, name: "triage", production: "—", type: "text"},
+];
+
+const version = (
+  partial: Partial<PromptVersionDetail> & {version: number}
+): PromptVersionDetail => ({
+  sensitive: false,
+  template: "Hello {{name}}",
+  type: "chat",
+  variables: [{key: "name", required: true}],
+  ...partial,
+});
+
+const detail: PromptDetail = {
+  description: "Summarize user text",
+  folder: "examples",
+  labels: [
+    {label: "latest", version: 2},
+    {label: "production", version: 1},
+  ],
+  name: "summarize",
+  relationships: {
+    experiments: {items: [], limit: 20, total: 0},
+    traces: {items: [], limit: 20, total: 0},
+  },
+  tags: ["ops"],
+  usedBy: {items: [], limit: 20, total: 0},
+  versions: [version({version: 1}), version({system: "Be brief", version: 2})],
+};
+
+describe("promptTypes helpers", () => {
+  it("unwraps list payloads whether or not they arrive in a {data} envelope", () => {
+    expect(unwrapPromptList(sample)).toEqual(sample);
+    expect(unwrapPromptList({data: sample})).toEqual(sample);
+    expect(unwrapPromptList(undefined)).toEqual([]);
+    expect(unwrapPromptList({data: {data: sample}})).toEqual(sample);
+  });
+
+  it("unwraps detail payloads", () => {
+    expect(unwrapPromptDetail(detail)?.name).toBe("summarize");
+    expect(unwrapPromptDetail({data: detail})?.name).toBe("summarize");
+    const legacy = unwrapPromptDetail({
+      ...detail,
+      usedBy: [{folder: "ops", name: "caller", versions: [1]}],
+    });
+    expect(legacy?.usedBy).toEqual({
+      items: [{folder: "ops", name: "caller", versions: [1]}],
+      limit: 20,
+      total: 1,
+    });
+  });
+
+  it("counts folders and filters by folder plus search", () => {
+    expect(folderCounts(sample)).toEqual([
+      {count: 1, folder: "examples"},
+      {count: 1, folder: "ops"},
+    ]);
+    expect(
+      filterPrompts({folder: "ops", prompts: sample, search: ""}).map((row) => row.name)
+    ).toEqual(["triage"]);
+    expect(
+      filterPrompts({folder: "", prompts: sample, search: "sum"}).map((row) => row.name)
+    ).toEqual(["summarize"]);
+  });
+
+  it("formats production as a version or em dash", () => {
+    expect(formatProduction(1)).toBe("v1");
+    expect(formatProduction("—")).toBe("—");
+  });
+
+  it("uses the production schema, or the latest version when production is unset", () => {
+    const unlabelled = {
+      ...detail,
+      labels: [],
+      versions: [
+        version({outputSchema: {old: {type: "string"}}, version: 1}),
+        version({outputSchema: {current: {type: "string"}}, version: 2}),
+      ],
+    };
+    expect(judgeOutputSchemaFromDetail(unlabelled)).toEqual({current: {type: "string"}});
+    const labelled = {
+      ...unlabelled,
+      labels: [{label: "production", version: 1}],
+    };
+    expect(judgeOutputSchemaFromDetail(labelled)).toEqual({old: {type: "string"}});
+  });
+
+  it("derives latest, next, and production versions from detail", () => {
+    expect(latestVersionFromDetail(detail)).toBe(2);
+    expect(nextVersionFromDetail(detail)).toBe(3);
+    expect(productionVersionFromDetail(detail)).toBe(1);
+    expect(outgoingProductionCopy({detail, selectedVersion: 2})).toContain(
+      "outgoing production version is v1"
+    );
+  });
+
+  it("appends a prompt reference on its own line", () => {
+    expect(appendPromptReference("", "base-rules")).toBe("{{> base-rules}}");
+    expect(appendPromptReference("Triage the form.", "base-rules")).toBe(
+      "Triage the form.\n{{> base-rules}}"
+    );
+    expect(appendPromptReference("Triage the form.\n", "base-rules")).toBe(
+      "Triage the form.\n{{> base-rules}}"
+    );
+  });
+
+  it("parses template variables and falls back when the version list is empty", () => {
+    expect(templateVariableKeys("Hi {{first}} and {{ last }} and {{first}}")).toEqual([
+      "first",
+      "last",
+    ]);
+    expect(
+      variableNamesFromVersion(version({template: "Hi {{topic}}", variables: [], version: 1}))
+    ).toEqual(["topic"]);
+  });
+
+  it("summarizes a JSON Schema output by its properties, not its keywords", () => {
+    const summary = schemaSummary(
+      version({
+        outputSchema: {
+          properties: {
+            confidence: {type: "number"},
+            faithful: {type: "boolean"},
+            notes: {description: "free text"},
+          },
+          required: ["faithful"],
+          type: "object",
+        },
+        version: 1,
+      })
+    );
+    expect(summary).toBe(
+      "Variables: name. Output: confidence (number), faithful (boolean), notes."
+    );
+    expect(schemaSummary(version({outputSchema: {summary: {type: "string"}}, version: 1}))).toBe(
+      "Variables: name. Output: summary."
+    );
+    // A field map with a field named "properties" stays a field map.
+    expect(
+      schemaSummary(
+        version({outputSchema: {properties: {type: "string"}, title: {type: "string"}}, version: 1})
+      )
+    ).toBe("Variables: name. Output: properties, title.");
+  });
+
+  it("summarizes schema and playground metrics", () => {
+    expect(
+      schemaSummary(version({outputSchema: {summary: {type: "string"}}, version: 1})).includes(
+        "summary"
+      )
+    ).toBe(true);
+    expect(
+      formatPlaygroundMetrics({
+        compiledMessages: [],
+        costUsd: 0.01,
+        latencyMs: 12,
+        output: "ok",
+        tokens: {totalTokens: 9},
+      })
+    ).toBe("12 ms · 9 tokens · $0.0100");
+    expect(
+      formatPlaygroundMetrics({
+        compiledMessages: [],
+        latencyMs: 4,
+        output: "ok",
+        tokens: {inputTokens: 2, outputTokens: 3},
+      })
+    ).toBe("4 ms · 2+3 tokens");
+  });
+});

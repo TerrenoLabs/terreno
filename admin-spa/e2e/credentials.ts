@@ -5,3 +5,11 @@
  */
 export const E2E_ADMIN_EMAIL = "admin-e2e@example.com";
 export const E2E_ADMIN_PASSWORD = "admin-e2e-password";
+
+/** A signed-in user who is not an admin: `/admin/config` answers 403 for this session. */
+export const E2E_MEMBER_EMAIL = "member-e2e@example.com";
+export const E2E_MEMBER_PASSWORD = "member-e2e-password";
+
+/** Session cookie the test server's mock better-auth sets for the admin (see serveTestApp). */
+export const E2E_ADMIN_SESSION_COOKIE = "admin_spa_e2e_session";
+export const E2E_ADMIN_SESSION_TOKEN = "admin-spa-e2e-session-token";

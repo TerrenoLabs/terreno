@@ -93,6 +93,9 @@ export const isDeletedPlugin = (schema: Schema<any, any, any, any>, defaultValue
   schema.pre("findOne", function () {
     applyDeleteFilter(this);
   });
+  schema.pre("countDocuments", function () {
+    applyDeleteFilter(this);
+  });
 };
 
 export const isDisabledPlugin = (

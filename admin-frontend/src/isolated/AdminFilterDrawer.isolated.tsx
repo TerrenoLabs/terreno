@@ -28,16 +28,17 @@ mock.module("../AdminRefField", () => ({
 
 import {AdminFilterDrawer} from "../AdminFilterDrawer";
 
+type OnApply = React.ComponentProps<typeof AdminFilterDrawer>["onApply"];
+
 describe("AdminFilterDrawer", () => {
   beforeEach(() => {
     mockWindowWidth = 1200;
   });
 
   it("renders desktop drawer with apply button and filter testIDs", async () => {
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     const {getByLabelText, getByTestId, getByText} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: undefined}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -68,10 +69,9 @@ describe("AdminFilterDrawer", () => {
   });
 
   it("enables apply after a draft change and clear-all applies empty filters", async () => {
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     const {getByTestId, rerender} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -93,7 +93,6 @@ describe("AdminFilterDrawer", () => {
 
     rerender(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean", label: "Active"}]}
@@ -110,10 +109,9 @@ describe("AdminFilterDrawer", () => {
   });
 
   it("renders every filter field kind and applies the edited draft", async () => {
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     const {UNSAFE_root, getByTestId} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true, status: "open"}}
         fields={{
           active: {required: false, type: "boolean"},
@@ -187,10 +185,9 @@ describe("AdminFilterDrawer", () => {
   });
 
   it("renders dateRange, choice, text, and ref filters", () => {
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     const {getByTestId, UNSAFE_root} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{owner: {ref: "User", required: false, type: "string"}}}
         filters={[
@@ -242,10 +239,9 @@ describe("AdminFilterDrawer", () => {
   });
 
   it("clears an individual boolean filter and collapses the desktop drawer", async () => {
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     const {getByLabelText, getByText, UNSAFE_root} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{active: true}}
         fields={{active: {required: false, type: "boolean"}}}
         filters={[{field: "active", kind: "boolean"}]}
@@ -273,7 +269,7 @@ describe("AdminFilterDrawer", () => {
 
   it("opens and dismisses the mobile filter sheet", async () => {
     mockWindowWidth = 320;
-    const onApply = mock(() => {});
+    const onApply = mock<OnApply>(() => {});
     Object.defineProperty(globalThis, "document", {
       configurable: true,
       value: {activeElement: null},
@@ -284,7 +280,6 @@ describe("AdminFilterDrawer", () => {
     });
     const {UNSAFE_root, getByTestId} = renderWithTheme(
       <AdminFilterDrawer
-        api={{} as never}
         appliedFilterState={{}}
         fields={{query: {required: false, type: "string"}}}
         filters={[{field: "query", kind: "text", label: "Query"}]}

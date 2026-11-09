@@ -80,12 +80,12 @@ const jobSchema: JobSchema = new mongoose.Schema<JobDocument, JobModel>(
     },
     retriedById: {
       description: "Follow-up job created by an admin retry action",
-      ref: "Job",
+      ref: "TerrenoJob",
       type: mongoose.Schema.Types.ObjectId,
     },
     retriedFromId: {
       description: "Original job row that this retry was created from",
-      ref: "Job",
+      ref: "TerrenoJob",
       type: mongoose.Schema.Types.ObjectId,
     },
     runAt: {
@@ -96,7 +96,7 @@ const jobSchema: JobSchema = new mongoose.Schema<JobDocument, JobModel>(
     },
     scheduleId: {
       description: "Recurring schedule that enqueued this job, when applicable",
-      ref: "JobSchedule",
+      ref: "TerrenoJobSchedule",
       type: mongoose.Schema.Types.ObjectId,
     },
     status: {
@@ -126,4 +126,4 @@ jobSchema.index(
 jobSchema.index({status: 1, runAt: 1});
 jobSchema.index({scheduleId: 1, status: 1});
 
-export const Job = mongoose.model<JobDocument, JobModel>("Job", jobSchema);
+export const Job = mongoose.model<JobDocument, JobModel>("TerrenoJob", jobSchema, "jobs");

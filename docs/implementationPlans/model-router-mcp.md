@@ -2,7 +2,7 @@
 
 **Status:** Complete (write path now uses unified mutation executors — see [unified-mutation-executors.md](unified-mutation-executors.md); list/read remain handlers)
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1092
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1092
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
 
 ## Overview
@@ -20,7 +20,7 @@ This makes every Terreno app instantly AI-native: any model becomes callable by 
 - Auth-agnostic: works with both JWT and Better Auth
 - Tool naming: `{prefix}_list`, `{prefix}_read`, `{prefix}_create`, `{prefix}_update`, `{prefix}_delete`
 - Populate is an option on the read tool, not a separate tool
-- Also exports `getMCPTools()` from `@terreno/ai` returning Vercel `ai` SDK `CoreTool` objects for direct in-process use
+- Also exports `getMCPTools()` from `@terreno/ai` returning Vercel AI SDK (`ai`) `CoreTool` objects for direct in-process use
 - Custom tools via `registerMCPTool` (example: `users_todo_statuses`)
 
 **Related work:** The `ai-multimodal-tools-mcp` branch has `MCPService` (MCP client) and `AIService` in `@terreno/ai` — that's the consumer of what this plan builds.
@@ -116,7 +116,7 @@ Generated from model name, field names/types, and `queryFields`. Example:
 
 ### CoreTool Export
 
-`getMCPTools()` exported from `@terreno/ai` returns all registered MCP tools as `Record<string, CoreTool>` for direct use with the Vercel `ai` SDK's `streamText()` / `generateText()`.
+`getMCPTools()` exported from `@terreno/ai` returns all registered MCP tools as `Record<string, CoreTool>` for direct use with the Vercel AI SDK's (`ai`) `streamText()` / `generateText()`.
 
 ## Notifications
 

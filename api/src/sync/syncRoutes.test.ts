@@ -95,7 +95,7 @@ interface SnapshotEntity {
   id: string;
   seq: number;
   deleted: boolean;
-  data: {name: string} | null;
+  data: {name?: string; title?: string} | null;
 }
 
 interface StreamInfo {
@@ -287,7 +287,7 @@ describe("sync routes", () => {
         .expect(200);
       expect(res.body.stream).toBe(ownerStream());
       expect(res.body.entities).toHaveLength(2);
-      expect(res.body.entities.map((e: SnapshotEntity) => e.data.name)).toEqual([
+      expect(res.body.entities.map((e: SnapshotEntity) => e.data?.name)).toEqual([
         "mine 1",
         "mine 2",
       ]);
@@ -349,7 +349,7 @@ describe("sync routes", () => {
       expect(page3.body.hasMore).toBe(false);
 
       const names = [...page1.body.entities, ...page2.body.entities, ...page3.body.entities].map(
-        (e: SnapshotEntity) => e.data.name
+        (e: SnapshotEntity) => e.data?.name
       );
       expect(names).toEqual(["item 1", "item 2", "item 3", "item 4", "item 5"]);
     });
@@ -388,7 +388,7 @@ describe("sync routes", () => {
       clearSyncRegistry();
       registerSync({
         config: {
-          responseHandler: (doc) => ({redactedName: `x-${(doc as RouteStuff).name}`}),
+          responseHandler: (doc) => ({redactedName: `x-${(doc as unknown as RouteStuff).name}`}),
           scope: {type: "owner"},
         },
         model: RouteStuffModel as unknown as Model<unknown>,
@@ -400,6 +400,114 @@ describe("sync routes", () => {
         .get(`/sync/snapshot?stream=${encodeURIComponent(ownerStream())}`)
         .expect(200);
       expect(res.body.entities[0].data).toEqual({redactedName: "x-secret"});
+    });
+  });
+
+  describe("POST /sync/snapshot/batch", () => {
+    const ownerStream = (): string => `routeStuff|owner:${notAdminId}`;
+    const tenantStream = "routeProjects|tenant:org1";
+
+    it("requires authentication", async () => {
+      await server
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: "routeStuff|owner:x"}]})
+        .expect(401);
+    });
+
+    it("returns one scoped page per stream, in request order", async () => {
+      await RouteStuffModel.create({name: "mine", ownerId: notAdminId});
+      await RouteStuffModel.create({name: "theirs", ownerId: "someoneElse"});
+      await RouteProjectModel.create({orgId: "org1", title: "visible"});
+      await RouteProjectModel.create({orgId: "org2", title: "hidden"});
+
+      const res = await agent
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: tenantStream}, {cursor: 0, stream: ownerStream()}]})
+        .expect(200);
+
+      expect(res.body.pages.map((page: {stream: string}) => page.stream)).toEqual([
+        tenantStream,
+        ownerStream(),
+      ]);
+      expect(res.body.pages[0].entities.map((e: SnapshotEntity) => e.data?.title)).toEqual([
+        "visible",
+      ]);
+      expect(res.body.pages[1].entities.map((e: SnapshotEntity) => e.data?.name)).toEqual(["mine"]);
+      expect(res.body.pages[1].hasMore).toBe(false);
+      expect(res.body.pages[1].cursor).toBe(res.body.pages[1].frontierSeq);
+    });
+
+    it("splits the entity budget across streams and resumes from each stream's cursor", async () => {
+      for (let i = 1; i <= 5; i++) {
+        await RouteStuffModel.create({name: `item ${i}`, ownerId: notAdminId});
+      }
+      await RouteProjectModel.create({orgId: "org1", title: "project"});
+
+      const first = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 4, streams: [{stream: ownerStream()}, {stream: tenantStream}]})
+        .expect(200);
+      const [ownerPage, tenantPage] = first.body.pages;
+      expect(ownerPage.entities).toHaveLength(2);
+      expect(ownerPage.hasMore).toBe(true);
+      expect(tenantPage.entities).toHaveLength(1);
+      expect(tenantPage.hasMore).toBe(false);
+
+      const second = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 4, streams: [{cursor: ownerPage.cursor, stream: ownerStream()}]})
+        .expect(200);
+      expect(second.body.pages[0].entities.map((e: SnapshotEntity) => e.data?.name)).toEqual([
+        "item 3",
+        "item 4",
+        "item 5",
+      ]);
+      expect(second.body.pages[0].hasMore).toBe(false);
+    });
+
+    it("serves the same page as GET /sync/snapshot for the same stream and cursor", async () => {
+      for (let i = 1; i <= 3; i++) {
+        await RouteStuffModel.create({name: `item ${i}`, ownerId: notAdminId});
+      }
+      const single = await agent
+        .get(`/sync/snapshot?stream=${encodeURIComponent(ownerStream())}&limit=2&cursor=1`)
+        .expect(200);
+      const batch = await agent
+        .post("/sync/snapshot/batch")
+        .send({limit: 2, streams: [{cursor: 1, stream: ownerStream()}]})
+        .expect(200);
+      expect(batch.body.pages[0]).toEqual(single.body);
+    });
+
+    it("rejects the whole request when any stream is not the caller's", async () => {
+      await agent
+        .post("/sync/snapshot/batch")
+        .send({streams: [{stream: ownerStream()}, {stream: "routeStuff|owner:someoneElse"}]})
+        .expect(403);
+    });
+
+    it("rejects malformed bodies", async () => {
+      const tooMany = Array.from({length: 501}, (_unused, index) => ({
+        stream: `routeStuff|owner:u${index}`,
+      }));
+      const bodies: unknown[] = [
+        {},
+        {streams: []},
+        {streams: "routeStuff"},
+        {streams: tooMany},
+        {streams: [{cursor: 0}]},
+        {streams: [{stream: ownerStream()}, {stream: ownerStream()}]},
+        {streams: [{cursor: -1, stream: ownerStream()}]},
+        {streams: [{legacyCursor: 5, stream: ownerStream()}]},
+        {limit: "lots", streams: [{stream: ownerStream()}]},
+        {streams: [{stream: "notAStreamKey"}]},
+      ];
+      for (const body of bodies) {
+        await agent
+          .post("/sync/snapshot/batch")
+          .send(body as object)
+          .expect(400);
+      }
     });
   });
 
@@ -913,12 +1021,16 @@ describe("sync routes", () => {
   // Task 9.27(b): bad caller input on the repair-fetch endpoint used to come back as a 500
   // (CastError) or, worse, a truncated 200 the client read as "those entities are gone".
   describe("GET /sync/entities input validation (Task 9.27)", () => {
-    it("400s (not 500s) for ids that cannot be cast to the model's _id type", async () => {
+    it("returns ids that cannot be cast to the model's _id type as absent (not a 500)", async () => {
       const doc = await RouteStuffModel.create({name: "real", ownerId: notAdminId});
+      // A rejected client-minted UUID create is queued for repair under that id; it must not
+      // fail the rest of the repair batch.
       const res = await agent
-        .get(`/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id`)
-        .expect(400);
-      expect(res.body.title).toMatch(/not-an-object-id/);
+        .get(
+          `/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id,${crypto.randomUUID()},abcdefghijkl`
+        )
+        .expect(200);
+      expect(res.body.entities.map((e: SnapshotEntity) => e.id)).toEqual([String(doc._id)]);
     });
 
     it("400s instead of silently truncating an over-cap id list", async () => {
@@ -1171,7 +1283,7 @@ describe("sync routes", () => {
       const res = await agent
         .get(`/sync/snapshot?stream=${encodeURIComponent(`routeStuff|owner:${notAdminId}`)}`)
         .expect(200);
-      expect(res.body.entities.map((e: SnapshotEntity) => e.data.name)).toEqual(["keep"]);
+      expect(res.body.entities.map((e: SnapshotEntity) => e.data?.name)).toEqual(["keep"]);
     });
   });
 });

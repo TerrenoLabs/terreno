@@ -2,7 +2,7 @@
 
 AI service layer for Terreno apps - GPT chat, request logging, and admin tools.
 
-AI service layer for Terreno backends — provider-agnostic chat, request logging, GPT history, projects, file uploads, MCP tools, and optional Langfuse integration.
+AI service layer for Terreno backends — provider-agnostic chat, request logging, GPT history, projects, file uploads, MCP tools, and built-in observability (prompt registry, traces, evaluators).
 
 ## Install
 
@@ -12,6 +12,8 @@ bun add @terreno/ai @terreno/api mongoose
 
 Also install a Vercel AI SDK provider in your app (e.g. `bun add @ai-sdk/google`).
 
+`@terreno/ai` is provider-agnostic through the Vercel AI SDK. That is a model library and is unrelated to Vercel hosting; to host a Terreno app on Vercel, see [Deploy to Vercel](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/deploy-to-vercel.md).
+
 ## Quick start
 
 ```typescript
@@ -20,14 +22,14 @@ import {AiApp, AIService} from "@terreno/ai";
 import {google} from "@ai-sdk/google";
 import {User} from "./models/user";
 
-const aiService = new AIService({model: google("gemini-2.5-flash")});
+const aiService = new AIService({model: google("gemini-3.8-flash")});
 
 new TerrenoApp({userModel: User})
   .register(new AiApp({aiService}))
   .start();
 ```
 
-This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), projects, and the admin AI request explorer. Add `LangfuseApp`, `FileStorageService`, and `MCPService` when you need those features.
+This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), projects, and the admin AI request explorer. Add `ObservabilityApp`, `FileStorageService`, and `MCPService` when you need those features.
 
 ## What's included
 
@@ -35,7 +37,8 @@ This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), proj
 - `AiApp` — TerrenoPlugin that registers all AI routes in one call
 - Mongoose models: `AIRequest`, `GptHistory`, `Project`, `FileAttachment`
 - Route registrars: `addGptRoutes`, `addGptHistoryRoutes`, `addProjectRoutes`, `addFileRoutes`, `addMcpRoutes`, `addAiRequestsExplorerRoutes`
-- `LangfuseApp` — optional Langfuse tracing and admin UI routes
+- Agent UI Asks (opt-in `asks` option on `AiApp` / `addGptRoutes`) — the agent pauses a turn to ask a typed question (`choice`, `confirm`, `markdown`, `form`, `files`), server-enforced approval for tools with `needsApproval`, and headless `pendingAsks` / `turn` endpoints for watches and other small clients. See [Agent UI Asks](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/agent-ui-asks.md)
+- `ObservabilityApp` — prompt registry, traces, evaluators, datasets, experiments, and review queue
 - `FileStorageService` — GCS uploads with signed URLs
 - `MCPService` — SSE MCP client for tool calling
 - `getMCPTools` — wrap registered `modelRouter` MCP tools as Vercel AI SDK tools for in-process `streamText` / `generateText`
@@ -43,8 +46,8 @@ This mounts GPT chat (`POST /gpt/prompt`), history CRUD (`/gpt/histories`), proj
 
 ## Documentation
 
-Full API reference: [docs/reference/ai.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/ai.md)
+Full API reference: [docs/reference/ai.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/ai.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

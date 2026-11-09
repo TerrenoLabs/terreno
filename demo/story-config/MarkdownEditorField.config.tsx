@@ -8,13 +8,14 @@ import {
 import {MarkdownEditorField} from "@terreno/ui";
 
 export const MarkdownEditorFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {MarkdownEditorField} from \"@terreno/ui\";\n\n<MarkdownEditorField />",
   name: "Markdown editor field",
   component: MarkdownEditorField,
   related: ["MarkdownView", "Text area", "Text field"],
   description:
     "A side-by-side markdown editor with a text input on the left and a live preview on the right. Useful for editing rich text content in admin panels and forms.",
   a11yNotes: ["The text input supports standard keyboard navigation and screen readers."],
-  category: "Data Entry",
+  category: "Form",
   status: {
     documentation: "ready",
     figma: "planned",

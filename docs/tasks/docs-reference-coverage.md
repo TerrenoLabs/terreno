@@ -8,14 +8,14 @@ See: [`docs/implementationPlans/docs-reference-coverage.md`](../implementationPl
 
 - **Do not write documentation from scratch.** The content already exists in `.cursor/rules/*/00-*.mdc` files. Your job is to convert prescriptive agent rules into descriptive public reference prose, verify every claim against source, and remove anything internal.
 - Verify every exported symbol you document by grepping the package's `src/index.ts`. If a rule file documents something that no longer exists, drop it and note the drift in the PR body.
-- READMEs are rendered on npmjs.com where relative links break. Use absolute `https://github.com/flourishhealth/terreno/...` or docs-site URLs in every README.
+- READMEs are rendered on npmjs.com where relative links break. Use absolute `https://github.com/TerrenoLabs/terreno/...` or docs-site URLs in every README.
 - Match the section ordering of `docs/reference/api.md` for new reference pages. Read it first.
 - Run `bun run website:build` before each commit that adds or moves a docs page.
 
 ## Phase 1: Missing reference pages
 
 - [x] **Task 1.1**: Write `docs/reference/ai.md`
-  - Description: Convert `.cursor/rules/ai/00-ai.mdc` into a public reference page. Sections, following `docs/reference/api.md`'s shape: Install; Commands; Architecture (file structure); `AIService` setup and full method table; structured-output helpers (`generateJsonValue`, `generateJsonObject`, `generateJsonArray`) including the JSON-normalization behavior and error logging; temperature presets; the `AIRequest` and `GptHistory` models with field tables; route registrars (`addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`) with endpoints, methods, and permissions; Langfuse integration; integration example with `setupServer`/`TerrenoApp`; environment variables; conventions; testing (including the mock-model pattern). Verify every symbol against `ai/src/index.ts`. Remove the internal-only conventions that make no sense to a consumer (for example instructions about not mocking `@terreno/api` belong in agent rules, not reference docs — use judgment).
+  - Description: Convert `.cursor/rules/ai/00-ai.mdc` into a public reference page. Sections, following `docs/reference/api.md`'s shape: Install; Commands; Architecture (file structure); `AIService` setup and full method table; structured-output helpers (`generateJsonValue`, `generateJsonObject`, `generateJsonArray`) including the JSON-normalization behavior and error logging; temperature presets; the `AIRequest` and `GptHistory` models with field tables; route registrars (`addGptRoutes`, `addGptHistoryRoutes`, `addAiRequestsExplorerRoutes`) with endpoints, methods, and permissions; integration example with `setupServer`/`TerrenoApp`; environment variables; conventions; testing (including the mock-model pattern). Verify every symbol against `ai/src/index.ts`. Remove the internal-only conventions that make no sense to a consumer (for example instructions about not mocking `@terreno/api` belong in agent rules, not reference docs — use judgment).
   - Files: `docs/reference/ai.md` (new)
   - Depends on: none
   - Acceptance: every documented symbol appears in `ai/src/index.ts`; the method table lists all `AIService` methods; all three route registrars documented with their permissions; no `.claude/` or `.cursor/` path referenced.

@@ -42,12 +42,18 @@ Then run `bun test` in the package. The preload starts `mongodb-memory-server` w
 - `registerBackendPreload` — full lifecycle with optional transactions and fixture cache
 - `setTerrenoTestEnv` — canonical auth secrets for tests
 - `getBaseServer` / `authAsUser` — Express + supertest helpers
+- `authWithToken` — authenticate with a pre-minted token, skipping the login round-trip
+- `waitUntil` / `waitForCalls` / `freezeTime` — poll instead of sleeping; freeze the clock
+- `expectAPIError` / `assertStrictResponseProperties` — error-body and field-leak assertions
+- Opt-in SDK mocks: Cloud Tasks, SendGrid, Twilio, Expo push, GCS, Google auth, AI SDK, notifiers
 - Log silencing and Sentry mocks for quiet CI
+- `@terreno/test/expo/*` — Bun test environment for Expo / React Native apps
+- `terreno-test-shard` and `terreno-test-hygiene` CLIs
 
 ## Documentation
 
-Full API reference: [docs/reference/test.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/test.md)
+Full API reference: [docs/reference/test.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/test.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

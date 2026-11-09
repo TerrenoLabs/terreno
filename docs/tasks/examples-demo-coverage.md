@@ -210,7 +210,7 @@ Packages below 95%: none (all published packages meet the 95% function and line 
   - Depends on: Task 5.1
   - Acceptance: every gap that a launch document depends on is filled with a working example; remaining gaps are recorded with issue links; both example apps still pass their CI.
 
-Recorded gaps (2026-09-11): AI structured output → [#1010](https://github.com/FlourishHealth/terreno/issues/1010); generic background jobs → [#1188](https://github.com/FlourishHealth/terreno/issues/1188). No launch tutorial currently depends on either.
+Recorded gaps (2026-09-11): AI structured output → [#1010](https://github.com/TerrenoLabs/terreno/issues/1010); generic background jobs → [#1188](https://github.com/TerrenoLabs/terreno/issues/1188). No launch tutorial currently depends on either.
 
 - [x] **Task 5.3**: Link the matrix into the contribution process
   - Description: Add a note to `CONTRIBUTING.md` and the PR template: when adding a framework capability, add or update the example that exercises it and update `docs/explanation/example-coverage.md`. This is what keeps the matrix true. Link the matrix from `docs/explanation/README.md`.

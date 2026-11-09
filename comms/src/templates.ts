@@ -1,3 +1,9 @@
+import {
+  DEFAULT_SECURITY_MAIL_TEMPLATES,
+  escapeMailHtml,
+  type SecurityMailTemplateId,
+} from "@terreno/api";
+
 export interface MessageTemplate {
   html?: string;
   subject: string;
@@ -9,16 +15,27 @@ export interface RenderTemplateOptions {
   template: MessageTemplate;
 }
 
-export type AuthMailTemplateId = "resetPassword" | "verifyEmail";
+/**
+ * Auth mail templates: the reset/verify links, plus the security notifications
+ * `AccountSecurityApp` sends (`securityPasswordChanged`, `securityPasskeyAdded`, ...).
+ */
+export type AuthMailTemplateId = "resetPassword" | "verifyEmail" | SecurityMailTemplateId;
 
 export interface RenderAuthMailOptions {
+  /**
+   * Extra placeholder values. Security notifications pass `actor`, `orgClause`, `orgReference`,
+   * `providerName`, `occurredAt`, `appUrl`, and `secureAccountLine`.
+   */
+  data?: Record<string, string>;
   publicAppUrl: string;
   templateId: AuthMailTemplateId;
-  token: string;
+  /** The reset/verify token. Security notifications carry none. */
+  token?: string;
   templates?: Partial<Record<AuthMailTemplateId, MessageTemplate>>;
 }
 
 export const DEFAULT_AUTH_MAIL_TEMPLATES: Record<AuthMailTemplateId, MessageTemplate> = {
+  ...DEFAULT_SECURITY_MAIL_TEMPLATES,
   resetPassword: {
     html: '<p><a href="{{resetUrl}}">Reset your password</a></p>',
     subject: "Reset your password",
@@ -57,22 +74,33 @@ const authMailUrl = (publicAppUrl: string, path: string, token: string): string 
   return `${base}${path}?token=${encodeURIComponent(token)}`;
 };
 
+/**
+ * Renders an auth mail template. HTML bodies get HTML-escaped values, so data such as an org
+ * name cannot inject markup; subject and text get the raw values.
+ */
 export const renderAuthMail = ({
+  data = {},
   publicAppUrl,
   templateId,
-  token,
+  token = "",
   templates,
 }: RenderAuthMailOptions): MessageTemplate => {
   const template = templates?.[templateId] ?? DEFAULT_AUTH_MAIL_TEMPLATES[templateId];
-  const resetUrl = authMailUrl(publicAppUrl, "/resetPassword", token);
-  const verifyUrl = authMailUrl(publicAppUrl, "/verifyEmail", token);
-  return renderTemplate({
-    data: {
-      publicAppUrl: publicAppUrl.replace(/\/$/, ""),
-      resetUrl,
-      token,
-      verifyUrl,
-    },
-    template,
-  });
+  const values: Record<string, string> = {
+    ...data,
+    publicAppUrl: publicAppUrl.replace(/\/$/, ""),
+    resetUrl: authMailUrl(publicAppUrl, "/resetPassword", token),
+    token,
+    verifyUrl: authMailUrl(publicAppUrl, "/verifyEmail", token),
+  };
+  const htmlValues = Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, escapeMailHtml(value)])
+  );
+  const {html, ...plain} = template;
+  return {
+    ...(html === undefined
+      ? {}
+      : {html: renderTemplate({data: htmlValues, template: {html, subject: ""}}).html}),
+    ...renderTemplate({data: values, template: plain}),
+  };
 };

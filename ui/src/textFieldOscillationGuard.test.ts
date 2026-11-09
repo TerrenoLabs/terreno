@@ -1,6 +1,7 @@
 import {describe, expect, it} from "bun:test";
 import {
   createTextFieldOscillationState,
+  isUserEditInputType,
   recordTextFieldOscillation,
   shouldSuppressTextFieldOscillation,
   TEXT_FIELD_OSCILLATION_WINDOW_MS,
@@ -59,5 +60,66 @@ describe("textFieldOscillationGuard", () => {
     expect(shouldSuppressTextFieldOscillation({currentValue: "he", now, state, text: "hel"})).toBe(
       false
     );
+  });
+});
+
+describe("textFieldOscillationGuard user edits", () => {
+  it("never suppresses a change the user typed, even an A→B→A typo fix", () => {
+    const state = createTextFieldOscillationState();
+    let now = 4_000;
+
+    recordTextFieldOscillation({currentValue: "hello", now, state, text: "hellox"});
+    now += 150;
+    expect(
+      shouldSuppressTextFieldOscillation({
+        currentValue: "hellox",
+        inputType: "deleteContentBackward",
+        now,
+        state,
+        text: "hello",
+      })
+    ).toBe(false);
+    // The same reversal without an input event is still treated as an oscillation.
+    expect(
+      shouldSuppressTextFieldOscillation({currentValue: "hellox", now, state, text: "hello"})
+    ).toBe(true);
+  });
+
+  it("still suppresses a spellcheck replacement that reverses a recent change", () => {
+    const state = createTextFieldOscillationState();
+    let now = 5_000;
+
+    recordTextFieldOscillation({
+      currentValue: "reachthreshold",
+      now,
+      state,
+      text: "reach threshold",
+    });
+    now += 10;
+    expect(
+      shouldSuppressTextFieldOscillation({
+        currentValue: "reach threshold",
+        inputType: "insertReplacementText",
+        now,
+        state,
+        text: "reachthreshold",
+      })
+    ).toBe(true);
+  });
+
+  it("classifies typing, deleting, paste and undo as user edits", () => {
+    for (const inputType of [
+      "insertText",
+      "insertFromPaste",
+      "insertLineBreak",
+      "deleteContentBackward",
+      "deleteWordBackward",
+      "historyUndo",
+    ]) {
+      expect(isUserEditInputType(inputType)).toBe(true);
+    }
+    for (const inputType of [undefined, "", "insertReplacementText", "insertCompositionText"]) {
+      expect(isUserEditInputType(inputType)).toBe(false);
+    }
   });
 });

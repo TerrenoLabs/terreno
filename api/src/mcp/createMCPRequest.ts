@@ -14,9 +14,15 @@ import type {MCPRequest, MCPToolArgs} from "./types";
  */
 export const createMCPRequest = ({
   body = {},
+  params = {},
+  query = {},
   user,
 }: {
   body?: MCPToolArgs;
+  /** Route params an action tool fills in, such as the instance action's `id`. */
+  params?: Record<string, string>;
+  /** Tool arguments of a GET action, which REST would read from the query string. */
+  query?: Record<string, unknown>;
   user?: User;
 }): express.Request => {
   const request: MCPRequest = {
@@ -24,8 +30,8 @@ export const createMCPRequest = ({
     headers: {},
     isMCPRequest: true,
     method: "MCP",
-    params: {},
-    query: {},
+    params,
+    query,
     user,
   };
   return request as unknown as express.Request;

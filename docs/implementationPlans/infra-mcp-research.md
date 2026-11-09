@@ -1,7 +1,7 @@
 # Research: Infrastructure MCP server (privileged tools gateway)
 
 **Status:** Complete — decisions made, IP written: [infra-mcp.md](infra-mcp.md)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1090
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1090
 **Created:** 2026-08-09
 
 ## Scope statement

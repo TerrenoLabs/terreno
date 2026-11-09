@@ -1,0 +1,5 @@
+> **isAuditRecorderInstalled**(): `boolean`
+
+## Returns
+
+`boolean`

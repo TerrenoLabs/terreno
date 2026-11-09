@@ -13,6 +13,7 @@ import {
   resolveAdminBroadcastQueryFilter,
 } from "./adminBroadcastScope";
 import {canUseAdminBroadcastWindow} from "./adminWindowAccess";
+import {isObjectIdHex, isObjectIdKeyed} from "./entityIds";
 import {
   computeStableFrontier,
   getCompactedThroughSeq,
@@ -36,6 +37,9 @@ import type {
   SyncMutateBatchRequest,
   SyncMutateRequest,
   SyncNackCode,
+  SyncSnapshotBatchRequest,
+  SyncSnapshotBatchResponse,
+  SyncSnapshotBatchStreamRequest,
   SyncSnapshotResponse,
   SyncStreamInfo,
   SyncStreamsResponse,
@@ -77,6 +81,13 @@ export interface SyncAppOptions {
 
 const MAX_SNAPSHOT_LIMIT = 100;
 const DEFAULT_SNAPSHOT_LIMIT = 100;
+/** Entity budget of one `POST /sync/snapshot/batch` response, shared by its streams. */
+const DEFAULT_SNAPSHOT_BATCH_LIMIT = 5_000;
+const MAX_SNAPSHOT_BATCH_LIMIT = 10_000;
+/** Most streams one batch request may name. */
+const MAX_SNAPSHOT_BATCH_STREAMS = 500;
+/** Streams paged at once per batch request, so one request cannot drain the Mongo pool. */
+const SNAPSHOT_BATCH_CONCURRENCY = 8;
 
 /** Minimal shape of a synced document as read by the snapshot/entities routes. */
 interface SyncedDoc {
@@ -246,7 +257,7 @@ const parseNonNegativeInt = (raw: unknown, name: string, fallback: number): numb
 
 /**
  * Task 9.14: the legacy cursor is a raw `_id` string, so it must be compared in the
- * model's OWN `_id` BSON type. Synced models are designed around client-minted string
+ * model's OWN `_id` BSON type. Synced models default to client-minted string
  * `_id`s: casting those to `ObjectId` either throws (non-hex ids) or — worse — silently
  * compares across BSON types and matches nothing, so the legacy stratum reported itself
  * exhausted after one page and the remaining documents were never bootstrapped.
@@ -259,11 +270,10 @@ const legacyCursorClause = ({
   model: SyncedModel;
   legacyCursorIn: string;
 }): Record<string, unknown> => {
-  const idInstance = (model.schema?.path("_id") as {instance?: string} | undefined)?.instance;
-  if (idInstance !== "ObjectId") {
+  if (!isObjectIdKeyed(model)) {
     return {_id: {$gt: legacyCursorIn}};
   }
-  if (!mongoose.isValidObjectId(legacyCursorIn)) {
+  if (!isObjectIdHex(legacyCursorIn)) {
     throw new APIError({status: 400, title: `Invalid legacyCursor: ${legacyCursorIn}`});
   }
   return {_id: {$gt: new mongoose.Types.ObjectId(legacyCursorIn)}};
@@ -317,9 +327,11 @@ const pageLegacyStratum = async ({
     if (!(await checkPermissions("read", entry.options.permissions.read, user, doc))) {
       continue;
     }
+    const isTombstone = Boolean(doc.deleted);
     entities.push({
-      data: await serializeSyncDoc({doc, entry, req}),
-      deleted: Boolean(doc.deleted),
+      // C7: tombstones carry no data, the same as the seq stratum and /sync/entities.
+      data: isTombstone ? null : await serializeSyncDoc({doc, entry, req}),
+      deleted: isTombstone,
       id: String(doc._id),
       seq: 0,
     });
@@ -461,9 +473,12 @@ export const MAX_ENTITY_FETCH = 100;
 
 /**
  * Task 9.27: `_id: {$in: ids}` leaves the cast to Mongoose, so one non-hex id against an
- * ObjectId-keyed model threw a CastError that surfaced as a 500 for what is purely bad
- * caller input. Validate up front and name the offending ids in a 400. Models with
- * client-minted string `_id`s (the syncdb default, see `legacyCursorClause`) take any shape.
+ * ObjectId-keyed model threw a CastError that surfaced as a 500. A non-hex id cannot name a
+ * document of such a model, so it is dropped and comes back absent, which is the true answer.
+ * Failing the whole request instead would wedge a client's repair batch: a create the server
+ * rejected for a bad id is queued for repair under that id, and every other id in the batch
+ * would never load. Models with client-minted string `_id`s (see `legacyCursorClause`) take
+ * any shape.
  */
 const castEntityIds = ({
   model,
@@ -472,24 +487,211 @@ const castEntityIds = ({
   ids: string[];
   model: SyncedModel;
 }): (string | mongoose.Types.ObjectId)[] => {
-  const idInstance = (model.schema?.path("_id") as {instance?: string} | undefined)?.instance;
-  if (idInstance !== "ObjectId") {
+  if (!isObjectIdKeyed(model)) {
     return ids;
   }
-  const invalid = ids.filter((id) => !mongoose.isValidObjectId(id));
-  if (invalid.length > 0) {
+  return ids.filter(isObjectIdHex).map((id) => new mongoose.Types.ObjectId(id));
+};
+
+/**
+ * Serve one snapshot page for one stream: membership/permission checks, frontier and
+ * retention signals, then the legacy or seq stratum. Shared by `GET /sync/snapshot` and
+ * `POST /sync/snapshot/batch`.
+ */
+const snapshotStreamPage = async ({
+  req,
+  user,
+  streamKey,
+  cursor,
+  limit,
+  legacyCursorIn,
+  options,
+}: {
+  req: express.Request;
+  user: User;
+  streamKey: string;
+  cursor: number;
+  limit: number;
+  legacyCursorIn?: string;
+  options: SyncAppOptions;
+}): Promise<SyncSnapshotResponse> => {
+  if (!streamKey) {
+    throw new APIError({status: 400, title: "stream query parameter is required"});
+  }
+  const parsed = parseStreamKey(streamKey);
+  if (!parsed) {
+    throw new APIError({status: 400, title: `Invalid stream key: ${streamKey}`});
+  }
+  const entry = findSyncEntryByCollectionTag(parsed.collectionTag);
+  if (!entry) {
     throw new APIError({
-      status: 400,
-      title: `Invalid ids for ${model.modelName}: ${invalid.join(",")}`,
+      status: 404,
+      title: `Unknown sync collection: ${parsed.collectionTag}`,
     });
   }
-  return ids.map((id) => new mongoose.Types.ObjectId(id));
+  if (!(await checkPermissions("list", entry.options.permissions.list, user))) {
+    throw new APIError({
+      status: 403,
+      title: `Access to sync snapshot for ${parsed.collectionTag} denied for ${user.id}`,
+    });
+  }
+  // C2: a client must not snapshot a stream it does not belong to.
+  const memberStreams = await resolveUserStreamsForEntry({
+    entry,
+    getUserScopes: options.getUserScopes,
+    user,
+  });
+  if (!memberStreams.includes(streamKey)) {
+    throw new APIError({
+      status: 403,
+      title: `User ${user.id} does not belong to stream ${streamKey}`,
+    });
+  }
+
+  const snapshotFilterResult = entry.config.snapshotFilter
+    ? await entry.config.snapshotFilter({id: String(user.id)})
+    : undefined;
+  const queryFilterResult = await resolveSyncQueryFilter({entry, user});
+  const scopeFilter = composeSyncReadFilter({
+    queryFilter: queryFilterResult.filter,
+    scopeFilter: buildSnapshotScopeFilter({
+      entry,
+      scopeValue: parsed.scopeValue,
+      snapshotFilterResult,
+    }),
+  });
+  const model = getSyncedModel(entry.modelName);
+  const frontierSeq = await computeStableFrontier({stream: streamKey});
+  // C7 (Task 9.15): the retention signal is the durable compaction watermark, not
+  // min(retained seq). The old computation was pinned low forever by any early doc that
+  // was never deleted, so a stale cursor sitting above a compacted tombstone's seq
+  // passed the check and silently never learned about that deletion.
+  const oldestRetainedSeq = await getCompactedThroughSeq({stream: streamKey});
+
+  // Task 9.19: a `queryFilter` that denies this caller means "no visible rows", exactly
+  // as REST's list endpoint answers. Serve a terminal empty page (cursor at the
+  // frontier, hasMore false) so the client settles instead of paging forever.
+  if (queryFilterResult.denied) {
+    const deniedResponse: SyncSnapshotResponse = {
+      cursor: frontierSeq,
+      entities: [],
+      frontierSeq,
+      hasMore: false,
+      oldestRetainedSeq,
+      stream: streamKey,
+    };
+    return deniedResponse;
+  }
+
+  // C3: legacy (seq-0) stratum, paged by _id. Drained fully before seq paging begins.
+  if (cursor === 0) {
+    const legacyResult = await pageLegacyStratum({
+      entry,
+      legacyCursorIn,
+      limit,
+      model,
+      req,
+      scopeFilter,
+    });
+    if (legacyResult) {
+      const response: SyncSnapshotResponse = {
+        cursor: 0,
+        entities: legacyResult.entities,
+        frontierSeq,
+        hasMore: true,
+        legacyCursor: legacyResult.legacyCursor,
+        oldestRetainedSeq,
+        stream: streamKey,
+      };
+      return response;
+    }
+  }
+
+  const seqResult = await pageSeqStratum({
+    cursor,
+    entry,
+    frontierSeq,
+    limit,
+    model,
+    req,
+    scopeFilter,
+    streamKey,
+  });
+  const response: SyncSnapshotResponse = {
+    cursor: seqResult.cursor,
+    entities: seqResult.entities,
+    frontierSeq,
+    hasMore: seqResult.hasMore,
+    oldestRetainedSeq,
+    stream: streamKey,
+  };
+  return response;
+};
+
+/** Validate the `streams` list of a snapshot batch body: non-empty, capped, no repeats. */
+const parseSnapshotBatchStreams = (raw: unknown): SyncSnapshotBatchStreamRequest[] => {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new APIError({status: 400, title: "streams must be a non-empty array"});
+  }
+  if (raw.length > MAX_SNAPSHOT_BATCH_STREAMS) {
+    throw new APIError({
+      detail: `Requested ${raw.length} streams; the limit is ${MAX_SNAPSHOT_BATCH_STREAMS}`,
+      status: 400,
+      title: "Too many streams in snapshot batch",
+    });
+  }
+  const seen = new Set<string>();
+  return raw.map((item: unknown) => {
+    const candidate = item as Partial<SyncSnapshotBatchStreamRequest> | null;
+    if (!candidate || typeof candidate.stream !== "string" || !candidate.stream) {
+      throw new APIError({status: 400, title: "Each snapshot batch entry needs a stream"});
+    }
+    if (candidate.legacyCursor !== undefined && typeof candidate.legacyCursor !== "string") {
+      throw new APIError({status: 400, title: `Invalid legacyCursor for ${candidate.stream}`});
+    }
+    if (seen.has(candidate.stream)) {
+      throw new APIError({
+        status: 400,
+        title: `Duplicate stream in snapshot batch: ${candidate.stream}`,
+      });
+    }
+    seen.add(candidate.stream);
+    return {
+      cursor: candidate.cursor,
+      legacyCursor: candidate.legacyCursor,
+      stream: candidate.stream,
+    };
+  });
+};
+
+/** `items.map(map)` with at most `concurrency` calls in flight; results keep item order. */
+const mapWithConcurrency = async <T, R>({
+  items,
+  concurrency,
+  map,
+}: {
+  items: T[];
+  concurrency: number;
+  map: (item: T) => Promise<R>;
+}): Promise<R[]> => {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await map(items[index] as T);
+    }
+  };
+  await Promise.all(Array.from({length: Math.min(concurrency, items.length)}, worker));
+  return results;
 };
 
 /**
  * Mount the SyncDB HTTP routes:
  * - GET /sync/streams — the authoritative set of streams the caller belongs to (C2)
  * - GET /sync/snapshot — per-stream bootstrap/catch-up with server-enforced scoping
+ * - POST /sync/snapshot/batch — one page for each of many streams in one round trip
  * - POST /sync/mutate — HTTP fallback mutation channel over applySyncMutation
  * - GET /sync/key — per-user key material for the default encryption KeyProvider
  */
@@ -541,40 +743,6 @@ export const addSyncRoutes = (app: express.Application, options: SyncAppOptions 
       if (!user) {
         throw new APIError({status: 401, title: "Authentication required"});
       }
-      const streamKey = String(req.query.stream ?? "");
-      if (!streamKey) {
-        throw new APIError({status: 400, title: "stream query parameter is required"});
-      }
-      const parsed = parseStreamKey(streamKey);
-      if (!parsed) {
-        throw new APIError({status: 400, title: `Invalid stream key: ${streamKey}`});
-      }
-      const entry = findSyncEntryByCollectionTag(parsed.collectionTag);
-      if (!entry) {
-        throw new APIError({
-          status: 404,
-          title: `Unknown sync collection: ${parsed.collectionTag}`,
-        });
-      }
-      if (!(await checkPermissions("list", entry.options.permissions.list, user))) {
-        throw new APIError({
-          status: 403,
-          title: `Access to sync snapshot for ${parsed.collectionTag} denied for ${user.id}`,
-        });
-      }
-      // C2: a client must not snapshot a stream it does not belong to.
-      const memberStreams = await resolveUserStreamsForEntry({
-        entry,
-        getUserScopes: options.getUserScopes,
-        user,
-      });
-      if (!memberStreams.includes(streamKey)) {
-        throw new APIError({
-          status: 403,
-          title: `User ${user.id} does not belong to stream ${streamKey}`,
-        });
-      }
-
       const cursor = parseNonNegativeInt(req.query.cursor, "cursor", 0);
       const requestedLimit = parseNonNegativeInt(
         req.query.limit,
@@ -586,84 +754,56 @@ export const addSyncRoutes = (app: express.Application, options: SyncAppOptions 
         typeof req.query.legacyCursor === "string" && req.query.legacyCursor.length > 0
           ? req.query.legacyCursor
           : undefined;
-
-      const snapshotFilterResult = entry.config.snapshotFilter
-        ? await entry.config.snapshotFilter({id: String(user.id)})
-        : undefined;
-      const queryFilterResult = await resolveSyncQueryFilter({entry, user});
-      const scopeFilter = composeSyncReadFilter({
-        queryFilter: queryFilterResult.filter,
-        scopeFilter: buildSnapshotScopeFilter({
-          entry,
-          scopeValue: parsed.scopeValue,
-          snapshotFilterResult,
-        }),
-      });
-      const model = getSyncedModel(entry.modelName);
-      const frontierSeq = await computeStableFrontier({stream: streamKey});
-      // C7 (Task 9.15): the retention signal is the durable compaction watermark, not
-      // min(retained seq). The old computation was pinned low forever by any early doc that
-      // was never deleted, so a stale cursor sitting above a compacted tombstone's seq
-      // passed the check and silently never learned about that deletion.
-      const oldestRetainedSeq = await getCompactedThroughSeq({stream: streamKey});
-
-      // Task 9.19: a `queryFilter` that denies this caller means "no visible rows", exactly
-      // as REST's list endpoint answers. Serve a terminal empty page (cursor at the
-      // frontier, hasMore false) so the client settles instead of paging forever.
-      if (queryFilterResult.denied) {
-        const deniedResponse: SyncSnapshotResponse = {
-          cursor: frontierSeq,
-          entities: [],
-          frontierSeq,
-          hasMore: false,
-          oldestRetainedSeq,
-          stream: streamKey,
-        };
-        return res.json(deniedResponse);
-      }
-
-      // C3: legacy (seq-0) stratum, paged by _id. Drained fully before seq paging begins.
-      if (cursor === 0) {
-        const legacyResult = await pageLegacyStratum({
-          entry,
-          legacyCursorIn,
-          limit,
-          model,
-          req,
-          scopeFilter,
-        });
-        if (legacyResult) {
-          const response: SyncSnapshotResponse = {
-            cursor: 0,
-            entities: legacyResult.entities,
-            frontierSeq,
-            hasMore: true,
-            legacyCursor: legacyResult.legacyCursor,
-            oldestRetainedSeq,
-            stream: streamKey,
-          };
-          return res.json(response);
-        }
-      }
-
-      const seqResult = await pageSeqStratum({
+      const response = await snapshotStreamPage({
         cursor,
-        entry,
-        frontierSeq,
+        legacyCursorIn,
         limit,
-        model,
+        options,
         req,
-        scopeFilter,
-        streamKey,
+        streamKey: String(req.query.stream ?? ""),
+        user,
       });
-      const response: SyncSnapshotResponse = {
-        cursor: seqResult.cursor,
-        entities: seqResult.entities,
-        frontierSeq,
-        hasMore: seqResult.hasMore,
-        oldestRetainedSeq,
-        stream: streamKey,
-      };
+      return res.json(response);
+    })
+  );
+
+  // Page many streams in one round trip: one page per requested stream, in request order.
+  // `limit` is the entity budget for the whole response, split evenly across the streams,
+  // so a request stays bounded however many streams it names; streams with more pages
+  // are asked for again (with a larger share) in the client's next round.
+  router.post(
+    "/sync/snapshot/batch",
+    authenticateMiddleware(),
+    asyncHandler(async (req, res) => {
+      const user = req.user as User | undefined;
+      if (!user) {
+        throw new APIError({status: 401, title: "Authentication required"});
+      }
+      const body = req.body as Partial<SyncSnapshotBatchRequest> | undefined;
+      const items = parseSnapshotBatchStreams(body?.streams);
+      const budget = Math.min(
+        Math.max(
+          parseNonNegativeInt(body?.limit, "limit", DEFAULT_SNAPSHOT_BATCH_LIMIT),
+          items.length
+        ),
+        MAX_SNAPSHOT_BATCH_LIMIT
+      );
+      const limit = Math.max(1, Math.floor(budget / items.length));
+      const pages = await mapWithConcurrency({
+        concurrency: SNAPSHOT_BATCH_CONCURRENCY,
+        items,
+        map: (item) =>
+          snapshotStreamPage({
+            cursor: parseNonNegativeInt(item.cursor, "cursor", 0),
+            legacyCursorIn: item.legacyCursor || undefined,
+            limit,
+            options,
+            req,
+            streamKey: item.stream,
+            user,
+          }),
+      });
+      const response: SyncSnapshotBatchResponse = {pages};
       return res.json(response);
     })
   );

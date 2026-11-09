@@ -7,7 +7,8 @@ import type {
   SegmentFunction,
 } from "./types";
 
-const isDebugEnabled = (): boolean => process.env.FEATURE_FLAGS_DEBUG !== "false";
+// Evaluation diagnostics are opt-in and never include the user's attribute values.
+const isDebugEnabled = (): boolean => process.env.FEATURE_FLAGS_DEBUG === "true";
 
 /**
  * Deterministic hash of a string to a number between 0 and 99.
@@ -63,9 +64,7 @@ const matchesFieldRule = (user: unknown, rule: FeatureFlagRule): boolean => {
   }
 
   if (isDebugEnabled()) {
-    logger.info(
-      `[feature-flags] field rule: user.${rule.field}=${JSON.stringify(fieldValue)} ${rule.operator} ${JSON.stringify(ruleValue)} → ${result}`
-    );
+    logger.debug(`[feature-flags] field rule: user.${rule.field} ${rule.operator} → ${result}`);
   }
 
   return result;
@@ -85,7 +84,7 @@ const matchesRule = (
     try {
       const result = segmentFn(user);
       if (isDebugEnabled()) {
-        logger.info(`[feature-flags] segment rule: "${rule.segment}" → ${result}`);
+        logger.debug(`[feature-flags] segment rule: "${rule.segment}" → ${result}`);
       }
       return result;
     } catch (err) {
@@ -111,7 +110,7 @@ export const evaluateFlag = (
 
   if (!flag.enabled) {
     if (debug) {
-      logger.info(
+      logger.debug(
         `[feature-flags] "${flag.key}" is disabled → ${flag.type === "variant" ? "null" : "false"}`
       );
     }
@@ -125,7 +124,7 @@ export const evaluateFlag = (
     if (matched) {
       const result = flag.type === "variant" ? (rule.variant ?? null) : (rule.enabled ?? false);
       if (debug) {
-        logger.info(`[feature-flags] "${flag.key}" matched rule ${i} → ${JSON.stringify(result)}`);
+        logger.debug(`[feature-flags] "${flag.key}" matched rule ${i} → ${JSON.stringify(result)}`);
       }
       return result;
     }
@@ -137,7 +136,7 @@ export const evaluateFlag = (
   if (flag.type === "boolean") {
     const result = hash < flag.rolloutPercentage;
     if (debug) {
-      logger.info(
+      logger.debug(
         `[feature-flags] "${flag.key}" no rules matched, hash=${hash} rollout=${flag.rolloutPercentage}% → ${result}`
       );
     }
@@ -150,7 +149,7 @@ export const evaluateFlag = (
     cumulativeWeight += variant.weight;
     if (hash < cumulativeWeight) {
       if (debug) {
-        logger.info(
+        logger.debug(
           `[feature-flags] "${flag.key}" no rules matched, hash=${hash} → variant "${variant.key}"`
         );
       }
@@ -161,7 +160,7 @@ export const evaluateFlag = (
   // Fallback (shouldn't happen if weights sum to 100)
   const fallback = flag.variants.length > 0 ? flag.variants[flag.variants.length - 1].key : null;
   if (debug) {
-    logger.info(`[feature-flags] "${flag.key}" variant fallback → ${JSON.stringify(fallback)}`);
+    logger.debug(`[feature-flags] "${flag.key}" variant fallback → ${JSON.stringify(fallback)}`);
   }
   return fallback;
 };
@@ -180,7 +179,7 @@ export const evaluateAllFlags = async (
   const results: EvaluationResult = {};
 
   if (isDebugEnabled()) {
-    logger.info(`[feature-flags] evaluating ${flags.length} flags for user ${userId}`);
+    logger.debug(`[feature-flags] evaluating ${flags.length} flags for user ${userId}`);
   }
 
   for (const flag of flags) {
@@ -188,7 +187,7 @@ export const evaluateAllFlags = async (
   }
 
   if (isDebugEnabled()) {
-    logger.info(`[feature-flags] results: ${JSON.stringify(results)}`);
+    logger.debug(`[feature-flags] results: ${JSON.stringify(results)}`);
   }
 
   return results;

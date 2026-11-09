@@ -17,7 +17,7 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.4 or newer — CI pins `bun-version: 1.4.0` (via `.github/actions/setup-bun-workspace` on the hot workflows). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
+- [Bun](https://bun.sh/) 1.4.4 or newer — CI pins `bun-version: 1.4.4` (via `.github/actions/setup-bun-workspace` on the hot workflows). 1.4.4 patches the Brotli decoder (CVE-2026-111497). EAS build profiles keep their own Bun pin: `eas.json` feeds the Expo fingerprint, so bumping it changes the native runtime version and forces a rebuild.
 - **MongoDB replica set** — required to run `example-backend` locally (change streams power realtime and feature-flag sync). A single-node replica set is enough for development.
 
 ### Bootstrap
@@ -99,7 +99,7 @@ Run coverage locally from a package directory:
 cd ui && bun run test:coverage
 ```
 
-Replace `ui` with any published package (`api`, `rtk`, `syncdb`, `ai`, `comms`,
+Replace `ui` with any published package (`api`, `syncdb`, `ai`, `comms`,
 `mcp-server`, `admin-backend`, `admin-frontend`, `admin-spa`, `api-health`,
 `feature-flags`, `test`). The script writes `coverage/lcov.info` for Codecov.
 Isolated `*.isolated.ts(x)` suites are merged into that report.
@@ -117,7 +117,7 @@ When you add a framework capability, exercise it in `example-backend` and/or
 Package-specific commands are listed in [AGENTS.md](AGENTS.md). You can also use Bun's filter syntax:
 
 ```bash
-bun run --filter '@terreno/ui' compile
+bun run --filter '@terreno/blocks' --filter '@terreno/ui' compile
 bun run --filter '@terreno/api' test
 ```
 
@@ -133,7 +133,7 @@ Consumers can develop against local copies of published packages using Bun's `li
 
 - **@terreno/api** — Link in the consumer's backend. Restart the server after changes; run `bun run api:compile` or `bun run api:dev` in Terreno so the consumer uses the built output.
 - **@terreno/ui** — Link in the consumer's frontend. When the app uses Metro/Expo, update Metro config (see step 5). Run `bun run ui:compile` or `bun run ui:dev` so the consumer uses `ui/dist/`.
-- **@terreno/rtk** — Link in the consumer's frontend. Metro apps that link rtk may need the same resolution tweaks as ui.
+- **@terreno/syncdb** — Link in the consumer's frontend. Run `bun run syncdb:compile` or `bun run syncdb:dev` so the consumer uses `syncdb/dist/`. Metro apps need the same resolution tweaks as ui.
 
 ### One-time setup in the consumer repo
 
@@ -143,7 +143,7 @@ Consumers can develop against local copies of published packages using Bun's `li
    ```json
    "@terreno/api": "link:../../terreno/api",
    "@terreno/ui": "link:../../terreno/ui",
-   "@terreno/rtk": "link:../../terreno/rtk"
+   "@terreno/syncdb": "link:../../terreno/syncdb"
    ```
 
 3. Register and link each package from the consumer repo:
@@ -159,7 +159,7 @@ Consumers can develop against local copies of published packages using Bun's `li
    ln -s /absolute/path/to/terreno/<package-dir> node_modules/@terreno/<name>
    ```
 
-5. When linking **@terreno/ui** (and optionally **@terreno/rtk**) in an Expo/Metro app, the consumer's Metro config must add the linked package directory to `watchFolders` and resolve that package's dependencies from the app's `node_modules` so there is only one copy of React.
+5. When linking **@terreno/ui** (and optionally **@terreno/syncdb**) in an Expo/Metro app, the consumer's Metro config must add the linked package directory to `watchFolders` and resolve that package's dependencies from the app's `node_modules` so there is only one copy of React.
 
 6. Restart the bundler with a clean cache (for example `bun start --clear`). Restart the API server so it picks up a linked `@terreno/api`.
 
@@ -181,15 +181,17 @@ Version format: semantic versioning (`1.0.0`, `1.2.3`, `2.0.0-beta.1`). No `v` p
 
 Required repository secrets: `NPM_TOKEN`, `REPO_ADMIN_TOKEN`, `ZOOM_WEBHOOK_URL`, `ZOOM_WEBHOOK_TOKEN`.
 
-GCP infrastructure and static-site hosting live in [terraform/README.md](terraform/README.md).
+Terreno's own GCP infrastructure lives in [infra/flourish/README.md](infra/flourish/README.md). Reusable Terraform modules for Terreno apps live in [terraform/README.md](terraform/README.md).
 
 ## AI rules management
 
-This project uses [rulesync](https://github.com/dyoshikawa/rulesync) to keep AI assistant rules consistent.
+This project uses [rulesync](https://github.com/dyoshikawa/rulesync) 17 (configured in `rulesync.jsonc`) to keep AI assistant rules consistent.
 
 1. Edit source files in `.rulesync/rules/`
 2. Run `bun run rules` to regenerate tool-specific files (`AGENTS.md`, `CLAUDE.md`, Cursor rules, Copilot instructions)
 3. Commit both the source and generated files
+
+The root rule `.rulesync/rules/00-root.md` generates `CLAUDE.md`, `AGENTS.md` (read by Devin and other AGENTS.md tools), `.cursor/rules/00-root.mdc`, and `.github/copilot-instructions.md`. `.rulesync/rules/01-claudecode-root.md` generates `CLAUDE.local.md`. Never edit these outputs by hand. Write links in the root rules relative to the repository root (`docs/how-to/...`), because rulesync copies the text without rewriting links.
 
 `bun run rules:check` verifies generated files are up to date (also run in CI).
 
@@ -211,11 +213,11 @@ Follow the conventions in [AGENTS.md](AGENTS.md). Highlights:
 
 ## How work gets planned
 
-1. **Ideas** — start in [GitHub Discussions → Ideas](https://github.com/FlourishHealth/terreno/discussions/new?category=ideas); do not open a tracking issue yourself.
-2. **Promotion** — a maintainer promotes an accepted idea to a `Shaping` tracking issue on the [Terreno Roadmap](https://github.com/FlourishHealth/terreno/blob/master/ROADMAP.md) board (`roadmap-promote`).
+1. **Ideas** — start in [GitHub Discussions → Ideas](https://github.com/TerrenoLabs/terreno/discussions/new?category=ideas); do not open a tracking issue yourself.
+2. **Promotion** — a maintainer promotes an accepted idea to a `Shaping` tracking issue on the [Terreno Roadmap](https://github.com/TerrenoLabs/terreno/blob/master/ROADMAP.md) board (`roadmap-promote`).
 3. **Design** — substantial work gets an [implementation plan](docs/implementationPlans/README.md) (IP) plus a task list before large coding begins. When the IP is approved, the tracking issue moves to `Planned` and gets its `IP` field set (`roadmap-item` — it updates the promoted issue, it does not open a second one).
-4. **Build** — the [`terreno-planning` plugin](plugins/README.md) provides bounded transitions: Grow (shape) → Pick (build) ⇄ Roast (prove) until tasks are done → Brew (submit) → Taste (react once). Pick and Roast loop one task at a time. Brew and Taste wait in-process for review bots such as Bugbot and CodeQL. Taste then waits in a loop for product CI using GitHub CLI or CircleCI CLI, and before any push always pulls latest `master`, records last-run failed tests and re-verifies them locally, then runs the repository root's `prepush` package script when present (otherwise affected-package lint, typecheck, and tests) using a no-context subagent, then pushes and watches CI. Taste observes product CI on every discovered host (GitHub Actions, CircleCI, Buildkite, and similar), not only GitHub checks. Waits prefer provider CLI watch hooks over timer polling. Outer loops `/terreno-planning-loop` (task list; pass `phases=` to restrict) and `/terreno-taste-sweep` (broken PRs) reinvoke those stages. Read architecture docs first and update them in the same slice. Install skills with `npx skills add FlourishHealth/terreno`, the Cursor plugin `terreno-planning` from `.cursor-plugin/marketplace.json`, the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json` (`$terreno-1-grow`), or the Claude Code plugin `terreno` from `.claude-plugin/marketplace.json` (`/terreno:1-grow`). Regenerate `skills/` and the generated Claude plugin with `bun run skills:sync`.
-5. **RFC path** — API or package changes that affect consumers start in [RFCs](https://github.com/FlourishHealth/terreno/discussions/new?category=rfcs); accepted RFCs become IPs.
+4. **Build** — the [`terreno-planning` plugin](plugins/README.md) provides bounded transitions: Grow (shape) → Pick (build) ⇄ Roast (prove) until tasks are done → Brew (submit) → Taste (react once). Pick and Roast loop one task at a time. Brew and Taste wait in-process for review bots such as Bugbot and CodeQL. Taste then waits in a loop for product CI using GitHub CLI or CircleCI CLI, and before any push fetches latest `master` (merging it only when needed), records last-run failed tests and re-verifies them locally, then runs the repository root's `prepush` package script when present (otherwise affected-package lint, typecheck, and tests) using a no-context subagent, then pushes and watches CI. Taste observes product CI on every discovered host (GitHub Actions, CircleCI, Buildkite, and similar), not only GitHub checks. Waits prefer provider CLI watch hooks over timer polling. Outer loops `/terreno-planning-loop` (task list; pass `phases=` to restrict) and `/terreno-taste-sweep` (broken PRs) reinvoke those stages. Read architecture docs first and update them in the same slice. Install skills with `npx skills add TerrenoLabs/terreno`, the Cursor plugin `terreno-planning` from `.cursor-plugin/marketplace.json`, the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json` (`$terreno-1-grow`), or the Claude Code plugin `terreno` from `.claude-plugin/marketplace.json` (`/terreno:1-grow`). Regenerate `skills/` and the generated Claude plugin with `bun run skills:sync`.
+5. **RFC path** — API or package changes that affect consumers start in [RFCs](https://github.com/TerrenoLabs/terreno/discussions/new?category=rfcs); accepted RFCs become IPs.
 
 See the [roadmap process](docs/explanation/roadmap-process.md) for the full IP ↔ roadmap lifecycle, the promote-vs-item split, maintainer setup, and the Linear bridge.
 
@@ -275,7 +277,7 @@ release time with `bun run changelog:assemble <version>`.
 1. **Branch** — create a feature branch from `master`
 2. **Draft PR** — open as a draft until CI is green and you are ready for review
 3. **CI** — `bun run lint`, relevant tests, and repo policy checks must pass
-4. **UI changes** — if you touch frontend packages (`ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, or frontend-integrated `rtk/`), include screenshots or a screen recording in the PR body showing the change
+4. **UI changes** — if you touch frontend packages (`ui/`, `demo/`, `example-frontend/`, `admin-frontend/`, `admin-spa/`, or frontend-integrated `syncdb/`), include screenshots or a screen recording in the PR body showing the change
 5. **Changelog** — add `changelog/unreleased/<feature>.md` for user-facing changes (do not edit `CHANGELOG.md`)
 6. **Description** — explain what changed and why; link related issues or IPs
 

@@ -5,6 +5,7 @@ import {fileURLToPath} from "node:url";
 
 import {DateTime} from "luxon";
 
+import {writeWhatsNewFile} from "../whats-new/io";
 import {loadUnreleasedFragments, UNRELEASED_DIR_NAME} from "./io";
 import {assembleChangelog} from "./lib";
 
@@ -15,7 +16,7 @@ const getVersion = (): string => {
 
   if (!versionArgument) {
     console.error(
-      "changelog:assemble: provide a version, for example bun run changelog:assemble 57.1.0",
+      "changelog:assemble: provide a version, for example bun run changelog:assemble 57.1.0"
     );
     process.exit(1);
   }
@@ -50,14 +51,16 @@ const main = (): void => {
   });
 
   writeFileSync(changelogPath, assembled);
+  const whatsNewPath = writeWhatsNewFile(REPO_ROOT);
 
   for (const fragment of fragments) {
     unlinkSync(join(REPO_ROOT, UNRELEASED_DIR_NAME, fragment.fileName));
   }
 
   console.info(
-    `changelog:assemble: wrote ${version} (${fragments.length} fragment(s)) and removed the assembled files`,
+    `changelog:assemble: wrote ${version} (${fragments.length} fragment(s)) and removed the assembled files`
   );
+  console.info(`changelog:assemble: refreshed what's new data at ${whatsNewPath}`);
 };
 
 main();

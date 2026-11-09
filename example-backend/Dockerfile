@@ -1,6 +1,7 @@
 # Build stage
 # TODO: Do this build in Github Actions
-FROM oven/bun:1 AS builder
+# 1.4.4 patches the Brotli decoder (CVE-2026-111497). `bun build --compile` embeds this binary.
+FROM oven/bun:1.4.4 AS builder
 WORKDIR /app
 
 COPY . .
@@ -8,14 +9,16 @@ COPY . .
 RUN bun install --frozen-lockfile --ignore-scripts
 RUN bun run --filter "@terreno/api" compile
 RUN bun run --filter "@terreno/api-health" compile
-RUN bun run --filter "@terreno/ai" compile
+RUN bun run --filter "@terreno/blocks" compile
+# @terreno/ai type-checks its optional JobsRunner against @terreno/jobs, so jobs compiles first.
 RUN bun run --filter "@terreno/jobs" compile
+RUN bun run --filter "@terreno/ai" compile
 RUN bun run --filter "@terreno/admin-backend" compile
 RUN bun run --filter "@terreno/announcements" compile
 RUN bun run --filter "@terreno/comms" compile
 RUN bun run --filter "@terreno/feature-flags" compile
 RUN bun run --filter "@terreno/ui" compile
-RUN bun run --filter "@terreno/rtk" compile
+RUN bun run --filter "@terreno/syncdb" compile
 RUN bun run --filter "@terreno/admin-frontend" compile
 RUN bun run --filter "@terreno/admin-spa" compile
 
@@ -49,7 +52,7 @@ COPY --from=builder /app/example-backend/migrations ./migrations
 ENV NODE_ENV=production
 ENV PORT=3000
 # The compiled binary cannot resolve the SPA bundle via __dirname, so point the
-# serve plugin at the copied export explicitly.
+# serve plugin at the copied export root (client/ + server/) explicitly.
 ENV ADMIN_SPA_DIST_DIR=/app/admin-spa-dist
 ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 3000

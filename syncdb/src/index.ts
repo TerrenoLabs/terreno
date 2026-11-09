@@ -4,7 +4,7 @@
  * The on-device store (TinyBase MergeableStore) is the UI's source of truth:
  * reads come from the local store, writes apply optimistically to local state and a
  * durable outbox, and the server is asynchronous reconciliation over a websocket
- * delta protocol with HTTP snapshot catch-up. Supersedes @terreno/rtk for
+ * delta protocol with HTTP snapshot catch-up. Replaces the pre-58 rtk package for
  * data-synchronization concerns. See docs/implementationPlans/syncdb-local-first.md.
  *
  * This module is the package's public API: everything re-exported here is
@@ -15,12 +15,14 @@
  * debug broadcast bridge. Reach for `client.store`/`client.outbox` (or the React
  * hooks) instead, and open an issue if something genuinely needs promoting.
  *
- * Two other entry points exist:
+ * Three other entry points exist:
  * - `@terreno/syncdb/react` (src/react/index.ts) — React bindings. They live on
  *   their own subpath because react is an optional peer dependency and this entry
  *   must stay importable without it.
  * - `@terreno/syncdb/testing` (src/testing/index.ts) — test doubles such as
  *   `createFakeTransport`, kept out of production bundles.
+ * - `@terreno/syncdb/devConsoleLogger` (src/devConsoleLogger.ts) — the dev console
+ *   logger alone, so `@terreno/rtk` can re-export it without bundling the client.
  */
 
 // --- Client ---------------------------------------------------------------
@@ -29,6 +31,7 @@ export {
   createSyncDb,
   DEFAULT_RECONCILE_INTERVAL_MS,
   DEFAULT_SEQ_JUMP_RECONCILE_MIN_INTERVAL_MS,
+  DEFAULT_SNAPSHOT_CONCURRENCY,
   DEFAULT_START_AUTH_RETRY_ATTEMPTS,
   DEFAULT_START_AUTH_RETRY_DELAY_MS,
   DEFAULT_TOMBSTONE_RETENTION_MS,
@@ -58,12 +61,28 @@ export type {
   SyncMutationOperation,
   SyncNack,
   SyncNackCode,
+  SyncNackReason,
   SyncSnapshotEntity,
   SyncSnapshotResponse,
   SyncStatus,
   SyncStreamInfo,
   SyncSubscribed,
 } from "./types";
+
+// --- Queries and server windows ------------------------------------------
+// `where`/`sort` share one syntax across local `useQuery`, server windows
+// (`client.queryWindows` / `useWindowQuery`), and `modelRouter` list params.
+
+export type {QuerySort} from "./query/localQuery";
+export {
+  DEFAULT_WINDOW_PAGE_SIZE,
+  type QueryWindowState,
+  type QueryWindows,
+  type WindowFetchStatus,
+  type WindowQuery,
+} from "./query/queryWindows";
+export type {SortDirection, SortSpec} from "./query/sort";
+export {compileWhere, type WhereFilter, type WhereOperators} from "./query/where";
 
 // --- Local store and outbox (read surface) -------------------------------
 // `client.store` is typed as SyncStore and `client.outbox` as Outbox;
@@ -73,6 +92,7 @@ export type {
 // any reserved table is the client's job alone.
 
 export {listConflicts} from "./mutations/conflicts";
+export {generateObjectId, type SyncIdFormat} from "./mutations/entityIds";
 export {generateMutationId, type Outbox} from "./mutations/outbox";
 export type {SyncStore} from "./storage/store";
 export {OUTBOX_TABLE, type SyncEntity} from "./storage/types";
@@ -135,6 +155,10 @@ export {
   type FetchSnapshotPageArgs,
   type HttpChannel,
   type HttpChannelConfig,
+  ListRequestError,
+  QueryFieldNotAllowedError,
+  RequestSupersededError,
+  type SupersedableRequestOptions,
 } from "./sync/httpChannel";
 export {createSocketTransport, type SocketTransportConfig} from "./sync/socketTransport";
 export {
@@ -142,9 +166,11 @@ export {
   DEFAULT_MUTATION_TIMEOUT_MS,
   type SendMutationBatchResult,
   type SendMutationResult,
+  type SocketEventHandler,
   type SyncTransport,
   type TransportStatus,
 } from "./sync/transport";
+export type {ListResponse} from "./types";
 
 // --- Debug log ------------------------------------------------------------
 // Enabled with `SyncDbConfig.debug`, read through `client.debug` or the React
@@ -160,3 +186,14 @@ export type {
   SyncDebugSnapshot,
   SyncDebugStats,
 } from "./debug/debugLog";
+
+// --- Dev console logger ---------------------------------------------------
+// Dev-only bridge from client console errors to the backend's
+// `POST /__terreno/browser-logs` route (read back by terreno-mcp-local `read_logs`).
+// Also exposed as `@terreno/syncdb/devConsoleLogger` so callers can import it
+// without bundling the sync client.
+
+export {
+  type InstallTerrenoDevConsoleLoggerArgs,
+  installTerrenoDevConsoleLogger,
+} from "./devConsoleLogger";

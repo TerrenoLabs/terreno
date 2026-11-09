@@ -25,7 +25,7 @@
   - Acceptance: Given a Mongoose model, produces valid Zod schemas for each CRUD method. Tests cover all common field types. `excludeFields` removes specified fields from schemas.
 
 - [x] **Task 1.4**: Generate MCP tool definitions from registry entries
-  - Description: Build tool generator that takes an `MCPRegistryEntry` and produces both `@modelcontextprotocol/sdk` `Tool` objects (JSON Schema input) and Vercel `ai` SDK `CoreTool` objects. Auto-generate descriptions from model name, fields, and queryFields. Apply `toolPrefix` naming (`{prefix}_{method}`). Only generate tools for methods listed in `mcp.methods`.
+  - Description: Build tool generator that takes an `MCPRegistryEntry` and produces both `@modelcontextprotocol/sdk` `Tool` objects (JSON Schema input) and Vercel AI SDK (`ai`) `CoreTool` objects. Auto-generate descriptions from model name, fields, and queryFields. Apply `toolPrefix` naming (`{prefix}_{method}`). Only generate tools for methods listed in `mcp.methods`.
   - Files: `api/src/mcp/toolGenerator.ts`, `api/src/mcp/toolGenerator.test.ts`
   - Depends on: Task 1.2, Task 1.3
   - Acceptance: Registry entry with `methods: ['list', 'read']` produces exactly `todos_list` and `todos_read` tools with correct schemas and descriptions.
@@ -55,7 +55,7 @@
   - Acceptance: Full CRUD lifecycle works over MCP. Permission denials return appropriate errors. Owner filtering restricts results. Population returns nested data.
 
 - [x] **Task 1.9**: Export public API
-  - Description: Export `MCPConfig` and MCP registry/server helpers from `@terreno/api`. Export `getMCPTools()` from `@terreno/ai` so the Vercel `ai` SDK stays out of `@terreno/api`.
+  - Description: Export `MCPConfig` and MCP registry/server helpers from `@terreno/api`. Export `getMCPTools()` from `@terreno/ai` so the Vercel AI SDK (`ai`) stays out of `@terreno/api`.
   - Files: `api/src/index.ts`, `ai/src/index.ts`, `ai/src/service/getMCPTools.ts`
   - Depends on: Task 1.7
   - Acceptance: Consumers can `import { MCPConfig } from "@terreno/api"` and `import { getMCPTools } from "@terreno/ai"`.

@@ -1,7 +1,7 @@
 # Implementation Plan: Deploy to GCP (Generalized) + `deploy-gcp` Skill
 
-**Status:** Approved — decisions recorded (2026-07-29)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1005
+**Status:** In progress — Phases 1–4 done; Phase 5 (live validation) deferred per GC8
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1005
 **Priority:** High
 **Effort:** Big batch
 **Owner:** unassigned
@@ -34,6 +34,8 @@ Turn Terreno's GCP deployment story from "how Flourish deploys Terreno" into "ho
 | GC5 | Flourish infra location (→ P5) | **C** — `infra/flourish/` now; **migrate to B** (private repo) post-launch |
 | GC6 | `deploy-gcp` skill deploys? | **C** — full deploy behind explicit confirmation gate |
 | GC7 | Secret management | **A** — Secret Manager for secrets; plain env for non-secrets |
+| GC8 | Live scratch-project validation (Tasks 4.1, 4.2) — run now or later? (asked 2026-10-12) | **Later** — ship Tasks 2.1–2.2 first; run 4.1/4.2 in a session with GCP access and a scratch project. Acceptance criteria 4 (module applies to a scratch project) and 8 (full deploy) stay open until then; the module is proven by mocked-provider tests only |
+| GC9 | How does `infra/flourish/` reach the shared modules? | **Stopgap:** an `infra/flourish/modules` symlink to `../../terraform/modules`; CI stages a dereferenced copy because Infra Manager uploads only `--local-source`. When GC5 moves `infra/flourish/` to a private repo, switch module sources to a pinned git source and drop the staging step |
 
 ## Architecture
 
@@ -137,7 +139,9 @@ No product flags. Moving `terraform/` to `infra/flourish/` breaks paths referenc
 - `docs/how-to/deploy-backend-to-cloud-run.md`
 - `docs/how-to/deploy-web-to-gcs-cdn.md`
 - `docs/explanation/deployment-architecture-gcp.md`
-- `terraform/modules/terreno-backend/{main.tf,variables.tf,outputs.tf,README.md}`
+- `terraform/modules/terreno-backend/{main.tf,variables.tf,outputs.tf,versions.tf,README.md}` and `tests/terreno_backend.tftest.hcl`
+- `infra/flourish/**` (moved from `terraform/`, plus the `modules` symlink and README)
+- `terraform/README.md` (generic module index)
 - `.rulesync/skills/deploy-gcp/SKILL.md`
 - `.rulesync/skills/deploy-gcp/references/troubleshooting.md`
 
@@ -146,7 +150,8 @@ No product flags. Moving `terraform/` to `infra/flourish/` breaks paths referenc
 - `docs/how-to/deploy-to-gcp.md` (becomes an index pointing at the two new guides, or is deleted with redirects)
 - `docs/how-to/README.md`
 - `scripts/setup-gcs-hosting.sh` (parameterize)
-- `terraform/README.md` (split generic vs Flourish)
+- `terraform/modules/{cloud_run_service,secret,artifact_registry}` (`session_affinity` input; test-only outputs `runtime_settings`, `accessors`, `writers`)
+- `.circleci/config.yml`, `.circleci/continue-config.yml`, `scripts/ci/gcp-deploy.sh` (infra/ path filter, fmt, module tests, Infra Manager staging)
 - `.github/workflows/cd.yml`, `.github/workflows/demo-deploy.yml`, `.github/workflows/frontend-example-deploy.yml` (path updates if terraform moves)
 - `example-backend/Dockerfile` (created by [`deployment-foundation`](deployment-foundation.md); referenced here)
 
@@ -156,12 +161,12 @@ See [`docs/tasks/deploy-to-gcp.md`](../tasks/deploy-to-gcp.md).
 
 ## Acceptance Criteria
 
-- [ ] `docs/how-to/deploy-backend-to-cloud-run.md` contains no `flourish` string and no hardcoded project ID, bucket name, or service URL.
-- [ ] The backend guide documents session affinity, request timeout, min-instances, and the replica-set requirement, each with the symptom that occurs when it is missed.
-- [ ] The web guide covers `expo export -p web`, bucket configuration with `notFoundPage=index.html`, CDN setup, cache invalidation, and setting `EXPO_PUBLIC_API_URL` at build time.
+- [x] `docs/how-to/deploy-backend-to-cloud-run.md` contains no `flourish` string and no hardcoded project ID, bucket name, or service URL.
+- [x] The backend guide documents session affinity, request timeout, min-instances, and the replica-set requirement, each with the symptom that occurs when it is missed.
+- [x] The web guide covers `expo export -p web`, bucket configuration with `notFoundPage=index.html`, CDN setup, cache invalidation, and setting `EXPO_PUBLIC_API_URL` at build time.
 - [ ] `terraform/modules/terreno-backend/` applies cleanly against a scratch project with only variables supplied, creating Cloud Run + Artifact Registry + secrets + service accounts.
-- [ ] `scripts/setup-gcs-hosting.sh` accepts project and site names as arguments and contains no Flourish defaults.
-- [ ] The `deploy-gcp` skill exists in `.rulesync/skills/` and all generated mirrors are committed (`bun run rules:check` exits 0).
-- [ ] The skill's plan step prints project, region, and service names and stops for confirmation before any mutating command.
+- [x] `scripts/setup-gcs-hosting.sh` accepts project and site names as arguments and contains no Flourish defaults.
+- [x] The `deploy-gcp` skill exists in `.rulesync/skills/` and all generated mirrors are committed (`bun run rules:check` exits 0).
+- [x] The skill's plan step prints project, region, and service names and stops for confirmation before any mutating command.
 - [ ] A full deploy of `example-backend` + `example-frontend` to a scratch GCP project succeeds following only the public docs, and `curl <backend>/health` returns `"healthy":true`.
-- [ ] All Flourish-specific infrastructure lives under `infra/flourish/` and CI still passes.
+- [x] All Flourish-specific infrastructure lives under `infra/flourish/` and CI still passes.

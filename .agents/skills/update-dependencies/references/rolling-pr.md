@@ -1,13 +1,14 @@
 # Rolling daily PR
 
-This skill runs **daily**. There is at most one open dependency-update PR.
+This skill runs **daily**. There is at most one open dependency-update PR, and
+this skill pushes to it once per run, plus at most three fix rounds when step 7 finds red CI.
 
 Constants (do not invent a second name): `scripts/planning/updateDependenciesPr.ts`
 
 | Constant | Value |
 | --- | --- |
 | Branch | `chore/update-dependencies` |
-| Title | `chore(deps): daily dependency updates` |
+| Title | `Daily dependency updates` |
 | Body marker | `<!-- terreno-update-dependencies -->` |
 
 ## Find or attach
@@ -53,9 +54,9 @@ If merge conflicts require a behavior decision, stop as `BLOCKED`. Never force-p
 
 The PR body is the memory across days. Preserve prior rows. Update in place.
 
-Required sections after the marker:
+Required sections after the marker: `## Why`, then `## What changed` holding the ledger as `###` subsections, then `## Verification` with one `✅ Tested` row per bump landed this run. The ledger subsections:
 
-1. **Last run** — ISO date (UTC), agent/run id if known, `bun outdated` summary count
+1. **Last run** — ISO date (UTC), agent/run id if known, `bun outdated` summary count, local gate result (`prepush` green, infra jobs run or not run), CI rounds this run (0–2) and the stop reason if CI stayed red
 2. **Landed** — package, old → new, exercise test path + command, fingerprint unchanged
 3. **Failed** — package, attempted version, date, cause (test path + error snippet, fingerprint hash change, install failure). Keep the row until a later run lands it or a human drops it.
 4. **Skipped** — fingerprint-skip, cooldown (<7 days), already at target
@@ -70,30 +71,50 @@ Do not delete failure history when the PR is still open. After merge, the next d
 ```markdown
 <!-- terreno-update-dependencies -->
 
-## Last run
+## Why
+
+Keep dependencies current on one rolling PR, with every bump proven by a test that imports it.
+
+## What changed
+
+### Last run
 
 - Date: 2026-09-08
 - Landed 1, failed 1, skipped 4 (2 fingerprint, 2 cooldown)
+- Local gate: `bun run prepush` green; Playwright `app` shard run; Maestro not run (no frontend bump)
+- CI rounds: 1, green
 
-### Run log
+#### Run log
 - 2026-09-07: opened; landed axios; failed chai (exercise `api/src/foo.test.ts`)
 - 2026-09-08: rebased master; landed chai; skipped expo-*
 
-## Landed
+### Landed
 | Package | From → to | Exercise | Fingerprint |
 | --- | --- | --- | --- |
 | axios | 1.13.1 → 1.13.2 | `bun test api/src/http.test.ts` | example-frontend + demo unchanged |
+| chai | 5.2.0 → 5.2.1 | `bun test api/src/foo.test.ts` | example-frontend + demo unchanged |
 
-## Failed
+### Failed
 | Package | Attempted | Date | Cause |
 | --- | --- | --- | --- |
 | mongoose | 9.8.0 | 2026-09-07 | exercise `api/src/models.test.ts` — timeout |
 
-## Skipped
+### Skipped
 | Package | Reason |
 | --- | --- |
 | left-pad@1.9.0 | published 2 days ago |
 
-## Deferred to release
+### Deferred to release
 `expo`, `expo-router`, `react-native-reanimated`
+
+## Verification
+
+| Status | Scope | Evidence / action |
+| --- | --- | --- |
+| ✅ Tested | chai 5.2.1 | `bun test api/src/foo.test.ts` → 9 pass; fingerprint unchanged |
+| ✅ Tested | Local gate | `bun run prepush` → green |
 ```
+
+Keep one `✅ Tested` row per landed bump this run, naming its exercise command and outcome.
+The ledger sits under `What changed` as `###` subsections so the approval bot reads the
+body's `Why`, `What changed`, and `Verification` sections.

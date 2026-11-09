@@ -13,7 +13,8 @@ describe("inferPackageTags", () => {
   test("tags bundled resource markdown files", () => {
     expect(inferPackageTags("resources/api.md")).toContain("api");
     expect(inferPackageTags("resources/ui.md")).toContain("ui");
-    expect(inferPackageTags("resources/rtk.md")).toContain("rtk");
+    expect(inferPackageTags("resources/syncdb.md")).toContain("syncdb");
+    expect(inferPackageTags("resources/rtk.md")).not.toContain("rtk");
   });
 
   test("tags admin and mcp paths", () => {
@@ -35,9 +36,9 @@ describe("inferPackageTags", () => {
     expect(inferPackageTags("resources/ui-types-component/Button.md")).toContain("ui");
   });
 
-  test("tags segment-based api and rtk paths", () => {
+  test("tags segment-based api and syncdb paths", () => {
     expect(inferPackageTags("docs/explanation/api/model-router.md")).toContain("api");
-    expect(inferPackageTags("docs/how-to/rtk/setup.md")).toContain("rtk");
+    expect(inferPackageTags("docs/how-to/syncdb/setup.md")).toContain("syncdb");
   });
 
   test("defaults to docs when no rule matches", () => {

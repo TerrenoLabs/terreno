@@ -5,7 +5,7 @@ import {fireEvent} from "@testing-library/react-native";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminFieldConfig} from "../types";
+import type {AdminFieldConfig} from "../types";
 
 mock.module("../AdminFieldRendererCore", () => ({
   AdminFieldRendererCore: ({
@@ -27,14 +27,16 @@ mock.module("@terreno/ui", () => {
   const ReactMod = require("react");
   const DraggableList = ({
     dataIDs,
+    itemHeight,
     renderItem,
     callbackNewDataIds,
   }: {
     dataIDs: string[];
+    itemHeight: number;
     renderItem: (arg: {item: string}) => React.ReactElement;
     callbackNewDataIds: (ids: string[]) => void;
   }) => {
-    return ReactMod.createElement(RN.View, {testID: "mock-draggable-list"}, [
+    return ReactMod.createElement(RN.View, {itemHeight, testID: "mock-draggable-list"}, [
       ...dataIDs.map((id) => ReactMod.cloneElement(renderItem({item: id}), {key: id})),
       ReactMod.createElement(RN.Pressable, {
         key: "__reorder",
@@ -67,6 +69,8 @@ mock.module("@terreno/ui", () => {
 
 import {AdminNestedArrayField} from "../AdminNestedArrayField";
 
+type NestedOnChange = React.ComponentProps<typeof AdminNestedArrayField>["onChange"];
+
 const baseItems = {
   active: {default: true, required: false, type: "boolean"},
   count: {required: false, type: "number"},
@@ -78,7 +82,6 @@ describe("AdminNestedArrayField", () => {
   it("renders empty state when no items", () => {
     const {toJSON, getByText} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         helperText="help"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
@@ -94,7 +97,6 @@ describe("AdminNestedArrayField", () => {
   it("renders items with error text", () => {
     const {toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         errorText="oops"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
@@ -112,7 +114,6 @@ describe("AdminNestedArrayField", () => {
   it("handles non-array incoming value gracefully", () => {
     const {toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -124,10 +125,9 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("adds a new item using buildDefaultItem for all supported types", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -146,10 +146,9 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("builds default item for string type without default value", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={
           {description: {required: false, type: "string"}} as unknown as Record<
@@ -167,7 +166,7 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("builds default item for boolean/number/array types without default values", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const items = {
       enabled: {required: false, type: "boolean"},
       qty: {required: false, type: "number"},
@@ -175,7 +174,6 @@ describe("AdminNestedArrayField", () => {
     };
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={items as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -187,15 +185,13 @@ describe("AdminNestedArrayField", () => {
     const added = onChange.mock.calls[0][0][0];
     expect(added.enabled).toBe(false);
     expect(added.qty).toBe(0);
-    expect(Array.isArray(added.tags)).toBe(true);
-    expect(added.tags.length).toBe(0);
+    expect(added.tags).toEqual([]);
   });
 
   it("removes an item via IconButton", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -215,10 +211,9 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("updates a sub-field value via AdminFieldRenderer onChange", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getAllByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -238,10 +233,9 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("reorders items via DraggableList callback", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {getByTestId} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -260,10 +254,9 @@ describe("AdminNestedArrayField", () => {
   });
 
   it("supports re-render with longer value array (grows itemIds)", () => {
-    const onChange = mock(() => {});
+    const onChange = mock<NestedOnChange>(() => {});
     const {rerender, toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -273,7 +266,6 @@ describe("AdminNestedArrayField", () => {
     );
     rerender(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={onChange}
@@ -290,7 +282,6 @@ describe("AdminNestedArrayField", () => {
   it("supports re-render with shorter value array (shrinks itemIds)", () => {
     const {rerender, toJSON} = renderWithTheme(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -303,7 +294,6 @@ describe("AdminNestedArrayField", () => {
     );
     rerender(
       <AdminNestedArrayField
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         items={baseItems as unknown as Record<string, AdminFieldConfig>}
         onChange={() => {}}
@@ -312,5 +302,91 @@ describe("AdminNestedArrayField", () => {
       />
     );
     expect(toJSON()).toBeDefined();
+  });
+
+  describe("nested object subfields", () => {
+    const mediaConfig = {
+      items: {
+        port: {required: false, type: "number"},
+        sonarr: {
+          items: {
+            apiKey: {required: false, type: "string"},
+            url: {required: false, type: "string"},
+          },
+          required: false,
+          type: "object",
+        },
+      },
+      required: false,
+      type: "object",
+    };
+
+    it("sizes editable rows to fit nested object groups", () => {
+      const {getByTestId} = renderWithTheme(
+        <AdminNestedArrayField
+          fieldKey="servers"
+          items={
+            {media: mediaConfig, name: {required: false, type: "string"}} as unknown as Record<
+              string,
+              AdminFieldConfig
+            >
+          }
+          onChange={() => {}}
+          title="Servers"
+          value={[{media: {port: 1}, name: "a"}]}
+        />
+      );
+      // Header 44 + name 76 + media group (84 + port 76 + sonarr group (84 + 2 * 76)) + padding 24
+      expect(getByTestId("mock-draggable-list").props.itemHeight).toBe(540);
+    });
+
+    it("gives nested groups per-item test IDs in editable rows", () => {
+      const {getByTestId} = renderWithTheme(
+        <AdminNestedArrayField
+          fieldKey="servers"
+          items={{media: mediaConfig} as unknown as Record<string, AdminFieldConfig>}
+          onChange={() => {}}
+          title="Servers"
+          value={[{media: {port: 1}}, {media: {port: 2}}]}
+        />
+      );
+      expect(getByTestId("admin-field-servers.0.media.sonarr.url")).toBeTruthy();
+      expect(getByTestId("admin-field-servers.1.media.sonarr.url")).toBeTruthy();
+    });
+
+    it("merges an edited nested leaf into the right item", () => {
+      const onChange = mock((_: unknown) => {});
+      const {getByTestId} = renderWithTheme(
+        <AdminNestedArrayField
+          fieldKey="servers"
+          items={{media: mediaConfig} as unknown as Record<string, AdminFieldConfig>}
+          onChange={onChange}
+          title="Servers"
+          value={[{media: {port: 1}}, {media: {port: 2}}]}
+        />
+      );
+      getByTestId("admin-field-servers.1.media.port").props.onChange(9);
+      expect(onChange).toHaveBeenCalledWith([{media: {port: 1}}, {media: {port: 9}}]);
+    });
+
+    it("starts new items from subfield defaults, skipping system fields and blank enums", () => {
+      const onChange = mock((_: unknown) => {});
+      const {getByTestId} = renderWithTheme(
+        <AdminNestedArrayField
+          items={
+            {
+              _id: {required: false, type: "objectid"},
+              kind: {enum: ["a", "b"], required: false, type: "string"},
+              media: mediaConfig,
+            } as unknown as Record<string, AdminFieldConfig>
+          }
+          onChange={onChange}
+          title="Servers"
+          value={[]}
+        />
+      );
+      fireEvent.press(getByTestId("btn-plus"));
+      expect(onChange).toHaveBeenCalledWith([{media: {port: 0, sonarr: {apiKey: "", url: ""}}}]);
+    });
   });
 });

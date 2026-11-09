@@ -12,15 +12,18 @@ import {NotificationPreference} from "../models/notificationPreference";
 import {clearSyncRegistry} from "../sync/registry";
 import {SyncApp} from "../sync/syncApp";
 import {TerrenoApp} from "../terrenoApp";
-import {authAsUser, setupDb, UserModel} from "../tests";
+import {authAsUser, authUserModel, setupDb, UserModel} from "../tests";
 import {configureNotificationService, getNotificationService} from "./notificationService";
 import {NotificationsApp} from "./notificationsApp";
-import {notificationsBeforeSend} from "./notificationsBeforeSend";
+import {
+  type NotificationsBeforeSendChannel,
+  notificationsBeforeSend,
+} from "./notificationsBeforeSend";
 
 interface FakeComms {
   mailCalls: Array<{html?: string; subject: string; to: string}>;
   mailUserIds: Array<string | undefined>;
-  pushCalls: Array<{title: string; userId: string}>;
+  pushCalls: Array<{body: string; title: string; userId: string}>;
   smsCalls: Array<{body: string; to: string}>;
   smsUserIds: Array<string | undefined>;
 }
@@ -34,7 +37,7 @@ const buildFakeComms = (
       message: {html?: string; subject: string; to: string},
       options?: {userId?: string}
     ) => Promise<{accepted: boolean}>;
-    sendPushToUser: (message: {title: string; userId: string}) => Promise<unknown[]>;
+    sendPushToUser: (message: {body: string; title: string; userId: string}) => Promise<unknown[]>;
     sendSms: (
       message: {body: string; to: string},
       options?: {userId?: string}
@@ -74,10 +77,7 @@ const buildFakeComms = (
 };
 
 const buildApp = (
-  options: {
-    getComms?: () => ReturnType<typeof buildFakeComms>["getComms"];
-    retainDays?: number;
-  } = {}
+  options: {getComms?: ReturnType<typeof buildFakeComms>["getComms"]; retainDays?: number} = {}
 ): express.Application => {
   clearSyncRegistry();
   return new TerrenoApp({
@@ -111,7 +111,7 @@ describe("NotificationsApp", () => {
     const app = buildApp();
     userAgent = await authAsUser(app, "notAdmin");
     await UserModel.deleteOne({email: "other-user@example.com"});
-    await signupUser(UserModel, "other-user@example.com", "password");
+    await signupUser(authUserModel, "other-user@example.com", "password");
     otherUserAgent = await authWithCredentials(app, {
       email: "other-user@example.com",
       password: "password",
@@ -336,6 +336,26 @@ describe("NotificationsApp", () => {
       sms: false,
     });
     const result = await notificationsBeforeSend({channel: "verification", userId});
+    assert.isUndefined(result);
+  });
+
+  it("notificationsBeforeSend does not cancel when userId is missing", async () => {
+    const result = await notificationsBeforeSend({channel: "mail"});
+    assert.isUndefined(result);
+  });
+
+  it("notificationsBeforeSend does not cancel for channels without a preference field", async () => {
+    await NotificationPreference.create({
+      inapp: false,
+      mail: false,
+      ownerId: userId,
+      push: false,
+      sms: false,
+    });
+    const result = await notificationsBeforeSend({
+      channel: "inapp" as unknown as NotificationsBeforeSendChannel,
+      userId,
+    });
     assert.isUndefined(result);
   });
 

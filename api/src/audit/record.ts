@@ -3,7 +3,12 @@ import mongoose from "mongoose";
 
 import {logger} from "../logger";
 import {getOrgContext, ORGANIZATION_ID_HEADER} from "../orgs/orgContext";
-import type {AuditEventModel, AuditEventOperation, AuditEventVerb} from "./auditEventModel";
+import type {
+  AuditEventModel,
+  AuditEventOperation,
+  AuditEventSource,
+  AuditEventVerb,
+} from "./auditEventModel";
 import {changedFieldDiff, recordLabelFromDoc, toAuditPlain} from "./diff";
 
 export interface ModelRouterAuditOptions {
@@ -28,12 +33,13 @@ export interface AuditEventWrite {
   organizationId?: string;
   recordId?: string;
   recordLabel?: string;
-  source: "admin" | "modelRouter" | "rbac";
+  source: AuditEventSource;
   verb: AuditEventVerb;
 }
 
 const MISSING_PLUGIN_MESSAGE =
   "modelRouter audit: true requires AuditApp to be registered; skipping AuditEvent write";
+const AUDIT_EVENT_MODEL_NAMES = new Set(["AuditEvent", "TerrenoAuditEvent"]);
 
 let auditEventModel: AuditEventModel | undefined;
 let auditEnqueue: AuditEnqueue | undefined;
@@ -68,6 +74,9 @@ const operationFromVerb = (verb: AuditEventVerb): AuditEventOperation => {
   if (verb === "deleted") {
     return "delete";
   }
+  if (verb === "viewed") {
+    return "read";
+  }
   return "update";
 };
 
@@ -92,7 +101,7 @@ export const maybeRecordAdminAudit = async ({
     if (!auditEventModel) {
       return;
     }
-    if (modelName === "AuditEvent") {
+    if (AUDIT_EVENT_MODEL_NAMES.has(modelName)) {
       return;
     }
     const beforePlain = toAuditPlain(before);
@@ -233,7 +242,7 @@ export const snapshotAuditBefore = ({
 };
 
 const persistAuditEvent = async (write: AuditEventWrite): Promise<void> => {
-  if (write.modelName === "AuditEvent") {
+  if (AUDIT_EVENT_MODEL_NAMES.has(write.modelName)) {
     return;
   }
   if (!auditEventModel) {

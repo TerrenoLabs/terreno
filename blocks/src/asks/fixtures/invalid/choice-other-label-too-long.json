@@ -1,0 +1,25 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {
+        "id": "cheese",
+        "label": "Cheese"
+      },
+      {
+        "id": "olives",
+        "label": "Olives"
+      }
+    ],
+    "allowOther": true,
+    "otherLabel": "An Other label that keeps going and going, well past the one hundred and twenty character limit for the labels of every kind"
+  },
+  "errors": [
+    {
+      "path": "otherLabel",
+      "code": "TOO_LONG"
+    }
+  ]
+}

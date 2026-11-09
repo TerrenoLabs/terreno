@@ -59,4 +59,4 @@ notificationPreferenceSchema.index(
 export const NotificationPreference = mongoose.model<
   NotificationPreferenceDocument,
   NotificationPreferenceModel
->("NotificationPreference", notificationPreferenceSchema);
+>("TerrenoNotificationPreference", notificationPreferenceSchema, "notificationpreferences");

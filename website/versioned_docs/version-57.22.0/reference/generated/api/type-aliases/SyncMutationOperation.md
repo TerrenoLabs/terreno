@@ -1,0 +1,1 @@
+> **SyncMutationOperation** = `"create"` \| `"update"` \| `"delete"`

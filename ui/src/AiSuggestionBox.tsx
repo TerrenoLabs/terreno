@@ -61,14 +61,14 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
   const backgroundColor = isAdded
     ? theme.surface.successLight
     : status === "not-started"
-      ? theme.primitives.neutral050
-      : theme.primitives.primary000;
+      ? theme.surface.baseAlternate
+      : theme.surface.ai;
 
   const borderColor = isAdded
-    ? "#9BE7B2"
+    ? theme.border.success
     : status === "not-started"
-      ? theme.surface.secondaryLight
-      : theme.primitives.primary100;
+      ? theme.border.default
+      : theme.border.ai;
 
   const containerStyle = {
     backgroundColor,
@@ -136,7 +136,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
         <View style={{alignItems: "center", flexDirection: "row", gap: 4, width: "100%"}}>
           <SparklesIcon fill={theme.text.secondaryDark} />
           <View style={{flex: 1}}>
-            <Text color="secondaryDark" size="sm">
+            <Text color={isAdded ? "primary" : "secondaryDark"} size="sm">
               {headingText}
             </Text>
           </View>
@@ -151,7 +151,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
         <View style={{alignItems: "center", flexDirection: "row", gap: 4, width: "100%"}}>
           <SparklesIcon fill={theme.text.secondaryDark} />
           <View style={{flex: 1}}>
-            <Text color="secondaryDark" size="sm">
+            <Text color={isAdded ? "primary" : "secondaryDark"} size="sm">
               {headingText}
             </Text>
           </View>
@@ -161,7 +161,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
               size="sm"
               testID={testID ? `${testID}-show` : undefined}
               text="Show"
-              variant="ghost"
+              variant="outline"
             />
             {renderFeedback()}
           </View>
@@ -175,7 +175,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
       <View style={{alignItems: "center", flexDirection: "row", gap: 4, width: "100%"}}>
         <SparklesIcon fill={theme.text.secondaryDark} />
         <View style={{flex: 1}}>
-          <Text color="secondaryDark" size="sm">
+          <Text color={isAdded ? "primary" : "secondaryDark"} size="sm">
             {headingText}
           </Text>
         </View>
@@ -202,7 +202,7 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
           size="sm"
           testID={testID ? `${testID}-hide` : undefined}
           text="Hide"
-          variant="ghost"
+          variant="outline"
         />
         {Boolean(onAdd) && (
           <Button

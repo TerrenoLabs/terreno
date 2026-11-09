@@ -30,14 +30,19 @@ const platformValues: PushTokenPlatform[] = ["android", "ios", "web"];
 const openApiOptions = (openApi?: unknown): {openApi?: OpenApiMiddleware} =>
   openApi ? {openApi: openApi as OpenApiMiddleware} : {};
 
-const getAuthenticatedUser = (
-  req: express.Request
-): {_id: unknown; admin?: boolean; id?: string} => {
-  const user = req.user as {_id?: unknown; admin?: boolean; id?: string} | undefined;
+interface AuthenticatedUser {
+  _id: unknown;
+  admin?: boolean;
+  id?: string;
+  tokenEpoch?: number;
+}
+
+const getAuthenticatedUser = (req: express.Request): AuthenticatedUser => {
+  const user = req.user as Partial<AuthenticatedUser> | undefined;
   if (!user?._id) {
     throw new APIError({status: 401, title: "Authentication required"});
   }
-  return user as {_id: unknown; admin?: boolean; id?: string};
+  return user as AuthenticatedUser;
 };
 
 const isDuplicateKeyError = (error: unknown): boolean =>
@@ -55,11 +60,13 @@ const claimPushToken = async ({
   deviceId,
   platform,
   token,
+  tokenEpoch,
   userId,
 }: {
   deviceId?: string;
   platform: PushTokenPlatform;
   token: string;
+  tokenEpoch: number;
   userId: Types.ObjectId;
 }): Promise<{created: boolean; document: PushTokenDocument}> => {
   const now = DateTime.utc().toJSDate();
@@ -78,6 +85,9 @@ const claimPushToken = async ({
         ...(deviceId === undefined ? {} : {deviceId}),
         lastSeenAt: now,
         platform,
+        // Binds the device to the session generation; a password reset or session revocation
+        // ends delivery until the device registers again.
+        tokenEpoch,
         updated: now,
         userId,
       },
@@ -140,6 +150,7 @@ export const addPushTokenRoutes = (
         deviceId: body.deviceId,
         platform: body.platform,
         token: body.token,
+        tokenEpoch: typeof user.tokenEpoch === "number" ? user.tokenEpoch : 0,
         userId: user._id as Types.ObjectId,
       };
 

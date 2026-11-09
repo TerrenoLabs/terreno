@@ -45,6 +45,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputInstance,
   type TextInputProps,
   TouchableOpacity,
   View,
@@ -137,7 +138,7 @@ export interface RNPickerSelectProps {
   /**
    * Web only. When true, the dropdown menu renders in a fixed portal on
    * `document.body` instead of a React Native `Modal`, so it floats above
-   * ancestor portals / high-zIndex overlays (e.g. the `Filter` panel).
+   * ancestor portals / high-zIndex overlays (e.g. a `DropdownPanel`).
    * @default false
    */
   renderMenuInBodyPortal?: boolean;
@@ -171,7 +172,7 @@ export const RNPickerSelect = ({
   const searchable = !disableSearch;
   const [showPicker, setShowPicker] = useState<boolean>(false);
   const [webSearchQuery, setWebSearchQuery] = useState("");
-  const webSearchInputRef = useRef<TextInput>(null);
+  const webSearchInputRef = useRef<TextInputInstance>(null);
   const [animationType, setAnimationType] = useState<ModalProps["animationType"]>(undefined);
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("portrait");
   const [doneDepressed, setDoneDepressed] = useState<boolean>(false);
@@ -469,11 +470,11 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >
@@ -589,12 +590,12 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
             height: 40,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >
@@ -742,11 +743,11 @@ export const RNPickerSelect = ({
         style={[
           defaultStyles.viewContainer,
           {
-            backgroundColor: theme.surface.base,
-            borderColor: theme.border.dark,
+            backgroundColor: theme.field.background,
+            borderColor: theme.field.border,
           },
           disabled && {
-            backgroundColor: theme.surface.neutralLight,
+            backgroundColor: theme.field.backgroundDisabled,
           },
         ]}
       >

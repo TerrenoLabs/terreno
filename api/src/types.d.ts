@@ -6,6 +6,7 @@ declare namespace NodeJS {
     SENTRY_TRACES_SAMPLE_RATE: string;
     SENTRY_PROFILES_SAMPLE_RATE: string;
     SLACK_WEBHOOKS?: string;
+    SLACK_BOT_TOKEN?: string;
     GOOGLE_CHAT_WEBHOOKS?: string;
     SESSION_SECRET: string;
     TOKEN_ISSUER: string;

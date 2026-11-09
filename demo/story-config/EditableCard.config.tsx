@@ -7,6 +7,7 @@ import {
 import {EditableCard} from "@terreno/ui";
 
 export const EditableCardConfiguration: DemoConfiguration = {
+  usageExample: "import {EditableCard} from \"@terreno/ui\";\n\n<EditableCard />",
   name: "EditableCard",
   component: EditableCard,
   related: ["Card", "Badge", "IconButton"],
@@ -23,7 +24,7 @@ export const EditableCardConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3869-6366",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4012-11316",
     ios: "ready",
     android: "ready",
     web: "ready",

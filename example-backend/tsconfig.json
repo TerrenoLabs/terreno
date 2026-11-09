@@ -1,35 +1,28 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022"],
-    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "lib": ["esnext"],
+    "module": "preserve",
+    "moduleDetection": "force",
     "noEmit": true,
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "types": ["bun-types"],
-    "ignoreDeprecations": "6.0",
-    "rootDir": "./src",
-    "baseUrl": ".",
     "paths": {
-      "@api/*": ["src/api/*"],
-      "@models/*": ["src/models/*"],
-      "@scripts/*": ["src/scripts/*"],
-      "@services/*": ["src/services/*"],
-      "@tasks/*": ["src/tasks/*"],
-      "@test/*": ["src/test/*"],
-      "@tests/*": ["src/tests/*"],
-      "@types": ["src/types/index.ts"],
-      "@types/*": ["src/types/*"],
-      "@utils/*": ["src/utils/*"]
-    }
+      "@api/*": ["./src/api/*"],
+      "@models/*": ["./src/models/*"],
+      "@scripts/*": ["./src/scripts/*"],
+      "@services/*": ["./src/services/*"],
+      "@tasks/*": ["./src/tasks/*"],
+      "@test/*": ["./src/test/*"],
+      "@tests/*": ["./src/tests/*"],
+      "@types": ["./src/types/index.ts"],
+      "@types/*": ["./src/types/*"],
+      "@utils/*": ["./src/utils/*"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "esnext",
+    "types": ["bun"],
+    "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "include": ["src"]
 }
-

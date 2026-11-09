@@ -2,7 +2,7 @@ import {Box, Heading, Link, Text} from "@terreno/ui";
 import React from "react";
 
 const DOC_LINK =
-  "https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/admin-ui-v2-django-parity.md";
+  "https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/admin-ui-v2-django-parity.md";
 
 /**
  * Static map of admin UI v2 features demonstrated by example-backend AdminApp and this admin

@@ -3,7 +3,9 @@ import {act, fireEvent, userEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import type {ReactElement} from "react";
 import type {TextInput} from "react-native";
+import type {TextFieldProps} from "./Common";
 import {TextField} from "./TextField";
+import {defaultThemePrimitives, useTheme} from "./Theme";
 import {renderWithTheme} from "./test-utils";
 
 describe("TextField", () => {
@@ -398,21 +400,25 @@ describe("TextField", () => {
         const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
         const originalSetTimeout = globalThis.setTimeout;
         let scheduledRefocus: (() => void) | undefined;
-        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-          (handler, timeout, ...args) => {
-            scheduledRefocus = handler as unknown as () => void;
-            return originalSetTimeout(() => {}, timeout, ...args);
-          }
-        );
+        const setTimeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(((
+          handler: () => void,
+          timeout?: number,
+          ...args: unknown[]
+        ) => {
+          scheduledRefocus = handler;
+          return originalSetTimeout(() => {}, timeout, ...args);
+        }) as unknown as typeof setTimeout);
         reactNative.Platform.OS = "web";
-        globalThis.requestAnimationFrame = undefined;
+        (
+          globalThis as {requestAnimationFrame?: typeof requestAnimationFrame}
+        ).requestAnimationFrame = undefined;
 
         try {
           const {getByDisplayValue, getByTestId} = renderWithTheme(
             <TextField onChange={mockOnChange} testID="pw" type="password" value="hunter2" />
           );
           const input = getByDisplayValue("hunter2");
-          const webInput = {focus: () => void 0};
+          const webInput = {focus: (): void => {}};
           const ref = (input.props as unknown as {ref?: (value: TextInput | null) => void}).ref;
           assert.isFunction(ref);
           const focusSpy = mock(() => {});
@@ -577,6 +583,14 @@ describe("TextField", () => {
       const input = getByDisplayValue("");
       expect(input.props.accessibilityHint).toBe("Enter text here");
       expect(input.props["aria-label"]).toBe("Text input field");
+    });
+
+    it("uses accessibilityLabel as the input's accessible name", () => {
+      const {getByDisplayValue} = renderWithTheme(
+        <TextField accessibilityLabel="Backup code" onChange={mockOnChange} value="" />
+      );
+
+      expect(getByDisplayValue("").props["aria-label"]).toBe("Backup code");
     });
 
     it("should indicate disabled state in accessibility", () => {
@@ -761,8 +775,10 @@ describe("TextField", () => {
 
     it("warns for not-yet-supported field types", () => {
       const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+      // TextFieldProps excludes numberRange; untyped callers can still pass it.
+      const unsupportedType = "numberRange" as unknown as TextFieldProps["type"];
       try {
-        renderWithTheme(<TextField onChange={mockOnChange} type="numberRange" value="" />);
+        renderWithTheme(<TextField onChange={mockOnChange} type={unsupportedType} value="" />);
         expect(warnSpy).toHaveBeenCalledWith("numberRange is not yet supported");
       } finally {
         warnSpy.mockRestore();
@@ -788,6 +804,22 @@ describe("TextField", () => {
       expect(() =>
         fireEvent(input, "contentSizeChange", {nativeEvent: {contentSize: {height: 120}}})
       ).not.toThrow();
+    });
+
+    it("clears the measured grow height after the controlled value is emptied", async () => {
+      const {getByDisplayValue, rerender} = renderWithTheme(
+        <TextField grow multiline onChange={mockOnChange} value="long note" />
+      );
+      fireEvent(getByDisplayValue("long note"), "contentSizeChange", {
+        nativeEvent: {contentSize: {height: 120}},
+      });
+
+      rerender(<TextField grow multiline onChange={mockOnChange} value="" />);
+      await act(async () => {});
+      rerender(<TextField grow multiline onChange={mockOnChange} value="n" />);
+
+      const styles = [getByDisplayValue("n").props.style].flat(Infinity);
+      assert.isTrue(styles.some((style) => style?.height === 40));
     });
 
     it("invokes the onFocus callback when the input is focused", () => {
@@ -924,6 +956,46 @@ describe("TextField", () => {
       }
     });
 
+    it("keeps a typo fix the user backspaces within the oscillation window", async () => {
+      const savedOS = PlatformModule.OS;
+      const originalNow = performance.now.bind(performance);
+      let fakeNow = 20_000;
+
+      try {
+        PlatformModule.OS = "web";
+        performance.now = () => fakeNow;
+
+        let value = "hello";
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} testID="memory-text" type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+
+        // RN Web fires onChange (the DOM input event) and then onChangeText for each key.
+        const typeKey = async (text: string, inputType: string): Promise<void> => {
+          const input = view.getByDisplayValue(value);
+          await act(async () => {
+            fireEvent(input, "change", {nativeEvent: {inputType, text}});
+            fireEvent.changeText(input, text);
+          });
+          view.rerender(renderField());
+        };
+
+        await typeKey("hellox", "insertText");
+        fakeNow += 150;
+        await typeKey("hello", "deleteContentBackward");
+
+        expect(onChange.mock.calls.map((call) => call[0])).toEqual(["hellox", "hello"]);
+        expect(value).toBe("hello");
+      } finally {
+        performance.now = originalNow;
+        PlatformModule.OS = savedOS;
+      }
+    });
+
     it("allows backspace and retype after the oscillation window", async () => {
       const savedOS = PlatformModule.OS;
       const originalNow = performance.now.bind(performance);
@@ -959,6 +1031,213 @@ describe("TextField", () => {
         performance.now = originalNow;
         PlatformModule.OS = savedOS;
       }
+    });
+  });
+
+  describe("autoComplete", () => {
+    const setOS = (os: string): string => {
+      const reactNative = require("react-native") as {Platform: {OS: string}};
+      const originalOS = reactNative.Platform.OS;
+      reactNative.Platform.OS = os;
+      return originalOS;
+    };
+
+    it("sets autoComplete on the input on web", () => {
+      const originalOS = setOS("web");
+      try {
+        const {getByTestId} = renderWithTheme(
+          <>
+            <TextField
+              autoComplete="current-password"
+              onChange={() => {}}
+              testID="password"
+              type="password"
+              value=""
+            />
+            <TextField
+              autoComplete="username webauthn"
+              onChange={() => {}}
+              testID="email"
+              type="email"
+              value=""
+            />
+          </>
+        );
+        expect(getByTestId("password").props.autoComplete).toBe("current-password");
+        expect(getByTestId("email").props.autoComplete).toBe("username webauthn");
+      } finally {
+        setOS(originalOS);
+      }
+    });
+
+    const nativeCases: {
+      autoComplete: TextFieldProps["autoComplete"];
+      expectedAutoComplete: string | undefined;
+      expectedTextContentType: string;
+      type: TextFieldProps["type"];
+    }[] = [
+      {
+        autoComplete: "username",
+        expectedAutoComplete: "username",
+        expectedTextContentType: "username",
+        type: "email",
+      },
+      {
+        autoComplete: "username webauthn",
+        expectedAutoComplete: "username",
+        expectedTextContentType: "username",
+        type: "email",
+      },
+      {
+        autoComplete: "email",
+        expectedAutoComplete: "email",
+        expectedTextContentType: "emailAddress",
+        type: "email",
+      },
+      {
+        autoComplete: "current-password",
+        expectedAutoComplete: "current-password",
+        expectedTextContentType: "password",
+        type: "password",
+      },
+      {
+        autoComplete: "new-password",
+        expectedAutoComplete: "new-password",
+        expectedTextContentType: "newPassword",
+        type: "password",
+      },
+      {
+        autoComplete: "one-time-code",
+        expectedAutoComplete: "one-time-code",
+        expectedTextContentType: "oneTimeCode",
+        type: "text",
+      },
+      {
+        autoComplete: "off",
+        expectedAutoComplete: "off",
+        expectedTextContentType: "none",
+        type: "search",
+      },
+      {
+        autoComplete: "on",
+        expectedAutoComplete: undefined,
+        expectedTextContentType: "password",
+        type: "password",
+      },
+    ];
+
+    for (const testCase of nativeCases) {
+      it(`forwards autoComplete="${testCase.autoComplete}" to native autofill hints`, () => {
+        const {getByTestId} = renderWithTheme(
+          <TextField
+            autoComplete={testCase.autoComplete}
+            onChange={() => {}}
+            testID="field"
+            type={testCase.type}
+            value=""
+          />
+        );
+        const input = getByTestId("field");
+        expect(input.props.autoComplete).toBe(testCase.expectedAutoComplete);
+        expect(input.props.textContentType).toBe(testCase.expectedTextContentType);
+      });
+    }
+
+    it("falls back to the type's text content hint on native without autoComplete", () => {
+      const {getByTestId} = renderWithTheme(
+        <>
+          <TextField onChange={() => {}} testID="email" type="email" value="" />
+          <TextField onChange={() => {}} testID="password" type="password" value="" />
+        </>
+      );
+      expect(getByTestId("email").props.autoComplete).toBeUndefined();
+      expect(getByTestId("email").props.textContentType).toBe("emailAddress");
+      expect(getByTestId("password").props.autoComplete).toBeUndefined();
+      expect(getByTestId("password").props.textContentType).toBe("password");
+    });
+
+    it("sets the web autofill token on web and leaves the iOS hint to the type map", () => {
+      const originalOS = setOS("web");
+      try {
+        const {getByTestId} = renderWithTheme(
+          <TextField
+            autoComplete="one-time-code"
+            onChange={() => {}}
+            testID="code"
+            type="text"
+            value=""
+          />
+        );
+        expect(getByTestId("code").props.autoComplete).toBe("one-time-code");
+      } finally {
+        setOS(originalOS);
+      }
+    });
+  });
+
+  describe("field theming", () => {
+    type ThemeContextValue = ReturnType<typeof useTheme>;
+
+    const renderWithFieldTheme = (
+      props: Partial<TextFieldProps> = {}
+    ): {captured: () => ThemeContextValue | undefined; findBox: (color: string) => unknown[]} => {
+      let captured: ThemeContextValue | undefined;
+      const Capture = (): null => {
+        captured = useTheme();
+        return null;
+      };
+      const view = renderWithTheme(
+        <>
+          <Capture />
+          <TextField onChange={() => {}} testID="themed-field" value="" {...props} />
+        </>
+      );
+      const findBox = (color: string): unknown[] =>
+        view.UNSAFE_root.findAll(
+          (node) =>
+            typeof node.type === "string" &&
+            node.props.style?.backgroundColor === color &&
+            node.props.style?.borderRadius === 4
+        );
+      return {captured: () => captured, findBox};
+    };
+
+    it("paints the input box from field.background and field.border", () => {
+      const {captured, findBox} = renderWithFieldTheme();
+      act(() => {
+        captured()?.setTheme({field: {background: "primary000", border: "primary500"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.primary000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.primary500);
+    });
+
+    it("paints a disabled input from field.backgroundDisabled and field.borderDisabled", () => {
+      const {captured, findBox} = renderWithFieldTheme({disabled: true});
+      act(() => {
+        captured()?.setTheme({
+          field: {backgroundDisabled: "accent050", borderDisabled: "accent700"},
+        });
+      });
+      const boxes = findBox(defaultThemePrimitives.accent050) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.accent700);
+    });
+
+    it("paints an error border from field.borderError", () => {
+      const {captured, findBox} = renderWithFieldTheme({errorText: "Required"});
+      act(() => {
+        captured()?.setTheme({field: {borderError: "warning200"}});
+      });
+      const boxes = findBox(defaultThemePrimitives.neutral000) as {
+        props: {style: {borderColor: string}};
+      }[];
+      assert.isAbove(boxes.length, 0);
+      assert.equal(boxes[0].props.style.borderColor, defaultThemePrimitives.warning200);
     });
   });
 });

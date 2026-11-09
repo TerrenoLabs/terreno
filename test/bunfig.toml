@@ -8,9 +8,12 @@ coveragePathIgnorePatterns = [
   "dist/**",
   "**/node_modules/**",
   "../api/**",
+  "../ui/**",
   # Restart/reconnect branches need a process that can stop mongoose; the main
   # suite keeps a shared connection, so those files are excluded from the gate.
   "src/mongo/mongoServer.ts",
   "src/mongo/connection.ts",
+  # Three-line bin wrappers; the CLI logic is covered through testShard.ts / testHygiene.ts.
+  "src/cli/*Cli.ts",
 ]
 coverageThreshold = { line = 95, function = 95 }

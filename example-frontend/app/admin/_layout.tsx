@@ -1,22 +1,72 @@
 import {
   AdminProvider,
+  type AdminScreenWidgetProps,
   AdminShellLayout,
+  AiPromptEditorScreenWidget,
+  AiReviewBatchScreenWidget,
+  AiTracesScreenWidget,
   OrgContextProvider,
   OrgSwitcher,
   organizationFromPath,
   useOptionalOrgContext,
 } from "@terreno/admin-frontend";
-import {baseUrl, canOpenAdminPage, selectBetterAuthUserId} from "@terreno/rtk";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {useSession} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import {SyncDbProvider, useConflicts} from "@terreno/syncdb/react";
-import {Box, Spinner, Text} from "@terreno/ui";
-import {Stack, usePathname} from "expo-router";
+import {Box, Spinner, Text, useStoredState, useTheme} from "@terreno/ui";
+import {Stack, ThemeProvider, usePathname} from "expo-router";
 import React, {useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
 import {ADMIN_ROUTE} from "@/constants/adminConstants";
-import {getAdminAuthHeaders} from "@/store/betterAuthApi";
-import {terrenoApi, useGetMeQuery} from "@/store/sdk";
-import {adminSyncDb, setAdminSyncOrganizationId} from "@/store/syncdb";
+import {useGetAuthMeQuery} from "@/store/apiSdk";
+import {adminSyncDb, getAdminAuthHeaders, setAdminSyncOrganizationId} from "@/store/syncdb";
+import {buildNavigationTheme} from "@/utils/navigationTheme";
 import SyncLabScreen from "./SyncLabScreen";
+
+const PLAYGROUND_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run the playground.";
+
+const MULTI_STAGE_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run the multi-stage trace test.";
+
+const ExamplePromptEditorScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiPromptEditorScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyLoading={isGeminiApiKeyLoading}
+      playgroundApiKeyHint={PLAYGROUND_GEMINI_KEY_HINT}
+    />
+  );
+};
+
+const ExampleTracesScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiTracesScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyHint={MULTI_STAGE_GEMINI_KEY_HINT}
+      apiKeyLoading={isGeminiApiKeyLoading}
+    />
+  );
+};
+
+const JUDGE_GEMINI_KEY_HINT =
+  "Save a Gemini API key on the Profile tab, then return here to run LLM judges on this batch.";
+
+const ExampleReviewBatchScreen: React.FC<AdminScreenWidgetProps> = (props) => {
+  const [geminiApiKey, , isGeminiApiKeyLoading] = useStoredState<string>("geminiApiKey", "");
+  return (
+    <AiReviewBatchScreenWidget
+      {...props}
+      apiKey={geminiApiKey || undefined}
+      apiKeyHint={JUDGE_GEMINI_KEY_HINT}
+      apiKeyLoading={isGeminiApiKeyLoading}
+    />
+  );
+};
 
 const BindAdminSyncOrganization: React.FC = () => {
   const organizationId = useOptionalOrgContext()?.organizationId;
@@ -37,11 +87,17 @@ const BindAdminSyncOrganization: React.FC = () => {
  * column (stack navigator). `admin:access` is the only permission that opens this page.
  */
 const AdminLayoutContent: React.FC = () => {
-  const userId = useSelector(selectBetterAuthUserId);
-  const {data: profile, isLoading} = useGetMeQuery(undefined, {skip: !userId});
+  const {userId} = useSession();
+  const {data: profile, isLoading} = useGetAuthMeQuery(undefined, {skip: !userId});
   const syncConflicts = useConflicts();
   const [isAdminSyncReady, setIsAdminSyncReady] = useState(false);
   const [adminSyncError, setAdminSyncError] = useState<string | undefined>();
+  const {colorScheme, theme} = useTheme();
+  // Transparent screen containers let the AdminShell canvas show through in both schemes.
+  const adminNavigationTheme = useMemo(
+    () => buildNavigationTheme({background: "transparent", colorScheme, theme}),
+    [colorScheme, theme]
+  );
   const canOpen = canOpenAdminPage({
     admin: profile?.admin,
     permissions: profile?.permissions,
@@ -117,46 +173,54 @@ const AdminLayoutContent: React.FC = () => {
 
   return (
     <AdminProvider
-      api={terrenoApi}
       apiBase={ADMIN_ROUTE}
       apiOrigin={baseUrl}
       getAuthHeaders={getAdminAuthHeaders}
       routeBase={ADMIN_ROUTE}
       syncConflicts={syncConflicts}
       syncDb={adminSyncDb}
-      widgets={{screens: {"sync-lab": SyncLabScreen}}}
+      widgets={{
+        screens: {
+          "ai-prompt-editor": ExamplePromptEditorScreen,
+          "ai-review-batch": ExampleReviewBatchScreen,
+          "ai-traces": ExampleTracesScreen,
+          "sync-lab": SyncLabScreen,
+        },
+      }}
     >
       <OrgContextProvider initialOrganization={routeOrganization}>
         <BindAdminSyncOrganization />
         <AdminShellLayout
-          api={terrenoApi}
           apiBase={ADMIN_ROUTE}
           configurationPath="/admin/configuration"
           isOrganizationOperator={isOrganizationOperator}
           organizationDirectoryPath="/orgs"
-          organizationSwitcher={<OrgSwitcher api={terrenoApi} routeBase={ADMIN_ROUTE} />}
+          organizationSwitcher={<OrgSwitcher routeBase={ADMIN_ROUTE} />}
           rolesPath="/roles"
           routeBase={ADMIN_ROUTE}
           versionConfigPath="/version-config"
         >
-          <Stack
-            screenOptions={{
-              contentStyle: {flex: 1},
-              headerShown: false,
-            }}
-          >
-            <Stack.Screen name="index" options={{title: "Admin"}} />
-            <Stack.Screen name="showcase" options={{title: "Admin UI v2 map"}} />
-            <Stack.Screen name="configuration" options={{title: "Configuration"}} />
-            <Stack.Screen name="roles" options={{title: "Roles"}} />
-            <Stack.Screen name="announcements/index" options={{title: "Announcements"}} />
-            <Stack.Screen name="consent-forms/index" options={{title: "Consent forms"}} />
-            <Stack.Screen name="consent-responses/index" options={{title: "Consent responses"}} />
-            <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
-            <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
-            <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
-            <Stack.Screen name="[model]" options={{title: "Model"}} />
-          </Stack>
+          <ThemeProvider value={adminNavigationTheme}>
+            <Stack
+              screenOptions={{
+                contentStyle: {backgroundColor: "transparent", flex: 1},
+                headerShown: false,
+              }}
+            >
+              <Stack.Screen name="index" options={{title: "Admin"}} />
+              <Stack.Screen name="showcase" options={{title: "Admin UI v2 map"}} />
+              <Stack.Screen name="configuration" options={{title: "Configuration"}} />
+              <Stack.Screen name="roles" options={{title: "Roles"}} />
+              <Stack.Screen name="announcements/index" options={{title: "Announcements"}} />
+              <Stack.Screen name="consent-forms/index" options={{title: "Consent forms"}} />
+              <Stack.Screen name="consent-responses/index" options={{title: "Consent responses"}} />
+              <Stack.Screen name="orgs/index" options={{title: "Organizations"}} />
+              <Stack.Screen name="orgs/[orgId]/index" options={{title: "Organization settings"}} />
+              <Stack.Screen name="orgs/[orgId]/members" options={{title: "Organization members"}} />
+              <Stack.Screen name="users/[id]/security" options={{title: "User security"}} />
+              <Stack.Screen name="[model]" options={{title: "Model"}} />
+            </Stack>
+          </ThemeProvider>
         </AdminShellLayout>
       </OrgContextProvider>
     </AdminProvider>

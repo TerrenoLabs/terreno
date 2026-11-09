@@ -150,8 +150,8 @@ describe("projects tenant create-escape (D3)", () => {
   });
 
   describe("over sync:mutate (applySyncMutation, shared by HTTP /sync/mutate and the socket handler)", () => {
-    // catalog clear helpers (e.g. clearMCPRegistry in usersTodoStatus.test.ts) wipe the
-    // shared collection registry; re-register projects sync before each case.
+    // Catalog clear helpers wipe the shared collection registry; re-register projects sync
+    // before each case.
     beforeEach(() => {
       if (findSyncEntryByCollectionTag("projects")) {
         return;

@@ -106,4 +106,59 @@ describe("admin user password action", () => {
     expect(res.body.data._id).toBe(String(target._id));
     expect(res.body.data.message).toBe("Password updated");
   });
+
+  it("ends the user's refresh tokens issued before the change", async () => {
+    const app = buildApp();
+    const admin = await createUser("admin@example.com", true);
+    const target = await createUser("target@example.com", false);
+    const token = await tokenFor(admin);
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: "target@example.com", password: "password12345"})
+      .expect(200);
+
+    await supertest(app)
+      .post(`/users/${target._id}/password`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({password: "newpassword1"})
+      .expect(200);
+
+    await supertest(app)
+      .post("/auth/refresh_token")
+      .send({refreshToken: login.body.data.refreshToken})
+      .expect(401);
+    const stored = await UserModel.findById(target._id);
+    expect(stored?.tokenEpoch).toBe(1);
+  });
+
+  it("passes the new password to the Better Auth sync so its sessions end", async () => {
+    const synced: {password: string; userId: string}[] = [];
+    process.env.TOKEN_SECRET = process.env.TOKEN_SECRET || "test-secret";
+    process.env.TOKEN_ISSUER = process.env.TOKEN_ISSUER || "example-backend-test";
+    const app = new TerrenoApp({
+      authOptions: {
+        generateJWTPayload: (user: unknown) => ({
+          admin: (user as {admin?: boolean}).admin === true,
+        }),
+        syncPasswordResetToBetterAuth: async (user, password): Promise<void> => {
+          synced.push({password, userId: String(user._id)});
+        },
+      },
+      skipListen: true,
+      userModel: UserModel as never,
+    })
+      .register(usersRouter)
+      .build();
+    const admin = await createUser("admin@example.com", true);
+    const target = await createUser("target@example.com", false);
+    const token = await tokenFor(admin);
+
+    await supertest(app)
+      .post(`/users/${target._id}/password`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({password: "newpassword1"})
+      .expect(200);
+
+    expect(synced).toEqual([{password: "newpassword1", userId: String(target._id)}]);
+  });
 });

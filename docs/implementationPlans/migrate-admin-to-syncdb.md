@@ -1,10 +1,16 @@
 # Implementation Plan: Migrate built-in admin to syncdb
 
-**Status:** Approved
+**Status:** Complete
+**Roadmap:** Area=`admin`, Target=`Released`, Impact=`Improvement`  
 **Branch:** `cursor/migrate-admin-to-syncdb-de61`
 **Owner:** Josh Gachnang
 **Created:** 2026-09-01
 **Grow run:** https://cursor.com/agents/bc-47350376-6566-4c5a-aee2-e6a28698de61
+
+> **Terreno 58 follow-up (done):** the dual-run window closed. `useAdminApi`, admin
+> `injectEndpoints`, and the admin `api` prop were removed (umbrella issue #1252).
+> ObjectId and API-only admin CRUD now use the `AdminProvider` fetch client through
+> `useAdminModelApi`. The plan below is kept as written for history.
 
 ## Goal
 

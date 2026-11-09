@@ -1,0 +1,17 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload the receipt.",
+    "maxSize": 1000
+  },
+  "errors": [
+    {
+      "path": "accept",
+      "code": "MISSING_REQUIRED"
+    },
+    {
+      "path": "maxSize",
+      "code": "UNKNOWN_KEY"
+    }
+  ]
+}

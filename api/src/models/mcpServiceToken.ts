@@ -1,8 +1,15 @@
-import {createHash, randomBytes} from "node:crypto";
+import {createHash, randomBytes, randomUUID} from "node:crypto";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
-import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, findOneOrNoneFor} from "../plugins";
+import {
+  createdUpdatedPlugin,
+  findExactlyOne,
+  findOneOrNone,
+  findOneOrNoneFor,
+  isDeletedPlugin,
+} from "../plugins";
+import {syncPlugin} from "../sync/syncSeqPlugin";
 import type {McpServiceTokenDocument, McpServiceTokenModel} from "../types/mcpServiceToken";
 
 export type {
@@ -12,7 +19,7 @@ export type {
   McpServiceTokenStatics,
 } from "../types/mcpServiceToken";
 
-const MCP_SERVICE_TOKEN_PREFIX = "mcp_";
+export const MCP_SERVICE_TOKEN_PREFIX = "mcp_";
 const MCP_SERVICE_TOKEN_RANDOM_BYTES = 32;
 const MCP_SERVICE_TOKEN_DISPLAY_LENGTH = 8;
 
@@ -20,6 +27,13 @@ const hashToken = (token: string): string => createHash("sha256").update(token).
 
 const mcpServiceTokenSchema = new mongoose.Schema<McpServiceTokenDocument, McpServiceTokenModel>(
   {
+    _id: {
+      // Synced collections use String ids. New rows get a UUID; rows created before
+      // Terreno 58 keep their ObjectId hex after the mcp-service-token-string-ids migration.
+      default: (): string => randomUUID(),
+      description: "The MCP service token id (String so the synced collection can address it)",
+      type: String,
+    },
     expiresAt: {
       description: "When this MCP service token expires; unset when it does not expire",
       type: Date,
@@ -37,6 +51,11 @@ const mcpServiceTokenSchema = new mongoose.Schema<McpServiceTokenDocument, McpSe
     revokedAt: {
       description: "When this MCP service token was revoked; unset while it remains active",
       type: Date,
+    },
+    tokenEpoch: {
+      description:
+        "The user's tokenEpoch when the token was issued; the token stops working after it changes",
+      type: Number,
     },
     tokenHash: {
       description: "SHA-256 hash of the full MCP service token plaintext",
@@ -64,8 +83,25 @@ mcpServiceTokenSchema.index({expiresAt: 1}, {expireAfterSeconds: 0});
 mcpServiceTokenSchema.index({revokedAt: 1, userId: 1});
 
 mcpServiceTokenSchema.plugin(createdUpdatedPlugin);
+mcpServiceTokenSchema.plugin(isDeletedPlugin);
 mcpServiceTokenSchema.plugin(findOneOrNone);
 mcpServiceTokenSchema.plugin(findExactlyOne);
+
+// Deleting a token means revoking it: the row stays visible to its owner (and the audit
+// trail) with `revokedAt` set. A soft delete (admin DELETE through modelRouter sets
+// `deleted: true`) is turned into a revoke so it never tombstones the owner's synced row.
+mcpServiceTokenSchema.pre("save", function () {
+  if (!this.isModified("deleted") || this.deleted !== true) {
+    return;
+  }
+  this.deleted = false;
+  if (!this.revokedAt) {
+    this.revokedAt = DateTime.now().toJSDate();
+  }
+});
+
+// Stamps a per-stream _syncSeq on every write; required by the /mcp/service-tokens sync config.
+mcpServiceTokenSchema.plugin(syncPlugin);
 
 const revokeInsteadOfDelete = async (
   doc: McpServiceTokenDocument | null
@@ -88,6 +124,9 @@ mcpServiceTokenSchema.methods = {
   },
 };
 
+// Query deleteOne revokes instead of removing the row. Registered after syncPlugin so that,
+// once the collection is synced, syncPlugin's hard-delete guard rejects the call before any
+// write happens.
 mcpServiceTokenSchema.pre("deleteOne", {document: false, query: true}, async function () {
   const existing = await findOneOrNoneFor(this.model, this.getFilter());
   await revokeInsteadOfDelete(existing as McpServiceTokenDocument | null);
@@ -98,7 +137,7 @@ mcpServiceTokenSchema.statics = {
   ...mcpServiceTokenSchema.statics,
   async countActiveForUser(
     this: McpServiceTokenModel,
-    userId: mongoose.Types.ObjectId
+    userId: mongoose.Types.ObjectId | string
   ): Promise<number> {
     const now = DateTime.now().toJSDate();
     return this.countDocuments({
@@ -109,13 +148,14 @@ mcpServiceTokenSchema.statics = {
   },
   async issueFor(
     this: McpServiceTokenModel,
-    user: {_id: {toString(): string}},
+    user: {_id: {toString(): string}; tokenEpoch?: number},
     options: {expiresAt?: Date; name: string}
   ): Promise<{mcpServiceToken: McpServiceTokenDocument; token: string}> {
     const token = `${MCP_SERVICE_TOKEN_PREFIX}${randomBytes(MCP_SERVICE_TOKEN_RANDOM_BYTES).toString("hex")}`;
     const mcpServiceToken = await this.create({
       expiresAt: options.expiresAt,
       name: options.name,
+      tokenEpoch: user.tokenEpoch ?? 0,
       tokenHash: hashToken(token),
       tokenPrefix: token.slice(
         MCP_SERVICE_TOKEN_PREFIX.length,
@@ -125,20 +165,51 @@ mcpServiceTokenSchema.statics = {
     });
     return {mcpServiceToken, token};
   },
+  async revokeAllForUser(
+    this: McpServiceTokenModel,
+    userId: mongoose.Types.ObjectId | string
+  ): Promise<number> {
+    const result = await this.updateMany(
+      {revokedAt: {$exists: false}, userId: new mongoose.Types.ObjectId(String(userId))},
+      {$set: {revokedAt: DateTime.now().toJSDate()}}
+    );
+    return result.modifiedCount;
+  },
   async revokeForUser(
     this: McpServiceTokenModel,
     user: {_id: {toString(): string}},
-    tokenId: mongoose.Types.ObjectId
+    tokenId: string
   ): Promise<McpServiceTokenDocument | null> {
     return this.findOneAndUpdate(
       {
-        _id: tokenId,
+        _id: String(tokenId),
         revokedAt: {$exists: false},
         userId: new mongoose.Types.ObjectId(String(user._id)),
       },
       {$set: {revokedAt: DateTime.now().toJSDate()}},
       {returnDocument: "after"}
     );
+  },
+  /**
+   * Revoke the user's active tokens issued under an earlier tokenEpoch. A token from before the
+   * field existed counts as epoch 0, the same way a refresh token without `te` does.
+   */
+  async revokeOutdatedForUser(
+    this: McpServiceTokenModel,
+    user: {_id: {toString(): string}; tokenEpoch?: number}
+  ): Promise<void> {
+    const currentEpoch = user.tokenEpoch ?? 0;
+    const userId = new mongoose.Types.ObjectId(String(user._id));
+    const outdated = await this.find({
+      revokedAt: {$exists: false},
+      tokenEpoch: {$nin: currentEpoch === 0 ? [0, null] : [currentEpoch]},
+      userId,
+    });
+    const revokedAt = DateTime.now().toJSDate();
+    for (const token of outdated) {
+      token.revokedAt = revokedAt;
+      await token.save();
+    }
   },
   async verify(this: McpServiceTokenModel, token: string): Promise<McpServiceTokenDocument | null> {
     const now = DateTime.now().toJSDate();
@@ -151,8 +222,9 @@ mcpServiceTokenSchema.statics = {
 };
 
 export const McpServiceToken =
-  (mongoose.models.McpServiceToken as McpServiceTokenModel | undefined) ??
+  (mongoose.models.TerrenoMcpServiceToken as unknown as McpServiceTokenModel | undefined) ??
   mongoose.model<McpServiceTokenDocument, McpServiceTokenModel>(
-    "McpServiceToken",
-    mcpServiceTokenSchema
+    "TerrenoMcpServiceToken",
+    mcpServiceTokenSchema,
+    "mcpservicetokens"
   );

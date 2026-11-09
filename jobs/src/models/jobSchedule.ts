@@ -52,6 +52,7 @@ jobScheduleSchema.plugin(findExactlyOne);
 jobScheduleSchema.index({enabled: 1, nextRunAt: 1});
 
 export const JobSchedule = mongoose.model<JobScheduleDocument, JobScheduleModel>(
-  "JobSchedule",
-  jobScheduleSchema
+  "TerrenoJobSchedule",
+  jobScheduleSchema,
+  "jobschedules"
 );

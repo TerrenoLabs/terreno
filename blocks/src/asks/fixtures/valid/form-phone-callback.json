@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "What number should the courier call?",
+    "fields": [
+      {
+        "id": "phone",
+        "type": "phone",
+        "label": "Phone",
+        "required": true,
+        "default": "+1 (415) 555-2671"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "phone": "+1 (415) 555-2671"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "What number should the courier call?",
+    "toolCallId": "call_fixture"
+  }
+}

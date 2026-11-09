@@ -5,21 +5,16 @@ import type {AdminScreenProps} from "./types";
 import {resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 
-export const AdminMigrations: React.FC<AdminScreenProps> = ({api, apiBase, baseUrl, routeBase}) => {
+export const AdminMigrations: React.FC<AdminScreenProps> = ({apiBase, baseUrl, routeBase}) => {
   const {apiBase: resolvedApiBase, routeBase: resolvedRouteBase} = resolveAdminBases({
     apiBase,
     baseUrl,
     routeBase,
   });
-  const {
-    config,
-    error: configError,
-    isLoading: isConfigLoading,
-  } = useAdminConfig(api, resolvedApiBase);
+  const {config, error: configError, isLoading: isConfigLoading} = useAdminConfig(resolvedApiBase);
 
   const view = (
     <AdminMigrationsView
-      api={api}
       apiBase={resolvedApiBase}
       config={config}
       configError={configError}

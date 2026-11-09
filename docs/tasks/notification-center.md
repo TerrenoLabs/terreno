@@ -1,7 +1,7 @@
 # Tasks: In-app notification center
 
 IP: [notification-center.md](../implementationPlans/notification-center.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1179
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1179
 
 **Feature profile:** false (full IP)
 

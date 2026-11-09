@@ -1,0 +1,24 @@
+v: 1
+blocks:
+  - type: list
+    id: menu
+    items:
+      - title: Roast leg of lamb
+        text: Rubbed with garlic and rosemary, roasted for 90 minutes, then rested.
+        meta: Main
+        image:
+          src: file:roast-lamb
+          alt: Roast leg of lamb on a carving board
+      - title: Crispy roast potatoes
+        text: Par-boiled, shaken, and roasted in hot fat.
+        image:
+          src: "data:image/png;base64,iVBORw0KGgo="
+          alt: Crisp roast potatoes in a tray
+      - title: Mint sauce
+  - type: card
+    title: Pudding
+    children:
+      - type: list
+        items:
+          - title: Apple crumble
+            meta: 45 min

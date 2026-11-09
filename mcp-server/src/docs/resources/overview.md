@@ -30,12 +30,24 @@ request to a mergeable pull request.
 
 - **@terreno/api** — REST API framework for Express/Mongoose (modelRouter, auth, OpenAPI)
 - **@terreno/ui** — React Native UI component library for iOS, Android, and web
-- **@terreno/syncdb** — Local-first data layer (primary path for collection CRUD)
-- **@terreno/rtk** — OpenAPI SDK, Better Auth Redux, feature flags (legacy for data sync)
+- **@terreno/syncdb** — Local-first data layer, request client + generated API hooks, auth session, config, and feature flags
 - **@terreno/ai** — Provider-agnostic AI service
 - **@terreno/admin-backend** / **@terreno/admin-frontend** / **@terreno/admin-spa** — Admin panel stack
 
-New apps: **syncdb + Better Auth** for data and auth; **rtk** for generated SDK hooks on non-synced routes only.
+Frontends use **@terreno/syncdb** for everything data-related: synced collections (`useQuery` /
+`useMutate`), generated request hooks for non-synced routes (`store/apiSdk.ts`), and the session
+(`SessionProvider` / `useSession` from `@terreno/syncdb/auth`). `@terreno/rtk` and Redux were removed
+in Terreno 58.
+
+## MCP development tools
+
+Use the hosted Terreno MCP for documentation and generators, and `terreno-mcp-local` for package
+versions, read-only Mongo inspection, merged logs, client state, and Metro/CDP runtime tools.
+Configure both with
+[Set up Terreno MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md);
+follow [Debug with MCP](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/debug-with-mcp.md)
+for the diagnostic workflow. The `terreno` CLI exposes the same
+local tools for terminal use.
 
 ## Development
 

@@ -1,10 +1,10 @@
 # Implementation Plan: API rate limiting
 
-**Status:** Approved  
+**Status:** Complete  
 **Branch:** `cursor/api-rate-limiting-d03a`  
 **Owner:** —  
 **Created:** 2026-08-30  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1187 (this feature **closes** that issue; implementation PRs use `Fixes #1187`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1187 (this feature **closes** that issue; implementation PRs use `Fixes #1187`)  
 **Task list:** [rate-limiting.md](../tasks/rate-limiting.md)  
 **Depends on:** —  
 **RTK deprecation flag:** None  
@@ -209,4 +209,4 @@ Skills: `backend-test-env` if any test mutates env (Redis URL). `mongoose-schema
 - [ ] 429 is `APIError` with `Retry-After` and `RateLimit` headers.
 - [ ] Docs how-to + reference + auth explanation + Terreno 58 default-on note exist.
 - [ ] Sync mutation limiter behavior unchanged (existing sync tests still pass).
-- [ ] Merging the implementation PR closes https://github.com/FlourishHealth/terreno/issues/1187 (`Fixes #1187`).
+- [ ] Merging the implementation PR closes https://github.com/TerrenoLabs/terreno/issues/1187 (`Fixes #1187`).

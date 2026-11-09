@@ -1,58 +1,8 @@
-import type express from "express";
 import type {Server as SocketIoServer} from "socket.io";
 import type {UserModel} from "../auth";
 import type {SyncAppOptions} from "../sync/routes";
 import type {startChangeStreamWatcher} from "./changeStreamWatcher";
 import type {BetterAuthSocketOptions} from "./socketAuth";
-
-/**
- * Configuration for real-time sync on a modelRouter.
- * Determines which CRUD methods emit WebSocket events and how they are routed.
- *
- * @deprecated Removed in Terreno 58. Use `sync` on modelRouter with `@terreno/syncdb`.
- * `RealtimeApp` remains required for sync sockets.
- */
-export interface RealtimeConfig {
-  /** Which CRUD methods should emit real-time sync events */
-  methods: Array<"create" | "update" | "delete">;
-  /**
-   * Strategy for determining which Socket.io rooms receive events.
-   * - 'owner': emit to `user:{doc.ownerId}` room
-   * - 'model': emit to `model:{modelName}` room (clients must subscribe)
-   * - 'broadcast': emit to all authenticated sockets
-   * - function: custom room resolver returning room name(s)
-   */
-  roomStrategy:
-    | "owner"
-    | "model"
-    | "broadcast"
-    | ((doc: Record<string, unknown>, method: string, req: express.Request) => string[]);
-  /** Custom serializer for real-time events. Falls back to the modelRouter responseHandler. */
-  realtimeResponseHandler?: (doc: Record<string, unknown>, method: string) => unknown;
-}
-
-/**
- * A real-time sync event emitted to clients via WebSocket.
- *
- * @deprecated Removed in Terreno 58 with modelRouter `realtime` and the RTK
- * cache-patching helpers. Syncdb uses `sync:delta` events instead.
- */
-export interface RealtimeEvent {
-  /** Mongoose model name (e.g. "Todo") */
-  model: string;
-  /** Route path used as tag type (e.g. "todos") */
-  collection: string;
-  /** The CRUD method that triggered this event */
-  method: "create" | "update" | "delete";
-  /** Document ID */
-  id: string;
-  /** Serialized document data (omitted for hard deletes) */
-  data?: unknown;
-  /** Fields that were updated (for update events from change streams) */
-  updatedFields?: string[];
-  /** Epoch milliseconds when the event was generated */
-  timestamp: number;
-}
 
 /**
  * Configuration for the MongoDB change stream watcher.
@@ -102,9 +52,10 @@ export interface RealtimeAppOptions {
   tokenIssuer?: string;
   /**
    * Enables the Better Auth session validator for socket authentication. It is tried after
-   * the legacy JWT validator when a token secret exists, or used alone otherwise. Pass the
-   * instance returned by `createBetterAuth` (and optionally the app user model so
-   * `decodedToken.id`/`admin` match the REST identity).
+   * the legacy JWT validator when a token secret exists, or used alone otherwise. Usually
+   * omitted: when a BetterAuthApp is registered on the same TerrenoApp, its instance and the
+   * RealtimeApp's `userModel` (else the TerrenoApp's) are used automatically. Pass the instance returned by
+   * `createBetterAuth` only for a RealtimeApp mounted without TerrenoApp, or to override it.
    */
   betterAuth?: BetterAuthSocketOptions;
   /**
@@ -119,8 +70,10 @@ export interface RealtimeAppOptions {
    * (D1). Authorization for realtime/sync subscriptions and mutations uses this full
    * document instead of the synthetic `{_id, admin, id}` shape derived from the token
    * alone — required for any permission check or `getUserScopes` resolver that reads
-   * fields beyond `admin` (e.g. `organizationIds` for tenant-scoped sync). Without it,
-   * socket-side authorization falls back to the synthetic shape (pre-D2 behavior).
+   * fields beyond `admin` (e.g. `organizationIds` for tenant-scoped sync). The sweep also
+   * disconnects sockets whose user was disabled or deleted. When omitted, the user model of
+   * the TerrenoApp this RealtimeApp is registered on is used; without either, socket-side
+   * authorization falls back to the synthetic shape (pre-D2 behavior).
    */
   userModel?: UserModel;
   /**
@@ -146,26 +99,4 @@ export interface RealtimeAppOptions {
    * process-wide `mock.module` of `./changeStreamWatcher`.
    */
   startChangeStreamWatcher?: typeof startChangeStreamWatcher;
-}
-
-/**
- * Payload sent by the client to subscribe to a single document's changes.
- */
-export interface DocumentSubscription {
-  /** Collection tag (e.g. "todos") */
-  collection: string;
-  /** Document ID */
-  id: string;
-}
-
-/**
- * Payload sent by the client to subscribe to a query-filtered list.
- */
-export interface QuerySubscription {
-  /** Collection tag (e.g. "todos") */
-  collection: string;
-  /** MongoDB-style query filter (e.g. {completed: false}) */
-  query: Record<string, unknown>;
-  /** Client-provided queryId (ignored — server computes a canonical ID) */
-  queryId?: string;
 }

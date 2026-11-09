@@ -1,4 +1,5 @@
 import {beforeEach, describe, expect, it} from "bun:test";
+import {assert} from "chai";
 import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -18,6 +19,14 @@ import {
 import {AdminOwnerTransformer} from "./transformers";
 
 type TestUser = Awaited<ReturnType<typeof setupDb>>[number];
+
+/** Returns a document a postUpdate hook captured, failing the test if the hook never ran. */
+const captured = (doc: Food | undefined): Food => {
+  if (!doc) {
+    throw new Error("Expected postUpdate to capture a document");
+  }
+  return doc;
+};
 
 describe("model array operations", () => {
   let _server: TestAgent;
@@ -218,7 +227,7 @@ describe("model array operations", () => {
 
     expect(updatedCategory.updated).not.toBe(updatedCategory.created);
     expect(unchangedCategory.updated).toBe(unchangedCategory.created);
-    expect(updatedCategory.name).toBe("Updated Category");
+    expect(updatedCategory?.name).toBe("Updated Category");
     // Unchanged.
     expect(updatedCategory.show).toBe(true);
     expect(unchangedCategory.show).toBe(true);
@@ -267,8 +276,8 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (new category added)
-    expect(postUpdateDoc.categories).toHaveLength(3);
-    expect(postUpdatePrevDoc.categories).toHaveLength(2);
+    expect(captured(postUpdateDoc).categories).toHaveLength(3);
+    expect(captured(postUpdatePrevDoc).categories).toHaveLength(2);
 
     // Reset for next test
     postUpdateCalled = false;
@@ -293,15 +302,15 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (category updated)
-    const updatedCategory = postUpdateDoc.categories.find(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const updatedCategory = captured(postUpdateDoc).categories.find(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
-    const prevCategory = postUpdatePrevDoc.categories.find(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const prevCategory = captured(postUpdatePrevDoc).categories.find(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
 
-    expect(updatedCategory.name).toBe("Updated Category");
-    expect(prevCategory.name).toBe("Fruit");
+    expect(updatedCategory?.name).toBe("Updated Category");
+    expect(prevCategory?.name).toBe("Fruit");
 
     // Reset for next test
     postUpdateCalled = false;
@@ -319,11 +328,11 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (category removed)
-    const remainingCategories = postUpdateDoc.categories.filter(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const remainingCategories = captured(postUpdateDoc).categories.filter(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
-    const prevCategories = postUpdatePrevDoc.categories.filter(
-      (c: FoodCategory) => c._id.toString() === categoryId.toString()
+    const prevCategories = captured(postUpdatePrevDoc).categories.filter(
+      (c: FoodCategory) => c._id?.toString() === categoryId.toString()
     );
 
     expect(remainingCategories).toHaveLength(0);
@@ -370,10 +379,10 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (new tag added)
-    expect(postUpdateDoc.tags).toHaveLength(3);
-    expect(postUpdatePrevDoc.tags).toHaveLength(2);
-    expect(postUpdateDoc.tags).toContain("organic");
-    expect(postUpdatePrevDoc.tags).not.toContain("organic");
+    expect(captured(postUpdateDoc).tags).toHaveLength(3);
+    expect(captured(postUpdatePrevDoc).tags).toHaveLength(2);
+    expect(captured(postUpdateDoc).tags).toContain("organic");
+    expect(captured(postUpdatePrevDoc).tags).not.toContain("organic");
 
     // Reset for next test
     postUpdateCalled = false;
@@ -387,10 +396,10 @@ describe("model array operations", () => {
     expect(postUpdateDoc).not.toBe(postUpdatePrevDoc);
 
     // Verify the content is different (tag updated)
-    expect(postUpdateDoc.tags).toContain("super-healthy");
-    expect(postUpdatePrevDoc.tags).toContain("healthy");
-    expect(postUpdateDoc.tags).not.toContain("healthy");
-    expect(postUpdatePrevDoc.tags).not.toContain("super-healthy");
+    expect(captured(postUpdateDoc).tags).toContain("super-healthy");
+    expect(captured(postUpdatePrevDoc).tags).toContain("healthy");
+    expect(captured(postUpdateDoc).tags).not.toContain("healthy");
+    expect(captured(postUpdatePrevDoc).tags).not.toContain("super-healthy");
   });
 });
 
@@ -420,6 +429,49 @@ describe("array operation errors", () => {
     app = getBaseServer();
     setupAuth(app, UserModel as unknown as AuthUserModel);
     addAuthRoutes(app, UserModel as unknown as AuthUserModel);
+  });
+
+  it("rejects array operations on non-array fields with a structured error", async () => {
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+      })
+    );
+    agent = await authAsUser(app, "admin");
+
+    const res = await agent.post(`/food/${apple._id}/name`).send({name: "Pear"}).expect(400);
+    assert.equal(res.body.code, "array-operation-field-not-array");
+    assert.equal(res.body.title, "Array operation field is not an array");
+  });
+
+  it("runs preUpdate before rejecting a non-array field", async () => {
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+        preUpdate: () => null,
+      })
+    );
+    agent = await authAsUser(app, "admin");
+
+    const res = await agent.post(`/food/${apple._id}/name`).send({name: "Pear"}).expect(403);
+    assert.equal(res.body.code, "update-not-allowed");
+    assert.equal(res.body.title, "Update not allowed");
   });
 
   it("array operation preUpdate returning undefined throws error", async () => {
@@ -535,6 +587,44 @@ describe("array operation errors", () => {
     const res = await agent.post(`/food/${apple._id}/tags`).send({tags: "organic"}).expect(405);
     expect(res.body.title).toBe("Access denied");
     expect(res.body.detail).toContain("Access to PATCH");
+  });
+
+  it("lets a later route handle non-ObjectId paths under the same prefix", async () => {
+    app.use(
+      "/ai",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [],
+          delete: [],
+          list: [],
+          read: [],
+          update: [],
+        },
+      })
+    );
+    app.post("/ai/observability/evaluators", (_req, res) => {
+      res.status(201).json({data: {created: true}});
+    });
+    app.post("/ai/observability/experiments", (_req, res) => {
+      res.status(201).json({data: {started: true}});
+    });
+    _server = supertest(app);
+
+    const created = await _server
+      .post("/ai/observability/evaluators")
+      .send({name: "toxicity", target: "full trace"})
+      .expect(201);
+    expect(created.body.data.created).toBe(true);
+
+    const started = await _server
+      .post("/ai/observability/experiments")
+      .send({name: "Example Experiment"})
+      .expect(201);
+    expect(started.body.data.started).toBe(true);
+
+    const denied = await _server.post(`/ai/${apple._id}/tags`).send({tags: "organic"}).expect(405);
+    expect(denied.body.code).toBe("array-update-not-allowed");
   });
 
   it("array operation on non-existent document returns 404", async () => {
@@ -708,5 +798,155 @@ describe("array operation with undefined preUpdate return", () => {
 
     const res = await agent.delete(`/food/${apple._id}/tags/healthy`).expect(400);
     expect(res.body.title).toContain("preUpdate hook error");
+  });
+});
+
+describe("array subdocument PATCH with a stripping preUpdate", () => {
+  let app: express.Application;
+  let apple: Food;
+  let agent: TestAgent;
+
+  beforeEach(async () => {
+    const [admin] = await setupDb();
+    apple = await FoodModel.create({
+      calories: 100,
+      categories: [
+        {name: "Fruit", show: true},
+        {name: "Popular", show: false},
+      ],
+      hidden: false,
+      name: "Apple",
+      ownerId: admin._id,
+    });
+  });
+
+  const mountStrippingRouter = async (
+    preUpdate: (body: Partial<Food>) => Partial<Food>
+  ): Promise<void> => {
+    app = getBaseServer();
+    setupAuth(app, UserModel as unknown as AuthUserModel);
+    addAuthRoutes(app, UserModel as unknown as AuthUserModel);
+    app.use(
+      "/food",
+      modelRouter(FoodModel, {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAdmin],
+          delete: [Permissions.IsAdmin],
+          list: [Permissions.IsAdmin],
+          read: [Permissions.IsAdmin],
+          update: [Permissions.IsAdmin],
+        },
+        // The hook returns the stripped update body, not a whole document.
+        preUpdate: (body) => preUpdate(body) as Food,
+      })
+    );
+    agent = await authAsUser(app, "admin");
+  };
+
+  it("keeps a subdocument unchanged when preUpdate strips the array field", async () => {
+    await mountStrippingRouter((body) => {
+      const {categories: _categories, ...rest} = body;
+      return rest;
+    });
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "ViaArraySubroute", show: false}})
+      .expect(200);
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Fruit");
+    expect(stored?.categories?.[0]?.show).toBe(true);
+  });
+
+  it("applies only the subdocument fields that survive preUpdate", async () => {
+    await mountStrippingRouter((body) => ({
+      categories: (body.categories ?? []).map((category) => ({
+        ...((category as {toObject?: () => FoodCategory}).toObject?.() ?? category),
+        show: true,
+      })) as Food["categories"],
+    }));
+    const categoryId = apple.categories[1]._id;
+    const res = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "Renamed", show: false}})
+      .expect(200);
+    expect(res.body.data.categories[1].name).toBe("Renamed");
+    expect(res.body.data.categories[1]._id).toBe(String(categoryId));
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[1]?.name).toBe("Renamed");
+    expect(stored?.categories?.[1]?.show).toBe(true);
+    expect(String(stored?.categories?.[1]?._id)).toBe(String(categoryId));
+  });
+
+  it("persists nested subdocument arrays across repeated PATCHes", async () => {
+    await mountStrippingRouter((body) => body);
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "First"}]}})
+      .expect(200);
+
+    const secondPatch = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Second"}]}})
+      .expect(200);
+
+    expect(secondPatch.body.data.categories[0].addendums[0].text).toBe("Second");
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Second");
+  });
+
+  it("updates a sibling field when an array item already has nested subdocuments", async () => {
+    await mountStrippingRouter((body) => body);
+    const categoryId = apple.categories[0]._id;
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Existing"}]}})
+      .expect(200);
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {name: "Renamed"}})
+      .expect(200);
+
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Renamed");
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Existing");
+  });
+
+  it("keeps nested subdocuments unchanged when preUpdate strips the array field", async () => {
+    await mountStrippingRouter((body) => {
+      const {categories: _categories, ...rest} = body;
+      return rest;
+    });
+    const categoryId = apple.categories[0]._id;
+    await FoodModel.updateOne(
+      {_id: apple._id},
+      {$set: {"categories.0.addendums": [{text: "Existing"}]}}
+    );
+
+    await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Changed"}], name: "Renamed"}})
+      .expect(200);
+
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(stored?.categories?.[0]?.name).toBe("Fruit");
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Existing");
+  });
+
+  it("applies nested subdocuments returned by preUpdate and keeps the item id", async () => {
+    await mountStrippingRouter((body) => ({...body}));
+    const categoryId = apple.categories[0]._id;
+    const res = await agent
+      .patch(`/food/${apple._id}/categories/${categoryId}`)
+      .send({categories: {addendums: [{text: "Applied"}]}})
+      .expect(200);
+
+    expect(res.body.data.categories[0]._id).toBe(String(categoryId));
+    expect(res.body.data.categories[0].addendums[0].text).toBe("Applied");
+    const stored = await FoodModel.findById(apple._id).lean();
+    expect(String(stored?.categories?.[0]?._id)).toBe(String(categoryId));
+    expect(stored?.categories?.[0]?.addendums?.[0]?.text).toBe("Applied");
   });
 });

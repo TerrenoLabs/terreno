@@ -43,7 +43,9 @@ const postBetterAuthEmailWithRetry = async (
 
 /**
  * Seed a Better Auth user in-process (no running server required).
- * Creates the credential account and syncs the Mongoose User row.
+ * Creates the credential account, marks the Better Auth user's email verified (so account
+ * linking treats it as the email's owner), and syncs the Mongoose User row. Seeding works under `AUTH_SIGN_UP=closed`
+ * too: its private Better Auth instance always allows sign-up.
  */
 export const seedBetterAuthUserInProcess = async (
   user: BetterAuthSeedUser
@@ -62,6 +64,7 @@ export const seedBetterAuthUserInProcess = async (
     config: {
       ...config,
       disableRateLimit: true,
+      signUp: {mode: "open"},
     },
     userModel: User as unknown as TerrenoAuthUserModel,
   });
@@ -108,15 +111,23 @@ export const seedBetterAuthUserInProcess = async (
   }
 
   if (body.user) {
-    await syncBetterAuthUser(User as unknown as TerrenoAuthUserModel, {
-      createdAt: DateTime.now().toJSDate(),
-      email: body.user.email,
-      emailVerified: false,
-      id: body.user.id,
-      image: null,
-      name: body.user.name,
-      updatedAt: DateTime.now().toJSDate(),
-    });
+    const context = await betterAuthApp.ensureAuth().$context;
+    await context.internalAdapter.updateUser(body.user.id, {emailVerified: true});
+    // The seed owns this Better Auth account, so its email is trusted for linking a legacy user.
+    await syncBetterAuthUser(
+      User as unknown as TerrenoAuthUserModel,
+      {
+        createdAt: DateTime.now().toJSDate(),
+        email: body.user.email,
+        emailVerified: true,
+        id: body.user.id,
+        image: null,
+        name: body.user.name,
+        updatedAt: DateTime.now().toJSDate(),
+      },
+      undefined,
+      {trustEmail: true}
+    );
   }
 
   logger.info(`Seeded Better Auth user in-process: ${user.email}`);

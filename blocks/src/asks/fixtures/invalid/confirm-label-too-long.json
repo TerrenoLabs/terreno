@@ -1,0 +1,14 @@
+{
+  "kind": "confirm",
+  "input": {
+    "prompt": "Delete 14 completed todos?",
+    "confirmLabel": "Delete all 14 completed todos",
+    "destructive": true
+  },
+  "errors": [
+    {
+      "path": "confirmLabel",
+      "code": "TOO_LONG"
+    }
+  ]
+}

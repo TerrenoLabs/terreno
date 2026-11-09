@@ -3,14 +3,7 @@ import {launchImageLibraryAsync} from "expo-image-picker";
 import {LinearGradient} from "expo-linear-gradient";
 import type React from "react";
 import {type FC, useState} from "react";
-import {
-  Image,
-  type ImageErrorEventData,
-  type NativeSyntheticEvent,
-  Pressable,
-  Text,
-  View,
-} from "react-native";
+import {Image, type ImageErrorEvent, Pressable, Text, View} from "react-native";
 
 import type {AvatarProps, CustomSvgProps} from "./Common";
 import {Icon} from "./Icon";
@@ -18,7 +11,7 @@ import {MobileIcon} from "./icons/MobileIcon";
 import {OfflineIcon} from "./icons/OfflineIcon";
 import {OnlineIcon} from "./icons/OnlineIcon";
 import {OutOfOfficeIcon} from "./icons/OutOfficeIcon";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {useTheme} from "./Theme";
 import {Tooltip} from "./Tooltip";
 
@@ -98,7 +91,7 @@ export const Avatar: FC<AvatarProps> = ({
     console.warn("Avatars with the status of 'imagePicker' should also have an onChange property.");
   }
 
-  const handleImageError = (event: NativeSyntheticEvent<ImageErrorEventData>) => {
+  const handleImageError = (event: ImageErrorEvent) => {
     setIsImageLoaded(false);
     console.warn("Image load error: ", event);
   };
@@ -204,6 +197,8 @@ export const Avatar: FC<AvatarProps> = ({
     >
       <Pressable
         aria-role="button"
+        // Only an editable avatar does anything when pressed, so only that one takes focus.
+        focusable={showEditIcon}
         style={{
           borderRadius: 1,
           cursor: showEditIcon ? "pointer" : "auto",
@@ -296,7 +291,7 @@ export const Avatar: FC<AvatarProps> = ({
           width: widthPlusPadding,
         }}
       >
-        <Tooltip idealPosition="top" text={isMobileDevice() ? undefined : status}>
+        <Tooltip idealPosition="top" text={isNarrowViewport() ? undefined : status}>
           {avatar}
         </Tooltip>
         {renderStatusIcon()}

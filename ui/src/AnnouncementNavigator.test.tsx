@@ -1,17 +1,19 @@
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import {DateTime} from "luxon";
-import React, {useCallback, useState} from "react";
+import type React from "react";
+import {useState} from "react";
 import {Linking, Text} from "react-native";
 import {AnnouncementNavigator} from "./AnnouncementNavigator";
+import * as announcementFrequency from "./announcementFrequency";
 import {
   buildFrequencyStorageKey,
   resetFrequencySessionStateForTests,
 } from "./announcementFrequency";
 import {Box} from "./Box";
 import {TextField} from "./TextField";
-import {renderWithTheme} from "./test-utils";
+import {createFakeRequestClient, fakeHttpError, renderWithTheme} from "./test-utils";
 import {Unifier} from "./Unifier";
 import {
   type AnnouncementPublic,
@@ -30,59 +32,63 @@ const makeAnnouncement = (overrides: Partial<AnnouncementPublic> = {}): Announce
   ...overrides,
 });
 
+interface MockApiOptions {
+  acknowledgeUnwrap?: () => Promise<unknown>;
+  clickUnwrap?: () => Promise<unknown>;
+  feedItems?: AnnouncementPublic[];
+  impressionUnwrap?: () => Promise<unknown>;
+  /** Runs before each pending refetch (every pending request after the first). */
+  onRefetch?: () => void;
+  /** Replaces the pending route: return a payload, a promise, or throw. */
+  pendingHandler?: () => unknown;
+  feedHandler?: () => unknown;
+}
+
+/**
+ * Fake request client for the announcement routes. Event mocks record `{announcementId}`
+ * per request; `refetch` records every pending request after the first.
+ */
 const createMockApi = (
   pending: PendingAnnouncementsResponse | (() => PendingAnnouncementsResponse),
-  refetchOverride?: () => Promise<void>,
-  feedItems: AnnouncementPublic[] = [],
-  clickUnwrap: () => Promise<unknown> = async () => ({data: {recorded: true}})
+  options: MockApiOptions = {}
 ) => {
   const getPending =
     typeof pending === "function" ? pending : (): PendingAnnouncementsResponse => pending;
-  const refetch = refetchOverride ?? mock(() => Promise.resolve());
-  const acknowledgeMutation = mock(() => ({
-    unwrap: mock(() => Promise.resolve({data: {acknowledged: true}})),
-  }));
-  const impressionMutation = mock(() => ({
-    unwrap: mock(() => Promise.resolve({data: {recorded: true}})),
-  }));
-  const clickMutation = mock(() => ({
-    unwrap: mock(clickUnwrap),
-  }));
+  const refetch = mock(() => {});
+  const acknowledgeMutation = mock((_args: {announcementId: string}) => {});
+  const impressionMutation = mock((_args: {announcementId: string}) => {});
+  const clickMutation = mock((_args: {announcementId: string}) => {});
+  let pendingRequestCount = 0;
 
-  const innerApi = {
-    injectEndpoints: mock((_config: unknown) => ({
-      useAcknowledgeAnnouncementMutation: mock(() => [
-        acknowledgeMutation,
-        {error: undefined, isLoading: false},
-      ]),
-      useGetAnnouncementFeedQuery: mock(() => ({
-        data: {data: feedItems},
-        error: undefined,
-        isLoading: false,
-        refetch,
-      })),
-      useGetPendingAnnouncementsQuery: mock(() => ({
-        data: {data: getPending()},
-        error: undefined,
-        isLoading: false,
-        refetch,
-      })),
-      useRecordAnnouncementClickMutation: mock(() => [
-        clickMutation,
-        {error: undefined, isLoading: false},
-      ]),
-      useRecordAnnouncementImpressionMutation: mock(() => [
-        impressionMutation,
-        {error: undefined, isLoading: false},
-      ]),
-    })),
-  };
+  const fake = createFakeRequestClient({
+    "GET /announcements/feed": () =>
+      options.feedHandler ? options.feedHandler() : {data: options.feedItems ?? []},
+    "GET /announcements/pending": () => {
+      pendingRequestCount += 1;
+      if (pendingRequestCount > 1) {
+        refetch();
+        options.onRefetch?.();
+      }
+      return options.pendingHandler ? options.pendingHandler() : {data: getPending()};
+    },
+    "POST /announcements/:id/acknowledge": (_args, {id}) => {
+      acknowledgeMutation({announcementId: id});
+      return (options.acknowledgeUnwrap ?? (async () => ({acknowledged: true})))();
+    },
+    "POST /announcements/:id/click": (_args, {id}) => {
+      clickMutation({announcementId: id});
+      return (options.clickUnwrap ?? (async () => ({recorded: true})))();
+    },
+    "POST /announcements/:id/impression": (_args, {id}) => {
+      impressionMutation({announcementId: id});
+      return (options.impressionUnwrap ?? (async () => ({recorded: true})))();
+    },
+  });
 
   return {
     acknowledgeMutation,
-    api: {
-      enhanceEndpoints: mock(() => innerApi),
-    },
+    api: fake.client,
+    calls: fake.calls,
     clickMutation,
     impressionMutation,
     refetch,
@@ -101,10 +107,13 @@ const announcementQueue: PendingAnnouncementsResponse[] = [
   {current: null, remainingCount: 0},
 ];
 
+/** Let fake requests resolve and the async frequency check settle. */
 const waitForFrequencyCheck = async (): Promise<void> => {
-  await act(async () => {
-    await Promise.resolve();
-  });
+  for (let i = 0; i < 3; i += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
 };
 
 const createNavigatorStorageMock = (): {
@@ -128,15 +137,16 @@ describe("AnnouncementNavigator", () => {
     Unifier.storage.setItem = storage.setItem;
   });
 
-  it("renders children when no announcements are pending", () => {
+  it("renders children when no announcements are pending", async () => {
     const {api} = createMockApi({current: null, remainingCount: 0});
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
+    await waitForFrequencyCheck();
     expect(result.getByTestId("app-content")).toBeTruthy();
   });
 
@@ -146,7 +156,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -164,7 +174,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 1,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -181,15 +191,15 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("shows the next announcement after refetch advances the queue", async () => {
+    let queueIndex = 0;
+    const {api} = createMockApi(() => announcementQueue[queueIndex], {
+      onRefetch: () => {
+        queueIndex = Math.min(queueIndex + 1, announcementQueue.length - 1);
+      },
+    });
     const QueueHarness: React.FC = () => {
-      const [queueIndex, setQueueIndex] = useState(0);
-      const refetch = useCallback(async (): Promise<void> => {
-        setQueueIndex((currentIndex) => Math.min(currentIndex + 1, announcementQueue.length - 1));
-      }, []);
-      const {api} = createMockApi(() => announcementQueue[queueIndex], refetch);
-
       return (
-        <AnnouncementNavigator api={api} frequency={{maxInterruptionsPerSession: 5}}>
+        <AnnouncementNavigator client={api} frequency={{maxInterruptionsPerSession: 5}}>
           <Box testID="app-content">
             <Text>App</Text>
           </Box>
@@ -211,42 +221,21 @@ describe("AnnouncementNavigator", () => {
     await act(async () => {
       fireEvent.press(result.getByText("Got it"));
     });
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("app-content")).toBeTruthy();
     expect(result.queryByTestId("announcement-screen")).toBeNull();
   });
 
   it("renders a loading spinner while pending announcements load", () => {
-    const innerApi = {
-      injectEndpoints: mock(() => ({
-        useAcknowledgeAnnouncementMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useGetAnnouncementFeedQuery: mock(() => ({
-          data: undefined,
-          error: undefined,
-          isLoading: true,
-          refetch: mock(() => Promise.resolve()),
-        })),
-        useGetPendingAnnouncementsQuery: mock(() => ({
-          data: undefined,
-          error: undefined,
-          isLoading: true,
-          refetch: mock(() => Promise.resolve()),
-        })),
-        useRecordAnnouncementClickMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useRecordAnnouncementImpressionMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-      })),
-    };
+    const {api} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        pendingHandler: () => new Promise(() => {}),
+      }
+    );
     const result = renderWithTheme(
-      <AnnouncementNavigator api={{enhanceEndpoints: mock(() => innerApi)}}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -255,84 +244,57 @@ describe("AnnouncementNavigator", () => {
     expect(result.getByTestId("announcement-navigator-loading")).toBeTruthy();
   });
 
-  it("shows retry UI for recoverable pending errors", () => {
-    const refetch = mock(() => Promise.resolve());
-    const innerApi = {
-      injectEndpoints: mock(() => ({
-        useAcknowledgeAnnouncementMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useGetAnnouncementFeedQuery: mock(() => ({
-          data: {data: []},
-          error: undefined,
-          isLoading: false,
-          refetch,
-        })),
-        useGetPendingAnnouncementsQuery: mock(() => ({
-          data: undefined,
-          error: {status: 500},
-          isLoading: false,
-          refetch,
-        })),
-        useRecordAnnouncementClickMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useRecordAnnouncementImpressionMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-      })),
-    };
-    const onError = mock(() => undefined);
+  it("shows retry UI for recoverable pending errors", async () => {
+    let shouldFail = true;
+    const {api, refetch} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        pendingHandler: () => {
+          if (shouldFail) {
+            throw fakeHttpError(500);
+          }
+          return {current: null, remainingCount: 0};
+        },
+      }
+    );
+    const onError = mock((_error: unknown) => undefined);
     const result = renderWithTheme(
-      <AnnouncementNavigator api={{enhanceEndpoints: mock(() => innerApi)}} onError={onError}>
+      <AnnouncementNavigator client={api} onError={onError}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
+    await waitForFrequencyCheck();
     expect(result.getByTestId("announcement-navigator-error")).toBeTruthy();
     expect(onError).toHaveBeenCalled();
+
+    shouldFail = false;
+    await act(async () => {
+      fireEvent.press(result.getByText("Retry"));
+    });
+    await waitForFrequencyCheck();
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(result.getByTestId("app-content")).toBeTruthy();
   });
 
-  it("renders children when only the feed request fails", () => {
-    const innerApi = {
-      injectEndpoints: mock(() => ({
-        useAcknowledgeAnnouncementMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useGetAnnouncementFeedQuery: mock(() => ({
-          data: undefined,
-          error: {status: 500},
-          isLoading: false,
-          refetch: mock(() => Promise.resolve()),
-        })),
-        useGetPendingAnnouncementsQuery: mock(() => ({
-          data: {data: {current: null, remainingCount: 0}},
-          error: undefined,
-          isLoading: false,
-          refetch: mock(() => Promise.resolve()),
-        })),
-        useRecordAnnouncementClickMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-        useRecordAnnouncementImpressionMutation: mock(() => [
-          mock(),
-          {error: undefined, isLoading: false},
-        ]),
-      })),
-    };
+  it("renders children when only the feed request fails", async () => {
+    const {api} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        feedHandler: () => {
+          throw fakeHttpError(500);
+        },
+      }
+    );
     const result = renderWithTheme(
-      <AnnouncementNavigator api={{enhanceEndpoints: mock(() => innerApi)}}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
+    await waitForFrequencyCheck();
     expect(result.getByTestId("app-content")).toBeTruthy();
     expect(result.queryByTestId("announcement-navigator-error")).toBeNull();
   });
@@ -343,7 +305,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -363,18 +325,18 @@ describe("AnnouncementNavigator", () => {
       return <TextField onChange={setValue} testID="todo-input" title="New Todo" value={value} />;
     };
 
+    let pending: PendingAnnouncementsResponse = {
+      current: makeAnnouncement({displayMode: "banner", requiresAcknowledgement: false}),
+      remainingCount: 0,
+    };
+    const {api} = createMockApi(() => pending, {
+      onRefetch: () => {
+        pending = {current: null, remainingCount: 0};
+      },
+    });
     const BannerDismissHarness: React.FC = () => {
-      const [pending, setPending] = useState<PendingAnnouncementsResponse>({
-        current: makeAnnouncement({displayMode: "banner", requiresAcknowledgement: false}),
-        remainingCount: 0,
-      });
-      const refetch = useCallback(async (): Promise<void> => {
-        setPending({current: null, remainingCount: 0});
-      }, []);
-      const {api} = createMockApi(pending, refetch);
-
       return (
-        <AnnouncementNavigator api={api} frequency={{maxInterruptionsPerSession: 5}}>
+        <AnnouncementNavigator client={api} frequency={{maxInterruptionsPerSession: 5}}>
           <Box testID="app-content">
             <StatefulInput />
           </Box>
@@ -393,25 +355,26 @@ describe("AnnouncementNavigator", () => {
 
     await act(async () => {
       fireEvent.press(result.getByText("Dismiss"));
-      await Promise.resolve();
     });
+    await waitForFrequencyCheck();
 
     expect(result.queryByTestId("announcement-banner")).toBeNull();
     expect(result.getByTestId("todo-input").props.value).toBe("unsaved text");
   });
 
-  it("ignores unexpected feed displayMode items in pending.current", () => {
+  it("ignores unexpected feed displayMode items in pending.current", async () => {
     const {api} = createMockApi({
       current: makeAnnouncement({displayMode: "feed"}),
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("app-content")).toBeTruthy();
     assert.isNull(result.queryByTestId("announcement-banner"));
@@ -419,15 +382,15 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("does not show a second interrupt in the same session when maxInterruptionsPerSession is 1", async () => {
+    let queueIndex = 0;
+    const {api} = createMockApi(() => announcementQueue[queueIndex], {
+      onRefetch: () => {
+        queueIndex = Math.min(queueIndex + 1, announcementQueue.length - 1);
+      },
+    });
     const QueueHarness: React.FC = () => {
-      const [queueIndex, setQueueIndex] = useState(0);
-      const refetch = useCallback(async (): Promise<void> => {
-        setQueueIndex((currentIndex) => Math.min(currentIndex + 1, announcementQueue.length - 1));
-      }, []);
-      const {api} = createMockApi(() => announcementQueue[queueIndex], refetch);
-
       return (
-        <AnnouncementNavigator api={api}>
+        <AnnouncementNavigator client={api}>
           <Box testID="app-content">
             <Text>App</Text>
           </Box>
@@ -458,7 +421,7 @@ describe("AnnouncementNavigator", () => {
       });
 
       return (
-        <AnnouncementNavigator api={api}>
+        <AnnouncementNavigator client={api}>
           <Box testID="app-content">
             <Text>App</Text>
           </Box>
@@ -467,9 +430,7 @@ describe("AnnouncementNavigator", () => {
     };
 
     const firstSession = renderWithTheme(<FirstSessionHarness />);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
     expect(firstSession.getByText("First update")).toBeTruthy();
     firstSession.unmount();
     resetFrequencySessionStateForTests();
@@ -481,7 +442,7 @@ describe("AnnouncementNavigator", () => {
       });
 
       return (
-        <AnnouncementNavigator api={api}>
+        <AnnouncementNavigator client={api}>
           <Box testID="app-content">
             <Text>App</Text>
           </Box>
@@ -490,9 +451,7 @@ describe("AnnouncementNavigator", () => {
     };
 
     const secondSession = renderWithTheme(<SecondSessionHarness />);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
 
     expect(secondSession.getByText("Second update")).toBeTruthy();
   });
@@ -503,7 +462,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api} frequency={{maxInterruptionsPerSession: 5}}>
+      <AnnouncementNavigator client={api} frequency={{maxInterruptionsPerSession: 5}}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -515,7 +474,7 @@ describe("AnnouncementNavigator", () => {
     assert.isNull(result.queryByTestId("app-content"));
 
     result.rerender(
-      <AnnouncementNavigator api={api} frequency={{maxInterruptionsPerSession: 5}}>
+      <AnnouncementNavigator client={api} frequency={{maxInterruptionsPerSession: 5}}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -532,16 +491,14 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api} frequency={{skipFirstLaunch: true, userId: "user-1"}}>
+      <AnnouncementNavigator client={api} frequency={{skipFirstLaunch: true, userId: "user-1"}}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("app-content")).toBeTruthy();
     assert.isNull(result.queryByTestId("announcement-screen"));
@@ -563,16 +520,14 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api} frequency={{cooldownHours: 24}}>
+      <AnnouncementNavigator client={api} frequency={{cooldownHours: 24}}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("app-content")).toBeTruthy();
     assert.isNull(result.queryByTestId("announcement-screen"));
@@ -590,14 +545,13 @@ describe("AnnouncementNavigator", () => {
         current: makeAnnouncement({title: "Blocked interrupt"}),
         remainingCount: 0,
       },
-      undefined,
-      [feedItem]
+      {feedItems: [feedItem]}
     );
 
     const FeedHarness: React.FC = () => {
       const {feed} = useAnnouncements(api);
       return (
-        <AnnouncementNavigator api={api} frequency={{maxInterruptionsPerSession: 0}}>
+        <AnnouncementNavigator client={api} frequency={{maxInterruptionsPerSession: 0}}>
           <Box testID="app-content">
             <Text testID="feed-title">{feed[0]?.title ?? "missing"}</Text>
           </Box>
@@ -606,9 +560,7 @@ describe("AnnouncementNavigator", () => {
     };
 
     const result = renderWithTheme(<FeedHarness />);
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("feed-title")).toHaveTextContent("Changelog entry");
     expect(result.getByTestId("app-content")).toBeTruthy();
@@ -628,16 +580,14 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api} frequency={{cooldownHours: 12, skipFirstLaunch: true}}>
+      <AnnouncementNavigator client={api} frequency={{cooldownHours: 12, skipFirstLaunch: true}}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
       </AnnouncementNavigator>
     );
 
-    await act(async () => {
-      await Promise.resolve();
-    });
+    await waitForFrequencyCheck();
 
     expect(result.getByTestId("announcement-screen")).toBeTruthy();
     expect(impressionMutation).toHaveBeenCalledTimes(1);
@@ -649,7 +599,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -675,7 +625,7 @@ describe("AnnouncementNavigator", () => {
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -693,7 +643,7 @@ describe("AnnouncementNavigator", () => {
   });
 
   it("still opens the primary action URL when click tracking fails", async () => {
-    const warnSpy = mock(() => undefined);
+    const warnSpy = mock((..._args: unknown[]) => undefined);
     const originalWarn = console.warn;
     console.warn = warnSpy;
 
@@ -708,15 +658,15 @@ describe("AnnouncementNavigator", () => {
         }),
         remainingCount: 0,
       },
-      undefined,
-      [],
-      async () => {
-        throw new Error("click failed");
+      {
+        clickUnwrap: async () => {
+          throw new Error("click failed");
+        },
       }
     );
 
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -736,13 +686,183 @@ describe("AnnouncementNavigator", () => {
     console.warn = originalWarn;
   });
 
+  it("renders children when the pending request is unauthorized", async () => {
+    const {api} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        pendingHandler: () => {
+          throw fakeHttpError(401);
+        },
+      }
+    );
+    const onError = mock((_error: unknown) => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator client={api} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+    await waitForFrequencyCheck();
+
+    expect(result.getByTestId("app-content")).toBeTruthy();
+    assert.isNull(result.queryByTestId("announcement-navigator-error"));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("calls onError when acknowledging fails", async () => {
+    const {api} = createMockApi(
+      {
+        current: makeAnnouncement(),
+        remainingCount: 0,
+      },
+      {
+        acknowledgeUnwrap: async () => {
+          throw new Error("ack failed");
+        },
+      }
+    );
+    const onError = mock((_error: unknown) => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator client={api} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+
+    await waitForFrequencyCheck();
+    await act(async () => {
+      fireEvent.press(result.getByText("Got it"));
+      await Promise.resolve();
+    });
+
+    assert.strictEqual(onError.mock.calls.length, 1);
+    assert.instanceOf(onError.mock.calls[0][0], Error);
+  });
+
+  it("keeps showing the announcement when recording the impression fails", async () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => undefined);
+    const {api} = createMockApi(
+      {
+        current: makeAnnouncement({title: "Impression failure"}),
+        remainingCount: 0,
+      },
+      {
+        impressionUnwrap: async () => {
+          throw new Error("impression failed");
+        },
+      }
+    );
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+      await waitForFrequencyCheck();
+      await waitForFrequencyCheck();
+
+      expect(result.getByText("Impression failure")).toBeTruthy();
+      const warned = warnSpy.mock.calls.some((call) =>
+        String(call[0]).includes("Failed to record impression")
+      );
+      assert.isTrue(warned);
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("warns when opening the primary action URL throws", async () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => undefined);
+    Linking.canOpenURL = mock(() => Promise.reject(new Error("no handler")));
+    Linking.openURL = mock(() => Promise.resolve());
+
+    const {api} = createMockApi({
+      current: makeAnnouncement({
+        primaryAction: {label: "Read docs", url: "https://example.com/docs"},
+      }),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+      await act(async () => {
+        fireEvent.press(result.getByText("Read docs"));
+        await Promise.resolve();
+      });
+
+      const warned = warnSpy.mock.calls.some((call) =>
+        String(call[0]).includes("Failed to open primary-action URL")
+      );
+      assert.isTrue(warned);
+      expect(Linking.openURL).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("fails open when the frequency check itself throws", async () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => undefined);
+    const suppressSpy = spyOn(announcementFrequency, "shouldSuppressInterrupt").mockImplementation(
+      async () => {
+        throw new Error("frequency exploded");
+      }
+    );
+    const recordSpy = spyOn(announcementFrequency, "recordInterruptShown").mockImplementation(
+      async () => {
+        throw new Error("record exploded");
+      }
+    );
+
+    const {api, impressionMutation} = createMockApi({
+      current: makeAnnouncement({title: "Still shown"}),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+      await waitForFrequencyCheck();
+      await waitForFrequencyCheck();
+
+      expect(result.getByText("Still shown")).toBeTruthy();
+      expect(impressionMutation).toHaveBeenCalledTimes(1);
+      const messages = warnSpy.mock.calls.map((call) => String(call[0]));
+      assert.isTrue(messages.some((message) => message.includes("Frequency check failed")));
+      assert.isTrue(
+        messages.some((message) => message.includes("Failed to record interrupt for frequency"))
+      );
+    } finally {
+      suppressSpy.mockRestore();
+      recordSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
   it("does not record a click when the announcement has no primary action", async () => {
     const {api, clickMutation} = createMockApi({
       current: makeAnnouncement(),
       remainingCount: 0,
     });
     const result = renderWithTheme(
-      <AnnouncementNavigator api={api}>
+      <AnnouncementNavigator client={api}>
         <Box testID="app-content">
           <Text>App</Text>
         </Box>
@@ -755,5 +875,230 @@ describe("AnnouncementNavigator", () => {
     });
 
     assert.strictEqual(clickMutation.mock.calls.length, 0);
+  });
+
+  it("renders children without calling onError when pending fails with 403", async () => {
+    const {api} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        pendingHandler: () => {
+          throw fakeHttpError(403);
+        },
+      }
+    );
+    const onError = mock((_error: unknown) => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator client={api} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+    await waitForFrequencyCheck();
+
+    expect(result.getByTestId("app-content")).toBeTruthy();
+    assert.isNull(result.queryByTestId("announcement-navigator-error"));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed post-acknowledge refetch through onError", async () => {
+    let pendingRequests = 0;
+    const {api, acknowledgeMutation} = createMockApi(
+      {current: null, remainingCount: 0},
+      {
+        pendingHandler: () => {
+          pendingRequests += 1;
+          if (pendingRequests > 1) {
+            throw new Error("refetch failed");
+          }
+          return {current: makeAnnouncement(), remainingCount: 0};
+        },
+      }
+    );
+    const onError = mock((_error: unknown) => undefined);
+    const result = renderWithTheme(
+      <AnnouncementNavigator client={api} onError={onError}>
+        <Box testID="app-content">
+          <Text>App</Text>
+        </Box>
+      </AnnouncementNavigator>
+    );
+
+    await waitForFrequencyCheck();
+    await act(async () => {
+      fireEvent.press(result.getByText("Got it"));
+    });
+    await waitForFrequencyCheck();
+
+    expect(acknowledgeMutation).toHaveBeenCalledTimes(1);
+    expect(result.getByTestId("announcement-navigator-error")).toBeTruthy();
+    assert.isAtLeast(onError.mock.calls.length, 1);
+    assert.strictEqual((onError.mock.calls[0][0] as Error).message, "refetch failed");
+  });
+
+  it("warns but keeps showing the announcement when recording an impression fails", async () => {
+    const warnSpy = mock((..._args: unknown[]) => undefined);
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+
+    const {api, impressionMutation} = createMockApi(
+      {current: makeAnnouncement(), remainingCount: 0},
+      {
+        impressionUnwrap: async () => {
+          throw new Error("impression failed");
+        },
+      }
+    );
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+      await waitForFrequencyCheck();
+      await waitForFrequencyCheck();
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      expect(impressionMutation).toHaveBeenCalledTimes(1);
+      const impressionWarnings = warnSpy.mock.calls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to record impression"
+      );
+      assert.strictEqual(impressionWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("warns when opening the primary action URL fails", async () => {
+    const warnSpy = mock((..._args: unknown[]) => undefined);
+    const originalWarn = console.warn;
+    console.warn = warnSpy;
+    const originalCanOpenURL = Linking.canOpenURL;
+    Linking.canOpenURL = mock(() => Promise.reject(new Error("cannot open")));
+
+    const {api, clickMutation} = createMockApi({
+      current: makeAnnouncement({
+        primaryAction: {label: "Read docs", url: "https://example.com/docs"},
+      }),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+      await act(async () => {
+        fireEvent.press(result.getByText("Read docs"));
+        await Promise.resolve();
+      });
+
+      assert.strictEqual(clickMutation.mock.calls.length, 1);
+      const linkWarnings = warnSpy.mock.calls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to open primary-action URL"
+      );
+      assert.strictEqual(linkWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+      Linking.canOpenURL = originalCanOpenURL;
+    }
+  });
+
+  it("fails open when the frequency check itself throws", async () => {
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    let hasThrownFrequencyWarning = false;
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
+      if (
+        !hasThrownFrequencyWarning &&
+        args[0] === "[announcementFrequency] Failed to read hasLaunched; allowing interrupt"
+      ) {
+        hasThrownFrequencyWarning = true;
+        throw new Error("warn exploded");
+      }
+    };
+    Unifier.storage.getItem = mock(async () => {
+      throw new Error("storage read failed");
+    });
+
+    const {api, impressionMutation} = createMockApi({
+      current: makeAnnouncement({title: "Still visible"}),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api} frequency={{skipFirstLaunch: true}}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      expect(impressionMutation).toHaveBeenCalledTimes(1);
+      const navigatorWarnings = warnCalls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Frequency check failed; allowing interrupt"
+      );
+      assert.strictEqual(navigatorWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
+  it("warns when recording the interrupt for frequency throws", async () => {
+    const originalWarn = console.warn;
+    const warnCalls: unknown[][] = [];
+    let hasThrownPersistWarning = false;
+    console.warn = (...args: unknown[]): void => {
+      warnCalls.push(args);
+      if (
+        !hasThrownPersistWarning &&
+        args[0] === "[announcementFrequency] Failed to persist lastInterruptAt"
+      ) {
+        hasThrownPersistWarning = true;
+        throw new Error("warn exploded");
+      }
+    };
+    Unifier.storage.setItem = mock(async () => {
+      throw new Error("storage write failed");
+    });
+
+    const {api} = createMockApi({
+      current: makeAnnouncement({title: "Still visible"}),
+      remainingCount: 0,
+    });
+
+    try {
+      const result = renderWithTheme(
+        <AnnouncementNavigator client={api}>
+          <Box testID="app-content">
+            <Text>App</Text>
+          </Box>
+        </AnnouncementNavigator>
+      );
+
+      await waitForFrequencyCheck();
+      await waitForFrequencyCheck();
+
+      expect(result.getByTestId("announcement-screen")).toBeTruthy();
+      const navigatorWarnings = warnCalls.filter(
+        (call) => call[0] === "[AnnouncementNavigator] Failed to record interrupt for frequency"
+      );
+      assert.strictEqual(navigatorWarnings.length, 1);
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 });

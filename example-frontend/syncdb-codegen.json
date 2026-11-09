@@ -3,5 +3,9 @@
     "todos": {
       "retries": false
     }
-  }
+  },
+  "excludePaths": [
+    "^/gpt/prompt$",
+    "^/gpt/histories/\\{[^}]+\\}/stream$"
+  ]
 }

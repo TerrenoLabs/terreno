@@ -37,6 +37,7 @@ Canonical copy, language rules, and the Django/Rails comparison:
 | [@terreno/ui](reference/ui.md) | React Native UI component library for iOS, Android, and web |
 | [@terreno/syncdb](reference/syncdb.md) | Local-first data layer with TinyBase, durable outbox, and delta sync |
 | [@terreno/ai](reference/ai.md) | Provider-agnostic AI service with streaming chat, request logging, and admin tools |
+| [@terreno/blocks](reference/blocks.md) | Shared contracts for agent-driven UI: ask schemas and whole-reply block documents |
 | [@terreno/admin-backend](reference/admin-backend.md) | Admin panel backend plugin for `@terreno/api` |
 | [@terreno/admin-frontend](reference/admin-frontend.md) | Admin panel frontend screens for `@terreno/api` backends |
 | [@terreno/admin-spa](reference/admin-spa.md) | Standalone admin SPA (Expo Router web) plus Express serve plugin |
@@ -45,19 +46,34 @@ Canonical copy, language rules, and the Django/Rails comparison:
 | [@terreno/comms](reference/comms.md) | Pluggable communications providers |
 | [@terreno/feature-flags](reference/feature-flags.md) | Feature flags and A/B testing plugin for `@terreno/api` |
 | [@terreno/mcp](reference/mcp-server.md) | MCP server that gives coding agents Terreno docs, codegen tools, and prompts |
+| [@terreno/cli](reference/cli.md) | `terreno` CLI for docs, codegen, bootstrap, and OpenAPI REST |
 | [create-terreno-app](reference/create-terreno-app.md) | CLI to scaffold a deployable full-stack Terreno app (`bunx create-terreno-app`) |
 
 ### Legacy
 
 | Package | Description |
 |---------|-------------|
-| [@terreno/rtk](reference/legacy/rtk.md) (deprecated for data sync) | OpenAPI SDK, Better Auth Redux, and feature flags for Terreno frontends |
+| [@terreno/rtk](reference/legacy/rtk.md) (removed in 58) | Replaced by `@terreno/syncdb` |
 
-**Migrating from RTK?** See [How to migrate from @terreno/rtk to @terreno/syncdb](how-to/migrate-rtk-to-syncdb.md).
+**Upgrading from RTK?** See [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](how-to/migrate-rtk-to-syncdb.md).
+
+## Testing
+
+- [E2E testing guide](testing/e2e.md) — the test tiers, smoke conventions, Playwright and
+  Maestro specs, and one page per package on how it is e2e-tested
+- [Regression suites](regression/README.md) — the manual cases a person walks before a release,
+  one file per area
+
+## User guide
+
+- [User guide](user-guide/README.md) — one page per example-app feature, in end-user words,
+  for chat agents answering "how do I…" questions
 
 ## Quick links
 
 - [Getting started](tutorials/getting-started.md)
+- [Set up Terreno MCP](how-to/set-up-terreno-mcp.md)
+- [Debug with MCP](how-to/debug-with-mcp.md)
 - [Create a Terreno app](how-to/create-a-terreno-app.md)
 - [Positioning](explanation/positioning.md)
 - [How admin interfaces are shaped](explanation/admin-interface.md)

@@ -1,6 +1,14 @@
-import {describe, expect, test} from "bun:test";
+import {afterEach, beforeEach, describe, expect, test} from "bun:test";
+import {spawnSync} from "node:child_process";
+import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {fileURLToPath} from "node:url";
 import {assert} from "chai";
-import {handleToolCall, tools} from "../tools.js";
+import {handleToolCall, toCollectionName, tools} from "../tools.js";
+
+// Run the CLI source with bun so the test does not depend on install-time bin links.
+const blocksCli = fileURLToPath(new URL("../../../blocks/src/cli.ts", import.meta.url));
 
 describe("tools", () => {
   test("should export all required tools", async () => {
@@ -11,6 +19,7 @@ describe("tools", () => {
     expect(toolNames).toContain("terreno_generate_screen");
     expect(toolNames).toContain("terreno_generate_form_fields");
     expect(toolNames).toContain("terreno_validate_model_schema");
+    expect(toolNames).toContain("terreno_validate_ui_blocks");
     expect(toolNames).toContain("terreno_install_admin");
     expect(toolNames).toContain("terreno_bootstrap_ai_rules");
     expect(toolNames).toContain("terreno_search_docs");
@@ -203,11 +212,13 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductListScreen");
-      expect(content).toContain("useGetProductsQuery");
-      expect(content).toContain("isLoading");
-      expect(content).toContain("error");
-      expect(content).toContain("refetch");
-      expect(content).toContain("ScrollView");
+      expect(content).toContain('import { useQuery, useSyncStatus } from "@terreno/syncdb/react";');
+      expect(content).toContain('useQuery<ProductRow>("products")');
+      expect(content).toContain("item.title");
+      expect(content).toContain("isSyncing");
+      expect(content).not.toContain("openApiSdk");
+      expect(content).toContain("SYNC_COLLECTIONS");
+      expect(content).toContain("@/store/apiSdk");
     });
 
     test("should generate form screen", async () => {
@@ -221,7 +232,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("CreateProductScreen");
-      expect(content).toContain("useCreateProductMutation");
+      expect(content).toContain('const {create} = useMutate("products");');
+      expect(content).toContain("create({data: { title, description }});");
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useState");
       expect(content).toContain("TextField");
       expect(content).toContain("handleSubmit");
@@ -239,7 +252,8 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductDetailScreen");
-      expect(content).toContain("useGetProductQuery");
+      expect(content).toContain('useEntity<ProductRow>("products", id ?? "")');
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useLocalSearchParams");
       expect(content).toContain("item.title");
       expect(content).toContain("item.price");
@@ -255,9 +269,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("TextField");
-      expect(content).toContain('label="Full Name"');
+      expect(content).toContain('title="Full Name"');
       expect(content).toContain("value={name}");
-      expect(content).toContain("onChangeText={setName}");
+      expect(content).toContain("onChange={setName}");
     });
 
     test("should generate email field", async () => {
@@ -268,7 +282,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("EmailField");
-      expect(content).toContain("error={errors.email}");
+      expect(content).toContain("errorText={errors.email}");
     });
 
     test("should generate select field with options", async () => {
@@ -290,7 +304,9 @@ describe("tools", () => {
       expect(content).toContain("SelectField");
       expect(content).toContain("USA");
       expect(content).toContain("Canada");
-      expect(content).toContain("onChangeValue={setCountry}");
+      expect(content).toContain("onChange={setCountry}");
+      expect(content).not.toContain("onChangeValue");
+      expect(content).not.toContain('label="Country"');
     });
 
     test("should generate boolean field", async () => {
@@ -312,7 +328,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="date"');
+      expect(content).toContain('type="date"');
     });
 
     test("should generate multiple fields", async () => {
@@ -401,6 +417,82 @@ describe("tools", () => {
 
       expect(result.content[0].text).toContain("findOne");
       expect(result.content[0].text).toContain("findOneOrThrow");
+    });
+
+    const conventionalOptions = `{
+          strict: "throw",
+          toJSON: {virtuals: true},
+          toObject: {virtuals: true},
+        }`;
+
+    test("accepts Document and Model types imported from src/types/models/", async () => {
+      // The example backend layout: types live in src/types/models/todoTypes.ts.
+      const schema = `
+        import mongoose from "mongoose";
+        import type {TodoDocument, TodoModel} from "../types/models/todoTypes";
+        import {addDefaultPlugins} from "./modelPlugins";
+
+        const todoSchema = new mongoose.Schema<TodoDocument, TodoModel>({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("✓");
+    });
+
+    test("accepts Document and Model types imported from modelInterfaces", async () => {
+      const schema = `
+        import mongoose from "mongoose";
+        import {
+          UserDocument,
+          UserModel,
+        } from "../modelInterfaces";
+
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+    });
+
+    test("accepts the create-terreno-app types barrel and inline type aliases", async () => {
+      const fromTypes = `
+        import type {UserDocument, UserModel} from "../types";
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+      const inlineAlias = `
+        export type NoteDocument = DefaultDoc & {body: string};
+        const noteSchema = new mongoose.Schema<NoteDocument>({}, ${conventionalOptions});
+        addDefaultPlugins(noteSchema);
+      `;
+
+      for (const schema of [fromTypes, inlineAlias]) {
+        const result = await handleToolCall("terreno_validate_model_schema", {schema});
+        expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      }
+    });
+
+    test("still reports missing types when the model has none", async () => {
+      // mongoose's own Document types are not the model's Document type.
+      const schema = `
+        import mongoose, {type HydratedDocument, Document} from "mongoose";
+        const todoSchema = new mongoose.Schema({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("src/types/models/");
     });
 
     test("should detect Date usage", async () => {
@@ -522,9 +614,11 @@ describe("tools", () => {
       });
       const content = result.content[0].text;
 
-      expect(content).toContain("PasswordField");
-      expect(content).toContain('label="Password"');
-      expect(content).toContain("error={errors.password}");
+      // PasswordField is a placeholder with no props; TextField type="password" is the real one.
+      expect(content).not.toContain("PasswordField");
+      expect(content).toContain('type="password"');
+      expect(content).toContain('title="Password"');
+      expect(content).toContain("errorText={errors.password}");
     });
 
     test("should generate textarea field", async () => {
@@ -543,7 +637,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="datetime"');
+      expect(content).toContain('type="datetime"');
     });
 
     test("should generate select field with empty options", async () => {
@@ -554,6 +648,26 @@ describe("tools", () => {
 
       expect(content).toContain("SelectField");
       expect(content).toContain("options={[]}");
+    });
+  });
+
+  describe("toCollectionName", () => {
+    test("derives kebab-case plural collection names from model names", () => {
+      expect(toCollectionName("Product")).toBe("products");
+      expect(toCollectionName("TodoItem")).toBe("todo-items");
+      expect(toCollectionName("Category")).toBe("categories");
+      expect(toCollectionName("Day")).toBe("days");
+      expect(toCollectionName("Settings")).toBe("settings");
+    });
+
+    test("screen tool honors an explicit collection", async () => {
+      const result = await handleToolCall("terreno_generate_screen", {
+        collection: "catalog-products",
+        modelName: "Product",
+        name: "Catalog",
+        type: "list",
+      });
+      expect(result.content[0].text).toContain('useQuery<ProductRow>("catalog-products")');
     });
   });
 
@@ -578,6 +692,14 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("# Install Admin Panel");
+      expect(content).toContain("frontend/app/(tabs)/admin/_layout.tsx");
+      expect(content).toContain("<AdminProvider");
+      expect(content).toContain("getAuthHeaders={getAdminAuthHeaders}");
+      expect(content).toContain('import {baseUrl} from "@terreno/syncdb/config";');
+      expect(content).toContain('import {authProvider} from "@/store/syncdb";');
+      expect(content).toContain("await authProvider.getToken()");
+      expect(content).not.toContain("@terreno/rtk");
+      expect(content).not.toContain("api={");
       expect(content).toContain("frontend/app/(tabs)/admin/index.tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model].tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model]/create.tsx");
@@ -682,6 +804,174 @@ describe("tools", () => {
         toVersion: "0.20.0",
       });
       expect(out.content[0].text).toContain("Invalid version range");
+    });
+  });
+
+  describe("terreno_validate_ui_blocks", () => {
+    const cliReport = (document: string): string => {
+      const result = spawnSync(process.execPath, [blocksCli, "validate", "-"], {
+        encoding: "utf8",
+        input: document,
+      });
+      return result.stdout;
+    };
+
+    test("lists a document argument", () => {
+      const tool = tools.find((entry) => entry.name === "terreno_validate_ui_blocks");
+      expect(tool?.inputSchema).toEqual({
+        properties: {
+          document: {
+            description: "Whole-reply YAML or JSON block document",
+            type: "string",
+          },
+        },
+        required: ["document"],
+        type: "object",
+      });
+    });
+
+    test("matches the CLI report for a valid document", async () => {
+      const document = "v: 1\nblocks:\n  - type: heading\n    text: Hello\n";
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text).toBe(cliReport(document));
+    });
+
+    test("matches the CLI report for an invalid document", async () => {
+      const document = "v: 1\nblocks:\n  - type: heading\n    color: red\n";
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text).toBe(cliReport(document));
+      expect(out.content[0].text).toContain("UNKNOWN_KEY");
+    });
+
+    test("asks for a document when the argument is missing", async () => {
+      const out = await handleToolCall("terreno_validate_ui_blocks", {});
+      expect(out.content[0].text).toBe("document is required\n");
+    });
+
+    test("matches the CLI report for a document that does not parse", async () => {
+      const document = "v: 1\nblocks: [\n";
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text.length).toBeGreaterThan(0);
+      expect(out.content[0].text).toBe(cliReport(document));
+    });
+
+    test("matches the CLI report for a valid document with warnings", async () => {
+      const document = [
+        "v: 1",
+        "datasets:",
+        "  signups:",
+        "    columns:",
+        "      - name: month",
+        "        type: string",
+        "      - name: count",
+        "        type: number",
+        "    rows:",
+        "      - [Jan, 1]",
+        "blocks:",
+        "  - type: chart",
+        "    kind: line",
+        "    data: signups",
+        "    x: month",
+        "    y: count",
+        "",
+      ].join("\n");
+      const out = await handleToolCall("terreno_validate_ui_blocks", {document});
+      expect(out.content[0].text).toContain("LINE_SINGLE_POINT");
+      expect(out.content[0].text).toBe(cliReport(document));
+    });
+  });
+  describe("update note tools", () => {
+    let docsDir: string;
+    let previousDocsDir: string | undefined;
+    let previousHelpApiUrl: string | undefined;
+
+    beforeEach((): void => {
+      docsDir = mkdtempSync(join(tmpdir(), "terreno-mcp-update-tools-"));
+      mkdirSync(join(docsDir, "upgrades"), {recursive: true});
+      writeFileSync(join(docsDir, "upgrades", "57.3.0.md"), "# Billing\n\nStripe webhooks moved.");
+      writeFileSync(join(docsDir, "upgrades", "57.4.0.md"), "# Popover\n\nPopover added.");
+      previousDocsDir = process.env.TERRENO_MCP_DOCS_DIR;
+      previousHelpApiUrl = process.env.TERRENO_HELP_API_URL;
+      process.env.TERRENO_MCP_DOCS_DIR = docsDir;
+      Reflect.deleteProperty(process.env, "TERRENO_HELP_API_URL");
+    });
+
+    afterEach((): void => {
+      rmSync(docsDir, {force: true, recursive: true});
+      if (previousDocsDir === undefined) {
+        Reflect.deleteProperty(process.env, "TERRENO_MCP_DOCS_DIR");
+      } else {
+        process.env.TERRENO_MCP_DOCS_DIR = previousDocsDir;
+      }
+      if (previousHelpApiUrl !== undefined) {
+        process.env.TERRENO_HELP_API_URL = previousHelpApiUrl;
+      }
+    });
+
+    test("searches bundled notes with string queries and a question", async () => {
+      const out = await handleToolCall("terreno_search_update_notes", {
+        includeArchived: true,
+        limit: 1,
+        queries: ["stripe", 42],
+        question: "billing",
+        source: "bundled",
+      });
+      const payload = JSON.parse(out.content[0].text) as {
+        hits: Array<{id: string}>;
+        sources: string[];
+      };
+      expect(payload.sources).toEqual(["bundled-upgrades"]);
+      expect(payload.hits.map((hit) => hit.id)).toEqual(["upgrade:57.3.0"]);
+    });
+
+    test("falls back to auto search for an unknown source and no queries", async () => {
+      const out = await handleToolCall("terreno_search_update_notes", {
+        queries: "billing",
+        source: "everywhere",
+      });
+      const payload = JSON.parse(out.content[0].text) as {
+        hits: Array<{id: string}>;
+        sources: string[];
+      };
+      // Without TERRENO_HELP_API_URL, auto mode searches only bundled notes, newest first.
+      expect(payload.sources).toEqual(["bundled-upgrades"]);
+      expect(payload.hits.map((hit) => hit.id)).toEqual(["upgrade:57.4.0", "upgrade:57.3.0"]);
+    });
+
+    test("requires an id to fetch an update note", async () => {
+      const out = await handleToolCall("terreno_get_update_note", {id: "   "});
+      expect(out.content[0].text).toContain("Provide an `id`");
+    });
+
+    test("fetches a bundled upgrade note by prefixed id or bare version", async () => {
+      for (const id of ["upgrade:57.3.0", " 57.3.0 "]) {
+        const out = await handleToolCall("terreno_get_update_note", {id});
+        const detail = JSON.parse(out.content[0].text) as {
+          body: string;
+          id: string;
+          kind: string;
+        };
+        expect(detail.id).toBe("upgrade:57.3.0");
+        expect(detail.kind).toBe("upgrade");
+        expect(detail.body).toContain("Stripe webhooks moved.");
+      }
+    });
+
+    test("answers update help questions with matches", async () => {
+      const out = await handleToolCall("terreno_ask_update_help", {limit: 3, question: "popover"});
+      expect(out.content[0].text).toContain("Question: popover");
+      expect(out.content[0].text).toContain("upgrade:57.4.0");
+    });
+
+    test("explains when no update notes match the question", async () => {
+      const out = await handleToolCall("terreno_ask_update_help", {question: "qqqzzzxxyy"});
+      expect(out.content[0].text).toContain('No update notes matched: "qqqzzzxxyy"');
+      expect(out.content[0].text).toContain("Sources searched: bundled-upgrades");
+    });
+
+    test("asks for a question when none is given", async () => {
+      const out = await handleToolCall("terreno_ask_update_help", {question: 7});
+      expect(out.content[0].text).toBe("Provide a non-empty `question` string.");
     });
   });
 });

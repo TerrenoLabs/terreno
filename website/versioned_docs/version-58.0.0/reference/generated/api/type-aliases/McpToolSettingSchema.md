@@ -1,0 +1,1 @@
+> **McpToolSettingSchema** = `mongoose.Schema`\<[`McpToolSettingDocument`](../interfaces/McpToolSettingDocument.md), [`McpToolSettingModel`](McpToolSettingModel.md), [`McpToolSettingMethods`](McpToolSettingMethods.md)\>

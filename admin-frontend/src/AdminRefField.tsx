@@ -9,7 +9,6 @@ import type {RefFieldRendererProps} from "./types";
 export type AdminRefFieldProps = RefFieldRendererProps;
 
 export const AdminRefField: React.FC<RefFieldRendererProps> = ({
-  api,
   routePath,
   refModelName,
   title,
@@ -23,7 +22,6 @@ export const AdminRefField: React.FC<RefFieldRendererProps> = ({
 }) => {
   return (
     <AdminObjectPicker
-      api={api}
       autocomplete={autocomplete}
       errorText={errorText}
       helperText={helperText}

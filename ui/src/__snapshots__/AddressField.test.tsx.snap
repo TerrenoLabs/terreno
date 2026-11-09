@@ -38,6 +38,8 @@ exports[`AddressField renders correctly with default props 1`] = `
                       "accessibilityState": {
                         "disabled": undefined,
                       },
+                      "aria-describedby": undefined,
+                      "aria-invalid": false,
                       "aria-label": "Text input field",
                       "autoCapitalize": "sentences",
                       "autoCorrect": true,
@@ -64,6 +66,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                         "fontSize": 16,
                         "gap": 10,
                         "height": 24,
+                        "letterSpacing": undefined,
                         "paddingVertical": 0,
                         "width": "100%",
                       },
@@ -88,7 +91,7 @@ exports[`AddressField renders correctly with default props 1`] = `
             "props": {
               "style": {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "flexDirection": "column",
@@ -156,6 +159,8 @@ exports[`AddressField renders correctly with default props 1`] = `
                       "accessibilityState": {
                         "disabled": undefined,
                       },
+                      "aria-describedby": undefined,
+                      "aria-invalid": false,
                       "aria-label": "Text input field",
                       "autoCapitalize": "sentences",
                       "autoCorrect": true,
@@ -182,6 +187,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                         "fontSize": 16,
                         "gap": 10,
                         "height": 24,
+                        "letterSpacing": undefined,
                         "paddingVertical": 0,
                         "width": "100%",
                       },
@@ -206,7 +212,7 @@ exports[`AddressField renders correctly with default props 1`] = `
             "props": {
               "style": {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "flexDirection": "column",
@@ -274,6 +280,8 @@ exports[`AddressField renders correctly with default props 1`] = `
                       "accessibilityState": {
                         "disabled": undefined,
                       },
+                      "aria-describedby": undefined,
+                      "aria-invalid": false,
                       "aria-label": "Text input field",
                       "autoCapitalize": "sentences",
                       "autoCorrect": true,
@@ -300,6 +308,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                         "fontSize": 16,
                         "gap": 10,
                         "height": 24,
+                        "letterSpacing": undefined,
                         "paddingVertical": 0,
                         "width": "100%",
                       },
@@ -324,7 +333,7 @@ exports[`AddressField renders correctly with default props 1`] = `
             "props": {
               "style": {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "flexDirection": "column",
@@ -457,7 +466,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                                     "current": null,
                                   },
                                   "style": {
-                                    "borderColor": "#9A9A9A",
+                                    "borderColor": "#949494",
                                     "borderRadius": 4,
                                     "borderWidth": 1,
                                     "color": "#1C1C1C",
@@ -2475,7 +2484,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                         "props": {
                           "style": {
                             "backgroundColor": "#FFFFFF",
-                            "borderColor": "#9A9A9A",
+                            "borderColor": "#949494",
                             "borderRadius": 4,
                             "borderWidth": 1,
                             "boxShadow": "0px 2px 8px rgba(0, 0, 0, 0.15)",
@@ -2520,7 +2529,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                     },
                     {
                       "backgroundColor": "#FFFFFF",
-                      "borderColor": "#9A9A9A",
+                      "borderColor": "#949494",
                     },
                     false,
                   ],
@@ -2594,6 +2603,8 @@ exports[`AddressField renders correctly with default props 1`] = `
                       "accessibilityState": {
                         "disabled": undefined,
                       },
+                      "aria-describedby": undefined,
+                      "aria-invalid": false,
                       "aria-label": "Text input field",
                       "autoCapitalize": "sentences",
                       "autoCorrect": true,
@@ -2620,6 +2631,7 @@ exports[`AddressField renders correctly with default props 1`] = `
                         "fontSize": 16,
                         "gap": 10,
                         "height": 24,
+                        "letterSpacing": undefined,
                         "paddingVertical": 0,
                         "width": "100%",
                       },
@@ -2644,7 +2656,7 @@ exports[`AddressField renders correctly with default props 1`] = `
             "props": {
               "style": {
                 "backgroundColor": "#FFFFFF",
-                "borderColor": "#9A9A9A",
+                "borderColor": "#949494",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "flexDirection": "column",

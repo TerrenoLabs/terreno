@@ -1,0 +1,1 @@
+> **WebhookClaimResult** = `"claimed"` \| `"duplicate"`

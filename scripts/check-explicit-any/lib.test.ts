@@ -194,7 +194,7 @@ test("formatSummaryText includes package breakdown", () => {
 test("inferPackageName maps monorepo paths", () => {
   expect(inferPackageName("api/src/auth.ts")).toBe("api");
   expect(inferPackageName("example-backend/src/server.ts")).toBe("example-backend");
-  expect(inferPackageName("admin-spa/store/sdk.ts")).toBe("admin-spa");
+  expect(inferPackageName("admin-spa/store/adminSyncDb.ts")).toBe("admin-spa");
 });
 
 test("isTestFile detects common test paths", () => {

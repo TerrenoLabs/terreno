@@ -1,6 +1,6 @@
 # SyncDB Hardening Plan (terreno-syncdb-2)
 
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1081  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1081  
 **Status:** Complete  
 **Parent IP:** [syncdb-local-first.md](syncdb-local-first.md) — this plan hardens that IP and shares its roadmap issue
 

@@ -1,0 +1,9 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick the only option.",
+    "select": "one",
+    "options": [{"id": "only", "label": "Only"}]
+  },
+  "errors": [{"path": "options", "code": "TOO_FEW"}]
+}

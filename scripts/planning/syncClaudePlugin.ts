@@ -22,9 +22,14 @@ interface GeneratedFile {
 export const CANONICAL_PLUGIN_DIRECTORY = "plugins/terreno-planning";
 export const CLAUDE_PLUGIN_DIRECTORY = "plugins/terreno-claude";
 export const CLAUDE_PLUGIN_NAME = "terreno";
+/** Marketplace that installs each Claude plugin from npm at its latest stable release. */
+export const CLAUDE_RELEASE_MARKETPLACE_PATH =
+  "plugins/claude-release/.claude-plugin/marketplace.json";
+export const CLAUDE_RELEASE_MARKETPLACE_NAME = "terreno-releases";
 
-const LONG_SKILL_NAME_PATTERN = /terreno-([1-5]-[a-z]+|pick-roast-loop|planning-loop|taste-sweep)/g;
-const LONG_SCAN_SKILL_NAME_PATTERN = /terreno-scan-([1-5]-[a-z]+|campaign|loop)/g;
+const LONG_SKILL_NAME_PATTERN =
+  /terreno-([1-5]-[a-z]+|pick-roast-loop|planning-loop|taste-sweep|prd)/g;
+const LONG_SCAN_SKILL_NAME_PATTERN = /terreno-loop-([1-5]-[a-z]+|campaign|run)/g;
 
 interface ClaudePluginTarget {
   /** Extra rewrites applied to markdown, in order, after the directory-name rewrite. */
@@ -34,6 +39,8 @@ interface ClaudePluginTarget {
   claudeName: string;
   displayName: string;
   namePattern: RegExp;
+  /** npm package the release pipeline publishes this plugin directory as. */
+  npmPackage: string;
 }
 
 export const CLAUDE_PLUGIN_TARGETS: ClaudePluginTarget[] = [
@@ -44,54 +51,125 @@ export const CLAUDE_PLUGIN_TARGETS: ClaudePluginTarget[] = [
     contentPatterns: [],
     displayName: "Terreno",
     namePattern: LONG_SKILL_NAME_PATTERN,
+    npmPackage: "@terreno/agent-plugin",
   },
   {
-    canonicalDirectory: "plugins/terreno-scan",
-    claudeDirectory: "plugins/terreno-scan-claude",
-    claudeName: "terreno-scan",
+    canonicalDirectory: "plugins/terreno-loop",
+    claudeDirectory: "plugins/terreno-loop-claude",
+    claudeName: "terreno-loop",
     contentPatterns: [LONG_SKILL_NAME_PATTERN],
-    displayName: "Terreno Scan",
+    displayName: "Terreno Loop",
     namePattern: LONG_SCAN_SKILL_NAME_PATTERN,
+    npmPackage: "@terreno/agent-plugin-loop",
   },
 ];
 
 const [PLANNING_TARGET] = CLAUDE_PLUGIN_TARGETS;
 
-const buildClaudePluginReadme = ({canonicalDirectory}: ClaudePluginTarget): string =>
-  `# Terreno Claude Code plugin
+const RELEASE_MARKETPLACE_URL =
+  "https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json";
 
-Generated. Do not hand-edit. Run \`bun run skills:sync\`.
+const buildInstallSection = (target: ClaudePluginTarget, firstCommand: string): string =>
+  `## Install
+
+Pick one channel and register only that one. Each channel provides a plugin named
+\`${target.claudeName}\`, so two channels give duplicate commands.
+
+Latest stable release, installed from npm as \`${target.npmPackage}\`:
+
+\`\`\`text
+/plugin marketplace add ${RELEASE_MARKETPLACE_URL}
+/plugin install ${target.claudeName}@${CLAUDE_RELEASE_MARKETPLACE_NAME}
+\`\`\`
+
+Every merge to \`master\`:
+
+\`\`\`text
+/plugin marketplace add TerrenoLabs/terreno
+/plugin install ${target.claudeName}@terreno-plugins
+\`\`\`
+
+One release, pinned: add \`TerrenoLabs/terreno#<version>\` as the marketplace instead.
+
+Then run \`${firstCommand}\`. Claude Code does not auto-update third-party marketplaces by
+default; run \`/plugin update ${target.claudeName}@<marketplace>\` to pick up a new release.
+`;
+
+const buildMaintainerSection = (target: ClaudePluginTarget, sources: string): string =>
+  `## Maintainers
+
+This directory is generated. Do not hand-edit it; run \`bun run skills:sync\`.
 
 Claude Code resolves a plugin skill's command from the frontmatter \`name\`, so the
-shortened stage names live here instead of in the shared stage files. This plugin is
-named \`terreno\`, so Grow is \`/terreno:1-grow\`.
+shortened names live here instead of in the shared skill files. Cursor, Codex, and
+\`npx skills\` keep the canonical names from \`${target.canonicalDirectory}/\`.
 
 | Source | Owns |
 | --- | --- |
-| \`${canonicalDirectory}/skills/\` | Lifecycle and Terreno app workflows |
-| \`${canonicalDirectory}/agents/\` | Reusable verification agents |
-| \`${canonicalDirectory}/references/\` | Shared lifecycle references |
-
-Cursor and \`npx skills\` keep the canonical \`terreno-*\` names.
+${sources}
 `;
 
-const buildScanPluginReadme = ({canonicalDirectory}: ClaudePluginTarget): string =>
-  `# Terreno Scan Claude Code plugin
+const buildClaudePluginReadme = (target: ClaudePluginTarget): string =>
+  `# Terreno plugin for Claude Code
 
-Generated. Do not hand-edit. Run \`bun run skills:sync\`.
+Terreno's agent lifecycle and app-building skills for Claude Code. Grow shapes a request
+into an approved plan, Pick and Roast build and prove it one task at a time, Brew opens the
+pull request, and Taste reacts to review and CI until it is mergeable. The plugin also ships
+Terreno backend, UI, data, admin, docs, upgrade, and deployment skills, plus the
+\`pre-commit\` and \`ui-verifier\` agents.
 
-Claude Code resolves a plugin skill's command from the frontmatter \`name\`, so the
-shortened scan-stage names live here instead of in the shared stage files. This plugin is
-named \`terreno-scan\`, so Aim is \`/terreno-scan:1-aim\`.
+Reference: https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/lifecycle-plugin.md
 
-| Source | Owns |
+${buildInstallSection(target, "/terreno:1-grow")}
+## What you get
+
+| Command | Does |
 | --- | --- |
-| \`${canonicalDirectory}/skills/\` | Aim, Sweep, Sift, Plot, Track, and the campaign loop |
-| \`${canonicalDirectory}/references/\` | Scan contract, map-reduce, goal tracking, schemas |
+| \`/terreno:1-grow\` | Research, clarify, and approve an implementation plan and task list |
+| \`/terreno:2-pick\` | Build one task test-first, then roast it and pick the next |
+| \`/terreno:3-roast\` | Independently prove or disprove the current task |
+| \`/terreno:4-brew\` | Final checks, commit, push, open the PR, wait for CI and review bots |
+| \`/terreno:5-taste\` | React to CI and review on the PR until it is mergeable |
+| \`/terreno:pick-roast-loop\` | Work an approved plan through every task |
 
-Requires the \`terreno\` lifecycle plugin: Plot hands each slice to Grow, Pick, Roast,
-Brew, and Taste. Cursor and \`npx skills\` keep the canonical \`terreno-scan-*\` names.
-`;
+${buildMaintainerSection(
+  target,
+  `| \`${target.canonicalDirectory}/skills/\` | Lifecycle and Terreno app workflows |
+| \`${target.canonicalDirectory}/agents/\` | Reusable verification agents |
+| \`${target.canonicalDirectory}/references/\` | Shared lifecycle references |`
+)}`;
+
+const buildScanPluginReadme = (target: ClaudePluginTarget): string =>
+  `# Terreno Loop plugin for Claude Code
+
+Goal-driven loops for Claude Code. Give it an outcome an agent can measure on its own,
+such as CI wall time, bundle size, or lint count, and it charters the goal, finds the work,
+slices it into pull requests, and re-measures after each one lands until the metric hits
+target or the budget runs out. Each slice goes through the \`terreno\` lifecycle plugin, so
+install that plugin too.
+
+Reference: https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/scan-plugin.md
+
+${buildInstallSection(target, "/terreno-loop:run <goal>")}
+## What you get
+
+| Command | Does |
+| --- | --- |
+| \`/terreno-loop:1-aim\` | Charter the goal: metric, baseline, rules, budget |
+| \`/terreno-loop:2-sweep\` | Run the rules and map parallel workers into candidate findings |
+| \`/terreno-loop:3-sift\` | Dedupe, verify, and rank findings |
+| \`/terreno-loop:4-plot\` | Slice findings into PR-sized plans |
+| \`/terreno-loop:5-track\` | Re-measure the metric and choose the next move |
+| \`/terreno-loop:campaign\` | Run bounded rounds, stopping at each gate |
+| \`/terreno-loop:run\` | Stay resident: keep the goal moving and tend every open PR |
+
+Loops can run for hours and use many tokens. Set a budget or stop condition in the charter.
+
+${buildMaintainerSection(
+  target,
+  `| \`${target.canonicalDirectory}/skills/\` | Aim, Sweep, Sift, Plot, Track, and the outer loops |
+| \`${target.canonicalDirectory}/references/\` | Scan contract, map-reduce, goal tracking, schemas |`
+)}`;
 
 const buildReadme = (target: ClaudePluginTarget): string =>
   target.claudeName === CLAUDE_PLUGIN_NAME
@@ -146,19 +224,28 @@ const listAgentPaths = (rootDirectory: string, target: ClaudePluginTarget): stri
     .filter((relativePath) => relativePath.endsWith(".md"))
     .map((relativePath) => `./agents/${relativePath}`);
 
-const buildClaudeManifest = (rootDirectory: string, target: ClaudePluginTarget): string => {
-  const cursorManifest = JSON.parse(
+interface CursorManifest {
+  author: {email: string; name: string};
+  compatibility: Record<string, string>;
+  description: string;
+  keywords: string[];
+}
+
+const readCursorManifest = (rootDirectory: string, target: ClaudePluginTarget): CursorManifest =>
+  JSON.parse(
     readFileSync(
       join(rootDirectory, target.canonicalDirectory, ".cursor-plugin/plugin.json"),
       "utf8"
     )
-  ) as {
-    author: {email: string; name: string};
-    compatibility: Record<string, string>;
-    description: string;
-    keywords: string[];
-    version: string;
-  };
+  ) as CursorManifest;
+
+/**
+ * The manifest carries no `version`: Claude Code then versions a git-hosted plugin by
+ * commit SHA, so master and tag installs pick up every change. The release pipeline
+ * writes the release version into the npm copy (scripts/ci/prepare-package-publish.mjs).
+ */
+const buildClaudeManifest = (rootDirectory: string, target: ClaudePluginTarget): string => {
+  const cursorManifest = readCursorManifest(rootDirectory, target);
   const agents = listAgentPaths(rootDirectory, target);
 
   const manifest = {
@@ -166,17 +253,97 @@ const buildClaudeManifest = (rootDirectory: string, target: ClaudePluginTarget):
     author: cursorManifest.author,
     description: cursorManifest.description,
     displayName: target.displayName,
-    homepage: "https://github.com/FlourishHealth/terreno/blob/master/plugins/README.md",
+    homepage: "https://github.com/TerrenoLabs/terreno/blob/master/plugins/README.md",
     keywords: cursorManifest.keywords,
     license: "MIT",
     metadata: {compatibility: cursorManifest.compatibility},
     name: target.claudeName,
-    repository: "https://github.com/FlourishHealth/terreno",
+    repository: "https://github.com/TerrenoLabs/terreno",
     skills: "./skills/",
-    version: cursorManifest.version,
   };
 
   return `${JSON.stringify(manifest, null, 2)}\n`;
+};
+
+/** npm package metadata; the release pipeline sets `version` at publish time. */
+const buildPackageJson = (rootDirectory: string, target: ClaudePluginTarget): string => {
+  const cursorManifest = readCursorManifest(rootDirectory, target);
+  const hasAgents = listAgentPaths(rootDirectory, target).length > 0;
+  const packageJson = {
+    description: cursorManifest.description,
+    files: [
+      ".claude-plugin/",
+      ...(hasAgents ? ["agents/"] : []),
+      "references/",
+      "skills/",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+    ],
+    homepage: "https://github.com/TerrenoLabs/terreno/blob/master/plugins/README.md",
+    keywords: ["claude-code", "claude-plugin", ...cursorManifest.keywords],
+    license: "MIT",
+    name: target.npmPackage,
+    publishConfig: {access: "public"},
+    repository: {
+      directory: target.claudeDirectory,
+      type: "git",
+      url: "git+https://github.com/TerrenoLabs/terreno.git",
+    },
+    version: "0.0.0",
+  };
+
+  return `${JSON.stringify(packageJson, null, 2)}\n`;
+};
+
+/**
+ * Release channel: each plugin comes from npm, so users get the latest stable release
+ * instead of master. Users add it by URL because a repository holds one default marketplace.
+ */
+export const buildReleaseMarketplace = (rootDirectory: string): string => {
+  const defaultMarketplace = JSON.parse(
+    readFileSync(join(rootDirectory, ".claude-plugin/marketplace.json"), "utf8")
+  ) as {
+    owner: {email: string; name: string};
+    plugins: {description: string; name: string; source: string}[];
+  };
+  const plugins = CLAUDE_PLUGIN_TARGETS.map((target) => {
+    const entry = defaultMarketplace.plugins.find(({name}) => name === target.claudeName);
+    if (!entry) {
+      throw new Error(`.claude-plugin/marketplace.json has no ${target.claudeName} entry`);
+    }
+    return {
+      description: entry.description,
+      name: target.claudeName,
+      source: {package: target.npmPackage, source: "npm"},
+    };
+  });
+  const marketplace = {
+    description:
+      "Terreno plugins at the latest stable release, installed from npm. For master, add TerrenoLabs/terreno instead.",
+    name: CLAUDE_RELEASE_MARKETPLACE_NAME,
+    owner: defaultMarketplace.owner,
+    plugins,
+  };
+
+  return `${JSON.stringify(marketplace, null, 2)}\n`;
+};
+
+const syncReleaseMarketplace = ({
+  check = false,
+  rootDirectory,
+}: SyncClaudePluginOptions): string[] => {
+  const path = join(rootDirectory, CLAUDE_RELEASE_MARKETPLACE_PATH);
+  const contents = buildReleaseMarketplace(rootDirectory);
+  if (!check) {
+    mkdirSync(join(path, ".."), {recursive: true});
+    writeFileSync(path, contents);
+    return [];
+  }
+  if (!existsSync(path) || readFileSync(path, "utf8") !== contents) {
+    return [`Claude release marketplace drift in ${CLAUDE_RELEASE_MARKETPLACE_PATH}`];
+  }
+  return [];
 };
 
 export const buildClaudePluginFiles = ({
@@ -194,6 +361,7 @@ export const buildClaudePluginFiles = ({
     {contents: buildClaudeManifest(rootDirectory, target), path: ".claude-plugin/plugin.json"},
     {contents: readFileSync(join(canonicalDirectory, "LICENSE"), "utf8"), path: "LICENSE"},
     {contents: buildReadme(target), path: "README.md"},
+    {contents: buildPackageJson(rootDirectory, target), path: "package.json"},
   ];
 
   for (const skillName of listSkillDirectories(canonicalSkills)) {
@@ -272,8 +440,10 @@ export const syncClaudePlugin = ({
 export const syncAllClaudePlugins = ({
   check = false,
   rootDirectory,
-}: SyncClaudePluginOptions): string[] =>
-  CLAUDE_PLUGIN_TARGETS.flatMap((target) => syncClaudePlugin({check, rootDirectory, target}));
+}: SyncClaudePluginOptions): string[] => [
+  ...CLAUDE_PLUGIN_TARGETS.flatMap((target) => syncClaudePlugin({check, rootDirectory, target})),
+  ...syncReleaseMarketplace({check, rootDirectory}),
+];
 
 if (import.meta.main) {
   const rootDirectory = resolve(import.meta.dir, "../..");
@@ -285,8 +455,9 @@ if (import.meta.main) {
     }
     process.exit(1);
   }
-  const directories = CLAUDE_PLUGIN_TARGETS.map(({claudeDirectory}) => `${claudeDirectory}/`).join(
-    ", "
-  );
+  const directories = [
+    ...CLAUDE_PLUGIN_TARGETS.map(({claudeDirectory}) => `${claudeDirectory}/`),
+    CLAUDE_RELEASE_MARKETPLACE_PATH,
+  ].join(", ");
   console.info(check ? `${directories} are in sync.` : `Wrote ${directories}.`);
 }

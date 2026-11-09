@@ -12,6 +12,7 @@ import mongoose, {type Document, type Model} from "mongoose";
 import {
   assertNoActionCollisions,
   type CollectionActionConfig,
+  hasMCPActions,
   type InstanceActionConfig,
   registerActionRoutes,
 } from "./actions";
@@ -35,7 +36,7 @@ import {
   passthroughOrWrapWrite,
 } from "./errors";
 import {logger} from "./logger";
-import {registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
+import {registerMCPActionModel, registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
 import type {MCPConfig} from "./mcp/types";
 import {
   createOpenApiMiddleware,
@@ -54,8 +55,8 @@ import {checkPermissions, permissionMiddleware, type RESTPermissions} from "./pe
 import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
-import {warnRealtimeDeprecated} from "./realtime/deprecation";
-import type {RealtimeConfig} from "./realtime/types";
+import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
+import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
   type ExecutorConcurrencyCheck,
   executeCreate,
@@ -212,6 +213,13 @@ export interface ModelRouterOptions<T> {
    * */
   sort?: string | {[key: string]: "ascending" | "descending"};
   /**
+   * Extra fields that list requests may sort by. A client `sort` may name only fields in
+   * `queryFields`, fields named in `sort`, and fields listed here; any other field returns
+   * 400 `sort-field-not-allowed`. Do not list fields that some readers cannot see (RBAC
+   * field views, responseHandler stripping): sort order reveals their values.
+   */
+  sortFields?: string[];
+  /**
    * Default queries to provide to Mongo before any user queries or transforms happen when making
    * list queries. Accepts any Mongoose-style queries, and runs for all user types.
    *    defaultQueryParams: \{hidden: false\} // By default, don't show objects with hidden=true
@@ -254,7 +262,7 @@ export interface ModelRouterOptions<T> {
   preCreate?: (
     value: Partial<T> | (Partial<T> | undefined)[] | null | undefined,
     request: express.Request
-  ) => T | Promise<T> | null;
+  ) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before changes are made for update operations.
    * Can update the body fields based on the request or the user.
@@ -264,7 +272,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The request body relative to the model update (type: Partial<T>). Note: this does not contain the entire document to be updated, only the fields being updated.
    * @param request - The Express request object.
    */
-  preUpdate?: (value: Partial<T>, request: express.Request) => T | Promise<T> | null;
+  preUpdate?: (value: Partial<T>, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before the object is deleted.
    * Return null to return a generic 403 error.
@@ -273,7 +281,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The document to be deleted, before the soft update of deleted: true (type: T).
    * @param request - The Express request object.
    */
-  preDelete?: (value: T, request: express.Request) => T | Promise<T> | null;
+  preDelete?: (value: T, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after the object is created but before the responseHandler serializes and
    * returned. This is a good spot to perform dependent changes to other models or performing async
@@ -395,18 +403,6 @@ export interface ModelRouterOptions<T> {
    */
   mcp?: MCPConfig;
   /**
-   * Enable real-time sync for this model via WebSocket events.
-   * When configured, CRUD operations will emit events to connected clients
-   * through the RealtimeApp plugin's change stream watcher.
-   *
-   * Requires the RealtimeApp plugin to be registered with TerrenoApp.
-   *
-   * @deprecated Removed in Terreno 58. Use `sync` with
-   * `@terreno/syncdb` instead. `RealtimeApp` remains required for sync sockets.
-   * See docs/how-to/migrate-rtk-to-syncdb.md.
-   */
-  realtime?: RealtimeConfig;
-  /**
    * Enable local-first sync (@terreno/syncdb) for this model. Documents are scoped
    * into streams (owner/tenant/broadcast/custom) with monotonic per-stream cursors.
    * Set `sync.adminBroadcast: true` to also emit `sync:delta` to `{collection}|admin`
@@ -496,10 +492,13 @@ const mergeDateRangeQueryParams = <T>(
 };
 
 // Ensures query params are allowed. Also checks nested query params when using $and/$or.
+// The error names the field, the model, and the allowed list so a missing `queryFields`
+// entry is obvious from the client (syncdb raises it as QueryFieldNotAllowedError).
 const checkQueryParamAllowed = (
   queryParam: string,
   queryParamValue: unknown,
-  queryFields: string[] = []
+  queryFields: string[] = [],
+  modelName = "this model"
 ) => {
   // Cast for iteration through complex query values
   const complexValue = queryParamValue as Array<Record<string, unknown>>;
@@ -509,19 +508,57 @@ const checkQueryParamAllowed = (
     // Complex query of the form `$and: [{key1: value1}, {key2: value2}]`
     for (const subQuery of complexValue) {
       for (const subKey of Object.keys(subQuery)) {
-        checkQueryParamAllowed(subKey, subQuery[subKey], queryFields);
+        checkQueryParamAllowed(subKey, subQuery[subKey], queryFields, modelName);
       }
     }
     return;
   }
   if (!queryFields.includes(queryParam)) {
+    const allowed = queryFields.length > 0 ? queryFields.join(", ") : "(none)";
     throw new BadRequestError({
       code: "query-param-not-allowed",
-      detail: `${queryParam} is not allowed as a query param.`,
+      detail:
+        `${queryParam} is not allowed as a query param. ` +
+        `Add "${queryParam}" to queryFields on the ${modelName} modelRouter to filter on it. ` +
+        `Allowed: ${allowed}.`,
+      meta: {allowedQueryFields: [...queryFields], model: modelName, queryParam},
       source: {parameter: queryParam},
       title: "Query parameter not allowed",
     });
   }
+};
+
+// Sorting by a field discloses its order even when responses hide it, so list sorts are
+// limited to fields the router declares sortable (queryFields, options.sort, sortFields).
+const checkListSortAllowed = <T>(
+  sort: unknown,
+  options: ModelRouterOptions<T>,
+  modelName: string
+): void => {
+  const allowed = getAllowedSortFields(options);
+  const result = checkSortFields(sort, allowed);
+  if (result.allowed) {
+    return;
+  }
+  if (result.error === "invalid-sort") {
+    throw new BadRequestError({
+      code: "invalid-sort",
+      detail: "sort must be a space-separated list of fields, each optionally prefixed with -.",
+      source: {parameter: "sort"},
+      title: "Invalid sort",
+    });
+  }
+  const allowedList = allowed.length > 0 ? allowed.join(", ") : "(none)";
+  throw new BadRequestError({
+    code: "sort-field-not-allowed",
+    detail:
+      `${result.field} is not allowed as a sort field. ` +
+      `Add "${result.field}" to sortFields or queryFields on the ${modelName} modelRouter ` +
+      `to sort on it. Allowed: ${allowedList}.`,
+    meta: {allowedSortFields: allowed, model: modelName, sortField: result.field},
+    source: {parameter: "sort"},
+    title: "Sort field not allowed",
+  });
 };
 
 // Handles dot notation patches, creates a normal object to be used for updates.
@@ -688,20 +725,22 @@ export function modelRouter<T>(
   // owns the catalog entry and MCP shares that routePath key.
   if (options.mcp && path === undefined) {
     registerMCPModel(model, options.mcp, options);
+  } else if (path === undefined && hasMCPActions(options)) {
+    registerMCPActionModel(model, options);
   }
 
   const shouldDeferBuild = path !== undefined && Boolean(options.access) && !options.accessControl;
 
   if (path !== undefined) {
-    if (options.realtime) {
-      warnRealtimeDeprecated(model.modelName, path);
-    }
     registerCollection({model, options, routePath: path});
   }
 
-  const router = shouldDeferBuild ? express.Router() : _buildModelRouter(model, options, path);
-
   if (path !== undefined) {
+    // TerrenoApp mounts _buildWithContext's router, which has OpenAPI wired in. Build the
+    // standalone router only if something reads `.router` (a hand-mounted registration), so
+    // registering doesn't build every router twice and log "No options.openApi provided" for
+    // each model at import.
+    let standaloneRouter: express.Router | undefined;
     return {
       __type: "modelRouter",
       _buildWithContext: (context: ModelRouterBuildContext) => {
@@ -720,17 +759,15 @@ export function modelRouter<T>(
       model,
       options,
       path,
-      router,
+      get router(): express.Router {
+        standaloneRouter ??= shouldDeferBuild
+          ? express.Router()
+          : _buildModelRouter(model, options, path);
+        return standaloneRouter;
+      },
     };
   }
 
-  if (options.realtime) {
-    warnRealtimeDeprecated(model.modelName);
-    logger.warn(
-      `modelRouter for ${model.modelName} has realtime config but was called without a path. ` +
-        "Realtime sync only works with the three-argument form: modelRouter('/path', Model, options)"
-    );
-  }
   if (options.sync) {
     logger.warn(
       `modelRouter for ${model.modelName} has sync config but was called without a path. ` +
@@ -738,7 +775,7 @@ export function modelRouter<T>(
     );
   }
 
-  return router;
+  return _buildModelRouter(model, options, path);
 }
 
 const _buildModelRouter = <T>(
@@ -767,7 +804,8 @@ const _buildModelRouter = <T>(
   if (routePath) {
     replaceCollectionOptions(routePath, options as unknown as ModelRouterOptions<unknown>);
   }
-  if (options.mcp) {
+  // A routed router's catalog entry was replaced by routePath above; only pathless ones need this.
+  if (options.mcp || (!routePath && hasMCPActions(options))) {
     updateMCPRegistryOptions(model.modelName, options as unknown as ModelRouterOptions<unknown>);
   }
 
@@ -829,6 +867,25 @@ const _buildModelRouter = <T>(
       authenticateMiddleware(options.allowAnonymous),
       permissionMiddleware(model, options),
       listOpenApiMiddleware(model, options, routePath),
+      // Runs before query validation so a field missing from queryFields is always
+      // reported with this error, whatever the validator's settings.
+      (req: Request, _res: Response, next: NextFunction): void => {
+        if (req.query.sort !== undefined) {
+          checkListSortAllowed(req.query.sort, options, model.modelName);
+        }
+        for (const queryParam of Object.keys(req.query)) {
+          if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
+            continue;
+          }
+          checkQueryParamAllowed(
+            queryParam,
+            req.query[queryParam],
+            options.queryFields,
+            model.modelName
+          );
+        }
+        next();
+      },
       queryValidation,
     ],
     asyncHandler(async (req: Request, res: Response) => {
@@ -841,7 +898,12 @@ const _buildModelRouter = <T>(
         if (PAGINATION_QUERY_PARAMS.includes(queryParam)) {
           continue;
         }
-        checkQueryParamAllowed(queryParam, req.query[queryParam], options.queryFields);
+        checkQueryParamAllowed(
+          queryParam,
+          req.query[queryParam],
+          options.queryFields,
+          model.modelName
+        );
 
         // Not sure if this is necessary or if mongoose does the right thing.
         if (req.query[queryParam] === "true") {
@@ -1152,98 +1214,16 @@ const _buildModelRouter = <T>(
     })
   );
 
-  const arrayOperation = async (
-    req: Request,
-    res: Response,
-    operation: "POST" | "PATCH" | "DELETE"
-  ) => {
-    // TODO Combine array operations and .patch(), as they are very similar.
-
-    if (!(await checkPermissions("update", options.permissions.update, req.user))) {
-      throw new APIError({
-        code: "array-update-not-allowed",
-        detail: `Access to PATCH on ${model.modelName} denied for ${req.user?.id}`,
-        meta: {method: "PATCH", model: model.modelName},
-        status: 405,
-        title: "Access denied",
-      });
-    }
-
-    const doc = await model.findById(req.params.id);
-    // Make a copy for passing pre-saved values to hooks.
-    const prevDoc = cloneDeep(doc);
-    if (!doc) {
-      throw new NotFoundError({
-        code: "document-not-found",
-        detail: `Could not find document to PATCH: ${req.params.id}`,
-        meta: {model: model.modelName},
-        title: "Document not found",
-      });
-    }
-
-    if (!(await checkPermissions("update", options.permissions.update, req.user, doc))) {
-      throw new ForbiddenError({
-        code: "update-not-allowed",
-        detail: `Patch not allowed for user ${req.user?.id} on doc ${doc._id}`,
-        meta: {model: model.modelName},
-        title: "Update not allowed",
-      });
-    }
-
-    const field = req.params.field as string;
-    const itemId = req.params.itemId as string;
-
-    // We apply the operation *before* the hooks. As far as the callers are concerned, this should
-    // be like PATCHing the field and replacing the whole thing.
-    if (operation !== "DELETE" && req.body[field] === undefined) {
-      throw new BadRequestError({
-        code: "malformed-array-operation-body",
-        detail: `Malformed body, array operations should have a single, top level key, got: ${Object.keys(
-          req.body
-        ).join(",")}`,
-        meta: {field},
-        title: "Malformed array operation body",
-      });
-    }
-
-    const array = [...(doc as unknown as Record<string, unknown[]>)[field]];
-    if (operation === "POST") {
-      array.push(req.body[field]);
-    } else if (operation === "PATCH" || operation === "DELETE") {
-      // Check for subschema vs String array:
-      let index: number;
-      if (isValidObjectId(itemId)) {
-        index = array.findIndex((x) => (x as {id?: string})?.id === itemId);
-      } else {
-        index = array.indexOf(itemId);
-      }
-      if (index === -1) {
-        throw new NotFoundError({
-          code: "array-item-not-found",
-          detail: `Could not find ${field}/${itemId}`,
-          meta: {field, itemId},
-          title: "Array item not found",
-        });
-      }
-      // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument.
-      if (operation === "PATCH" && isValidObjectId(itemId)) {
-        Object.assign(array[index] as object, req.body[field]);
-      } else if (operation === "PATCH") {
-        // For PATCHing a string array, we can replace the whole object.
-        array[index] = req.body[field];
-      } else {
-        array.splice(index, 1);
-      }
-    } else {
-      throw new BadRequestError({
-        code: "invalid-array-operation",
-        detail: `Invalid array operation: ${operation}`,
-        meta: {operation},
-        title: "Invalid array operation",
-      });
-    }
-    let body: Partial<T> | null = {[field]: array} as unknown as Partial<T>;
+  /**
+   * Applies consumer update transforms and authorization hooks for array subroutes.
+   * Keeping this pipeline shared ensures invalid field requests cannot bypass consumer
+   * authorization before modelRouter returns its own validation error.
+   */
+  const applyArrayOperationUpdateHooks = async (
+    inputBody: Partial<T>,
+    req: Request
+  ): Promise<Partial<T>> => {
+    let body: Partial<T> | null = inputBody;
 
     try {
       body = transform<T>(options, body, "update", req.user) as Partial<T>;
@@ -1282,6 +1262,137 @@ const _buildModelRouter = <T>(
       }
     }
 
+    return body;
+  };
+
+  const arrayOperation = async (
+    req: Request,
+    res: Response,
+    operation: "POST" | "PATCH" | "DELETE"
+  ) => {
+    // TODO Combine array operations and .patch(), as they are very similar.
+
+    if (!(await checkPermissions("update", options.permissions.update, req.user))) {
+      throw new APIError({
+        code: "array-update-not-allowed",
+        detail: `Access to PATCH on ${model.modelName} denied for ${req.user?.id}`,
+        meta: {method: "PATCH", model: model.modelName},
+        status: 405,
+        title: "Access denied",
+      });
+    }
+
+    const doc = await model.findById(req.params.id);
+    // Make a copy for passing pre-saved values to hooks.
+    const prevDoc = cloneDeep(doc);
+    if (!doc) {
+      throw new NotFoundError({
+        code: "document-not-found",
+        detail: `Could not find document to PATCH: ${req.params.id}`,
+        meta: {model: model.modelName},
+        title: "Document not found",
+      });
+    }
+
+    if (!(await checkPermissions("update", options.permissions.update, req.user, doc))) {
+      throw new ForbiddenError({
+        code: "update-not-allowed",
+        detail: `Patch not allowed for user ${req.user?.id} on doc ${doc._id}`,
+        meta: {model: model.modelName},
+        title: "Update not allowed",
+      });
+    }
+
+    await assertCanWriteTargetUser({
+      accessControl: options.accessControl,
+      actor: req.user,
+      modelName: model.modelName,
+      target: doc,
+    });
+
+    const field = req.params.field as string;
+    const itemId = req.params.itemId as string;
+
+    // We apply the operation *before* the hooks. As far as the callers are concerned, this should
+    // be like PATCHing the field and replacing the whole thing.
+    if (operation !== "DELETE" && req.body[field] === undefined) {
+      throw new BadRequestError({
+        code: "malformed-array-operation-body",
+        detail: `Malformed body, array operations should have a single, top level key, got: ${Object.keys(
+          req.body
+        ).join(",")}`,
+        meta: {field},
+        title: "Malformed array operation body",
+      });
+    }
+
+    const currentFieldValue = (doc as unknown as Record<string, unknown>)[field];
+    if (!Array.isArray(currentFieldValue)) {
+      await applyArrayOperationUpdateHooks(req.body as Partial<T>, req);
+      throw new BadRequestError({
+        code: "array-operation-field-not-array",
+        detail: `Cannot apply an array operation to non-array field ${field}`,
+        meta: {field},
+        title: "Array operation field is not an array",
+      });
+    }
+
+    const array = [...currentFieldValue];
+    if (operation === "POST") {
+      array.push(req.body[field]);
+    } else if (operation === "PATCH" || operation === "DELETE") {
+      // Check for subschema vs String array:
+      let index: number;
+      if (isValidObjectId(itemId)) {
+        index = array.findIndex((x) => (x as {id?: string})?.id === itemId);
+      } else {
+        index = array.indexOf(itemId);
+      }
+      if (index === -1) {
+        throw new NotFoundError({
+          code: "array-item-not-found",
+          detail: `Could not find ${field}/${itemId}`,
+          meta: {field, itemId},
+          title: "Array item not found",
+        });
+      }
+      // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
+      // other parts of the subdocument. Merge plain data from the detached copy: $clone() loses
+      // the subdocument's parent, so assigning a nested document array to it can throw in
+      // Mongoose's setters. The loaded document's live subdocuments must not change until only
+      // the body that survives the hooks below is applied.
+      if (operation === "PATCH" && isValidObjectId(itemId)) {
+        const current = array[index] as {toObject?: () => object} | object;
+        const detached =
+          typeof (current as {toObject?: unknown}).toObject === "function"
+            ? (current as {toObject: () => object}).toObject()
+            : {...current};
+        Object.assign(detached, req.body[field]);
+        array[index] = detached;
+      } else if (operation === "PATCH") {
+        // For PATCHing a string array, we can replace the whole object.
+        array[index] = req.body[field];
+      } else {
+        array.splice(index, 1);
+      }
+    } else {
+      throw new BadRequestError({
+        code: "invalid-array-operation",
+        detail: `Invalid array operation: ${operation}`,
+        meta: {operation},
+        title: "Invalid array operation",
+      });
+    }
+    let body = await applyArrayOperationUpdateHooks({[field]: array} as unknown as Partial<T>, req);
+
+    await assertCanWriteUserIdentity({
+      accessControl: options.accessControl,
+      actor: req.user,
+      body,
+      modelName: model.modelName,
+      target: doc,
+    });
+
     body = omitUserRolesFromWriteBody(
       model.modelName,
       options.accessControl,
@@ -1303,7 +1414,37 @@ const _buildModelRouter = <T>(
     // Using .save here runs the risk of a versioning error if you try to make two simultaneous
     // updates. We won't wind up with corrupted data, just an API error.
     try {
-      Object.assign(doc, body);
+      const bodyRecord = body as Record<string, unknown>;
+      const finalArray = bodyRecord[field];
+      const liveArray = (doc as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(finalArray) && Array.isArray(liveArray)) {
+        const mergedArray = finalArray.map((item) => {
+          if (!item || typeof item !== "object") {
+            return item;
+          }
+          const itemIdValue = (item as {id?: unknown}).id ?? (item as {_id?: unknown})._id;
+          if (itemIdValue == null) {
+            return item;
+          }
+          const liveItem = liveArray.find((live) => {
+            if (!live || typeof live !== "object") {
+              return false;
+            }
+            const liveId = (live as {id?: unknown}).id ?? (live as {_id?: unknown})._id;
+            return String(liveId) === String(itemIdValue);
+          });
+          if (liveItem && typeof liveItem === "object" && (liveItem as {$__?: unknown}).$__) {
+            Object.assign(liveItem, item);
+            return liveItem;
+          }
+          return item;
+        });
+        (doc as unknown as Record<string, unknown>)[field] = mergedArray;
+        const {[field]: _arrayField, ...restBody} = bodyRecord;
+        Object.assign(doc, restBody);
+      } else {
+        Object.assign(doc, body);
+      }
       await doc.save();
     } catch (error: unknown) {
       throw passthroughOrWrapWrite(error, {
@@ -1350,15 +1491,36 @@ const _buildModelRouter = <T>(
     });
   };
 
-  const arrayPost = async (req: Request, res: Response) => {
+  // Array routes are `/:id/:field`. A non-ObjectId id is another resource under the
+  // same prefix (for example POST /ai/observability/evaluators), so leave the router
+  // and let a later registration handle it.
+  const continueUnlessDocumentId = (req: Request, next: NextFunction): boolean => {
+    const id = req.params.id;
+    if (typeof id === "string" && isValidObjectId(id)) {
+      return false;
+    }
+    next("router");
+    return true;
+  };
+
+  const arrayPost = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "POST");
   };
 
-  const arrayPatch = async (req: Request, res: Response) => {
+  const arrayPatch = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "PATCH");
   };
 
-  const arrayDelete = async (req: Request, res: Response) => {
+  const arrayDelete = async (req: Request, res: Response, next: NextFunction) => {
+    if (continueUnlessDocumentId(req, next)) {
+      return;
+    }
     return arrayOperation(req, res, "DELETE");
   };
   // Set up routes for managing array fields. Check if there any array fields to add this for.

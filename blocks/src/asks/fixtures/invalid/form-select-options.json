@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "region",
+        "type": "select",
+        "label": "Region",
+        "options": [
+          {
+            "id": "us",
+            "label": "US"
+          }
+        ]
+      },
+      {
+        "id": "regions",
+        "type": "multiselect",
+        "label": "Regions",
+        "options": [
+          {
+            "id": "us",
+            "label": "US"
+          },
+          {
+            "id": "us",
+            "label": "USA"
+          }
+        ]
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].options",
+      "code": "TOO_FEW"
+    },
+    {
+      "path": "fields[1].options[1].id",
+      "code": "DUPLICATE_ID"
+    }
+  ]
+}

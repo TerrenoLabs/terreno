@@ -1,0 +1,7 @@
+v: 1
+blocks:
+  - type: chart
+    kind: bar
+    data: missing
+    x: month
+    y: count

@@ -185,7 +185,7 @@ exports[`TableHeaderCell renders correctly with title 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -423,7 +423,7 @@ exports[`TableHeaderCell renders correctly with children 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -660,7 +660,7 @@ exports[`TableHeaderCell renders with left alignment (default) 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -897,7 +897,7 @@ exports[`TableHeaderCell renders with center alignment 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1134,7 +1134,7 @@ exports[`TableHeaderCell renders with right alignment 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1374,7 +1374,7 @@ exports[`TableHeaderCell renders sortable header 1`] = `
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },
@@ -1648,7 +1648,7 @@ exports[`TableHeaderCell renders sortable header with sort indicator when sorted
                 "onPointerEnter": [Function: AsyncFunction],
                 "onPointerLeave": [Function: AsyncFunction],
                 "style": {
-                  "backgroundColor": "#D9D9D9",
+                  "backgroundColor": "#CDCDCD",
                   "borderBottom": "1px solid #e0e0e0",
                   "width": "100%",
                 },

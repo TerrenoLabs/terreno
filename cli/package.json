@@ -1,0 +1,73 @@
+{
+  "author": "Josh Gachnang",
+  "bin": {
+    "terreno": "./dist/bin.js"
+  },
+  "bugs": {
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
+  },
+  "dependencies": {
+    "@terreno/mcp": "workspace:*",
+    "@terreno/syncdb": "workspace:*",
+    "create-terreno-app": "workspace:*"
+  },
+  "description": "Terreno CLI for docs, codegen, app scaffolding, and OpenAPI-driven REST clients",
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@terreno/test": "workspace:*",
+    "@types/bun": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "exports": {
+    ".": {
+      "bun": "./dist/index.js",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./rest": {
+      "bun": "./dist/index.js",
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "LICENSE",
+    "dist"
+  ],
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
+  "keywords": [
+    "terreno",
+    "cli",
+    "openapi",
+    "codegen"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "@terreno/cli",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
+  },
+  "scripts": {
+    "compile": "bun tsc",
+    "compile:watch": "bun tsc -w",
+    "dev": "bun tsc -w",
+    "lint": "biome check ./src ./e2e",
+    "lint:fix": "biome check --write ./src ./e2e",
+    "smoke": "bun e2e/smoke.ts",
+    "test": "bun test src/",
+    "test:agent": "AGENT=1 bun test --only-failures src/",
+    "test:ci": "bun test src/",
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
+  },
+  "types": "dist/index.d.ts",
+  "version": "57.3.0"
+}

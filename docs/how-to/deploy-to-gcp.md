@@ -18,9 +18,13 @@ Read the [deployment baseline](../explanation/deployment-baseline.md) — seven 
 
 [GCP deployment architecture](../explanation/deployment-architecture-gcp.md) — topology diagram, component roles, and tradeoffs (Cloud Run vs GKE, static vs SSR).
 
+## Terraform
+
+- [`terraform/modules/terreno-backend`](https://github.com/TerrenoLabs/terreno/tree/master/terraform/modules/terreno-backend) — Cloud Run, Artifact Registry, secrets, and service accounts for one backend. See [Manage with Terraform](deploy-backend-to-cloud-run.md#manage-with-terraform).
+
 ## Scripts
 
-- [`scripts/setup-gcs-hosting.sh`](https://github.com/FlourishHealth/terreno/blob/master/scripts/setup-gcs-hosting.sh) — parameterized GCS + CDN provisioning for one site
+- [`scripts/setup-gcs-hosting.sh`](https://github.com/TerrenoLabs/terreno/blob/master/scripts/setup-gcs-hosting.sh) — parameterized GCS + CDN provisioning for one site
 
 ## Environment variables
 
@@ -28,7 +32,7 @@ Read the [deployment baseline](../explanation/deployment-baseline.md) — seven 
 
 ## Operator-specific deployment
 
-Vendor-specific infrastructure (hardcoded project IDs, CI deploy workflows) lives outside these generalized guides. New deployments should follow the guides above with your own `$PROJECT_ID` and bucket names.
+Vendor-specific infrastructure (hardcoded project IDs, CI deploy workflows) lives outside these generalized guides. Terreno's own deployment of its example backend and hosted MCP server is in [`infra/flourish/`](https://github.com/TerrenoLabs/terreno/tree/master/infra/flourish) and is not a template. New deployments should follow the guides above with your own `$PROJECT_ID` and bucket names.
 
 ## Related
 

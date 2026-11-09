@@ -3,10 +3,11 @@ import {AddressFieldDemo} from "@stories/AddressField.stories";
 import {Field} from "@terreno/ui";
 
 export const AddressFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {Field} from \"@terreno/ui\";\n\n<Field />",
   name: "AddressField",
-  related: ["TapToEdit"],
+  related: ["Tap to edit"],
   description: "Set/Display a user's address",
-  category: "Pattern",
+  category: ["Pattern", "Form"],
   component: Field,
   status: {
     documentation: "planned",

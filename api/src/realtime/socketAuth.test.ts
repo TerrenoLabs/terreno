@@ -9,9 +9,10 @@
  * Moved out of sync/syncSocket.test.ts (which still covers the higher-level
  * subscribe/mutate socket handlers) into its own file per the syncdb hardening plan.
  */
-import {describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 import jwt from "jsonwebtoken";
+import mongoose, {Schema} from "mongoose";
 import type {Socket} from "socket.io";
 
 import type {UserModel} from "../auth";
@@ -24,6 +25,31 @@ import {
 } from "./socketAuth";
 
 type StubbedAuth = BetterAuthSocketOptions["auth"];
+
+interface SocketAuthUserFields {
+  _id: mongoose.Types.ObjectId;
+  admin?: boolean;
+  betterAuthId?: string;
+  disabled?: boolean;
+  email?: string;
+  name?: string;
+}
+
+const socketAuthUserSchema = new Schema({
+  admin: {default: false, description: "Whether the user is an admin", type: Boolean},
+  betterAuthId: {description: "Better Auth user id", type: String},
+  disabled: {default: false, description: "Whether the account is disabled", type: Boolean},
+  email: {description: "User email", type: String},
+  name: {description: "Display name", type: String},
+});
+
+const getSocketAuthUserModel = (): mongoose.Model<SocketAuthUserFields> => {
+  try {
+    return mongoose.model<SocketAuthUserFields>("SocketAuthUser");
+  } catch {
+    return mongoose.model<SocketAuthUserFields>("SocketAuthUser", socketAuthUserSchema);
+  }
+};
 
 describe("socketAuth", () => {
   const tokenSecret = "socket-auth-test-secret";
@@ -145,6 +171,60 @@ describe("socketAuth", () => {
     });
   });
 
+  describe("createLegacyJwtValidator with a user model", () => {
+    const SocketAuthUser = getSocketAuthUserModel();
+    const userModel = SocketAuthUser as unknown as UserModel;
+
+    beforeEach(async () => {
+      await SocketAuthUser.deleteMany({});
+    });
+
+    it("accepts an enabled user's JWT", async () => {
+      const user = await SocketAuthUser.create({email: "enabled-jwt@example.com"});
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await validator(socket);
+
+      expect(socket.decodedToken?.id).toBe(String(user._id));
+      expect(socket.decodedToken?.authKind).toBe("jwt");
+    });
+
+    it("rejects a disabled user's JWT", async () => {
+      const user = await SocketAuthUser.create({disabled: true, email: "disabled-jwt@example.com"});
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await expect(validator(socket)).rejects.toThrow("disabled");
+      expect(socket.decodedToken).toBeUndefined();
+    });
+
+    it("rejects a JWT whose user no longer exists", async () => {
+      const validator = createLegacyJwtValidator(tokenSecret, undefined, userModel);
+      const token = jwt.sign({id: String(new mongoose.Types.ObjectId())}, tokenSecret);
+      const socket = makeAuthSocket(`Bearer ${token}`);
+
+      await expect(validator(socket)).rejects.toThrow("Unauthorized");
+      expect(socket.decodedToken).toBeUndefined();
+    });
+
+    it("refuses a disabled user through the middleware chain on every handshake", async () => {
+      const user = await SocketAuthUser.create({email: "reconnect-jwt@example.com"});
+      const middleware = createSocketAuthMiddleware({tokenSecret, userModel});
+      const token = jwt.sign({id: String(user._id)}, tokenSecret);
+
+      expect(await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`))).toBeUndefined();
+
+      await SocketAuthUser.updateOne({_id: user._id}, {disabled: true});
+      const first = await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`));
+      const second = await runMiddleware(middleware, makeAuthSocket(`Bearer ${token}`));
+      expect(first?.message).toContain("disabled");
+      expect(second?.message).toContain("disabled");
+    });
+  });
+
   describe("createBetterAuthValidator", () => {
     const stubAuth = (
       session: unknown,
@@ -231,14 +311,66 @@ describe("socketAuth", () => {
       });
     });
 
-    it("rejects when the Better Auth user has no application user", async () => {
-      const validator = createBetterAuthValidator({
-        auth: stubAuth({session: {id: "s"}, user: {id: "ba-orphan"}}),
-        userModel: {findOneOrNone: async () => null} as unknown as UserModel,
+    describe("with a real user model", () => {
+      const SocketAuthUser = getSocketAuthUserModel();
+      const userModel = SocketAuthUser as unknown as UserModel;
+
+      beforeEach(async () => {
+        await SocketAuthUser.deleteMany({});
       });
-      await expect(validator(makeAuthSocket("session-token"))).rejects.toThrow(
-        "no application user"
-      );
+
+      it("creates the app user when a freshly signed-up user connects first", async () => {
+        const validator = createBetterAuthValidator({
+          auth: stubAuth({
+            session: {id: "s"},
+            user: {email: "fresh@example.com", id: "ba-fresh", name: "Fresh User"},
+          }),
+          userModel,
+        });
+        const socket = makeAuthSocket("session-token");
+
+        await validator(socket);
+
+        const created = await SocketAuthUser.find({betterAuthId: "ba-fresh"});
+        expect(created).toHaveLength(1);
+        expect(created[0].email).toBe("fresh@example.com");
+        expect(socket.decodedToken?.id).toBe(String(created[0]._id));
+      });
+
+      it("rejects with an Unauthorized error, not the database error, when the lookup fails", async () => {
+        const validator = createBetterAuthValidator({
+          auth: stubAuth({session: {id: "s"}, user: {email: "x@example.com", id: "ba-x"}}),
+          userModel: {
+            findOneOrNone: async () => {
+              throw new Error("E11000 duplicate key error collection: users");
+            },
+          } as unknown as UserModel,
+        });
+
+        const error = await validator(makeAuthSocket("session-token")).catch((e: Error) => e);
+
+        expect(error?.message).toContain("could not resolve the application user");
+        expect(error?.message).not.toContain("E11000");
+      });
+
+      it("rejects a disabled user's session", async () => {
+        await SocketAuthUser.create({
+          betterAuthId: "ba-disabled",
+          disabled: true,
+          email: "disabled@example.com",
+        });
+        const validator = createBetterAuthValidator({
+          auth: stubAuth({
+            session: {id: "s"},
+            user: {email: "disabled@example.com", id: "ba-disabled", name: "Disabled"},
+          }),
+          userModel,
+        });
+        const socket = makeAuthSocket("session-token");
+
+        await expect(validator(socket)).rejects.toThrow("disabled");
+        expect(socket.decodedToken).toBeUndefined();
+      });
     });
   });
 

@@ -284,7 +284,18 @@ describe("query and list methods", () => {
   it("list query params not in list", async () => {
     const res = await agent.get(`/food?ownerId=${admin._id}`).expect(400);
     expect(res.body.title).toBe("Query parameter not allowed");
-    expect(res.body.detail).toBe("ownerId is not allowed as a query param.");
+    expect(res.body.detail).toContain("ownerId is not allowed as a query param.");
+  });
+
+  it("names the model and allowed queryFields when a filter field is missing", async () => {
+    const res = await agent.get(`/food?ownerId=${admin._id}`).expect(400);
+    expect(res.body.code).toBe("query-param-not-allowed");
+    expect(res.body.source).toEqual({parameter: "ownerId"});
+    expect(res.body.detail).toContain('Add "ownerId" to queryFields on the Food modelRouter');
+    expect(res.body.meta.queryParam).toBe("ownerId");
+    expect(res.body.meta.model).toBe("Food");
+    expect(Array.isArray(res.body.meta.allowedQueryFields)).toBe(true);
+    expect(res.body.meta.allowedQueryFields).not.toContain("ownerId");
   });
 
   it("list query by nested param", async () => {
@@ -460,7 +471,7 @@ describe("query and list methods", () => {
       .get(`/food?${qs.stringify({$or: [{name: "Carrots"}, {name: "Pizza"}]})}`)
       .expect(200);
     expect(res.body.data).toHaveLength(2);
-    const ids1 = res.body.data.map((d: Food) => d.id);
+    const ids1 = res.body.data.map((d: {id: string}) => d.id);
     expect(ids1).toEqual(expect.arrayContaining([carrots?._id.toString(), pizza?._id.toString()]));
     expect(ids1).toHaveLength(2);
   });
@@ -475,7 +486,7 @@ describe("query and list methods", () => {
       )
       .expect(200);
     expect(res.body.data).toHaveLength(2);
-    const ids2 = res.body.data.map((d: Food) => d.id);
+    const ids2 = res.body.data.map((d: {id: string}) => d.id);
     expect(ids2).toEqual(
       expect.arrayContaining([carrots?._id.toString(), spinach?._id.toString()])
     );
@@ -487,18 +498,18 @@ describe("query and list methods", () => {
       .get(`/food?${qs.stringify({$and: [{ownerId: "healthy"}, {tags: "cheap"}]})}`)
       .expect(400);
     expect(res.body.title).toBe("Query parameter not allowed");
-    expect(res.body.detail).toBe("ownerId is not allowed as a query param.");
+    expect(res.body.detail).toContain("ownerId is not allowed as a query param.");
     res = await agent
       .get(`/food?${qs.stringify({$and: [{tags: "cheap"}, {ownerId: "healthy"}]})}`)
       .expect(400);
     expect(res.body.title).toBe("Query parameter not allowed");
-    expect(res.body.detail).toBe("ownerId is not allowed as a query param.");
+    expect(res.body.detail).toContain("ownerId is not allowed as a query param.");
 
     res = await agent
       .get(`/food?${qs.stringify({$or: [{tags: "cheap"}, {ownerId: "healthy"}]})}`)
       .expect(400);
     expect(res.body.title).toBe("Query parameter not allowed");
-    expect(res.body.detail).toBe("ownerId is not allowed as a query param.");
+    expect(res.body.detail).toContain("ownerId is not allowed as a query param.");
   });
 
   it("query with a number", async () => {

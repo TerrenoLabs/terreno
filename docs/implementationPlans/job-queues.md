@@ -5,7 +5,7 @@
 **Owner:** —  
 **Created:** 2026-09-10  
 **Approved:** 2026-09-10  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1188 (this feature **closes** that issue; implementation PRs use `Fixes #1188`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1188 (this feature **closes** that issue; implementation PRs use `Fixes #1188`)  
 **Task list:** [job-queues.md](../tasks/job-queues.md)  
 **Depends on:** —  
 **RTK deprecation flag:** Partial — admin screens use generated SDK / `useAdminApi`  
@@ -144,7 +144,7 @@ picks it up. Cloud runners persist then create a platform task whose HTTP body
 is `{jobId}` (not the payload). Execute loads the Mongo row, claims if needed,
 runs the handler.
 
-GCP and Vercel SDKs are **optional peers** on subpath exports
+GCP and Vercel Queues SDKs are **optional peers** on subpath exports
 (`@terreno/jobs/runners/gcpCloudTasks`, `@terreno/jobs/runners/vercelQueues`).
 Core `@terreno/jobs` has zero cloud SDKs. Tests inject fakes.
 

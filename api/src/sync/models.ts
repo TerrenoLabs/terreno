@@ -436,8 +436,11 @@ export interface SyncMutationDocument {
   _id: mongoose.Types.ObjectId;
   mutationId: string;
   userId: string;
+  /** Sync collection the mutation was claimed for; absent on rows recorded before it existed. */
+  collectionTag?: string;
   status: SyncMutationStatus;
   nackCode?: string;
+  nackReason?: string;
   resultId?: string;
   resultSeq?: number;
   error?: string;
@@ -464,6 +467,12 @@ const syncMutationSchema = new Schema<SyncMutationDocument>(
         "SYNC_MUTATION_LEASE_MS may be taken over by a fresh delivery via findOneAndUpdate",
       type: Date,
     },
+    collectionTag: {
+      description:
+        "Sync collection the mutation was claimed for; a replay naming another collection is " +
+        "rejected",
+      type: String,
+    },
     created: {
       default: () => DateTime.now().toJSDate(),
       description: "When the mutation was first claimed; TTL-indexed so rows expire after 30 days",
@@ -483,6 +492,11 @@ const syncMutationSchema = new Schema<SyncMutationDocument>(
     nackCode: {
       description:
         "Nack code recorded for rejected mutations (conflict/unauthorized/validation/error)",
+      type: String,
+    },
+    nackReason: {
+      description:
+        "Why a validation nack rejected the mutation's entity id (id_collision/invalid_id)",
       type: String,
     },
     resultId: {

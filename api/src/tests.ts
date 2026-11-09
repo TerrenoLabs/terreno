@@ -25,6 +25,7 @@ import {loadTestDataFromCache, setupTestCache} from "./tests/mongoTestSetup";
 import {setupDb, setupTestData} from "./tests/testHelper";
 import type {TestData} from "./tests/types";
 
+export {authUserModel} from "./tests/models";
 export type {Food, FoodCategory, RequiredField, StaffUser, SuperUser, TestData, User};
 export {
   createTestData,
@@ -55,3 +56,10 @@ export const authAsUser = async (
 };
 
 export {loadTestData} from "./tests/mongoTestSetup";
+export {
+  type DocumentedResponseOptions,
+  type DocumentedResponseResult,
+  expectDocumentedResponse,
+  type OpenApiResponseSpec,
+  validateDocumentedResponse,
+} from "./tests/openApiResponseSchema";

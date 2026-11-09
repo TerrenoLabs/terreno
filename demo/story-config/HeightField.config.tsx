@@ -9,6 +9,7 @@ import {
 import {HeightField} from "@terreno/ui";
 
 export const HeightFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {HeightField} from \"@terreno/ui\";\n\n<HeightField />",
   name: "Height field",
   component: HeightField,
   related: ["Number field", "Text field"],
@@ -19,7 +20,7 @@ export const HeightFieldConfiguration: DemoConfiguration = {
     "The field should announce the current value to screen readers.",
     "On mobile, the action sheet should be accessible via screen readers.",
   ],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "planned",

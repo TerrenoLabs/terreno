@@ -41,10 +41,10 @@ Wrap authenticated app content with `AnnouncementNavigator` from `@terreno/ui` o
 
 ## Documentation
 
-- Reference: [docs/reference/announcements.md](https://github.com/FlourishHealth/terreno/blob/master/docs/reference/announcements.md)
-- How-to: [docs/how-to/product-announcements.md](https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/product-announcements.md)
-- Implementation plan: [docs/implementationPlans/announcements.md](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/announcements.md)
+- Reference: [docs/reference/announcements.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/announcements.md)
+- How-to: [docs/how-to/product-announcements.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/product-announcements.md)
+- Implementation plan: [docs/implementationPlans/announcements.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/announcements.md)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/FlourishHealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/FlourishHealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

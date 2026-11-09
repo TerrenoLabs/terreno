@@ -1,8 +1,8 @@
 {
   "extends": "@docusaurus/tsconfig",
   "compilerOptions": {
-    "ignoreDeprecations": "6.0",
-    "baseUrl": ".",
+    // @docusaurus/tsconfig sets the deprecated baseUrl; null clears it so paths resolve from here.
+    "baseUrl": null,
     "paths": {
       "@site/*": ["./*"]
     }

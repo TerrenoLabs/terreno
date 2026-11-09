@@ -6,13 +6,15 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {pathToFileURL} from "node:url";
 import {assert} from "chai";
 
-import {runCli} from "../cli.js";
+import {isEntryPoint, runCli} from "../cli.js";
 import {
   deriveDisplayName,
   formatNextSteps,
@@ -383,6 +385,41 @@ describe("create-terreno-app bin", () => {
       assert.isTrue(existsSync(join(targetPath, "backend/package.json")));
     } finally {
       rmSync(parentDir, {force: true, recursive: true});
+    }
+  });
+});
+
+describe("isEntryPoint", () => {
+  test("matches the module run directly or through a bin symlink", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cta-entry-"));
+    try {
+      const cliPath = join(dir, "cli.js");
+      writeFileSync(cliPath, "");
+      const binPath = join(dir, "create-terreno-app");
+      symlinkSync(cliPath, binPath);
+      const moduleUrl = pathToFileURL(cliPath).href;
+      assert.isTrue(isEntryPoint(moduleUrl, cliPath));
+      assert.isTrue(isEntryPoint(moduleUrl, binPath));
+      assert.isFalse(isEntryPoint(moduleUrl, join(dir, "other.js")));
+      assert.isFalse(isEntryPoint(moduleUrl, undefined));
+    } finally {
+      rmSync(dir, {force: true, recursive: true});
+    }
+  });
+
+  test("matches when the module URL itself goes through a symlinked directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "cta-entry-"));
+    try {
+      const realDir = join(dir, "real");
+      mkdirSync(realDir);
+      writeFileSync(join(realDir, "cli.js"), "");
+      const linkedDir = join(dir, "linked");
+      symlinkSync(realDir, linkedDir);
+      const moduleUrl = pathToFileURL(join(linkedDir, "cli.js")).href;
+      assert.isTrue(isEntryPoint(moduleUrl, join(realDir, "cli.js")));
+      assert.isTrue(isEntryPoint(moduleUrl, join(linkedDir, "cli.js")));
+    } finally {
+      rmSync(dir, {force: true, recursive: true});
     }
   });
 });

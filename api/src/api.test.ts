@@ -1,15 +1,18 @@
-import {beforeEach, describe, expect, it} from "bun:test";
+import {beforeEach, describe, expect, it, spyOn} from "bun:test";
 import type express from "express";
 import {DateTime} from "luxon";
 import mongoose, {type Model} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
-import {addPopulateToQuery, modelRouter} from "./api";
+import {addPopulateToQuery, type JSONValue, modelRouter} from "./api";
 import {type UserModel as AuthUserModel, addAuthRoutes, setupAuth} from "./auth";
+import {clearCollectionRegistry, getCollection} from "./collectionRegistry";
 import {APIError} from "./errors";
+import {logger} from "./logger";
 import {clearMCPRegistry, getMCPRegistry} from "./mcp/registry";
 import {Permissions} from "./permissions";
+import type {AnyTerrenoAccess} from "./rbac/types";
 import {
   authAsUser,
   type Food,
@@ -403,7 +406,7 @@ describe("@terreno/api", () => {
             read: [Permissions.IsAny],
             update: [Permissions.IsAny],
           },
-          responseHandler: async (_data, method) => {
+          responseHandler: async (_data, method): Promise<JSONValue> => {
             if (method === "list") {
               return {custom: "response"};
             }
@@ -451,6 +454,42 @@ describe("@terreno/api", () => {
       res = await server.get("/food?sort=-name").expect(200);
       expect(res.body.data[0].name).toBe("Spinach");
       expect(res.body.data[1].name).toBe("Apple");
+    });
+
+    it("list rejects sort fields outside queryFields, options.sort, and sortFields", async () => {
+      await FoodModel.create({calories: 200, hidden: true, name: "Apple", ownerId: admin._id});
+      const listOptions = {
+        allowAnonymous: true,
+        permissions: {
+          create: [Permissions.IsAny],
+          delete: [Permissions.IsAny],
+          list: [Permissions.IsAny],
+          read: [Permissions.IsAny],
+          update: [Permissions.IsAny],
+        },
+        queryFields: ["name"],
+        sort: "-created" as const,
+      };
+      app.use("/food", modelRouter(FoodModel, listOptions));
+      app.use("/foodSortable", modelRouter(FoodModel, {...listOptions, sortFields: ["calories"]}));
+      server = supertest(app);
+
+      let res = await server.get("/food?sort=hidden%20name").expect(400);
+      expect(res.body.code).toBe("sort-field-not-allowed");
+      expect(res.body.meta.sortField).toBe("hidden");
+      await server.get("/food?sort=-calories").expect(400);
+      await server.get("/food?sort[calories]=1").expect(400);
+      await server.get("/food?sort=name&sort=calories").expect(400);
+
+      // queryFields and the router's default sort fields stay sortable.
+      await server.get("/food?sort=-name").expect(200);
+      await server.get("/food?sort=created%20-name").expect(200);
+      await server.get("/food?sort=%2Bname").expect(200);
+
+      // An explicit sortFields list adds fields that are not filterable.
+      res = await server.get("/foodSortable?sort=-calories").expect(200);
+      expect(res.body.data[0].name).toBe("Apple");
+      await server.get("/foodSortable?sort=hidden").expect(400);
     });
 
     it("queryFilter error is handled", async () => {
@@ -1407,7 +1446,7 @@ describe("@terreno/api", () => {
 
     it("model.create validation error is handled", async () => {
       // Use a model that has required fields
-      const {RequiredModel} = await import("./tests");
+      const {RequiredModel} = await import("./tests.js");
 
       app.use(
         "/required",
@@ -2154,7 +2193,7 @@ describe("@terreno/api", () => {
   });
 
   describe("three-arg modelRouter registration", () => {
-    it("returns a ModelRouterRegistration with path and realtime", () => {
+    it("returns a ModelRouterRegistration with path", () => {
       const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
@@ -2163,7 +2202,6 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
-        realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
       expect(registration).toHaveProperty("__type", "modelRouter");
       expect(registration).toHaveProperty("path", "/food");
@@ -2171,6 +2209,35 @@ describe("@terreno/api", () => {
       expect(registration).toHaveProperty("_buildWithContext");
       expect(registration).toHaveProperty("model");
       expect(registration).toHaveProperty("options");
+    });
+
+    it("builds the standalone router only when something reads it", () => {
+      const debugSpy = spyOn(logger, "debug");
+      const openApiSkips = (): number =>
+        debugSpy.mock.calls.filter((call) =>
+          String(call[0]).includes('No options.openApi provided for model "Food"')
+        ).length;
+      try {
+        const registration = modelRouter("/food", FoodModel, {
+          permissions: {
+            create: [Permissions.IsAny],
+            delete: [Permissions.IsAny],
+            list: [Permissions.IsAny],
+            read: [Permissions.IsAny],
+            update: [Permissions.IsAny],
+          },
+        });
+        // TerrenoApp mounts _buildWithContext's router, so registering must not build one.
+        expect(openApiSkips()).toBe(0);
+
+        const router = registration.router;
+        expect(typeof router).toBe("function");
+        expect(openApiSkips()).toBe(1);
+        expect(registration.router).toBe(router);
+        expect(openApiSkips()).toBe(1);
+      } finally {
+        debugSpy.mockRestore();
+      }
     });
 
     it("refreshes MCP registry options when rebuilt with accessControl", () => {
@@ -2198,8 +2265,8 @@ describe("@terreno/api", () => {
         }),
         queryFilter: async (): Promise<Record<string, unknown>> => ({}),
         statements: {food: ["list", "read", "create", "update", "delete"]},
-      };
-      registration._buildWithContext({accessControl: accessControl as never});
+      } as unknown as AnyTerrenoAccess;
+      registration._buildWithContext({accessControl});
 
       const after = getMCPRegistry()[0];
       expect(after?.options.accessControl).toBe(accessControl);
@@ -2217,10 +2284,10 @@ describe("@terreno/api", () => {
         }),
         queryFilter: async (): Promise<Record<string, unknown>> => ({}),
         statements: {food: ["list", "read", "create", "update", "delete"]},
-      };
+      } as unknown as AnyTerrenoAccess;
       modelRouter(FoodModel, {
         access: {resource: "food"},
-        accessControl: accessControl as never,
+        accessControl,
         mcp: {methods: ["list"]},
         permissions: {
           create: [Permissions.IsAny],
@@ -2235,8 +2302,9 @@ describe("@terreno/api", () => {
       expect(registered?.options.permissions.list).not.toEqual([Permissions.IsAny]);
     });
 
-    it("logs a warning when realtime config is used without the path form", () => {
-      const router = modelRouter(FoodModel, {
+    it("rejects the removed realtime option and registers no realtime surface", () => {
+      clearCollectionRegistry();
+      const registration = modelRouter("/food", FoodModel, {
         permissions: {
           create: [Permissions.IsAny],
           delete: [Permissions.IsAny],
@@ -2244,11 +2312,12 @@ describe("@terreno/api", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
+        // @ts-expect-error `realtime` was removed in Terreno 58; use `sync` with @terreno/syncdb.
         realtime: {methods: ["create", "update", "delete"], roomStrategy: "model"},
       });
-      // Returns a plain Router, not a registration, because no path was given
-      expect(router).toBeDefined();
-      expect(router).not.toHaveProperty("__type");
+      expect(registration).toHaveProperty("path", "/food");
+      expect(getCollection("/food")?.surfaces).toEqual({mcp: false, sync: false});
+      clearCollectionRegistry();
     });
   });
 

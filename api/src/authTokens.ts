@@ -114,5 +114,9 @@ authTokenSchema.statics = {
 };
 
 export const AuthToken =
-  (mongoose.models.AuthToken as AuthTokenModel | undefined) ??
-  mongoose.model<AuthTokenDocument, AuthTokenModel>("AuthToken", authTokenSchema);
+  (mongoose.models.TerrenoAuthToken as AuthTokenModel | undefined) ??
+  mongoose.model<AuthTokenDocument, AuthTokenModel>(
+    "TerrenoAuthToken",
+    authTokenSchema,
+    "authtokens"
+  );

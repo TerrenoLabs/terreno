@@ -5,12 +5,14 @@ import mongoose from "mongoose";
 import supertest from "supertest";
 
 import {MAX_PASSWORD_LENGTH} from "./auth";
+import {changeUserPassword} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
-import {setupDb, UserModel} from "./tests";
+import {authUserModel, setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
+  sensitive?: boolean;
   subject: string;
   text: string;
   to: string;
@@ -39,8 +41,27 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
+  });
+
+  it("marks reset and verification mail as sensitive so transports do not store the link", async () => {
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "notAdmin@example.com"})
+      .expect(202);
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    await supertest(app)
+      .post("/auth/sendVerification")
+      .set("authorization", `Bearer ${login.body.data.token}`)
+      .send({})
+      .expect(202);
+
+    assert.lengthOf(sentMail, 2);
+    assert.isTrue(sentMail.every((mail) => mail.sensitive === true));
   });
 
   it("returns 202 for existing and missing emails and only mails existing users", async () => {
@@ -143,6 +164,49 @@ describe("password reset routes", () => {
       .expect(200);
   });
 
+  it("can disable only the legacy POST /resetPassword alias", async () => {
+    const noLegacyAliasApp = new TerrenoApp({
+      authOptions: {
+        legacyResetPasswordRoute: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: authUserModel,
+    }).build();
+
+    await supertest(noLegacyAliasApp).post("/resetPassword").send({}).expect(404);
+    await supertest(noLegacyAliasApp).post("/auth/resetPassword").send({}).expect(400);
+  });
+
+  it("can disable all password reset routes", async () => {
+    const noPasswordResetApp = new TerrenoApp({
+      authOptions: {
+        passwordReset: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: authUserModel,
+    }).build();
+
+    await supertest(noPasswordResetApp).post("/auth/forgotPassword").send({}).expect(404);
+    await supertest(noPasswordResetApp).post("/auth/resetPassword").send({}).expect(404);
+    await supertest(noPasswordResetApp).post("/resetPassword").send({}).expect(404);
+  });
+
+  it("can disable all email verification routes", async () => {
+    const noEmailVerificationApp = new TerrenoApp({
+      authOptions: {
+        emailVerification: false,
+        publicAppUrl: "https://app.example.com",
+      },
+      skipListen: true,
+      userModel: authUserModel,
+    }).build();
+
+    await supertest(noEmailVerificationApp).post("/auth/sendVerification").send({}).expect(404);
+    await supertest(noEmailVerificationApp).post("/auth/verifyEmail").send({}).expect(404);
+  });
+
   it("syncs a successful JWT reset to Better Auth when a bridge is configured", async () => {
     const synced: Array<{email?: string; password: string}> = [];
     const bridgedApp = new TerrenoApp({
@@ -156,7 +220,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(bridgedApp)
@@ -173,6 +237,27 @@ describe("password reset routes", () => {
     assert.equal(synced.length, 1);
     assert.equal(synced[0]?.email, "notAdmin@example.com");
     assert.equal(synced[0]?.password, "bridged-password-123");
+  });
+
+  it("refuses to reset the password or issue tokens for a disabled user", async () => {
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "notAdmin@example.com"})
+      .expect(202);
+    const token = tokenFromResetUrl(sentMail[0]?.text ?? "");
+    await UserModel.updateOne({email: "notAdmin@example.com"}, {disabled: true});
+
+    const reset = await supertest(app)
+      .post("/auth/resetPassword")
+      .send({password: "disabled-new-password", token})
+      .expect(401);
+    assert.isUndefined(reset.body.data?.token);
+
+    await UserModel.updateOne({email: "notAdmin@example.com"}, {disabled: false});
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "disabled-new-password"})
+      .expect(401);
   });
 
   it("does not consume a reset token when the new password is too long", async () => {
@@ -206,6 +291,29 @@ describe("password reset routes", () => {
       .expect(200);
   });
 
+  it("lets an account with no password set one in a pure JWT app", async () => {
+    // Without Better Auth the legacy routes are the only recovery path, so they keep working for
+    // an account that has no password yet (for example one an admin created).
+    await UserModel.create({email: "no-password@example.com"});
+    const stored = await UserModel.collection.findOne({email: "no-password@example.com"});
+    assert.isUndefined(stored?.hash);
+
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "no-password@example.com"})
+      .expect(202);
+    assert.lengthOf(sentMail, 1);
+    const token = tokenFromResetUrl(sentMail[0]?.text ?? "");
+    await supertest(app)
+      .post("/auth/resetPassword")
+      .send({password: "first-password-123", token})
+      .expect(200);
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "no-password@example.com", password: "first-password-123"})
+      .expect(200);
+  });
+
   it("returns 202 without issuing a token when publicAppUrl is missing", async () => {
     const noUrlApp = new TerrenoApp({
       authOptions: {
@@ -214,7 +322,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const before = await AuthToken.countDocuments({});
     await supertest(noUrlApp)
@@ -251,7 +359,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     await supertest(consoleApp)
       .post("/auth/forgotPassword")
@@ -268,7 +376,7 @@ describe("password reset routes", () => {
           publicAppUrl: "https://app.example.com",
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: authUserModel,
       }).build();
       await supertest(consoleApp)
         .post("/auth/forgotPassword")
@@ -277,5 +385,62 @@ describe("password reset routes", () => {
     } finally {
       process.env.NODE_ENV = previous;
     }
+  });
+});
+
+describe("changeUserPassword", () => {
+  beforeEach(async () => {
+    await setupDb();
+  });
+
+  it("sets the password, bumps tokenEpoch, and runs the Better Auth sync registered on the app", async () => {
+    const synced: string[] = [];
+    const app = new TerrenoApp({
+      authOptions: {
+        syncPasswordResetToBetterAuth: async (_user, password): Promise<void> => {
+          synced.push(password);
+        },
+      },
+      skipListen: true,
+      userModel: authUserModel,
+    }).build();
+    const login = await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "password"})
+      .expect(200);
+    const user = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.isNotNull(user);
+
+    await changeUserPassword(user as never, "changed-password-123", {adminId: "admin-1", app});
+
+    assert.deepEqual(synced, ["changed-password-123"]);
+    const stored = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.equal(stored?.tokenEpoch, 1);
+    await supertest(app)
+      .post("/auth/refresh_token")
+      .send({refreshToken: login.body.data.refreshToken})
+      .expect(401);
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "notAdmin@example.com", password: "changed-password-123"})
+      .expect(200);
+  });
+
+  it("prefers explicit authOptions and works without an app", async () => {
+    const synced: string[] = [];
+    const user = await UserModel.findOne({email: "notAdmin@example.com"});
+
+    await changeUserPassword(user as never, "explicit-password-123", {
+      authOptions: {
+        syncPasswordResetToBetterAuth: async (_user, password): Promise<void> => {
+          synced.push(password);
+        },
+      },
+    });
+    await changeUserPassword(user as never, "no-sync-password-123");
+
+    assert.deepEqual(synced, ["explicit-password-123"]);
+    const stored = await UserModel.findOne({email: "notAdmin@example.com"});
+    assert.equal(stored?.tokenEpoch, 2);
   });
 });

@@ -1,7 +1,11 @@
 name: Repository policies
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 jobs:
   no-barrel-imports:
@@ -13,7 +17,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -35,7 +39,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -63,7 +67,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -102,7 +106,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -124,7 +128,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -146,7 +150,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |
@@ -174,7 +178,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Validate required secrets
         run: |

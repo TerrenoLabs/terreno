@@ -4,7 +4,7 @@ import Footer from "@theme-original/DocItem/Footer";
 import type React from "react";
 
 const DOCS_FEEDBACK_BASE =
-  "https://github.com/FlourishHealth/terreno/discussions/new?category=docs-feedback";
+  "https://github.com/TerrenoLabs/terreno/discussions/new?category=docs-feedback";
 
 const DocItemFooter: React.FC<React.ComponentProps<typeof Footer>> = (props) => {
   const {siteConfig} = useDocusaurusContext();

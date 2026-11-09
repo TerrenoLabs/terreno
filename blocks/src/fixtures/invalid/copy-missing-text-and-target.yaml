@@ -1,0 +1,10 @@
+v: 1
+blocks:
+  - type: actions
+    id: copy_actions
+    elements:
+      - type: button
+        id: copy_it
+        text: Copy
+        action:
+          kind: copy

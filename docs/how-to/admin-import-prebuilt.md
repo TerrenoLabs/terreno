@@ -18,7 +18,7 @@ const app = new TerrenoApp({userModel: User})
 
 - `FeatureFlagsApp`: FeatureFlag model and `feature-flags-overrides` home widget.
 - `ConsentApp`: ConsentForm and ConsentResponse models plus consent field-widget IDs.
-- `DocumentStorageApp`: `documents` custom screen.
+- `DocumentStorageApp`: `documents` custom screen. Pass `fileUploadsEnabled: false` (or a function that returns `false`) to reject uploads while listing and download stay available. The example app wires this to the `file-uploads` feature flag.
 - `AIAdminApp`: `ai-requests` custom screen and explorer API.
 - `JobsApp`: `jobs` custom screen and home widget (`dead` / `running` counts). With
   `accessControl`, requires **both** `admin:access` and `admin:jobs`; without it, legacy

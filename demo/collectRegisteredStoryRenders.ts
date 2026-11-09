@@ -1,5 +1,6 @@
 import type React from "react";
 
+import {controlDefault} from "./catalogContract";
 import type {DemoConfiguration} from "./demoConfig";
 
 export interface RegisteredStoryRender {
@@ -11,8 +12,8 @@ export const defaultDemoProps = (config: DemoConfiguration): Record<string, unkn
   const controls = config.demoOptions.controls ?? {};
   const props: Record<string, unknown> = {};
   for (const [key, control] of Object.entries(controls)) {
-    if (control !== undefined && "defaultValue" in control) {
-      props[key] = control.defaultValue;
+    if (control !== undefined) {
+      props[key] = controlDefault(control);
     }
   }
   return props;

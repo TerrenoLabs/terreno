@@ -1,4 +1,4 @@
-import {afterAll, beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import mongoose, {model, Schema} from "mongoose";
 import type {ConfigurationModel, Paths, SecretProvider} from "./configurationPlugin";
 import {configurationPlugin, flattenToDotPaths} from "./configurationPlugin";
@@ -297,16 +297,6 @@ describe("configurationPlugin", () => {
         }
       } catch {
         dbConnected = false;
-      }
-    });
-
-    afterAll(async () => {
-      if (dbConnected && mongoose.connection.readyState === 1) {
-        try {
-          await mongoose.connection.db?.dropDatabase();
-        } catch {
-          // ignore
-        }
       }
     });
 

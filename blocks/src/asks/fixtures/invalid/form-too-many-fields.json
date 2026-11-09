@@ -1,0 +1,59 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "f0",
+        "type": "text",
+        "label": "Field 0"
+      },
+      {
+        "id": "f1",
+        "type": "text",
+        "label": "Field 1"
+      },
+      {
+        "id": "f2",
+        "type": "text",
+        "label": "Field 2"
+      },
+      {
+        "id": "f3",
+        "type": "text",
+        "label": "Field 3"
+      },
+      {
+        "id": "f4",
+        "type": "text",
+        "label": "Field 4"
+      },
+      {
+        "id": "f5",
+        "type": "text",
+        "label": "Field 5"
+      },
+      {
+        "id": "f6",
+        "type": "text",
+        "label": "Field 6"
+      },
+      {
+        "id": "f7",
+        "type": "text",
+        "label": "Field 7"
+      },
+      {
+        "id": "f8",
+        "type": "text",
+        "label": "Field 8"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields",
+      "code": "TOO_MANY"
+    }
+  ]
+}

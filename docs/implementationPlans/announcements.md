@@ -1,6 +1,7 @@
 # Product Update Announcements — In-App Core Feature
 
-**Status:** In progress — implementation and Roast complete; pending Brew
+**Status:** Complete — shipped with @terreno/announcements (57.6.x)
+**Roadmap:** Area=`api`, Target=`Released`, Impact=`Feature`  
 **Branch:** `cursor/announcements-grow-bf9c`  
 **Owner:** Terreno  
 **Created:** 2026-09-08  

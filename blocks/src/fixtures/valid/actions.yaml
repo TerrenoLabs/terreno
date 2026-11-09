@@ -1,0 +1,32 @@
+v: 1
+blocks:
+  - type: chart
+    id: signups_chart
+    kind: bar
+    points:
+      - label: Jan
+        value: 120
+  - type: actions
+    id: followups
+    elements:
+      - type: button
+        id: weekly
+        text: Show weekly
+        action:
+          kind: reply
+          text: Show weekly signups for this quarter
+      - type: button
+        id: open_report
+        text: Open report
+        variant: outline
+        action:
+          kind: open
+          route: /reports
+      - type: segmented
+        id: grain
+        target: signups_chart
+        options:
+          - label: Month
+            data: signups
+          - label: Week
+            data: signups_weekly

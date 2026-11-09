@@ -1,0 +1,68 @@
+name: Deploy Cloud Run with WIF retry
+description: Deploys to Cloud Run and selectively retries transient WIF token timeouts
+
+inputs:
+  service:
+    description: Cloud Run service name
+    required: true
+  region:
+    description: Cloud Run region
+    required: false
+  image:
+    description: Container image to deploy
+    required: true
+  tag:
+    description: Traffic tag
+    required: false
+  no_traffic:
+    description: Deploy without serving traffic
+    required: false
+    default: "false"
+  env_vars:
+    description: Environment variables
+    required: false
+  env_vars_update_strategy:
+    description: Environment variable update strategy
+    required: false
+    default: merge
+  secrets:
+    description: Secret Manager bindings
+    required: false
+  secrets_update_strategy:
+    description: Secret update strategy
+    required: false
+    default: merge
+  flags:
+    description: Additional gcloud flags
+    required: false
+  skip_default_labels:
+    description: Skip the deployment action's default labels
+    required: false
+    default: "false"
+
+outputs:
+  url:
+    description: URL of the deployed Cloud Run service
+    value: ${{ steps.deploy.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install selective gcloud WIF retry shim
+      shell: bash
+      run: bash "$GITHUB_WORKSPACE/scripts/ci/install-gcloud-wif-retry-shim.sh"
+    - name: Deploy to Cloud Run
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v3
+      with:
+        service: ${{ inputs.service }}
+        region: ${{ inputs.region }}
+        image: ${{ inputs.image }}
+        tag: ${{ inputs.tag }}
+        no_traffic: ${{ inputs.no_traffic }}
+        env_vars: ${{ inputs.env_vars }}
+        env_vars_update_strategy: ${{ inputs.env_vars_update_strategy }}
+        secrets: ${{ inputs.secrets }}
+        secrets_update_strategy: ${{ inputs.secrets_update_strategy }}
+        flags: ${{ inputs.flags }}
+        skip_default_labels: ${{ inputs.skip_default_labels }}

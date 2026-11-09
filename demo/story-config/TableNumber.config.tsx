@@ -4,6 +4,7 @@ import {TableNumber} from "@terreno/ui";
 import {TableNumberDemo} from "../stories/TableNumber.stories";
 
 export const TableNumberConfiguration: DemoConfiguration = {
+  usageExample: "import {TableNumber} from \"@terreno/ui\";\n\n<TableNumber />",
   name: "Table number",
   component: TableNumber, // Replace with actual component reference
   related: ["Table"],
@@ -15,7 +16,7 @@ export const TableNumberConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24177&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24006",
     ios: "ready",
     android: "ready",
     web: "ready",

@@ -1,3 +1,4 @@
+import {DemoPreviewFrame} from "@components/DemoPreviewFrame";
 import {ErrorBoundary} from "@components/ErrorBoundary";
 import {DemoConfig, findDemoConfig} from "@config";
 import {Box} from "@terreno/ui";
@@ -31,9 +32,11 @@ const DevComponentPage: FC = () => {
   }
 
   return (
-    <Box flex="grow" height="100%" width="100%">
-      <ErrorBoundary>{config.stories[story]?.render()}</ErrorBoundary>
-    </Box>
+    <DemoPreviewFrame>
+      <Box flex="grow" height="100%" width="100%">
+        <ErrorBoundary>{config.stories[story]?.render()}</ErrorBoundary>
+      </Box>
+    </DemoPreviewFrame>
   );
 };
 

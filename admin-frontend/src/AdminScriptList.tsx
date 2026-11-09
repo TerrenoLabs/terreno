@@ -20,7 +20,7 @@ import {
   statusMeta,
   summarizeOutput,
 } from "./scriptRunUtils";
-import {type AdminApi, type AdminScriptConfig, resolveAdminBases, type ScriptRun} from "./types";
+import {type AdminScriptConfig, resolveAdminBases, type ScriptRun} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 import {useAdminScripts} from "./useAdminScripts";
 
@@ -31,7 +31,6 @@ interface AdminScriptListProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   /** When false, the Run button is disabled. Defaults to true. */
   isAdmin?: boolean;
 }
@@ -50,7 +49,6 @@ export const AdminScriptList: React.FC<AdminScriptListProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   isAdmin = true,
 }) => {
   const {apiBase: resolvedApiBase, routeBase: resolvedRouteBase} = resolveAdminBases({
@@ -58,8 +56,8 @@ export const AdminScriptList: React.FC<AdminScriptListProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, isLoading, error} = useAdminConfig(api, resolvedApiBase);
-  const {useListScriptRunsQuery} = useAdminScripts(api, resolvedApiBase);
+  const {config, isLoading, error} = useAdminConfig(resolvedApiBase);
+  const {useListScriptRunsQuery} = useAdminScripts(resolvedApiBase);
   const canRunScripts = isAdmin && (config?.platformTools?.runScripts ?? true);
   const canViewScripts = config?.platformTools?.viewScripts ?? true;
 
@@ -94,7 +92,7 @@ export const AdminScriptList: React.FC<AdminScriptListProps> = ({
   // Accumulate each loaded history page (de-duplicated by id) so "Load more" advances through
   // pages instead of re-requesting a server-capped first page. Keying on the active filter lets
   // a filter change replace the list (rather than blanking state and risking an empty render when
-  // RTK Query serves a cached, same-reference page).
+  // a refetch returns the same page).
   useEffect(() => {
     if (!historyData?.data) {
       return;
@@ -388,7 +386,6 @@ export const AdminScriptList: React.FC<AdminScriptListProps> = ({
       {tab === "scripts" ? renderScripts() : renderHistory()}
 
       <AdminScriptRunModal
-        api={api}
         apiBase={resolvedApiBase}
         historyTaskId={selectedRun?.taskId}
         onDismiss={handleDismiss}

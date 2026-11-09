@@ -37,7 +37,11 @@ exports[`TerrenoProvider renders correctly with default props 1`] = `
       {
         "$$typeof": Symbol(react.test.json),
         "children": null,
-        "props": {},
+        "props": {
+          "style": {
+            "pointerEvents": "box-none",
+          },
+        },
         "type": "SafeAreaView",
       },
     ],
@@ -69,7 +73,11 @@ exports[`TerrenoProvider renders correctly with default props 1`] = `
       {
         "$$typeof": Symbol(react.test.json),
         "children": null,
-        "props": {},
+        "props": {
+          "style": {
+            "pointerEvents": "box-none",
+          },
+        },
         "type": "SafeAreaView",
       },
     ],
@@ -125,7 +133,11 @@ exports[`TerrenoProvider renders with openAPISpecUrl 1`] = `
       {
         "$$typeof": Symbol(react.test.json),
         "children": null,
-        "props": {},
+        "props": {
+          "style": {
+            "pointerEvents": "box-none",
+          },
+        },
         "type": "SafeAreaView",
       },
     ],
@@ -157,7 +169,11 @@ exports[`TerrenoProvider renders with openAPISpecUrl 1`] = `
       {
         "$$typeof": Symbol(react.test.json),
         "children": null,
-        "props": {},
+        "props": {
+          "style": {
+            "pointerEvents": "box-none",
+          },
+        },
         "type": "SafeAreaView",
       },
     ],

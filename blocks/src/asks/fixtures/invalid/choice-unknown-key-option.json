@@ -1,0 +1,15 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick a size.",
+    "select": "one",
+    "options": [
+      {"id": "small", "label": "Small"},
+      {"id": "large", "label": "Large", "value": 2, "color": "blue"}
+    ]
+  },
+  "errors": [
+    {"path": "options[1].color", "code": "UNKNOWN_KEY"},
+    {"path": "options[1].value", "code": "UNKNOWN_KEY"}
+  ]
+}

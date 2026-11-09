@@ -1,4 +1,5 @@
 import type {Tool} from "@modelcontextprotocol/server";
+import {type BlockError, parseBlocks, validateBlocks} from "@terreno/blocks";
 import {bootstrapTools, handleBootstrapToolCall} from "./bootstrap.js";
 import {askUpdateHelp, getUpdateNote, searchUpdateNotes} from "./help/updateNotes.js";
 import {getComponentDocsMarkdown, searchDocs} from "./search/docIndex.js";
@@ -7,7 +8,7 @@ import {getUpgradeGuideMarkdown} from "./upgradeGuide.js";
 const docSearchTools: Tool[] = [
   {
     description:
-      "Search Terreno documentation (Diátaxis docs, bundled package guides, and @terreno/ui component props) with BM25-style keyword search. **Call this before guessing** modelRouter, OpenAPI, RTK Query, or UI APIs — same workflow as Laravel Boost search-docs.",
+      "Search Terreno documentation (Diátaxis docs, bundled package guides, and @terreno/ui component props) with BM25-style keyword search. **Call this before guessing** modelRouter, OpenAPI, syncdb, or UI APIs — same workflow as Laravel Boost search-docs.",
     inputSchema: {
       properties: {
         packages: {
@@ -252,9 +253,15 @@ export const tools: Tool[] = [
     name: "terreno_generate_route",
   },
   {
-    description: "Generate a React Native screen component using @terreno/ui components",
+    description:
+      "Generate a React Native screen component using @terreno/ui components. List, detail, and form screens read and write a synced collection with @terreno/syncdb/react (useQuery, useEntity, useMutate).",
     inputSchema: {
       properties: {
+        collection: {
+          description:
+            "Synced collection name (defaults to the kebab-case plural of modelName, e.g. 'todo-items')",
+          type: "string",
+        },
         fields: {
           description: "Fields to display or edit",
           items: {type: "string"},
@@ -344,6 +351,21 @@ export const tools: Tool[] = [
   },
   {
     description:
+      "Validate a whole-reply UI block document. Returns the same report as terreno-blocks validate.",
+    inputSchema: {
+      properties: {
+        document: {
+          description: "Whole-reply YAML or JSON block document",
+          type: "string",
+        },
+      },
+      required: ["document"],
+      type: "object",
+    },
+    name: "terreno_validate_ui_blocks",
+  },
+  {
+    description:
       "Generate admin panel integration files and instructions for a Terreno project. Creates frontend screen files and provides backend/frontend setup snippets for @terreno/admin-backend and @terreno/admin-frontend.",
     inputSchema: {
       properties: {
@@ -383,7 +405,7 @@ export const tools: Tool[] = [
   },
 ];
 
-const generateModel = (args: {
+export const generateModel = (args: {
   name: string;
   fields: Array<{
     name: string;
@@ -468,7 +490,7 @@ export type { ${name}Document, ${name}Model };
 `;
 };
 
-const generateRoute = (args: {
+export const generateRoute = (args: {
   modelName: string;
   routePath: string;
   permissions?: {
@@ -554,11 +576,30 @@ export const add${modelName}Routes = (router: Router) => {
 `;
 };
 
-const generateScreen = (args: {
+/**
+ * Default synced collection name for a model: kebab-case plural of the model name
+ * (`Product` → `products`, `TodoItem` → `todo-items`), matching a `modelRouter` path.
+ */
+export const toCollectionName = (modelName: string): string => {
+  const kebab = modelName
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/[\s_]+/g, "-")
+    .toLowerCase();
+  if (kebab.endsWith("s")) {
+    return kebab;
+  }
+  if (/[^aeiou]y$/.test(kebab)) {
+    return `${kebab.slice(0, -1)}ies`;
+  }
+  return `${kebab}s`;
+};
+
+export const generateScreen = (args: {
   name: string;
   type: "list" | "detail" | "form" | "empty";
   modelName?: string;
   fields?: string[];
+  collection?: string;
 }): string => {
   const {name, type, modelName, fields} = args;
 
@@ -580,47 +621,40 @@ export default ${name}Screen;
 `;
   }
 
+  // Generated screens read and write a synced collection through @terreno/syncdb (local-first).
+  // Non-synced models use the generated request hooks in `@/store/apiSdk` instead.
+  const collection = args.collection ?? (modelName ? toCollectionName(modelName) : "");
+  const typeName = modelName ? `${modelName}Row` : "";
+  const rowInterface = modelName
+    ? `interface ${typeName} {
+  id: string;
+${(fields ?? []).map((f) => `  ${f}?: unknown;`).join("\n")}
+}
+`
+    : "";
+
   if (type === "list" && modelName) {
-    const pluralLower = `${modelName.toLowerCase()}s`;
-    return `import React, { useCallback } from "react";
-import { Box, Page, Text, Button, ScrollView } from "@terreno/ui";
-import { useGet${modelName}sQuery } from "@/store/openApiSdk";
+    return `import React from "react";
+import { useQuery, useSyncStatus } from "@terreno/syncdb/react";
+import { Box, Page, Spinner, Text } from "@terreno/ui";
 
+${rowInterface}
 const ${name}Screen: React.FC = () => {
-  const { data: ${pluralLower}, isLoading, error, refetch } = useGet${modelName}sQuery({});
-
-  if (isLoading) {
-    return (
-      <Page navigation={undefined} title="${name}">
-        <Box flex={1} alignItems="center" justifyContent="center">
-          <Text>Loading...</Text>
-        </Box>
-      </Page>
-    );
-  }
-
-  if (error) {
-    return (
-      <Page navigation={undefined} title="${name}">
-        <Box flex={1} alignItems="center" justifyContent="center" gap={2}>
-          <Text color="error500">Failed to load data</Text>
-          <Button text="Retry" onClick={refetch} />
-        </Box>
-      </Page>
-    );
-  }
+  // Local-first: rows come from the on-device store and update as sync deltas arrive.
+  const items = useQuery<${typeName}>("${collection}");
+  const {isSyncing} = useSyncStatus();
 
   return (
-    <Page navigation={undefined} title="${name}">
-      <ScrollView>
-        <Box padding={4} gap={2}>
-          {${pluralLower}?.map((item) => (
-            <Box key={item.id} padding={3} backgroundColor="neutral100" borderRadius="md">
-              <Text>{item.${fields?.[0] ?? "id"}}</Text>
-            </Box>
-          ))}
-        </Box>
-      </ScrollView>
+    <Page navigation={undefined} scroll title="${name}">
+      <Box padding={4} gap={2}>
+        {isSyncing && items.length === 0 ? <Spinner /> : null}
+        {items.map((item) => (
+          <Box key={item.id} padding={3} color="base" rounding="md">
+            <Text>{String(item.${fields?.[0] ?? "id"} ?? "")}</Text>
+          </Box>
+        ))}
+        {!isSyncing && items.length === 0 ? <Text>No ${collection} yet</Text> : null}
+      </Box>
     </Page>
   );
 };
@@ -636,20 +670,20 @@ export default ${name}Screen;
 
     const fieldInputs = (fields ?? ["name"])
       .map(
-        (f) => `          <TextField
-            label="${f.charAt(0).toUpperCase() + f.slice(1)}"
-            value={${f}}
-            onChangeText={set${f.charAt(0).toUpperCase() + f.slice(1)}}
-            error={errors.${f}}
-          />`
+        (f) => `        <TextField
+          title="${f.charAt(0).toUpperCase() + f.slice(1)}"
+          value={${f}}
+          onChange={set${f.charAt(0).toUpperCase() + f.slice(1)}}
+          errorText={errors.${f}}
+        />`
       )
       .join("\n");
 
     const bodyFields = (fields ?? ["name"]).map((f) => `${f}`).join(", ");
 
     return `import React, { useCallback, useState } from "react";
+import { useMutate } from "@terreno/syncdb/react";
 import { Box, Page, Button, TextField } from "@terreno/ui";
-import { useCreate${modelName}Mutation } from "@/store/openApiSdk";
 
 interface FormErrors {
   ${(fields ?? ["name"]).map((f) => `${f}?: string;`).join("\n  ")}
@@ -658,38 +692,28 @@ interface FormErrors {
 const ${name}Screen: React.FC = () => {
 ${fieldStates}
   const [errors, setErrors] = useState<FormErrors>({});
-  const [create${modelName}, { isLoading }] = useCreate${modelName}Mutation();
+  // Local-first write: applies optimistically and syncs through the durable outbox.
+  const {create} = useMutate("${collection}");
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback((): void => {
     const newErrors: FormErrors = {};
-    ${(fields ?? ["name"]).map((f) => `if (!${f}.trim()) newErrors.${f} = "${f.charAt(0).toUpperCase() + f.slice(1)} is required";`).join("\n    ")}
+    ${(fields ?? ["name"]).map((f) => `if (!${f}.trim()) {\n      newErrors.${f} = "${f.charAt(0).toUpperCase() + f.slice(1)} is required";\n    }`).join("\n    ")}
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    try {
-      await create${modelName}({ ${bodyFields} }).unwrap();
-      // Success - navigate or show message
-    } catch (err: unknown) {
-      const apiError = err as {data?: {fields?: FormErrors}};
-      if (apiError.data?.fields) {
-        setErrors(apiError.data.fields);
-      }
-    }
-  }, [${bodyFields}, create${modelName}]);
+    setErrors({});
+    create({data: { ${bodyFields} }});
+    // Success - navigate or show message. Server rejections surface through useConflicts().
+  }, [${bodyFields}, create]);
 
   return (
     <Page navigation={undefined} title="Create ${modelName}">
       <Box padding={4} gap={3}>
 ${fieldInputs}
-        <Button
-          text="Create"
-          onClick={handleSubmit}
-          loading={isLoading}
-          fullWidth
-        />
+        <Button text="Create" onClick={handleSubmit} fullWidth />
       </Box>
     </Page>
   );
@@ -701,42 +725,30 @@ export default ${name}Screen;
 
   if (type === "detail" && modelName) {
     return `import React from "react";
-import { Box, Page, Text, Button, ScrollView } from "@terreno/ui";
-import { useGet${modelName}Query } from "@/store/openApiSdk";
+import { useEntity } from "@terreno/syncdb/react";
+import { Box, Page, Text } from "@terreno/ui";
 import { useLocalSearchParams } from "expo-router";
 
+${rowInterface}
 const ${name}Screen: React.FC = () => {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: item, isLoading, error, refetch } = useGet${modelName}Query({ id: id! }, { skip: !id });
+  const { data: item, deleted } = useEntity<${typeName}>("${collection}", id ?? "");
 
-  if (isLoading) {
+  if (!item || deleted) {
     return (
       <Page navigation={undefined} title="${name}">
-        <Box flex={1} alignItems="center" justifyContent="center">
-          <Text>Loading...</Text>
-        </Box>
-      </Page>
-    );
-  }
-
-  if (error || !item) {
-    return (
-      <Page navigation={undefined} title="${name}">
-        <Box flex={1} alignItems="center" justifyContent="center" gap={2}>
-          <Text color="error500">Failed to load data</Text>
-          <Button text="Retry" onClick={refetch} />
+        <Box padding={4} alignItems="center" justifyContent="center">
+          <Text>Not found</Text>
         </Box>
       </Page>
     );
   }
 
   return (
-    <Page navigation={undefined} title="${name}">
-      <ScrollView>
-        <Box padding={4} gap={2}>
-          ${(fields ?? ["id"]).map((f) => `<Text>{item.${f}}</Text>`).join("\n          ")}
-        </Box>
-      </ScrollView>
+    <Page navigation={undefined} scroll title="${name}">
+      <Box padding={4} gap={2}>
+        ${(fields ?? ["id"]).map((f) => `<Text>{String(item.${f} ?? "")}</Text>`).join("\n        ")}
+      </Box>
     </Page>
   );
 };
@@ -763,7 +775,10 @@ export default ${name}Screen;
 `;
 };
 
-const generateFormFields = (args: {
+// Prop names follow @terreno/ui's field interfaces (TextFieldProps, SelectFieldProps,
+// BooleanFieldProps, DateTimeFieldProps, NumberFieldProps): `title`, `onChange`, `errorText`.
+// formFieldsTypecheck.test.ts compiles this output against @terreno/ui to catch drift.
+export const generateFormFields = (args: {
   fields: Array<{
     name: string;
     type: string;
@@ -781,110 +796,119 @@ const generateFormFields = (args: {
     const label = field.label ?? field.name.charAt(0).toUpperCase() + field.name.slice(1);
     const stateName = field.name;
     const setterName = `set${field.name.charAt(0).toUpperCase() + field.name.slice(1)}`;
+    const errorProp = field.required ? `\n          errorText={errors.${field.name}}` : "";
+    const renderField = (component: string, extraProps = ""): string =>
+      `        <${component}
+          title="${label}"${extraProps}
+          value={${stateName}}
+          onChange={${setterName}}${errorProp}
+        />`;
 
     switch (field.type) {
       case "text":
         imports.add("TextField");
-        fieldComponents.push(`        <TextField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("TextField"));
         break;
       case "email":
         imports.add("EmailField");
-        fieldComponents.push(`        <EmailField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("EmailField"));
         break;
       case "password":
-        imports.add("PasswordField");
-        fieldComponents.push(`        <PasswordField
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        // PasswordField is a placeholder without props; TextField type="password" masks input.
+        imports.add("TextField");
+        fieldComponents.push(renderField("TextField", '\n          type="password"'));
         break;
       case "number":
         imports.add("NumberField");
-        fieldComponents.push(`        <NumberField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("NumberField", '\n          type="number"'));
         break;
       case "textarea":
         imports.add("TextArea");
-        fieldComponents.push(`        <TextArea
-          label="${label}"
-          value={${stateName}}
-          onChangeText={${setterName}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("TextArea"));
         break;
       case "select": {
         imports.add("SelectField");
         const optionsStr = field.options
           ? JSON.stringify(field.options, null, 2).replace(/\n/g, "\n          ")
           : "[]";
-        fieldComponents.push(`        <SelectField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-          options={${optionsStr}}
-          ${field.required ? `error={errors.${field.name}}` : ""}
-        />`);
+        fieldComponents.push(renderField("SelectField", `\n          options={${optionsStr}}`));
         break;
       }
       case "boolean":
         imports.add("BooleanField");
-        fieldComponents.push(`        <BooleanField
-          label="${label}"
-          value={${stateName}}
-          onChangeValue={${setterName}}
-        />`);
+        fieldComponents.push(renderField("BooleanField"));
         break;
       case "date":
       case "datetime":
         imports.add("DateTimeField");
-        fieldComponents.push(`        <DateTimeField
-          label="${label}"
-          value={${stateName}}
-          onChange={${setterName}}
-          mode="${field.type === "date" ? "date" : "datetime"}"
-        />`);
+        fieldComponents.push(renderField("DateTimeField", `\n          type="${field.type}"`));
         break;
     }
   }
 
-  const stateDeclarations = fields
-    .map((f) => {
-      const defaultValue = f.type === "boolean" ? "false" : f.type === "number" ? "0" : '""';
-      return `  const [${f.name}, set${f.name.charAt(0).toUpperCase() + f.name.slice(1)}] = useState(${defaultValue});`;
-    })
-    .join("\n");
+  // Every field value is a string (NumberField and DateTimeField included) except BooleanField.
+  const stateLines = fields.map((f) => {
+    const defaultValue = f.type === "boolean" ? "false" : '""';
+    return `  const [${f.name}, set${f.name.charAt(0).toUpperCase() + f.name.slice(1)}] = useState(${defaultValue});`;
+  });
+  if (fields.some((f) => f.required)) {
+    stateLines.push(
+      '  // Set a message to show it under a field, e.g. setErrors({title: "Title is required"}).',
+      "  const [errors, setErrors] = useState<Record<string, string | undefined>>({});"
+    );
+  }
 
-  return `import React, { useState } from "react";
+  return `import { useState } from "react";
 import { ${Array.from(imports).join(", ")} } from "@terreno/ui";
 
 // State declarations (add to your component):
-${stateDeclarations}
+${stateLines.join("\n")}
 
 // Form fields (add inside your component's return):
-{/* Form Fields */}
 <Box gap={3}>
 ${fieldComponents.join("\n")}
 </Box>
 `;
 };
 
-const validateModelSchema = (args: {schema: string}): string => {
+const formatBlockIssue = (error: BlockError): string =>
+  `${error.path}  ${error.code}  ${error.message} — ${error.fix}`;
+
+/** Same stdout as `terreno-blocks validate` for one document. */
+export const validateUiBlocks = (args: {document?: string}): string => {
+  if (typeof args.document !== "string") {
+    return "document is required\n";
+  }
+  const parsed = parseBlocks(args.document);
+  if (!parsed.ok) {
+    return `${parsed.errors.map(formatBlockIssue).join("\n")}\n`;
+  }
+  const validated = validateBlocks(parsed.value);
+  if (!validated.ok) {
+    return `${validated.errors.map(formatBlockIssue).join("\n")}\n`;
+  }
+  if (validated.warnings.length === 0) {
+    return "";
+  }
+  return `${validated.warnings.map(formatBlockIssue).join("\n")}\n`;
+};
+
+const NAMED_IMPORT_PATTERN =
+  /import\s+(?:type\s+)?(?:\w+\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+const MODEL_DOCUMENT_TYPE_PATTERN = /\b\w+Document\b/;
+
+// True when the source declares a `<Name>Document` type or imports one from the app's type files.
+// mongoose's own Document types (Document, HydratedDocument) do not count.
+const hasModelDocumentType = (source: string): boolean => {
+  if (/^\s*(?:export\s+)?(?:interface|type)\s+\w+Document\b/m.test(source)) {
+    return true;
+  }
+  return Array.from(source.matchAll(NAMED_IMPORT_PATTERN)).some(
+    ([, names, from]) => from !== "mongoose" && MODEL_DOCUMENT_TYPE_PATTERN.test(names)
+  );
+};
+
+export const validateModelSchema = (args: {schema: string}): string => {
   const {schema} = args;
   const issues: string[] = [];
   const suggestions: string[] = [];
@@ -912,10 +936,13 @@ const validateModelSchema = (args: {schema: string}): string => {
     suggestions.push("Add addDefaultPlugins(schema) or manually add createdUpdatedPlugin");
   }
 
-  // Check for interface
-  if (!schema.includes("interface") || !schema.includes("Document")) {
+  // Check for the model's Document type: declared inline, or imported from where Terreno keeps
+  // model types (src/modelInterfaces.ts or src/types/models/).
+  if (!hasModelDocumentType(schema)) {
     issues.push("Missing TypeScript interfaces");
-    suggestions.push("Define interfaces for Document and Model types");
+    suggestions.push(
+      "Define Document and Model types in src/modelInterfaces.ts or src/types/models/ and import them into the model file"
+    );
   }
 
   // Check for findOne usage
@@ -947,7 +974,7 @@ Suggestions:
 ${suggestions.map((s) => `- ${s}`).join("\n")}`;
 };
 
-const generateInstallAdmin = (args: {
+export const generateInstallAdmin = (args: {
   models: Array<{
     modelName: string;
     routePath: string;
@@ -978,13 +1005,46 @@ const generateInstallAdmin = (args: {
 
   const files: GeneratedFile[] = [
     {
+      content: `import {AdminProvider} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/syncdb/config";
+import {Stack} from "expo-router";
+import type React from "react";
+import {authProvider} from "@/store/syncdb";
+
+// Every admin request (model CRUD and admin RPC) goes through AdminProvider's fetch client.
+// authProvider is the same @terreno/syncdb AuthProvider the sync and request clients use
+// (Better Auth session token, or the JWT from jwtAuthAdapter).
+const getAdminAuthHeaders = async (): Promise<HeadersInit> => {
+  const token = await authProvider.getToken();
+  if (!token) {
+    return {};
+  }
+  return {Authorization: \`Bearer \${token}\`};
+};
+
+const AdminLayout: React.FC = () => {
+  return (
+    <AdminProvider
+      apiBase="/admin"
+      apiOrigin={baseUrl}
+      getAuthHeaders={getAdminAuthHeaders}
+      routeBase="/admin"
+    >
+      <Stack screenOptions={{headerShown: false}} />
+    </AdminProvider>
+  );
+};
+
+export default AdminLayout;
+`,
+      path: "frontend/app/(tabs)/admin/_layout.tsx",
+    },
+    {
       content: `import {AdminModelList} from "@terreno/admin-frontend";
 import type React from "react";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminIndexScreen: React.FC = () => {
-  return <AdminModelList api={terrenoApi} baseUrl={\`\${baseUrl}/admin\`} />;
+  return <AdminModelList baseUrl="/admin" />;
 };
 
 export default AdminIndexScreen;
@@ -995,15 +1055,11 @@ export default AdminIndexScreen;
       content: `import {AdminModelTable} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminModelScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
 
-  return (
-    <AdminModelTable api={terrenoApi} baseUrl={\`\${baseUrl}/admin\`} modelName={model!} />
-  );
+  return <AdminModelTable baseUrl="/admin" modelName={model!} />;
 };
 
 export default AdminModelScreen;
@@ -1014,20 +1070,11 @@ export default AdminModelScreen;
       content: `import {AdminModelForm} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminCreateScreen: React.FC = () => {
   const {model} = useLocalSearchParams<{model: string}>();
 
-  return (
-    <AdminModelForm
-      api={terrenoApi}
-      baseUrl={\`\${baseUrl}/admin\`}
-      mode="create"
-      modelName={model!}
-    />
-  );
+  return <AdminModelForm baseUrl="/admin" mode="create" modelName={model!} />;
 };
 
 export default AdminCreateScreen;
@@ -1038,21 +1085,11 @@ export default AdminCreateScreen;
       content: `import {AdminModelForm} from "@terreno/admin-frontend";
 import type React from "react";
 import {useLocalSearchParams} from "expo-router";
-import {terrenoApi} from "@/store/sdk";
-import {baseUrl} from "@terreno/rtk";
 
 const AdminEditScreen: React.FC = () => {
   const {model, id} = useLocalSearchParams<{model: string; id: string}>();
 
-  return (
-    <AdminModelForm
-      api={terrenoApi}
-      baseUrl={\`\${baseUrl}/admin\`}
-      itemId={id}
-      mode="edit"
-      modelName={model!}
-    />
-  );
+  return <AdminModelForm baseUrl="/admin" itemId={id} mode="edit" modelName={model!} />;
 };
 
 export default AdminEditScreen;
@@ -1121,9 +1158,13 @@ Add the dependency to \`frontend/package.json\`:
 cd frontend && bun add @terreno/admin-frontend
 \`\`\`
 
-### Step 4: Create the 4 screen files
+### Step 4: Create the admin layout and 3 screen files
 
-Create the files listed above. Each file's content is provided below.
+Create the files listed above. Each file's content is provided below. The \`_layout.tsx\`
+\`AdminProvider\` is required: it binds every admin request to your API origin and auth
+headers. It reads the token from the \`authProvider\` exported by \`frontend/store/syncdb.ts\`
+(the scaffold's shared \`@terreno/syncdb\` auth provider) and the API origin from
+\`@terreno/syncdb/config\`. Admin screens take no \`api\` prop.
 
 ### Step 5: Add Admin tab to \`frontend/app/(tabs)/_layout.tsx\`
 
@@ -1286,7 +1327,7 @@ export const handleToolCall = async (
       result = wrapWithFileInstructions(code, `backend/src/api/${modelName}.ts`, [
         `Export from \`backend/src/api/index.ts\`: \`export * from "./${modelName}";\``,
         `Register in server setup: \`add${routeArgs.modelName}Routes(router, options);\``,
-        `Regenerate frontend SDK: \`bun run sdk\` in the frontend directory`,
+        `Regenerate frontend API hooks (store/apiSdk.ts): \`bun run sdk\` in the frontend directory`,
       ]);
       break;
     }
@@ -1295,6 +1336,8 @@ export const handleToolCall = async (
       const code = generateScreen(screenArgs);
       result = wrapWithFileInstructions(code, `frontend/src/screens/${screenArgs.name}Screen.tsx`, [
         "Add the screen to your navigation configuration",
+        "List/detail/form screens need the model synced: syncPlugin + isDeletedPlugin, modelRouter `sync` config, and the collection in SYNC_COLLECTIONS (frontend/store/syncdb.ts)",
+        "For a non-synced model, swap the syncdb hooks for the generated request hooks in `@/store/apiSdk` (run `bun run sdk` first)",
       ]);
       break;
     }
@@ -1307,6 +1350,9 @@ export const handleToolCall = async (
     }
     case "terreno_validate_model_schema":
       result = validateModelSchema(args as Parameters<typeof validateModelSchema>[0]);
+      break;
+    case "terreno_validate_ui_blocks":
+      result = validateUiBlocks(args as Parameters<typeof validateUiBlocks>[0]);
       break;
     case "terreno_install_admin":
       result = generateInstallAdmin(args as Parameters<typeof generateInstallAdmin>[0]);

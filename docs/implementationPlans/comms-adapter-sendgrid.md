@@ -1,7 +1,7 @@
 # Implementation Plan: Comms adapter — transactional email (SendGrid)
 
 **Status:** In progress — Phase 1 send path implemented; Phase 2 gated on inbound-webhooks
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1022
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1022
 **Priority:** High
 **Effort:** Small batch
 **Owner:** unassigned

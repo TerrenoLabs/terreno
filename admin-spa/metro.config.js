@@ -15,7 +15,6 @@ const config = getDefaultConfig(projectRoot);
 const monorepoPackages = {
   "@terreno/ui": path.resolve(monorepoRoot, "ui"),
   "@terreno/admin-frontend": path.resolve(monorepoRoot, "admin-frontend"),
-  "@terreno/rtk": path.resolve(monorepoRoot, "rtk"),
 };
 
 // 1. Watch the local app folder, and only the shared packages (limiting the scope and speeding it
@@ -198,5 +197,11 @@ config.server.rewriteRequestUrl = (requestUrl) => {
 
   return rewrittenUrl;
 };
+
+// CI containers report the host's CPU count, so Metro would start far more transform workers than
+// the executor has cores and cold exports run out of memory. Cap the pool at the executor's size.
+if (process.env.CI) {
+  config.maxWorkers = 4;
+}
 
 module.exports = config;

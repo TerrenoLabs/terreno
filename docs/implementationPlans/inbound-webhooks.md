@@ -1,11 +1,11 @@
 # Implementation Plan: Inbound webhook framework
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1251  
 **Branch:** `cursor/inbound-webhooks-4945`  
 **Owner:** —  
 **Created:** 2026-09-01  
 **Approved:** 2026-09-01  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1172 (this feature **closes** that issue; implementation PRs use `Fixes #1172`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1172 (this feature **closes** that issue; implementation PRs use `Fixes #1172`)  
 **Task list:** [inbound-webhooks.md](../tasks/inbound-webhooks.md)  
 **Depends on:** —  
 **RTK deprecation flag:** None  

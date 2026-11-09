@@ -1,8 +1,13 @@
 import type {DemoConfiguration} from "@config";
-import {SyncStatusBannerDemo, SyncStatusBannerOffline} from "@stories/SyncStatusBanner.stories";
+import {
+  SyncStatusBannerDemo,
+  SyncStatusBannerOffline,
+  SyncStatusBannerOfflineGrace,
+} from "@stories/SyncStatusBanner.stories";
 import {SyncStatusBanner} from "@terreno/ui";
 
 export const SyncStatusBannerConfiguration: DemoConfiguration = {
+  usageExample: "import {SyncStatusBanner} from \"@terreno/ui\";\n\n<SyncStatusBanner />",
   a11yNotes: ["Keep interactive controls keyboard reachable."],
   additionalDocumentation: [],
   category: "Component",
@@ -23,6 +28,7 @@ export const SyncStatusBannerConfiguration: DemoConfiguration = {
   },
   stories: {
     Offline: {render: () => <SyncStatusBannerOffline />},
+    "Offline (grace period)": {render: () => <SyncStatusBannerOfflineGrace />},
   },
   usage: {
     do: ["Use this component for the pattern it documents in the demo."],

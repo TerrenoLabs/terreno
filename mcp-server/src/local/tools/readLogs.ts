@@ -1,6 +1,14 @@
 import {existsSync, readFileSync} from "node:fs";
-import {join} from "node:path";
+import {DateTime} from "luxon";
 
+import {resolveExistingAppLogPaths, resolveExistingBrowserLogPaths} from "../logPaths.js";
+import {
+  ensureCdpConnected,
+  ensureMetroEventsConnected,
+  getCdpConnectionStatus,
+  snapshotCdpConsoleRing,
+  snapshotMetroEventsRing,
+} from "../metro/metroDevSession.js";
 import {resolveTerrenoProjectRoot} from "../projectRoot.js";
 
 interface LogEntry {
@@ -36,47 +44,115 @@ const parseJsonlFile = (path: string, source: string, maxLines: number): LogEntr
   return out;
 };
 
+const ringToEntries = (
+  ring: Array<{level?: string; raw: string; source: string; timestamp?: string}>
+): LogEntry[] => {
+  return ring.map((r) => {
+    try {
+      const obj = JSON.parse(r.raw) as Record<string, unknown>;
+      return {
+        level: typeof obj.level === "string" ? obj.level : r.level,
+        message: obj.message,
+        raw: r.raw,
+        source: r.source,
+        timestamp: typeof obj.timestamp === "string" ? obj.timestamp : r.timestamp,
+      };
+    } catch {
+      return {raw: r.raw, source: r.source, timestamp: r.timestamp};
+    }
+  });
+};
+
+const parseIso = (s: string | undefined): DateTime | undefined => {
+  if (!s) {
+    return undefined;
+  }
+  const dt = DateTime.fromISO(s);
+  if (!dt.isValid) {
+    return undefined;
+  }
+  return dt;
+};
+
+const mergeByTimestamp = (entries: LogEntry[]): LogEntry[] => {
+  return [...entries].sort((a, b) => {
+    const ta = parseIso(a.timestamp)?.toMillis() ?? 0;
+    const tb = parseIso(b.timestamp)?.toMillis() ?? 0;
+    if (ta !== tb) {
+      return ta - tb;
+    }
+    return a.raw.localeCompare(b.raw);
+  });
+};
+
 export interface ReadLogsArgs {
   sources?: string[];
   entries?: number;
   level?: string;
+  since?: string;
 }
 
 export const readLogs = async (args: ReadLogsArgs): Promise<string> => {
-  const root = resolveTerrenoProjectRoot();
   const maxEntries = Math.min(Math.max(args.entries ?? 200, 1), 2000);
   const want = (args.sources ?? ["backend", "browser", "metro", "app"]).map((s) => s.toLowerCase());
   const levelFilter = args.level?.toLowerCase();
-
-  const backendPath = join(root, ".terreno", "logs", "app.log");
-  const browserPath = join(root, ".terreno", "logs", "browser.log");
+  const sinceDt = args.since ? DateTime.fromISO(args.since) : undefined;
+  const sinceThreshold = sinceDt?.isValid ? sinceDt : undefined;
 
   const merged: LogEntry[] = [];
+  const status: string[] = [];
 
   if (want.includes("backend")) {
-    merged.push(...parseJsonlFile(backendPath, "backend", maxEntries));
+    for (const p of resolveExistingAppLogPaths()) {
+      merged.push(...parseJsonlFile(p, "backend", maxEntries));
+    }
   }
   if (want.includes("browser")) {
-    merged.push(...parseJsonlFile(browserPath, "browser", maxEntries));
+    for (const p of resolveExistingBrowserLogPaths()) {
+      merged.push(...parseJsonlFile(p, "browser", maxEntries));
+    }
   }
+
   if (want.includes("metro")) {
-    merged.push({
-      raw: "Metro bundler events require an active `/events` WebSocket connection (not attached in v1). Start Metro and use Expo MCP or extend terreno-mcp-local.",
-      source: "metro",
-    });
+    const metroConn = await ensureMetroEventsConnected();
+    status.push(metroConn.detail);
+    merged.push(...ringToEntries(snapshotMetroEventsRing()));
   }
+
   if (want.includes("app")) {
-    merged.push({
-      raw: "Hermes console capture requires a CDP connection to Metro (not attached in v1). Use Expo MCP `collect_app_logs` or enable future CDP support in terreno-mcp-local.",
-      source: "app",
-    });
+    const cdp = await ensureCdpConnected();
+    status.push(cdp.detail);
+    merged.push(...ringToEntries(snapshotCdpConsoleRing()));
   }
 
-  const filtered = levelFilter
-    ? merged.filter((e) => (e.level ?? "").toLowerCase() === levelFilter)
-    : merged;
+  let filtered = merged;
+  if (sinceThreshold) {
+    const ms = sinceThreshold.toMillis();
+    filtered = merged.filter((e) => {
+      const t = parseIso(e.timestamp)?.toMillis();
+      if (t === undefined) {
+        return true;
+      }
+      return t >= ms;
+    });
+  }
+  if (levelFilter) {
+    filtered = filtered.filter((e) => (e.level ?? "").toLowerCase() === levelFilter);
+  }
 
-  return JSON.stringify({entries: filtered.slice(-maxEntries)}, null, 2);
+  const sorted = mergeByTimestamp(filtered);
+  const tail = sorted.slice(-maxEntries);
+
+  return JSON.stringify(
+    {
+      connection: getCdpConnectionStatus(),
+      entries: tail,
+      metroHint: status.join(" | ") || undefined,
+      projectRoot: resolveTerrenoProjectRoot(),
+    },
+    null,
+    2
+  );
 };
 
 export interface LastErrorArgs {
@@ -84,39 +160,46 @@ export interface LastErrorArgs {
 }
 
 export const lastError = async (args: LastErrorArgs): Promise<string> => {
-  const root = resolveTerrenoProjectRoot();
-  const want = (args.sources ?? ["backend", "browser"]).map((s) => s.toLowerCase());
-  const paths: Array<{path: string; source: string}> = [];
+  const want = (args.sources ?? ["backend", "browser", "metro", "app"]).map((s) => s.toLowerCase());
+  let last: LogEntry | undefined;
+
+  const consider = (entries: LogEntry[]): void => {
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+      const e = entries[i];
+      if (!e) {
+        continue;
+      }
+      if ((e.level ?? "").toLowerCase() === "error") {
+        last = e;
+        return;
+      }
+    }
+  };
+
+  const pool: LogEntry[] = [];
   if (want.includes("backend")) {
-    paths.push({path: join(root, ".terreno", "logs", "app.log"), source: "backend"});
+    for (const p of resolveExistingAppLogPaths()) {
+      pool.push(...parseJsonlFile(p, "backend", 500));
+    }
   }
   if (want.includes("browser")) {
-    paths.push({path: join(root, ".terreno", "logs", "browser.log"), source: "browser"});
+    for (const p of resolveExistingBrowserLogPaths()) {
+      pool.push(...parseJsonlFile(p, "browser", 500));
+    }
+  }
+  if (want.includes("metro")) {
+    await ensureMetroEventsConnected();
+    pool.push(...ringToEntries(snapshotMetroEventsRing()));
+  }
+  if (want.includes("app")) {
+    await ensureCdpConnected();
+    pool.push(...ringToEntries(snapshotCdpConsoleRing()));
   }
 
-  let last: LogEntry | undefined;
-  for (const {path, source} of paths) {
-    if (!existsSync(path)) {
-      continue;
-    }
-    const lines = readFileSync(path, "utf-8").split("\n").filter(Boolean);
-    for (let i = lines.length - 1; i >= 0; i -= 1) {
-      const raw = lines[i] ?? "";
-      try {
-        const obj = JSON.parse(raw) as {level?: string};
-        if ((obj.level ?? "").toLowerCase() === "error") {
-          last = {level: "error", raw, source};
-          break;
-        }
-      } catch {}
-    }
-    if (last) {
-      break;
-    }
-  }
+  consider(mergeByTimestamp(pool));
 
   if (!last) {
-    return "No recent error-level JSONL entries in `.terreno/logs/app.log` or `.terreno/logs/browser.log`.";
+    return `No recent error-level entries in selected sources (${want.join(", ")}). ${getCdpConnectionStatus()}`;
   }
   return last.raw;
 };

@@ -1,7 +1,7 @@
 # RBAC Permissions for Terreno — API Design
 
 **Status:** Complete — phases 1–6 shipped in PR #932 (2026-08-22)
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1089
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1089
 **Target package:** `@terreno/api` (new `src/rbac/` module), with surfaces in `admin-backend`, `admin-frontend`, `admin-spa`, `rtk`, and the modelRouter MCP work
 **Depends on:** `better-auth/plugins/access` (already a dependency via the Better Auth provider)
 
@@ -112,7 +112,7 @@ export const terrenoStatements = {
   // Managing the RBAC system itself
   rbac: ["read", "manageRoles", "assignRoles"],
   // The framework user model (auth surfaces, admin user CRUD)
-  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword"],
+  user: ["create", "list", "read", "update", "delete", "impersonate", "setPassword", "updateIdentity"],
   // Feature flag / configuration app
   configuration: ["read", "update"],
 } as const;
@@ -880,6 +880,9 @@ export interface PermissionSource {
   // "use-stale-bounded" with a short staleMaxAgeMs — never unbounded stale reuse.
   staleOnFailure?: StaleOnFailurePolicy;
   staleMaxAgeMs?: number; // required when staleOnFailure === "use-stale-bounded"
+  // Default true: a failure with no last-known deny posture for the user throws 503.
+  // Set false on additive-only sources that never return deny.
+  failClosedWhenDenyUnknown?: boolean;
   getGrants(args: {user: User}): Promise<PermissionSourceGrants | null>;
 }
 ```
@@ -909,7 +912,7 @@ behavior is per-source `staleOnFailure` (default `"deny"`):
 
 | Policy | Behavior |
 |---|---|
-| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch cached a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down. Revoked upstream *elevations* cannot linger because a dependency is down. |
+| `"deny"` (default) | Omit this source's additive grants (`roles`, `permissions`) for the request. Local `user.roles` and other sources still apply. If a prior fetch returned a `deny` set, keep applying that last-known deny so IdP/ABAC restrictions do not lift while the source is down; cache invalidation and eviction do not drop it, and a set resolved during a failure is not cached. With no last-known deny (cold process, or the posture was evicted), the check throws 503 `Permission source unavailable`, because the source's deny is unknown. Additive-only sources that never return `deny` set `failClosedWhenDenyUnknown: false`; their failure then only drops their grants and local roles apply. Revoked upstream *elevations* cannot linger because a dependency is down. |
 | `"use-stale-bounded"` | Reuse the last successful grants only if younger than `staleMaxAgeMs` (hard cap). Suitable for read-only hints, not elevation. |
 | `"use-stale"` | Reuse last successful grants until TTL expiry. **Not permitted** for sources that can grant roles/permissions beyond what local roles already provide — elevation paths must fail closed. |
 

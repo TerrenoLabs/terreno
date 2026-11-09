@@ -1,4 +1,4 @@
-import {Box, type SurfaceColor, Text} from "@terreno/ui";
+import {Box, type SurfaceColor, Text, useTheme} from "@terreno/ui";
 import type React from "react";
 
 import {StorybookContainer} from "./StorybookContainer";
@@ -38,6 +38,10 @@ export const BoxDemo = () => {
 };
 
 export const FlexBox = () => {
+  const {colorScheme} = useTheme();
+  // Dark primary is a light blue. Inverted text is the dark label that meets 4.5:1 on it.
+  const initialsColor = colorScheme === "dark" ? "inverted" : "primary";
+
   return (
     <StorybookContainer>
       <Box
@@ -50,7 +54,9 @@ export const FlexBox = () => {
         rounding="circle"
         width={50}
       >
-        <Text size="lg">JG</Text>
+        <Text color={initialsColor} size="lg">
+          JG
+        </Text>
       </Box>
       <Box direction="column" paddingX={2}>
         <Text bold>Josh Gachnang</Text>

@@ -122,7 +122,10 @@ If `taste` is selected, invoke `terreno-5-taste` after Brew `PASS` (or
 after the last selected earlier stage if Brew was omitted). Taste reacts
 to review on the current PR; it does not walk the task list.
 
-If Taste emits `FAIL` or `PASS`, stop. If Taste emits `PENDING`, honor
+If Taste emits `PASS`, stop. If Taste emits `FAIL` with a new evidence-based
+hypothesis, invoke fresh Taste; a `FAIL` without one is `BLOCKED`. On `BLOCKED`, stop
+and escalate per [`push ownership`](../../references/push-ownership.md#escalation).
+Never stop on a red PR without that escalation. If Taste emits `PENDING`, honor
 `wait` / `next`. During that bound, prefer the product-CI provider's native watch hook
 or a harness event subscription; use a timer only when no hook applies. Invoke fresh
 Taste as soon as the hook returns. Taste already waited in-process for CI on the

@@ -1,0 +1,1 @@
+> **OrganizationSchema** = `mongoose.Schema`\<[`OrganizationDocument`](../interfaces/OrganizationDocument.md), [`OrganizationModel`](../interfaces/OrganizationModel.md), [`OrganizationMethods`](OrganizationMethods.md)\>

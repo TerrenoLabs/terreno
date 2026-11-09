@@ -20,16 +20,12 @@ url: http://localhost:8082/login
     id: "login-screen-password-input"
 - inputText: "testpassword123"
 
+# The button's accessible name is its label, "Sign in". The form has the same name,
+# so match the label under the password field.
 - tapOn:
-    id: "Log In"
-
-- extendedWaitUntil:
-    visible:
-      id: "announcement-screen"
-    timeout: 30000
-
-- tapOn:
-    text: "Got it"
+    text: "Sign in"
+    below:
+      id: "login-screen-password-input"
 
 - extendedWaitUntil:
     visible:

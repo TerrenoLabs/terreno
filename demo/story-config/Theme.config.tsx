@@ -1,9 +1,10 @@
 import {DemoConfiguration} from "@config";
 
 import {DefaultDemo} from "../stories/DefaultDemo";
-import {ThemeComponentStories, ThemeFontStories} from "../stories/Theme.stories";
+import {ThemeComponentStories, ThemeFieldStories, ThemeFontStories} from "../stories/Theme.stories";
 
 export const ThemeConfiguration: DemoConfiguration = {
+  usageExample: "import {Box} from \"@terreno/ui\";\n\n<Box />",
   name: "Theme",
   component: () => null,
   related: [],
@@ -31,5 +32,6 @@ export const ThemeConfiguration: DemoConfiguration = {
   stories: {
     ThemeFont: {render: ThemeFontStories},
     ThemeComponent: {render: ThemeComponentStories},
+    ThemeField: {render: ThemeFieldStories},
   },
 };

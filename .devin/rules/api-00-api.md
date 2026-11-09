@@ -31,7 +31,7 @@ src/
   errors.ts              # APIError and error middleware
   expressServer.ts       # setupServer and middleware stack
   terrenoApp.ts          # TerrenoApp class with register pattern
-  rateLimit/             # Opt-in HTTP rate limiting (memory / redis / mongo)
+  rateLimit/             # Default-on HTTP rate limiting (memory / redis / mongo)
   audit/                 # Opt-in AuditApp, AuditEvent factory, recorder (no barrel)
   terrenoPlugin.ts       # TerrenoPlugin interface for extensibility
   openApiBuilder.ts      # Fluent OpenAPI middleware builder
@@ -73,7 +73,7 @@ Methods:
 - `build()` — Build Express app without listening
 - `start()` — Build and start server
 
-`rateLimit` on `TerrenoApp` is **opt-in**. Omit it to leave HTTP unlimited (Terreno 58 defaults on). Empty `{}` enables memory buckets: auth 20 / 15 min (login, signup, refresh, GitHub OAuth, Better Auth sign-in / sign-up / reset-password / OAuth callback); api 600 / 15 min. Paths ignore a trailing slash. JWT login/signup/refresh skip expired access tokens. `store: "redis"` needs `VALKEY_URL` then `REDIS_URL`. `store: "mongo"` uses `rateLimitHits`. The framework does **not** read `RATE_LIMIT_ENABLED`. Operator guide: `docs/how-to/rate-limiting.md`.
+`rateLimit` on `TerrenoApp` is **on by default**: omitted, `undefined`, or `{}` mounts memory buckets: auth 20 / 15 min (login, signup, refresh, GitHub OAuth, Better Auth sign-in / sign-up / reset-password / OAuth callback); api 600 / 15 min. Pass `rateLimit: false` to turn it off. On Cloud Run pass `trustProxy: 1` (otherwise all unauthenticated traffic shares one auth bucket). Paths ignore a trailing slash. JWT login/signup/refresh skip expired access tokens. `store: "redis"` needs `VALKEY_URL` then `REDIS_URL`. `store: "mongo"` uses `rateLimitHits`. The framework does **not** read `RATE_LIMIT_ENABLED`. Test suites that burst logins on one app instance pass `rateLimit: false` in their shared helper. Operator guide: `docs/how-to/rate-limiting.md`.
 
 Inbound HTTP callbacks use `WebhooksApp` (`webhooks.route` then `app.register(webhooks)`).
 Verify `req.rawBody` with `hmacSignature` / `stripeSignature` / `twilioSignature` /
@@ -296,6 +296,25 @@ Better Auth automatically:
 - Extracts sessions from requests and populates `req.user`
 - Syncs Better Auth users to your Mongoose User model (requires `betterAuthId` field)
 - Supports email/password signup and login
+- Serves public `GET {basePath}/terreno/methods` (enabled providers, email/password, sign-up,
+  linking mode); login screens read it with rtk `useAuthMethods(authClient)` instead of
+  hard-coding providers
+
+Auth features are config fields, not hand-added plugins: `accountLinking`, `twoFactor`,
+`passkey`, `signUp: {mode: "closed"}`, `lastLoginMethod`, `multiSession`, `oauthProxy`,
+`nativeApps`, and the key form of `appleOAuth` (`betterAuthFeatures.ts`). All are off by
+default. Feature plugins go after `terreno-methods` and before `config.plugins`; closed sign-up
+adds `terreno-sign-up-closed` after `config.plugins`. Table:
+`docs/how-to/configure-better-auth.md#auth-features`.
+
+`oauthHandoff: {webOrigins, callbackPaths?}` (opt-in) lets a bearer-mode web client on another
+site finish social sign-in without cookies. It adds `GET {basePath}/oauth-handoff/start` (a
+top-level navigation; 400 unless `callbackURL` is one of `callbackPaths` on one of `webOrigins`,
+the optional `errorCallbackURL` is on one of `webOrigins`, and `trustedOrigins` allows both; 400
+too when `Sec-Fetch-Dest` is set and is not `document`) and
+`POST {basePath}/one-time-token/verify` (`{token}` -> session + `set-auth-token`). Keep loopback
+origins out of production `webOrigins`. Full rules: `docs/reference/api.md` (Better Auth) and
+`docs/how-to/configure-better-auth.md#social-sign-in-in-bearer-mode`.
 
 ### In-app notifications (`NotificationsApp`)
 

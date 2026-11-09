@@ -1,7 +1,7 @@
 import {Banner, Box, Button, Card, Heading, Spinner, Text} from "@terreno/ui";
 import {DateTime} from "luxon";
 import React, {useCallback, useEffect, useRef, useState} from "react";
-import type {AdminApi, AdminConfigResponse, BackgroundTask} from "./types";
+import type {AdminConfigResponse, BackgroundTask} from "./types";
 import {useAdminMigrations} from "./useAdminMigrations";
 import {useAdminScripts} from "./useAdminScripts";
 
@@ -23,7 +23,6 @@ const formatAppliedAt = (value: string | undefined): string => {
 };
 
 export interface AdminMigrationsViewProps {
-  api: AdminApi;
   apiBase: string;
   config: AdminConfigResponse | null;
   configError: unknown;
@@ -31,15 +30,14 @@ export interface AdminMigrationsViewProps {
 }
 
 export const AdminMigrationsView: React.FC<AdminMigrationsViewProps> = ({
-  api,
   apiBase,
   config,
   configError,
   isConfigLoading,
 }) => {
   const migrationsEnabled = Boolean(config?.migrations?.enabled);
-  const {useGetMigrationsQuery, useRunMigrationsMutation} = useAdminMigrations(api, apiBase);
-  const scripts = useAdminScripts(api, apiBase);
+  const {useGetMigrationsQuery, useRunMigrationsMutation} = useAdminMigrations(apiBase);
+  const scripts = useAdminScripts(apiBase);
   const useGetScriptTaskQuery =
     typeof scripts.useGetScriptTaskQuery === "function"
       ? scripts.useGetScriptTaskQuery

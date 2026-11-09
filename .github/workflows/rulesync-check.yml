@@ -1,7 +1,11 @@
 name: Rulesync Check
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 jobs:
   rulesync-check:
@@ -14,7 +18,7 @@ jobs:
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

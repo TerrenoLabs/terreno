@@ -7,7 +7,6 @@ const SCOPED_PACKAGES = [
   "ai",
   "api",
   "example-backend",
-  "rtk",
   "ui",
 ] as const;
 
@@ -39,7 +38,7 @@ const IGNORED_DIR_NAMES = new Set([
   "node_modules",
 ]);
 
-const GENERATED_FILE_NAMES = new Set(["openApiSdk.ts"]);
+const GENERATED_FILE_NAMES = new Set(["apiSdk.ts", "syncDbSdk.ts"]);
 
 const isTestOrHarnessFile = (relativePath: string): boolean => {
   if (

@@ -1,10 +1,10 @@
 # Implementation Plan: DataTable server-side filtering and search
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1303  
 **Branch:** `cursor/datatable-server-side-filtering-191d`  
 **Owner:** —  
 **Created:** 2026-09-10  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1177 (this feature **closes** that issue; implementation PRs use `Fixes #1177`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1177 (this feature **closes** that issue; implementation PRs use `Fixes #1177`)  
 **Task list:** [datatable-server-side-filtering.md](../tasks/datatable-server-side-filtering.md)  
 **Depends on:** —  
 **RTK deprecation flag:** Partial — `@terreno/ui` stays data-layer agnostic; AdminModelTable keeps RTK `useListQuery`; syncdb is out of scope  

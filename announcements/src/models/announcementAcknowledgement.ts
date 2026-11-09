@@ -15,7 +15,7 @@ const announcementAcknowledgementSchema = new mongoose.Schema<
     announcementId: {
       description: "Announcement that was acknowledged",
       index: true,
-      ref: "Announcement",
+      ref: "TerrenoAnnouncement",
       required: true,
       type: mongoose.Schema.Types.ObjectId,
     },
@@ -43,8 +43,9 @@ announcementAcknowledgementSchema.plugin(findOneOrNone);
 announcementAcknowledgementSchema.index({announcementId: 1, userId: 1, version: 1}, {unique: true});
 
 export const AnnouncementAcknowledgement =
-  (mongoose.models.AnnouncementAcknowledgement as AnnouncementAcknowledgementModel) ??
+  (mongoose.models.TerrenoAnnouncementAcknowledgement as AnnouncementAcknowledgementModel) ??
   mongoose.model<AnnouncementAcknowledgementDocument, AnnouncementAcknowledgementModel>(
-    "AnnouncementAcknowledgement",
-    announcementAcknowledgementSchema
+    "TerrenoAnnouncementAcknowledgement",
+    announcementAcknowledgementSchema,
+    "announcementacknowledgements"
   );

@@ -1,32 +1,16 @@
 name: Docs Deploy
 
-# Dual-run with CircleCI until `terreno-netlify` has NETLIFY_* values.
-# CircleCI skips Netlify jobs when those vars are unset.
+# Disabled after CD moved to CircleCI (deploy-*, gcp-cd-*); retained for rollback.
+# Never re-enable alongside CircleCI: both would deploy and apply terraform.
 on:
+  # Retained for rollback without registering failed zero-job runs.
   push:
-    branches:
-      - master
-    paths:
-      - "docs/**"
-      - "website/**"
-      - "api/src/**"
-      - "rtk/src/**"
-      - "demo/demoConfig.tsx"
-      - "demo/story-config/**"
-      - "ui/src/**"
-      - ".github/workflows/docs-deploy.yml"
-      - "netlify.toml"
-  pull_request:
-    paths:
-      - "docs/**"
-      - "website/**"
-      - "api/src/**"
-      - "rtk/src/**"
-      - "demo/demoConfig.tsx"
-      - "demo/story-config/**"
-      - "ui/src/**"
-      - ".github/workflows/docs-deploy.yml"
-      - "netlify.toml"
+    branches-ignore:
+      - "**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-changes:
@@ -42,7 +26,7 @@ jobs:
         id: check
         run: |
           FILES=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          CHANGES=$(echo "$FILES" | grep -cE '^(docs/|website/|api/src/|rtk/src/|demo/demoConfig\.tsx|demo/story-config/|ui/src/|netlify\.toml)' || true)
+          CHANGES=$(echo "$FILES" | grep -cE '^(docs/|website/|api/src/|demo/demoConfig\.tsx|demo/story-config/|ui/src/|netlify\.toml)' || true)
           echo "has_changes=$( [ "$CHANGES" -gt 0 ] && echo true || echo false )" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,9 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.3
 
-      # Cache Bun's download cache only (see setup-bun-workspace). Do not restore
-      # node_modules: a stale tree across lockfile changes can leave extra
-      # packages that a frozen install will not prune (typedoc TypeScript resolution).
+      # Frozen bun install, no package cache. Do not restore node_modules: a
+      # stale tree across lockfile changes can leave extra packages that a
+      # frozen install will not prune (typedoc TypeScript resolution).
       - name: Setup Bun workspace
         uses: ./.github/actions/setup-bun-workspace
 
@@ -66,7 +50,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: docs/reference/generated
-          key: docs-api-ref-${{ hashFiles('api/src/**', 'rtk/src/**', 'website/scripts/generate-api-reference.ts') }}
+          key: docs-api-ref-${{ hashFiles('api/src/**', 'website/scripts/generate-api-reference.ts') }}
 
       - name: Cache generated UI component docs
         id: ui-docs-cache
@@ -76,6 +60,11 @@ jobs:
             demo/ui-types-documentation.json
             docs/reference/components
           key: docs-ui-ref-${{ hashFiles('ui/src/**', 'demo/demoConfig.tsx', 'demo/story-config/**', 'website/scripts/generate-component-docs.ts') }}
+
+      - name: Build blocks dependency
+        if: steps.ui-docs-cache.outputs.cache-hit != 'true'
+        working-directory: blocks
+        run: bun run compile
 
       - name: Compile UI package
         if: steps.ui-docs-cache.outputs.cache-hit != 'true'

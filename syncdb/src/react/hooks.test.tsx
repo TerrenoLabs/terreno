@@ -7,7 +7,15 @@ import {memoryPersisterFactory} from "../persisters/memoryPersister";
 import {AuthRequiredError} from "../sync/httpChannel";
 import {createFakeTransport, type FakeTransport} from "../testing/fakeTransport";
 import type {AuthProvider, SyncDelta} from "../types";
-import {useConflicts, useEntity, useEntityIds, useMutate, useQuery, useSyncStatus} from "./hooks";
+import {
+  useConflicts,
+  useEntity,
+  useEntityIds,
+  useMutate,
+  useQuery,
+  useSyncDebugLog,
+  useSyncStatus,
+} from "./hooks";
 import {SyncDbProvider, useSyncDbClient} from "./provider";
 
 interface TodoData {
@@ -51,12 +59,13 @@ interface Harness {
   wrapper: React.FC<{children: React.ReactNode}>;
 }
 
-const setup = async (): Promise<Harness> => {
+const setup = async (options?: {debug?: boolean}): Promise<Harness> => {
   const transport = createFakeTransport();
   const auth = makeAuthProvider("u1");
   const client = createSyncDb({
     authProvider: auth,
     collections: ["todos"],
+    debug: options?.debug,
     name: uniqueName(),
     persisterFactory: memoryPersisterFactory,
     reconcileIntervalMs: 0,
@@ -758,6 +767,57 @@ describe("listener cleanup on unmount (E4)", () => {
     expect(client.store.raw.getListenerStats().table).toBe(baseline.table + 1);
     unmount();
     expect(client.store.raw.getListenerStats()).toEqual(baseline);
+    await act(async () => {
+      await client.stop();
+    });
+  });
+
+  it("useEntityIds removes its table listener on unmount", async () => {
+    const {client, wrapper} = await setup();
+    const baseline = client.store.raw.getListenerStats();
+    const {unmount} = renderHook(() => useEntityIds<TodoData>("todos"), {wrapper});
+    expect(client.store.raw.getListenerStats().table).toBe(baseline.table + 1);
+    unmount();
+    expect(client.store.raw.getListenerStats()).toEqual(baseline);
+    await act(async () => {
+      await client.stop();
+    });
+  });
+});
+
+describe("useSyncDebugLog", () => {
+  it("stays disabled and clear is a no-op when the client has no debug log", async () => {
+    const {client, wrapper} = await setup();
+    const {result, unmount} = renderHook(() => useSyncDebugLog(), {wrapper});
+    expect(result.current.enabled).toBe(false);
+    expect(result.current.events).toEqual([]);
+    expect(result.current.log).toBeUndefined();
+    expect(result.current.stats).toBeUndefined();
+    act(() => {
+      result.current.clear();
+    });
+    expect(result.current.events).toEqual([]);
+    unmount();
+    await act(async () => {
+      await client.stop();
+    });
+  });
+
+  it("reads recorded events and clears them when debug is on", async () => {
+    const {client, wrapper} = await setup({debug: true});
+    const {result, unmount} = renderHook(() => useSyncDebugLog(), {wrapper});
+    expect(result.current.enabled).toBe(true);
+    act(() => {
+      client.debug?.record({direction: "system", label: "seed", type: "connect"});
+    });
+    expect(result.current.events.some((event) => event.label === "seed")).toBe(true);
+    expect(result.current.stats?.retained).toBeGreaterThan(0);
+    act(() => {
+      result.current.clear();
+    });
+    expect(client.debug?.getEvents()).toEqual([]);
+    expect(client.debug?.getStats().retained).toBe(0);
+    unmount();
     await act(async () => {
       await client.stop();
     });

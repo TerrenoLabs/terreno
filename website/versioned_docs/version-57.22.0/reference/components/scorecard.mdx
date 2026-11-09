@@ -1,0 +1,38 @@
+---
+title: "Scorecard"
+description: "Compact KPI tile with a formatted value and optional solid-current/dotted-comparison sparkline."
+sidebar_label: "Scorecard"
+slug: /reference/components/scorecard
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# Scorecard
+
+Compact KPI tile with a formatted value and optional solid-current/dotted-comparison sparkline.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `ScorecardProps`  
+**Story source:** [`demo/stories/Scorecard.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/Scorecard.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="Scorecard" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `title` | `string` | Yes |  |
+| `value` | `union` | Yes |  |
+| `comparisonData` | `array` |  | Optional previous-period sparkline values. |
+| `formatValue` | `reflection` |  | Formats numeric values. String values render unchanged. |
+| `loading` | `boolean` |  | When true, renders  |
+| `loadingAnimation` | `SkeletonAnimation` |  | Animation for skeletons inside  |
+| `loadingComponent` | `ReactNode` |  | Placeholder rendered while  |
+| `loadingLabel` | `string` |  | Screen reader label announced while loading. |
+| `onPeriodPress` | `reflection` |  |  |
+| `periodLabel` | `string` |  |  |
+| `sparklineData` | `array` |  | Current-period sparkline values. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |

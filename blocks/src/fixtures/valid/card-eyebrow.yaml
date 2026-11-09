@@ -1,0 +1,8 @@
+v: 1
+blocks:
+  - type: card
+    eyebrow: Your dinner plan
+    title: Sunday roast for six
+    children:
+      - type: text
+        markdown: Lamb, crispy potatoes, and honey carrots.

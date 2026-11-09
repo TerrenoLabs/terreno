@@ -1,4 +1,5 @@
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import {DateTime} from "luxon";
 import type React from "react";
 import {
   type FC,
@@ -11,12 +12,14 @@ import {
   useState,
 } from "react";
 import {
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Platform,
   Pressable,
   type FlatList as RNFlatList,
   ScrollView,
+  type ScrollViewInstance,
   View,
 } from "react-native";
 import {Box} from "./Box";
@@ -30,7 +33,17 @@ import type {
   DataTableProps,
   SurfaceColor,
 } from "./Common";
+import {readableTextColor} from "./colorContrast";
 import {DataTableHeaderInfoMarkdown} from "./DataTableHeaderInfoMarkdown";
+import {
+  DATA_TABLE_BORDER_WIDTH,
+  DATA_TABLE_CELL_PADDING,
+  DATA_TABLE_MORE_COLUMN_WIDTH,
+  DATA_TABLE_SORT_BUTTON_MARGIN,
+  DATA_TABLE_SORT_BUTTON_SIZE,
+  fitDataTableColumnWidths,
+  getDataTableNaturalWidths,
+} from "./dataTableColumnWidths";
 import {
   DataTableAdditionalFiltersWeb,
   DataTableColumnFilterWeb,
@@ -60,13 +73,85 @@ const DATA_TABLE_MAX_TO_RENDER_PER_BATCH = 10;
 const DATA_TABLE_WINDOW_SIZE = 5;
 const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
 
+/** A column after auto-sizing: every column has a resolved pixel width. */
+type SizedDataTableColumn = DataTableColumn & {width: number};
+
+/** Inverted text when primary text falls below WCAG AA on the cell's highlight fill. */
+// Dark neutralLight (#686868) is too light for a stripe: ghost and link text drop near 2:1 on it.
+const useStripeColor = (): string => {
+  const {colorScheme, theme} = useTheme();
+  return colorScheme === "dark" ? theme.primitives.neutral900 : theme.surface.neutralLight;
+};
+
+const useHighlightTextColor = (cellData: DataTableCellData): "inverted" | undefined => {
+  const {theme} = useTheme();
+  const highlightColor = cellData.highlight ? theme.surface[cellData.highlight] : undefined;
+  if (!highlightColor) {
+    return undefined;
+  }
+  return readableTextColor(theme.text.primary, theme.text.inverted, highlightColor) === "inverted"
+    ? "inverted"
+    : undefined;
+};
+
 const TextCell: FC<{
   cellData: DataTableCellData;
   column: DataTableColumn;
 }> = ({cellData}) => {
+  const textColor = useHighlightTextColor(cellData);
+
   return (
     <Box flex="grow" justifyContent="center">
-      <Text size={cellData.textSize || "md"}>{String(cellData.value ?? "")}</Text>
+      <Text color={textColor} size={cellData.textSize || "md"}>
+        {String(cellData.value ?? "")}
+      </Text>
+    </Box>
+  );
+};
+
+const NumberCell: FC<{
+  cellData: DataTableCellData;
+  column: DataTableColumn;
+}> = ({cellData}) => {
+  const textColor = useHighlightTextColor(cellData);
+
+  return (
+    <Box flex="grow" justifyContent="center" width="100%">
+      <Text align="right" color={textColor} size={cellData.textSize || "md"}>
+        {String(cellData.value ?? "")}
+      </Text>
+    </Box>
+  );
+};
+
+/** Formats ISO strings and Dates as Luxon DATE_MED; anything unparseable is shown as written. */
+const formatDataTableDate = (value: unknown): string => {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  let date: DateTime | undefined;
+  if (value instanceof Date) {
+    date = DateTime.fromJSDate(value);
+  } else if (typeof value === "string") {
+    date = DateTime.fromISO(value);
+  }
+  if (!date?.isValid) {
+    return String(value);
+  }
+  return date.toLocaleString(DateTime.DATE_MED);
+};
+
+const DateCell: FC<{
+  cellData: DataTableCellData;
+  column: DataTableColumn;
+}> = ({cellData}) => {
+  const textColor = useHighlightTextColor(cellData);
+
+  return (
+    <Box flex="grow" justifyContent="center">
+      <Text color={textColor} size={cellData.textSize || "md"}>
+        {formatDataTableDate(cellData.value)}
+      </Text>
     </Box>
   );
 };
@@ -111,6 +196,10 @@ const DataTableCellComponent: FC<InternalDataTableCellProps> = ({
     Component = customColumnComponentMap[columnDef.columnType];
   } else if (columnDef.columnType === "boolean") {
     Component = CheckedCell;
+  } else if (columnDef.columnType === "number") {
+    Component = NumberCell;
+  } else if (columnDef.columnType === "date") {
+    Component = DateCell;
   }
   const cellData = value.textSize === textSize ? value : {...value, textSize};
 
@@ -123,7 +212,7 @@ const DataTableCellComponent: FC<InternalDataTableCellProps> = ({
         height,
         justifyContent: "center",
         overflow: "hidden",
-        padding: 16,
+        padding: DATA_TABLE_CELL_PADDING,
         position: "relative",
         width: columnDef.width,
         zIndex: 1,
@@ -151,7 +240,7 @@ const DataTableCell = memo(DataTableCellComponent);
 interface DataTableRowProps {
   rowData: DataTableCellData[];
   rowIndex: number;
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   columnEnd: number;
   columnStart: number;
   pinnedColumns: number;
@@ -178,8 +267,9 @@ const DataTableRowComponent: FC<DataTableRowProps> = ({
   testID,
 }) => {
   const {theme} = useTheme();
+  const stripeColor = useStripeColor();
   const backgroundColor =
-    alternateRowBackground && rowIndex % 2 === 1 ? theme.surface.neutralLight : theme.surface.base;
+    alternateRowBackground && rowIndex % 2 === 1 ? stripeColor : theme.surface.base;
 
   return (
     <View
@@ -234,20 +324,19 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
   rowHeight,
 }) => {
   const {theme} = useTheme();
+  const stripeColor = useStripeColor();
 
   return (
     <View
       style={{
         alignItems: "center",
         backgroundColor:
-          alternateRowBackground && rowIndex % 2 === 1
-            ? theme.surface.neutralLight
-            : theme.surface.base,
+          alternateRowBackground && rowIndex % 2 === 1 ? stripeColor : theme.surface.base,
         borderBottomColor: theme.border.default,
         borderBottomWidth: 1,
         height: rowHeight ?? 54,
         justifyContent: "center",
-        width: 48,
+        width: DATA_TABLE_MORE_COLUMN_WIDTH,
       }}
     >
       <Pressable
@@ -258,9 +347,7 @@ const MoreButtonCellComponent: FC<MoreButtonCellProps> = ({
         style={{
           alignItems: "center",
           backgroundColor:
-            alternateRowBackground && rowIndex % 2 === 1
-              ? theme.surface.base
-              : theme.surface.neutralLight,
+            alternateRowBackground && rowIndex % 2 === 1 ? theme.surface.base : stripeColor,
           borderRadius: theme.radius.rounded,
           height: 32,
           justifyContent: "center",
@@ -303,6 +390,8 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
 }) => {
   const {theme} = useTheme();
   const sort = sortColumn?.column === index ? sortColumn.direction : undefined;
+  // Number cells are right-aligned, so their header sits on the same edge.
+  const isNumberColumn = column.columnType === "number";
 
   return (
     <View
@@ -313,8 +402,8 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
         borderBottomWidth: 1,
         flexDirection: "row",
         height: headerHeight ?? rowHeight,
-        justifyContent: "space-between",
-        padding: 16,
+        justifyContent: isNumberColumn ? "flex-end" : "space-between",
+        padding: DATA_TABLE_CELL_PADDING,
         width: column.width,
         ...(isPinnedHorizontal && {
           left: pinnedLeft,
@@ -325,7 +414,11 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
     >
       {[
         column.title ? (
-          <TableTitle align="left" key="data-table-header-title" title={column.title!} />
+          <TableTitle
+            align={isNumberColumn ? "right" : "left"}
+            key="data-table-header-title"
+            title={column.title!}
+          />
         ) : null,
         <View key="data-table-header-tools" style={{alignItems: "center", flexDirection: "row"}}>
           {column.filter && onFilterValuesChange && Platform.OS === "web" ? (
@@ -351,10 +444,10 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
                   alignItems: "center",
                   backgroundColor: sort ? theme.surface.primary : theme.surface.neutralLight,
                   borderRadius: theme.radius.rounded,
-                  height: 16,
+                  height: DATA_TABLE_SORT_BUTTON_SIZE,
                   justifyContent: "center",
-                  marginLeft: 8,
-                  width: 16,
+                  marginLeft: DATA_TABLE_SORT_BUTTON_MARGIN,
+                  width: DATA_TABLE_SORT_BUTTON_SIZE,
                 }}
               >
                 <FontAwesome6
@@ -376,12 +469,12 @@ const DataTableHeaderCell: FC<DataTableHeaderCellProps> = ({
 };
 
 interface DataTableHeaderProps {
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   hasMoreContent: boolean;
   pinnedColumns: number;
   pinnedLeftOffsets: number[];
   pinnedWidth: number;
-  headerScrollRef: React.RefObject<ScrollView | null>;
+  headerScrollRef: React.RefObject<ScrollViewInstance | null>;
   sortColumn?: ColumnSortInterface;
   onSort: (index: number) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>, isHeader: boolean) => void;
@@ -420,7 +513,7 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
             borderBottomColor: theme.border.default,
             borderBottomWidth: 1,
             height: headerHeight ?? rowHeight,
-            width: 48,
+            width: DATA_TABLE_MORE_COLUMN_WIDTH,
             zIndex: 11,
           }}
         />
@@ -489,12 +582,12 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
 
 interface DataTableContentProps {
   data: DataTableCellData[][];
-  columns: DataTableColumn[];
+  columns: SizedDataTableColumn[];
   pinnedColumns: number;
   alternateRowBackground: boolean;
   pinnedLeftOffsets: number[];
   pinnedWidth: number;
-  bodyScrollRef: React.RefObject<ScrollView | null>;
+  bodyScrollRef: React.RefObject<ScrollViewInstance | null>;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>, isHeader: boolean) => void;
   moreContentComponent?: React.ComponentType<
     {
@@ -772,7 +865,7 @@ const DataTableContentComponent: FC<DataTableContentProps> = ({
               left: 0,
               position: "absolute",
               top: 0,
-              width: 48,
+              width: DATA_TABLE_MORE_COLUMN_WIDTH,
               zIndex: 1,
             }}
           >
@@ -900,11 +993,12 @@ const DataTableComponent: FC<DataTableProps> = ({
   filterValues,
   onFilterValuesChange,
   onQueryChange,
+  toolbarAlign = "center",
 }) => {
   const {theme} = useTheme();
   const tableTestIDs = resolveDataTableTestIDsFromProps({testID, testIDs});
-  const headerScrollRef = useRef<ScrollView>(null);
-  const bodyScrollRef = useRef<ScrollView>(null);
+  const headerScrollRef = useRef<ScrollViewInstance>(null);
+  const bodyScrollRef = useRef<ScrollViewInstance>(null);
   const lastEmittedQueryRef = useRef<string | undefined>(undefined);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const [isNativeFiltersOpen, setIsNativeFiltersOpen] = useState(false);
@@ -981,7 +1075,45 @@ const DataTableComponent: FC<DataTableProps> = ({
     setNativeSearchDraft("");
   }, [columnFilters]);
 
-  const columnWidths = useMemo(() => columns.map((col) => col.width), [columns]);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const moreColumnWidth = moreContentComponent ? DATA_TABLE_MORE_COLUMN_WIDTH : 0;
+  // Measure text only when columns or data change; a resize only re-runs the cheap fit below.
+  const naturalWidths = useMemo(
+    () =>
+      getDataTableNaturalWidths({
+        columns,
+        customColumnTypes: customColumnComponentMap
+          ? new Set(Object.keys(customColumnComponentMap))
+          : undefined,
+        data,
+        defaultTextSize,
+        formatDate: formatDataTableDate,
+        hasFilters: Boolean(onFilterValuesChange),
+      }),
+    [columns, customColumnComponentMap, data, defaultTextSize, onFilterValuesChange]
+  );
+  const columnWidths = useMemo(
+    () =>
+      fitDataTableColumnWidths({
+        availableWidth: availableWidth > 0 ? availableWidth - moreColumnWidth : 0,
+        columns,
+        naturalWidths,
+      }),
+    [availableWidth, columns, moreColumnWidth, naturalWidths]
+  );
+  const sizedColumns = useMemo(
+    (): SizedDataTableColumn[] =>
+      columns.map((column, index) =>
+        column.width === columnWidths[index]
+          ? (column as SizedDataTableColumn)
+          : {...column, width: columnWidths[index]}
+      ),
+    [columns, columnWidths]
+  );
+  const handleBodyLayout = useCallback((event: LayoutChangeEvent): void => {
+    const width = Math.floor(event.nativeEvent.layout.width - DATA_TABLE_BORDER_WIDTH * 2);
+    setAvailableWidth((previous) => (previous === width ? previous : width));
+  }, []);
   const pinnedLeftOffsets = useMemo(() => {
     let currentOffset = 0;
     return columnWidths.map((width) => {
@@ -1039,7 +1171,7 @@ const DataTableComponent: FC<DataTableProps> = ({
     >
       {showSearch || showNativeFilters || showAdditionalFilters ? (
         <Box
-          alignItems="center"
+          alignItems={toolbarAlign}
           direction="row"
           gap={2}
           marginBottom={2}
@@ -1077,9 +1209,10 @@ const DataTableComponent: FC<DataTableProps> = ({
         </Box>
       ) : null}
       <View
+        onLayout={handleBodyLayout}
         style={{
           borderColor: theme.border.default,
-          borderWidth: 1,
+          borderWidth: DATA_TABLE_BORDER_WIDTH,
           flex: 1,
           height: "100%",
           minHeight: 0,
@@ -1087,7 +1220,7 @@ const DataTableComponent: FC<DataTableProps> = ({
         testID={tableTestIDs.body}
       >
         <DataTableHeader
-          columns={columns}
+          columns={sizedColumns}
           filterValues={filterValues}
           hasMoreContent={Boolean(moreContentComponent)}
           headerHeight={headerHeight}
@@ -1110,7 +1243,7 @@ const DataTableComponent: FC<DataTableProps> = ({
             <DataTableContent
               alternateRowBackground={alternateRowBackground}
               bodyScrollRef={bodyScrollRef}
-              columns={columns}
+              columns={sizedColumns}
               customColumnComponentMap={customColumnComponentMap}
               data={data}
               defaultTextSize={defaultTextSize}

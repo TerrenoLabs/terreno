@@ -1,0 +1,214 @@
+import {DateTime} from "luxon";
+
+export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
+
+export interface ReviewListItem {
+  assigneeId?: string;
+  batchId?: string;
+  /** Set when reviewers judge a dataset item. */
+  datasetItemId?: string;
+  enqueuedAt: string;
+  evaluatorId: string;
+  id: string;
+  /** Short preview of what the AI wrote; the queue falls back to the trace name without it. */
+  outputPreview?: string;
+  promptName?: string;
+  reason: string;
+  status: ReviewStatus;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
+  traceName: string;
+}
+
+export interface EvaluatorDimension {
+  dataType: "boolean" | "categorical" | "numeric";
+  key: string;
+  /** Question shown to human reviewers in place of the score key. */
+  question?: string;
+  range?: string;
+  required: boolean;
+}
+
+export interface ReviewPanelField {
+  key: string;
+  label: string;
+  note?: string;
+  value: unknown;
+}
+
+export interface ReviewDetail {
+  batchId?: string;
+  batchName?: string;
+  comment?: string;
+  dimensions: EvaluatorDimension[];
+  evaluatorId: string;
+  id: string;
+  instructions?: string;
+  panels: {
+    given: ReviewPanelField[];
+    wrote: ReviewPanelField[];
+  };
+  rawInput?: unknown;
+  rawOutput?: unknown;
+  scores?: Record<string, boolean | number | string>;
+  status: ReviewStatus;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
+  /** Set when reviewers judge a dataset item; answers are saved on that item. */
+  datasetItemId?: string;
+}
+
+export const REVIEW_STATUSES: ReviewStatus[] = ["pending", "in_progress", "done", "skipped"];
+
+export const reviewStatusLabel = (status: ReviewStatus): string => {
+  if (status === "in_progress") {
+    return "In progress";
+  }
+  return `${status.slice(0, 1).toUpperCase()}${status.slice(1)}`;
+};
+
+export const unwrapReviewList = (raw: unknown): ReviewListItem[] => {
+  if (Array.isArray(raw)) {
+    return raw as ReviewListItem[];
+  }
+  if (!raw || typeof raw !== "object") {
+    return [];
+  }
+  const nested = (raw as Record<string, unknown>).data;
+  return Array.isArray(nested) ? (nested as ReviewListItem[]) : [];
+};
+
+export const unwrapReviewCounts = (raw: unknown): Record<ReviewStatus, number> => {
+  const empty = {done: 0, in_progress: 0, pending: 0, skipped: 0};
+  if (!raw || typeof raw !== "object") {
+    return empty;
+  }
+  const counts = (raw as Record<string, unknown>).counts;
+  if (!counts || typeof counts !== "object") {
+    return empty;
+  }
+  const record = counts as Record<string, unknown>;
+  return {
+    done: typeof record.done === "number" ? record.done : 0,
+    in_progress: typeof record.in_progress === "number" ? record.in_progress : 0,
+    pending: typeof record.pending === "number" ? record.pending : 0,
+    skipped: typeof record.skipped === "number" ? record.skipped : 0,
+  };
+};
+
+export const unwrapReviewDetail = (raw: unknown): ReviewDetail | undefined => {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  if ("dimensions" in record && "panels" in record) {
+    return record as unknown as ReviewDetail;
+  }
+  return unwrapReviewDetail(record.data);
+};
+
+export const unwrapCurrentUserId = (raw: unknown): string | undefined => {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record.id === "string") {
+    return record.id;
+  }
+  return unwrapCurrentUserId(record.data ?? record.user);
+};
+
+export const waitingLabel = (enqueuedAt: string): string => {
+  const start = DateTime.fromISO(enqueuedAt, {zone: "utc"});
+  if (!start.isValid) {
+    return "—";
+  }
+  const minutes = Math.max(0, Math.floor(DateTime.utc().diff(start, "minutes").minutes));
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h`;
+  }
+  return `${Math.floor(hours / 24)}d`;
+};
+
+export const wordCount = (value: unknown): number => {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text?.trim() ? text.trim().split(/\s+/).length : 0;
+};
+
+export const displayReviewValue = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === undefined) {
+    return "—";
+  }
+  return JSON.stringify(value, null, 2);
+};
+
+export const numericRange = (range?: string): {max: number; min: number; step: number} => {
+  const matches = range?.match(/(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)/);
+  const min = matches?.[1] ? Number(matches[1]) : 0;
+  const max = matches?.[2] ? Number(matches[2]) : 1;
+  return {max, min, step: max - min <= 1 ? 0.1 : 1};
+};
+
+export const categoricalOptions = (range?: string): string[] => {
+  if (!range) {
+    return [];
+  }
+  return range
+    .split(/[|,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+/** Reviewer-facing label for a score: its question when set, otherwise the key. */
+export const dimensionLabel = (dimension: EvaluatorDimension): string => {
+  return dimension.question?.trim() || dimension.key;
+};
+
+/** Key of the first required-or-optional dimension still missing an answer. */
+const firstUnanswered = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
+};
+
+/** The first unanswered question after `fromKey`, wrapping to the start; undefined when all are answered. */
+export const nextUnansweredAfter = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>,
+  fromKey?: string
+): string | undefined => {
+  const start = dimensions.findIndex((dimension) => dimension.key === fromKey) + 1;
+  return firstUnanswered([...dimensions.slice(start), ...dimensions.slice(0, start)], scores);
+};
+
+/** Move the highlighted question up or down one row, stopping at the first and last question. */
+export const stepQuestionKey = (
+  dimensions: EvaluatorDimension[],
+  currentKey: string | undefined,
+  step: 1 | -1
+): string | undefined => {
+  const index = dimensions.findIndex((dimension) => dimension.key === currentKey);
+  if (index < 0) {
+    return (step > 0 ? dimensions[0] : dimensions.at(-1))?.key;
+  }
+  return dimensions[Math.min(dimensions.length - 1, Math.max(0, index + step))]?.key;
+};
+
+/** Key of the first unanswered yes/no question: the one the list highlights and Y or N answers. */
+export const firstUnansweredBoolean = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return firstUnanswered(
+    dimensions.filter((dimension) => dimension.dataType === "boolean"),
+    scores
+  );
+};

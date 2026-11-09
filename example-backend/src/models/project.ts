@@ -10,8 +10,9 @@ import {addDefaultPlugins} from "./modelPlugins";
 const projectSchema = new mongoose.Schema<ProjectDocument, ProjectModel>(
   {
     _id: {
-      // Synced models need a String _id: offline syncdb clients mint entity ids
-      // (UUIDs) locally and the sync mutation channel writes them through as _id.
+      // Offline syncdb clients mint entity ids locally and the sync mutation channel writes
+      // them through as _id. A String _id takes syncdb's default UUIDs; a model that keeps the
+      // ObjectId default instead sets `idFormats: {collection: "objectId"}` on the client.
       default: (): string => new mongoose.Types.ObjectId().toHexString(),
       description: "The document id (String so offline sync clients can mint ids)",
       type: String,
@@ -38,7 +39,7 @@ projectSchema.plugin(organizationIdImmutabilityPlugin);
 projectSchema.plugin(syncPlugin);
 
 // Named "ExampleProject" because @terreno/ai (imported by server.ts) already registers a
-// mongoose model called "Project" for Langfuse. The exported binding and the /projects
+// mongoose model called "Project" for GPT chat projects. The exported binding and the /projects
 // route keep the friendly name.
 export const Project = mongoose.model<ProjectDocument, ProjectModel>(
   "ExampleProject",

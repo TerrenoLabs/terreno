@@ -4,6 +4,7 @@ import {SelectBadge} from "@terreno/ui";
 import React from "react";
 
 export const SelectBadgeConfiguration: DemoConfiguration = {
+  usageExample: "import {SelectBadge} from \"@terreno/ui\";\n\n<SelectBadge />",
   name: "SelectBadge",
   related: [],
   description:
@@ -14,7 +15,7 @@ export const SelectBadgeConfiguration: DemoConfiguration = {
     documentation: "planned",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23330&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=4013-23972&t=J847q9JMSjR8oQmN-1",
     ios: "ready",
     android: "ready",
     web: "ready",

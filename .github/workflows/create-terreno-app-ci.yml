@@ -1,7 +1,11 @@
 name: create-terreno-app CI
 
 # Disabled after migration to CircleCI; retained for rollback.
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 defaults:
   run:
@@ -17,20 +21,16 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
-
-      - name: Cache Bun dependencies
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ github.ref }}-${{ hashFiles('bun.lock', 'package.json') }}
-          restore-keys: |
-            bun-${{ runner.os }}-${{ github.ref }}-
-            bun-${{ runner.os }}-
+          bun-version: 1.4.4
 
       - name: Install dependencies
         working-directory: .
         run: bun install --frozen-lockfile
+
+      # generatedApp.compile.test.ts type-checks a scaffolded app against these packages' dist.
+      - name: Compile workspace packages the generated app imports
+        working-directory: .
+        run: bun run --filter '@terreno/api' --filter '@terreno/blocks' --filter '@terreno/jobs' --filter '@terreno/api-health' --filter '@terreno/admin-backend' --filter '@terreno/ui' --filter '@terreno/syncdb' --filter '@terreno/admin-frontend' compile
 
       - name: Lint
         run: bun run lint

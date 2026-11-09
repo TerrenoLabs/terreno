@@ -202,8 +202,8 @@ const loadTestDataIntoDb = async (cachedCollections: Record<string, unknown[]>):
     }
     const convertedDocs = docs.map((doc) => convertValue(doc));
     restorePromises.push(
-      mongoose.connection
-        .db!.collection(collectionName)
+      requireDb()
+        .collection(collectionName)
         .insertMany(convertedDocs as Record<string, unknown>[], {ordered: false})
     );
   }

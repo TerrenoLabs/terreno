@@ -3,7 +3,7 @@
 Plan: [`docs/implementationPlans/create-terreno-app.md`](../implementationPlans/create-terreno-app.md)
 
 **Status:** Approved — all in-scope tasks Roast PASS. **next: brew**.  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1174
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1174
 
 ## Instructions for the implementing agent
 

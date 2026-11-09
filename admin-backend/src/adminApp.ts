@@ -1,9 +1,12 @@
 import {
   ADMIN_PAGE_ACTION,
   type AdminAccessConfig,
+  type AdminConfig,
   type AdminModelAdminMap,
   type AnyTerrenoAccess,
   APIError,
+  assertCanWriteTargetUser,
+  assertCanWriteUserIdentity,
   asyncHandler,
   auditActorIdFromRequest,
   authenticateMiddleware,
@@ -15,6 +18,8 @@ import {
   describeModel,
   findSyncEntryByModelName,
   getOrgContext,
+  isRbacUserModelName,
+  isWriteKeyForField,
   type JSONValue,
   logger,
   type ModelRouterOptions,
@@ -27,6 +32,7 @@ import {
   type PermissionMethod,
   Permissions,
   type PopulatePath,
+  publicFrameworkModelName,
   registerAdminBroadcastScope,
   registerAdminWindowMutationScope,
   type ScriptArgDef,
@@ -45,6 +51,7 @@ import type {Model} from "mongoose";
 import mongoose from "mongoose";
 import {assignUniqueAdminConfigNames, findAdminModelMetaByRoutePath} from "./adminConfigIdentity";
 import {mountAdminMigrationRoutes} from "./adminMigrations";
+import {assertAdminRowScopeAfterUpdate, buildAdminRowScopePermission} from "./adminRowScope";
 import {
   ADMIN_SCRIPT_JOB_NAME,
   defineAdminScriptJob,
@@ -74,6 +81,8 @@ import {aggregateFromTerrenoApp} from "./aggregateAdmin";
 import {parseAdminListFilters} from "./filterParser";
 import type {ResolvedAdminModel} from "./resolvedAdminModel";
 import {RESERVED_SCRIPT_FLAGS} from "./scriptCli";
+
+const AUDIT_EVENT_MODEL_NAMES = new Set(["AuditEvent", "TerrenoAuditEvent"]);
 
 /**
  * Configuration for a single model in the admin panel.
@@ -114,6 +123,8 @@ export interface AdminModelConfig {
   fieldOrder?: string[];
   /** Fields to hide from admin forms/responses (e.g., password hash fields). */
   hiddenFields?: string[];
+  /** Fields stripped from admin create and update bodies. */
+  excludeFields?: string[];
   /** Optional sidebar / nav grouping label for schema v2 shells */
   group?: string;
   /** Changelist columns (defaults to listFields) */
@@ -151,7 +162,8 @@ export interface AdminModelConfig {
   /** Allowlisted keys for POST .../bulk-patch (defaults from listFields minus system/readonly/hidden) */
   bulkPatchAllowlist?: string[];
   /**
-   * Per-model `modelRouter` query filter (list and other query-shaped reads).
+   * Per-model admin row scope. List and search add it to the query; by-id read/update/delete,
+   * bulk-patch, and admin-window sync writes deny documents outside it.
    * Same contract as {@link ModelRouterOptions.queryFilter} in `@terreno/api`: merge into the
    * Mongoose query, return the incoming `query` unchanged if allowed, or return `null` to yield
    * an empty list without error.
@@ -261,6 +273,21 @@ interface AdminFieldMeta {
   /** For array fields of ObjectId refs: the referenced model name */
   itemRef?: string;
 }
+
+const publicFrameworkFieldMeta = (field: AdminFieldMeta): AdminFieldMeta => {
+  return {
+    ...field,
+    ...(field.ref ? {ref: publicFrameworkModelName(field.ref)} : {}),
+    ...(field.itemRef ? {itemRef: publicFrameworkModelName(field.itemRef)} : {}),
+    ...(field.items
+      ? {
+          items: Object.fromEntries(
+            Object.entries(field.items).map(([key, item]) => [key, publicFrameworkFieldMeta(item)])
+          ),
+        }
+      : {}),
+  };
+};
 
 interface AdminModelMeta {
   actions: AdminActionInput[];
@@ -419,13 +446,16 @@ const buildAdminListQueryFilter = (
       merged = {...merged, ...OrgQueryFilter(user, merged)};
     }
     const result = andMongoFilters(merged, searchClause);
-    const overrides: Record<string, unknown> = {...filter};
-    for (const key of consumedKeys) {
-      if (!(key in overrides)) {
-        overrides[key] = undefined;
+    // modelRouter spreads this over the raw request query. Clear consumed raw keys that the
+    // result does not set, and spread the result last so the row scope always wins over a
+    // client filter on the same field.
+    const cleared: Record<string, unknown> = {};
+    for (const key of [...consumedKeys, ...Object.keys(filter)]) {
+      if (!(key in result)) {
+        cleared[key] = undefined;
       }
     }
-    return {...result, ...overrides, [ADMIN_LIST_SEARCH_PARAM]: undefined};
+    return {...cleared, ...result, [ADMIN_LIST_SEARCH_PARAM]: undefined};
   };
 };
 
@@ -554,7 +584,11 @@ const extractFieldMetaFromDescription = (
   const hiddenFieldSet = new Set(hiddenFields);
   const description = describeModel(model);
   const fields = modelDescriptionToAdminFields(description);
-  return Object.fromEntries(Object.entries(fields).filter(([key]) => !hiddenFieldSet.has(key)));
+  return Object.fromEntries(
+    Object.entries(fields)
+      .filter(([key]) => !hiddenFieldSet.has(key))
+      .map(([key, field]) => [key, publicFrameworkFieldMeta(field)])
+  );
 };
 
 const asMiddlewareList = (
@@ -629,7 +663,7 @@ export class AdminApp {
     }
     // Platform audit rows may omit organizationId. Requiring a selected org hides
     // those events and skips Recent Activity / the AuditEvent changelist.
-    if (config.model.modelName === "AuditEvent") {
+    if (AUDIT_EVENT_MODEL_NAMES.has(config.model.modelName)) {
       return false;
     }
     return Boolean(config.model.schema.path("organizationId"));
@@ -706,11 +740,12 @@ export class AdminApp {
     if (explicit) {
       return explicit;
     }
-    const standard = `admin${config.model.modelName}`;
+    const publicName = publicFrameworkModelName(config.model.modelName);
+    const standard = `admin${publicName}`;
     if (accessControl?.statements[standard]) {
       return standard;
     }
-    return `${config.model.modelName.charAt(0).toLowerCase()}${config.model.modelName.slice(1)}`;
+    return `${publicName.charAt(0).toLowerCase()}${publicName.slice(1)}`;
   }
 
   private async isAdminModelOwned(
@@ -726,7 +761,27 @@ export class AdminApp {
     return ownerId != null && String(ownerId) === String(user.id);
   }
 
+  /**
+   * Admin permissions for one model action: the admin page gate plus RBAC (or IsAdmin), ANDed
+   * with the model's `admin.adminPermissions[action]` methods. An explicitly empty array denies
+   * the action.
+   */
   private resourceActionPermissions(
+    config: Pick<AdminModelConfig, "adminAccess" | "model"> & {admin?: AdminConfig},
+    action: "list" | "read" | "create" | "update" | "delete"
+  ): PermissionMethod<unknown>[] {
+    const base = this.baseResourceActionPermissions(config, action);
+    const configured = config.admin?.adminPermissions?.[action];
+    if (!configured) {
+      return base;
+    }
+    if (configured.length === 0 || base.length === 0) {
+      return [];
+    }
+    return [...base, ...configured];
+  }
+
+  private baseResourceActionPermissions(
     config: Pick<AdminModelConfig, "adminAccess" | "model">,
     action: "list" | "read" | "create" | "update" | "delete"
   ): PermissionMethod<unknown>[] {
@@ -835,7 +890,7 @@ export class AdminApp {
       request: express.Request;
       verb: AdminAuditEvent["verb"];
     }): Promise<void> => {
-      if (modelName === "AuditEvent") {
+      if (AUDIT_EVENT_MODEL_NAMES.has(modelName)) {
         return;
       }
       void maybeRecordAdminAudit({
@@ -852,7 +907,7 @@ export class AdminApp {
     // Build config response with field metadata from Mongoose schemas
     const configNames = assignUniqueAdminConfigNames(
       modelConfigs.map((config) => ({
-        modelName: config.model.modelName,
+        modelName: publicFrameworkModelName(config.model.modelName),
         routePath: config.routePath,
         source: config.source,
       }))
@@ -907,7 +962,7 @@ export class AdminApp {
         listDisplay,
         listDisplayLinks: config.listDisplayLinks ?? [],
         listFields,
-        name: configNames[configIndex] ?? config.model.modelName,
+        name: configNames[configIndex] ?? publicFrameworkModelName(config.model.modelName),
         organizationScoped: isOrgScopedModel,
         pageSize: config.pageSize,
         permissions: {
@@ -1404,31 +1459,50 @@ export class AdminApp {
         return permissions;
       };
 
-      const updatePermissions = adminPermission(config.permissions?.update, "update");
+      // Read/update/delete of one document must stay inside the same row scope list and search use.
+      const rowScopePermission = config.queryFilter
+        ? buildAdminRowScopePermission(config)
+        : undefined;
+      const withRowScope = (
+        permissions: PermissionMethod<unknown>[]
+      ): PermissionMethod<unknown>[] => {
+        if (!rowScopePermission || permissions.length === 0) {
+          return permissions;
+        }
+        return [...permissions, rowScopePermission];
+      };
+
+      const updatePermissions = withRowScope(adminPermission(config.permissions?.update, "update"));
+      // The RBAC user model: "User" or the userModel given to createAccess, whatever its name.
+      const isRbacUserModel = isRbacUserModelName(
+        config.model.modelName,
+        this.options.accessControl
+      );
 
       const stripProtectedFromBody = (body: unknown): Record<string, unknown> => {
         if (!body || typeof body !== "object" || Array.isArray(body)) {
           return {};
         }
-        const next = {...(body as Record<string, unknown>)};
-        for (const key of readonlySet) {
-          delete next[key];
-        }
-        for (const key of hiddenFieldSet) {
-          delete next[key];
-        }
-        for (const key of excludeFieldSet) {
-          delete next[key];
-        }
-        for (const key of SYSTEM_ADMIN_FIELDS) {
-          delete next[key];
-        }
+        const protectedFields = [
+          ...readonlySet,
+          ...hiddenFieldSet,
+          ...excludeFieldSet,
+          ...SYSTEM_ADMIN_FIELDS,
+        ];
         // Self-service never writes these fields. Admin CRUD may set `admin`.
         // When RBAC is enabled, `roles` must go through RoleManager.assign and
         // tenant membership is not a generic User document field.
-        if (config.model.modelName === "User" && this.options.accessControl) {
-          delete next.organizationIds;
-          delete next.roles;
+        if (isRbacUserModel) {
+          protectedFields.push("organizationIds", "roles");
+        }
+        // Mongoose applies dotted keys (`roles.0`) as paths, so drop paths inside a protected
+        // field as well as the field itself.
+        const next: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+          if (protectedFields.some((field) => isWriteKeyForField(key, field))) {
+            continue;
+          }
+          next[key] = value;
         }
         return next;
       };
@@ -1444,7 +1518,7 @@ export class AdminApp {
         body: Record<string, unknown>,
         request: express.Request
       ): void => {
-        if (config.model.modelName !== "User" || !this.options.accessControl) {
+        if (!isRbacUserModel) {
           return;
         }
         if (!("roles" in body)) {
@@ -1545,7 +1619,7 @@ export class AdminApp {
       const bulkPatchOpenApi = openApiMw
         ? createOpenApiBuilder({openApi: openApiMw})
             .withTags(["admin"])
-            .withSummary(`Bulk patch ${config.model.modelName} documents`)
+            .withSummary(`Bulk patch ${publicFrameworkModelName(config.model.modelName)} documents`)
             .withRequestBody<{ids: string[]; patch: Record<string, unknown>}>({
               ids: {
                 description: "Document ids to update",
@@ -1651,7 +1725,7 @@ export class AdminApp {
         currentAdmin = false,
         targetUserId?: string
       ): Promise<void> => {
-        if (config.model.modelName !== "User" || !("admin" in body)) {
+        if (!isRbacUserModel || !("admin" in body)) {
           return;
         }
         const accessControl = this.options.accessControl;
@@ -1703,15 +1777,29 @@ export class AdminApp {
         return Boolean((existing as {admin?: boolean} | null)?.admin);
       };
 
+      // The document an update applies to: the one the REST permission check loaded, or (for
+      // admin-window sync updates, which set req.params.id) the stored row.
+      const currentDocumentForUpdate = async (request: express.Request): Promise<unknown> => {
+        const loaded = (request as express.Request & {obj?: unknown}).obj;
+        if (loaded) {
+          return loaded;
+        }
+        const id = request.params?.id;
+        if (!id || !rowScopePermission) {
+          return undefined;
+        }
+        const query: Record<string, unknown> = {_id: id};
+        if (config.model.schema.path("deleted")) {
+          query.deleted = {$in: [true, false]};
+        }
+        return config.model.findById(id).where(query).lean();
+      };
+
       const markAuthorizedUserAdminWrite = (
         body: Record<string, unknown>,
         request: express.Request
       ): void => {
-        if (
-          config.model.modelName !== "User" ||
-          !this.options.accessControl ||
-          !("admin" in body)
-        ) {
+        if (!isRbacUserModel || !("admin" in body)) {
           return;
         }
         (
@@ -1766,10 +1854,10 @@ export class AdminApp {
         maxLimit: 500,
         permissions: {
           create: adminPermission(config.permissions?.create, "create"),
-          delete: adminPermission(config.permissions?.delete, "delete"),
+          delete: withRowScope(adminPermission(config.permissions?.delete, "delete")),
           list: adminPermission(true, "list"),
-          read: adminPermission(true, "read"),
-          update: adminPermission(config.permissions?.update, "update"),
+          read: withRowScope(adminPermission(true, "read")),
+          update: updatePermissions,
         },
         postCreate: async (value, request) => {
           await applyPendingUserRoles(value, request, true);
@@ -1815,7 +1903,14 @@ export class AdminApp {
           takePendingUserRoles(record, req);
           await assertCanWriteUserAdminFlag(record, req, await currentUserAdminFlag(req));
           markAuthorizedUserAdminWrite(record, req);
-          return stripProtectedFromBody(body) as typeof body;
+          const stripped = stripProtectedFromBody(body) as Record<string, unknown>;
+          await assertAdminRowScopeAfterUpdate({
+            config,
+            current: await currentDocumentForUpdate(req),
+            patch: stripped,
+            user: req.user as User | undefined,
+          });
+          return stripped as typeof body;
         },
         queryFields: buildAdminModelQueryFields({
           filters: config.filters,
@@ -1831,6 +1926,7 @@ export class AdminApp {
         responseHandler: async (value, _method, request): Promise<JSONValue> =>
           addRecordCapabilities(value, request),
         sort: config.defaultSort ?? "-created",
+        sortFields: modelMeta?.sortableFields ?? [],
         ...(config.populatePaths ? {populatePaths: config.populatePaths} : {}),
         ...(auditHooks.postDelete ? {postDelete: auditHooks.postDelete} : {}),
       };
@@ -1850,7 +1946,7 @@ export class AdminApp {
         registerAdminWindowMutationScope(config.model.modelName, {
           accessControl: this.options.accessControl,
           createPermissions: adminPermission(config.permissions?.create, "create"),
-          deletePermissions: adminPermission(config.permissions?.delete, "delete"),
+          deletePermissions: withRowScope(adminPermission(config.permissions?.delete, "delete")),
           modelName: config.model.modelName,
           permissions: {
             create: config.permissions?.create !== false,
@@ -1863,7 +1959,7 @@ export class AdminApp {
           preCreate: routerOptions.preCreate,
           preUpdate: routerOptions.preUpdate,
           stripMutationData: (data) => stripProtectedFromBody(data),
-          updatePermissions: adminPermission(config.permissions?.update, "update"),
+          updatePermissions,
         });
       }
 
@@ -1913,11 +2009,7 @@ export class AdminApp {
           }
           const patch = stripProtectedFromBody(rawPatch);
           let pendingRoles: string[] | undefined;
-          if (
-            config.model.modelName === "User" &&
-            this.options.accessControl &&
-            "roles" in rawPatch
-          ) {
+          if (isRbacUserModel && "roles" in rawPatch) {
             pendingRoles = parseRoleNames(rawPatch.roles);
           }
           if (Object.keys(patch).length === 0 && pendingRoles === undefined) {
@@ -1944,6 +2036,20 @@ export class AdminApp {
                 failures.push({id, title: "Forbidden"});
                 continue;
               }
+              await assertAdminRowScopeAfterUpdate({config, current: doc, patch, user: actor});
+              await assertCanWriteTargetUser({
+                accessControl: this.options.accessControl,
+                actor,
+                modelName: config.model.modelName,
+                target: doc,
+              });
+              await assertCanWriteUserIdentity({
+                accessControl: this.options.accessControl,
+                actor,
+                body: patch,
+                modelName: config.model.modelName,
+                target: doc,
+              });
               await assertCanWriteUserAdminFlag(
                 rawPatch,
                 req,

@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Closed:** 2026-08-20 — Research incorporated into [admin-only.md](admin-only.md); shipped as `@terreno/admin-spa`.
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1075
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1075
 
 ## Summary
 

@@ -27,7 +27,8 @@ const aiRequestSchema = new mongoose.Schema<AIRequestDocument, AIRequestModel>(
     },
     prompt: {description: "The input prompt sent to the AI model", required: true, type: String},
     requestType: {
-      description: "The type of AI request (e.g. general, translation, summarization)",
+      description:
+        "The type of AI request (general, translation, summarization, ui_action, and the other default types)",
       required: true,
       type: String,
     },

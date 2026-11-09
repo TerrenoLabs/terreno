@@ -137,8 +137,9 @@ time includes dependency evaluation in the Bun test harness. Lower is better.
 
 Changes in this slice:
 
-- Measured heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent/admin tools, and related
+- Measured heavy optional widgets (`GPTChat`, `EmojiSelector`, `MarkdownEditor`, consent/admin tools, `LineChart`, `BarChart`, `AreaChart`, `DonutChart`, and related
   exports) now cross lazy root boundaries so their implementation files stay off the cold root import path.
+  `DashboardGrid` stays eager.
 - `MarkdownView`, `DataTable` header info, and `EmojiSelector` defer `react-native-markdown-display` and
   `emoji-datasource` until first use.
 - `RootImportRegression.test.tsx` and `bun run performance:imports` guard the public entrypoints.

@@ -26,7 +26,7 @@ bun expo export --platform web
 
 ### Alternative: `app.json` `extra.BASE_URL`
 
-`@terreno/rtk` resolves the API base from `expo-constants` `extra.BASE_URL` and `EXPO_PUBLIC_API_URL` (see `rtk/src/constants.ts` `resolveBaseUrls`). Priority in **production** builds:
+`@terreno/syncdb/config` resolves the API base from `expo-constants` `extra.BASE_URL` and `EXPO_PUBLIC_API_URL` (see `syncdb/src/config/resolveBaseUrls.ts`). Priority in **production** builds:
 
 1. `EXPO_PUBLIC_API_URL` environment variable (set before export)
 2. `extra.BASE_URL` in app config (when env var is unset)
@@ -66,4 +66,4 @@ Upload `dist/` to your host. **Client-side routing** requires the host to serve 
 - [Deploy to GCP](deploy-to-gcp.md) — GCS + Cloud CDN (static web) + Cloud Run (backend)
 - Deployment baseline — [seven requirements](../explanation/deployment-baseline.md)
 
-For server-rendered web (future), see [Web SSR and admin SPA](https://github.com/FlourishHealth/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).
+For server-rendered web (future), see [Web SSR and admin SPA](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/web-ssr-and-admin-spa.md).

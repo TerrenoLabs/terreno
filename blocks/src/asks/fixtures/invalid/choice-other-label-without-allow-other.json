@@ -1,0 +1,14 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"}
+    ],
+    "allowOther": false,
+    "otherLabel": "Something else"
+  },
+  "errors": [{"path": "otherLabel", "code": "OTHER_NOT_ALLOWED"}]
+}

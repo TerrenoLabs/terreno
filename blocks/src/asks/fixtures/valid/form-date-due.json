@@ -1,0 +1,44 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "When is the report due?",
+    "fields": [
+      {
+        "id": "due",
+        "type": "date",
+        "label": "Due date",
+        "required": true,
+        "default": "2026-10-01"
+      }
+    ]
+  },
+  "simple": {
+    "buttons": [
+      {
+        "id": "submit-defaults",
+        "label": "Submit defaults",
+        "response": {
+          "action": "accept",
+          "content": {
+            "values": {
+              "due": "2026-10-01"
+            }
+          }
+        },
+        "style": "primary"
+      },
+      {
+        "id": "cancel",
+        "label": "Cancel",
+        "response": {
+          "action": "decline"
+        },
+        "style": "cancel"
+      }
+    ],
+    "handoff": true,
+    "kind": "form",
+    "text": "When is the report due?",
+    "toolCallId": "call_fixture"
+  }
+}

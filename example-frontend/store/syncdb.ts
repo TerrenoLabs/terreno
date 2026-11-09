@@ -1,35 +1,70 @@
 /**
  * @terreno/syncdb client for the example app.
  *
- * Authenticates with the Better Auth session from @terreno/rtk's Expo client.
+ * Authenticates with the Better Auth session from `lib/betterAuth.ts`. The same `authProvider`
+ * feeds the request client (store/apiClient.ts), so sync and request traffic share one session.
  */
-import {baseUrl} from "@terreno/rtk";
 import {
   betterAuthAdapter,
   bridgeBetterAuthReactClient,
   createSyncDb,
   type SyncDb,
 } from "@terreno/syncdb";
-import {betterAuthClient} from "@/lib/betterAuth";
+import {baseUrl} from "@terreno/syncdb/config";
+import {bearerAuthHeaders} from "@/lib/authHeaders";
+import {betterAuthClient, getStoredBearerToken} from "@/lib/betterAuth";
+import {socketTransports} from "@/store/socketTransports";
 import {SYNC_COLLECTIONS} from "@/store/syncDbSdk";
 
 export const SYNC_DB_NAME = "terreno-example";
 /** Admin window rows live in their own store so they never leak into the product UI. */
 const ADMIN_SYNC_DB_NAME = `${SYNC_DB_NAME}-admin`;
 
-// pollIntervalMs is only used as a fallback if the session atom bridge is unavailable
-// (e.g. a future Better Auth client shape change); keep it slow.
-const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+/** Collection tags for the AI screen's chat list and the MCP settings token list. */
+export const GPT_HISTORIES_COLLECTION = "gpt/histories";
+export const MCP_SERVICE_TOKENS_COLLECTION = "mcp/service-tokens";
+
+/**
+ * Owner-only collections with no `adminBroadcast`: the admin window store never opens them,
+ * and the server has no admin window stream for them.
+ */
+const PRODUCT_ONLY_COLLECTIONS: ReadonlySet<string> = new Set([
+  GPT_HISTORIES_COLLECTION,
+  MCP_SERVICE_TOKENS_COLLECTION,
+]);
+const ADMIN_COLLECTIONS = SYNC_COLLECTIONS.filter(
+  (collection) => !PRODUCT_ONLY_COLLECTIONS.has(collection)
+);
+
+/**
+ * The app's one token source, shared by the sync client and the API client
+ * (store/apiClient.ts) so both send the same Better Auth session token.
+ *
+ * `getBearerToken` reads the web bearer token locally, so `getToken()` makes no `get-session`
+ * call per read; it returns null in cookie mode and on native, where the adapter reads the
+ * session instead. pollIntervalMs is only used as a fallback if the session atom bridge is
+ * unavailable (e.g. a future Better Auth client shape change); keep it slow.
+ */
+export const authProvider = betterAuthAdapter(bridgeBetterAuthReactClient(betterAuthClient), {
+  getBearerToken: getStoredBearerToken,
   pollIntervalMs: 60_000,
 });
+
+/**
+ * `Authorization` header for code that calls the backend outside the request client
+ * (`AdminProvider`'s fetch client on the admin and documents screens).
+ */
+export const getAdminAuthHeaders = (): Promise<Record<string, string>> =>
+  bearerAuthHeaders(authProvider.getToken);
 
 /**
  * Singleton local-first client. Started/stopped by the root layout when the user is
  * authenticated; wipe-on-user-change is handled internally.
  *
- * `debug` enables the in-memory sync event log in dev builds only — it powers the
- * `/syncdb-debug` debugger screen (and, in the future, MCP introspection). It is
- * off in production so there is zero recording overhead.
+ * `debug` enables the in-memory sync event log in dev builds only. It powers the
+ * `/syncdb-debug` screen and registers this client for terreno-mcp-local state,
+ * action, and snapshot tools. It is off in production so there is zero recording
+ * or MCP bridge overhead.
  */
 export const syncDb: SyncDb = createSyncDb({
   authProvider,
@@ -47,7 +82,17 @@ export const syncDb: SyncDb = createSyncDb({
   // package default) once your entities are truly independent and you want a
   // conflict on one to never stall unrelated ones.
   haltQueueOnConflict: true,
+  // GptHistory keeps Mongoose's default ObjectId `_id`, so any history this client creates
+  // gets a client-minted ObjectId instead of the default UUID.
+  idFormats: {[GPT_HISTORIES_COLLECTION]: "objectId"},
   name: SYNC_DB_NAME,
+  // Todos stay fully synced; `fullSync` also enables server-filtered query windows
+  // (`useWindowQuery`) over GET /todos — see app/todo-windows.tsx.
+  queryCollections: [{collection: "todos", fullSync: true}],
+  socketTransports,
+  // An explicit logout (useSession().logout) signs this client out; wipe the signed-out user's
+  // local rows and queued writes so they never reach the next account on this device.
+  wipeOnSignOut: true,
 });
 
 let adminOrganizationId: string | undefined;
@@ -64,10 +109,12 @@ export const setAdminSyncOrganizationId = (organizationId?: string): void => {
 export const adminSyncDb: SyncDb = createSyncDb({
   authProvider,
   baseUrl,
-  collections: [...SYNC_COLLECTIONS],
+  collections: [...ADMIN_COLLECTIONS],
   name: ADMIN_SYNC_DB_NAME,
   organizationIdProvider: () => adminOrganizationId,
-  windowCollections: [...SYNC_COLLECTIONS],
+  socketTransports,
+  windowCollections: [...ADMIN_COLLECTIONS],
+  wipeOnSignOut: true,
 });
 
 /**

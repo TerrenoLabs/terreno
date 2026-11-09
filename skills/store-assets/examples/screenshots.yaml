@@ -1,0 +1,31 @@
+appId: ${APP_ID}
+---
+# Store screenshots for one app. Copy to <appDir>/maestro/screenshots.yaml and replace the
+# screens. Subflow paths assume <appDir> is one level deep; add a ../ per extra level. Run with
+# `bun run screenshots <app>`; the script supplies APP_ID, EMAIL, PASSWORD,
+# HOME_SCREEN_ID and collects every NN-name.png.
+- runFlow: ../../scripts/storeAssets/maestro/openApp.yaml
+- waitForAnimationToEnd
+- takeScreenshot: 01-home
+
+# Tab screen: tap the tab's testID, wait on the destination (prefer a content testID over the
+# screen root so data has loaded), then capture.
+- tapOn:
+    id: "tab-schedule"
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 20000
+- waitForAnimationToEnd
+- takeScreenshot: 02-schedule
+
+# Stack screen opened from home, then back to home for the next one.
+- tapOn:
+    id: "header-action-profile"
+- extendedWaitUntil:
+    visible:
+      id: "profile-screen"
+    timeout: 20000
+- waitForAnimationToEnd
+- takeScreenshot: 03-profile
+- runFlow: ../../scripts/storeAssets/maestro/goHome.yaml

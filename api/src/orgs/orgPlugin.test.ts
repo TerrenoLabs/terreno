@@ -1,6 +1,6 @@
 import {beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
-import mongoose, {model, Schema} from "mongoose";
+import mongoose, {model, Schema, type UpdateQuery} from "mongoose";
 
 import {orgScopedPlugin} from "./orgPlugin";
 
@@ -106,11 +106,12 @@ describe("orgScopedPlugin", () => {
       title: "Pinned",
     });
 
-    for (const update of [
+    const updates: UpdateQuery<OrgScopedWidget>[] = [
       {$unset: {organizationId: 1}},
       {$rename: {organizationId: "formerOrganizationId"}},
       {$rename: {formerOrganizationId: "organizationId"}},
-    ]) {
+    ];
+    for (const update of updates) {
       let error: unknown;
       try {
         await OrgScopedWidgetModel.updateOne({_id: widget._id}, update);

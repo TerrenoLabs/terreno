@@ -2,7 +2,11 @@ name: Architectural PR Review
 
 # Disabled after migration to CircleCI; retained for rollback.
 # Original trigger: pull_request_target on master (opened, synchronize, reopened, ready_for_review).
-on: []
+on:
+  # Retained for rollback without registering failed zero-job runs.
+  push:
+    branches-ignore:
+      - "**"
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.0
+          bun-version: 1.4.4
 
       - name: Install root dependencies
         run: bun install --frozen-lockfile

@@ -11,7 +11,7 @@ export interface MarkdownChunk {
   breadcrumb: string;
   /** Searchable body (heading line may repeat for BM25) */
   text: string;
-  /** Short package ids for filtering (api, ui, rtk, docs, …) */
+  /** Short package ids for filtering (api, ui, syncdb, docs, …) */
   packageTags: string[];
 }
 

@@ -112,6 +112,11 @@ export const todoRouter = modelRouter("/todos", Todo, {
 
         return {matched: todos.length, modified};
       },
+      // Same implementation over REST (POST /todos/bulkComplete) and MCP (todos_bulk_complete).
+      mcp: {
+        description: "Mark several of the caller's todos complete",
+        name: "todos_bulk_complete",
+      },
       method: "POST",
       permissions: [Permissions.IsAuthenticated],
       response: z
@@ -135,6 +140,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
         await todo.save();
         return todo;
       },
+      mcp: {name: "todos_mark_complete"},
       method: "POST",
       permissions: [Permissions.IsOwner],
       summary: "Mark a single todo as complete",
@@ -170,12 +176,8 @@ export const todoRouter = modelRouter("/todos", Todo, {
       ownerId: (req.user as unknown as UserDocument)?._id,
     } as TodoDocument;
   },
-  queryFields: ["completed", "ownerId"],
+  queryFields: ["completed", "created", "ownerId"],
   queryFilter: OwnerQueryFilter,
-  realtime: {
-    methods: ["create", "update", "delete"],
-    roomStrategy: "owner",
-  },
   sort: "-created",
   // Local-first sync (@terreno/syncdb): stream = todos|owner:{ownerId}.
   sync: {adminBroadcast: true, scope: {type: "owner"}},

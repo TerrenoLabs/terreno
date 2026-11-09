@@ -7,13 +7,13 @@ import {Box} from "./Box";
 import {Button} from "./Button";
 import type {DataTableColumnFilter} from "./Common";
 import {DateTimeField} from "./DateTimeField";
+import {DropdownPanel} from "./DropdownPanel";
 import {
   DATA_TABLE_CHOICE_EMPTY_LABEL,
   DATA_TABLE_CHOICE_EMPTY_VALUE,
   endOfUtcDay,
   startOfUtcDay,
 } from "./dataTableListQuery";
-import {Filter} from "./Filter";
 import {MultiselectField} from "./MultiselectField";
 import {NumberField} from "./NumberField";
 import {TextField} from "./TextField";
@@ -333,7 +333,7 @@ export const DataTableColumnFilterWeb: FC<DataTableColumnFilterWebProps> = ({
   }
 
   return (
-    <Filter
+    <DropdownPanel
       iconName="filter"
       iconOnly
       isOpen={isOpen}
@@ -351,7 +351,7 @@ export const DataTableColumnFilterWeb: FC<DataTableColumnFilterWebProps> = ({
         filters={[filter]}
         onDraftChange={setDraftValuesSync}
       />
-    </Filter>
+    </DropdownPanel>
   );
 };
 
@@ -419,7 +419,7 @@ export const DataTableAdditionalFiltersWeb: FC<DataTableAdditionalFiltersWebProp
   }
 
   return (
-    <Filter
+    <DropdownPanel
       iconName="filter"
       isOpen={isOpen}
       label="More filters"
@@ -436,6 +436,6 @@ export const DataTableAdditionalFiltersWeb: FC<DataTableAdditionalFiltersWebProp
         onDraftChange={setDraftValuesSync}
         showFieldClear
       />
-    </Filter>
+    </DropdownPanel>
   );
 };

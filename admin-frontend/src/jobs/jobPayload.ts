@@ -45,7 +45,7 @@ export interface JobsListResponse {
   total: number;
 }
 
-/** Unwrapped stats payload from `useStatsQuery` after the host RTK responseHandler strips `{data}`. */
+/** Unwrapped stats payload from `useStatsQuery` after `unwrapAdminEnvelope` strips `{data}`. */
 export interface JobsStats {
   byStatus: Record<string, number>;
   total: number;

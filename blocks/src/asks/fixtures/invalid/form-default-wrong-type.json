@@ -1,0 +1,30 @@
+{
+  "kind": "form",
+  "input": {
+    "prompt": "Fill this in.",
+    "fields": [
+      {
+        "id": "seats",
+        "type": "number",
+        "label": "Seats",
+        "default": "12"
+      },
+      {
+        "id": "notify",
+        "type": "boolean",
+        "label": "Notify",
+        "default": "yes"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "path": "fields[0].default",
+      "code": "INVALID_TYPE"
+    },
+    {
+      "path": "fields[1].default",
+      "code": "INVALID_TYPE"
+    }
+  ]
+}

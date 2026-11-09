@@ -2,7 +2,7 @@
 
 **Status:** Deferred
 **Closed:** 2026-08-20 — Superseded by [@terreno/syncdb](syncdb-local-first.md) local-first outbox and offline-capable sync.
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1096
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1096
 **Priority:** High
 **Effort:** Medium
 

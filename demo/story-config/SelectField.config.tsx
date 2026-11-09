@@ -4,18 +4,19 @@ import {SelectField} from "@terreno/ui";
 import React from "react";
 
 export const SelectFieldConfiguration: DemoConfiguration = {
+  usageExample: "import {SelectField} from \"@terreno/ui\";\n\n<SelectField />",
   name: "Select field",
   component: SelectField,
   related: ["Checkbox", "Radio field"],
   description:
     "Displays a list of options. Uses a custom dropdown with optional search on web and native (centered modal on Android).",
   a11yNotes: ["The list should be labeled so that screen readers know that the list is related."],
-  category: "Component",
+  category: ["Component", "Form"],
   status: {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23563&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23990",
     ios: "ready",
     android: "ready",
     web: "ready",

@@ -66,6 +66,15 @@ flowchart TD
 
 Native iOS and Android apps call Cloud Run directly; only the web client uses the CDN origin.
 
+## gcloud quickstart vs Terraform
+
+| Approach | Tradeoff |
+|----------|----------|
+| **gcloud commands** | Fastest first deploy; nothing to install beyond the CLI, but resources drift and are hard to recreate |
+| **`terreno-backend` Terraform module** | Reviewable, repeatable infrastructure for production; adds Terraform state to manage |
+
+With the module, Terraform owns the structure (registry, identities, secrets, service settings) and the deploy step owns the payload (image, env vars, secret mounts). The module ignores image and env changes after creation so the two never fight.
+
 ## Durable jobs and PR isolation
 
 Cloud Tasks is a push service; it does not expose a pull-consumer API. Cloud Run worker
@@ -79,6 +88,11 @@ callback URL. A PR backend targets the matching `pr-<number>` worker tag and use
 service tags. An old callback then fails closed instead of reaching production or another
 PR. A failed backend preview tag cannot stay on a not-Ready revision: CD rebuilds traffic
 from Ready tags, deploys the new revision without `--tag`, then tags it.
+
+Every example-frontend PR preview is paired with this isolated backend, including
+frontend-only PRs. The exported Netlify bundle targets the matching `pr-<number>` Cloud
+Run tag, whose CORS configuration trusts only that preview origin. Preview clients never
+fall back to the production backend or production database.
 
 Queue IAM grants `cloudtasks.enqueuer` and `iam.serviceAccountUser` on
 `terreno-jobs-invoker` only to `terreno-backend-runtime`, the example API Cloud Run

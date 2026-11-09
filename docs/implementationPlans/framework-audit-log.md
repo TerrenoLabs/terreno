@@ -1,10 +1,10 @@
 # Implementation Plan: Framework-level audit log
 
-**Status:** Approved  
+**Status:** Complete — shipped in #1301  
 **Branch:** `cursor/framework-audit-log-grow-0d6c`  
 **Owner:** —  
 **Created:** 2026-09-10  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1186 (implementation PRs use `Fixes #1186`)  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1186 (implementation PRs use `Fixes #1186`)  
 **Task list:** [framework-audit-log.md](../tasks/framework-audit-log.md)  
 **Program:** [B2B platform](b2b-platform-program.md)  
 **Depends on:** — (soft: `organizationId` now; org-admin list filter waits on [org-management-ui](org-management-ui.md))  
@@ -244,4 +244,4 @@ This IP **is** the activity log. No `UserUpdate` spam.
 - [ ] RBAC `auditSink` helper writes `source: "rbac"` without dropping `RbacAudit`.
 - [ ] Default: no TTL. `retentionDays > 0` adds TTL on `created`.
 - [ ] How-to + api reference + admin explanation match the shipped design.
-- [ ] Merging the implementation PR closes https://github.com/FlourishHealth/terreno/issues/1186 (`Fixes #1186`).
+- [ ] Merging the implementation PR closes https://github.com/TerrenoLabs/terreno/issues/1186 (`Fixes #1186`).

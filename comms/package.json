@@ -1,7 +1,7 @@
 {
   "author": "Josh Gachnang",
   "bugs": {
-    "url": "https://github.com/FlourishHealth/terreno/issues"
+    "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
     "@terreno/api": "workspace:*",
@@ -42,7 +42,7 @@
       "types": "./dist/adapters/twilioVerify.d.ts"
     }
   },
-  "homepage": "https://github.com/FlourishHealth/terreno#readme",
+  "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "communications",
     "email",
@@ -75,19 +75,21 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/FlourishHealth/terreno.git"
+    "url": "git+ssh://git@github.com/TerrenoLabs/terreno.git"
   },
   "scripts": {
     "compile": "bun tsc",
     "compile:watch": "bun tsc -w",
     "dev": "bun tsc -w",
-    "lint": "biome check ./src",
-    "lint:fix": "biome check --write ./src",
+    "lint": "biome check ./src ./e2e",
+    "lint:fix": "biome check --write ./src ./e2e",
+    "smoke": "bun e2e/smoke.ts",
     "test": "bun test",
     "test:agent": "AGENT=1 bun test --only-failures",
     "test:ci": "bun test",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
-  "version": "57.3.0"
+  "version": "58.0.0"
 }

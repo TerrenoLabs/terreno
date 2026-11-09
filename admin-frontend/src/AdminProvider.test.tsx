@@ -13,7 +13,6 @@ import {
   useScreenWidget,
 } from "./AdminProvider";
 import type {
-  AdminApi,
   AdminProviderValue,
   AdminWidgetRegistry,
   FieldWidgetComponent,
@@ -46,8 +45,9 @@ describe("AdminProvider widget registry", () => {
     const CustomHome: HomeWidgetComponent = () => null;
     const CustomField: FieldWidgetComponent = () => null;
     const CustomScreen: ScreenWidgetComponent = () => null;
-    let context: AdminProviderValue | null = null;
-    let registry: AdminWidgetRegistry | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
+    let registry = null as AdminWidgetRegistry | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       registry = useAdminWidgetRegistry();
@@ -56,7 +56,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         routeBase="/console"
         widgets={{
@@ -95,7 +94,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         baseUrl="/admin"
         widgets={{
           fields: {custom: CustomField},
@@ -133,7 +131,7 @@ describe("AdminProvider widget registry", () => {
     };
 
     const {toJSON} = renderWithTheme(
-      <AdminProvider api={{} as unknown as AdminApi} baseUrl="/admin">
+      <AdminProvider baseUrl="/admin">
         <Probe />
       </AdminProvider>
     );
@@ -146,7 +144,8 @@ describe("AdminProvider widget registry", () => {
 
   it("exposes host-injected credentials and getAuthHeaders on context", () => {
     const getAuthHeaders = (): HeadersInit => ({Authorization: "Bearer ctx-token"});
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
@@ -154,7 +153,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         credentials="same-origin"
         getAuthHeaders={getAuthHeaders}
@@ -170,7 +168,8 @@ describe("AdminProvider widget registry", () => {
   });
 
   it("exposes apiOrigin and binds it onto RPC context", () => {
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
@@ -178,7 +177,6 @@ describe("AdminProvider widget registry", () => {
 
     renderWithTheme(
       <AdminProvider
-        api={{} as AdminApi}
         apiBase="/admin"
         apiOrigin="http://localhost:4000"
         getAuthHeaders={() => ({Authorization: "Bearer ctx-token"})}
@@ -201,14 +199,15 @@ describe("AdminProvider widget registry", () => {
         raw: {addTableListener: () => "listener", delListener: () => {}},
       },
     };
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
     };
 
     renderWithTheme(
-      <AdminProvider api={{} as AdminApi} apiBase="/admin" syncDb={syncDb}>
+      <AdminProvider apiBase="/admin" syncDb={syncDb}>
         <Probe />
       </AdminProvider>
     );
@@ -218,14 +217,15 @@ describe("AdminProvider widget registry", () => {
 
   it("exposes the host useConflicts adapter on context", () => {
     const syncConflicts = {conflicts: [], resolve: () => {}};
-    let context: AdminProviderValue | null = null;
+    // Assigned inside the probe render, so the declared type must not narrow to null.
+    let context = null as AdminProviderValue | null;
     const Probe: React.FC = () => {
       context = useAdminContext();
       return null;
     };
 
     renderWithTheme(
-      <AdminProvider api={{} as AdminApi} apiBase="/admin" syncConflicts={syncConflicts}>
+      <AdminProvider apiBase="/admin" syncConflicts={syncConflicts}>
         <Probe />
       </AdminProvider>
     );

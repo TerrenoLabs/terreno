@@ -37,6 +37,10 @@ const listItemSchema = (
 
 const fallbackEntityName = (collection: string): string => {
   const pascal = toPascalCase(collection);
+  // `gpt/histories` → GptHistory, not GptHistorie.
+  if (pascal.endsWith("ies") && pascal.length > 3) {
+    return `${pascal.slice(0, -3)}y`;
+  }
   if (pascal.endsWith("s") && pascal.length > 1) {
     return pascal.slice(0, -1);
   }

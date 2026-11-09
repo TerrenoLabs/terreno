@@ -8,7 +8,7 @@ export interface AuditEventRow {
   operation?: string;
   recordId?: string;
   recordLabel?: string;
-  source: "admin" | "modelRouter" | "rbac";
+  source: "admin" | "modelRouter" | "rbac" | "security";
   verb: "created" | "deleted" | "updated";
 }
 

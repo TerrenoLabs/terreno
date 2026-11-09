@@ -1,0 +1,16 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Send the export as a CSV file.",
+    "accept": ["csv"],
+    "maxFiles": 1,
+    "allowDecline": false
+  },
+  "simple": {
+    "buttons": [],
+    "handoff": true,
+    "kind": "files",
+    "text": "Send the export as a CSV file.",
+    "toolCallId": "call_fixture"
+  }
+}

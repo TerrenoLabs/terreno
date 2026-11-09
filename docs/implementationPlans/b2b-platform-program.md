@@ -1,7 +1,7 @@
 # Program: B2B platform
 
 **Status:** Approved — decisions D1–D7 resolved 2026-08-09; first ten IPs open
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1095
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1095
 **Owner:** unassigned
 **Created:** 2026-08-09
 
@@ -36,7 +36,7 @@ org switcher, dark mode).
 | C | Communications (pluggable) | `comms-abstraction`, one item **per adapter**: `comms-adapter-expo-push` (first push adapter, per D4), `comms-adapter-twilio-sms`, `comms-adapter-twilio-verify`, `comms-adapter-sendgrid` (first mail adapter, per D2); operations: `comms-admin-dashboard`; consumers: `password-reset-and-email-verification`, `notification-center` |
 | B | Billing | `inbound-webhooks`, `billing-stripe` (web-first, per D1), `mobile-iap-revenuecat` (Future) |
 | D | Zero-to-deployed DX | `create-terreno-app`, `mongo-migrations` (deploy items already exist in the OSS launch program) |
-| E | B2B UI surfaces | `data-grid-server-filters`, `charts-and-dashboards`, `dark-mode-theme`, `command-palette`, `wizard-stepper`, `wysiwyg-editor` (markdown stays for now, per D3), `global-search` |
+| E | B2B UI surfaces | `data-grid-server-filters`, `charts-and-dashboards`, `dashboard-chart-parity`, `dark-mode-theme`, `command-palette`, `wizard-stepper`, `wysiwyg-editor` (markdown stays for now, per D3), `global-search` |
 | F | Enterprise & scale | `framework-audit-log` (Next), `rate-limiting` (Next), `job-queues` (Next), `enterprise-sso`, `mfa-step-up-auth` |
 | — | Native baseline | `native-module-baseline` — all new native modules land in one major release |
 
@@ -103,7 +103,7 @@ All decisions resolved by the maintainer on 2026-08-09:
 | [orgs-and-teams](orgs-and-teams.md) | Superseded by [org-management-ui](org-management-ui.md) | — |
 | [org-management-ui](org-management-ui.md) | Draft — awaiting approval | [tasks](../tasks/org-management-ui.md) |
 | [billing-stripe](billing-stripe.md) | Draft | [tasks](../tasks/billing-stripe.md) |
-| [native-module-baseline](native-module-baseline.md) | Draft | [tasks](../tasks/native-module-baseline.md) |
+| [native-module-baseline](native-module-baseline.md) | In progress | [tasks](../tasks/native-module-baseline.md) |
 | [rbac-permissions](rbac-permissions.md) | Complete (PR #932) | — |
 | [notification-center](notification-center.md) | Approved | [tasks](../tasks/notification-center.md) |
 | [framework-audit-log](framework-audit-log.md) | Approved | [tasks](../tasks/framework-audit-log.md) |

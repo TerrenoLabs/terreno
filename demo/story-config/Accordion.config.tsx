@@ -3,6 +3,7 @@ import {AccordionDemo, AccordionDevDemo, AccordionOnToggleDemo} from "@stories/A
 import {Accordion} from "@terreno/ui";
 
 export const AccordionConfiguration: DemoConfiguration = {
+  usageExample: "import {Accordion} from \"@terreno/ui\";\n\n<Accordion />",
   name: "Accordion",
   component: Accordion,
   related: [],
@@ -14,7 +15,7 @@ export const AccordionConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?node-id=3318-6026&t=Qm7RCZRrCGRgEA7b-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3318-6025",
     ios: "ready",
     android: "ready",
     web: "ready",

@@ -1,0 +1,1 @@
+> **McpRequestLogSchema** = `mongoose.Schema`\<[`McpRequestLogDocument`](../interfaces/McpRequestLogDocument.md), [`McpRequestLogModel`](McpRequestLogModel.md), [`McpRequestLogMethods`](McpRequestLogMethods.md)\>

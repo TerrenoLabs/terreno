@@ -6,6 +6,7 @@ import {join} from "node:path";
 import {readMappings} from "../check-circleci-parity/lib";
 import {PACKAGE_CI_LCOV_SKIP} from "../check-new-file-coverage";
 import {jobCommandBlock} from "../check-package-coverage-ci";
+import {E2E_SHARDS as SHARD_DEFINITIONS} from "./e2eAffected/shards";
 
 const repoRoot = join(import.meta.dir, "../..");
 const continueConfig = readFileSync(join(repoRoot, ".circleci/continue-config.yml"), "utf8");
@@ -18,15 +19,40 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-form",
     "admin-todo-crud",
     "admin-title-update-depth",
+    "org-admin-security",
+    "admin-user-security",
   ],
   "admin-table": [
     "admin-table-search-filter",
     "admin-table-bulk-actions",
     "admin-custom-screens",
     "admin-comms-back",
+    "harness-approvals",
+    "harness-intake",
   ],
-  app: ["todos", "profile", "realtime", "ai-chat", "pdf", "notifications"],
-  auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
+  app: [
+    "todos",
+    "todo-windows",
+    "todo-browser",
+    "profile",
+    "realtime",
+    "ai-chat",
+    "pdf",
+    "notifications",
+    "socket-flags",
+    "mcp-tokens",
+  ],
+  auth: [
+    "login",
+    "login-form",
+    "signup",
+    "consents",
+    "provisionalConsent",
+    "forgot-password",
+    "reset-password",
+    "verify-email",
+    "two-factor",
+  ],
   syncdb: [
     "syncdb-load-delta",
     "syncdb-offline",
@@ -71,6 +97,17 @@ describe("CircleCI concurrency", () => {
     assert.deepEqual(duplicates, []);
   });
 
+  it("installs bun packages without a CircleCI dependency cache", () => {
+    const start = continueConfig.indexOf("  install_bun_and_deps:\n");
+    assert.ok(start >= 0);
+    const next = continueConfig.indexOf("\n  resolve_preview_pr_number:", start);
+    const slice = continueConfig.slice(start, next > start ? next : undefined);
+    assert.match(slice, /pkg-manager: bun/);
+    assert.match(slice, /with-cache: false/);
+    assert.doesNotMatch(continueConfig, /include-branch-in-cache-key/);
+    assert.doesNotMatch(continueConfig, /cache-version: v1/);
+  });
+
   it("runs repository policies as a single job", () => {
     const repoPolicies = jobCommandBlock(continueConfig, "repo-policies");
     assert.ok(repoPolicies);
@@ -101,20 +138,24 @@ describe("CircleCI concurrency", () => {
     const specFiles = readdirSync(join(repoRoot, "example-frontend/e2e")).filter((name) =>
       name.endsWith(".spec.ts")
     );
+    // Shards that do not block a PR (load, cross-site bearer) have no CircleCI PR job.
+    const nonBlockingSpecs = new Set(
+      SHARD_DEFINITIONS.filter((shard) => !shard.blocksPullRequest).flatMap((shard) => shard.specs)
+    );
     const prSpecs = specFiles
       .map((name) => name.replace(/\.spec\.ts$/, ""))
-      .filter((name) => name !== "syncdb-loadlab");
+      .filter((name) => !nonBlockingSpecs.has(name));
     assert.deepEqual([...listed].sort(), [...prSpecs].sort());
   });
 
-  it("does not start example-backend CI for ui or rtk-only changes", () => {
+  it("does not start example-backend CI for ui or syncdb-only changes", () => {
     const mappings = readMappings({repoRoot});
     assert.equal(
       mappingMatches({mappings, parameter: "run-example-backend", path: "ui/src/Box.tsx"}),
       false
     );
     assert.equal(
-      mappingMatches({mappings, parameter: "run-example-backend", path: "rtk/src/index.ts"}),
+      mappingMatches({mappings, parameter: "run-example-backend", path: "syncdb/src/index.ts"}),
       false
     );
     assert.equal(
@@ -214,5 +255,44 @@ describe("CircleCI concurrency", () => {
         new RegExp(`add_skip "<< pipeline.parameters.${pipelineParameter} >>" ${packageName}`)
       );
     }
+  });
+});
+
+describe("CircleCI config parameter syntax", () => {
+  it("has no unescaped << outside pipeline/parameters references", () => {
+    // CircleCI 2.1 treats every `<<` as a parameter tag; a shell here-string fails compile
+    // for every continuation pipeline, not just the job that uses it.
+    for (const [name, config] of [
+      ["config.yml", setupConfig],
+      ["continue-config.yml", continueConfig],
+    ]) {
+      const stray = config
+        .split("\n")
+        .map((line, index) => ({line, number: index + 1}))
+        .filter(({line}) =>
+          /(^|[^\\])<</.test(line.replace(/<< *(pipeline|parameters)\.[^>]*>>/g, ""))
+        );
+      assert.deepEqual(stray, [], `${name} has unescaped <<`);
+    }
+  });
+});
+
+/** Names under the top-level `parameters:` block of a CircleCI config. */
+const topLevelParameterNames = (config: string): string[] => {
+  const block = config.split(/^parameters:\s*$/m)[1]?.split(/^\S/m)[0] ?? "";
+  return [...block.matchAll(/^ {2}([a-z0-9-]+):\s*$/gm)].map((match) => match[1] ?? "");
+};
+
+describe("setup → continuation parameters", (): void => {
+  it("declares every setup pipeline parameter in the continued config", (): void => {
+    // CircleCI forwards trigger parameters into the continuation; an undeclared
+    // one errors the pipeline with "Unexpected argument(s)".
+    const setupParameters = topLevelParameterNames(setupConfig);
+    const continueParameters = new Set(topLevelParameterNames(continueConfig));
+    assert.ok(setupParameters.includes("run-preview-cleanup"));
+    assert.deepEqual(
+      setupParameters.filter((name) => !continueParameters.has(name)),
+      []
+    );
   });
 });

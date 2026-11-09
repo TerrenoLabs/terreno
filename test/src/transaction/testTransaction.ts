@@ -1,5 +1,3 @@
-// noExplicitAny: Mongoose prototype patches require dynamic signatures
-// biome-ignore-all lint/suspicious/noExplicitAny: Mongoose prototype patches require dynamic signatures
 /**
  * Transaction-based test isolation for MongoDB.
  *
@@ -28,9 +26,22 @@
  * cause TransientTransactionError / NoSuchTransaction. We solve this with a
  * reentrant async mutex:
  * - Top-level operations (the ones fired by Promise.all) are serialized
- * - Nested operations (e.g. pre-save hooks that do queries) detect they're
- *   already inside a serialized block and skip the mutex, preventing deadlocks
- * - AsyncLocalStorage tracks the serialization context across the async chain
+ * - Nested operations (e.g. pre-save hooks that do queries) run without taking
+ *   the mutex while the ancestor that owns it is still inside its critical
+ *   section, preventing deadlocks
+ * - AsyncLocalStorage tracks which critical section owns the current async chain
+ *
+ * Teardown drain: every operation is counted while in flight, and teardown waits
+ * for that count to reach zero before aborting. Work a test leaves behind — a
+ * fire-and-forget `void AuditLog.create(...)` write, follow-up writes spawned by
+ * post-save hooks — would otherwise still be queued when the transaction is
+ * aborted, then run against the aborted transaction or, once the session is no
+ * longer transactional, commit for real.
+ *
+ * Test-boundary cancellation: operations still queued on the mutex when the
+ * session is discarded reject with {@link TestTransactionOperationCancelledError}
+ * instead of running. Use {@link isTestTransactionOperationCancelled} to
+ * recognize that error (including when wrapped through `cause`).
  *
  * Limitations:
  * - App code that creates its own sessions (e.g. explicit transactions in
@@ -47,50 +58,203 @@ import mongoose from "mongoose";
 let currentTestSession: ClientSession | null = null;
 let patchesInstalled = false;
 
+/** How deep {@link isTestTransactionOperationCancelled} follows `cause` chains. */
+const MAX_CAUSE_DEPTH = 5;
+
+/** Default budget for in-flight operations to settle before teardown gives up. */
+// Below Bun's default 5s hook timeout, so a quarantine after a timed-out drain finishes
+// inside the same afterEach instead of spilling into the next test.
+const DEFAULT_DRAIN_TIMEOUT_MS = 3000;
+
+// ============================================================================
+// Cancellation Error
+// ============================================================================
+
+/**
+ * Thrown when a queued DB operation is discarded at a test boundary.
+ *
+ * Rejecting stops the operation's `await` chain so later writes cannot run
+ * after the test session is gone. `bun test` reports an unawaited rejection
+ * itself (it does not call `process.on("unhandledRejection")` listeners), so a
+ * fire-and-forget write that hits this error shows up as a test failure; await
+ * the write, or check `isTestTransactionOperationCancelled` where it is caught.
+ */
+export class TestTransactionOperationCancelledError extends Error {
+  constructor() {
+    super("[testTransaction] Cancelled a queued operation at a test boundary");
+    this.name = "TestTransactionOperationCancelledError";
+  }
+}
+
+/** True when `error` is a test-boundary cancellation, including wrapped `cause` chains. */
+export const isTestTransactionOperationCancelled = (error: unknown): boolean => {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && current; depth++) {
+    if (current instanceof TestTransactionOperationCancelledError) {
+      return true;
+    }
+    current = (current as {cause?: unknown}).cause;
+  }
+  return false;
+};
+
 // ============================================================================
 // Reentrant Async Mutex
 // ============================================================================
 
 /**
- * Tracks whether the current async context is already inside a serialized
- * DB operation. When true, nested operations skip the mutex to avoid deadlocks.
+ * Identifies the critical section that the current async context belongs to.
+ * A nested operation skips the mutex only while that section still holds it,
+ * which avoids deadlocks without letting detached work bypass serialization.
  */
-const serializationContext = new AsyncLocalStorage<{active: boolean}>();
+const serializationContext = new AsyncLocalStorage<{owner: object}>();
+
+interface MutexWaiter {
+  reject: (error: Error) => void;
+  resolve: (generation: number) => void;
+}
 
 /**
  * Async mutex that serializes access to the MongoDB session.
  * Only one DB operation can be in-flight at a time when a test session is active.
  */
 class AsyncMutex {
-  private queue: Array<() => void> = [];
+  private queue: MutexWaiter[] = [];
   private locked = false;
+  /**
+   * Bumped by {@link reset}. A holder releases with the generation it acquired
+   * in, so a holder stranded by a reset cannot unlock (or hand off) a mutex that
+   * a later test now owns.
+   */
+  private generation = 0;
 
-  async acquire(): Promise<void> {
+  /** Resolves with the generation the lock was granted in; pass it to {@link release}. */
+  async acquire(): Promise<number> {
     if (!this.locked) {
       this.locked = true;
-      return;
+      return this.generation;
     }
-    return new Promise<void>((resolve) => {
-      this.queue.push(resolve);
+    return new Promise<number>((resolve, reject) => {
+      this.queue.push({reject, resolve});
     });
   }
 
-  release(): void {
+  release(generation: number): void {
+    if (generation !== this.generation) {
+      return;
+    }
     const next = this.queue.shift();
     if (next) {
-      next();
+      next.resolve(this.generation);
     } else {
       this.locked = false;
     }
   }
 
+  /**
+   * Cancels queued work when the owning test session is discarded.
+   *
+   * Resolving every waiter as though it owned the lock would let them all
+   * proceed concurrently on the shared session. Rejecting with
+   * {@link TestTransactionOperationCancelledError} instead stops `await`
+   * chains so later writes cannot run after the session is reset.
+   */
   reset(): void {
-    this.locked = false;
+    const stranded = this.queue;
     this.queue = [];
+    this.locked = false;
+    this.generation++;
+    for (const waiter of stranded) {
+      waiter.reject(new TestTransactionOperationCancelledError());
+    }
   }
 }
 
 const sessionMutex = new AsyncMutex();
+
+/**
+ * Identity of the critical section that currently holds {@link sessionMutex}.
+ * A nested operation may only skip the mutex while its own ancestor still holds
+ * it; see {@link serialized}.
+ */
+let currentMutexOwner: object | null = null;
+
+/** Clears the mutex and its holder identity between tests. */
+const resetSessionMutex = (): void => {
+  currentMutexOwner = null;
+  sessionMutex.reset();
+};
+
+// ============================================================================
+// In-Flight Operation Tracking
+// ============================================================================
+
+/**
+ * DB operations issued through {@link serialized} that have not settled yet.
+ *
+ * This counts queued operations as well as running ones, because a test can
+ * leave work behind after its body returns — fire-and-forget writes, and
+ * follow-up writes spawned by post-save hooks. Teardown must wait for all of it.
+ */
+let pendingOperationCount = 0;
+
+/**
+ * Incremented when tracking is abandoned so that late `finally` blocks from a
+ * previous epoch cannot drive {@link pendingOperationCount} negative.
+ */
+let operationEpoch = 0;
+
+/** Resolvers waiting for {@link pendingOperationCount} to reach zero. */
+let drainWaiters: Array<() => void> = [];
+
+const notifyDrained = (): void => {
+  const waiters = drainWaiters;
+  drainWaiters = [];
+  for (const resolve of waiters) {
+    resolve();
+  }
+};
+
+/** Runs an operation while counting it as in-flight. */
+const trackOperation = async <T>(operation: () => T | Promise<T>): Promise<T> => {
+  const epoch = operationEpoch;
+  pendingOperationCount++;
+  try {
+    return await operation();
+  } finally {
+    if (epoch === operationEpoch) {
+      pendingOperationCount--;
+      if (pendingOperationCount === 0) {
+        notifyDrained();
+      }
+    }
+  }
+};
+
+/** Resolves once no tracked operation is in flight. */
+const whenNoOperationsInFlight = (): Promise<void> => {
+  if (pendingOperationCount === 0) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    drainWaiters.push(resolve);
+  });
+};
+
+/**
+ * Clears operation accounting after the session that owns it is quarantined.
+ *
+ * Late `finally` blocks from the discarded session belong to the previous
+ * epoch, so they cannot affect accounting for the next test.
+ */
+const abandonOperationTracking = (): void => {
+  operationEpoch++;
+  pendingOperationCount = 0;
+  notifyDrained();
+};
+
+/** Minimal shape of a Mongoose connection (`Model.db`) needed to compare clients. */
+type ConnectionLike = {getClient?: () => unknown} | null | undefined;
 
 /**
  * Returns whether the active test transaction session can be attached to DB
@@ -102,9 +266,7 @@ const sessionMutex = new AsyncMutex();
  * @param connection - Mongoose connection (`Model.db`), or undefined when unknown
  * @returns True when the session should be passed into driver options / `.session()`
  */
-const shouldAttachTestSessionToConnection = (
-  connection: {getClient?: () => unknown} | null | undefined
-): boolean => {
+const shouldAttachTestSessionToConnection = (connection: ConnectionLike): boolean => {
   if (!currentTestSession) {
     return false;
   }
@@ -119,41 +281,117 @@ const shouldAttachTestSessionToConnection = (
   return sessionClient === connClient;
 };
 
+const drainTimeoutError = (): Error =>
+  new Error(
+    `[testTransaction] Timed out waiting for ${pendingOperationCount} serialized operation(s) to drain`
+  );
+
 /**
- * Waits until all serialized DB operations have completed before test teardown.
+ * Waits until every serialized DB operation has settled before test teardown.
  *
- * This prevents operations that were queued near test completion from leaking
- * into the next test's transaction window, which can surface as intermittent
- * NoSuchTransaction / transaction-number mismatch errors.
+ * Taking one turn on the mutex is not enough: the mutex is FIFO, so a turn only
+ * proves that operations queued *before* teardown have finished. Work the test
+ * left behind — a fire-and-forget write, a follow-up write spawned by a
+ * post-save hook — queues after teardown and would still be pending. Those
+ * operations then execute against a transaction that has already been aborted,
+ * which surfaces as a NoSuchTransaction error, or worse, land after
+ * {@link serialized} has given up on the transaction and get committed for real.
+ *
+ * Waiting on the in-flight count instead covers both queued and running work,
+ * and re-checks after yielding because settling one operation can enqueue the
+ * next one in its chain. Uses the monotonic clock so `setSystemTime` in a test
+ * cannot stretch or shrink the budget.
  */
-const waitForSerializedOperationsToDrain = async (timeoutMs = 5000): Promise<void> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      (async () => {
-        await sessionMutex.acquire();
-        sessionMutex.release();
-      })(),
-      new Promise<void>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(
-            new Error(`[testTransaction] Timed out waiting for serialized operations to drain`)
-          );
-        }, timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
+const waitForSerializedOperationsToDrain = async (timeoutMs: number): Promise<void> => {
+  const deadline = performance.now() + timeoutMs;
+
+  while (pendingOperationCount > 0) {
+    const remainingMs = deadline - performance.now();
+    if (remainingMs <= 0) {
+      throw drainTimeoutError();
     }
+
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        whenNoOperationsInFlight(),
+        new Promise<void>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(drainTimeoutError());
+          }, remainingMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    // Yield a macrotask so any operation chained onto the ones that just settled
+    // is registered before we conclude the queue is empty.
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
   }
 };
 
 /**
- * Wraps an async DB operation with the session mutex. Reentrant: if the current
- * async context is already inside a serialized block, the operation runs directly
- * without acquiring the mutex (preventing deadlocks from nested operations like
- * pre-save hooks that do queries).
+ * Guarantees the reused session has an open transaction before an operation runs.
+ *
+ * When the server aborts the transaction mid-test, the session stays usable but
+ * is no longer transactional. Every subsequent write would then execute as an
+ * ordinary write and be committed, permanently leaking the test's fixtures into
+ * the shared database and corrupting every test file that runs after it.
+ * Reopening a transaction keeps those writes rollback-able.
+ */
+const ensureTransactionOpen = (): void => {
+  if (currentTestSession && !currentTestSession.inTransaction()) {
+    currentTestSession.startTransaction();
+  }
+};
+
+/**
+ * Discards a session whose operations did not settle before teardown.
+ *
+ * A drain timeout means the session can no longer safely isolate the following
+ * test. Aborting and ending it makes the old operations fail instead of letting
+ * them attach to a new transaction; clearing the global lets the next test
+ * obtain a fresh session.
+ */
+const quarantineTestSession = async (): Promise<void> => {
+  const session = currentTestSession;
+  if (!session) {
+    return;
+  }
+
+  currentTestSession = null;
+  try {
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
+  } catch {
+    // The session is being discarded after a teardown failure.
+  }
+  try {
+    await session.endSession();
+  } catch {
+    // The session is being discarded after a teardown failure.
+  }
+};
+
+/**
+ * Wraps an async DB operation with the session mutex. Reentrant: while the
+ * critical section that owns the mutex is still running, operations it spawns
+ * run directly without acquiring the mutex, so nested work like a pre-save hook
+ * issuing its own query cannot deadlock against its caller.
+ *
+ * Restart caveat: when a `TransientTransactionError` is hit mid-test, this
+ * function restarts the transaction and retries only the *failing* operation.
+ * The restart discards the transaction's snapshot, so writes the test made
+ * earlier are silently rolled back and a later assertion can fail against a DB
+ * state the test doesn't expect. The restart path is a last resort — the drain
+ * and reentrancy rules above exist to keep operations from arriving on an
+ * already-aborted transaction in the first place.
  */
 const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
   // If no test session is active, skip serialization entirely
@@ -161,10 +399,16 @@ const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
     return fn();
   }
 
-  // If we're already inside a serialized block (nested call), run directly
+  // Nested call whose ancestor still holds the mutex: acquiring it again would
+  // deadlock, so run directly. The ancestor check is deliberately by identity
+  // rather than a plain "am I inside a serialized block" flag — the async
+  // context is inherited by fire-and-forget work too, and such an operation can
+  // resume long after its ancestor released the mutex. Treating that as nested
+  // would let it run concurrently with another operation on the same session,
+  // which MongoDB rejects.
   const store = serializationContext.getStore();
-  if (store?.active) {
-    return fn();
+  if (store && store.owner === currentMutexOwner) {
+    return trackOperation(fn);
   }
 
   // Top-level call: acquire mutex, then run inside the serialization context
@@ -172,15 +416,22 @@ const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
     let hasRetried = false;
 
     while (true) {
-      await sessionMutex.acquire();
+      const generation = await sessionMutex.acquire();
+      const owner = {};
+      currentMutexOwner = owner;
       try {
-        return await serializationContext.run({active: true}, fn);
-      } catch (error: any) {
+        ensureTransactionOpen();
+        return await serializationContext.run({owner}, fn);
+      } catch (error) {
+        if (isTestTransactionOperationCancelled(error)) {
+          throw error;
+        }
         // If this error aborted the transaction (e.g. E11000 duplicate key),
         // restart it and retry once so transient transaction-number mismatches
         // don't fail the test immediately.
+        const transactionError = error as {errorLabels?: string[]};
         const isTransactionAborted =
-          error?.errorLabels?.includes?.("TransientTransactionError") ||
+          transactionError?.errorLabels?.includes?.("TransientTransactionError") ||
           (currentTestSession && !currentTestSession.inTransaction());
 
         if (!hasRetried && isTransactionAborted && currentTestSession) {
@@ -199,11 +450,14 @@ const serialized = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
 
         throw error;
       } finally {
-        sessionMutex.release();
+        if (currentMutexOwner === owner) {
+          currentMutexOwner = null;
+        }
+        sessionMutex.release(generation);
       }
     }
   };
-  return run();
+  return trackOperation(run);
 };
 
 // ============================================================================
@@ -242,33 +496,51 @@ export const startTestTransaction = async (): Promise<void> => {
     currentTestSession = await mongoose.startSession();
   }
 
-  sessionMutex.reset();
+  resetSessionMutex();
   currentTestSession.startTransaction();
 };
+
+export interface AbortTestTransactionOptions {
+  /** How long to wait for in-flight and queued operations to settle. Defaults to 3000ms. */
+  drainTimeoutMs?: number;
+}
 
 /**
  * Aborts the current test transaction. Call in afterEach.
  *
- * The session is intentionally kept alive (not ended) so it can be reused by
+ * Waits for in-flight and queued operations to settle first. If they do not
+ * settle within the drain budget, the session is quarantined (aborted and
+ * ended), queued operations reject with {@link TestTransactionOperationCancelledError},
+ * and the drain timeout error is rethrown so the offending test fails.
+ *
+ * The session is otherwise kept alive (not ended) so it can be reused by
  * the next test. This avoids returning the session to the driver's server
  * session pool, which prevents transaction number mismatches when in-flight
  * operations from a previous test complete after the session has been recycled.
  */
-export const abortTestTransaction = async (): Promise<void> => {
+export const abortTestTransaction = async ({
+  drainTimeoutMs = DEFAULT_DRAIN_TIMEOUT_MS,
+}: AbortTestTransactionOptions = {}): Promise<void> => {
   if (!currentTestSession) {
     return;
   }
 
+  // Ensure any in-flight/queued DB work from the current test has settled
+  // before aborting, so it cannot land on the next test's transaction.
   try {
-    // Ensure any in-flight/queued DB work from the current test has settled
-    // before aborting and starting the next transaction.
-    await waitForSerializedOperationsToDrain();
+    await waitForSerializedOperationsToDrain(drainTimeoutMs);
+  } catch (error) {
+    await quarantineTestSession();
+    abandonOperationTracking();
+    resetSessionMutex();
+    throw error;
+  }
 
+  try {
     if (currentTestSession.inTransaction()) {
       await currentTestSession.abortTransaction();
     }
   } catch (error) {
-    // biome-ignore lint/suspicious/noConsole: test harness diagnostic when abort fails
     console.warn("[testTransaction] Error aborting transaction:", error);
     // If the abort failed, the session may be in a bad state. End it so
     // startTestTransaction creates a fresh one.
@@ -280,7 +552,7 @@ export const abortTestTransaction = async (): Promise<void> => {
     currentTestSession = null;
   } finally {
     // Clean slate for the next test transaction.
-    sessionMutex.reset();
+    resetSessionMutex();
   }
 };
 
@@ -293,7 +565,7 @@ export const abortTestTransaction = async (): Promise<void> => {
  */
 export const resetTestSessionAfterReconnect = async (): Promise<void> => {
   if (!currentTestSession) {
-    sessionMutex.reset();
+    resetSessionMutex();
     return;
   }
 
@@ -306,7 +578,7 @@ export const resetTestSessionAfterReconnect = async (): Promise<void> => {
     // Ignore cleanup failures; session is being discarded regardless.
   } finally {
     currentTestSession = null;
-    sessionMutex.reset();
+    resetSessionMutex();
   }
 };
 
@@ -328,7 +600,8 @@ export const resetTestSessionAfterReconnect = async (): Promise<void> => {
  * - Aggregate.prototype.exec — covers aggregation pipelines
  * - Model.bulkWrite — covers bulk write operations
  * - Model.insertMany — covers bulk inserts (uses native driver, not save)
- * - Model.distinct — bypasses Query, calls native driver directly
+ * - Model.create — serializes multi-document creates (forces `ordered: true`) so
+ *   their saves cannot race each other on the shared session
  * - Model.startSession — returns a no-op wrapper so app-level transactions don't conflict
  * - Collection.prototype (insertOne, updateOne, deleteOne, etc.) — covers native driver
  *   operations used by tests that call Model.collection.insertOne() directly
@@ -344,25 +617,37 @@ export const installTransactionPatches = (): void => {
 
   // --- Query.prototype.exec ---
   const originalQueryExec = mongoose.Query.prototype.exec;
-  mongoose.Query.prototype.exec = function (this: any) {
+  mongoose.Query.prototype.exec = function (this: mongoose.Query<unknown, unknown>) {
     if (currentTestSession) {
       if (!shouldAttachTestSessionToConnection(this.model?.db)) {
         return originalQueryExec.apply(this);
       }
-      this.session(currentTestSession);
-      return serialized(() => originalQueryExec.apply(this));
+      let attempt = 0;
+      return serialized(() => {
+        // Query instances are single-use in Mongoose, so when serialized() retries
+        // after restarting a transaction it must execute a fresh clone. The first
+        // attempt runs the original: `clone()` drops per-instance hooks such as the
+        // ones `doc.deleteOne()` registers to run document middleware.
+        const queryForExecution = attempt === 0 ? this : this.clone();
+        attempt++;
+        queryForExecution.session(currentTestSession);
+        return originalQueryExec.apply(queryForExecution);
+      });
     }
     return originalQueryExec.apply(this);
-  } as any;
+  } as unknown as typeof mongoose.Query.prototype.exec;
 
   // --- Model.prototype.save and $save ---
-  // In Mongoose 8, Model.create() calls $save (not save). $save is assigned from
-  // save at module load time (Model.prototype.$save = Model.prototype.save), so we
-  // must patch both to ensure Model.create() goes through our session injection.
-  const patchSave = (original: Function) =>
-    function (this: any, options?: any) {
+  // Model.create() calls $save (not save). $save is assigned from save at module
+  // load time (Model.prototype.$save = Model.prototype.save), so we must patch
+  // both to ensure Model.create() goes through our session injection.
+  const patchSave = (original: (...args: unknown[]) => unknown) =>
+    function (
+      this: mongoose.Document,
+      options?: mongoose.SaveOptions | ((error: Error | null) => void)
+    ) {
       if (currentTestSession) {
-        const connection = this.constructor?.db;
+        const connection = (this.constructor as unknown as {db?: ConnectionLike}).db;
         if (!shouldAttachTestSessionToConnection(connection)) {
           return original.call(this, options);
         }
@@ -370,24 +655,32 @@ export const installTransactionPatches = (): void => {
           this.$session(currentTestSession);
           return serialized(() => original.call(this, options));
         }
-        options = {...(options || {}), session: currentTestSession};
-        return serialized(() => original.call(this, options));
+        const optionsWithSession = {...(options ?? {}), session: currentTestSession};
+        return serialized(() => original.call(this, optionsWithSession));
       }
       return original.call(this, options);
     };
 
   const originalSave = mongoose.Model.prototype.save;
-  mongoose.Model.prototype.save = patchSave(originalSave) as any;
+  mongoose.Model.prototype.save = patchSave(
+    originalSave as unknown as (...args: unknown[]) => unknown
+  ) as unknown as typeof mongoose.Model.prototype.save;
 
   // $save is what Model.create() actually calls
   const original$Save = mongoose.Model.prototype.$save;
-  mongoose.Model.prototype.$save = patchSave(original$Save) as any;
+  mongoose.Model.prototype.$save = patchSave(
+    original$Save as unknown as (...args: unknown[]) => unknown
+  ) as unknown as typeof mongoose.Model.prototype.$save;
 
   // --- Aggregate.prototype.exec ---
   const originalAggExec = mongoose.Aggregate.prototype.exec;
-  mongoose.Aggregate.prototype.exec = function (this: any) {
+  mongoose.Aggregate.prototype.exec = function (this: mongoose.Aggregate<unknown>) {
     if (currentTestSession) {
-      const connection = this._model?.db ?? this._connection;
+      const aggregateInternals = this as unknown as {
+        _model?: {db?: ConnectionLike};
+        _connection?: ConnectionLike;
+      };
+      const connection = aggregateInternals._model?.db ?? aggregateInternals._connection;
       if (!shouldAttachTestSessionToConnection(connection)) {
         return originalAggExec.apply(this);
       }
@@ -395,33 +688,41 @@ export const installTransactionPatches = (): void => {
       return serialized(() => originalAggExec.apply(this));
     }
     return originalAggExec.apply(this);
-  } as any;
+  } as unknown as typeof mongoose.Aggregate.prototype.exec;
 
   // --- Model.bulkWrite (static) ---
-  const originalBulkWrite = mongoose.Model.bulkWrite;
-  (mongoose.Model as any).bulkWrite = function (this: any, ops: any[], options?: any) {
+  const originalBulkWrite = mongoose.Model.bulkWrite as unknown as (
+    this: unknown,
+    ...args: unknown[]
+  ) => unknown;
+  mongoose.Model.bulkWrite = function (this: {db?: ConnectionLike}, ...args: unknown[]) {
     if (currentTestSession) {
       if (!shouldAttachTestSessionToConnection(this.db)) {
-        return originalBulkWrite.call(this, ops, options);
+        return originalBulkWrite.apply(this, args);
       }
-      options = {...(options || {}), session: currentTestSession};
-      return serialized(() => originalBulkWrite.call(this, ops, options));
+      const [ops, options] = args;
+      const optionsWithSession = {...((options as object) ?? {}), session: currentTestSession};
+      return serialized(() => originalBulkWrite.apply(this, [ops, optionsWithSession]));
     }
-    return originalBulkWrite.call(this, ops, options);
-  };
+    return originalBulkWrite.apply(this, args);
+  } as unknown as typeof mongoose.Model.bulkWrite;
 
   // --- Model.insertMany (static) ---
-  const originalInsertMany = mongoose.Model.insertMany;
-  (mongoose.Model as any).insertMany = function (this: any, docs: any, options?: any) {
+  const originalInsertMany = mongoose.Model.insertMany as unknown as (
+    this: unknown,
+    ...args: unknown[]
+  ) => unknown;
+  mongoose.Model.insertMany = function (this: {db?: ConnectionLike}, ...args: unknown[]) {
     if (currentTestSession) {
       if (!shouldAttachTestSessionToConnection(this.db)) {
-        return (originalInsertMany as any).call(this, docs, options);
+        return originalInsertMany.apply(this, args);
       }
-      options = {...(options || {}), session: currentTestSession};
-      return serialized(() => (originalInsertMany as any).call(this, docs, options));
+      const [docs, options] = args;
+      const optionsWithSession = {...((options as object) ?? {}), session: currentTestSession};
+      return serialized(() => originalInsertMany.apply(this, [docs, optionsWithSession]));
     }
-    return (originalInsertMany as any).call(this, docs, options);
-  };
+    return originalInsertMany.apply(this, args);
+  } as unknown as typeof mongoose.Model.insertMany;
 
   // --- Model.create (static) ---
   // Some code paths call Model.create() directly (including through
@@ -429,37 +730,66 @@ export const installTransactionPatches = (): void => {
   // serialization guard and race with other operations on the shared test
   // session. Wrapping create ensures transient transaction aborts trigger the
   // same auto-restart logic in serialized().
-  const originalCreate = mongoose.Model.create;
-  (mongoose.Model as any).create = function (this: any, ...args: any[]) {
+  //
+  // Multi-document creates are additionally forced to `ordered: true`. Mongoose
+  // saves an array of documents with `Promise.all` unless ordered, and those
+  // nested saves are reentrant children of this critical section, so they skip
+  // the mutex and hit the shared session concurrently. When such a create is the
+  // first operation of a transaction, only one of the racing inserts carries
+  // `startTransaction: true`; if a sibling reaches the server first, the server
+  // rejects it with NoSuchTransaction ("Given transaction number N ... does not
+  // match any in-progress transactions"). Mongoose enforces the same constraint
+  // itself for explicitly-passed sessions — our session is injected lower down,
+  // at `$save`, so that guard never sees it.
+  // Varargs (`create(doc1, doc2)`) cannot carry options, so multi-document
+  // calls are rewritten to the equivalent array form, which also returns an array.
+  const toOrderedCreateArgs = (args: unknown[]): unknown[] => {
+    if (Array.isArray(args[0])) {
+      return [args[0], {...((args[1] as object) ?? {}), ordered: true}, ...args.slice(2)];
+    }
+    // Mongoose drops a trailing falsy argument from varargs creates.
+    const docs = args.length > 1 && !args[args.length - 1] ? args.slice(0, -1) : args;
+    return docs.length > 1 ? [docs, {ordered: true}] : args;
+  };
+  const originalCreate = mongoose.Model.create as unknown as (
+    this: unknown,
+    ...args: unknown[]
+  ) => unknown;
+  mongoose.Model.create = function (this: {db?: ConnectionLike}, ...args: unknown[]) {
     if (currentTestSession) {
       if (!shouldAttachTestSessionToConnection(this.db)) {
-        return (originalCreate as any).apply(this, args);
+        return originalCreate.apply(this, args);
       }
-      return serialized(() => (originalCreate as any).apply(this, args));
+      return serialized(() => originalCreate.apply(this, toOrderedCreateArgs(args)));
     }
-    return (originalCreate as any).apply(this, args);
-  };
+    return originalCreate.apply(this, args);
+  } as unknown as typeof mongoose.Model.create;
 
   // --- Model.startSession (static) ---
   // When test session is active, return a wrapper that redirects operations
   // through the test session. This ensures app code that creates its own
-  // transactions (e.g. userExplorerAcquisitionUpload.ts) doesn't bypass
-  // test isolation.
-  const originalStartSession = mongoose.Model.startSession;
-  (mongoose.Model as any).startSession = async function (this: any, options?: any) {
+  // transactions doesn't bypass test isolation.
+  const originalStartSession = mongoose.Model.startSession as unknown as (
+    this: unknown,
+    ...args: unknown[]
+  ) => unknown;
+  mongoose.Model.startSession = async function (this: unknown, ...args: unknown[]) {
     if (currentTestSession) {
+      const testSession = currentTestSession;
       return {
-        ...currentTestSession,
-        abortTransaction: async () => {},
-        commitTransaction: async () => {},
-        endSession: async () => {},
-        id: currentTestSession.id,
-        inTransaction: () => currentTestSession?.inTransaction() ?? false,
-        startTransaction: () => {},
+        ...testSession,
+        abortTransaction: async (): Promise<void> => {},
+        commitTransaction: async (): Promise<void> => {},
+        endSession: async (): Promise<void> => {},
+        id: testSession.id,
+        inTransaction: (): boolean => currentTestSession?.inTransaction() ?? false,
+        startTransaction: (): void => {},
+        withTransaction: async <T>(callback: (session: ClientSession) => Promise<T>): Promise<T> =>
+          callback(testSession),
       };
     }
-    return originalStartSession.call(this, options);
-  };
+    return originalStartSession.apply(this, args);
+  } as unknown as typeof mongoose.Model.startSession;
 
   // --- Collection.prototype (native driver operations) ---
   // Some test files call Model.collection.insertOne() etc. directly, bypassing
@@ -470,25 +800,28 @@ export const installTransactionPatches = (): void => {
   // - optionsAt1: (docOrFilter, options?) — insertOne, deleteOne, deleteMany, findOne, etc.
   // - optionsAt2: (filter, update, options?) — updateOne, updateMany, findOneAndUpdate, etc.
   const patchCollectionMethod = (method: string, optionsIndex: number): void => {
-    const original = (mongoose.Collection.prototype as any)[method];
+    const collectionPrototype = mongoose.Collection.prototype as unknown as Record<string, unknown>;
+    const original = collectionPrototype[method];
     if (typeof original !== "function") {
       return;
     }
-    (mongoose.Collection.prototype as any)[method] = function (this: any, ...args: any[]) {
+    const originalMethod = original as (this: unknown, ...args: unknown[]) => unknown;
+    collectionPrototype[method] = function (this: {conn?: ConnectionLike}, ...args: unknown[]) {
       if (!currentTestSession) {
-        return original.apply(this, args);
+        return originalMethod.apply(this, args);
       }
       if (!shouldAttachTestSessionToConnection(this.conn)) {
-        return original.apply(this, args);
+        return originalMethod.apply(this, args);
       }
       return serialized(() => {
         // Inject session into the options argument at the correct position
-        if (args[optionsIndex] && typeof args[optionsIndex] === "object") {
-          args[optionsIndex] = {...args[optionsIndex], session: currentTestSession};
+        const existingOptions = args[optionsIndex];
+        if (existingOptions && typeof existingOptions === "object") {
+          args[optionsIndex] = {...(existingOptions as object), session: currentTestSession};
         } else {
           args[optionsIndex] = {session: currentTestSession};
         }
-        return original.apply(this, args);
+        return originalMethod.apply(this, args);
       });
     };
   };
@@ -520,7 +853,6 @@ export const installTransactionPatches = (): void => {
 
   patchesInstalled = true;
   if (process.env.DEBUG_TEST_TRANSACTION === "true") {
-    // biome-ignore lint/suspicious/noConsole: optional debug for patch installation
     console.debug("[testTransaction] Mongoose patches installed");
   }
 };

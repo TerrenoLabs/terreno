@@ -106,6 +106,7 @@ export interface PushTokenDocument
   lastSeenAt: Date;
   platform: PushTokenPlatform;
   token: string;
+  tokenEpoch?: number;
   updated: Date;
   userId: mongoose.Types.ObjectId;
 }

@@ -1,5 +1,6 @@
 /** Verifies generated `/openapi.json` includes registered example-backend routes. */
 import {describe, expect, it} from "bun:test";
+import {getObservabilityApp} from "@terreno/ai";
 import {assert} from "chai";
 import type express from "express";
 import supertest from "supertest";
@@ -17,6 +18,48 @@ describe("OpenAPI spec generation", () => {
     expect(res.body.openapi).toBe("3.0.0");
     expect(res.body.info).toBeDefined();
     expect(res.body.paths).toBeDefined();
+  });
+
+  it("documents every non-synced route the frontends call", async (): Promise<void> => {
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    const paths = res.body.paths;
+    const expected: [string, string][] = [
+      ["/auth/me", "get"],
+      ["/auth/me", "patch"],
+      ["/auth/sendVerification", "post"],
+      ["/auth/forgotPassword", "post"],
+      ["/auth/verifyEmail", "post"],
+      ["/auth/resetPassword", "post"],
+      ["/resetPassword", "post"],
+      ["/version-check", "get"],
+      ["/consents/pending", "get"],
+      ["/consents/respond", "post"],
+      ["/announcements/pending", "get"],
+      ["/announcements/feed", "get"],
+      ["/announcements/{id}/acknowledge", "post"],
+      ["/announcements/{id}/click", "post"],
+      ["/announcements/{id}/impression", "post"],
+      ["/feature-flags/flagConfiguration", "get"],
+      ["/files/upload", "post"],
+    ];
+    const missing = expected.filter(([path, method]) => !paths[path]?.[method]);
+    expect(missing).toEqual([]);
+
+    // The example User model, with roles/permissions from accessControl and no password fields.
+    const me = paths["/auth/me"].get.responses["200"].content["application/json"].schema;
+    expect(me.properties.data.properties.email.type).toBe("string");
+    expect(me.properties.data.properties.permissions.type).toBe("object");
+    expect(me.properties.data.properties.hash).toBeUndefined();
+    expect(me.properties.data.properties.salt).toBeUndefined();
+
+    const upload = paths["/files/upload"].post;
+    expect(upload.requestBody.content["multipart/form-data"].schema.properties.file).toEqual({
+      format: "binary",
+      required: true,
+      type: "string",
+    });
+    expect(paths["/auth/forgotPassword"].post.responses["202"]).toBeDefined();
   });
 
   it("includes admin todo routes", async () => {
@@ -101,6 +144,51 @@ describe("OpenAPI spec generation", () => {
     expect(res.body.paths["/gpt/histories/"]).toBeDefined();
     expect(res.body.paths["/gpt/histories/"].get).toBeDefined();
     expect(res.body.paths["/gpt/histories/{id}"]).toBeDefined();
+    expect(res.body.paths["/gpt/histories/pendingAsks"].get.operationId).toBe(
+      "gpthistories_pendingAsks"
+    );
+    expect(res.body.paths["/gpt/histories/{id}/turn"].post.operationId).toBe("gpthistories_turn");
+    expect(res.body.paths["/gpt/histories/{id}/stream"].get).toBeDefined();
+  });
+
+  it("boots local observability and documents the seeded summarize route", async () => {
+    const observability = getObservabilityApp();
+    expect(observability?.plugins.map((plugin) => plugin.id)).toEqual(["local"]);
+    expect(observability?.control).toEqual({
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    });
+
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    expect(res.body.paths["/ai/example-summarize"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/status"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/prompts"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces/test-multi-stage"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/review"]?.get).toBeDefined();
+  });
+
+  it("boots local observability and documents the seeded summarize route", async () => {
+    const observability = getObservabilityApp();
+    expect(observability?.plugins.map((plugin) => plugin.id)).toEqual(["local"]);
+    expect(observability?.control).toEqual({
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    });
+
+    const server = supertest(app);
+    const res = await server.get("/openapi.json").expect(200);
+    expect(res.body.paths["/ai/example-summarize"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/status"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/prompts"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces"]?.get).toBeDefined();
+    expect(res.body.paths["/ai/observability/traces/test-multi-stage"]?.post).toBeDefined();
+    expect(res.body.paths["/ai/observability/review"]?.get).toBeDefined();
   });
 
   it("includes settings routes", async () => {

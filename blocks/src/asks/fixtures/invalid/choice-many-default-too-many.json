@@ -1,0 +1,15 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"},
+      {"id": "peppers", "label": "Peppers"}
+    ],
+    "maxSelected": 2,
+    "default": ["cheese", "olives", "peppers"]
+  },
+  "errors": [{"path": "default", "code": "SELECTION_COUNT"}]
+}

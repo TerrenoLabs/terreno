@@ -1,0 +1,32 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Should I archive the finished todos?",
+    "select": "one",
+    "options": [
+      {"id": "archive", "label": "Archive them"},
+      {"id": "keep", "label": "Keep them"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Should I archive the finished todos?",
+    "handoff": false,
+    "buttons": [
+      {
+        "id": "option:archive",
+        "label": "Archive them",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["archive"]}}
+      },
+      {
+        "id": "option:keep",
+        "label": "Keep them",
+        "style": "default",
+        "response": {"action": "accept", "content": {"selected": ["keep"]}}
+      },
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

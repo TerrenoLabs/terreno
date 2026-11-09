@@ -1,7 +1,7 @@
 # Tasks: Inbound webhook framework
 
 IP: [inbound-webhooks.md](../implementationPlans/inbound-webhooks.md)  
-**Closes:** https://github.com/FlourishHealth/terreno/issues/1172
+**Closes:** https://github.com/TerrenoLabs/terreno/issues/1172
 
 **Feature profile:** false (full IP)
 

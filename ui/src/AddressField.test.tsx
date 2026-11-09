@@ -3,6 +3,7 @@ import {fireEvent} from "@testing-library/react-native";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {AddressField} from "./AddressField";
+import type {AddressFieldProps} from "./Common";
 import {renderWithTheme} from "./test-utils";
 
 describe("AddressField", () => {
@@ -29,8 +30,6 @@ describe("AddressField", () => {
   });
 
   const defaultProps = {
-    onBlur: mockOnBlur,
-    onChange: mockOnChange,
     testID: "test-address",
     value: defaultValue,
   };
@@ -138,9 +137,16 @@ describe("AddressField", () => {
   });
 
   it("renders without throwing when value is undefined", () => {
+    // Simulates an untyped caller that omits the required value at runtime.
+    const missingValue = undefined as unknown as AddressFieldProps["value"];
     expect(() =>
       renderWithTheme(
-        <AddressField onBlur={mockOnBlur} onChange={mockOnChange} testID="no-value" />
+        <AddressField
+          onBlur={mockOnBlur}
+          onChange={mockOnChange}
+          testID="no-value"
+          value={missingValue}
+        />
       )
     ).not.toThrow();
   });

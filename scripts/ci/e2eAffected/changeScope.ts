@@ -19,6 +19,7 @@ const INERT_PATTERNS: RegExp[] = [
   /^plugins\//,
   /^changelog\//,
   /^terraform\//,
+  /^infra\//,
   /^create-terreno-app\//,
   /^\.maestro\//,
   /^\.github\//,

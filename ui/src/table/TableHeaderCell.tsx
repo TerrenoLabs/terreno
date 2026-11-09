@@ -1,5 +1,5 @@
 // TableHeaderCell.tsx
-import {FontAwesome6} from "@expo/vector-icons";
+import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {type ReactElement, useCallback} from "react";
 
 import {Box} from "../Box";

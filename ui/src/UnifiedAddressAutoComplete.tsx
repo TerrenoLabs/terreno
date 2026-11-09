@@ -1,7 +1,7 @@
 import {useMemo} from "react";
 
 import type {AddressAutocompleteProps} from "./Common";
-import {isMobileDevice} from "./MediaQuery";
+import {isNarrowViewport} from "./MediaQuery";
 import {MobileAddressAutocomplete} from "./MobileAddressAutoComplete";
 import {TextField} from "./TextField";
 import {isNative, isValidGoogleApiKey} from "./Utilities";
@@ -35,7 +35,7 @@ export const UnifiedAddressAutoCompleteField = ({
         testID={testID}
       />
     );
-  } else if (isMobileDevice() && isNative() && isValidatedGoogleApiKey) {
+  } else if (isNarrowViewport() && isNative() && isValidatedGoogleApiKey) {
     return (
       <MobileAddressAutocomplete
         disabled={disabled}

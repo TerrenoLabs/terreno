@@ -1,7 +1,7 @@
 # Admin UI v2 — Django-Parity Admin (Config-Driven Shell)
 
 **Status:** Implemented (phased tasks complete; acceptance criteria verified in-repo)  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1076
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1076
 **Branch:** Landed via `cursor/admin-ui-v2-backend-a736` (PR #782)  
 **Owner:** Josh Gachnang  
 **Created:** 2026-06-15  

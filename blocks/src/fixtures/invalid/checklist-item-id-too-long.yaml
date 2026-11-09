@@ -1,0 +1,7 @@
+v: 1
+blocks:
+  - type: checklist
+    id: cooking
+    items:
+      - id: a_very_long_item_id_that_is_over_32
+        text: Preheat the oven

@@ -1,0 +1,22 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which day works for the kickoff?",
+    "select": "one",
+    "options": [
+      {"id": "mon", "label": "Monday"},
+      {"id": "tue", "label": "Tuesday"},
+      {"id": "wed", "label": "Wednesday"},
+      {"id": "thu", "label": "Thursday"}
+    ]
+  },
+  "simple": {
+    "toolCallId": "call_fixture",
+    "kind": "choice",
+    "text": "Which day works for the kickoff?",
+    "handoff": true,
+    "buttons": [
+      {"id": "skip", "label": "Skip", "style": "cancel", "response": {"action": "decline"}}
+    ]
+  }
+}

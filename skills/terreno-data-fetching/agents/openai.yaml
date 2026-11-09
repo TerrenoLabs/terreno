@@ -1,4 +1,4 @@
 interface:
   display_name: "Terreno Data Fetching"
-  short_description: "RTK Query generated hooks, auth tokens, and realtime sockets for Terreno apps — never axios or raw fetch"
-  default_prompt: "Use $terreno-data-fetching to implement API calls with generated RTK Query hooks, auth, and caching in a Terreno app."
+  short_description: "syncdb collection hooks, generated request hooks, session auth, and socket events for Terreno apps — never axios or raw fetch"
+  default_prompt: "Use $terreno-data-fetching to implement API calls with @terreno/syncdb collection hooks, generated store/apiSdk.ts hooks, and session auth in a Terreno app."

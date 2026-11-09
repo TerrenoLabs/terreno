@@ -1,7 +1,7 @@
 # Implementation Plan: create-terreno-app scaffolding CLI
 
 **Status:** In progress — all tasks Roast PASS; next: Brew  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1174  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1174  
 **Branch:** `cursor/create-terreno-app-ip-54bd`  
 **Owner:** unassigned  
 **Created:** 2026-09-10  

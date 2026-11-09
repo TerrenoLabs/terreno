@@ -4,6 +4,7 @@ import {
   APIError,
   asyncHandler,
   authenticateMiddleware,
+  createOpenApiBuilder,
   logger,
   type ModelRouterOptions,
   modelRouter,
@@ -116,6 +117,40 @@ export class FeatureFlagsApp implements TerrenoPlugin {
     app.get(
       `${basePath}/flagConfiguration`,
       authenticateMiddleware(),
+      // Documentation only: request validation stays off so the handler behaves as before.
+      createOpenApiBuilder(openApi ? {openApi: openApi as OpenApiMiddleware} : {})
+        .withTags(["feature-flags"])
+        .withSummary("Get every flag's configuration resolved for the current user")
+        .withDescription(
+          "Keyed by flag key. Disabled boolean flags are included with disabled: true; disabled variant flags are omitted."
+        )
+        .withResponse(
+          200,
+          {
+            data: {
+              additionalProperties: {
+                properties: {
+                  defaultVariant: {
+                    description: "The variant to use for the current user",
+                    type: "string",
+                  },
+                  disabled: {type: "boolean"},
+                  variants: {
+                    additionalProperties: {oneOf: [{type: "boolean"}, {type: "string"}]},
+                    description: "Variant name to its value",
+                    type: "object",
+                  },
+                },
+                required: ["defaultVariant", "disabled", "variants"],
+                type: "object",
+              },
+              type: "object",
+            },
+          },
+          {required: ["data"]}
+        )
+        .withValidation({enabled: false})
+        .build(),
       asyncHandler(async (req: express.Request, res: express.Response) => {
         const user = req.user as {_id?: unknown; id?: string} | undefined;
         if (!user) {
@@ -123,10 +158,15 @@ export class FeatureFlagsApp implements TerrenoPlugin {
         }
 
         const targetingKey = String(user._id ?? user.id);
-        const flags = await FeatureFlag.find({archived: {$ne: true}, enabled: true});
+        const flags = await FeatureFlag.find({archived: {$ne: true}});
         const config: Record<string, FlagDefinition> = {};
 
         for (const flag of flags) {
+          // Disabled boolean flags are sent as `off` so clients can tell a turned-off
+          // flag from one that was never created. Disabled variant flags stay omitted.
+          if (!flag.enabled && flag.type !== "boolean") {
+            continue;
+          }
           config[flag.key] = buildFlagDefinition(flag, targetingKey, user, this.segments);
         }
 
@@ -142,7 +182,7 @@ export class FeatureFlagsApp implements TerrenoPlugin {
         if (!evaluateDeprecationWarned) {
           evaluateDeprecationWarned = true;
           logger.warn(
-            "[feature-flags] GET /evaluate is deprecated; migrate clients to GET /flagConfiguration or use @terreno/rtk useFeatureFlags / useTerrenoFeatureFlags."
+            "[feature-flags] GET /evaluate is deprecated; migrate clients to GET /flagConfiguration or use useFeatureFlags / useTerrenoFeatureFlags from @terreno/syncdb/flags."
           );
         }
 

@@ -2,7 +2,7 @@ import {afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test
 import {act} from "@testing-library/react-native";
 import {assert} from "chai";
 import {createRef, forwardRef, useImperativeHandle, useRef} from "react";
-import {Platform, Modal as RNModal, Text, View} from "react-native";
+import {Platform, Modal as RNModal, Text, View, type ViewInstance} from "react-native";
 
 import {SimpleContent, useCombinedRefs} from "./ModalSheet";
 import {renderWithTheme} from "./test-utils";
@@ -14,10 +14,11 @@ const closeMock = mock(() => {});
 mock.module("react-native-modalize", () => ({
   Modalize: forwardRef<React.ElementRef<typeof View>, {children: React.ReactNode}>(
     ({children}, ref) => {
-      useImperativeHandle(ref, () => ({
-        close: closeMock,
-        open: openMock,
-      }));
+      // The Modalize double exposes only the open/close handle ModalSheet calls.
+      useImperativeHandle(
+        ref,
+        () => ({close: closeMock, open: openMock}) as unknown as React.ElementRef<typeof View>
+      );
       return (
         <View ref={ref} testID="modalize">
           {children}
@@ -48,8 +49,8 @@ describe("ModalSheet", () => {
 
   it("useCombinedRefs combines multiple refs", () => {
     const TestComponent = () => {
-      const ref1 = useRef<View>(null);
-      const ref2 = useRef<View>(null);
+      const ref1 = useRef<ViewInstance>(null);
+      const ref2 = useRef<ViewInstance>(null);
       const combinedRef = useCombinedRefs(ref1, ref2);
       return <View ref={combinedRef} testID="combined-ref-view" />;
     };
@@ -72,10 +73,10 @@ describe("ModalSheet", () => {
   });
 
   it("useCombinedRefs forwards the node to callback refs, object refs, and skips undefined", () => {
-    const callbackRef = mock((_node: View | null) => {});
-    const objectRef: {current: View | null} = {current: null};
+    const callbackRef = mock((_node: ViewInstance | null) => {});
+    const objectRef: {current: ViewInstance | null} = {current: null};
     const TestComponent = () => {
-      const combinedRef = useCombinedRefs<View>(callbackRef, undefined, objectRef);
+      const combinedRef = useCombinedRefs<ViewInstance>(callbackRef, undefined, objectRef);
       return <View ref={combinedRef} testID="combined-ref-view" />;
     };
 

@@ -1,7 +1,7 @@
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
-import type {AdminApi, AdminModelConfig} from "../types";
+import type {AdminModelConfig} from "../types";
 
 interface ActivityState {
   data: unknown;
@@ -12,8 +12,8 @@ interface ActivityState {
 const state: ActivityState = {data: undefined, isError: false, isLoading: false};
 const listCalls: unknown[] = [];
 
-mock.module("../useAdminApi", () => ({
-  useAdminApi: () => ({
+mock.module("../useAdminModelApi", () => ({
+  useAdminModelApi: () => ({
     useListQuery: (...args: unknown[]) => {
       listCalls.push(args);
       return state;
@@ -24,8 +24,10 @@ mock.module("../useAdminApi", () => ({
 import {RecentActivityWidget} from "../widgets/RecentActivityWidget";
 
 const auditModel: AdminModelConfig = {
+  defaultSort: "-created",
   displayName: "Audit logs",
   fields: {},
+  listFields: [],
   name: "AdminAuditLog",
   routePath: "/admin/audit-logs",
 };
@@ -34,7 +36,6 @@ const orgScopedAuditModel: AdminModelConfig = {
   organizationScoped: true,
 };
 const baseProps = {
-  api: {} as AdminApi,
   apiBase: "/admin",
   routeBase: "/admin",
 };

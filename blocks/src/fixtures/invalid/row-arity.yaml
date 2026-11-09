@@ -1,0 +1,11 @@
+v: 1
+datasets:
+  signups:
+    columns:
+      - {name: month, type: string}
+      - {name: count, type: number}
+    rows:
+      - [Jan]
+blocks:
+  - type: table
+    data: signups

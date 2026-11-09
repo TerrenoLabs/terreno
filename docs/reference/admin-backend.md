@@ -113,6 +113,29 @@ When `JobsApp` is already registered, the run is enqueued as job `admin/script` 
 `defineAdminScriptJob` on the worker process with the same script list. The CLI
 (`runScriptCli`) does not enqueue.
 
+## MCP screens
+
+`mcpAdminModels(options?)` returns model configs for an MCP server's admin screens, in the `MCP` sidebar group:
+
+| Route | Model | Allowed | Notes |
+| --- | --- | --- | --- |
+| `/mcp-service-tokens` | `McpServiceToken` | list, read, delete | Delete sets `revokedAt` |
+| `/mcp-oauth-clients` | `McpOAuthClient` | list, read, delete | Delete removes the registration and revokes every token issued to it |
+| `/mcp-oauth-connections` | `McpOAuthToken` | list, read, delete | One row per token pair; delete revokes the whole family (connection) and keeps the rows |
+| `/mcp-request-log` | `McpRequestLog` | list, read | Needs `mcpRequestLog` on `TerrenoApp` |
+| `/mcp-tools` | `McpToolSetting` | list, read, update | Only `enabled` is writable. Needs `mcpToolSettings` on `TerrenoApp` |
+
+Options: `group` (default `"MCP"`); `requestLog: true` and `toolSettings: true` add those screens. Both default to `false`; set them to match `TerrenoApp`'s `mcpRequestLog` and `mcpToolSettings`. Hash fields are hidden. Each config sets `adminAccess.resource`; with `accessControl`, spread `mcpAdminStatements` into your `createAccess({statements})`.
+
+`mcpAdminScripts()` adds `mcp-sign-out-everywhere` (`--user <id or email>`), which revokes every OAuth connection and service token the user holds. A dry run reports the counts. Email lookup uses the model registered as `User`.
+
+```typescript
+new AdminApp({
+  models: [...appModels, ...mcpAdminModels({requestLog: true, toolSettings: true})],
+  scripts: [...appScripts, ...mcpAdminScripts()],
+});
+```
+
 ## Config Endpoint
 
 `GET {basePath}/config` returns metadata for all registered models:
@@ -150,7 +173,9 @@ Field metadata includes:
 - `description` — From schema (ensure all fields have descriptions!)
 - `enum` — Enum values if applicable
 - `default` — Default value
-- `ref` — Referenced model name for ObjectId refs
+- `ref` / `itemRef` — Referenced admin config `name` for ObjectId refs. Framework
+  compiled names such as `TerrenoOrganization` are returned as their stable public
+  admin names (`Organization`) so frontend reference pickers resolve the matching model.
 - `adminBroadcast` — Always present. `true` when the app `modelRouter` `sync` config set
   `adminBroadcast`, except organization-scoped models (forced to `false`)
 - `organizationScoped` — `true` when `AdminApp({organizations: true})` manages a model with
@@ -183,6 +208,33 @@ and `onAdminAudit` post hooks as REST — via AdminApp executor callbacks on the
 pipeline (Mongoose validation, conflict/baseVersion checks, and ledger ordering unchanged).
 Organization-scoped models do not register this scope and use REST mutations. Product clients
 that omit the marker keep product sync permissions and hooks.
+
+### Per-model permission methods
+
+`admin.adminPermissions` holds optional `PermissionMethod` arrays per action (`list`, `read`,
+`create`, `update`, `delete`). AdminApp ANDs them with the admin permissions above on every path
+that uses that action: REST CRUD, search (`list`), bulk-patch (`update`), the `/admin/config`
+capability flags and `_adminCapabilities`, and the admin-window sync read and write scopes. They
+can only restrict. An empty array disables the action; for `list` the model also drops out of
+`/admin/config`.
+
+### Row scope
+
+A model's `queryFilter` (or `admin.adminFilter`, which AdminApp turns into one) is its admin row
+scope, the equivalent of Django's `get_queryset`. List and search add it to the query. Declared
+`filters` only narrow results inside the scope: when a client filter names a field the scope also
+sets, the scope's value is used. Every route
+that resolves one document by id applies it too:
+
+- `GET`, `PATCH`, and `DELETE {basePath}{routePath}/:id` (and the array-field routes) return 403
+  when the document does not match the scope. The check runs in MongoDB with the same filter the
+  list uses. A scope that returns `null` denies every by-id route; the list stays empty.
+- `bulk-patch` lists out-of-scope ids under `failures` with `Forbidden` and patches the rest.
+- Admin-window sync `update` and `delete` mutations nack with 403 for out-of-scope rows.
+- `PATCH`, `bulk-patch`, and admin-window sync updates that write a field the scope constrains
+  must leave the document inside the scope (the new state is checked in memory with
+  `matchesQuery`). Otherwise they get 403 `Admin write outside row scope`. Creates are not checked
+  against the scope, because hooks and defaults often fill the scoped field after validation.
 
 With `accessControl`, each model can use a standard admin resource with three actions:
 
@@ -222,7 +274,10 @@ new AdminApp({
 });
 ```
 
-`adminAccess.resource` overrides the default `admin<ModelName>` name. Use
+`adminAccess.resource` overrides the default `admin<ModelName>` name. Framework
+models compiled as `Terreno*` still use the pre-namespace `admin<ModelName>`
+resource (`adminAuditEvent`, `adminAnnouncement`, `adminMcpServiceToken`) and
+the same `/admin/<PublicName>` UI key (`/admin/AuditEvent`). Use
 `adminAccess.authorize({action, instance, user})` when a model or screen needs a completely
 custom decision. The callback replaces the standard read/write/write-owned decision, while
 `admin:access` still protects the admin shell. Every action is authorized without an instance
@@ -252,7 +307,54 @@ When `AuditApp` is registered, successful admin POST/PATCH/DELETE persist append
 not required for the framework log. Failures in either sink do not change the mutation HTTP
 status. `AuditEvent` itself is never audited.
 
+Admin create, update, bulk-patch, and admin-window sync bodies drop `readonlyFields`,
+`hiddenFields`, `excludeFields`, and system fields, including dotted paths into them
+(`address.city` for a readonly `address`). With `accessControl`, writes to the user model (`"User"`, or the `userModel` passed to
+`createAccess` under any name) also drop
+`organizationIds` and `roles` in any key form (`roles.0`). A `roles` array in the body is
+assigned after the write through `access.roles.assign`, which requires `rbac:assignRoles`.
+Admin update, bulk-patch, delete, and admin-window sync writes to another user also require the
+actor to hold every permission the target user holds (the RoleManager target-privilege rule).
+A delegate with `user:update` gets 403 `Cannot modify a user with permissions you do not hold` for
+a superadmin target; bulk-patch reports that target under `failures` and patches the rest. When a
+permission source is down and the target's grants from it are unknown, the check answers 503
+`Permission source unavailable` instead of comparing against a partial set. Legacy
+`admin: true` actors and writes to the actor's own record are not checked.
+
+Changing another user's `email`, `disabled`, `betterAuthId`, `githubId`, or `emailVerified`
+through admin `PATCH`, bulk-patch, or admin-window sync also needs `user:updateIdentity`. Without it
+the write gets 403 `Missing user:updateIdentity permission`, and bulk-patch lists the target under
+`failures` with that title. Values equal to the stored ones do not count, so the edit form can
+still save other fields. Existing deployments must add `updateIdentity` to the stored `admin` role.
+See [RBAC user identity writes](api.md#rbac-user-identity-writes).
+
 **Important:** Only expose models that should be editable via admin panel. Avoid sensitive internal models.
+
+## Document storage
+
+`DocumentStorageApp` mounts a GCS file browser at `basePath` (default `/documents`): list, upload, download, create folder, and delete.
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `bucketName` | `GCS_BUCKET` | 503 `Storage not configured` when neither is set |
+| `folderPrefix` | `""` | Root inside the bucket. A non-empty value without a trailing `/` gets one, so `pr-5` and `pr-5/` both scope to `pr-5/` |
+| `access` | `"admin"` | `"authenticated"` also admits signed-in non-admins, confined to `{folderPrefix}users/<userId>/`. Admins always see the whole `folderPrefix` |
+| `uploadRateLimit` | off | `{max, windowMs, store?, keyBy?}` on `POST basePath/` only. Keys by IP by default. See [Rate limiting](../how-to/rate-limiting.md#limit-one-route) |
+| `allowedMimeTypes`, `maxFileSize` | images, PDF, text, Office; 10 MB | Upload filter |
+| `fileUploadsEnabled` | `true` | `false` or `(req) => boolean` rejects uploads; list, download, delete stay on |
+
+```typescript
+new DocumentStorageApp({
+  access: "authenticated",
+  basePath: "/documents",
+  bucketName: process.env.GCS_BUCKET ?? "",
+  uploadRateLimit: {max: 1, store: "mongo", windowMs: 60_000},
+});
+```
+
+Pair it with `DocumentStorageBrowser` from `@terreno/admin-frontend`. Pass `backButton={false}` when the browser is embedded outside admin. Upload failures (including 429) show inline.
+
+Example-backend deploys set `GCS_BUCKET` to the example documents bucket. PR previews also set `GCS_FOLDER_PREFIX` to `pr-<number>/`. Unset `GCS_BUCKET` is the only path that returns 503 `Storage not configured`. A bucket GCS reports as missing lists as an empty folder.
 
 ## Best Practices
 

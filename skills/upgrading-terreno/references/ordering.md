@@ -6,10 +6,12 @@ Why the `upgrading-terreno` skill bumps packages in a fixed order. Packages belo
 
 | Class | Packages (`publish-on-tag.yml` job) |
 | --- | --- |
-| Backend | `api`, `test`, `admin-backend`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp` |
-| Frontend | `ui`, `rtk`, `syncdb`, `admin-frontend`, `admin-spa` |
+| Backend | `api`, `test`, `admin-backend`, `blocks`, `ai`, `api-health`, `comms`, `feature-flags`, `mcp` |
+| Frontend | `ui`, `syncdb`, `admin-frontend`, `admin-spa` |
 
-`demo` and the example apps are not published.
+`blocks` holds contracts that both `ai` and `ui` depend on, so it moves with the backend step.
+
+`demo` and the example apps are not published. `rtk` was published through 57.x and removed in 58.
 
 ## Backend before frontend
 
@@ -19,7 +21,7 @@ Bump and compile backend packages first, then start that backend, then regenerat
 
 ## Typed client only after the new backend is up
 
-`example-frontend` codegen reads `http://localhost:4000/openapi.json` (or `OPENAPI_URL`). If the process is still the old binary, the file `store/openApiSdk.ts` is silently stale. Symptom: runtime 404 on new paths or TypeScript errors after you edit screens to call new endpoints that the SDK never emitted.
+`example-frontend` codegen reads `http://localhost:4000/openapi.json` (or `OPENAPI_URL`). If the process is still the old binary, `store/apiSdk.ts` (and `store/syncDbSdk.ts`) are silently stale. Symptom: runtime 404 on new paths or TypeScript errors after you edit screens to call new endpoints that the SDK never emitted.
 
 ## Expo before `@terreno/ui`
 

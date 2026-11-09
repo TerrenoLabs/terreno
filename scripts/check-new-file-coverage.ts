@@ -18,7 +18,7 @@ const DEFAULT_THRESHOLD = 90;
 const normalizePath = (path: string): string => path.split(sep).join("/");
 const SOURCE_FILE_PATTERN = /\.(?:ts|tsx)$/;
 const EXCLUDED_SOURCE_PATTERN =
-  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|openApiSdk\.ts$/;
+  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk)\.ts$/;
 /**
  * Expo Router route files under `app/`: `index`, `_layout`, `+not-found`, dynamic
  * segments such as `[id]`, thin `create` wrappers, and named recovery routes
@@ -26,6 +26,9 @@ const EXCLUDED_SOURCE_PATTERN =
  * Playwright e2e; submit logic lives in `lib/authRecoveryActions.ts`. Ordinary
  * modules under `app/` stay gated.
  */
+/** Scaffold templates are copied into generated apps as text, never executed here. */
+const TEMPLATE_FILE_PATTERN = /\.template\.(?:ts|tsx)$/;
+
 const EXPO_ROUTER_ENTRY_PATTERN =
   /(?:^|\/)app\/(?:.*\/)?(?:index|_layout|create|\+[^/]+|\[[^/]+\]|forgotPassword|resetPassword|verifyEmail)\.tsx$/;
 
@@ -55,12 +58,12 @@ export const PACKAGE_CI_LCOV_SKIP: {packageName: string; pipelineParameter: stri
   {packageName: "ai", pipelineParameter: "run-ai"},
   {packageName: "api", pipelineParameter: "run-api"},
   {packageName: "api-health", pipelineParameter: "run-api-health"},
+  {packageName: "blocks", pipelineParameter: "run-blocks"},
   {packageName: "comms", pipelineParameter: "run-comms"},
   {packageName: "create-terreno-app", pipelineParameter: "run-create-terreno-app"},
   {packageName: "feature-flags", pipelineParameter: "run-feature-flags"},
   {packageName: "jobs", pipelineParameter: "run-jobs"},
   {packageName: "mcp-server", pipelineParameter: "run-mcp-server"},
-  {packageName: "rtk", pipelineParameter: "run-rtk"},
   {packageName: "syncdb", pipelineParameter: "run-syncdb"},
   {packageName: "test", pipelineParameter: "run-test-package"},
   {packageName: "ui", pipelineParameter: "run-ui"},
@@ -184,8 +187,66 @@ export const isCoverageSourceFile = (path: string): boolean => {
   return (
     SOURCE_FILE_PATTERN.test(path) &&
     !EXCLUDED_SOURCE_PATTERN.test(path) &&
+    !TEMPLATE_FILE_PATTERN.test(path) &&
     !EXPO_ROUTER_ENTRY_PATTERN.test(path)
   );
+};
+
+/**
+ * Subpath entry files (`syncdb/src/auth/auth.ts`) hold only comments and `export … from`
+ * statements. Bun emits no LCOV record for them, so they would read as 0% covered.
+ */
+export const isReExportOnlySource = (source: string): boolean => {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .trim();
+  if (code.length === 0) {
+    return false;
+  }
+  const statements = code
+    .split(/;\s*/)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  return statements.every((statement) =>
+    /^export\s+(?:type\s+)?(?:\*|\{[\s\S]*\})(?:\s+as\s+\w+)?\s+from\s+["'][^"']+["']$/.test(
+      statement
+    )
+  );
+};
+
+const stripCommentsAndStrings = (source: string): string => {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/`(?:\\.|[^`\\])*`/g, "``")
+    .trim();
+};
+
+/**
+ * Modules that export only `interface` and `type` aliases. TypeScript erases them, so Bun
+ * writes no LCOV record and the new-file gate would treat the file as 0% covered.
+ */
+export const isTypeOnlySource = (source: string): boolean => {
+  const code = stripCommentsAndStrings(source);
+  if (code.length === 0) {
+    return false;
+  }
+  if (/\b(?:function|class|enum|const|let|var|namespace)\b/.test(code)) {
+    return false;
+  }
+  if (/^import(?!\s+type\b)/m.test(code)) {
+    return false;
+  }
+  if (/export\s+default\b/.test(code)) {
+    return false;
+  }
+  if (/export\s+(?!type\b|interface\b)/.test(code)) {
+    return false;
+  }
+  return /export\s+(?:type|interface)\b/.test(code);
 };
 
 const findFileCoverage = (
@@ -206,6 +267,34 @@ const findFileCoverage = (
   return null;
 };
 
+const globToRegExp = (pattern: string): RegExp => {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "@@GLOBSTAR@@")
+    .replace(/\*/g, "[^/]*")
+    .replace(/@@GLOBSTAR@@/g, ".*");
+  return new RegExp(`(?:^|/)${escaped}$`);
+};
+
+export const readCoveragePathIgnorePatterns = (packageRoot: string): string[] => {
+  const bunfigPath = join(packageRoot, "bunfig.toml");
+  if (!existsSync(bunfigPath)) {
+    return [];
+  }
+  const match = readFileSync(bunfigPath, "utf8").match(
+    /coveragePathIgnorePatterns\s*=\s*\[([^\]]*)\]/
+  );
+  if (!match?.[1]) {
+    return [];
+  }
+  return [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1] ?? "").filter(Boolean);
+};
+
+export const isCoveragePathIgnored = (packageRelativePath: string, patterns: string[]): boolean => {
+  const normalized = normalizePath(packageRelativePath);
+  return patterns.some((pattern) => globToRegExp(pattern).test(normalized));
+};
+
 export const evaluateNewFileCoverage = ({
   coverage,
   files,
@@ -219,9 +308,14 @@ export const evaluateNewFileCoverage = ({
   repoRoot: string;
   threshold: number;
 }): NewFileCoverageFailure[] => {
+  const ignorePatterns = readCoveragePathIgnorePatterns(packageRoot);
   const failures: NewFileCoverageFailure[] = [];
   for (const file of files) {
     const absoluteFile = resolve(repoRoot, file);
+    const packageRelativePath = normalizePath(relative(packageRoot, absoluteFile));
+    if (isCoveragePathIgnored(packageRelativePath, ignorePatterns)) {
+      continue;
+    }
     const fileCoverage = findFileCoverage(coverage, packageRoot, absoluteFile);
     if (!fileCoverage) {
       failures.push({path: file, summary: null});
@@ -250,7 +344,11 @@ const getAddedSourceFiles = (repoRoot: string, base: string): string[] => {
   return output
     .split("\n")
     .map((path) => path.trim())
-    .filter((path) => path.length > 0 && isCoverageSourceFile(path));
+    .filter((path) => path.length > 0 && isCoverageSourceFile(path))
+    .filter((path) => {
+      const source = readFileSync(join(repoRoot, path), "utf8");
+      return !isReExportOnlySource(source) && !isTypeOnlySource(source);
+    });
 };
 
 export const groupFilesByWorkspace = ({
@@ -289,6 +387,23 @@ export const expandCoverageFileArgs = (args: readonly string[], cwd: string): st
   return expanded;
 };
 
+const BUN_TEST_VALUE_FLAGS = new Set([
+  "--bail",
+  "--config",
+  "--coverage-dir",
+  "--cwd",
+  "--max-concurrency",
+  "--preload",
+  "--reporter",
+  "--rerun-each",
+  "--seed",
+  "--test-name-pattern",
+  "--timeout",
+  "-c",
+  "-r",
+  "-t",
+]);
+
 export const bunTestFileArgs = (testScript: string | undefined): string[] => {
   if (!testScript) {
     return [];
@@ -298,7 +413,20 @@ export const bunTestFileArgs = (testScript: string | undefined): string[] => {
   if (!match?.[1]) {
     return [];
   }
-  return match[1].split(/\s+/).filter((token) => token.length > 0 && !token.startsWith("-"));
+  const tokens = match[1].split(/\s+/).filter((token) => token.length > 0);
+  const files: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.startsWith("-")) {
+      const flag = token.split("=")[0];
+      if (!token.includes("=") && BUN_TEST_VALUE_FLAGS.has(flag)) {
+        index += 1;
+      }
+      continue;
+    }
+    files.push(token);
+  }
+  return files;
 };
 
 export const coverageRunArgs = ({

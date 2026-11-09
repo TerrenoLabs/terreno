@@ -1,0 +1,17 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Which toppings?",
+    "select": "many",
+    "options": [
+      {"id": "cheese", "label": "Cheese"},
+      {"id": "olives", "label": "Olives"}
+    ],
+    "minSelected": 1.5,
+    "maxSelected": "2"
+  },
+  "errors": [
+    {"path": "maxSelected", "code": "INVALID_TYPE"},
+    {"path": "minSelected", "code": "INVALID_TYPE"}
+  ]
+}

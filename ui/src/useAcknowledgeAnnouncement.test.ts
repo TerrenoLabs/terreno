@@ -1,223 +1,131 @@
-import {describe, expect, it, mock} from "bun:test";
-import {renderHook} from "@testing-library/react-native";
-import {assert} from "chai";
+import {afterEach, describe, expect, it} from "bun:test";
+import {act, renderHook} from "@testing-library/react-native";
+import Constants from "expo-constants";
 import {Platform} from "react-native";
 
+// Drive the preload's shared expo-constants mock (src/bunSetup.ts) instead of replacing the
+// module: Bun's mock.module is process-global, so a second registration leaks into siblings.
+const constantsState = Constants as unknown as {
+  expoConfig: {extra: {buildNumber?: number | string}};
+};
+
+import {createFakeRequestClient, fakeHttpError} from "./test-utils";
 import {useAcknowledgeAnnouncement} from "./useAcknowledgeAnnouncement";
 
-type AcknowledgeApi = Parameters<typeof useAcknowledgeAnnouncement>[0];
-
-interface MockMutationDef {
-  query: (args: {announcementId: string; platform?: string}) => {
-    body?: {action?: string; platform?: string};
-    method: string;
-    url: string;
-  };
-}
-
-interface MockInjectOpts {
-  endpoints: (build: {mutation: (def: MockMutationDef) => string}) => Record<string, unknown>;
-}
+const buildClient = (): ReturnType<typeof createFakeRequestClient> =>
+  createFakeRequestClient({
+    "POST /api/announcements/:id/acknowledge": () => ({acknowledged: true}),
+    "POST /api/announcements/:id/click": () => ({recorded: true}),
+    "POST /api/announcements/:id/impression": () => ({recorded: true}),
+  });
 
 describe("useAcknowledgeAnnouncement", () => {
-  const buildApi = () => {
-    const acknowledgeUnwrap = mock(async () => ({acknowledged: true}));
-    const impressionUnwrap = mock(async () => ({recorded: true}));
-    const clickUnwrap = mock(async () => ({recorded: true}));
-    const acknowledgeMutation = mock(() => ({unwrap: acknowledgeUnwrap}));
-    const impressionMutation = mock(() => ({unwrap: impressionUnwrap}));
-    const clickMutation = mock(() => ({unwrap: clickUnwrap}));
-    let clickQueryDef: MockMutationDef | undefined;
-    let acknowledgeQueryDef: MockMutationDef | undefined;
-    const api = {
-      enhanceEndpoints: mock(() => ({
-        injectEndpoints: mock((opts: MockInjectOpts) => {
-          const build = {
-            mutation: mock((def: MockMutationDef) => {
-              const result = def.query({announcementId: "a1", platform: "ios"});
-              expect(result.method).toBe("POST");
-              expect(result.url).toContain("/announcements/a1/");
-              if (result.url.includes("/click")) {
-                clickQueryDef = def;
-              }
-              if (result.url.includes("/acknowledge")) {
-                acknowledgeQueryDef = def;
-              }
-              return "mutation";
-            }),
-          };
-          opts.endpoints(build);
-          return {
-            useAcknowledgeAnnouncementMutation: () => [
-              acknowledgeMutation,
-              {error: undefined, isLoading: false},
-            ],
-            useRecordAnnouncementClickMutation: () => [
-              clickMutation,
-              {error: undefined, isLoading: false},
-            ],
-            useRecordAnnouncementImpressionMutation: () => [
-              impressionMutation,
-              {error: undefined, isLoading: false},
-            ],
-          };
-        }),
-      })),
-    };
-    return {
-      acknowledgeMutation,
-      acknowledgeQueryDef: () => acknowledgeQueryDef,
-      api,
-      clickMutation,
-      clickQueryDef: () => clickQueryDef,
-      impressionMutation,
-    };
-  };
+  const originalOS = Platform.OS;
+
+  afterEach(() => {
+    constantsState.expoConfig.extra.buildNumber = undefined;
+    Platform.OS = originalOS;
+  });
 
   it("acknowledges and records impressions", async () => {
-    const {api, acknowledgeMutation, impressionMutation} = buildApi();
-    const {result} = renderHook(() =>
-      useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi, "/api")
-    );
-    await result.current.acknowledge("announcement-1");
-    await result.current.recordImpression("announcement-1");
-    expect(acknowledgeMutation).toHaveBeenCalled();
-    expect(impressionMutation).toHaveBeenCalled();
+    const {client, callsTo} = buildClient();
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client, "/api"));
+    await act(async () => {
+      await result.current.acknowledge("announcement-1");
+      await result.current.recordImpression("announcement-1");
+    });
+    expect(callsTo("POST /api/announcements/announcement-1/acknowledge")).toHaveLength(1);
+    expect(callsTo("POST /api/announcements/announcement-1/impression")).toHaveLength(1);
+    expect(result.current.isSubmitting).toBe(false);
   });
 
   it("uses the client platform for impressions", async () => {
-    const originalOS = Platform.OS;
     Platform.OS = "ios";
-    const {api, impressionMutation} = buildApi();
-    const {result} = renderHook(() => useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi));
-    await result.current.recordImpression("announcement-1");
-    expect(impressionMutation).toHaveBeenCalledWith({
-      announcementId: "announcement-1",
-      platform: "ios",
+    const {client, calls} = buildClient();
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client, "/api"));
+    await act(async () => {
+      await result.current.recordImpression("announcement-1");
     });
-    Platform.OS = originalOS;
+    expect(calls).toEqual([
+      {
+        body: {platform: "ios"},
+        method: "POST",
+        url: "/api/announcements/announcement-1/impression",
+      },
+    ]);
   });
 
   it("records primary-action clicks with platform and build version in the query", async () => {
-    const constantsState = {
-      expoConfig: {
-        extra: {
-          buildNumber: 42,
-        },
-      },
-    };
-    mock.module("expo-constants", () => ({
-      default: constantsState,
-    }));
-
-    const originalOS = Platform.OS;
+    constantsState.expoConfig.extra.buildNumber = 42;
     Platform.OS = "web";
-
-    const {api, clickMutation, clickQueryDef} = buildApi();
-    const {result} = renderHook(() =>
-      useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi, "/api")
-    );
-
-    await result.current.recordClick("announcement-42");
-
-    assert.strictEqual(clickMutation.mock.calls.length, 1);
-    assert.deepEqual(clickMutation.mock.calls[0], [{announcementId: "announcement-42"}]);
-
-    const clickDef = clickQueryDef();
-    assert.ok(clickDef);
-    const queryResult = clickDef.query({announcementId: "announcement-42"});
-    assert.strictEqual(queryResult.method, "POST");
-    assert.strictEqual(
-      queryResult.url,
-      "/api/announcements/announcement-42/click?platform=web&version=42"
-    );
-    assert.deepEqual(queryResult.body, {action: "primaryAction", platform: "web"});
-
-    Platform.OS = originalOS;
-    mock.module("expo-constants", () => ({
-      default: {expoConfig: {extra: {buildNumber: undefined}}},
-    }));
+    const {client, calls} = buildClient();
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client, "/api"));
+    await act(async () => {
+      await result.current.recordClick("announcement-42");
+    });
+    expect(calls).toEqual([
+      {
+        body: {action: "primaryAction", platform: "web"},
+        method: "POST",
+        params: {platform: "web", version: 42},
+        url: "/api/announcements/announcement-42/click",
+      },
+    ]);
   });
 
-  it("omits version from click URL when build number is not finite", async () => {
-    mock.module("expo-constants", () => ({
-      default: {expoConfig: {extra: {buildNumber: undefined}}},
-    }));
-
-    const originalOS = Platform.OS;
+  it("omits version from click params when build number is not finite", async () => {
     Platform.OS = "android";
-
-    const {api, clickQueryDef} = buildApi();
-    renderHook(() => useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi, "/api"));
-
-    const clickDef = clickQueryDef();
-    assert.ok(clickDef);
-    const queryResult = clickDef.query({announcementId: "announcement-1"});
-    assert.strictEqual(queryResult.url, "/api/announcements/announcement-1/click?platform=android");
-    assert.deepEqual(queryResult.body, {action: "primaryAction", platform: "android"});
-
-    Platform.OS = originalOS;
+    const {client, calls} = buildClient();
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client, "/api"));
+    await act(async () => {
+      await result.current.recordClick("announcement-1");
+    });
+    expect(calls[0]?.params).toEqual({platform: "android"});
+    expect(calls[0]?.body).toEqual({action: "primaryAction", platform: "android"});
   });
 
   it("posts acknowledge with platform and build version in the query", async () => {
-    const constantsState = {
-      expoConfig: {
-        extra: {
-          buildNumber: 42,
-        },
-      },
-    };
-    mock.module("expo-constants", () => ({
-      default: constantsState,
-    }));
-
-    const originalOS = Platform.OS;
+    constantsState.expoConfig.extra.buildNumber = 42;
     Platform.OS = "ios";
-
-    const {api, acknowledgeMutation, acknowledgeQueryDef} = buildApi();
-    const {result} = renderHook(() =>
-      useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi, "/api")
-    );
-
-    await result.current.acknowledge("announcement-42");
-
-    assert.strictEqual(acknowledgeMutation.mock.calls.length, 1);
-    assert.deepEqual(acknowledgeMutation.mock.calls[0], [{announcementId: "announcement-42"}]);
-
-    const acknowledgeDef = acknowledgeQueryDef();
-    assert.ok(acknowledgeDef);
-    const queryResult = acknowledgeDef.query({announcementId: "announcement-42"});
-    assert.strictEqual(queryResult.method, "POST");
-    assert.strictEqual(
-      queryResult.url,
-      "/api/announcements/announcement-42/acknowledge?platform=ios&version=42"
-    );
-
-    Platform.OS = originalOS;
-    mock.module("expo-constants", () => ({
-      default: {expoConfig: {extra: {buildNumber: undefined}}},
-    }));
+    const {client, calls} = buildClient();
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client, "/api"));
+    await act(async () => {
+      await result.current.acknowledge("announcement-42");
+    });
+    expect(calls).toEqual([
+      {
+        method: "POST",
+        params: {platform: "ios", version: 42},
+        url: "/api/announcements/announcement-42/acknowledge",
+      },
+    ]);
   });
 
-  it("omits version from acknowledge URL when build number is not finite", async () => {
-    mock.module("expo-constants", () => ({
-      default: {expoConfig: {extra: {buildNumber: undefined}}},
-    }));
-
-    const originalOS = Platform.OS;
+  it("omits version from acknowledge params when build number is not finite", async () => {
+    constantsState.expoConfig.extra.buildNumber = "invalid";
     Platform.OS = "web";
+    const {client, calls} = createFakeRequestClient({
+      "POST /announcements/:id/acknowledge": () => ({acknowledged: true}),
+    });
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client));
+    await act(async () => {
+      await result.current.acknowledge("announcement-1");
+    });
+    expect(calls[0]?.url).toBe("/announcements/announcement-1/acknowledge");
+    expect(calls[0]?.params).toEqual({platform: "web"});
+  });
 
-    const {api, acknowledgeQueryDef} = buildApi();
-    renderHook(() => useAcknowledgeAnnouncement(api as unknown as AcknowledgeApi, "/api"));
-
-    const acknowledgeDef = acknowledgeQueryDef();
-    assert.ok(acknowledgeDef);
-    const queryResult = acknowledgeDef.query({announcementId: "announcement-1"});
-    assert.strictEqual(
-      queryResult.url,
-      "/api/announcements/announcement-1/acknowledge?platform=web"
-    );
-
-    Platform.OS = originalOS;
+  it("exposes the failing request error", async () => {
+    const failure = fakeHttpError(500);
+    const {client} = createFakeRequestClient({
+      "POST /announcements/:id/click": () => {
+        throw failure;
+      },
+    });
+    const {result} = renderHook(() => useAcknowledgeAnnouncement(client));
+    await act(async () => {
+      await result.current.recordClick("announcement-1").catch(() => {});
+    });
+    expect(result.current.error).toBe(failure);
   });
 });

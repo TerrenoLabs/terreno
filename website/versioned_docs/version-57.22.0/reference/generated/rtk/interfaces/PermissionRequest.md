@@ -1,0 +1,3 @@
+## Indexable
+
+> \[`resource`: `string`\]: `string`[]

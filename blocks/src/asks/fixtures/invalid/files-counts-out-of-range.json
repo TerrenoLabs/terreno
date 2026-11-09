@@ -1,0 +1,19 @@
+{
+  "kind": "files",
+  "input": {
+    "prompt": "Upload the receipts.",
+    "accept": ["image"],
+    "minFiles": 0,
+    "maxFiles": 11
+  },
+  "errors": [
+    {
+      "path": "maxFiles",
+      "code": "RANGE_INVALID"
+    },
+    {
+      "path": "minFiles",
+      "code": "RANGE_INVALID"
+    }
+  ]
+}

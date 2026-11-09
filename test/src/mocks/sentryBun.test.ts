@@ -2,9 +2,7 @@ import {describe, expect, it} from "bun:test";
 
 import {registerSentryBunMock} from "./sentryBun";
 
-interface MockFn {
-  (...args: unknown[]): unknown;
-}
+type MockFn = (...args: unknown[]) => unknown;
 
 interface MockClient {
   captureException: MockFn;

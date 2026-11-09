@@ -66,6 +66,8 @@ const getRefModel = (
 
 export interface AdminFieldRendererCoreProps extends AdminScreenProps {
   fieldKey: string;
+  /** Field label. Defaults to the humanized `fieldKey`; nested subfields pass their own key's label. */
+  label?: string;
   fieldConfig: AdminFieldConfig;
   value: AdminFieldValue;
   onChange: (value: AdminFieldValue) => void;
@@ -85,12 +87,14 @@ export interface AdminFieldRendererCoreProps extends AdminScreenProps {
 }
 
 /**
- * Renders admin form fields for all types except arrays of sub-documents.
- * Nested sub-document arrays are handled by {@link AdminNestedArrayField} via
- * {@link AdminFieldRenderer} to avoid a circular import.
+ * Renders admin form fields for all types except arrays of sub-documents and nested objects
+ * with subfield metadata. Those are handled by {@link AdminNestedArrayField} and
+ * {@link AdminNestedObjectField} via {@link AdminFieldRenderer} to avoid a circular import.
+ * Objects without `items` (Mixed, Map) fall back to the JSON editor.
  */
 export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   fieldKey,
+  label: labelProp,
   fieldConfig,
   value,
   onChange,
@@ -98,14 +102,15 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   modelConfigs,
   parentFormState,
   refRenderers,
   readOnly,
   autocompleteFields,
 }) => {
-  const label = startCase(fieldKey);
+  const label = labelProp ?? startCase(fieldKey);
+  // Name heuristics read the subfield's own key: a dotted path also carries its parents' names.
+  const leafKey = fieldKey.split(".").pop() ?? fieldKey;
   const helperText = fieldConfig.description;
   const refModel = getRefModel(modelConfigs, USER_REF_MODEL_NAME);
   const isReadOnly = Boolean(readOnly);
@@ -115,7 +120,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (FieldWidget && fieldConfig.widget) {
     return (
       <FieldWidget
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
@@ -135,7 +139,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (fieldKey === "roles" && fieldConfig.type === "array" && fieldConfig.itemType === "string") {
     return (
       <AdminRolesField
-        api={api}
         apiBase={apiBase}
         baseUrl={baseUrl}
         errorText={errorText}
@@ -162,7 +165,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
           : [];
       return (
         <AdminPrimitiveArrayField
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -186,7 +188,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
       if (CustomRenderer) {
         return (
           <CustomRenderer
-            api={api}
             autocomplete={useAutocomplete}
             baseUrl={baseUrl}
             errorText={errorText}
@@ -203,7 +204,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
       if (refModel) {
         return (
           <AdminRefField
-            api={api}
             autocomplete={useAutocomplete}
             baseUrl={baseUrl}
             errorText={errorText}
@@ -252,7 +252,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     if (CustomRenderer) {
       return (
         <CustomRenderer
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -271,7 +270,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     if (refModel) {
       return (
         <AdminRefField
-          api={api}
           apiBase={apiBase}
           autocomplete={useAutocomplete}
           baseUrl={baseUrl}
@@ -296,6 +294,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
         errorText={errorText}
         helperText={helperText}
         onChange={onChange}
+        testID={`admin-field-${fieldKey}`}
         title={label}
         value={typeof value === "boolean" ? value : false}
       />
@@ -324,7 +323,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (
     fieldConfig.type === "date" ||
     fieldConfig.type === "datetime" ||
-    (fieldConfig.type === "string" && fieldKey.toLowerCase().includes("date"))
+    (fieldConfig.type === "string" && leafKey.toLowerCase().includes("date"))
   ) {
     return (
       <DateTimeField
@@ -377,7 +376,6 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (fieldConfig.type === "array" && fieldConfig.itemType && !fieldConfig.items) {
     return (
       <AdminPrimitiveArrayField
-        api={api}
         apiBase={apiBase}
         autocomplete={useAutocomplete}
         baseUrl={baseUrl}

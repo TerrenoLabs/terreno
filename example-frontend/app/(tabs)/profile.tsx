@@ -1,11 +1,16 @@
 import {useBooleanFlagDetails} from "@openfeature/react-sdk";
-import {canOpenAdminPage, selectBetterAuthUserId, useFeatureFlags} from "@terreno/rtk";
+import type {ApiError} from "@terreno/syncdb/api";
+import {canOpenAdminPage} from "@terreno/syncdb/app";
+import {SIGN_OUT_FAILED_MESSAGE, useSession} from "@terreno/syncdb/auth";
+import {useFeatureFlags} from "@terreno/syncdb/flags";
 import {
   Badge,
   Banner,
+  BooleanField,
   Box,
   Button,
   Card,
+  FormContainer,
   Heading,
   Page,
   Spinner,
@@ -13,40 +18,61 @@ import {
   Text,
   TextField,
   useStoredState,
-  useTheme,
 } from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {useSelector} from "react-redux";
-import {logout, useAppDispatch} from "@/store/index";
+import {useThemePreference} from "@/contexts/ThemePreferenceContext";
 import {
-  terrenoApi,
-  useGetMeQuery,
-  usePatchMeMutation,
+  useCommsTestPushMutation,
+  useDeleteCommsPushTokensByIdMutation,
+  useGetAuthMeQuery,
+  usePatchAuthMeMutation,
   usePostAuthSendVerificationMutation,
-  usePostCommsDevTestPushMutation,
-} from "@/store/sdk";
+} from "@/store/apiSdk";
+import {releaseExpoPushTokenSafely} from "@/store/registerExpoPushToken";
+
+/** What POST /comms/dev/testPush reports for the caller's registered devices. */
+interface TestPushResult {
+  accepted?: number;
+  tokenCount?: number;
+}
 
 const ProfileScreen: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
-  const userId = useSelector(selectBetterAuthUserId);
-  const {data: profileResponse, isLoading, refetch} = useGetMeQuery(undefined, {skip: !userId});
-  const [updateProfile, {isLoading: isUpdating}] = usePatchMeMutation();
+  // `error` is SIGN_OUT_FAILED_MESSAGE when a sign-out could not reach the server and the
+  // session stayed.
+  const {error: sessionError, isSigningOut, logout, userId} = useSession();
+  const isSignOutFailed = sessionError === SIGN_OUT_FAILED_MESSAGE;
+  const {
+    data: profileResponse,
+    isLoading,
+    refetch,
+  } = useGetAuthMeQuery(undefined, {
+    skip: !userId,
+  });
+  const [updateProfile, {isLoading: isUpdating}] = usePatchAuthMeMutation();
   const [sendVerification, {isLoading: isSendingVerification}] =
     usePostAuthSendVerificationMutation();
-  const [sendTestPush, {isLoading: isSendingTestPush}] = usePostCommsDevTestPushMutation();
-  const {setPrimitives, resetTheme} = useTheme();
+  const [sendTestPush, {isLoading: isSendingTestPush}] = useCommsTestPushMutation();
+  const [deletePushToken] = useDeleteCommsPushTokensByIdMutation();
+  const {
+    colorSchemeSetting,
+    isLoading: isThemePreferenceLoading,
+    setColorScheme,
+  } = useThemePreference();
 
   const {
     flags,
-    getFlag,
     isLoading: isFeatureFlagsLoading,
     error: featureFlagsError,
-  } = useFeatureFlags(terrenoApi, {skip: !userId, userId});
+  } = useFeatureFlags({
+    // The root OpenFeatureBridge refetches the shared flag query on socket pushes.
+    skip: !userId,
+    socket: null,
+    userId,
+  });
   const darkModeFlagDetails = useBooleanFlagDetails("dark-mode-toggle", false);
-  const showDarkModeToggle = getFlag("dark-mode-toggle");
   const featureFlagEntries = useMemo(
     (): Array<{key: string; value: boolean | string | null}> =>
       Object.keys(flags)
@@ -59,7 +85,7 @@ const ProfileScreen: React.FC = () => {
 
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
+  const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [testPushMessage, setTestPushMessage] = useState<string | null>(null);
@@ -112,12 +138,16 @@ const ProfileScreen: React.FC = () => {
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating name:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update name"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update name");
       }
     },
     [showSaveSuccess, updateProfile]
+  );
+
+  // Changing the email needs the current password; an unchanged or re-cased email does not.
+  const isEmailChanged = useMemo(
+    (): boolean => email.trim().toLowerCase() !== (profile?.email ?? "").trim().toLowerCase(),
+    [email, profile?.email]
   );
 
   const handleSaveEmail = useCallback(
@@ -125,42 +155,26 @@ const ProfileScreen: React.FC = () => {
       setSaveError(null);
       setSaveSuccess(false);
       try {
-        await updateProfile({email: value}).unwrap();
+        await updateProfile(
+          isEmailChanged ? {currentPassword, email: value} : {email: value}
+        ).unwrap();
+        setCurrentPassword("");
         showSaveSuccess();
       } catch (err) {
         console.error("Error updating email:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update email"
-        );
+        setSaveError((err as ApiError).data?.title || "Failed to update email");
       }
     },
-    [showSaveSuccess, updateProfile]
+    [currentPassword, isEmailChanged, showSaveSuccess, updateProfile]
   );
 
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      setSaveSuccess(false);
-      try {
-        await updateProfile({password: value}).unwrap();
-        setPassword("");
-        showSaveSuccess();
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError(
-          (err as {data?: {message?: string}})?.data?.message || "Failed to update password"
-        );
-      }
-    },
-    [showSaveSuccess, updateProfile]
-  );
-
-  const handleLogout = useCallback((): void => {
-    dispatch(logout());
-  }, [dispatch]);
+  // useSession().logout signs out the auth server, then both sync clients (wiping local rows).
+  const handleLogout = useCallback(async (): Promise<void> => {
+    await releaseExpoPushTokenSafely({
+      deleteToken: async (id) => deletePushToken(id).unwrap(),
+    });
+    await logout();
+  }, [deletePushToken, logout]);
 
   const handleResendVerification = useCallback(async (): Promise<void> => {
     setVerificationError(null);
@@ -196,6 +210,10 @@ const ProfileScreen: React.FC = () => {
     router.push("/settings/mcp");
   }, [router]);
 
+  const handleNavigateToSecurity = useCallback((): void => {
+    router.push("/settings/security");
+  }, [router]);
+
   const handleNavigateToNotificationSettings = useCallback((): void => {
     router.push("/settings/notifications");
   }, [router]);
@@ -204,10 +222,10 @@ const ProfileScreen: React.FC = () => {
     setTestPushError(null);
     setTestPushMessage(null);
     try {
-      const result = await sendTestPush({
+      const result = (await sendTestPush({
         body: "Sent from the example app profile screen.",
         title: "Terreno test push",
-      }).unwrap();
+      }).unwrap()) as TestPushResult;
       if (result.tokenCount === 0) {
         setTestPushMessage("No registered push tokens for this account.");
         return;
@@ -271,7 +289,7 @@ const ProfileScreen: React.FC = () => {
         )}
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} testID="profile-account-form">
             <Heading size="lg">Account Details</Heading>
 
             <TapToEdit
@@ -296,17 +314,19 @@ const ProfileScreen: React.FC = () => {
               value={email}
             />
 
-            <TapToEdit
-              disabled={isUpdating}
-              editable={!isUpdating}
-              helperText="Leave blank to keep current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              testID="profile-password-input"
-              title="New Password"
-              type="password"
-              value={password}
-            />
+            {isEmailChanged && (
+              <TextField
+                accessibilityLabel="Current password"
+                autoComplete="current-password"
+                disabled={isUpdating}
+                helperText="Enter your current password to change your email"
+                onChange={setCurrentPassword}
+                testID="profile-current-password-input"
+                title="Current password"
+                type="password"
+                value={currentPassword}
+              />
+            )}
 
             {saveSuccess && (
               <Box testID="profile-save-success">
@@ -319,7 +339,21 @@ const ProfileScreen: React.FC = () => {
                 <Text color="error">{saveError}</Text>
               </Box>
             )}
-          </Box>
+
+            <Text color="secondaryLight" size="sm">
+              Change your password, linked sign-in methods, passkeys, two-factor authentication and
+              signed-in devices in Security.
+            </Text>
+            <Box alignItems="start">
+              <Button
+                iconName="shield-halved"
+                onClick={handleNavigateToSecurity}
+                testID="profile-security-link"
+                text="Security"
+                variant="secondary"
+              />
+            </Box>
+          </FormContainer>
         </Card>
 
         <Card marginBottom={6} testID="profile-roles-card">
@@ -351,14 +385,17 @@ const ProfileScreen: React.FC = () => {
         </Card>
 
         <Card marginBottom={6}>
-          <Box gap={4}>
+          <FormContainer gap={4} onSubmit={handleSaveApiKey} testID="profile-gemini-form">
             <Heading size="lg">Gemini API Key</Heading>
             <Text color="secondaryLight" size="sm">
-              Paste your Gemini API key to enable AI features. The key is stored locally on your
-              device.
+              Paste your Gemini API key to enable AI chat and the admin prompt playground. The key
+              is stored locally on your device.
             </Text>
             <TextField
+              accessibilityLabel="Gemini API key"
+              autoComplete="off"
               onChange={setApiKeyInput}
+              onEnter={apiKeyInput.trim() ? handleSaveApiKey : undefined}
               placeholder="Enter your Gemini API key"
               testID="profile-gemini-key-input"
               title="API Key"
@@ -387,39 +424,23 @@ const ProfileScreen: React.FC = () => {
                 variant="destructive"
               />
             </Box>
-          </Box>
+          </FormContainer>
         </Card>
 
-        {/* Dark mode toggle — gated by "dark-mode-toggle" feature flag */}
-        {showDarkModeToggle && (
-          <Card marginBottom={6} testID="profile-dark-mode-card">
-            <Box gap={4}>
-              <Heading size="lg">Appearance</Heading>
-              <Box direction="row" gap={3}>
-                <Button
-                  iconName="sun"
-                  onClick={() => resetTheme()}
-                  text="Light"
-                  variant="outline"
-                />
-                <Button
-                  iconName="moon"
-                  onClick={() =>
-                    setPrimitives({
-                      neutral000: "#1a1a2e",
-                      neutral100: "#16213e",
-                      neutral200: "#0f3460",
-                      neutral800: "#e0e0e0",
-                      neutral900: "#ffffff",
-                    })
-                  }
-                  text="Dark"
-                  variant="outline"
-                />
-              </Box>
-            </Box>
-          </Card>
-        )}
+        <Card marginBottom={6} testID="profile-dark-mode-card">
+          <Box gap={4}>
+            <Heading size="lg">Appearance</Heading>
+            <BooleanField
+              disabled={isThemePreferenceLoading}
+              onChange={(isDark): void => {
+                void setColorScheme(isDark ? "dark" : "light");
+              }}
+              testID="profile-dark-mode-toggle"
+              title="Dark mode"
+              value={colorSchemeSetting === "dark"}
+            />
+          </Box>
+        </Card>
 
         <Card marginBottom={6} testID="profile-feature-flags-card">
           <Box gap={3}>
@@ -430,7 +451,7 @@ const ProfileScreen: React.FC = () => {
               {String(darkModeFlagDetails.reason ?? "")})
             </Text>
             {isFeatureFlagsLoading && <Text color="secondaryLight">Loading feature flags...</Text>}
-            {!isFeatureFlagsLoading && featureFlagsError && (
+            {!isFeatureFlagsLoading && Boolean(featureFlagsError) && (
               <Text color="error">Failed to load feature flags</Text>
             )}
             {!isFeatureFlagsLoading && !featureFlagsError && featureFlagEntries.length === 0 && (
@@ -445,9 +466,15 @@ const ProfileScreen: React.FC = () => {
                   justifyContent="between"
                   key={flagEntry.key}
                   paddingY={1}
+                  testID={`profile-feature-flag-${flagEntry.key}`}
                 >
                   <Text>{flagEntry.key}</Text>
-                  <Text color="secondaryLight">{String(flagEntry.value)}</Text>
+                  <Text
+                    color="secondaryLight"
+                    testID={`profile-feature-flag-${flagEntry.key}-value`}
+                  >
+                    {String(flagEntry.value)}
+                  </Text>
                 </Box>
               ))}
           </Box>
@@ -488,8 +515,14 @@ const ProfileScreen: React.FC = () => {
             <Text color="secondaryLight" testID="profile-logged-in-as">
               Logged in as {profile?.email}
             </Text>
+            {isSignOutFailed ? (
+              <Text color="error" testID="profile-logout-error">
+                {SIGN_OUT_FAILED_MESSAGE}
+              </Text>
+            ) : null}
             <Button
               iconName="right-from-bracket"
+              loading={isSigningOut}
               onClick={handleLogout}
               testID="profile-logout-button"
               text="Logout"

@@ -1,6 +1,6 @@
 # `describeModel()` schema metadata
 
-**Status:** Approved — 2026-08-24  
+**Status:** Complete — shipped in #1154  
 **Branch:** `cursor/architecture-ips-a7ec`  
 **Owner:** —  
 **Created:** 2026-08-24  

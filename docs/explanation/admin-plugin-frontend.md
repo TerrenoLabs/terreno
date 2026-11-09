@@ -8,8 +8,8 @@ implementations ship from `@terreno/admin-frontend`, under `src/widgets/`.
 
 This keeps the first-party integration in one frontend package and avoids making backend-only
 packages depend on React Native. The built-in registry includes consent field widgets, feature
-flag home widgets, and Documents/AI/Comms custom screens. Hosts can override any ID through
-`AdminProvider.widgets`.
+flag home widgets, and Documents/AI Requests/AI Observability/Comms custom screens. Hosts can
+override any ID through `AdminProvider.widgets`.
 
 Third-party plugins should publish their own frontend package and ask the host to spread its
 registry into `AdminProvider`; `@terreno/admin-frontend` only owns first-party Terreno widgets.
@@ -18,7 +18,7 @@ registry into `AdminProvider`; `@terreno/admin-frontend` only owns first-party T
 
 Opening the admin UI is a separate decision from what an operator may do inside it. The page
 gate is `admin:access` (`GET /admin/config` 403 without it). Host apps should hide admin
-navigation with the same check (`canOpenAdminPage` from `@terreno/rtk`).
+navigation with the same check (`canOpenAdminPage` from `@terreno/syncdb/app`).
 
 `AdminApp` then resolves authorization before returning `/admin/config`. The response only contains
 models and custom screens the caller may read, includes effective write capabilities, and exposes

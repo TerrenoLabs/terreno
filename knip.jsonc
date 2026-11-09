@@ -13,33 +13,56 @@
     ".devin/skills/expo-cicd-workflows/scripts/**",
     ".github/skills/expo-cicd-workflows/scripts/**",
     "skills/expo-cicd-workflows/scripts/**",
-    ".rulesync/skills/expo-cicd-workflows/scripts/**"
+    ".rulesync/skills/expo-cicd-workflows/scripts/**",
+    // Store-assets scripts are copied into consumer repos and run with `bun`, not imported
+    // here. Canonical source is `plugins/terreno-planning/skills`; the rest are sync output.
+    "plugins/terreno-planning/skills/store-assets/scripts/**",
+    "plugins/terreno-claude/skills/store-assets/scripts/**",
+    "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
   "ignoreBinaries": ["maestro"],
-  // Root tooling loads these through package scripts or child CLIs rather than imports:
-  // Biome powers hooks, RTK codegen is resolved by generate-sdk.ts, and ts-node loads
-  // TypeScript codegen configuration.
-  "ignoreDependencies": ["@biomejs/biome", "@rtk-query/codegen-openapi", "ts-node"],
+  // Root tooling loads Biome through package scripts and hooks rather than imports.
+  //
+  // `@terreno/test` is a devDependency of every package so each package's real-process smoke
+  // (`e2e/smoke.ts`) can import its helpers. Packages whose smoke has not landed yet do not
+  // import it; drop this entry once every workspace's smoke does.
+  "ignoreDependencies": ["@biomejs/biome", "@terreno/test"],
   "ignoreIssues": {
     // Keep the Sentry React Native catalog pin stable for consumer/native fingerprint
     // compatibility even though no current workspace declares it.
     "package.json": ["catalog"],
     "**/generated/**": ["exports", "types"],
-    "**/openApiSdk.ts": ["exports", "types"],
+    // Generated syncdb API SDK covers every non-synced route; screens adopt hooks over time.
+    "**/apiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
+    // In-memory flag server shared by the syncdb flags hook tests.
+    "syncdb/src/flags/flagTestServer.ts": ["files"],
     "example-backend/migrations/**": ["files", "exports", "types"],
+    // Bin entry points (terreno-test-shard / terreno-test-hygiene): the pure functions and
+    // types behind them are exported for their unit tests only, not as a library surface.
+    "test/src/cli/**": ["exports", "types"],
     "example-backend/src/migrationsDir.ts": ["files", "exports", "types"],
+    // Runtime adapters expose these hooks only so deterministic tests can replace or
+    // reset process-global browser, Metro, log-path, and console state.
+    "mcp-server/src/local/localServer.ts": ["exports"],
+    "mcp-server/src/local/logPaths.ts": ["exports"],
+    "mcp-server/src/local/metro/metroDevSession.ts": ["exports"],
+    "mcp-server/src/local/tools/browser.ts": ["exports"],
     // Generated syncdb SDK surface may include hooks before an example screen adopts them.
     "example-frontend/store/syncDbSdk.ts": ["exports", "types"],
-    // Generated communications SDK may include hooks before an example screen adopts them.
-    "example-frontend/store/commsOpenApiSdk.ts": ["exports", "types"],
     // check-explicit-any/lib.ts loads BASELINE_PATH/loadBaseline through require() so it
     // can avoid a static lib ↔ baseline cycle; Knip cannot see the destructured names.
     "scripts/check-explicit-any/baseline.ts": ["exports"],
     // Preserve the vendored express-openapi CommonJS API unchanged; Knip cannot trace
     // properties assigned through module.exports (including serveSwaggerUI used in index.js).
     "api/src/vendor/wesleytodd-openapi/**": ["exports", "types"],
+    // The evaluator algorithms are direct unit-test seams; production calls both through
+    // runEvaluator, while tests exercise their detailed coercion and failure contracts.
+    "ai/src/observability/evaluate.ts": ["exports"],
+    // reviewShortcutAction is the keydown seam. Production calls it only inside this
+    // module; tests import it to assert modifier and typing suppression.
+    "admin-frontend/src/widgets/aiObservability/review/reviewShortcuts.ts": ["exports"],
     // Published public types may have no in-monorepo consumer; removing them would be a
     // breaking package API change.
     "admin-spa/components/AppConfigGate.tsx": ["types"],
@@ -47,19 +70,20 @@
     // Backwards-compatible public aliases intentionally point at the same implementation.
     "api/src/api.ts": ["duplicates"],
     "api/src/rbac/middleware.ts": ["duplicates"],
+    "ui/src/DropdownPanel.tsx": ["duplicates"],
     "mcp-server/src/docs/templates/**": ["files", "exports", "types"],
     // Tests load this CLI through createRequire(); Knip does not see those CJS exports.
     ".github/scripts/prune-cloud-run-not-ready-traffic.js": ["exports"]
   },
   "ignoreFiles": [
-    // Generated communications SDK is retained as a codegen contract even before a
-    // product screen imports it; generated exports/types are handled by ignoreIssues.
-    "example-frontend/store/commsOpenApiSdk.ts",
     // Human upgrade docs link this source example; it is intentionally illustrative
     // rather than imported by the package runtime.
     "api/src/example.ts"
   ],
   "workspaces": {
+    // Every package's real-process smoke (`e2e/smoke.ts`, or `e2e/smoke.spec.ts` for browser
+    // packages) is run by its `smoke` script, not imported, so each workspace lists it as an
+    // entry. example-frontend's `e2e/**/*.ts` already covers it. See docs/reference/test.md.
     // mcp-server `bunfig.toml` `test.preload` is an array so Knip's Bun plugin can
     // `preload.map`. A scalar string crashes the plugin (hence it used to set bun: false).
     // Setting `entry` replaces Knip's default `{index,cli,main}` patterns for that
@@ -72,7 +96,9 @@
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "scripts/**/*.test.ts",
         ".github/scripts/**/*.test.ts",
-        "scripts/ci/prepare-package-publish.mjs"
+        "scripts/ci/prepare-package-publish.mjs",
+        "scripts/charts/compareRenderedSnapshots.ts",
+        "scripts/captureListDetail.ts"
       ],
       // Policy/release scripts are development entries, not production modules.
       "project": [
@@ -91,16 +117,24 @@
       // that become unused both internally and externally are still reported.
       "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/**/*.test.{ts,tsx}",
         "src/*.isolated.{ts,tsx}",
         "src/isolated/**/*.isolated.{ts,tsx}",
-        // `bunfig.toml` test preload for shared RTK doubles; not imported from package entry.
-        "src/testing/useAdminApiDouble.ts"
+        // Test-only helpers: the `bunfig.toml` preload for the shared admin model API double and
+        // the observability fetch-stub helpers. Neither is imported from the package entry.
+        "src/testing/useAdminModelApiDouble.ts",
+        "src/testing/observabilityTestUtils.tsx"
       ]
     },
     "admin-backend": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -110,7 +144,10 @@
       // The Vertex provider is loaded dynamically only when an app opts in and supplies
       // the package through @terreno/ai's optional peer contract.
       "ignoreDependencies": ["@ai-sdk/google-vertex"],
+      // Public types used by their own implementation remain valid package API.
+      "ignoreExportsUsedInFile": {"interface": true, "type": true},
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/isolated/**/*.isolated.ts"
@@ -126,10 +163,12 @@
       "ignoreDependencies": ["ioredis", "passport-local-mongoose"],
       // auth.compile.test.ts compiles this fixture by absolute path.
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/tests/fixtures/compileAuthEntry.ts",
-        "src/migrations/cli.ts"
+        "src/migrations/cli.ts",
+        "src/isolated/**/*.isolated.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -137,22 +176,12 @@
         "!src/sync/loadHarness.ts!"
       ]
     },
-    "rtk": {
-      "entry": [
-        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts"
-      ],
-      "project": [
-        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "!test-preload.ts!"
-      ]
-    },
     "syncdb": {
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/isolated/**/*.isolated.ts",
+        "src/isolated/**/*.isolated.{ts,tsx}",
         // Platform resolvers select these shipped implementations without an extension.
         "src/persisters/defaultPersisterFactory.native.ts!",
         "src/persisters/defaultPersisterFactory.web.ts!"
@@ -166,7 +195,33 @@
       // The test logger discovers @terreno/api through a runtime require. Declaring it
       // here would cycle with API's own @terreno/test dependency and break the
       // topological order that .github/scripts/compile-workspace-deps.js relies on.
-      "ignoreDependencies": ["@sentry/bun", "@terreno/api"],
+      // The expo tests import Expo/RN modules and app aliases that the preload only mocks;
+      // they are never installed by @terreno/test or its consumers' backend entry point.
+      "ignoreDependencies": [
+        "@sentry/bun",
+        "@terreno/api",
+        "@react-native-async-storage/async-storage",
+        "@hooks/useA",
+        "@store",
+        "expo-clipboard",
+        "expo-constants",
+        "expo-haptics",
+        "expo-linking",
+        "expo-secure-store",
+        "expo-splash-screen",
+        // The service-mock tests import the SDKs their registrars replace with mock.module.
+        "@google-cloud/storage",
+        "@google-cloud/tasks",
+        "@sendgrid/mail",
+        "expo-server-sdk",
+        "google-auth-library",
+        "twilio"
+      ],
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/preload/**!"
@@ -183,14 +238,17 @@
         "expo-status-bar",
         "expo-system-ui",
         "expo-updates",
-        "jspdf",
-        "redux-persist"
+        "jspdf"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "e2e/serveTestApp.ts",
-        "jspdf-native-stub.js"
+        "jspdf-native-stub.js",
+        "src/isolated/**/*.isolated.{ts,tsx}",
+        // Test-only helper: writes a stub expo-server `dist/server` build for the SSR serve tests.
+        "src/testing/ssrStubBuild.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -236,16 +294,29 @@
         "swiper"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "**/*.test.ts",
         "collectRegisteredStoryRenders.ts",
         "jspdf-native-stub.js",
-        "fingerprint.config.js"
+        "fingerprint.config.js",
+        "chartVisual/ChartVisualGallery.tsx",
+        "chartVisual/fixtureCatalog.ts",
+        "chartVisual/**/*.test.ts",
+        "chartVisual/fixtures.tsx",
+        "app/demo/chart-visual-gallery.tsx"
+      ],
+      // e2e/ holds the Bun-driven smoke and its helpers, which never ship; production mode
+      // skips them, and default mode still checks them from the smoke entry.
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!e2e/**!"
       ]
     },
     "announcements": {
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         // `bunfig.toml` test preload; not imported from the package entry graph.
@@ -256,7 +327,23 @@
         "!src/tests/**!"
       ]
     },
+    "blocks": {
+      // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+      // cycle through @terreno/test's @terreno/ui dependency and break compile order.
+      "ignoreDependencies": ["@terreno/test"],
+      "entry": ["src/{index,cli}.ts!", "e2e/smoke.{ts,spec.ts}"],
+      "project": [
+        "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "!src/tests/**!",
+        "!scripts/**!"
+      ]
+    },
     "comms": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -270,21 +357,28 @@
         "expo-print",
         "expo-sharing",
         "expo-system-ui",
+        // Terreno 58 native module baseline: linked into the binary before any screen imports
+        // them, so later features ship as OTA updates (docs/implementationPlans/native-module-baseline.md).
+        "expo-device",
+        "react-native-purchases",
+        "react-native-purchases-ui",
         "jspdf",
         // EXPO_UNSTABLE_MCP_SERVER in start/web/ios loads the Expo MCP package.
         "expo-mcp",
-        // RTK OpenAPI's CLI loads TypeScript configuration through ts-node.
-        "ts-node"
+        // auth-experience T2 owns the lockfile and adds this ahead of its first import
+        // (T22's TOTP e2e helper). Remove the entry when T22 lands.
+        "otpauth"
       ],
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "openapi-config.ts",
-        "comms-openapi-config.ts",
         "e2e/**/*.ts",
         "jspdf-native-stub.js",
         "fingerprint.config.js",
-        "playwright.circleci.config.ts"
+        "playwright.circleci.config.ts",
+        "playwright.smoke.config.ts",
+        "tests/bunSetup.ts",
+        "tests/testPreload.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -323,6 +417,7 @@
         "@terreno/jobs!",
         "@thream/socketio-jwt!",
         "ai!",
+        "better-auth!",
         "expo-server-sdk!",
         "express!",
         "google-auth-library!",
@@ -336,12 +431,16 @@
         "zod!"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "src/index.ts!",
+        // Vercel Functions entry (see vercel.json / build:vercel).
+        "src/app.ts!",
         "src/jobsWorker.ts!",
         "src/**/*.test.ts",
         "src/tests/setup.ts",
         "src/scripts/runAdminScript.ts",
         "src/scripts/seed-test-data.ts",
+        "src/scripts/generatePhotoLibrary.ts",
         "src/scripts/syncConsents.ts",
         "src/scripts/configuration-example.ts",
         "src/scripts/seed-admin-spa-admin.ts",
@@ -353,6 +452,11 @@
       ]
     },
     "feature-flags": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -363,6 +467,11 @@
       "ignoreDependencies": ["@google-cloud/tasks", "@vercel/queue"],
       // Mongoose method/static interfaces and runner option types are used in-file.
       "ignoreExportsUsedInFile": {"interface": true, "type": true},
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "!src/tests/**!"
@@ -374,6 +483,7 @@
       // preload file from the plugin, so it is listed as an entry.
       "bun": false,
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "src/index.ts",
         "src/local/index.ts",
         "src/**/*.test.ts",
@@ -382,38 +492,56 @@
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "!scripts/**!"
+        "!scripts/**!",
+        // Test-only helpers (fakeFetch) are reached from tests, not production entries.
+        "!src/__tests__/**!"
       ]
     },
     "ui": {
       // Published UI components expose native/web peers through platform resolution and
       // consumer bundlers; Knip cannot observe those out-of-repository consumers.
       "ignoreDependencies": [
-        "@react-native-community/blur",
         "@react-navigation/native",
         "expo-notifications",
         "expo-updates",
         "expo-web-browser",
-        "react-app-polyfill",
-        "react-date-picker",
-        "react-datetime-picker",
-        "react-dev-utils",
         "react-native-permissions",
-        "react-native-picker-select",
         "react-native-webview",
-        // mdurl ships its own types; the extra @types package is a catalog pin.
-        "@types/mdurl",
-        "react-time-picker",
         // Tests mock expo-modules-core subpaths by string; TypeDoc is invoked by
         // the package's `types` script.
         "expo-modules-core",
-        "typedoc"
+        "typedoc",
+        // The e2e smoke imports @terreno/test from the hoisted workspace. Declaring it would
+        // cycle through @terreno/test's own @terreno/ui dependency.
+        "@terreno/test"
       ],
       "entry": [
+        "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "babel.config.js",
         "utilities/process-counties-script/processCounties.js"
+      ]
+    },
+    "api-health": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ]
+    },
+    "cli": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
+      ]
+    },
+    "create-terreno-app": {
+      "entry": [
+        "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "e2e/smoke.{ts,spec.ts}"
       ]
     },
     "website": {
@@ -426,7 +554,8 @@
       "entry": [
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
-        "src/theme/DocItem/Footer/index.tsx"
+        "src/theme/DocItem/Footer/index.tsx",
+        "scripts/docs-audit.test.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

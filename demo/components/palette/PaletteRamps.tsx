@@ -12,7 +12,7 @@ import {FAMILY_LABELS} from "./paletteTypes";
 
 /**
  * Visual read-out of the whole generated palette: one row per family showing every generated shade
- * (000-900 for the main families, 000/100/200 for status). Updates live as anchors or the chat
+ * (000-900 for the main families, 000/050/100/200 for status). Updates live as anchors or the chat
  * assistant change the palette.
  */
 

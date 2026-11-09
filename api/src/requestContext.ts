@@ -40,13 +40,36 @@ const TRACE_SAMPLED_HEADER = "x-trace-sampled";
 const USER_ID_HEADER = "x-user-id";
 
 /**
+ * How the caller authenticated. Permission functions and hooks read it through
+ * {@link getCurrentRequestContext} to tell a user's own session apart from a delegated agent
+ * credential (an `mcp_` service token or an MCP OAuth access token).
+ *
+ * - `jwt`: a Terreno JWT bearer (REST or `/mcp`).
+ * - `better-auth-session`: a Better Auth session cookie or bearer.
+ * - `mcp-service-token`: a personal `mcp_` service token on `/mcp`.
+ * - `oauth`: an MCP OAuth access token on `/mcp`.
+ */
+export type RequestCredential = "jwt" | "better-auth-session" | "mcp-service-token" | "oauth";
+
+/**
  * Correlation fields stored in AsyncLocalStorage for the lifetime of a request or job. Every log
  * line emitted inside the scope is enriched with these. `requestId` is the only required field; the
  * rest are populated when headers, trace context, or auth supply them.
  */
 export interface RequestContext {
+  /**
+   * The credential type that authenticated `userId`. Unset for anonymous requests and jobs.
+   * See {@link RequestCredential}.
+   */
+  credential?: RequestCredential;
   /** Background job identifier (from `x-job-id` or set via {@link runWithRequestContext}). */
   jobId?: string;
+  /**
+   * Scopes granted to the MCP OAuth access token that authenticated the request. Set only when
+   * `credential` is `oauth`. Terreno does not map scopes to tools; check them in permission code,
+   * for example with `requireOAuthScope`.
+   */
+  oauthScopes?: string[];
   /** Stable id shared by all log lines for one request/job; echoed to clients as `X-Request-ID`. */
   requestId: string;
   /** Auth session id, resolved from the JWT/Better Auth session or `x-session-id`. */
@@ -223,6 +246,7 @@ export const getCurrentLogContext = (): Partial<RequestContext> => {
   }
 
   return {
+    credential: context.credential,
     jobId: context.jobId,
     requestId: context.requestId,
     sessionId: context.sessionId,
@@ -260,6 +284,7 @@ export const applyRequestContextToSentry = (
 ): void => {
   const scope = Sentry.getCurrentScope();
   setSentryTag(scope, "request_id", context.requestId);
+  setSentryTag(scope, "credential", context.credential);
   setSentryTag(scope, "session_id", context.sessionId);
   setSentryTag(scope, "job_id", context.jobId);
   setSentryTag(scope, "user_id", context.userId);
@@ -273,6 +298,7 @@ export const applyRequestContextToSentry = (
 
   const sentryContext: Record<string, string | boolean> = {};
   setSentryContextValue(sentryContext, "requestId", context.requestId);
+  setSentryContextValue(sentryContext, "credential", context.credential);
   setSentryContextValue(sentryContext, "sessionId", context.sessionId);
   setSentryContextValue(sentryContext, "jobId", context.jobId);
   setSentryContextValue(sentryContext, "userId", context.userId);
@@ -369,6 +395,30 @@ export const runWithRequestContextAttributes = <T>(
   return runWithRequestContext(getRequestContextFromAttributes(attributes), callback);
 };
 
+/**
+ * The Better Auth session middleware runs after JWT decoding and replaces `req.user` when it
+ * finds a session, so a session wins over a decoded JWT payload. A user set some other way (for
+ * example by passport inside `authenticateMiddleware`) keeps the credential already recorded.
+ */
+const resolveRequestCredential = (
+  req: express.Request & {
+    authTokenPayload?: JwtSessionPayload;
+    betterAuthSession?: {session?: {id?: string}};
+  },
+  userId: string | undefined
+): RequestCredential | undefined => {
+  if (!userId) {
+    return undefined;
+  }
+  if (req.betterAuthSession) {
+    return "better-auth-session";
+  }
+  if (req.authTokenPayload) {
+    return "jwt";
+  }
+  return getCurrentRequestContext()?.credential;
+};
+
 export const updateRequestContextFromRequest = (
   req: express.Request,
   res?: express.Response
@@ -388,8 +438,9 @@ export const updateRequestContextFromRequest = (
     getHeader(req, SESSION_ID_HEADER);
   const user = req.user as {_id?: unknown; id?: string} | undefined;
   const userId = user?.id ?? (user?._id ? String(user._id) : undefined);
+  const credential = resolveRequestCredential(reqWithContext, userId);
 
-  setRequestContext({jobId, sessionId, userId});
+  setRequestContext({credential, jobId, sessionId, userId});
 
   if (jobId) {
     reqWithContext.jobId = jobId;

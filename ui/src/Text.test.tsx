@@ -1,7 +1,11 @@
 import {describe, expect, it, spyOn} from "bun:test";
+import {render} from "@testing-library/react-native";
+import {createRef} from "react";
+import type {TextInstance as NativeText, TextProps} from "react-native";
 
 import {Text} from "./Text";
-import {renderWithTheme} from "./test-utils";
+import {ThemeProvider} from "./Theme";
+import {elementProps, renderWithTheme} from "./test-utils";
 
 describe("Text", () => {
   it("renders correctly with default props", () => {
@@ -112,7 +116,7 @@ describe("Text", () => {
 
   // Color tests
   it("renders with secondary color", () => {
-    const {toJSON} = renderWithTheme(<Text color="secondary">Secondary color</Text>);
+    const {toJSON} = renderWithTheme(<Text color="secondaryDark">Secondary color</Text>);
     expect(toJSON()).toMatchSnapshot();
   });
 
@@ -162,6 +166,24 @@ describe("Text", () => {
   it("renders with testID", () => {
     const {getByTestId} = renderWithTheme(<Text testID="test-text">Test</Text>);
     expect(getByTestId("test-text")).toBeTruthy();
+  });
+
+  it("marks a header for screen readers and exposes its native text to a ref", () => {
+    const ref = createRef<NativeText>();
+    const nativeText = {focus: (): void => {}};
+    const {getByRole} = render(
+      <Text accessibilityRole="header" ref={ref}>
+        Which plan?
+      </Text>,
+      {
+        createNodeMock: (element) =>
+          elementProps<TextProps>(element).accessibilityRole === "header" ? nativeText : null,
+        wrapper: ThemeProvider,
+      }
+    );
+
+    expect(getByRole("header", {name: "Which plan?"})).toBeTruthy();
+    expect(ref.current).toBe(nativeText as unknown as NativeText);
   });
 
   // Combined style tests

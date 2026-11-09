@@ -3,38 +3,24 @@ import * as Sentry from "@sentry/bun";
 import type express from "express";
 import {Server, type Socket} from "socket.io";
 
-import type {User} from "../auth";
+import type {UserModel} from "../auth";
+import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import {APIError} from "../errors";
 import {logger} from "../logger";
-import {canSubscribeRealtime} from "../rbac/realtimeAccess";
 import {warnOnSyncScopesWithoutUserModel} from "../sync/registry";
 import {installSyncSocketHandlers} from "../sync/socketHandlers";
 import {getSyncAppOptions} from "../sync/syncApp";
+import type {TerrenoApp} from "../terrenoApp";
 import type {TerrenoPlugin} from "../terrenoPlugin";
 import {startChangeStreamWatcher, stopChangeStreamWatcher} from "./changeStreamWatcher";
-import {
-  addQuerySubscription,
-  computeQueryId,
-  removeAllSocketQueries,
-  removeQuerySubscription,
-} from "./queryStore";
-import {findRegistryEntryByRoutePath, type RealtimeRegistryEntry} from "./registry";
 import {
   loadFullUserForSocket,
   type SessionRevalidationHandle,
   startSessionRevalidationSweep,
 } from "./sessionRevalidation";
-import {createSocketAuthMiddleware} from "./socketAuth";
-import {getSocketUser, type SocketDataBag, type SocketWithDecodedToken} from "./socketUser";
-import type {DocumentSubscription, QuerySubscription, RealtimeAppOptions} from "./types";
-
-/**
- * Caps on per-socket subscriptions. Prevents a malicious or buggy client from
- * exhausting server memory by opening unbounded subscriptions.
- */
-export const MAX_MODEL_SUBSCRIPTIONS = 50;
-export const MAX_DOCUMENT_SUBSCRIPTIONS = 500;
-export const MAX_QUERY_SUBSCRIPTIONS = 100;
+import {type BetterAuthSocketOptions, createSocketAuthMiddleware} from "./socketAuth";
+import type {SocketDataBag, SocketWithDecodedToken} from "./socketUser";
+import type {RealtimeAppOptions} from "./types";
 
 /**
  * Replace any userinfo (`user:password@`) component in a URL with `***@` so the
@@ -72,53 +58,14 @@ export interface RealtimeSocketLike extends SocketWithDecodedToken {
   on: (event: string, handler: (...args: never[]) => void | Promise<void>) => void;
 }
 
-const canSubscribe = async (
-  entry: RealtimeRegistryEntry,
-  method: "list" | "read",
-  user?: User
-): Promise<boolean> => canSubscribeRealtime(entry, method, user);
-
-const getAuthorizedQuery = async (
-  entry: RealtimeRegistryEntry,
-  query: Record<string, unknown>,
-  user?: User
-): Promise<Record<string, unknown> | null> => {
-  if (!(await canSubscribe(entry, "list", user))) {
-    return null;
-  }
-
-  if (!entry.options.queryFilter) {
-    return query;
-  }
-
-  let filteredQuery: Record<string, unknown> | null;
-  try {
-    filteredQuery = await entry.options.queryFilter(user, query);
-  } catch (error) {
-    logger.error(
-      `[realtime] queryFilter threw for ${entry.modelName}/list: ${error}. Denying query subscription.`
-    );
-    Sentry.captureException(error);
-    return null;
-  }
-
-  if (filteredQuery === null) {
-    return null;
-  }
-
-  return {...query, ...filteredQuery};
-};
-
 /**
- * Install the realtime subscription handlers on a single socket. Extracted from the
- * RealtimeApp connection handler so this logic can be unit-tested with a mock socket
- * (no real Socket.io / HTTP server / JWT handshake required).
+ * Install the base socket handlers on a single socket: join the per-user, `authenticated`,
+ * and (for admins) `admin` rooms, and log disconnects. Extracted from the RealtimeApp
+ * connection handler so it can be unit-tested with a mock socket (no real Socket.io /
+ * HTTP server / JWT handshake required).
  *
- * Enforces:
- *   - per-socket subscription caps (DoS protection)
- *   - registry membership (only realtime-enabled collections can be subscribed)
- *   - owner-strategy isolation (non-admin users cannot subscribe to other users' rooms)
- *   - server-side queryId computation (clients can't hijack queries by colliding ids)
+ * Collection subscriptions go through the sync protocol (`sync:subscribe`), installed
+ * separately by `installSyncSocketHandlers`.
  */
 export const installRealtimeSocketHandlers = (
   socket: RealtimeSocketLike,
@@ -127,11 +74,6 @@ export const installRealtimeSocketHandlers = (
   const logInfo = options.logInfo ?? ((): void => {});
   const userId = socket.decodedToken?.id;
   const isAdmin = socket.decodedToken?.admin === true;
-  // D2: re-derive per event rather than capturing once at install time, so a
-  // handshake-time-loaded full user (or one refreshed by D1's sweep) is always used.
-  const currentUser = (): User | undefined => getSocketUser(socket);
-
-  const counts = {document: 0, model: 0, query: 0};
 
   const joinUserRooms = async (): Promise<void> => {
     if (userId) {
@@ -148,189 +90,19 @@ export const installRealtimeSocketHandlers = (
   // Fire-and-forget — there is nothing useful for the caller to await.
   void joinUserRooms();
 
-  socket.on("subscribe:model", async (modelName: string): Promise<void> => {
-    if (typeof modelName !== "string" || modelName.length === 0) {
-      return;
-    }
-    if (counts.model >= MAX_MODEL_SUBSCRIPTIONS) {
-      logInfo(`[realtime] User ${userId} hit model subscription limit`);
-      return;
-    }
-
-    const entry = findRegistryEntryByRoutePath(modelName);
-    if (!entry) {
-      logInfo(
-        `[realtime] User ${userId} denied model subscription: collection "${modelName}" not registered`
-      );
-      return;
-    }
-
-    // Owner-strategy models fan out via user:{ownerId} — there is no shared model room
-    // that should be open to all users. Owners receive events through their user room
-    // automatically; admins can use the admin room to see everything.
-    if (entry.config.roomStrategy === "owner" && !isAdmin) {
-      logInfo(
-        `[realtime] User ${userId} denied model subscription for ${modelName}: ` +
-          "owner strategy restricts model room to admins"
-      );
-      return;
-    }
-
-    if (!(await canSubscribe(entry, "list", currentUser()))) {
-      logInfo(
-        `[realtime] User ${userId} denied model subscription for ${modelName}: list permission denied`
-      );
-      return;
-    }
-
-    counts.model += 1;
-    await socket.join(`model:${modelName}`);
-    logInfo(`[realtime] User ${userId} subscribed to model:${modelName}`);
-  });
-
-  socket.on("unsubscribe:model", async (modelName: string): Promise<void> => {
-    if (typeof modelName === "string" && modelName.length > 0) {
-      await socket.leave(`model:${modelName}`);
-      counts.model = Math.max(0, counts.model - 1);
-      logInfo(`[realtime] User ${userId} unsubscribed from model:${modelName}`);
-    }
-  });
-
-  socket.on("subscribe:document", async (payload: DocumentSubscription): Promise<void> => {
-    if (
-      !payload?.collection ||
-      !payload?.id ||
-      typeof payload.collection !== "string" ||
-      typeof payload.id !== "string"
-    ) {
-      return;
-    }
-    if (counts.document >= MAX_DOCUMENT_SUBSCRIPTIONS) {
-      logInfo(`[realtime] User ${userId} hit document subscription limit`);
-      return;
-    }
-
-    const entry = findRegistryEntryByRoutePath(payload.collection);
-    if (!entry) {
-      logInfo(
-        `[realtime] User ${userId} denied document subscription: ` +
-          `collection "${payload.collection}" not registered`
-      );
-      return;
-    }
-
-    if (!(await canSubscribe(entry, "read", currentUser()))) {
-      logInfo(
-        `[realtime] User ${userId} denied document subscription for ` +
-          `${payload.collection}/${payload.id}: read permission denied`
-      );
-      return;
-    }
-
-    if (entry.config.roomStrategy === "owner" && !isAdmin) {
-      logInfo(
-        `[realtime] User ${userId} denied document subscription for ` +
-          `${payload.collection}/${payload.id}: owner strategy requires admin`
-      );
-      return;
-    }
-
-    counts.document += 1;
-    const room = `document:${payload.collection}:${payload.id}`;
-    await socket.join(room);
-    logInfo(`[realtime] User ${userId} subscribed to ${room}`);
-  });
-
-  socket.on("unsubscribe:document", async (payload: DocumentSubscription): Promise<void> => {
-    if (payload?.collection && payload?.id) {
-      const room = `document:${payload.collection}:${payload.id}`;
-      await socket.leave(room);
-      counts.document = Math.max(0, counts.document - 1);
-      logInfo(`[realtime] User ${userId} unsubscribed from ${room}`);
-    }
-  });
-
-  socket.on("subscribe:query", async (payload: QuerySubscription): Promise<void> => {
-    if (
-      !payload?.collection ||
-      !payload?.query ||
-      typeof payload.collection !== "string" ||
-      typeof payload.query !== "object" ||
-      Array.isArray(payload.query)
-    ) {
-      return;
-    }
-    if (counts.query >= MAX_QUERY_SUBSCRIPTIONS) {
-      logInfo(`[realtime] User ${userId} hit query subscription limit`);
-      return;
-    }
-
-    const entry = findRegistryEntryByRoutePath(payload.collection);
-    if (!entry) {
-      logInfo(
-        `[realtime] User ${userId} denied query subscription: ` +
-          `collection "${payload.collection}" not registered`
-      );
-      return;
-    }
-
-    let query = await getAuthorizedQuery(entry, {...payload.query}, currentUser());
-    if (!query) {
-      logInfo(
-        `[realtime] User ${userId} denied query subscription for ${payload.collection}: ` +
-          "list permission or query filter denied"
-      );
-      return;
-    }
-
-    if (entry.config.roomStrategy === "owner" && !isAdmin) {
-      if (!userId) {
-        return;
-      }
-      query = {...query, ownerId: userId};
-    }
-
-    const queryId = computeQueryId(payload.collection, query);
-
-    addQuerySubscription(socket.id, payload.collection, query, queryId);
-    counts.query += 1;
-    await socket.join(`query:${queryId}`);
-    socket.emit("query:subscribed", {
-      clientQueryId: payload.queryId,
-      collection: payload.collection,
-      queryId,
-    });
-    logInfo(`[realtime] User ${userId} subscribed to query:${queryId} on ${payload.collection}`);
-  });
-
-  socket.on("unsubscribe:query", async (payload: {queryId: string}): Promise<void> => {
-    if (payload?.queryId) {
-      removeQuerySubscription(socket.id, payload.queryId);
-      await socket.leave(`query:${payload.queryId}`);
-      counts.query = Math.max(0, counts.query - 1);
-      logInfo(`[realtime] User ${userId} unsubscribed from query:${payload.queryId}`);
-    }
-  });
-
   socket.on("disconnect", () => {
-    removeAllSocketQueries(socket.id);
     logInfo(`[realtime] User ${userId} disconnected`);
   });
 };
 
 /**
- * TerrenoPlugin that provides real-time sync via Socket.io and MongoDB change streams.
+ * TerrenoPlugin that hosts Socket.io and the MongoDB change stream watcher for
+ * `@terreno/syncdb`.
  *
  * Attaches a Socket.io server to the HTTP server created by TerrenoApp.start(),
- * sets up JWT and/or Better Auth authentication for socket connections, manages room subscriptions
- * (model, document, and query rooms), and starts a change stream watcher that
- * emits events to connected clients.
- *
- * ## Subscription types
- *
- * - **Model rooms**: `subscribe:model` / `unsubscribe:model` — receive all events for a collection
- * - **Document rooms**: `subscribe:document` / `unsubscribe:document` — receive events for a single document
- * - **Query rooms**: `subscribe:query` / `unsubscribe:query` — receive events matching a MongoDB query
+ * sets up JWT and/or Better Auth authentication for socket connections, installs the
+ * sync protocol handlers (`sync:subscribe` / `sync:mutate`), and starts a change stream
+ * watcher that emits `sync:delta` events for models registered with `sync`.
  *
  * @example
  * ```typescript
@@ -338,7 +110,8 @@ export const installRealtimeSocketHandlers = (
  *   userModel: User,
  *   realtime: { debug: true },
  * })
- *   .register(todoRouter)   // todoRouter has realtime config
+ *   .register(todoRouter)   // todoRouter has a `sync` config
+ *   .register(new SyncApp())
  *   .start();
  * ```
  */
@@ -347,6 +120,7 @@ export class RealtimeApp implements TerrenoPlugin {
   private io: Server | null = null;
   private config: RealtimeAppOptions;
   private sessionRevalidation: SessionRevalidationHandle | null = null;
+  private terrenoApp: TerrenoApp | undefined;
 
   constructor(config: RealtimeAppOptions = {}) {
     this.config = config;
@@ -355,8 +129,9 @@ export class RealtimeApp implements TerrenoPlugin {
   /**
    * Register routes and middleware. Adds a /realtime/health endpoint.
    */
-  register(app: express.Application): void {
+  register(app: express.Application, _openApi?: unknown, terrenoApp?: TerrenoApp): void {
     this.app = app;
+    this.terrenoApp = terrenoApp;
     app.get("/realtime/health", (_req, res) => {
       const connected = this.io?.engine?.clientsCount ?? 0;
       res.json({
@@ -365,6 +140,33 @@ export class RealtimeApp implements TerrenoPlugin {
         status: this.io ? "running" : "not_started",
       });
     });
+  }
+
+  /**
+   * This RealtimeApp's `userModel`, else the TerrenoApp's, matching what `TerrenoApp({realtime})`
+   * passes to the RealtimeApp it registers.
+   */
+  private resolveUserModel(): UserModel | undefined {
+    return this.config.userModel ?? (this.terrenoApp?.getUserModel() as UserModel | undefined);
+  }
+
+  /**
+   * The Better Auth instance for socket sessions: the explicit `betterAuth` option, else the
+   * one from a Better Auth plugin (such as BetterAuthApp) registered on the same TerrenoApp,
+   * so apps do not have to build the instance early and pass it to both plugins. The socket
+   * validator falls back to the resolved `userModel`, so the handshake and the revalidation
+   * sweep resolve the same users.
+   */
+  private resolveBetterAuth(): BetterAuthSocketOptions | undefined {
+    const userModel = this.resolveUserModel();
+    if (this.config.betterAuth) {
+      return {...this.config.betterAuth, userModel: this.config.betterAuth.userModel ?? userModel};
+    }
+    const auth = getProvidedBetterAuth(findBetterAuthProvider(this.terrenoApp?.getPlugins() ?? []));
+    if (!auth) {
+      return undefined;
+    }
+    return {auth, userModel};
   }
 
   /**
@@ -395,7 +197,9 @@ export class RealtimeApp implements TerrenoPlugin {
 
       // Authentication middleware: legacy JWT first when configured, optionally Better Auth sessions.
       const tokenSecret = this.config.tokenSecret ?? process.env.TOKEN_SECRET;
-      if (!tokenSecret && !this.config.betterAuth) {
+      const userModel = this.resolveUserModel();
+      const betterAuth = this.resolveBetterAuth();
+      if (!tokenSecret && !betterAuth) {
         throw new APIError({
           status: 500,
           title:
@@ -415,13 +219,14 @@ export class RealtimeApp implements TerrenoPlugin {
 
       this.io.use(
         createSocketAuthMiddleware({
-          betterAuth: this.config.betterAuth,
+          betterAuth,
           issuer: resolveTokenIssuer,
-          ...(tokenSecret ? {tokenSecret} : {}),
+          tokenSecret,
+          userModel,
         })
       );
 
-      const authKinds = [tokenSecret ? "JWT" : null, this.config.betterAuth ? "Better Auth" : null]
+      const authKinds = [tokenSecret ? "JWT" : null, betterAuth ? "Better Auth" : null]
         .filter(Boolean)
         .join(" + ");
       logInfo(`[realtime] Socket auth middleware added (${authKinds})`);
@@ -429,7 +234,7 @@ export class RealtimeApp implements TerrenoPlugin {
       // Task 9.21: tenant/custom sync scopes can only be resolved from the full user
       // document, so warn loudly here (once, at startup) rather than silently serving
       // empty tenant streams for the life of the process.
-      warnOnSyncScopesWithoutUserModel({userModel: this.config.userModel});
+      warnOnSyncScopesWithoutUserModel({userModel});
 
       // Configure adapter for multi-instance deployments
       this.setupAdapter(logInfo);
@@ -444,7 +249,7 @@ export class RealtimeApp implements TerrenoPlugin {
           // back to the synthetic shape until this resolves.
           void loadFullUserForSocket(
             socket as unknown as Socket & {data: SocketDataBag},
-            this.config.userModel
+            userModel
           );
           // The auth middleware adds `decodedToken` at runtime; cast through
           // RealtimeSocketLike (a structural subset) to keep socket handler logic testable.
@@ -479,11 +284,11 @@ export class RealtimeApp implements TerrenoPlugin {
       // re-resolves sync room membership (D4) for sockets that remain valid.
       // A thunk (not a snapshot) reads this app's SyncApp options fresh on every sweep.
       this.sessionRevalidation = startSessionRevalidationSweep(this.io, () => ({
-        betterAuth: this.config.betterAuth,
+        betterAuth,
         intervalMs: this.config.sessionRevalidationIntervalMs,
         logInfo,
         sync: this.config.sync ?? (this.app ? getSyncAppOptions(this.app) : undefined),
-        userModel: this.config.userModel,
+        userModel,
       }));
 
       logInfo("[realtime] Socket.io server setup complete");

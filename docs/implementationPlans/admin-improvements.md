@@ -1,10 +1,10 @@
 # Implementation Plan: Admin Improvements (post–Admin UI v2)
 
-**Status:** Approved  
+**Status:** Deferred — roadmap declined #1099; Phase 7 (rules, MCP generator, migration guide, telemetry) not started  
 **Branch:** (implementation TBD)  
 **Owner:** Josh Gachnang  
 **Created:** 2026-06-01 (original); revised 2026-08-20 post–v2 gap analysis  
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1099  
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1099  
 **Prerequisite:** [Admin UI v2 — Django-parity admin](./admin-ui-v2-django-parity.md) (**Complete**)  
 **Research:** [admin-improvements-research.md](./admin-improvements-research.md)
 ## Goal

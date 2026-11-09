@@ -47,8 +47,8 @@ test.describe("Consent Flow", () => {
     await page.getByTestId("consent-form-agree-button").click();
     await waitForSyncTodosScreen(page);
 
-    // Navigate to consents tab
-    await page.goto("/consents");
+    // Navigate to the consents section of the documents tab
+    await page.goto("/documents?section=consents");
     await page.getByTestId("consent-history-list").waitFor({state: "visible"});
     await expect(page.getByTestId("consent-history-list")).toBeVisible();
   });

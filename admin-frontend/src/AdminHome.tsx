@@ -1,8 +1,9 @@
-import {Box, Heading, Page, Spinner, Text} from "@terreno/ui";
+import {Box, Heading, isSupportedDesktopWidth, Page, Spinner, Text} from "@terreno/ui";
 import React, {useMemo} from "react";
+import {useWindowDimensions} from "react-native";
 import {useHomeWidget} from "./AdminProvider";
 import {isAuditLogModel} from "./isAuditLogModel";
-import type {AdminApi, AdminModelConfig} from "./types";
+import type {AdminModelConfig} from "./types";
 import {resolveAdminBases} from "./types";
 import {useAdminConfig} from "./useAdminConfig";
 import {normalizeSidebarWidgets, normalizeWidgetIds} from "./widgets/homeWidgetUtils";
@@ -13,7 +14,6 @@ interface AdminHomeProps {
   baseUrl?: string;
   apiBase?: string;
   routeBase?: string;
-  api: AdminApi;
   /**
    * When true, omits the outer {@link Page} wrapper so the dashboard can sit under a parent
    * screen (for example, the Expo admin index together with tools and model cards).
@@ -22,7 +22,6 @@ interface AdminHomeProps {
 }
 
 const HomeSlotWidget: React.FC<{
-  api: AdminApi;
   apiBase: string;
   auditModel?: AdminModelConfig;
   config: NonNullable<ReturnType<typeof useAdminConfig>["config"]>;
@@ -30,14 +29,13 @@ const HomeSlotWidget: React.FC<{
   models: AdminModelConfig[];
   routeBase: string;
   widgetId: string;
-}> = ({api, apiBase, auditModel, config, featureFlagModel, models, routeBase, widgetId}) => {
+}> = ({apiBase, auditModel, config, featureFlagModel, models, routeBase, widgetId}) => {
   const Widget = useHomeWidget(widgetId);
   if (!Widget) {
     return <MissingWidget bucket="home" widgetId={widgetId} />;
   }
   return (
     <Widget
-      api={api}
       apiBase={apiBase}
       auditModel={auditModel}
       config={config}
@@ -56,15 +54,16 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   embedded = false,
 }) => {
+  const {width: windowWidth} = useWindowDimensions();
+  const isDesktopLayout = !embedded && isSupportedDesktopWidth({width: windowWidth});
   const {apiBase: resolvedApiBase, routeBase: resolvedRouteBase} = resolveAdminBases({
     apiBase,
     baseUrl,
     routeBase,
   });
-  const {config, error, isLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, error, isLoading} = useAdminConfig(resolvedApiBase);
 
   const models = (config?.models ?? []) as AdminModelConfig[];
   const auditModel = useMemo(() => models.find(isAuditLogModel), [models]);
@@ -115,7 +114,6 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
   const title = config.home?.title ?? "Admin";
 
   const slotWidgetProps = {
-    api,
     apiBase: resolvedApiBase,
     auditModel,
     config,
@@ -138,14 +136,19 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
         </Box>
       ) : null}
 
-      <Box alignItems="start" direction={embedded ? "column" : "row"} gap={4}>
+      <Box
+        alignItems="start"
+        direction={isDesktopLayout ? "row" : "column"}
+        gap={4}
+        testID="admin-home-columns"
+      >
         {main.length > 0 ? (
           <Box
             flex="grow"
             gap={3}
-            minWidth={embedded ? 0 : 280}
+            minWidth={isDesktopLayout ? 280 : 0}
             testID="admin-home-slot-main"
-            {...(embedded ? {width: "100%"} : {})}
+            {...(isDesktopLayout ? {} : {width: "100%"})}
           >
             {main.map((id) => (
               <Box key={`mn-${id}`}>
@@ -158,9 +161,9 @@ export const AdminHome: React.FC<AdminHomeProps> = ({
           <Box
             direction="column"
             gap={3}
-            minWidth={embedded ? 0 : 280}
+            minWidth={isDesktopLayout ? 280 : 0}
             testID="admin-home-slot-sidebar"
-            width={embedded ? "100%" : 320}
+            width={isDesktopLayout ? 320 : "100%"}
           >
             {sidebar.map((id) => (
               <Box key={`sb-${id}`}>

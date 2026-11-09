@@ -11,6 +11,7 @@ import {AnnouncementsApp} from "@terreno/announcements";
 
 new AnnouncementsApp({
   defaultAcknowledgementPolicy: "dismiss-only",
+  uploadToken: process.env.ANNOUNCEMENTS_UPLOAD_TOKEN,
   // audienceType staff/patient/all is applied inside the plugin via matchAudienceByType.
   isStaff: (user) => (user as {admin?: boolean}).admin === true,
   matchAudience: (user, announcement) => {
@@ -46,6 +47,8 @@ For Flourish-style surfaces on one collection:
 
 2. Create announcements in admin (draft → publish). Use `AnnouncementOverview`, `AnnouncementEditor`, and (optionally) `AnnouncementList` from `@terreno/admin-frontend` with dedicated Expo routes (see `example-frontend/app/admin/announcements/`). The built-in admin screen widget key `announcements` renders the overview when your host uses `AdminScreenRouter` for custom screens. Published `title`/`body` edits auto-increment `version`, which re-shows the surface to users who only acknowledged the previous version.
 
+For release-driven batches, use an [announcement release pack](../reference/announcement-release-packs.md). It keeps one `pack.yaml` manifest plus multiple Markdown announcements in source control, validates release and build versioning, and can import idempotent drafts or explicitly publish the whole pack through a dedicated bearer token. The example Cloud Run service accepts `Authorization: Bearer terreno-example-announcement-upload` (Terraform variable `announcements_upload_token`).
+
 ### Admin editor fields
 
 `AnnouncementEditor` exposes structured targeting controls (no raw `requiresAcknowledgement` boolean):
@@ -61,7 +64,7 @@ For Flourish-style surfaces on one collection:
 
 ### Admin overview
 
-`AnnouncementOverview` calls `GET /announcements/overview` (via RTK `injectEndpoints`) and shows:
+`AnnouncementOverview` calls `GET /announcements/overview` (through the `AdminProvider` fetch client) and shows:
 
 - Launch workflow guidance (draft → targeting → preview → publish) with a primary **Create announcement** action
 - Summary cards for published, drafts, impressions, acknowledgements, and CTA clicks
@@ -84,11 +87,14 @@ Wrap authenticated app content:
 
 ```tsx
 import {AnnouncementNavigator} from "@terreno/ui";
+import {apiClient} from "@/store/apiClient"; // @terreno/syncdb/api createApiClient(...)
 
-<AnnouncementNavigator api={terrenoApi}>
+<AnnouncementNavigator client={apiClient}>
   <AppTabs />
 </AnnouncementNavigator>
 ```
+
+`client` is the app's request client (see [`TerrenoRequestClient`](../reference/ui.md#terrenorequestclient)); the RTK `api` prop was removed in Terreno 58.
 
 Place it after consent/onboarding wrappers if you use `ConsentNavigator`. The navigator sends the native platform (`ios` / `android` / `web`) and, when available, the app build number from `Constants.expoConfig.extra.buildNumber` (same source as `useUpgradeCheck`) on pending and feed requests. Only pending failures block the app — changelog feed errors are non-fatal. These surfaces are not in the `@terreno/ui` component demo; wire them in the app (`example-frontend`) the same way.
 
@@ -117,7 +123,7 @@ Interrupt frequency is enforced **client-side** in `AnnouncementNavigator` befor
 
 ```tsx
 <AnnouncementNavigator
-  api={terrenoApi}
+  client={apiClient}
   frequency={{
     cooldownHours: 24,
     skipFirstLaunch: false,
@@ -128,7 +134,7 @@ Interrupt frequency is enforced **client-side** in `AnnouncementNavigator` befor
 </AnnouncementNavigator>
 ```
 
-`maxInterruptionsPerSession` defaults to `1` when omitted. The example app sets `skipFirstLaunch: false` so seeded interrupts still appear on first launch.
+`maxInterruptionsPerSession` defaults to `1` when omitted. The example app sets `skipFirstLaunch: false` so an announcement an admin publishes appears on the next launch.
 
 | Prop | Default | Behavior |
 |------|---------|----------|
@@ -147,9 +153,11 @@ Paste YouTube or Loom URLs in the announcement `body` using markdown links or im
 
 ## Example app
 
-`example-backend` registers `AnnouncementsApp` with `isStaff: (user) => user.admin === true` and an optional `matchAudience` org filter. `bun run backend:seed` idempotently seeds:
+`example-backend` registers `AnnouncementsApp` with `isStaff: (user) => user.admin === true` and an optional `matchAudience` org filter. `bun run backend:seed` idempotently seeds two **drafts**:
 
 - **Staff modal (required)** — `audienceType: "staff"`, `displayMode: "modal"`, `acknowledgementPolicy: "required"` (`Example staff operations bulletin`)
 - **Patient banner (dismiss-only)** — `audienceType: "patient"`, `displayMode: "banner"`, `acknowledgementPolicy: "dismiss-only"` (`Example patient care tip`)
 
-The staff launch example is rich markdown with a YouTube embed, overview/editor screenshots, and a tracked docs CTA. Re-running the seed updates that example in place. An existing legacy welcome row (`Welcome to Terreno announcements`) is archived idempotently so it no longer blocks the patient banner. `example-frontend` wraps authenticated users with `AnnouncementNavigator` (`skipFirstLaunch: false`, `userId` from the profile); non-staff users therefore see only the patient banner interrupt under the default session cap of `1`.
+The seed keeps them as drafts so a fresh database (local dev or a PR preview) does not interrupt sign-in. Publish one from **Admin → Announcements** to see it. Re-running the seed updates both examples in place and sets them back to draft. The staff example is rich markdown with a YouTube embed, overview/editor screenshots, and a tracked docs CTA. An existing legacy welcome row (`Welcome to Terreno announcements`) is archived idempotently. `example-frontend` wraps authenticated users with `AnnouncementNavigator` (`skipFirstLaunch: false`, `userId` from the profile).
+
+Release notes in the example app use [`WhatsNewBanner`](./whats-new-banner.md) instead of announcements.

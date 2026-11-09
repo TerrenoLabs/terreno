@@ -3,9 +3,10 @@ import {ToastDemo, Toasts} from "@stories/Toast.stories";
 import {Toast} from "@terreno/ui";
 
 export const ToastConfiguration: DemoConfiguration = {
+  usageExample: "import {Toast} from \"@terreno/ui\";\n\n<Toast />",
   name: "Toast",
   component: Toast, // Replace with actual component reference
-  related: ["Banners"],
+  related: ["Banner"],
   description:
     "Toasts are brief and small messages that overlay content, but do not block the user’s flow, as they are out of the way and ephemeral. Toasts do not require user action and primarily acknowledge that a user has performed an action or completed a task. Also known as 'snackbar'.",
   shortDescription:
@@ -16,7 +17,7 @@ export const ToastConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r/Terreno-Design-System?node-id=3611-6847&t=Oy9DQ55rqjZ987fn-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=3611-6847",
     ios: "ready",
     android: "ready",
     web: "ready",

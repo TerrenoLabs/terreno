@@ -12,17 +12,30 @@ export interface DriftItem {
   message: string;
 }
 
-export const INTERNAL_LEAKAGE_REGEX =
+const INTERNAL_LEAKAGE_REGEX =
   /\.cursor\/rules|\.claude\/rules|\.claude\/skills|\.cursor\/skills|flourish-terreno|flourish-backend|mcp\.terreno\.flourish\.health|a\.run\.app|\bPRO-\d+\b|\bFH-\d+\b/gi;
 
+/** Reference page for each generated agent plugin published from the plugin matrix job. */
+const AGENT_PLUGIN_REFERENCE_PAGES: Record<string, string> = {
+  "plugins/terreno-claude": "docs/reference/lifecycle-plugin.md",
+  "plugins/terreno-loop-claude": "docs/reference/scan-plugin.md",
+};
+
+/** Package directories from `working-directory:` steps and `directory: [...]` matrices. */
 export const parsePublishWorkingDirectories = (yaml: string): string[] => {
-  const matches = [...yaml.matchAll(/working-directory:\s*([A-Za-z0-9._-]+)/g)];
-  return [...new Set(matches.map((match) => match[1]))].sort();
+  const workingDirectories = [...yaml.matchAll(/working-directory:\s*([A-Za-z0-9._-]+)/g)].map(
+    (match) => match[1]
+  );
+  const matrixDirectories = [...yaml.matchAll(/^\s*directory:\s*\[([^\]]+)\]/gm)].flatMap((match) =>
+    match[1].split(",").map((entry) => entry.trim())
+  );
+  return [...new Set([...workingDirectories, ...matrixDirectories])].sort();
 };
 
 export const referencePageForPackage = (packageDir: string): string => {
-  if (packageDir === "rtk") {
-    return "docs/reference/legacy/rtk.md";
+  const pluginReference = AGENT_PLUGIN_REFERENCE_PAGES[packageDir];
+  if (pluginReference) {
+    return pluginReference;
   }
   if (packageDir === "mcp-server") {
     return "docs/reference/mcp-server.md";
@@ -59,7 +72,7 @@ const walkMarkdownFiles = (dir: string, collected: string[]): void => {
   }
 };
 
-export const collectPublicDocPaths = (repoRoot: string): string[] => {
+const collectPublicDocPaths = (repoRoot: string): string[] => {
   const paths: string[] = [];
   for (const section of ["reference", "how-to", "tutorials", "explanation"]) {
     walkMarkdownFiles(join(repoRoot, "docs", section), paths);
@@ -110,7 +123,7 @@ export const checkPublishedPackageDocs = ({
   return issues;
 };
 
-export const checkInternalLeakage = ({
+const checkInternalLeakage = ({
   filePaths,
   repoRoot,
 }: {
@@ -165,7 +178,7 @@ const parseStoryConfigs = (): {name: string; interfaceName: string}[] =>
     })
     .filter((entry): entry is {name: string; interfaceName: string} => Boolean(entry));
 
-export const runDocsAudit = (repoRoot = REPO_ROOT): DriftItem[] => {
+const runDocsAudit = (repoRoot = REPO_ROOT): DriftItem[] => {
   const issues: DriftItem[] = [];
   const typesPath = join(repoRoot, "demo/ui-types-documentation.json");
   if (!existsSync(typesPath)) {

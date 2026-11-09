@@ -43,6 +43,17 @@ mutStuffSchema.plugin(createdUpdatedPlugin);
 mutStuffSchema.plugin(syncPlugin);
 const MutStuffModel = model<MutStuff>("MutStuff", mutStuffSchema);
 
+// A second synced collection, for ledger replays that name a different collection.
+const mutOtherSchema = new Schema<MutStuff>({
+  _id: {description: "Client-minted string id", type: String},
+  name: {description: "The name of the item", required: true, type: String},
+  ownerId: {description: "The user who owns this item", type: String},
+});
+mutOtherSchema.plugin(isDeletedPlugin);
+mutOtherSchema.plugin(createdUpdatedPlugin);
+mutOtherSchema.plugin(syncPlugin);
+const MutOtherModel = model<MutStuff>("MutOther", mutOtherSchema);
+
 const owner = {_id: "mut-owner", admin: false, id: "mut-owner"} as unknown as User;
 const stranger = {_id: "mut-stranger", admin: false, id: "mut-stranger"} as unknown as User;
 
@@ -53,6 +64,17 @@ const ownerOptions: ModelRouterOptions<MutStuff> = {
     list: [Permissions.IsAny],
     read: [Permissions.IsAny],
     update: [Permissions.IsOwner],
+  },
+};
+
+// For broadcast and tenant collections, where `ownerId` is not an owner binding.
+const sharedOptions: ModelRouterOptions<MutStuff> = {
+  permissions: {
+    create: [Permissions.IsAuthenticated],
+    delete: [Permissions.IsAuthenticated],
+    list: [Permissions.IsAny],
+    read: [Permissions.IsAny],
+    update: [Permissions.IsAuthenticated],
   },
 };
 
@@ -180,6 +202,45 @@ describe("applySyncMutation", () => {
       expect(ack.seq).toBe(2);
       const tombstones = await MutStuffModel.find({_id: doc._id, deleted: true});
       expect(tombstones).toHaveLength(1);
+    });
+
+    it("ignores client-sent sync bookkeeping fields on update", async () => {
+      const doc = await MutStuffModel.create({name: "original", ownerId: owner.id});
+      const outcome = await applySyncMutation({
+        mutation: {
+          baseVersion: 1,
+          collection: "mutStuff",
+          data: {_syncPrevStream: "mutStuff|owner:elsewhere", _syncSeq: 777},
+          id: doc._id.toString(),
+          mutationId: "m-update-pinned-seq",
+          operation: "update",
+        },
+        user: owner,
+      });
+      const ack = expectAck(outcome);
+      expect(ack.seq).toBe(1);
+      const saved = await MutStuffModel.findById(doc._id).lean();
+      expect(saved?._syncSeq).toBe(1);
+      expect((saved as {_syncPrevStream?: string | null})?._syncPrevStream ?? null).toBeNull();
+    });
+
+    it("stamps a fresh seq when a client-sent seq rides along with a real change", async () => {
+      const doc = await MutStuffModel.create({name: "original", ownerId: owner.id});
+      const outcome = await applySyncMutation({
+        mutation: {
+          baseVersion: 1,
+          collection: "mutStuff",
+          data: {_syncSeq: 999, name: "changed"},
+          id: doc._id.toString(),
+          mutationId: "m-update-seq-and-name",
+          operation: "update",
+        },
+        user: owner,
+      });
+      expect(expectAck(outcome).seq).toBe(2);
+      const saved = await MutStuffModel.findById(doc._id).lean();
+      expect(saved?._syncSeq).toBe(2);
+      expect(saved?.name).toBe("changed");
     });
   });
 
@@ -847,6 +908,90 @@ describe("applySyncMutation", () => {
       expect(nack.message).toContain("Unknown sync collection");
     });
 
+    it("nacks invalid_id for a non-hex id on an ObjectId-keyed collection, for every operation", async () => {
+      const doc = await MutStuffModel.create({name: "keyed", ownerId: owner.id});
+      const badIds = [crypto.randomUUID(), "abcdefghijkl", `${String(doc._id)}0`];
+      for (const [index, id] of badIds.entries()) {
+        for (const operation of ["create", "update", "delete"] as const) {
+          const mutationId = `m-bad-id-${operation}-${index}`;
+          const nack = expectNack(
+            await applySyncMutation({
+              mutation: {
+                baseVersion: 1,
+                collection: "mutStuff",
+                data: {name: "bad id", ownerId: owner.id},
+                id,
+                mutationId,
+                operation,
+              },
+              user: owner,
+            })
+          );
+          assert.equal(nack.code, "validation");
+          assert.equal(nack.reason, "invalid_id");
+          // Rejected before the claim: nothing to replay, nothing written.
+          assert.equal(await SyncMutation.countDocuments({mutationId}), 0);
+        }
+      }
+      assert.equal(await MutStuffModel.countDocuments({}), 1);
+    });
+
+    it("accepts any id shape on a String-keyed collection", async () => {
+      clearSyncRegistry();
+      registerSync({
+        config: {scope: {type: "owner"}},
+        model: MutOtherModel,
+        options: ownerOptions,
+        routePath: "/mutOther",
+      });
+      const id = crypto.randomUUID();
+      const ack = expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutOther",
+            data: {name: "uuid", ownerId: owner.id},
+            id,
+            mutationId: "m-uuid-ok",
+            operation: "create",
+          },
+          user: owner,
+        })
+      );
+      assert.equal(ack.id, id);
+      await MutOtherModel.collection.deleteMany({});
+    });
+
+    it("nacks id_collision when a create names an _id another document holds", async () => {
+      const taken = await MutStuffModel.create({name: "theirs", ownerId: stranger.id});
+      const create = (): Promise<SyncMutationOutcome> =>
+        applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "mine", ownerId: owner.id},
+            id: String(taken._id),
+            mutationId: "m-collision",
+            operation: "create",
+          },
+          user: owner,
+        });
+
+      const nack = expectNack(await create());
+      assert.equal(nack.code, "validation");
+      assert.equal(nack.reason, "id_collision");
+      assert.equal(nack.message, "Entity id already exists");
+      assert.notInclude(JSON.stringify(nack), stranger.id);
+      const stored = await MutStuffModel.findById(taken._id);
+      assert.equal(stored?.name, "theirs");
+      assert.equal(stored?.ownerId, stranger.id);
+
+      // A duplicate delivery replays the recorded nack, reason included.
+      const replayed = expectNack(await create());
+      assert.equal(replayed.reason, "id_collision");
+      const row = await SyncMutation.findOne({mutationId: "m-collision"});
+      assert.equal(row?.status, "failed");
+      assert.equal(row?.nackReason, "id_collision");
+    });
+
     it("nacks validation when an update omits baseVersion", async () => {
       const doc = await MutStuffModel.create({name: "no base", ownerId: owner.id});
       const nack = expectNack(
@@ -1084,7 +1229,7 @@ describe("applySyncMutation", () => {
 
   describe("write scope enforcement", () => {
     it("skips the write-scope check for broadcast collections", async () => {
-      registerMutStuff({config: {scope: {type: "broadcast"}}});
+      registerMutStuff({config: {scope: {type: "broadcast"}}, options: sharedOptions});
       const ack = expectAck(
         await applySyncMutation({
           mutation: {
@@ -1120,7 +1265,10 @@ describe("applySyncMutation", () => {
     });
 
     it("acks a tenant-scoped create when the resolver confirms the membership", async () => {
-      registerMutStuff({config: {scope: {field: "ownerId", type: "tenant"}}});
+      registerMutStuff({
+        config: {scope: {field: "ownerId", type: "tenant"}},
+        options: sharedOptions,
+      });
       const ack = expectAck(
         await applySyncMutation({
           mutation: {
@@ -1187,6 +1335,106 @@ describe("applySyncMutation", () => {
       const nack = expectNack(await replay("m-conflict-bad-id"));
       assert.equal(nack.code, "conflict");
       assert.isUndefined(nack.serverDoc);
+    });
+  });
+
+  describe("ledger replay authorization", () => {
+    const attacker = {_id: "mut-attacker", admin: false, id: "mut-attacker"} as unknown as User;
+    const victim = {_id: "mut-victim", admin: false, id: "mut-victim"} as unknown as User;
+
+    beforeEach(async () => {
+      registerSync({
+        config: {scope: {type: "owner"}},
+        model: MutOtherModel,
+        options: ownerOptions,
+        routePath: "/mutOther",
+      });
+      await MutOtherModel.collection.deleteMany({});
+    });
+
+    it("does not replay a recorded outcome for another collection", async () => {
+      const sharedId = new mongoose.Types.ObjectId().toHexString();
+      await MutOtherModel.create({_id: sharedId, name: "DUMMY-victim-secret", ownerId: victim.id});
+      expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "attacker own", ownerId: attacker.id},
+            id: sharedId,
+            mutationId: "m-cross-own",
+            operation: "create",
+          },
+          user: attacker,
+        })
+      );
+      const conflict = expectNack(
+        await applySyncMutation({
+          mutation: {
+            baseVersion: 999,
+            collection: "mutStuff",
+            data: {name: "stale"},
+            id: sharedId,
+            mutationId: "m-cross-conflict",
+            operation: "update",
+          },
+          user: attacker,
+        })
+      );
+      expect(conflict.code).toBe("conflict");
+
+      const replayed = expectNack(
+        await applySyncMutation({
+          mutation: {
+            baseVersion: 0,
+            collection: "mutOther",
+            data: {name: "z"},
+            id: "unrelated",
+            mutationId: "m-cross-conflict",
+            operation: "update",
+          },
+          user: attacker,
+        })
+      );
+      expect(replayed.code).toBe("unauthorized");
+      expect(replayed.serverDoc).toBeUndefined();
+      expect(JSON.stringify(replayed)).not.toContain("DUMMY-victim-secret");
+    });
+
+    it("omits the server doc on replay after the caller loses access to the document", async () => {
+      const created = expectAck(
+        await applySyncMutation({
+          mutation: {
+            collection: "mutStuff",
+            data: {name: "attacker own", ownerId: attacker.id},
+            mutationId: "m-stale-own",
+            operation: "create",
+          },
+          user: attacker,
+        })
+      );
+      const mutation: SyncMutateRequest = {
+        baseVersion: 999,
+        collection: "mutStuff",
+        data: {name: "stale"},
+        id: created.id,
+        mutationId: "m-stale-conflict",
+        operation: "update",
+      };
+      const first = expectNack(await applySyncMutation({mutation, user: attacker}));
+      expect((first.serverDoc as {name: string}).name).toBe("attacker own");
+
+      const doc = await MutStuffModel.findById(created.id);
+      if (!doc) {
+        throw new Error("expected doc");
+      }
+      doc.ownerId = victim.id;
+      doc.name = "DUMMY-after-transfer";
+      await doc.save();
+
+      const replayed = expectNack(await applySyncMutation({mutation, user: attacker}));
+      expect(replayed.code).toBe("conflict");
+      expect(replayed.serverSeq).toBe(first.serverSeq);
+      expect(replayed.serverDoc).toBeUndefined();
     });
   });
 

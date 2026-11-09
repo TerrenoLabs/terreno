@@ -1,0 +1,1 @@
+> **SeedMode** = `"reset"` \| `"sync"`

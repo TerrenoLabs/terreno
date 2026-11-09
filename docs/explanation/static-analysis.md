@@ -4,8 +4,9 @@ Run `bun run analyze:full` before pushing changes that alter imports, exports, p
 dependencies, or module boundaries.
 
 Taste does not need to infer that policy in this repository. The root `prepush` package
-script is the canonical local gate and runs lint, TypeScript compilation, and full static
-analysis:
+script is the canonical local gate. It runs lint and TypeScript compilation, then the
+local mirror of every CI job the branch triggers, including full static analysis when
+repo policies apply (see [Run tests locally](../how-to/run-tests-locally.md#prepush-mirrors-ci)):
 
 ```bash
 bun run prepush

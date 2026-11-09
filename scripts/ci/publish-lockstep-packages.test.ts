@@ -12,25 +12,49 @@ const publishWorkflow = readFileSync(
   "utf8"
 );
 const changelog = readFileSync(join(repoRoot, "CHANGELOG.md"), "utf8");
-const changelogFragment = readFileSync(
-  join(repoRoot, "changelog/unreleased/create-terreno-app.md"),
-  "utf8"
-);
 const dogfoodSkill = readFileSync(
   join(repoRoot, ".rulesync/skills/build-terreno-app/SKILL.md"),
   "utf8"
 );
 
 describe("lockstep publish package lists", () => {
+  it("includes announcements in CircleCI tag publish and master version bump", () => {
+    assert.include(circleConfig, "announcements");
+    assert.match(
+      circleConfig,
+      /api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb/
+    );
+  });
+
   it("includes create-terreno-app in CircleCI tag publish and master version bump", () => {
     assert.match(
       circleConfig,
-      /packages=\(\s*\n\s*api test ui rtk admin-backend admin-frontend admin-spa ai\s*\n\s*api-health comms feature-flags jobs create-terreno-app mcp-server syncdb\s*\n\s*\)/
+      /packages=\(\s*\n\s*api test blocks ui admin-backend admin-frontend admin-spa ai\s*\n\s*api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb\s*\n\s*\)/
     );
     assert.match(
       circleConfig,
-      /for package in api test ui rtk admin-backend admin-frontend admin-spa ai api-health comms feature-flags jobs create-terreno-app mcp-server syncdb; do/
+      /for package in api test blocks ui admin-backend admin-frontend admin-spa ai api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb; do/
     );
+  });
+
+  it("publishes blocks before ui and ai because both depend on it at install time", () => {
+    assert.include([...PUBLISHED_PACKAGES], "blocks");
+    assert.match(publishWorkflow, /publish-blocks:[\s\S]*?working-directory: blocks/);
+    assert.match(publishWorkflow, /publish-ui:\n {4}needs: \[check-changes, publish-blocks\]/);
+    assert.match(
+      publishWorkflow,
+      /publish-ai:\n {4}needs: \[check-changes, publish-api, publish-test, publish-blocks, publish-jobs\]/
+    );
+    assert.match(
+      publishWorkflow,
+      /update_version blocks "\$\{\{ needs\.publish-blocks\.result \}\}"/
+    );
+    assert.match(publishWorkflow, /add_status "@terreno\/blocks"/);
+    assert.match(publishWorkflow, /notify:[\s\S]*?needs: \[[^\]]*publish-blocks/);
+  });
+
+  it("publishes jobs before ai because ai's optional JobsRunner installs it as a dev dependency", () => {
+    assert.match(publishWorkflow, /publish-ai:\n {4}needs: \[[^\]]*publish-jobs/);
   });
 
   it("includes create-terreno-app in GitHub tag publish fallback workflow", () => {
@@ -67,9 +91,11 @@ describe("lockstep publish package lists", () => {
 
   it("covers license, changelog, and dogfood contracts", () => {
     assert.include([...PUBLISHED_PACKAGES], "create-terreno-app");
+    assert.include([...PUBLISHED_PACKAGES], "announcements");
     assert.match(changelog, /unscoped `create-terreno-app` CLI are versioned in lockstep/);
-    assert.match(changelogFragment, /^---\ncategory: Added\n---/);
-    assert.match(changelogFragment, /create-terreno-app/);
+    assert.match(changelog, /create-terreno-app/);
+    assert.match(publishWorkflow, /publish-announcements:/);
+    assert.match(publishWorkflow, /needs\.publish-announcements\.result/);
     assert.match(dogfoodSkill, /### Phase 2 — Scaffold[\s\S]*bunx create-terreno-app/);
     assert.notMatch(dogfoodSkill, /file dump as fallback/);
   });

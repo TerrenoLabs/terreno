@@ -3,9 +3,12 @@
 Published npm package for the Terreno Model Context Protocol (MCP) server. The monorepo directory is still `mcp-server/`. The package exposes:
 
 - **`terreno-mcp`** — HTTP server used in Cloud Run and local debugging (`src/index.ts`)
-- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): `application_info`, `database_schema`, `database_query`, `read_logs`, `last_error`, `get_rtk_state`, `evaluate` (gated by `TERRENO_MCP_EVAL`), `navigate` (CDP wiring planned). `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
+- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics and SyncDB state/action/snapshot tools (the Redux `get_rtk_state` tool was removed in Terreno 58). `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
 
 It provides AI coding assistants with documentation access, code generation tools, and workflow prompts.
+For editor configuration and runtime prerequisites, see
+[Set up Terreno MCP](../how-to/set-up-terreno-mcp.md). For the end-to-end diagnostic workflow, see
+[Debug a Terreno app with MCP](../how-to/debug-with-mcp.md).
 
 Both HTTP MCP surfaces (`@terreno/mcp` and the `modelRouter` endpoint in
 `@terreno/api`) use the MCP TypeScript SDK v2 and speak the stateless
@@ -91,7 +94,7 @@ Documentation resources accessible via `terreno://` protocol:
 | `terreno://docs/overview` | Monorepo overview and architecture |
 | `terreno://docs/api` | @terreno/api reference documentation |
 | `terreno://docs/ui` | @terreno/ui reference documentation |
-| `terreno://docs/rtk` | @terreno/rtk reference documentation |
+| `terreno://docs/syncdb` | @terreno/syncdb: synced collections, request client + generated API hooks, auth session, config, flags |
 | `terreno://docs/patterns` | Common patterns and best practices |
 
 **How it works:**
@@ -107,7 +110,54 @@ Set `TERRENO_MCP_DOCS_DIR` environment variable to override default path.
 
 ## Tools
 
-Code generation tools that return TypeScript/JavaScript code as text. They do not write files — the AI assistant receives the code and writes it to appropriate locations. Scaffold a new app with [`create-terreno-app`](create-terreno-app.md) (`bunx create-terreno-app`), not an MCP tool.
+Code generation tools return TypeScript/JavaScript code as text. **Code generation tools do not
+write files** — the AI assistant receives the code and writes it to appropriate locations. Scaffold
+a new app with [`create-terreno-app`](create-terreno-app.md) (`bunx create-terreno-app`), not an MCP
+tool.
+
+The local `browser` tool is different: its `screenshot` action writes the requested image path so an
+agent can attach the rendered result as verification evidence. It keeps one headless session alive
+for the MCP connection. Call `open` first, perform interactions, call `snapshot` and `screenshot` to
+prove the final state, then call `close`.
+
+`open` accepts only `http:` and `https:` URLs. Snapshots redact password input values; use them for
+page structure and visible state, not credential inspection.
+
+``````json
+{"name":"browser","arguments":{"action":"open","url":"http://localhost:8082","width":1280,"height":720}}
+{"name":"browser","arguments":{"action":"wait","timeout":1000}}
+{"name":"browser","arguments":{"action":"click","selector":"button[type=submit]"}}
+{"name":"browser","arguments":{"action":"snapshot"}}
+{"name":"browser","arguments":{"action":"screenshot","output":"/opt/cursor/artifacts/app.png"}}
+{"name":"browser","arguments":{"action":"close"}}
+``````
+
+`browser` requires Bun 1.4 or newer. macOS uses system WebKit; Linux and Windows use an installed
+Chrome, Chromium, or Edge through the Chrome DevTools Protocol. Browser storage is ephemeral unless
+`open` receives `dataDir`. Set `TERRENO_MCP_EVAL=1` to enable its arbitrary-JavaScript `evaluate`
+action. Screenshot paths must stay under the project root or `/opt/cursor/artifacts`; persistent
+browser data must stay under the project root. Calls are serialized around the one session owned by
+the local MCP process.
+
+### SyncDB runtime tools
+
+Create the app client with `debug: true` so it registers by its configured
+`name`. The local MCP uses the in-process registry when available and Hermes CDP
+for a separately running app.
+
+| Tool | Purpose |
+| --- | --- |
+| `get_syncdb_state` | Read status, entities/tombstones, outbox, conflicts, cursors, streams, repair markers, values, and debugger events |
+| `syncdb_snapshot` | Capture, list, get, compare, or delete snapshots held by this MCP process |
+| `syncdb_action` | Mutate or directly edit local state, flush, reconcile/resync, resolve/retry, toggle offline, clear debug events, or merge a snapshot |
+
+State and snapshot responses redact fields containing `password`, `token`,
+`secret`, `authorization`, or `cookie`. Snapshot merge payloads are retained
+privately and are not returned. Start the local MCP with
+`TERRENO_MCP_EVAL=1` before calling `syncdb_action`.
+
+See [Debug a Terreno app with MCP](../how-to/debug-with-mcp.md) for examples and
+safety guidance.
 
 ### terreno_search_docs
 
@@ -261,8 +311,7 @@ Generate React Native screen component with Terreno UI components.
   type: "list" | "detail" | "form" | "empty";
   modelName?: string;        // Model name for CRUD screens
   fields?: string[];         // Fields to display/edit
-  hasSearch?: boolean;       // Add search bar (list screens)
-  hasPagination?: boolean;   // Add pagination (list screens)
+  collection?: string;       // Synced collection (default: kebab-case plural of modelName)
 }
 ``````
 
@@ -273,18 +322,16 @@ Generate React Native screen component with Terreno UI components.
   "name": "ProductList",
   "type": "list",
   "modelName": "Product",
-  "fields": ["title", "price", "active"],
-  "hasSearch": true,
-  "hasPagination": true
+  "fields": ["title", "price", "active"]
 }
 ``````
 
 **Returns:**
 
 - React Native functional component
-- RTK Query hooks integration
-- @terreno/ui components (Box, Text, Button, Card, etc.)
-- Loading/error/empty states
+- `@terreno/syncdb/react` hooks against the synced collection: `useQuery` + `useSyncStatus` (list), `useEntity` (detail), `useMutate().create` (form). For a model that is not synced, swap them for the generated `@/store/apiSdk` hooks
+- @terreno/ui components (Box, Text, Button, Page, etc.)
+- Empty and not-found states
 
 ### terreno_generate_form_fields
 
@@ -341,6 +388,23 @@ Validate a Mongoose schema against Terreno conventions.
 - Recommendations for fixes
 - Severity levels (error, warning, info)
 
+### terreno_validate_ui_blocks
+
+Check one whole-reply YAML or JSON document. The text is the same report `terreno-blocks validate` prints: each problem is `path  CODE  message — fix`. A valid document with no warnings returns an empty string.
+
+**Parameters:**
+
+``````typescript
+{
+  document: string; // Required — the YAML or JSON document
+}
+``````
+
+**Returns:**
+
+- The CLI report, including a trailing newline when there is at least one line
+- An empty string when the document is valid and has no warnings
+
 ### terreno_bootstrap_ai_rules
 
 Scaffold AI coding assistant rules (AGENTS.md, Cursor/Windsurf rules, Copilot instructions, rulesync config).
@@ -352,7 +416,7 @@ Scaffold AI coding assistant rules (AGENTS.md, Cursor/Windsurf rules, Copilot in
   appName: string;
   appDisplayName: string;
   description?: string;
-  /** Optional — which @terreno/* packages to merge into rules. Use ids like `api`, `ui`, `rtk`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit or pass only what the app uses so admin guidelines stay out of projects without the admin panel. */
+  /** Optional — which @terreno/* packages to merge into rules. Use ids like `api`, `ui`, `syncdb`, `admin-backend`, `admin-frontend`, or `@terreno/api`. Omit or pass only what the app uses so admin guidelines stay out of projects without the admin panel. */
   packages?: string[];
 }
 ``````
@@ -367,7 +431,10 @@ Generate admin panel integration for `@terreno/admin-backend` and `@terreno/admi
 
 **Parameters:** Model configurations with `modelName`, `routePath`, `displayName`, `listFields`, etc.
 
-**Returns:** Frontend screen files and backend/frontend setup snippets.
+**Returns:** Frontend screen files and backend/frontend setup snippets. The generated
+`admin/_layout.tsx` wraps the routes in `AdminProvider` with `apiOrigin={baseUrl}` (from
+`@terreno/syncdb/config`) and `getAuthHeaders` reading `authProvider.getToken()` from the
+scaffold's `frontend/store/syncdb.ts`. No `@terreno/rtk` import.
 
 ## Prompts
 
@@ -461,7 +528,7 @@ Generate form screen with validation and error handling.
 1. Generate screen component with Page layout
 2. Add form fields from @terreno/ui
 3. Include validation logic
-4. Add RTK mutation hooks
+4. Add generated `store/apiSdk.ts` mutation hooks (or syncdb `useMutate` for synced collections)
 5. Add loading/error/success states
 6. Provide navigation setup
 
@@ -478,7 +545,7 @@ Generate authentication setup for new projects.
 
 1. Configure User model with passport-local-mongoose
 2. Set up auth routes in backend
-3. Configure Redux auth slice in frontend
+3. Wire `SessionProvider` / `useSession` from `@terreno/syncdb/auth` in the frontend
 4. Generate login screen
 5. Generate signup screen
 6. Set up token storage
@@ -515,6 +582,10 @@ Returns comprehensive code style guide from project documentation.
 | `PORT` | `8080` | HTTP server port |
 | `MCP_HOST` or `HOST` | `0.0.0.0` | Server host address |
 | `TERRENO_MCP_DOCS_DIR` | `../docs` | Path to documentation directory (relative to dist/) |
+| `TERRENO_PROJECT_ROOT` | nearest Terreno project root | Override local package, database, and log discovery |
+| `TERRENO_METRO_URL` | Frontend script port or `http://localhost:8082` | Metro origin used for `/events` and CDP discovery |
+| `TERRENO_MCP_EVAL` | Disabled | Set to `1` to enable local MCP `evaluate`, `navigate`, and SyncDB state-changing actions |
+| `TERRENO_BROWSER_LOGS` | Enabled only when `NODE_ENV=development` | Set to `true` to opt in in another non-production environment or `false` to disable; production rejects the route, and non-loopback clients must authenticate |
 
 **Example:**
 

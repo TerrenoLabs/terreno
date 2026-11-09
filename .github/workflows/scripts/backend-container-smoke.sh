@@ -227,7 +227,9 @@ docker run -d \
 deadline=$((SECONDS + HEALTH_TIMEOUT_SEC))
 started_at=$SECONDS
 while [ "$SECONDS" -lt "$deadline" ]; do
-  if curl -fsS "http://127.0.0.1:${HOST_PORT}/health" 2>/dev/null | grep -q '"healthy":true'; then
+  # Probe from inside the container: CircleCI remote Docker does not expose
+  # published ports on the job host, so 127.0.0.1:${HOST_PORT} is unreachable.
+  if docker exec "$CONTAINER_NAME" curl -fsS "http://127.0.0.1:3000/health" 2>/dev/null | grep -q '"healthy":true'; then
     log "Container passed /health after $((SECONDS - started_at))s."
     exit 0
   fi

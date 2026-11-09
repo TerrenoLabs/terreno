@@ -4,11 +4,16 @@ import {Tabs} from "expo-router";
 import type React from "react";
 import type {ColorValue} from "react-native";
 
+type IconColor = React.ComponentProps<typeof FontAwesome>["color"];
+
 const TabBarIcon: React.FC<{
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: ColorValue;
 }> = ({name, color}) => {
-  return <FontAwesome color={color} name={name} size={24} style={{marginBottom: -3}} />;
+  // React Native 0.88's ColorValue also admits number and null; tab tints are theme strings.
+  return (
+    <FontAwesome color={color as IconColor} name={name} size={24} style={{marginBottom: -3}} />
+  );
 };
 
 const TabLayout: React.FC = () => {
@@ -18,7 +23,13 @@ const TabLayout: React.FC = () => {
     <Tabs
       screenOptions={{
         headerShown: false,
+        sceneStyle: {backgroundColor: theme.surface.base},
         tabBarActiveTintColor: theme.surface.primary,
+        tabBarInactiveTintColor: theme.text.secondaryLight,
+        tabBarStyle: {
+          backgroundColor: theme.surface.base,
+          borderTopColor: theme.border.default,
+        },
       }}
     >
       <Tabs.Screen
@@ -38,24 +49,11 @@ const TabLayout: React.FC = () => {
         }}
       />
       <Tabs.Screen
-        name="files"
+        name="documents"
         options={{
+          tabBarButtonTestID: "tab-documents",
           tabBarIcon: ({color}) => <TabBarIcon color={color} name="folder-open" />,
-          title: "Files",
-        }}
-      />
-      <Tabs.Screen
-        name="consents"
-        options={{
-          tabBarIcon: ({color}) => <TabBarIcon color={color} name="file-text" />,
-          title: "Consents",
-        }}
-      />
-      <Tabs.Screen
-        name="pdf"
-        options={{
-          tabBarIcon: ({color}) => <TabBarIcon color={color} name="file-pdf-o" />,
-          title: "PDF",
+          title: "Documents",
         }}
       />
       <Tabs.Screen

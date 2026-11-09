@@ -15,8 +15,8 @@ npm equivalent:
 npm create terreno-app my-app -- --display-name "My App"
 ```
 
-Docs: [Create a Terreno app](https://github.com/FlourishHealth/terreno/blob/master/docs/how-to/create-a-terreno-app.md)
-and [CLI reference](https://github.com/FlourishHealth/terreno/blob/master/docs/reference/create-terreno-app.md).
+Docs: [Create a Terreno app](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/create-a-terreno-app.md)
+and [CLI reference](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/create-terreno-app.md).
 
 ## CLI
 

@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Closed:** 2026-08-20 — Shipped via `ConsentApp`, `ConsentForm`/`ConsentResponse` models, and `@terreno/ui` consent screens (`ConsentNavigator`, `ConsentFormScreen`, `useConsentForms`).
-**Roadmap issue:** https://github.com/FlourishHealth/terreno/issues/1078
+**Roadmap issue:** https://github.com/TerrenoLabs/terreno/issues/1078
 
 *When an engineer is assigned to a project but before you begin coding, you should fill in the implementation plan and get feedback from the engineering team. Once you have finished or you make any changes, tag Josh with the @ symbol so he can review. Also tag anyone else that needs to be notified, has conflicting work, etc.*
 
@@ -78,6 +78,14 @@ const consentResponseSchema = new mongoose.Schema({
 consentResponseSchema.index({userId: 1, consentFormId: 1});
 addDefaultPlugins(consentResponseSchema);
 ```
+
+**Follow-up: provisional signing.** Staff can now record consent on a user's behalf. A
+provisional `ConsentResponse` sets `provisional`, `provisionalNote`, and
+`provisionalSignedBy`; it counts as consent but leaves the form in the user's pending list
+until they answer it themselves, and it can be voided (`voidedAt`, `voidedBy`,
+`voidReason`) without being deleted. That work is planned in
+[`docs/plans/2026-10-23-provisional-consent.md`](../plans/2026-10-23-provisional-consent.md)
+and explained in [`docs/explanation/consent-forms.md`](../explanation/consent-forms.md).
 
 ## **APIs**
 

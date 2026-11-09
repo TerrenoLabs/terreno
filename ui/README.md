@@ -118,7 +118,7 @@ Releases are typically done after each pull request is merged to keep the packag
 
 ### Publishing a new version
 
-1. Go to the [GitHub releases page](https://github.com/FlourishHealth/terreno/releases)
+1. Go to the [GitHub releases page](https://github.com/TerrenoLabs/terreno/releases)
 2. Click "Draft a new release"
 3. Create a new tag with a version number (usually a minor version bump, e.g., `1.11.0`)
 4. Use the "Generate release notes" button to auto-populate the description
@@ -187,10 +187,12 @@ Do not rely on internal CSS class names or DOM structure for tests.
 
 ## Documentation
 
-Full API reference: [docs/reference/ui.md](https://github.com/flourishhealth/terreno/blob/master/docs/reference/ui.md)
+Full API reference: [docs/reference/ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/ui.md)
+
+Agent asks in `GPTChat` (`AskCard`, `SimpleAskCard`): [Add agent asks to a chat](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/agent-ui-asks.md)
 
 Live example: [Terreno UI demo](https://terreno-demo.netlify.app)
 
 ## License and Contributing
 
-Licensed under the [MIT License](https://github.com/flourishhealth/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/flourishhealth/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.
+Licensed under the [MIT License](https://github.com/TerrenoLabs/terreno/blob/master/LICENSE). See [CONTRIBUTING.md](https://github.com/TerrenoLabs/terreno/blob/master/CONTRIBUTING.md) for contribution guidelines.

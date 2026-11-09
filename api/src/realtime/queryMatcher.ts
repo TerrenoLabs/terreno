@@ -149,24 +149,17 @@ const matchesCondition = (rawValue: unknown, condition: unknown): boolean => {
   return true;
 };
 
-/**
- * Check if a document matches a MongoDB-style query in memory.
- *
- * @param doc - The document to test (plain object or Mongoose document)
- * @param query - MongoDB-style query object
- * @returns true if the document matches all query conditions
- */
-export const matchesQuery = (
-  doc: Record<string, unknown>,
-  query: Record<string, unknown>
-): boolean => {
+const isPlainQuery = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const evaluateQuery = (doc: Record<string, unknown>, query: Record<string, unknown>): boolean => {
   for (const [key, condition] of Object.entries(query)) {
     if (key === "$and") {
       if (!Array.isArray(condition)) {
         return false;
       }
       for (const subQuery of condition) {
-        if (!matchesQuery(doc, subQuery as Record<string, unknown>)) {
+        if (!isPlainQuery(subQuery) || !evaluateQuery(doc, subQuery)) {
           return false;
         }
       }
@@ -179,7 +172,7 @@ export const matchesQuery = (
       }
       let matched = false;
       for (const subQuery of condition) {
-        if (matchesQuery(doc, subQuery as Record<string, unknown>)) {
+        if (isPlainQuery(subQuery) && evaluateQuery(doc, subQuery)) {
           matched = true;
           break;
         }
@@ -197,4 +190,28 @@ export const matchesQuery = (
   }
 
   return true;
+};
+
+/**
+ * Check if a document matches a MongoDB-style query in memory.
+ *
+ * Fails closed: malformed clauses, and operands that cannot be compared (for example an
+ * object whose `toString` is not a function), count as a non-match instead of throwing.
+ *
+ * @param doc - The document to test (plain object or Mongoose document)
+ * @param query - MongoDB-style query object
+ * @returns true if the document matches all query conditions
+ */
+export const matchesQuery = (
+  doc: Record<string, unknown>,
+  query: Record<string, unknown>
+): boolean => {
+  if (!isPlainQuery(query)) {
+    return false;
+  }
+  try {
+    return evaluateQuery(doc, query);
+  } catch {
+    return false;
+  }
 };

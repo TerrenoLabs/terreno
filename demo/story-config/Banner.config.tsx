@@ -4,6 +4,7 @@ import {Banner, Box} from "@terreno/ui";
 import React from "react";
 
 export const BannerConfiguration: DemoConfiguration = {
+  usageExample: "import {Banner} from \"@terreno/ui\";\n\n<Banner />",
   name: "Banner",
   component: Banner,
   related: ["Toast", "Modal"],
@@ -18,7 +19,7 @@ export const BannerConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "inProgress",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A23346&mode=design&t=AKQ8wyFQBA4qC5eF-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23973",
     ios: "ready",
     android: "ready",
     web: "ready",

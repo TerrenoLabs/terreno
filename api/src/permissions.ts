@@ -7,12 +7,29 @@ import type {User} from "./auth";
 import {loadDocOr404} from "./docLoader";
 import {APIError} from "./errors";
 import {isOrgMemberPermission, OrgQueryFilter} from "./orgs/orgPermissions";
+import {getCurrentRequestContext} from "./requestContext";
 
 export type PermissionMethod<T> = (
   method: RESTMethod,
   user?: User,
   obj?: T
 ) => boolean | Promise<boolean>;
+
+/**
+ * Permission that refuses an MCP OAuth access token unless it was granted `scope`. Other
+ * credentials (the user's own JWT or Better Auth session, and `mcp_` service tokens) are not
+ * scoped and pass. Combine it with the method's other permissions, for example
+ * `[Permissions.IsAuthenticated, requireOAuthScope("write")]`.
+ */
+export const requireOAuthScope = (scope: string): PermissionMethod<unknown> => {
+  return (): boolean => {
+    const context = getCurrentRequestContext();
+    if (context?.credential !== "oauth") {
+      return true;
+    }
+    return context.oauthScopes?.includes(scope) === true;
+  };
+};
 
 export interface RESTPermissions<T> {
   create: PermissionMethod<T>[];

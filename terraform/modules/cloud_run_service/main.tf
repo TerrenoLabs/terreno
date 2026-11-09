@@ -11,6 +11,7 @@ resource "google_cloud_run_v2_service" "this" {
   template {
     max_instance_request_concurrency = var.concurrency
     timeout                          = "${var.timeout_seconds}s"
+    session_affinity                 = var.session_affinity
     service_account                  = var.service_account_email != "" ? var.service_account_email : null
 
     scaling {

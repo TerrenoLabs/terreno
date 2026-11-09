@@ -8,6 +8,7 @@ import {
   rewritePluginLinksForInstallable,
   rewriteSharedPluginLinks,
   syncInstallableSkills,
+  syncRulesyncPluginReferences,
   validateSkillGroupings,
 } from "./syncInstallableSkills.ts";
 
@@ -101,6 +102,33 @@ describe("installable skills sync", (): void => {
     assert.isTrue(
       existsSync(join(ROOT_DIRECTORY, "skills/terreno-4-brew/references/product-ci.md"))
     );
+  });
+
+  it("bundles a linked lifecycle reference beside a repository skill and flags drift", (): void => {
+    const root = mkdtempSync(join(tmpdir(), "terreno-rulesync-refs-"));
+    try {
+      mkdirSync(join(root, "plugins/terreno-planning/references"), {recursive: true});
+      writeFileSync(
+        join(root, "plugins/terreno-planning/references/push-ownership.md"),
+        "# Push ownership\n"
+      );
+      mkdirSync(join(root, ".rulesync/skills/fix-conflicts"), {recursive: true});
+      writeFileSync(
+        join(root, ".rulesync/skills/fix-conflicts/SKILL.md"),
+        "Follow [push ownership](references/push-ownership.md#escalation) and [local](references/local.md).\n"
+      );
+      const copy = join(root, ".rulesync/skills/fix-conflicts/references/push-ownership.md");
+
+      assert.deepEqual(syncRulesyncPluginReferences({check: true, rootDirectory: root}), [
+        ".rulesync/skills/fix-conflicts/references/push-ownership.md drifts from plugins/terreno-planning/references/push-ownership.md",
+      ]);
+      assert.deepEqual(syncRulesyncPluginReferences({rootDirectory: root}), []);
+      assert.equal(readFileSync(copy, "utf8"), "# Push ownership\n");
+      assert.isFalse(existsSync(join(root, ".rulesync/skills/fix-conflicts/references/local.md")));
+      assert.deepEqual(syncRulesyncPluginReferences({check: true, rootDirectory: root}), []);
+    } finally {
+      rmSync(root, {force: true, recursive: true});
+    }
   });
 
   it("rejects an ungrouped installable skill", (): void => {

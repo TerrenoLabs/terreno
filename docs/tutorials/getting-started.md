@@ -65,7 +65,7 @@ Frontend runs at `http://localhost:8082`. Sign in with `test@example.com` / `tes
 If you are contributing to Terreno or want reference implementations inside this repository:
 
 ```bash
-git clone https://github.com/FlourishHealth/terreno.git
+git clone https://github.com/TerrenoLabs/terreno.git
 cd terreno && bun run bootstrap
 ```
 
@@ -74,7 +74,7 @@ cd terreno && bun run bootstrap
 | example-backend | 4000 | `bun run backend:dev` |
 | example-frontend web | 8082 | `EXPO_PUBLIC_API_URL=http://localhost:4000 bun run frontend:web` |
 
-The example backend needs `MONGO_URI` (replica set) and auth secrets — see the repository [AGENTS.md](https://github.com/FlourishHealth/terreno/blob/master/AGENTS.md) (Cursor Cloud section). Seed with `bun run backend:seed` from the repo root.
+The example backend needs `MONGO_URI` (replica set) and auth secrets — see the repository [AGENTS.md](https://github.com/TerrenoLabs/terreno/blob/master/AGENTS.md) (Cursor Cloud section). Seed with `bun run backend:seed` from the repo root.
 
 ## Next steps
 

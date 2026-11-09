@@ -2,14 +2,17 @@
 name: respond-to-review
 description: >-
   Resolve and classify Terreno PR comments, plan focused fixes, and implement
-  addressed items without owning submission or CI waiting. Lifecycle
+  addressed items without owning submission or CI waiting. Every review-bot
+  thread ends fixed, declined with a reply, or raised as a decision. Lifecycle
   composition: Taste.
 ---
 # PR Review Response Workflow
 
 Review comments on a PR resolved from `$ARGUMENTS` or the current branch, then plan and
 implement focused fixes. If a human decision is required, return it as a blocker. Taste
-owns commit/push/result emission; the outer loop owns later observation.
+owns commit/push/result emission; the outer loop owns later observation. Invoked directly
+by a human, hand the verified diff to `terreno-5-taste` in standalone entry so the push
+is watched until green or escalated, per [push ownership](references/push-ownership.md).
 
 ## Step 0: Validate Input
 
@@ -147,11 +150,15 @@ Paraphrase; do not quote comments unless exact wording changes the decision.
 | --- | --- | --- |
 | Blocker | `file:line` | <smallest fix> |
 | Decision | `file:line` | <one exact question> |
-| Skip | `file:line` | <short reason> |
+| Skip | `file:line` | <one-sentence reply to post> |
 ```
 
 Omit categories with no rows. Do not add a preamble, recap, suggested thanks, or a
 separate reply section.
+
+A bot thread is never silently skipped. `Skip` on a bot thread means: post the
+one-sentence reply (false positive, intended behavior, or out of scope with a follow-up
+link), then resolve the thread. Only `Decision` rows may stay open.
 
 ## Step 4: Confirmation (only if there are open questions)
 
@@ -216,8 +223,8 @@ For a required decision:
 </details>
 ```
 
-For each thread that was fixed or addressed (`Blocker` rows, and any `Decision` row
-the human already answered in code):
+For each thread that was fixed or addressed (`Blocker` rows, `Skip` rows on bot
+threads after their reply, and any `Decision` row the human already answered in code):
 ```bash
 gh api graphql -f query='
   mutation($threadId: ID!) {

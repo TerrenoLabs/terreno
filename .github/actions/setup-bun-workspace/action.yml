@@ -1,11 +1,11 @@
 name: Setup Bun workspace
-description: Pin Bun, cache the install cache (not node_modules), and install from the lockfile.
+description: Pin Bun and install from the lockfile. Does not cache ~/.bun/install/cache.
 
 inputs:
   bun-version:
     description: Bun version to install
     required: false
-    default: "1.4.0"
+    default: "1.4.4"
   working-directory:
     description: Directory that contains bun.lock and package.json
     required: false
@@ -22,15 +22,6 @@ runs:
       uses: oven-sh/setup-bun@v2
       with:
         bun-version: ${{ inputs.bun-version }}
-
-    - name: Cache Bun download cache
-      uses: actions/cache@v6
-      with:
-        path: ~/.bun/install/cache
-        key: bun-${{ runner.os }}-${{ inputs.bun-version }}-${{ hashFiles(format('{0}/bun.lock', inputs.working-directory), format('{0}/package.json', inputs.working-directory)) }}
-        restore-keys: |
-          bun-${{ runner.os }}-${{ inputs.bun-version }}-
-          bun-${{ runner.os }}-
 
     - name: Install dependencies
       if: ${{ inputs.install == 'true' }}

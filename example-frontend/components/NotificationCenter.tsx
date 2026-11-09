@@ -12,7 +12,7 @@ import {type Href, useRouter} from "expo-router";
 import {DateTime} from "luxon";
 import React, {useCallback, useContext, useMemo, useState} from "react";
 import {useSyncDbReady} from "@/hooks/useSyncDbReady";
-import {usePostNotificationsDevNotifyMutation} from "@/store/sdk";
+import {usePostNotificationsDevNotifyMutation} from "@/store/apiSdk";
 import type {Notification} from "@/store/syncDbSdk";
 import {syncDb} from "@/store/syncdb";
 

@@ -7,7 +7,7 @@ import {Modal} from "@terreno/ui";
 // component: InnerModalContent, related: ["Modals"], description:
 // "This component populates the interior of standard modals.
 // This component uses the custom content block – see how to use that by clicking here.", a11yNotes:
-// [], category: ["Layout", "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24093&mode=design&t=iCiJI3xbrm6rrXPg-1",
+// [], category: ["Layout", "Utility"], status: { documentation: "ready", figma: "ready", figmaLink: "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-23999",
 // ios: "ready", android: "ready", web: "ready", }, additionalDocumentation: [], interfaceName:
 // "InnerModalContentProps", usage: { do: [ "Use the right variant for the device you’re designing
 // for (desktop, mobile).", "Center align your content when there’s 1-2 sentences;
@@ -18,9 +18,10 @@ import {Modal} from "@terreno/ui";
 // testMatrixDefaultProps: {}, };
 
 export const ModalConfiguration: DemoConfiguration = {
+  usageExample: "import {Modal} from \"@terreno/ui\";\n\n<Modal />",
   name: "Modal",
   component: Modal,
-  related: ["Date / time modal", "Custom content block"],
+  related: ["ActionSheet", "SimpleContent"],
   description:
     "A Modal displays content that requires user interaction. Modals appear on a layer above the page and therefore block the content underneath, preventing users from interacting with anything else besides the Modal. Modal should be used to gather short bits of information from the user. Also known as dialog or prompt.",
   shortDescription:
@@ -34,7 +35,7 @@ export const ModalConfiguration: DemoConfiguration = {
     documentation: "ready",
     figma: "ready",
     figmaLink:
-      "https://www.figma.com/file/ykXj5qjjtFjOYkAvTasu9r/Flourish-Health-Design-System?type=design&node-id=656%3A24105&mode=design&t=IZ8oGBzUmBzUtZMr-1",
+      "https://www.figma.com/design/ykXj5qjjtFjOYkAvTasu9r?node-id=4013-24000",
     ios: "ready",
     android: "ready",
     web: "ready",

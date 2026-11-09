@@ -15,10 +15,11 @@ const roleNamesFromValue = (value: unknown): string[] => {
  * User-role editor backed by the RBAC role collection.
  *
  * Existing assignments remain visible and removable while the select only offers roles that
- * are not already assigned.
+ * are not already assigned. A read-only field lists the assigned role names without loading the
+ * role catalog, so staff who may view a user but not read RBAC roles (such as an operator) see
+ * the record without a refused `/rbac/roles` request.
  */
 export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
-  api,
   apiBase,
   baseUrl,
   errorText,
@@ -28,8 +29,10 @@ export const AdminRolesField: React.FC<AdminFieldWidgetProps> = ({
   value,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
-  const {useListRolesQuery} = useAdminRoles(api, resolvedApiBase);
-  const {data, error, isLoading} = useListRolesQuery();
+  const {useListRolesQuery} = useAdminRoles(resolvedApiBase);
+  // The catalog only supplies display names and the options to add; a read-only field needs
+  // neither, and its viewer may lack `rbac:read`.
+  const {data, error, isLoading} = useListRolesQuery(undefined, {skip: Boolean(readOnly)});
   const roles = normalizeRoles(data);
   const selectedRoleNames = roleNamesFromValue(value);
   const selectedRoleSet = useMemo(() => new Set(selectedRoleNames), [selectedRoleNames]);

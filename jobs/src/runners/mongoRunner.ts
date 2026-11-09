@@ -1,8 +1,6 @@
-import {DateTime} from "luxon";
+import {logger} from "@terreno/api";
 
-import {createClaimLock, type JobClaimLock} from "../claimLock";
-import {runClaimedJob} from "../jobExecutor";
-import {Job} from "../models/job";
+import {claimDueJob, runClaimedJob} from "../jobExecutor";
 import type {JobDocument} from "../modelTypes";
 import type {JobRunner, JobRunnerStartOptions} from "../types";
 
@@ -10,9 +8,6 @@ const DEFAULT_POLL_INTERVAL_MS = 1_000;
 
 /** @internal */
 export {getWorkerId, hasWorkerIdPrefix} from "../claimLock";
-
-const buildLockExpiry = (lockTtlMs: number): Date =>
-  DateTime.utc().minus({milliseconds: lockTtlMs}).toJSDate();
 
 const waitForAbortOrTimeout = (signal: AbortSignal, timeoutMs: number): Promise<void> =>
   new Promise((resolve) => {
@@ -33,17 +28,6 @@ const waitForAbortOrTimeout = (signal: AbortSignal, timeoutMs: number): Promise<
 
     signal.addEventListener("abort", onAbort, {once: true});
   });
-
-const readClaimLock = (job: JobDocument): JobClaimLock => {
-  if (!job.lockedAt || !job.lockedBy) {
-    throw new Error(`Job ${job._id.toString()} is missing claim lock metadata`);
-  }
-
-  return {
-    lockedAt: job.lockedAt,
-    lockedBy: job.lockedBy,
-  };
-};
 
 export class MongoJobRunner implements JobRunner {
   readonly id = "mongo";
@@ -100,36 +84,30 @@ export class MongoJobRunner implements JobRunner {
   }
 
   private async processNext(options: JobRunnerStartOptions): Promise<boolean> {
-    const now = DateTime.utc().toJSDate();
-    const lockExpiry = buildLockExpiry(options.jobs.getLockTtlMs());
-    const claim = createClaimLock(now);
-
-    const claimed = await Job.findOneAndUpdate(
-      {
-        $or: [{lockedAt: {$exists: false}}, {lockedAt: null}, {lockedAt: {$lte: lockExpiry}}],
-        runAt: {$lte: now},
-        status: {$in: ["pending", "running", "scheduled"]},
-      },
-      {
-        $set: {
-          lockedAt: claim.lockedAt,
-          lockedBy: claim.lockedBy,
-          status: "running",
-        },
-      },
-      {returnDocument: "after", sort: {runAt: 1}}
-    );
+    const claimed = await claimDueJob({
+      lockTtlMs: options.jobs.getLockTtlMs(),
+      sort: {runAt: 1},
+    });
 
     if (!claimed) {
       return false;
     }
 
-    await runClaimedJob({
-      claim: readClaimLock(claimed),
-      host: options.jobs,
-      job: claimed,
-      signal: options.signal,
-    });
+    if (claimed.kind === "dead") {
+      return true;
+    }
+
+    // A failure to finalize one job (for example a lost lease) must not end the poll loop.
+    try {
+      await runClaimedJob({
+        claim: claimed.claim,
+        host: options.jobs,
+        job: claimed.job,
+        signal: options.signal,
+      });
+    } catch (error: unknown) {
+      logger.error(`[jobs] Failed to finalize job ${claimed.job._id.toString()}: ${String(error)}`);
+    }
     return true;
   }
 }

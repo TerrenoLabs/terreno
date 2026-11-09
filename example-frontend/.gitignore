@@ -6,6 +6,7 @@ node_modules/
 # Expo
 .expo/
 dist/
+dist-smoke/
 web-build/
 expo-env.d.ts
 
@@ -41,3 +42,4 @@ npm-debug.*
 # playwright artifacts
 /test-results
 /playwright-report
+dist-cross-site/

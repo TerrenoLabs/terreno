@@ -1,0 +1,32 @@
+---
+title: "ThumbsUpDownFeedback"
+description: "ThumbsUpDownFeedback is a thumbs up / thumbs down pair for collecting a single positive or negative reaction, e.g. on an AI generated response. Pressing the selected option again clears the selection."
+sidebar_label: "ThumbsUpDownFeedback"
+slug: /reference/components/thumbsupdownfeedback
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# ThumbsUpDownFeedback
+
+ThumbsUpDownFeedback is a thumbs up / thumbs down pair for collecting a single positive or negative reaction, e.g. on an AI generated response. Pressing the selected option again clears the selection.
+
+**Package:** `@terreno/ui`  
+**Categories:** Component  
+**Props interface:** `ThumbsUpDownFeedbackProps`  
+**Story source:** [`demo/stories/ThumbsUpDownFeedback.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/ThumbsUpDownFeedback.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="ThumbsUpDownFeedback" />
+
+## Props
+
+| Prop | Type | Required | Description |
+| --- | --- | --- | --- |
+| `onChange` | `reflection` | Yes | Called with the newly selected value, or undefined when the current value is deselected. |
+| `disabled` | `boolean` |  | If true, both options are non-interactive and rendered in a muted color. |
+| `negativeAccessibilityLabel` | `string` |  | Accessibility label for the negative (thumbs down) option. |
+| `positiveAccessibilityLabel` | `string` |  | Accessibility label for the positive (thumbs up) option. |
+| `testID` | `string` |  | Root test id for the primary interactive element or container. |
+| `value` | `ThumbsUpDownFeedbackValue` |  | The currently selected feedback. Leave undefined for no selection. |

@@ -1,0 +1,24 @@
+{
+  "kind": "choice",
+  "input": {
+    "prompt": "Pick one.",
+    "select": "one",
+    "options": [
+      {
+        "id": "a",
+        "label": "A"
+      },
+      {
+        "id": "b",
+        "label": "B"
+      }
+    ],
+    "title": "ttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt"
+  },
+  "errors": [
+    {
+      "path": "title",
+      "code": "TOO_LONG"
+    }
+  ]
+}

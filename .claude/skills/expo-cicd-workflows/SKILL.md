@@ -5,6 +5,7 @@ description: >-
   skill when the user asks about CI/CD or workflows in an Expo or EAS context,
   mentions .eas/workflows/, or wants help with EAS build pipelines or deployment
   automation.
+license: MIT License
 ---
 # EAS Workflows Skill
 

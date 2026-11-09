@@ -1,44 +1,111 @@
+export type {
+  Ask,
+  AskKind,
+  AskResponse,
+  AskValidationError,
+  SimpleCard,
+  SimpleCardButton,
+} from "@terreno/blocks";
 export type {FlexibleSchema, JSONValue} from "ai";
 export {jsonSchema, Output} from "ai";
 export type {AIAdminAppOptions} from "./aiAdminApp";
 export {AIAdminApp} from "./aiAdminApp";
 export type {AiAppOptions} from "./aiApp";
 export {AiApp} from "./aiApp";
-export {LangfuseApp} from "./langfuseApp";
-export {getCached, invalidateCache, LangfuseCache, setCached} from "./langfuseCache";
-export {
-  getLangfuseClient,
-  initLangfuseClient,
-  isLangfuseInitialized,
-  shutdownLangfuseClient,
-} from "./langfuseClient";
-export {compilePrompt, createPrompt, getPrompt, invalidatePromptCache} from "./langfusePrompts";
-export {initTracing, shutdownTracing} from "./langfuseTracing";
-export type {
-  ChatMessage,
-  GetPromptOptions,
-  LangfuseAppOptions,
-  LangfuseCachedPrompt,
-  PaginatedResult,
-  PreparePromptResult,
-  PromptListItem,
-  ScoreSubmission,
-  ScoringFunction,
-  TelemetrySettings,
-  TraceListItem,
-} from "./langfuseTypes";
-export {createTelemetryConfig, preparePromptForAI} from "./langfuseVercelAi";
+export {AIDataset} from "./models/aiDataset";
 export {AIRequest} from "./models/aiRequest";
 export {FileAttachment} from "./models/fileAttachment";
 export {GptHistory} from "./models/gptHistory";
-export {Project} from "./models/project";
+export {getProjectModel, Project} from "./models/project";
+export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
+export {
+  answersAgree,
+  computeJudgeAgreement,
+  type JudgeAgreement,
+} from "./observability/judgeAgreement";
+export {LocalDatasetStore} from "./observability/local/datasetStore";
+export {type EvaluatorCalibration, LocalEvaluatorStore} from "./observability/local/evaluatorStore";
+export {
+  DEFAULT_TARGET_AGREEMENT,
+  type JudgeExperimentCreateInput,
+  LocalExperimentRunner,
+} from "./observability/local/experimentRunner";
+export {
+  type DatasetJudgmentSummary,
+  loadCurrentHumanAnswers,
+} from "./observability/local/humanAnswers";
+export {
+  createLocalObservabilityBundle,
+  createLocalObservabilityPlugin,
+} from "./observability/local/localPlugin";
+export {LocalPromptStore} from "./observability/local/promptStore";
+export {
+  DEFAULT_REVIEW_BATCH_SIZE,
+  LocalReviewBatchStore,
+  MAX_REVIEW_BATCH_SIZE,
+  type ReviewBatchDetail,
+  type ReviewBatchListItem,
+} from "./observability/local/reviewBatchStore";
+export {LocalReviewStore} from "./observability/local/reviewStore";
+export {
+  LocalScoreSink,
+  LocalTraceSink,
+  LocalTraceStore,
+  MemoryScoreSink,
+  MemoryTraceSink,
+} from "./observability/local/traceStore";
+export {
+  getObservabilityApp,
+  ObservabilityApp,
+  resetObservabilityApp,
+} from "./observability/observabilityApp";
+export {questionSetFingerprint} from "./observability/questionFingerprint";
+export type {
+  ObservabilityPluginStatus,
+  ObservabilityStatus,
+  PlaygroundAiSource,
+  PlaygroundAiStatus,
+} from "./observability/status";
+export {
+  buildObservabilityStatus,
+  buildPlaygroundAiStatus,
+  isLocalObservabilityPluginOn,
+} from "./observability/status";
+export type {
+  ControlPrimary,
+  ObservabilityAiServiceFactory,
+  ObservabilityAppOptions,
+  ObservabilityCapability,
+  ObservabilityControlConfig,
+  ObservabilityGenerateClient,
+  ObservabilityPlugin,
+  ObservabilityRequestAiServiceFactory,
+  PromptRegistry,
+  ReviewQueue,
+  ScoreRecord,
+  ScoreSink,
+  SpanRecord,
+  TraceExportResult,
+  TraceRecord,
+  TraceSink,
+} from "./observability/types";
+export {
+  DEFAULT_OBSERVABILITY_CONTROL,
+  resolveObservabilityControl,
+  validateObservabilityConfig,
+} from "./observability/types";
 export {addAiRequestsExplorerRoutes} from "./routes/aiRequestsExplorer";
-export {addFileRoutes} from "./routes/files";
+export {addFileRoutes, type FileStorageServiceSource} from "./routes/files";
 export {addGptRoutes} from "./routes/gpt";
 export {addGptHistoryRoutes} from "./routes/gptHistories";
 export {addMcpRoutes} from "./routes/mcp";
 export {addProjectRoutes} from "./routes/projects";
+export {findAgentBlock} from "./service/agentBlocks";
+export type {RegisteredDataset} from "./service/aiDatasets";
+export {configureAiDatasets, registerAiDataset} from "./service/aiDatasets";
 export {AIService, TemperaturePresets} from "./service/aiService";
+export {createAskTools} from "./service/asks";
+export {runBufferedChatTurn} from "./service/chatTurn";
 export {FileStorageService} from "./service/fileStorage";
 export type {ListGeminiApiModelsOptions} from "./service/gemini";
 export {
@@ -54,13 +121,17 @@ export {
   parseAiJson,
 } from "./service/parseAiJson";
 export {
+  COMPACT_SURFACE_SYSTEM_PROMPT,
   CONTENT_SUMMARY_PROMPT,
   DEFAULT_GPT_MEMORY,
   JSON_VALUE_SYSTEM_PROMPT,
   REMIX_PROMPT,
+  TERRENO_ASKS_SYSTEM_PROMPT,
   TITLE_GENERATION_PROMPT,
   TRANSLATION_PROMPT,
 } from "./service/prompts";
+export {scaleStepperHostAction} from "./service/scaleStepper";
+export {toggleChecklistHostAction} from "./service/toggleChecklist";
 export type {
   CreateVertexProviderOptions,
   ListEnabledVertexModelsOptions,

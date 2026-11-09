@@ -12,11 +12,15 @@ import {getJobsService} from "@terreno/jobs";
 import mongoose from "mongoose";
 
 import {consentDefinitions} from "./consentDefinitions";
+import {startApprovalDemo} from "./harness/startApprovalDemo";
+import {DEFAULT_INTAKE_PATIENT_ID, startClinicalIntake} from "./harness/startClinicalIntake";
 import {Project} from "./models/project";
 import {Todo} from "./models/todo";
 import {User} from "./models/user";
+import {seedChatSafetyDataset} from "./scripts/chatSafetyDataset";
 import {seedFeatureFlags} from "./scripts/seed-feature-flags";
 import {seedDefaultData} from "./scripts/seed-test-data";
+import {seedAiObservabilityDemo} from "./scripts/seedAiObservabilityDemo";
 
 const auditEventModel = (): ReturnType<typeof createAuditEventModel> => {
   return createAuditEventModel(mongoose.connection);
@@ -214,6 +218,24 @@ export const adminScripts: AdminScriptConfig[] = [
   },
   {
     description:
+      "Load the synthetic chat-safety dataset (12 proofread two-person chats), screen prompt v1 and v2, judge prompt, and agreement evaluator. Idempotent. Also loads on boot when SEED_DEFAULTS=true. CLI: bun run script seedChatSafetyDataset --wet",
+    name: "seedChatSafetyDataset",
+    runner: async (wetRun) => {
+      const result = await seedChatSafetyDataset({dryRun: !wetRun});
+      return {results: result.results, success: true};
+    },
+  },
+  {
+    description:
+      "Fill AI Observability with a demo workspace: labelled versions of example-summarize, joke-generator, and chat-assistant, judge prompts, eight evaluators (including the summary-review-questions question set and two LLM judges for it), the example-summarize-gold, joke-generator-topics, and chat-assistant-gold datasets, four finished experiments, 30 traces with scores, review items in every status, a 10-item review batch with 8 answered and both judges compared, and the summary-review-set dataset answered by humans for every item with a judge calibration experiment comparing two versions of the summary judge prompt. Idempotent; runs after the base seed. CLI: bun run script seedAiObservabilityDemo --wet",
+    name: "seedAiObservabilityDemo",
+    runner: async (wetRun) => {
+      const result = await seedAiObservabilityDemo({dryRun: !wetRun});
+      return {results: result.results, success: true};
+    },
+  },
+  {
+    description:
       "Enqueue the example/dlq-demo job so the admin Jobs screen can demonstrate retry and dead-letter flows.",
     name: "enqueueDlqDemoJob",
     runner: async (wetRun) => {
@@ -232,5 +254,48 @@ export const adminScripts: AdminScriptConfig[] = [
         success: true,
       };
     },
+  },
+  {
+    args: [
+      {
+        default: 2,
+        description: "How many demo approvals to request (1-20)",
+        example: "2",
+        name: "count",
+        type: "number",
+      },
+      {
+        default: "Demo approval",
+        description: "Title prefix; each approval is titled '<prefix> <n> of <count>'",
+        example: "Demo approval",
+        name: "prefix",
+        type: "string",
+      },
+    ],
+    description:
+      "Start demo.approvalDemo harness tasks; each waits for an admin decision in AI Harness > Approvals.",
+    name: "startHarnessApprovalDemo",
+    runner: startApprovalDemo,
+  },
+  {
+    args: [
+      {
+        default: DEFAULT_INTAKE_PATIENT_ID,
+        description: "FakePatientChart patientId to summarize (seeded: p-1001, p-1002, p-1003)",
+        example: DEFAULT_INTAKE_PATIENT_ID,
+        name: "patientId",
+        type: "string",
+      },
+      {
+        description: "Idempotency key; defaults to intake-<patientId>. Use a new one to rerun.",
+        example: "intake-p-1001-2",
+        name: "requestId",
+        type: "string",
+      },
+    ],
+    description:
+      "Start a clinic.intakeSummary run: fetch the chart, summarize it, wait for clinician sign-off in AI Harness > Approvals, then file the note.",
+    name: "startClinicalIntake",
+    runner: startClinicalIntake,
   },
 ];

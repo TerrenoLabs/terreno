@@ -311,7 +311,6 @@ export * from "./scriptRunner";
 export {adminBodyFieldsToStrip, scrubAdminFields, stripAdminBodyFields} from "./scrubAdminFields";
 export * from "./secretProviders";
 export * from "./seedRunner";
-export * from "./sentryV10DataCollection";
 export * from "./sync/adminBroadcastScope";
 export * from "./sync/adminWindowMutation";
 export * from "./sync/executors";

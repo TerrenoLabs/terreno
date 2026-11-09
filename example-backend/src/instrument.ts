@@ -58,7 +58,7 @@ if (isTracingEnabled) {
 
 // Initialize Sentry after trace agent
 import * as Sentry from "@sentry/bun";
-import {SENTRY_V10_DATA_COLLECTION} from "@terreno/api";
+import {SENTRY_V10_DATA_COLLECTION} from "@terreno/api/sentry";
 
 const sentryDsn = process.env.SENTRY_DSN;
 

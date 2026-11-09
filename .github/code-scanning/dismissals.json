@@ -1,0 +1,536 @@
+{
+  "dismissals": [
+    {
+      "alert": 234,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gptActions.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 235,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 236,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 237,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 238,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 239,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 240,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 241,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gpt.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 242,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/routes/gptDatasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 244,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 245,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 246,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 247,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 248,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 249,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 250,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 251,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 252,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 253,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 254,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 255,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 256,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 257,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 258,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 259,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/datasets.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 260,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 261,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/evaluators.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 262,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/experiments.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 263,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/experiments.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 264,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/experiments.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 265,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/experiments.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 266,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/experiments.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 267,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 268,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 269,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 270,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 271,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 272,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/prompts.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 273,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/review.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 274,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/review.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 275,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/review.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 276,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/review.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 277,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/status.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 278,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/testMultiStage.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 279,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/traces.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 280,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/traces.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 281,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/traces.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 288,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/sync/routes.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 289,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/sync/routes.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 290,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 291,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 292,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 293,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 294,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/server.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 301,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/githubAuth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 307,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/betterAuthFeatures.test.ts",
+      "reason": "used in tests",
+      "comment": "Test-only Express app; the CodeQL config ignores test files."
+    },
+    {
+      "alert": 308,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/betterAuthLinking.test.ts",
+      "reason": "used in tests",
+      "comment": "Test-only Express app; the CodeQL config ignores test files."
+    },
+    {
+      "alert": 310,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/betterAuthSetup.test.ts",
+      "reason": "used in tests",
+      "comment": "Test-only Express app; the CodeQL config ignores test files."
+    },
+    {
+      "alert": 311,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/betterAuthSetup.test.ts",
+      "reason": "used in tests",
+      "comment": "Test-only Express app; the CodeQL config ignores test files."
+    },
+    {
+      "alert": 315,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/reviewBatches.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 316,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/reviewBatches.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 317,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/reviewBatches.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 318,
+      "rule": "js/missing-rate-limiting",
+      "path": "ai/src/observability/routes/reviewBatches.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 327,
+      "rule": "js/missing-rate-limiting",
+      "path": "announcements/src/announcementsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 328,
+      "rule": "js/missing-rate-limiting",
+      "path": "announcements/src/announcementsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 329,
+      "rule": "js/missing-rate-limiting",
+      "path": "announcements/src/announcementsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 330,
+      "rule": "js/missing-rate-limiting",
+      "path": "announcements/src/announcementsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 331,
+      "rule": "js/missing-rate-limiting",
+      "path": "announcements/src/announcementsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 332,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/auth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 333,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/auth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 334,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/auth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 335,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/auth.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 336,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/consentApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 337,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/consentApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 338,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/consentApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 339,
+      "rule": "js/missing-rate-limiting",
+      "path": "feature-flags/src/featureFlagsApp.ts",
+      "reason": "false positive",
+      "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    }
+  ]
+}

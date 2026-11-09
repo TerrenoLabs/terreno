@@ -68,11 +68,18 @@ updates:
     directories:
       - "/admin-backend"
       - "/ai"
+      - "/announcements"
       - "/api"
       - "/api-health"
+      - "/blocks"
+      - "/cli"
+      - "/comms"
+      - "/create-terreno-app"
       - "/example-backend"
       - "/feature-flags"
+      - "/jobs"
       - "/mcp-server"
+      - "/test"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 0
@@ -87,10 +94,12 @@ updates:
   - package-ecosystem: "bun"
     directories:
       - "/admin-frontend"
+      - "/admin-spa"
       - "/demo"
       - "/ui"
       - "/example-frontend"
       - "/syncdb"
+      - "/website"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 0

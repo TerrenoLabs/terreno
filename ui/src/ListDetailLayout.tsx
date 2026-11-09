@@ -14,7 +14,7 @@ import {SafeAreaView} from "react-native-safe-area-context";
 import type {ListDetailLayoutProps, ListDetailState} from "./Common";
 import {IconButton} from "./IconButton";
 import {useTheme} from "./Theme";
-import {trimTrailingSlashes} from "./Utilities";
+import {trimTrailingSlashes} from "./trimTrailingSlashes";
 
 const DEFAULT_SPLIT_AT_WIDTH = 768;
 const DEFAULT_LIST_WIDTH = 360;

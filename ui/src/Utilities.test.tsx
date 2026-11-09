@@ -25,7 +25,6 @@ import {
   rangeWithoutZero,
   toggle,
   toProps,
-  trimTrailingSlashes,
   union,
 } from "./Utilities";
 
@@ -486,20 +485,5 @@ describe("Utilities", () => {
         createBoxShadow({blurRadius: 12, color: "#1C1C1C", offsetX: 1, offsetY: 4, opacity: 0.15})
       ).toBe("1px 4px 12px rgba(28, 28, 28, 0.15)");
     });
-  });
-});
-
-describe("trimTrailingSlashes", () => {
-  it("drops every trailing slash and keeps the rest", () => {
-    expect(trimTrailingSlashes("/todos///")).toBe("/todos");
-    expect(trimTrailingSlashes("/")).toBe("");
-    expect(trimTrailingSlashes("/todos/1")).toBe("/todos/1");
-  });
-
-  it("stays fast on a long run of slashes that does not end the string", () => {
-    const input = `/todos${"/".repeat(100_000)}x`;
-    const start = performance.now();
-    expect(trimTrailingSlashes(input)).toBe(input);
-    expect(performance.now() - start).toBeLessThan(100);
   });
 });

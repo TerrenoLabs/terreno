@@ -33,15 +33,6 @@ export const isTestUser = (profile?: BaseProfile): boolean => {
   );
 };
 
-/** Drop trailing `/`s. A loop instead of `/\/+$/` keeps this linear on long runs of slashes. */
-export const trimTrailingSlashes = (value: string): string => {
-  let end = value.length;
-  while (end > 0 && value[end - 1] === "/") {
-    end -= 1;
-  }
-  return value.slice(0, end);
-};
-
 export const iconNumberToSize = (size = 16): IconSize => {
   let iconSize: IconSize;
   if (size < 8) {

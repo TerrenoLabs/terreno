@@ -22,7 +22,7 @@ leaves the run in exactly one lane:
 Nothing is dismissed before the PR merges. Never call the dismiss API by hand
 from this skill.
 
-Operator doc: [`docs/how-to/fix-code-scanning-alerts.md`](../../docs/how-to/fix-code-scanning-alerts.md).
+Operator doc: [`docs/how-to/fix-code-scanning-alerts.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/fix-code-scanning-alerts.md).
 Per-rule playbook: [`references/rules.md`](references/rules.md).
 Ledger code: `scripts/ci/codeScanning/` (`dismissals.ts`, `applyDismissals.ts`).
 
@@ -37,6 +37,24 @@ Ledger code: `scripts/ci/codeScanning/` (`dismissals.ts`, `applyDismissals.ts`).
 7. **Tests are out of scope for CodeQL.** `.github/codeql/codeql-config.yml` ignores test files, so their alerts close as `fixed` on the next master scan. Still list them in the ledger as `used in tests` so the run is deterministic.
 
 ## Procedure
+
+### 0. Bootstrap (repositories other than TerrenoLabs/terreno)
+
+The ledger tooling lives in TerrenoLabs/terreno. When `scripts/ci/codeScanning/applyDismissals.ts` is missing, copy it in on the PR branch (step 1) before triage:
+
+```bash
+for f in scripts/ci/codeScanning/dismissals.ts scripts/ci/codeScanning/dismissals.test.ts \
+  scripts/ci/codeScanning/applyDismissals.ts .github/workflows/code-scanning-dismissals.yml \
+  .github/codeql/codeql-config.yml; do
+  mkdir -p "$(dirname "$f")"
+  gh api "repos/TerrenoLabs/terreno/contents/$f" -H "Accept: application/vnd.github.raw" > "$f"
+done
+mkdir -p .github/code-scanning && echo '{"dismissals": []}' > .github/code-scanning/dismissals.json
+```
+
+Then, in the repository's CodeQL workflow, add `pull_request: branches: [<default branch>]` and `config-file: ./.github/codeql/codeql-config.yml` on `codeql-action/init`. If the repository's default branch is not `master`, change the workflow's `push` branch. Without a CodeQL workflow (default setup only), skip the PR-ref proof in step 6 and say so in the report.
+
+Completion: `bun test scripts/ci/codeScanning/` passes.
 
 ### 1. Branch
 

@@ -137,7 +137,7 @@ export class LocalReviewStore {
       pending: await ObsReviewItem.countDocuments({...scope, status: "pending"}),
       skipped: await ObsReviewItem.countDocuments({...scope, status: "skipped"}),
     };
-    const filter = status ? {...scope, status} : scope;
+    const filter = status ? {...scope, status: {$eq: status}} : scope;
     // Batch items keep their batch order (enqueued together, newest trace first).
     const rows = await ObsReviewItem.find(filter).sort({_id: 1, enqueuedAt: 1});
     const data: ReviewListItem[] = [];

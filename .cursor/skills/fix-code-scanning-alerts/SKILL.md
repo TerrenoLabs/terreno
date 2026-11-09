@@ -104,9 +104,9 @@ Completion: tests pass; dry run says `mismatched 0, missing 0`.
 3. Push and open **one** PR. Body: a table of every alert (`#n`, rule, path, lane, one-line reason), grouped Fixed / Dismissed after merge, plus the counts.
 4. Prove the fixes with a **full** branch scan. PR scans are diff-informed (they only report alerts on changed lines), so a clean PR check is not proof. Run `gh workflow run codeql-analysis.yml --ref fix-code-scanning-alerts`, wait for it, then for each fix-lane alert:
    ```bash
-   gh api "repos/{owner}/{repo}/code-scanning/alerts/<n>/instances?ref=refs/heads/fix-code-scanning-alerts" --jq '.[0].state'
+   gh api "repos/{owner}/{repo}/code-scanning/alerts/<n>/instances?ref=refs/heads/fix-code-scanning-alerts" --jq '.[0].state // "none"'
    ```
-   It must print `fixed`. Calibrate with one ledger alert, which must print `open`. A fix-lane alert still `open` is not fixed: change the fix (rule 3) or move it to the ledger with a reason. The branch analysis must add no alert that is absent on `master`.
+   It must print `none` (the branch scan never reported it) or `fixed`. Calibrate with one ledger alert, which must print `open`. A fix-lane alert still `open` is not fixed: change the fix (rule 3) or move it to the ledger with a reason. The branch analysis must add no alert that is absent on `master`.
 5. Hand off to `terreno:5-taste` until CI is green and review bots are answered.
 
 Completion: PR green; the full branch scan shows every fix-lane alert `fixed` and no new alert.

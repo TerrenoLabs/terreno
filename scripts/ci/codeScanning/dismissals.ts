@@ -13,9 +13,9 @@
  * mismatch and left alone.
  */
 
-export const DISMISSAL_REASONS = ["false positive", "won't fix", "used in tests"] as const;
+const DISMISSAL_REASONS = ["false positive", "won't fix", "used in tests"] as const;
 
-export type DismissalReason = (typeof DISMISSAL_REASONS)[number];
+type DismissalReason = (typeof DISMISSAL_REASONS)[number];
 
 export interface DismissalEntry {
   alert: number;

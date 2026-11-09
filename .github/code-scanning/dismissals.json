@@ -379,11 +379,32 @@
       "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
     },
     {
+      "alert": 295,
+      "rule": "js/insufficient-password-hash",
+      "path": "api/src/models/mcpOAuthToken.ts",
+      "reason": "false positive",
+      "comment": "Hashes only server-made MCP OAuth tokens and secrets from generateMcpOAuthSecret (randomBytes(32), 256-bit), so a fast SHA-256 is correct; no user password is hashed."
+    },
+    {
       "alert": 301,
       "rule": "js/missing-rate-limiting",
       "path": "api/src/githubAuth.ts",
       "reason": "false positive",
       "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 302,
+      "rule": "js/insufficient-password-hash",
+      "path": "api/src/githubAuth.ts",
+      "reason": "false positive",
+      "comment": "signStatePayload is an HMAC-SHA256 over the OAuth state cookie (randomBytes(24) nonce) keyed by the session secret: message authentication, not password storage."
+    },
+    {
+      "alert": 306,
+      "rule": "js/insufficient-password-hash",
+      "path": "api/src/betterAuthFeatures.ts",
+      "reason": "false positive",
+      "comment": "createSign(\"SHA256\") makes the ES256 signature on the Sign in with Apple client-secret JWT from the configured .p8 key; no password is hashed."
     },
     {
       "alert": 307,

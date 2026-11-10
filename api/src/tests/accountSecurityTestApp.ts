@@ -17,6 +17,7 @@ import {
   clearSecurityActionListenersForTests,
   SECURITY_ACTIONS,
 } from "../accountSecurity/securityEvents";
+import {flushSecurityNotificationsForTests} from "../accountSecurity/securityNotifications";
 import {AuditApp} from "../audit/auditApp";
 import {createAuditEventModel} from "../audit/auditEventModel";
 import {flushAuditRecorderForTests, resetAuditRecorderForTests} from "../audit/record";
@@ -66,6 +67,9 @@ const getSecurityUserModel = (): mongoose.Model<SecurityUserFields> => {
 export const SecurityUser = getSecurityUserModel();
 export const securityUserModel = SecurityUser as unknown as UserModel;
 export const AuditEvent = createAuditEventModel(mongoose.connection);
+
+/** Account-security suites reset Mongo and Better Auth collections each test; allow headroom on CI. */
+export const ACCOUNT_SECURITY_HOOK_TIMEOUT_MS = 30_000;
 
 export const access = createAccess({
   connection: mongoose.connection,
@@ -278,6 +282,7 @@ export const betterAuthIdFor = async (userId: string): Promise<string> => {
 
 /** Clears every collection the security suites write, plus in-process recorder state. */
 export const resetAccountSecurityState = async (): Promise<void> => {
+  await flushSecurityNotificationsForTests();
   clearMCPRegistry();
   clearSecurityActionListenersForTests();
   resetAuditRecorderForTests();

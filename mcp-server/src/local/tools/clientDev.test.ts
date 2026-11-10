@@ -305,4 +305,53 @@ describe("clientDev MCP tools", () => {
     evalSpy.mockRestore();
     expect(text).toContain("true");
   });
+
+  it("readLocalStorage CDP path succeeds when no in-process adapter", async (): Promise<void> => {
+    const ensureSpy = spyOn(metroSession, "ensureCdpConnected").mockResolvedValue({
+      detail: "ok",
+      ok: true,
+    });
+    const evalSpy = spyOn(metroSession, "cdpRuntimeEvaluate").mockResolvedValue({
+      value: {count: 1, entries: {token: "secret"}},
+    });
+    const statusSpy = spyOn(metroSession, "getCdpConnectionStatus").mockReturnValue("CDP: storage");
+    const text = await readLocalStorage({keys: ["token"]});
+    ensureSpy.mockRestore();
+    evalSpy.mockRestore();
+    statusSpy.mockRestore();
+    expect(text).toContain("secret");
+    expect(text).toContain("CDP: storage");
+  });
+
+  it("readLocalStorage CDP path lists keys with optional prefix when keys omitted", async (): Promise<void> => {
+    const ensureSpy = spyOn(metroSession, "ensureCdpConnected").mockResolvedValue({
+      detail: "ok",
+      ok: true,
+    });
+    const evalSpy = spyOn(metroSession, "cdpRuntimeEvaluate").mockResolvedValue({
+      value: {count: 1, entries: {"user:theme": "dark"}},
+    });
+    const text = await readLocalStorage({prefix: "user:"});
+    ensureSpy.mockRestore();
+    evalSpy.mockRestore();
+    expect(text).toContain("user:theme");
+  });
+
+  it("writeLocalStorage CDP path succeeds when no in-process adapter", async (): Promise<void> => {
+    process.env.TERRENO_MCP_EVAL = "1";
+    const ensureSpy = spyOn(metroSession, "ensureCdpConnected").mockResolvedValue({
+      detail: "ok",
+      ok: true,
+    });
+    const evalSpy = spyOn(metroSession, "cdpRuntimeEvaluate").mockResolvedValue({
+      value: {key: "session", ok: true},
+    });
+    const statusSpy = spyOn(metroSession, "getCdpConnectionStatus").mockReturnValue("CDP: write");
+    const text = await writeLocalStorage({key: "session", value: "abc"});
+    ensureSpy.mockRestore();
+    evalSpy.mockRestore();
+    statusSpy.mockRestore();
+    expect(text).toContain("session");
+    expect(text).toContain("CDP: write");
+  });
 });

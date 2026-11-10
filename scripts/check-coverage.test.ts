@@ -591,6 +591,9 @@ describe("sharded coverage", () => {
     expect(
       isEmptyShardOutput("bun test v1.4.4\n--shard=7/7: running 0/6 test files\n\n 0 pass\n")
     ).toBe(true);
+    expect(
+      isEmptyShardOutput("bun test v1.4.4\n--shard=2/4: running 0/1 test file\n\n 0 pass\n")
+    ).toBe(true);
     expect(isEmptyShardOutput("--shard=1/2: running 3/6 test files\n 3 pass\n")).toBe(false);
     expect(isEmptyShardOutput(" 12 pass\n 0 fail\n")).toBe(false);
   });

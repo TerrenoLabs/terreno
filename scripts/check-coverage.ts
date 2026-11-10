@@ -595,7 +595,7 @@ const runBunTest = async (
 
 /** True when Bun reported that this shard was assigned no test files. */
 export const isEmptyShardOutput = (output: string): boolean =>
-  /--shard=\d+\/\d+: running 0\/\d+ test files/.test(stripAnsi(output));
+  /--shard=\d+\/\d+: running 0\/\d+ test files?/.test(stripAnsi(output));
 
 /**
  * Runs the main suite as `total` concurrent coverage shards and returns the union of their

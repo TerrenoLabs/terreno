@@ -12,6 +12,7 @@ import {apiErrorMiddleware} from "../errors";
 import {type AuthenticatableSocket, createBetterAuthValidator} from "../realtime/socketAuth";
 import {type RequestCredential, runWithRequestContext} from "../requestContext";
 import {
+  ACCOUNT_SECURITY_HOOK_TIMEOUT_MS,
   access,
   betterAuthCollection,
   betterAuthIdFor,
@@ -126,11 +127,11 @@ const tokenFromUrl = (url: string): string => new URL(url).searchParams.get("tok
 describe("access recovery actions", () => {
   beforeAll(async () => {
     await access.roles.seedDefaults();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   beforeEach(async () => {
     await resetAccountSecurityState();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   afterEach(() => {
     resetAuditRecorderForTests();

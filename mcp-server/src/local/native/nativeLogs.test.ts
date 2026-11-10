@@ -114,7 +114,7 @@ describe("snapshotNativeLogs", () => {
     const result = await snapshotNativeLogs(2);
     spawnSpy.mockRestore();
     expect(result.entries).toEqual([]);
-    expect(result.status).toContain("no booted simulator");
+    expect(result.status).toContain("log stream failed");
   });
 
   it("uses TERRENO_ADB_SERIAL when set", async (): Promise<void> => {

@@ -1,8 +1,13 @@
 import {afterEach, describe, expect, it, mock} from "bun:test";
 import {
   clearTerrenoDevMcpRegistryForTests,
+  getTerrenoDevClientDispatch,
   getTerrenoDevStorageAdapter,
+  listTerrenoDevCommandSummaries,
+  registerTerrenoDevClientDispatch,
+  registerTerrenoDevCommand,
   registerTerrenoDevStorage,
+  runTerrenoDevCommand,
 } from "./devMcpRegistry";
 
 describe("devMcpRegistry (module mocks)", () => {
@@ -10,6 +15,39 @@ describe("devMcpRegistry (module mocks)", () => {
     clearTerrenoDevMcpRegistryForTests();
     Reflect.deleteProperty(process.env, "TERRENO_DEV_MCP_REGISTRY_TEST");
     Reflect.deleteProperty(globalThis as {__DEV__?: boolean}, "__DEV__");
+  });
+
+  it("registers client dispatch when __DEV__ is true", (): void => {
+    (globalThis as {__DEV__?: boolean}).__DEV__ = true;
+    registerTerrenoDevClientDispatch({
+      dispatch: ({type}) => type,
+    });
+    expect(getTerrenoDevClientDispatch()?.dispatch({type: "demo/action"})).toBe("demo/action");
+  });
+
+  it("no-ops outside dev or test", (): void => {
+    Reflect.deleteProperty(process.env, "TERRENO_DEV_MCP_REGISTRY_TEST");
+    registerTerrenoDevCommand({description: "x", handler: () => 1, name: "ghost"});
+    registerTerrenoDevClientDispatch({dispatch: () => 1});
+    registerTerrenoDevStorage({asyncStorage: false});
+    expect(listTerrenoDevCommandSummaries()).toEqual([]);
+    expect(getTerrenoDevClientDispatch()).toBeUndefined();
+    expect(getTerrenoDevStorageAdapter()).toBeUndefined();
+  });
+
+  it("registers commands and client dispatch in test mode", async (): Promise<void> => {
+    process.env.TERRENO_DEV_MCP_REGISTRY_TEST = "true";
+    registerTerrenoDevClientDispatch({
+      dispatch: (action) => action,
+    });
+    registerTerrenoDevCommand({
+      description: "Adds",
+      handler: ({a, b}) => Number(a) + Number(b),
+      name: "add",
+    });
+    expect(listTerrenoDevCommandSummaries().map((c) => c.name)).toEqual(["add"]);
+    await expect(runTerrenoDevCommand("add", {a: 1, b: 2})).resolves.toBe(3);
+    expect(getTerrenoDevClientDispatch()?.dispatch({type: "x"})).toEqual({type: "x"});
   });
 
   it("treats global __DEV__=true like test mode without env", async (): Promise<void> => {

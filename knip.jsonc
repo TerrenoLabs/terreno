@@ -458,7 +458,9 @@
         "src/scripts/syncConsents.ts",
         "src/scripts/configuration-example.ts",
         "src/scripts/seed-admin-spa-admin.ts",
-        "src/scripts/seedConsents.ts"
+        "src/scripts/seedConsents.ts",
+        "src/**/*.isolated.ts",
+        "src/isolated/**/*.isolated.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

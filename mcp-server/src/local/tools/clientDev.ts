@@ -23,10 +23,29 @@ type DevCommandRegistry = Record<
   }
 >;
 
+type DevClientDispatch = {
+  dispatch: (action: {payload?: unknown; type: string}) => unknown;
+};
+
 type DevMcpGlobal = typeof globalThis & {
+  __TERRENO_DEV_CLIENT_DISPATCH__?: DevClientDispatch;
   __TERRENO_DEV_COMMANDS__?: DevCommandRegistry;
   __TERRENO_DEV_STORAGE__?: DevStorageAdapter;
-  __TERRENO_STORE__?: {dispatch: (action: unknown) => unknown};
+};
+
+const SENSITIVE_STORAGE_KEY = /(?:^|\/)(?:auth|token|session|password|credential|cookie|secret)/i;
+
+const formatStorageValue = (key: string, value: string | null): string | null => {
+  if (value === null) {
+    return null;
+  }
+  if (SENSITIVE_STORAGE_KEY.test(key)) {
+    return `[REDACTED len=${value.length}]`;
+  }
+  if (value.length > MAX_STORAGE_VALUE_CHARS) {
+    return `${value.slice(0, MAX_STORAGE_VALUE_CHARS)}…`;
+  }
+  return value;
 };
 
 const isTerrenoMcpEvalEnabled = (): boolean => {
@@ -37,8 +56,8 @@ const refuseEval = (tool: string): string => {
   return `Refused: set \`TERRENO_MCP_EVAL=1\` to opt in to \`${tool}\`.`;
 };
 
-const getDevStore = (): {dispatch: (action: unknown) => unknown} | undefined => {
-  return (globalThis as DevMcpGlobal).__TERRENO_STORE__;
+const getDevClientDispatch = (): DevClientDispatch | undefined => {
+  return (globalThis as DevMcpGlobal).__TERRENO_DEV_CLIENT_DISPATCH__;
 };
 
 const getDevStorage = (): DevStorageAdapter | undefined => {
@@ -84,11 +103,11 @@ export const dispatchClientAction = async (args: DispatchClientActionArgs): Prom
   if (!type) {
     return "No action type provided.";
   }
-  const store = getDevStore();
-  if (store) {
+  const bus = getDevClientDispatch();
+  if (bus) {
     try {
-      store.dispatch({payload: args.payload, type});
-      return JSON.stringify({ok: true, status: "in-process store"}, null, 2);
+      const result = bus.dispatch({payload: args.payload, type});
+      return JSON.stringify({ok: true, result, status: "in-process dispatch"}, null, 2);
     } catch (e) {
       return JSON.stringify({error: String(e), ok: false}, null, 2);
     }
@@ -96,11 +115,11 @@ export const dispatchClientAction = async (args: DispatchClientActionArgs): Prom
   const typeJson = JSON.stringify(type);
   const payloadJson = JSON.stringify(args.payload ?? null);
   const expression = `(() => {
-    const store = globalThis.__TERRENO_STORE__;
-    if (!store || typeof store.dispatch !== "function") {
-      return { ok: false, error: "no __TERRENO_STORE__" };
+    const bus = globalThis.__TERRENO_DEV_CLIENT_DISPATCH__;
+    if (!bus || typeof bus.dispatch !== "function") {
+      return { ok: false, error: "no __TERRENO_DEV_CLIENT_DISPATCH__ (call registerTerrenoDevClientDispatch from @terreno/syncdb)" };
     }
-    store.dispatch({ type: ${typeJson}, payload: ${payloadJson} });
+    bus.dispatch({ type: ${typeJson}, payload: ${payloadJson} });
     return { ok: true };
   })()`;
   await ensureCdpConnected();
@@ -132,10 +151,7 @@ const readStorageInProcess = async (
   const entries: Record<string, string | null> = {};
   for (const key of keys) {
     const value = await adapter.get(key);
-    entries[key] =
-      value !== null && value.length > MAX_STORAGE_VALUE_CHARS
-        ? `${value.slice(0, MAX_STORAGE_VALUE_CHARS)}…`
-        : value;
+    entries[key] = formatStorageValue(key, value);
   }
   return JSON.stringify({count: keys.length, entries, status: "in-process adapter"}, null, 2);
 };
@@ -158,9 +174,16 @@ export const readLocalStorage = async (args: ReadLocalStorageArgs): Promise<stri
     }
     keys = keys.slice(0, ${MAX_STORAGE_KEYS});
     const entries = {};
+    const sensitive = new RegExp(${JSON.stringify(SENSITIVE_STORAGE_KEY.source)}, "i");
+    const redact = (key, value) => {
+      if (value === null) return null;
+      if (sensitive.test(key)) return "[REDACTED len=" + value.length + "]";
+      if (value.length > ${MAX_STORAGE_VALUE_CHARS}) return value.slice(0, ${MAX_STORAGE_VALUE_CHARS}) + "…";
+      return value;
+    };
     for (const key of keys) {
       const value = await storage.get(key);
-      entries[key] = value;
+      entries[key] = redact(key, value);
     }
     return { count: keys.length, entries };
   })()`;

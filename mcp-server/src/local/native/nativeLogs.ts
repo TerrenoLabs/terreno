@@ -14,11 +14,18 @@ const isNativeLogsDisabled = (): boolean => {
 };
 
 const inferLevel = (line: string): string => {
-  const lower = line.toLowerCase();
-  if (lower.includes(" error ") || lower.startsWith("e/") || lower.includes("fatal")) {
+  const logcatTag = /\s([VDIWEF])\s+\S+:/.exec(line);
+  if (logcatTag?.[1] === "E" || logcatTag?.[1] === "F") {
     return "error";
   }
-  if (lower.includes(" warn ") || lower.startsWith("w/")) {
+  if (logcatTag?.[1] === "W") {
+    return "warn";
+  }
+  const lower = line.toLowerCase();
+  if (lower.includes(" error ") || lower.includes("fatal")) {
+    return "error";
+  }
+  if (lower.includes(" warn ")) {
     return "warn";
   }
   return "info";
@@ -70,16 +77,22 @@ const readIosSimulatorLogs = (maxLines: number): {entries: NativeLogEntry[]; sta
   if (result.error) {
     return {entries: [], status: `native ios: simctl failed (${result.error.message})`};
   }
-  const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
-  const lines = combined
+  const lines = (result.stdout ?? "")
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean)
     .slice(-maxLines);
-  if (lines.length === 0 && result.status !== 0) {
+  if (lines.length === 0) {
+    const detail = (result.stderr ?? "").trim().slice(0, 200);
+    if (result.status !== 0) {
+      return {
+        entries: [],
+        status: `native ios: log stream failed (exit ${result.status}${detail ? `: ${detail}` : ""})`,
+      };
+    }
     return {
       entries: [],
-      status: `native ios: no booted simulator or log stream unavailable (exit ${result.status})`,
+      status: "native ios: no log lines in stream window",
     };
   }
   return {

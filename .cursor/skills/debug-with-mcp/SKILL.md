@@ -8,10 +8,10 @@ description: 'Standard way to debug and drive Terreno apps: use terreno-mcp-loca
 tools → edit code → act with gated tools → observe again until logs and state match
 expectations. Do not ask the user to paste server logs when MCP can read them.
 
-Architecture and limits: [`docs/explanation/ai-development-loop.md`](../../docs/explanation/ai-development-loop.md).
-Symptom → tool table and walkthrough: [`docs/how-to/debug-with-mcp.md`](../../docs/how-to/debug-with-mcp.md).
-Setup: [`docs/how-to/set-up-terreno-mcp.md`](../../docs/how-to/set-up-terreno-mcp.md).
-Tool reference: [`docs/reference/mcp-server.md`](../../docs/reference/mcp-server.md).
+Architecture and limits: [`docs/explanation/ai-development-loop.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/explanation/ai-development-loop.md).
+Symptom → tool table and walkthrough: [`docs/how-to/debug-with-mcp.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/debug-with-mcp.md).
+Setup: [`docs/how-to/set-up-terreno-mcp.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/set-up-terreno-mcp.md).
+Tool reference: [`docs/reference/mcp-server.md`](https://github.com/TerrenoLabs/terreno/blob/master/docs/reference/mcp-server.md).
 SyncDB-only deep dive: invoke **`debug-syncdb-with-mcp`**.
 
 ## 0. Preconditions (stop if missing)

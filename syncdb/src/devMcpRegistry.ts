@@ -35,7 +35,17 @@ export interface TerrenoDevCommandSummary {
   name: string;
 }
 
+export interface TerrenoDevClientAction {
+  payload?: unknown;
+  type: string;
+}
+
+export interface TerrenoDevClientDispatch {
+  dispatch: (action: TerrenoDevClientAction) => unknown;
+}
+
 type DevMcpGlobal = typeof globalThis & {
+  __TERRENO_DEV_CLIENT_DISPATCH__?: TerrenoDevClientDispatch;
   __TERRENO_DEV_COMMANDS__?: Record<string, TerrenoDevCommandDefinition>;
   __TERRENO_DEV_STORAGE__?: TerrenoDevStorageAdapter;
 };
@@ -52,8 +62,21 @@ const isDevOrTest = (): boolean => {
 
 export const clearTerrenoDevMcpRegistryForTests = (): void => {
   const g = globalThis as DevMcpGlobal;
+  delete g.__TERRENO_DEV_CLIENT_DISPATCH__;
   delete g.__TERRENO_DEV_COMMANDS__;
   delete g.__TERRENO_DEV_STORAGE__;
+};
+
+/** Optional client-side action bus for `dispatch_client_action` (Terreno 58 SyncDB apps). */
+export const registerTerrenoDevClientDispatch = (dispatch: TerrenoDevClientDispatch): void => {
+  if (!isDevOrTest()) {
+    return;
+  }
+  (globalThis as DevMcpGlobal).__TERRENO_DEV_CLIENT_DISPATCH__ = dispatch;
+};
+
+export const getTerrenoDevClientDispatch = (): TerrenoDevClientDispatch | undefined => {
+  return (globalThis as DevMcpGlobal).__TERRENO_DEV_CLIENT_DISPATCH__;
 };
 
 export const registerTerrenoDevStorage = (options: RegisterTerrenoDevStorageOptions = {}): void => {

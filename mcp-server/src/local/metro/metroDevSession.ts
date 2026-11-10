@@ -17,7 +17,10 @@ const cdpConsoleRing: RingEntry[] = [];
 const cdpNetworkRing: RingEntry[] = [];
 const metroEventsRing: RingEntry[] = [];
 
-const SENSITIVE_HEADER_NAMES = new Set(["authorization", "cookie", "set-auth-token"]);
+const SENSITIVE_HEADER_NAMES = new Set(["authorization", "cookie", "set-auth-token", "set-cookie"]);
+
+/** Maps CDP Network.requestId → request URL for loadingFailed events. */
+const networkRequestUrls = new Map<string, string>();
 
 const redactHeaders = (headers: unknown): Record<string, string> | undefined => {
   if (!headers || typeof headers !== "object") {
@@ -245,6 +248,10 @@ const handleCdpMessage = (text: string): void => {
     const params = msg.params as Record<string, unknown> | undefined;
     const request = params?.request as Record<string, unknown> | undefined;
     const url = typeof request?.url === "string" ? request.url : "";
+    const requestId = typeof params?.requestId === "string" ? params.requestId : "";
+    if (requestId && url) {
+      networkRequestUrls.set(requestId, url);
+    }
     const method = typeof request?.method === "string" ? request.method : "GET";
     pushNetworkEntry({
       event: "requestWillBeSent",
@@ -266,8 +273,8 @@ const handleCdpMessage = (text: string): void => {
     const status = typeof response?.status === "number" ? response.status : undefined;
     const timing = response?.timing as Record<string, unknown> | undefined;
     const durationMs =
-      typeof timing?.receiveHeadersEnd === "number" && typeof timing?.requestTime === "number"
-        ? Math.round((timing.receiveHeadersEnd as number) * 1000)
+      typeof timing?.receiveHeadersEnd === "number"
+        ? Math.round(timing.receiveHeadersEnd as number)
         : undefined;
     pushNetworkEntry({
       durationMs,
@@ -286,7 +293,10 @@ const handleCdpMessage = (text: string): void => {
   }
   if (msg.method === "Network.loadingFailed") {
     const params = msg.params as Record<string, unknown> | undefined;
-    const url = typeof params?.documentURL === "string" ? params.documentURL : "";
+    const requestId = typeof params?.requestId === "string" ? params.requestId : "";
+    const url =
+      (requestId ? networkRequestUrls.get(requestId) : undefined) ??
+      (typeof params?.documentURL === "string" ? params.documentURL : "");
     pushNetworkEntry({
       errorText: params?.errorText,
       event: "loadingFailed",
@@ -384,8 +394,12 @@ export const ensureCdpConnected = async (): Promise<{ok: boolean; detail: string
     });
 
     await sendCdp("Runtime.enable", {});
-    await sendCdp("Network.enable", {});
-    lastCdpStatus = `connected to ${String(target?.title ?? "target")}`;
+    try {
+      await sendCdp("Network.enable", {});
+      lastCdpStatus = `connected to ${String(target?.title ?? "target")}`;
+    } catch {
+      lastCdpStatus = `connected to ${String(target?.title ?? "target")} (Network domain unavailable)`;
+    }
   })();
 
   try {
@@ -530,6 +544,7 @@ export const resetMetroDevSessionForTests = (): void => {
   rejectPendingCdp("CDP session reset");
   cdpConsoleRing.length = 0;
   cdpNetworkRing.length = 0;
+  networkRequestUrls.clear();
   metroEventsRing.length = 0;
   nextCdpId = 1;
   lastCdpStatus = "not connected";

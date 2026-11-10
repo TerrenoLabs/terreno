@@ -16,11 +16,13 @@ describe("clientDev MCP tools", () => {
     const g = globalThis as typeof globalThis & {
       __TERRENO_DEV_COMMANDS__?: Record<string, unknown>;
       __TERRENO_DEV_STORAGE__?: unknown;
-      __TERRENO_STORE__?: {dispatch: (action: unknown) => unknown};
+      __TERRENO_DEV_CLIENT_DISPATCH__?: {
+        dispatch: (action: unknown) => unknown;
+      };
     };
     delete g.__TERRENO_DEV_COMMANDS__;
     delete g.__TERRENO_DEV_STORAGE__;
-    delete g.__TERRENO_STORE__;
+    delete g.__TERRENO_DEV_CLIENT_DISPATCH__;
   });
 
   it("refuses dispatch without TERRENO_MCP_EVAL", async (): Promise<void> => {
@@ -28,10 +30,12 @@ describe("clientDev MCP tools", () => {
     expect(text).toContain("Refused");
   });
 
-  it("dispatches through an in-process store when eval is enabled", async (): Promise<void> => {
+  it("dispatches through an in-process client bus when eval is enabled", async (): Promise<void> => {
     process.env.TERRENO_MCP_EVAL = "1";
     const actions: unknown[] = [];
-    (globalThis as typeof globalThis & {__TERRENO_STORE__?: unknown}).__TERRENO_STORE__ = {
+    (
+      globalThis as typeof globalThis & {__TERRENO_DEV_CLIENT_DISPATCH__?: unknown}
+    ).__TERRENO_DEV_CLIENT_DISPATCH__ = {
       dispatch: (action: unknown) => {
         actions.push(action);
         return action;
@@ -48,9 +52,11 @@ describe("clientDev MCP tools", () => {
     expect(text).toBe("No action type provided.");
   });
 
-  it("dispatch returns JSON error when in-process store throws", async (): Promise<void> => {
+  it("dispatch returns JSON error when in-process client bus throws", async (): Promise<void> => {
     process.env.TERRENO_MCP_EVAL = "1";
-    (globalThis as typeof globalThis & {__TERRENO_STORE__?: unknown}).__TERRENO_STORE__ = {
+    (
+      globalThis as typeof globalThis & {__TERRENO_DEV_CLIENT_DISPATCH__?: unknown}
+    ).__TERRENO_DEV_CLIENT_DISPATCH__ = {
       dispatch: () => {
         throw new Error("boom");
       },

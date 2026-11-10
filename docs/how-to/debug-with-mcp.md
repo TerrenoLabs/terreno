@@ -170,7 +170,7 @@ On web this returns `layer: "none"`:
 ```json
 {
   "connection": "CDP: Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?); Metro events: not connected",
-  "hint": "No client data layer found. For RTK Query, call `registerTerrenoDevStore(store)` from @terreno/rtk in __DEV__. For SyncDB, create the client with `createSyncDb({debug: true})`. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).",
+  "hint": "No client data layer found. For SyncDB, create the client with `createSyncDb({debug: true})`. For custom client actions, call `registerTerrenoDevClientDispatch` from `@terreno/syncdb` in __DEV__. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).",
   "layer": "none",
   "reasons": {
     "rtk": "Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?)",

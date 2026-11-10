@@ -72,7 +72,7 @@ describe("isCoverageSourceFile", () => {
     assert.isFalse(isCoverageSourceFile("api/src/newRoute.test.ts"));
     assert.isFalse(isCoverageSourceFile("ui/src/NewComponent.stories.tsx"));
     assert.isFalse(isCoverageSourceFile("mcp-server/src/local/tools/clientDev.isolated.ts"));
-    assert.isFalse(isCoverageSourceFile("example-frontend/devMcpCommands.ts"));
+    assert.isTrue(isCoverageSourceFile("example-frontend/devMcpCommands.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/devMcpCommands.isolated.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/e2e/helpers/auditEvents.ts"));
     assert.isFalse(isCoverageSourceFile("example-frontend/store/apiSdk.ts"));

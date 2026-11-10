@@ -205,7 +205,7 @@ export const localMcpTools: Tool[] = [
   },
   {
     description:
-      "Dispatch a Redux action on `globalThis.__TERRENO_STORE__` (requires `registerTerrenoDevStore` in __DEV__). Gated by `TERRENO_MCP_EVAL=1`. Prefer `syncdb_action` for synced collection writes.",
+      "Dispatch a dev client action on `globalThis.__TERRENO_DEV_CLIENT_DISPATCH__` (requires `registerTerrenoDevClientDispatch` from `@terreno/syncdb` in __DEV__). Gated by `TERRENO_MCP_EVAL=1`. Prefer `syncdb_action` for synced collection writes.",
     inputSchema: {
       additionalProperties: false,
       properties: {

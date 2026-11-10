@@ -96,6 +96,7 @@ import {
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
+import {io} from "./websockets";
 
 const BOOT_START_TIME = process.hrtime();
 const notificationsApp = new NotificationsApp({
@@ -189,9 +190,6 @@ export const start = async (
     const websocketsDebug = WEBSOCKETS_DEBUG || adminWebsocketsDebug === true;
 
     registerOrganizationSettings(organizationSettingsSchema);
-
-    /** Set when RealtimeApp is registered so FeatureFlags live updates reuse the same Socket.io. */
-    let featureFlagsRealtimeApp: RealtimeApp | null = null;
 
     const terraApp = new TerrenoApp({
       accessControl: access,
@@ -303,11 +301,10 @@ export const start = async (
         })
       );
 
-    // Mount Socket.io whenever this service owns realtime sync, or Terreno attaches to a
-    // host-owned listener (Vercel / early PORT bind), so `/socket.io/` shares Express.
-    const shouldRegisterRealtimeApp = isWebsocketService || Boolean(httpServer);
-    if (shouldRegisterRealtimeApp) {
-      featureFlagsRealtimeApp = new RealtimeApp({
+    // Kept so FeatureFlagsApp live updates emit on the same socket the syncdb client uses.
+    let realtimeApp: RealtimeApp | undefined;
+    if (isWebsocketService) {
+      realtimeApp = new RealtimeApp({
         changeStream: {
           ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
         },
@@ -316,11 +313,9 @@ export const start = async (
         // must load the persisted user id before Membership-based tenant streams resolve.
         userModel: User as unknown as TerrenoAuthUserModel,
       });
-      terraApp.register(featureFlagsRealtimeApp);
+      terraApp.register(realtimeApp);
     } else {
-      logger.info(
-        "RealtimeApp disabled because BACKEND_SERVICE is not websockets/all and no httpServer was provided"
-      );
+      logger.info("RealtimeApp disabled because BACKEND_SERVICE is not websockets/all");
     }
 
     if (process.env.COMMS_ENABLED !== "false") {
@@ -435,7 +430,7 @@ export const start = async (
       .register(
         new FeatureFlagsApp({
           liveUpdates: {
-            socketIoServer: () => featureFlagsRealtimeApp?.getIo() ?? null,
+            socketIoServer: () => realtimeApp?.getIo() ?? io,
           },
           segments: exampleFeatureFlagSegments,
         })

@@ -159,6 +159,18 @@ privately and are not returned. Start the local MCP with
 See [Debug a Terreno app with MCP](../how-to/debug-with-mcp.md) for examples and
 safety guidance.
 
+### Dev client hooks (`@terreno/syncdb`)
+
+| Tool | EVAL | Registration |
+| --- | --- | --- |
+| `read_logs` / `last_error` | no | sources include **network** and **native** |
+| `dispatch_client_action` | yes | `registerTerrenoDevClientDispatch` |
+| `read_local_storage` / `write_local_storage` | write | `registerTerrenoDevStorage` (reads redact auth-like keys) |
+| `list_dev_commands` / `invoke_dev_command` | invoke | `registerTerrenoDevCommand` |
+
+Network capture redacts `Authorization`, `Cookie`, `Set-Cookie`, and `Set-Auth-Token`.
+Failed requests include the URL from the matching `requestWillBeSent` `requestId`.
+
 ### terreno_search_docs
 
 BM25-style keyword search over markdown bundled with the MCP server: `docs/resources/*.md`, synced Diátaxis docs under `docs/versioned/`, and per-component excerpts derived from `ui-types-documentation.json`. **Prefer this tool before guessing** Terreno APIs (same posture as Laravel Boost `search-docs`).

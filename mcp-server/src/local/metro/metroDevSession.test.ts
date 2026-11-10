@@ -154,6 +154,53 @@ describe("Metro development session", () => {
     expect(await navigate({path: "/profile"})).toContain('"result": 2');
   });
 
+  it("redacts set-cookie and records duration without double scaling", async (): Promise<void> => {
+    expect((await ensureCdpConnected()).ok).toBe(true);
+    const socket = FakeWebSocket.instances[0];
+    socket?.emit("message", {
+      data: JSON.stringify({
+        method: "Network.responseReceived",
+        params: {
+          requestId: "2",
+          response: {
+            headers: {"Content-Type": "application/json", "Set-Cookie": "sid=secret"},
+            status: 200,
+            timing: {receiveHeadersEnd: 42},
+            url: "http://localhost:4000/api",
+          },
+        },
+      }),
+    });
+    const entry = JSON.parse(snapshotNetworkRing()[0]?.raw ?? "{}") as {
+      durationMs?: number;
+      responseHeaders?: Record<string, string>;
+    };
+    expect(entry.durationMs).toBe(42);
+    expect(entry.responseHeaders?.["Set-Cookie"]).toBe("[REDACTED]");
+  });
+
+  it("records failed requests with URL from requestWillBeSent", async (): Promise<void> => {
+    expect((await ensureCdpConnected()).ok).toBe(true);
+    const socket = FakeWebSocket.instances[0];
+    socket?.emit("message", {
+      data: JSON.stringify({
+        method: "Network.requestWillBeSent",
+        params: {
+          request: {method: "GET", url: "http://localhost:4000/missing"},
+          requestId: "fail-1",
+        },
+      }),
+    });
+    socket?.emit("message", {
+      data: JSON.stringify({
+        method: "Network.loadingFailed",
+        params: {errorText: "net::ERR_FAILED", requestId: "fail-1"},
+      }),
+    });
+    const entry = JSON.parse(snapshotNetworkRing().at(-1)?.raw ?? "{}") as {url?: string};
+    expect(entry.url).toBe("http://localhost:4000/missing");
+  });
+
   it("captures CDP network events with redacted authorization headers", async (): Promise<void> => {
     expect((await ensureCdpConnected()).ok).toBe(true);
     const socket = FakeWebSocket.instances[0];

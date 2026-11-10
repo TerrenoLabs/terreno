@@ -49,10 +49,18 @@ list pipelines on the slug above.
 
 ## Bun version is pinned
 
-`install_bun_and_deps` pins Bun with `node/install-bun` `version`. Bun 1.4.4 reports
-lower line coverage than 1.4.2 for the same tests, which fails the 95% package
-coverage gates. Bump the pin together with the local toolchain and re-run
-`bun run test:coverage` in each package first.
+`install_bun_and_deps` pins Bun with `node/install-bun` `version`, currently 1.4.4, the
+same version as the local toolchain and the GitHub workflows. Package tests run through
+`bun test --shard`, which needs 1.4.4 or newer. Bump the pin together with the local
+toolchain and re-run `bun run test:coverage` in each package first: coverage numbers move
+between Bun releases.
+
+## Test shards
+
+Each executor sets `TERRENO_TEST_SHARDS`, the number of concurrent `bun test --shard`
+processes a package's tests use. Medium executors set 1. `api-ci`, the longest test
+job, overrides it to 2 and runs on `large`. See
+[Test sharding](../explanation/test-sharding.md).
 
 ## Bun install is uncached
 

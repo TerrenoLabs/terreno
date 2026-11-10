@@ -52,7 +52,8 @@ describe("example-backend migrations", () => {
 
     const kept = await migrationsCollection().findOne({_id: "keep-me"});
     assert.exists(kept);
-  });
+    // A full seed hashes every user's password; on a loaded machine that passes Bun's 5s default.
+  }, 30_000);
 
   it("mounts admin migrations on the example server", async () => {
     const app = await start(true);

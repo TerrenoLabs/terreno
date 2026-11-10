@@ -247,6 +247,9 @@
         "e2e/serveTestApp.ts",
         "jspdf-native-stub.js",
         "src/isolated/**/*.isolated.{ts,tsx}",
+        // `test:ci` hands these directories to scripts/test-shards.ts, so the Bun plugin no
+        // longer reads them from a `bun test <dirs>` script.
+        "{src,store,components,server}/**/*.test.{ts,tsx}",
         // Test-only helper: writes a stub expo-server `dist/server` build for the SSR serve tests.
         "src/testing/ssrStubBuild.ts"
       ],
@@ -378,7 +381,10 @@
         "playwright.circleci.config.ts",
         "playwright.smoke.config.ts",
         "tests/bunSetup.ts",
-        "tests/testPreload.ts"
+        "tests/testPreload.ts",
+        // `test:ci` hands these globs to scripts/test-shards.ts, so the Bun plugin no longer
+        // reads them from a `bun test <globs>` script.
+        "**/*.test.{ts,tsx}"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",

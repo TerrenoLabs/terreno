@@ -162,42 +162,61 @@ parameters:
 executors:
   # Docker Performance credits/min: small 5, medium 10, medium+ 15, large 20.
   # Sidecar mongo shares the class. Keep large for in-job Expo export / compile+Playwright.
+  #
+  # Package tests run as concurrent `bun test --shard` processes (scripts/test-shards.ts).
+  # A container reports the host's cores, so each job states its shard count in
+  # TERRENO_TEST_SHARDS: 1 on medium (2 vCPU, which one backend shard already fills) and 2 on
+  # api-ci, the longest test job, which runs on large.
   node22:
     docker:
       - image: cimg/node:22.11
     resource_class: medium
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   # Knip (oxc-parser) needs Node 22.14; 22.11 throws ERR_REQUIRE_ESM.
   node22_knip:
     docker:
       - image: cimg/node:22.14
     resource_class: medium
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   node22_mongo:
     docker:
       - image: cimg/node:22.11
       - image: mongo:6.0
     resource_class: medium
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   node22_mongo_rs:
     docker:
       - image: cimg/node:22.11
       - image: mongo:6.0
         command: ["--replSet", "rs0", "--bind_ip_all"]
     resource_class: large
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   node22_browsers:
     docker:
       - image: cimg/node:22.11-browsers
     resource_class: medium
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   node22_browsers_mongo_rs:
     docker:
       - image: cimg/node:22.11-browsers
       - image: mongo:6.0
         command: ["--replSet", "rs0", "--bind_ip_all"]
     resource_class: medium+
+    environment:
+      TERRENO_TEST_SHARDS: "1"
   node22_browsers_mongo_rs_heavy:
     docker:
       - image: cimg/node:22.11-browsers
       - image: mongo:6.0
         command: ["--replSet", "rs0", "--bind_ip_all"]
     resource_class: large
+    environment:
+      TERRENO_TEST_SHARDS: "1"
 
 commands:
   install_terraform:
@@ -215,10 +234,10 @@ commands:
   install_bun_and_deps:
     description: Install pinned Bun and workspace deps with frozen lockfile (no package cache)
     steps:
-      # Pinned: Bun 1.4.4 reports lower line coverage than 1.4.2 for the same
-      # tests, which fails the 95% package gates. Bump with the local toolchain.
+      # Pinned to the local toolchain's Bun. `bun test --shard` (scripts/test-shards.ts)
+      # needs 1.4.4 or newer. Bump both together and re-run each package's test:coverage.
       - node/install-bun:
-          version: "1.4.2"
+          version: "1.4.4"
       - node/install-packages:
           pkg-manager: bun
           with-cache: false
@@ -691,6 +710,9 @@ jobs:
 
   api-ci:
     executor: node22_mongo
+    resource_class: large
+    environment:
+      TERRENO_TEST_SHARDS: "2"
     working_directory: ~/project
     steps:
       - checkout

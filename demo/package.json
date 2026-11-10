@@ -121,9 +121,9 @@
     "preweb": "test -f ui-types-documentation.json || bun run generate-types",
     "smoke": "bun e2e/smoke.spec.ts",
     "start": "RCT_METRO_PORT=8085 NODE_OPTIONS=--openssl-legacy-provider expo start --port 8085",
-    "test": "bun test",
-    "test:agent": "AGENT=1 bun test",
-    "test:ci": "bun test",
+    "test": "bun ../scripts/test-shards.ts",
+    "test:agent": "AGENT=1 bun ../scripts/test-shards.ts",
+    "test:ci": "bun ../scripts/test-shards.ts",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "web": "NODE_OPTIONS=--openssl-legacy-provider expo start --web --port 8085"
   },

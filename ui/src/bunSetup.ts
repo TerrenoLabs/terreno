@@ -1100,12 +1100,20 @@ mock.module("@react-native-community/slider", () => ({
   Slider: (props: MockComponentProps) => React.createElement("Slider", props),
 }));
 
-// Mock react-native-swiper-flatlist
+// Mock react-native-swiper-flatlist as a host View with testID "swiper-flatlist". The ref exposes
+// scrollToIndex, and tests read the shared spy from the module's `scrollToIndexMock` export.
+// Registered here, not in a test file, so every file sees one shape whatever ran before it.
+const swiperScrollToIndexMock = mock((_options?: {animated?: boolean; index: number}) => {});
+const MockSwiperFlatList = React.forwardRef(
+  ({children, style}: MockComponentProps, ref: React.Ref<{scrollToIndex: unknown}>) => {
+    React.useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndexMock}));
+    return React.createElement("View", {style, testID: "swiper-flatlist"}, children);
+  }
+);
 mock.module("react-native-swiper-flatlist", () => ({
-  default: ({children, ...props}: MockComponentProps) =>
-    React.createElement("SwiperFlatList", props, children),
-  SwiperFlatList: ({children, ...props}: MockComponentProps) =>
-    React.createElement("SwiperFlatList", props, children),
+  default: MockSwiperFlatList,
+  SwiperFlatList: MockSwiperFlatList,
+  scrollToIndexMock: swiperScrollToIndexMock,
 }));
 
 // Mock Unifier module

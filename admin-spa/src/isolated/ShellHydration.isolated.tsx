@@ -272,7 +272,8 @@ beforeAll(async () => {
   }));
 
   ({default: RootLayout} = await import("../../app/_layout"));
-});
+  // Loading the whole shell can pass Bun's 5s hook default while other test processes run.
+}, 30_000);
 
 const installClientWindow = (): void => {
   globalState.window = {

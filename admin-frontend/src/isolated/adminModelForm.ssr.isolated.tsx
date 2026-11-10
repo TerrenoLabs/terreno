@@ -1,5 +1,5 @@
 /**
- * Isolated: runs with `ADMIN_USE_REAL_API=1` (see scripts/run-tests.sh) so the real
+ * Isolated: runs with `ADMIN_USE_REAL_API=1` (see ../scripts/ci/testShards/lib.ts) so the real
  * `useAdminModelApi` and `useAdminRpcQuery` run under `AdminModelForm`. Proves an edit form under
  * an `AdminRpcSeed` shows the record's values on the very first render (no effect-driven second
  * render) and asks for no read, refetches the read once after a save, and, unseeded, keeps today's

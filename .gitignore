@@ -23,6 +23,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 coverage/
 coverage-main/
 coverage-iso-*/
+coverage-shard-*/
+coverage-main-shard-*/
 *.lcov
 .nyc_output/
 

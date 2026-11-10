@@ -62,6 +62,11 @@ Packages that finish in a few seconds gain nothing and lose nothing.
 `src/isolated/*.isolated.ts(x)` file runs in a process of its own, as many at a time as there
 are shards. See [Test isolation](test-isolation.md).
 
+An isolated file that needs an environment variable says so in its leading comment:
+`@test-env KEY=VALUE`. The runner and the coverage script set it for that file's process only.
+`admin-frontend` uses `@test-env ADMIN_USE_REAL_API=1` for the suites that need the real API
+module and not the preload double.
+
 ## Coverage
 
 `bun run test:coverage` (`scripts/check-coverage.ts`) uses the same shards. Each shard writes
@@ -81,7 +86,7 @@ and another shard finds nested functions that nothing calls.
 A sharded run that misses 95% is run again as one unsplit process, and the gate uses that
 exact result. A package whose function coverage is near 95% therefore pays for a second pass;
 set `TERRENO_TEST_SHARDS=1` to skip the first. CircleCI gates every package unsplit except
-`api` and `ai`, which run 2 shards.
+`api`, which runs 2 shards.
 
 While shards run, their output is held and printed one shard at a time. The runner prints a
 `[shards] still running` line once a minute so CI does not see a silent job.

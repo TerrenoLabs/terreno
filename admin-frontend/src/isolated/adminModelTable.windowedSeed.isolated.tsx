@@ -1,5 +1,5 @@
 /**
- * Isolated: runs with `ADMIN_USE_REAL_API=1` (see ../scripts/ci/testShards/lib.ts). A windowed table under a
+ * Isolated: `@test-env ADMIN_USE_REAL_API=1`. A windowed table under a
  * server seed renders the seeded REST rows before syncdb exists, keeps them (no empty frame) when
  * `AdminProvider` receives syncDb after `start()`, and catches up to changes made on the server
  * between the server render and that switch.

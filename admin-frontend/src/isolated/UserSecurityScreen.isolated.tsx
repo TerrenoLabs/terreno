@@ -15,7 +15,7 @@ import {
 
 const pushMock = mock((_href: string) => {});
 
-// Own process (see ../scripts/ci/testShards/lib.ts), so this replacement cannot leak into shared suites.
+// Own process (see docs/explanation/test-isolation.md), so this replacement cannot leak into shared suites.
 mock.module("expo-router", () => ({
   router: {back: mock(() => {}), push: pushMock},
 }));

@@ -270,9 +270,16 @@ describe("isolated files", () => {
       return {exitCode: args.at(-1)?.includes("broken") ? 1 : 0, output: "ran\n"};
     };
     const written: string[] = [];
+    const dir = mkdtempSync(join(tmpdir(), "terreno-test-isolated-env-"));
+    mkdirSync(join(dir, "src", "isolated"), {recursive: true});
+    writeFileSync(
+      join(dir, "src", "isolated", "hooks.isolated.tsx"),
+      "/**\n * Isolated: `@test-env ADMIN_USE_REAL_API=1` so the real hook runs.\n */\n"
+    );
+    writeFileSync(join(dir, "src", "isolated", "broken.isolated.ts"), "");
     const {results} = await runIsolatedFiles({
       bunArgs: ["--max-concurrency=1"],
-      cwd: "/pkg",
+      cwd: dir,
       env: {},
       files: ["././src/isolated/hooks.isolated.tsx", "././src/isolated/broken.isolated.ts"],
       limit: 1,
@@ -281,6 +288,7 @@ describe("isolated files", () => {
         written.push(text);
       },
     });
+    rmSync(dir, {force: true, recursive: true});
     expect(calls).toEqual([
       {args: ["test", "--max-concurrency=1", "././src/isolated/hooks.isolated.tsx"], realApi: "1"},
       {

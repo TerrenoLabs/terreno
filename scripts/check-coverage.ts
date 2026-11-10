@@ -799,7 +799,7 @@ const measureCoverage = async ({
       const run = await runBunTest(
         [testFile, "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${dir}`],
         {
-          env: isolatedFileEnv({file: testFile}).env,
+          env: isolatedFileEnv({cwd, file: testFile}).env,
           isBuffered: shardTotal > 1,
         }
       );

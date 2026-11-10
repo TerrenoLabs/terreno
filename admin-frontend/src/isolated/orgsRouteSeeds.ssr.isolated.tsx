@@ -1,5 +1,5 @@
 /**
- * Isolated: runs with `ADMIN_USE_REAL_API=1` (see ../scripts/ci/testShards/lib.ts) so the real
+ * Isolated: `@test-env ADMIN_USE_REAL_API=1` so the real
  * `useAdminRpcQuery` hooks run under each screen. Binding checks for the admin SPA's orgs
  * loaders (T11): each screen is rendered inside `AdminProvider` with a recording fetch.
  * - Unseeded, the screen requests exactly the requests below (this pins the literals to the hooks).

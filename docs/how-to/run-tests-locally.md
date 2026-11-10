@@ -52,8 +52,10 @@ bun run test          # every workspace `test:ci`
 bun run test:agent    # same suites; passing cases suppressed
 ```
 
-Each package's `test`, `test:ci`, `test:agent`, and `test:coverage` scripts split the suite
-into concurrent `bun test --shard` processes, half the cores by default. Set
+Each package's `test`, `test:ci`, and `test:agent` scripts split the suite into concurrent
+`bun test --shard` processes, half the cores by default. So does `test:coverage` in the
+packages that gate through `scripts/check-coverage.ts`; `example-backend` runs plain
+`bun test --coverage`. Set
 `TERRENO_TEST_SHARDS=1` for one unsplit process. See
 [Test sharding](../explanation/test-sharding.md).
 

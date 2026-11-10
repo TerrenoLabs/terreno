@@ -1,6 +1,6 @@
 /**
  * Tests for `useAdminModelApi`, the admin model CRUD hook over the host-bound
- * fetch client. Runs with `ADMIN_USE_REAL_API=1` so the preload double in
+ * fetch client. `@test-env ADMIN_USE_REAL_API=1`, so the preload double in
  * `src/testing/useAdminModelApiDouble.ts` does not replace the real module.
  */
 import {afterEach, describe, expect, it} from "bun:test";

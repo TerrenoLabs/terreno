@@ -9,7 +9,7 @@
  * Docs: docs/explanation/test-sharding.md
  */
 import {spawn} from "node:child_process";
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync, readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
 /** Most shards picked automatically; more than this mostly adds Mongo and module-load cost. */
@@ -224,21 +224,34 @@ export const findIsolatedFiles = (cwd: string): string[] => {
   return files.sort();
 };
 
-/** admin-frontend isolated suites that run against the real API module, not the preload double. */
-const REAL_API_ISOLATED_FILES = new Set([
-  "././src/isolated/hooks.isolated.tsx",
-  "././src/isolated/adminModelTable.ssr.isolated.tsx",
-  "././src/isolated/adminModelForm.ssr.isolated.tsx",
-  "././src/isolated/adminModelTable.windowedSeed.isolated.tsx",
-  "././src/isolated/adminRouteSeeds.ssr.isolated.tsx",
-  "././src/isolated/jobsCommsRouteSeeds.ssr.isolated.tsx",
-  "././src/isolated/orgsRouteSeeds.ssr.isolated.tsx",
-]);
+/** `@test-env KEY=VALUE` in an isolated file's leading comment sets a variable for its process. */
+const TEST_ENV_PRAGMA = /@test-env\s+([A-Z_][A-Z0-9_]*)=([\w.:/-]+)/g;
 
-/** Extra environment one isolated file needs. */
-export const isolatedFileEnv = ({file}: {file: string}): {env: Record<string, string>} => ({
-  env: REAL_API_ISOLATED_FILES.has(file) ? {ADMIN_USE_REAL_API: "1"} : {},
-});
+/** Bytes of an isolated file searched for `@test-env` pragmas: its leading comment. */
+const TEST_ENV_PRAGMA_WINDOW = 2048;
+
+/**
+ * Extra environment one isolated file asks for with `@test-env KEY=VALUE` pragmas in its
+ * leading comment. The file states its own needs, so the runner knows no package's files.
+ */
+export const isolatedFileEnv = ({
+  cwd,
+  file,
+}: {
+  cwd: string;
+  file: string;
+}): {env: Record<string, string>} => {
+  const path = join(cwd, file);
+  if (!existsSync(path)) {
+    return {env: {}};
+  }
+  const head = readFileSync(path, "utf8").slice(0, TEST_ENV_PRAGMA_WINDOW);
+  const env: Record<string, string> = {};
+  for (const [, key, value] of head.matchAll(TEST_ENV_PRAGMA)) {
+    env[key] = value;
+  }
+  return {env};
+};
 
 /** Runs `tasks` with at most `limit` in flight, keeping results in input order. */
 export const runPool = async <T>(
@@ -286,7 +299,7 @@ export const runIsolatedFiles = async ({
       const {exitCode, output} = await run({
         args: ["test", ...bunArgs, file],
         cwd,
-        env: {...env, ...isolatedFileEnv({file}).env},
+        env: {...env, ...isolatedFileEnv({cwd, file}).env},
       });
       write(`\n=== ${file} (exit ${exitCode}) ===\n${output}`);
       return {exitCode, file};

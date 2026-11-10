@@ -1,6 +1,7 @@
 import Ajv, {type ErrorObject} from "ajv";
 
-const ajv = new Ajv({allErrors: true, strict: false});
+// Stop at the first error: allErrors walks every node of untrusted input (CodeQL js/resource-exhaustion).
+const ajv = new Ajv({strict: false});
 
 export interface SchemaValidationError {
   message: string;

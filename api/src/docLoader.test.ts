@@ -100,4 +100,17 @@ describe("loadDocOr404", () => {
       expect(apiError.meta).toEqual({});
     }
   });
+
+  it("rejects a non-string id before it can reach the query as an operator", async () => {
+    const findById = mock(() => ({exec: mock(async () => ({_id: "leaked"}))}));
+    const model = {
+      collection: {findOne: mock(async () => null)},
+      findById,
+      modelName: "MockModel",
+    } as unknown as Model<unknown>;
+
+    const injected = {$ne: null} as unknown as string;
+    await expect(loadDocOr404(model, injected)).rejects.toMatchObject({status: 404});
+    expect(findById).not.toHaveBeenCalled();
+  });
 });

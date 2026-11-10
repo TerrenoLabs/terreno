@@ -495,6 +495,16 @@ describe("tools", () => {
       expect(result.content[0].text).toContain("src/types/models/");
     });
 
+    test("scans many unclosed named imports in linear time", async () => {
+      const schema = `${"import {{|".repeat(20_000)}\nimport {UserDocument} from "../types";`;
+
+      const start = performance.now();
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(performance.now() - start).toBeLessThan(500);
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+    });
+
     test("should detect Date usage", async () => {
       const schema = `
         const timestamp = new Date();

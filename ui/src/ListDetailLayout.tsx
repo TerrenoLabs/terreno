@@ -14,6 +14,7 @@ import {SafeAreaView} from "react-native-safe-area-context";
 import type {ListDetailLayoutProps, ListDetailState} from "./Common";
 import {IconButton} from "./IconButton";
 import {useTheme} from "./Theme";
+import {trimTrailingSlashes} from "./trimTrailingSlashes";
 
 const DEFAULT_SPLIT_AT_WIDTH = 768;
 const DEFAULT_LIST_WIDTH = 360;
@@ -93,7 +94,7 @@ const useSelectedId = ({
     return undefined;
   }
   // The detail must sit directly below the index. Ids may contain "/", so compare whole paths.
-  const indexPath = indexHref.replace(/\/+$/, "");
+  const indexPath = trimTrailingSlashes(indexHref);
   const isDirectChild =
     pathname === `${indexPath}/${value}` ||
     pathname === `${indexPath}/${encodeURIComponent(value)}`;

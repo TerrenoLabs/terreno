@@ -17,6 +17,7 @@ import {
 } from "better-auth/client/plugins";
 import {createAuthClient, type ReactAuthClient} from "better-auth/react";
 import * as SecureStore from "expo-secure-store";
+import {trimTrailingSlashes} from "../api/apiFetch";
 import {
   bearerTokenKey,
   DEFAULT_STORAGE_PREFIX,
@@ -378,9 +379,9 @@ const createWebBearerFetchOptions = ({
 
 // Better Auth appends `/api/auth` to a baseURL that has no path of its own.
 const resolveAuthBaseURL = (baseURL: string): string => {
-  const trimmed = baseURL.replace(/\/+$/, "");
+  const trimmed = trimTrailingSlashes(baseURL);
   try {
-    if (new URL(baseURL).pathname.replace(/\/+$/, "") !== "") {
+    if (trimTrailingSlashes(new URL(baseURL).pathname) !== "") {
       return trimmed;
     }
   } catch {

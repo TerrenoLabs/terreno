@@ -34,6 +34,46 @@ describe("harness approval helpers", () => {
     expect(taskLabel(undefined)).toBe("Unknown task");
   });
 
+  it("labels keys the same way the old regex did", () => {
+    const oldTaskLabel = (key: string): string => /^(.+@\d+):.+$/.exec(key)?.[1] ?? key;
+    const keys = [
+      "a@1:b@2:c",
+      "a@1:b@2:",
+      "@1:x",
+      "a@:x",
+      "a@1:",
+      "a@12x:y",
+      "a@1:b:c",
+      "a@1\n:b",
+      "x:a@1:b",
+      "a@@1:b",
+    ];
+    for (const key of keys) {
+      expect(taskLabel(key)).toBe(oldTaskLabel(key));
+    }
+    const alphabet = ["a", "@", "1", ":"];
+    let seed = 11;
+    const next = (): number => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed;
+    };
+    for (let run = 0; run < 20_000; run += 1) {
+      const length = 1 + (next() % 12);
+      let key = "";
+      for (let index = 0; index < length; index += 1) {
+        key += alphabet[next() % alphabet.length];
+      }
+      expect(taskLabel(key)).toBe(oldTaskLabel(key));
+    }
+  });
+
+  it("stays fast on a long run of repeated name@version: segments", () => {
+    const key = "a@0:".repeat(50_000);
+    const start = performance.now();
+    expect(taskLabel(key)).toBe(key.slice(0, -5));
+    expect(performance.now() - start).toBeLessThan(100);
+  });
+
   it("formats times with Luxon and tolerates missing or invalid values", () => {
     const iso = DateTime.now().minus({hours: 2}).toISO() ?? "";
     expect(relativeTime(iso)).toBe("2 hours ago");

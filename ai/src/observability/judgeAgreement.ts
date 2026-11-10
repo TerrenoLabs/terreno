@@ -48,7 +48,10 @@ export interface JudgeAgreement {
 const NUMERIC_TOLERANCE = 0.1;
 
 const numericSpan = (range?: string): number => {
-  const matches = range?.match(/(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)/);
+  const matches = range?.match(
+    // Bounded quantifiers keep the unanchored scan linear on long digit runs.
+    /(-?\d{1,15}(?:\.\d{1,15})?)\s{0,10}(?:-|\.\.)\s{0,10}(-?\d{1,15}(?:\.\d{1,15})?)/
+  );
   if (!matches) {
     return 1;
   }

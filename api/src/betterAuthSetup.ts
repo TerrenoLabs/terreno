@@ -688,12 +688,32 @@ const originOfReferer = (referer: string | undefined): string | undefined => {
 // True when the request's own `Authorization: Bearer` token is the session Better Auth resolved,
 // rather than a cookie sent beside some other header. The bearer plugin accepts the raw token or
 // the signed `token.signature` form.
+const BEARER_SCHEME = "bearer";
+
+/**
+ * The credential from an `Authorization: Bearer <token>` header, or undefined. Parsed with string
+ * operations rather than a regex so a long run of whitespace cannot cause polynomial backtracking.
+ */
+export const extractBearerToken = (header: string | undefined): string | undefined => {
+  if (!header || header.length <= BEARER_SCHEME.length) {
+    return undefined;
+  }
+  if (header.slice(0, BEARER_SCHEME.length).toLowerCase() !== BEARER_SCHEME) {
+    return undefined;
+  }
+  if (header.charAt(BEARER_SCHEME.length).trim() !== "") {
+    return undefined;
+  }
+  const token = header.slice(BEARER_SCHEME.length + 1).trim();
+  return token || undefined;
+};
+
 const isBearerSession = (req: Request, sessionToken: string): boolean => {
-  const match = /^Bearer\s+(.+)$/i.exec(headerValue(req.headers.authorization) ?? "");
-  if (!match || !sessionToken) {
+  const token = extractBearerToken(headerValue(req.headers.authorization));
+  if (!token || !sessionToken) {
     return false;
   }
-  let bearer = match[1].trim();
+  let bearer = token;
   try {
     bearer = decodeURIComponent(bearer);
   } catch {

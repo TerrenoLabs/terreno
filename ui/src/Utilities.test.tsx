@@ -65,6 +65,20 @@ describe("Utilities", () => {
       expect(isTestUser(undefined)).toBeFalsy();
     });
 
+    it("returns true for a subdomain of a test domain", () => {
+      expect(isTestUser({email: "qa@mail.example.com"} as unknown as BaseProfile)).toBe(true);
+      expect(isTestUser({email: "QA@NANG.IO"} as unknown as BaseProfile)).toBe(true);
+    });
+
+    it("returns false when a test domain only appears as a substring", () => {
+      expect(isTestUser({email: "user@evil-example.com"} as unknown as BaseProfile)).toBe(false);
+      expect(isTestUser({email: "user@example.com.evil.net"} as unknown as BaseProfile)).toBe(
+        false
+      );
+      expect(isTestUser({email: "example.com@company.com"} as unknown as BaseProfile)).toBe(false);
+      expect(isTestUser({email: "user@notnang.io"} as unknown as BaseProfile)).toBe(false);
+    });
+
     it("returns falsy for profile without email", () => {
       expect(isTestUser({} as unknown as BaseProfile)).toBeFalsy();
     });

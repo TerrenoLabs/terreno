@@ -343,6 +343,10 @@ describe("CommsApp", () => {
       [["ExponentPushToken[ios]", false]]
     );
     assert.equal(ignoredFilter.body.total, 2);
+
+    // Operator-shaped query values are rejected instead of reaching Mongo.
+    await owner.get("/comms/pushTokens?platform[$ne]=ios").expect(400);
+    await owner.get("/comms/pushTokens?platform=ios&platform=android").expect(400);
   });
 
   it("surfaces non-conflict storage failures while claiming a push token", async (): Promise<void> => {

@@ -140,6 +140,9 @@ describe("LocalReviewBatchStore", () => {
     await expect(
       store.create({evaluatorId: questionSetId, promptName: "summarize"})
     ).rejects.toThrow(/No recent "summarize" traces/);
+    await expect(
+      store.create({evaluatorId: questionSetId, promptName: {$ne: null} as unknown as string})
+    ).rejects.toMatchObject({status: 400, title: "promptName must be a string"});
 
     const listed = await store.list();
     expect(listed.map((row) => [row.name, row.counts.total, row.judgeCount])).toEqual([

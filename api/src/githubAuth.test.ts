@@ -1,4 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, setSystemTime} from "bun:test";
+import {createHmac} from "node:crypto";
 import type express from "express";
 import mongoose, {type Model, model, Schema} from "mongoose";
 import passport from "passport";
@@ -1135,6 +1136,44 @@ describe("GitHub OAuth state binding", () => {
       .get(`/auth/github/callback?code=gh-late-1&state=${state}`)
       .expect(302);
     expect(res.headers.location).toContain("/auth/github/failure");
+  });
+
+  describe("signed state link targets", () => {
+    const signedStateCookie = (state: string | null, linkUserId: unknown): string => {
+      const payload = Buffer.from(
+        JSON.stringify({expiresAt: Date.now() + 60_000, linkUserId, nonce: state})
+      ).toString("base64url");
+      const signature = createHmac("sha256", process.env.SESSION_SECRET ?? "")
+        .update(payload)
+        .digest("base64url");
+      return `terreno_github_oauth_state=${payload}.${signature}`;
+    };
+
+    it("a correctly signed string link target links that user", async () => {
+      const user = await GitHubTestUserModel.create({email: "signed-link@example.test"});
+      const start = await supertest(app).get("/auth/github").expect(302);
+      const state = stateFromLocation(start.headers.location);
+
+      const res = await supertest(app)
+        .get(`/auth/github/callback?code=gh-signed-1&state=${state}`)
+        .set("cookie", signedStateCookie(state, String(user._id)))
+        .expect(200);
+      expect(String(res.body.data.userId)).toBe(String(user._id));
+    });
+
+    it("a signed state whose link target is not a string is rejected", async () => {
+      const victim = await GitHubTestUserModel.create({email: "victim6@example.test"});
+      const start = await supertest(app).get("/auth/github").expect(302);
+      const state = stateFromLocation(start.headers.location);
+
+      const res = await supertest(app)
+        .get(`/auth/github/callback?code=gh-operator-1&state=${state}`)
+        .set("cookie", signedStateCookie(state, {$ne: null}))
+        .expect(302);
+      expect(res.headers.location).toContain("/auth/github/failure");
+      const victimRow = await GitHubTestUserModel.findById(victim._id);
+      expect(victimRow?.githubId).toBeUndefined();
+    });
   });
 
   it("a tampered state cookie is rejected", async () => {

@@ -209,8 +209,13 @@ export const addPushTokenRoutes = (
       if (req.query.active === "true" || req.query.active === "false") {
         match.active = req.query.active === "true";
       }
-      if (req.query.platform) {
-        match.platform = req.query.platform;
+      const platform = req.query.platform;
+      if (platform !== undefined && platform !== "") {
+        // A query-string object such as `platform[$ne]=ios` would become a Mongo operator.
+        if (typeof platform !== "string") {
+          throw new APIError({status: 400, title: "platform must be a string"});
+        }
+        match.platform = {$eq: platform};
       }
       const [tokens, total] = await Promise.all([
         PushToken.find(match).sort("-lastSeenAt").skip(skip).limit(limit),

@@ -37,6 +37,10 @@ export const loadDocOr404 = async <T>(
   id: string,
   populatePaths?: PopulatePath[]
 ): Promise<T> => {
+  // A non-string id (e.g. `{$ne: null}` from a JSON body) would become a query operator.
+  if (typeof id !== "string") {
+    throw documentNotFound(model.modelName, String(id));
+  }
   const builtQuery = model.findById(id);
   const populatedQuery = addPopulateToQuery(
     builtQuery as unknown as Parameters<typeof addPopulateToQuery>[0],

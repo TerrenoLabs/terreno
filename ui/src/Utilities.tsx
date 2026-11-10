@@ -19,10 +19,17 @@ export const mergeInlineStyles = (
   };
 };
 
-export const isTestUser = (profile?: BaseProfile) => {
-  return (
-    profile?.email &&
-    (profile.email.indexOf("nang.io") > -1 || profile.email.indexOf("example.com") > -1)
+const TEST_EMAIL_DOMAINS = ["nang.io", "example.com"];
+
+/** True when the profile's email domain is a test domain or one of its subdomains. */
+export const isTestUser = (profile?: BaseProfile): boolean => {
+  const email = profile?.email;
+  if (!email) {
+    return false;
+  }
+  const domain = email.slice(email.lastIndexOf("@") + 1).toLowerCase();
+  return TEST_EMAIL_DOMAINS.some(
+    (testDomain) => domain === testDomain || domain.endsWith(`.${testDomain}`)
   );
 };
 

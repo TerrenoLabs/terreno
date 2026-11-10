@@ -837,6 +837,20 @@ describe("executeDelete", () => {
     assert.isTrue(doc.deleted);
   });
 
+  it("rejects an operator object as an id without deleting anything", async () => {
+    await createDoc();
+    const error = await caught(
+      executeDelete<ExecStuff>({
+        id: {$ne: null} as unknown as string,
+        model: ExecStuffModel,
+        options: baseOptions(),
+        user: owner,
+      })
+    );
+    assert.equal(error.status, 404);
+    expect(await ExecStuffModel.countDocuments({deleted: true})).toBe(0);
+  });
+
   it("checks object permissions before returning an idempotent tombstone", async () => {
     const id = "foreign-offline-id";
     await ExecStringIdStuffModel.create({

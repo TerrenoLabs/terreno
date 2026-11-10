@@ -406,4 +406,14 @@ describe("LocalTraceStore", () => {
     expect(traceSink.traces).toEqual([trace]);
     expect(scoreSink.scores).toEqual([score]);
   });
+
+  it("rejects operator objects in string filters", async () => {
+    const operator = {$ne: "x"} as unknown as string;
+    await expect(store.list({sessionId: operator})).rejects.toMatchObject({status: 400});
+    await expect(store.list({scope: operator})).rejects.toMatchObject({status: 400});
+    await expect(store.list({status: {$ne: "ok"} as unknown as "ok"})).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(store.list({prompt: [operator]})).rejects.toMatchObject({status: 400});
+  });
 });

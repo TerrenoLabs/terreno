@@ -101,6 +101,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "release",
       "generate-release-announcements",
       "update-dependencies",
+      "fix-code-scanning-alerts",
       "upgrading-terreno",
       "deploy-gcp",
       "bootstrap-mcp-server",

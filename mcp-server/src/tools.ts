@@ -893,8 +893,10 @@ export const validateUiBlocks = (args: {document?: string}): string => {
   return `${validated.warnings.map(formatBlockIssue).join("\n")}\n`;
 };
 
+// `[^{}]` rather than `[^}]` stops a failed match at the next `{`, so sources with many
+// unclosed `import {` runs no longer rescan to the end of the file from each one.
 const NAMED_IMPORT_PATTERN =
-  /import\s+(?:type\s+)?(?:\w+\s*,\s*)?\{([^}]*)\}\s*from\s*["']([^"']+)["']/g;
+  /import\s+(?:type\s+)?(?:\w+\s*,\s*)?\{([^{}]*)\}\s*from\s*["']([^"']+)["']/g;
 const MODEL_DOCUMENT_TYPE_PATTERN = /\b\w+Document\b/;
 
 // True when the source declares a `<Name>Document` type or imports one from the app's type files.

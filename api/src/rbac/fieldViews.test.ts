@@ -1,4 +1,4 @@
-import {describe, expect, it} from "bun:test";
+import {afterEach, describe, expect, it} from "bun:test";
 import {assert} from "chai";
 
 import {applyReadMask, getDisallowedWriteKeys} from "./fieldViews";
@@ -124,5 +124,34 @@ describe("fieldViews", () => {
 
   it("getDisallowedWriteKeys returns nothing for an empty body", () => {
     assert.deepEqual(getDisallowedWriteKeys({}, {omit: [], read: "*", write: ["name"]}), []);
+  });
+
+  describe("prototype pollution", () => {
+    afterEach(() => {
+      delete (Object.prototype as Record<string, unknown>).polluted;
+      delete (Object.prototype as Record<string, unknown>).__terrenoProbe;
+    });
+
+    it("applyReadMask does not copy a __proto__ read path onto Object.prototype", () => {
+      const doc = JSON.parse('{"__proto__": {"polluted": "yes"}, "name": "Todo"}');
+      const masked = applyReadMask(doc, {
+        omit: [],
+        read: ["name", "__proto__.polluted", "constructor.prototype.polluted"],
+        write: [],
+      });
+      expect(masked).toEqual({name: "Todo"});
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    });
+
+    it("applyReadMask does not delete from Object.prototype through an omit path", () => {
+      Object.defineProperty(Object.prototype, "__terrenoProbe", {
+        configurable: true,
+        enumerable: false,
+        value: "kept",
+        writable: true,
+      });
+      applyReadMask({name: "Todo"}, {omit: ["__proto__.__terrenoProbe"], read: "*", write: []});
+      expect(({} as Record<string, unknown>).__terrenoProbe).toBe("kept");
+    });
   });
 });

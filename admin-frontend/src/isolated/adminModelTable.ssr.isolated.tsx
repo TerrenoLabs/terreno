@@ -1,5 +1,5 @@
 /**
- * Isolated: runs with `ADMIN_USE_REAL_API=1` (see scripts/run-tests.sh) so the real
+ * Isolated: runs with `ADMIN_USE_REAL_API=1` (see ../scripts/ci/testShards/lib.ts) so the real
  * `useAdminModelApi` and `useAdminRpcQuery` run under `AdminModelTable`. Proves a table under an
  * `AdminRpcSeed` renders its rows on the first render and asks for no list, and pins the URL the
  * table requests for default params, which the admin SPA's server loader must build identically

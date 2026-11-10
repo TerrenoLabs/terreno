@@ -245,5 +245,6 @@ describe("seedDefaultDataOnBoot", () => {
 
     assert.exists(result);
     assert.exists(await User.findByEmail("admin@example.com"));
-  });
+    // A full seed hashes every user's password; on a loaded machine that passes Bun's 5s default.
+  }, 30_000);
 });

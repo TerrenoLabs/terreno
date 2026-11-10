@@ -52,6 +52,11 @@ bun run test          # every workspace `test:ci`
 bun run test:agent    # same suites; passing cases suppressed
 ```
 
+Each package's `test`, `test:ci`, `test:agent`, and `test:coverage` scripts split the suite
+into concurrent `bun test --shard` processes, half the cores by default. Set
+`TERRENO_TEST_SHARDS=1` for one unsplit process. See
+[Test sharding](../explanation/test-sharding.md).
+
 Closest package during a red/green cycle:
 
 ```bash

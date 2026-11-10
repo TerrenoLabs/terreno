@@ -994,6 +994,12 @@ describe("Extensions, hooks, wraps, and memos", () => {
     it("rejects blank keys, non-JSON values, and writes after the phase committed", async () => {
       const errors: string[] = [];
       const lateRead: unknown[] = [];
+      // The task reads as completed from the commit on, before the phase function returns.
+      // Wait for the function itself, or the post-commit calls race the assertions below.
+      let markPhaseReturned = (): void => {};
+      const phaseReturned = new Promise<void>((resolve) => {
+        markPhaseReturned = resolve;
+      });
       const capture = async (work: () => Promise<unknown>): Promise<void> => {
         try {
           await work();
@@ -1013,6 +1019,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
               await rt.commit({terminal: {status: "completed"}});
               await capture(() => rt.memo("late", 1));
               lateRead.push(await rt.memo("late"));
+              markPhaseReturned();
             },
           },
         },
@@ -1021,6 +1028,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
       const harness = await openHarness({registry: [task]});
       const created = await harness.createTask(task, {});
       await harness.waitForTask(created._id, {timeout: {seconds: 10}});
+      await phaseReturned;
       expect(errors).toEqual([
         "memo requires a non-empty key",
         'memo "big": value is not JSON-serializable (JSON.stringify cannot serialize BigInt.)',

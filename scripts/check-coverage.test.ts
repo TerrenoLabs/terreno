@@ -7,6 +7,7 @@ import {
   evaluateCoverage,
   formatLcov,
   isBunCoverageThresholdExit,
+  isEmptyShardOutput,
   listCoveredSourceFiles,
   mergeIsolatedLcov,
   mergeLcov,
@@ -17,6 +18,7 @@ import {
   parseLcov,
   stripAnsi,
   summarizeLcov,
+  summarizeLcovByFile,
   summaryFromCompleteLcov,
 } from "./check-coverage";
 
@@ -537,5 +539,55 @@ describe("formatLcov", () => {
     expect(rendered).toContain("FNF:10");
     expect(rendered).toContain("FNH:7");
     expect(rendered).toContain("DA:1,1");
+  });
+});
+
+describe("sharded coverage", () => {
+  const shard = (lines: string[]): ReturnType<typeof parseLcov> => parseLcov(lines.join("\n"));
+
+  it("merges shards as a line union with the largest found and hit function counts", () => {
+    // Bun counts a nested function only after its parent ran, so shards disagree on FNF.
+    const merged = mergeLcov(
+      shard(["SF:src/a.ts", "FNF:4", "FNH:3", "DA:1,1", "DA:2,0", "DA:3,0", "end_of_record"]),
+      shard(["SF:src/a.ts", "FNF:10", "FNH:2", "DA:1,0", "DA:2,3", "DA:3,0", "end_of_record"])
+    );
+    const a = merged.get("src/a.ts");
+    expect([...(a?.lines.entries() ?? [])]).toEqual([
+      [1, 1],
+      [2, 3],
+      [3, 0],
+    ]);
+    // Not the 3/4 of the shard that loaded least of the file.
+    expect([a?.functionsHit, a?.functionsFound]).toEqual([3, 10]);
+  });
+
+  it("averages per-file percentages like Bun's All files row", () => {
+    const coverage = shard([
+      "SF:src/big.ts",
+      "FNF:4",
+      "FNH:2",
+      "DA:1,1",
+      "DA:2,1",
+      "DA:3,1",
+      "DA:4,0",
+      "end_of_record",
+      "SF:src/small.ts",
+      "FNF:0",
+      "FNH:0",
+      "DA:1,1",
+      "end_of_record",
+    ]);
+    // big: 50% functions, 75% lines. small: no functions counts as 100%, 100% lines.
+    expect(summarizeLcovByFile(coverage)).toEqual({functions: 75, lines: 87.5});
+    expect(summarizeLcov(coverage).lines).toBe(80);
+    expect(summarizeLcovByFile(new Map())).toEqual({functions: 100, lines: 100});
+  });
+
+  it("recognizes a shard that was assigned no files", () => {
+    expect(
+      isEmptyShardOutput("bun test v1.4.4\n--shard=7/7: running 0/6 test files\n\n 0 pass\n")
+    ).toBe(true);
+    expect(isEmptyShardOutput("--shard=1/2: running 3/6 test files\n 3 pass\n")).toBe(false);
+    expect(isEmptyShardOutput(" 12 pass\n 0 fail\n")).toBe(false);
   });
 });

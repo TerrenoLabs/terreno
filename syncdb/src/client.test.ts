@@ -2446,7 +2446,8 @@ describe("createSyncDb", () => {
 
       harness.auth.setUserId("u2");
       harness.auth.emitAuthChange();
-      await flush();
+      // The wipe is asynchronous; a fixed 5ms wait loses to it on a loaded machine.
+      await waitUntil(() => client.store.getLastUserId() === "u2");
       expect(client.store.listEntities({collection: "todos"})).toEqual([]);
       expect(client.store.getLastUserId()).toBe("u2");
       await client.stop();
@@ -3273,11 +3274,21 @@ describe("createSyncDb", () => {
 
       harness.auth.setUserId("u2");
       harness.auth.emitAuthChange();
-      await flush();
+      // The wipe is asynchronous; a fixed 5ms wait loses to it on a loaded machine. Poll the
+      // cache until the key is gone, then assert on the final read.
+      let cached: CryptoKey | undefined;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await flush();
+        cached = await idbGet<CryptoKey>({
+          databaseName: DEFAULT_KEY_CACHE_DB_NAME,
+          key: "local:local",
+        });
+        if (cached === undefined) {
+          break;
+        }
+      }
 
-      expect(
-        await idbGet<CryptoKey>({databaseName: DEFAULT_KEY_CACHE_DB_NAME, key: "local:local"})
-      ).toBeUndefined();
+      expect(cached).toBeUndefined();
       await client.stop();
     });
   });

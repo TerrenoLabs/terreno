@@ -24,12 +24,31 @@
  * missing table is accepted when `coverage/lcov.info` lists every non-test
  * source file under `src/`.
  *
+ * The main pass runs as concurrent `bun test --shard` processes (count from
+ * `TERRENO_TEST_SHARDS`, default half the cores, at most 4). Each shard writes
+ * its own LCOV report and the union is gated, the same way isolated passes are
+ * merged. Isolated files run in a pool of the same size. Line coverage merges
+ * exactly. Bun's LCOV has no per-function records, so a file's merged function
+ * figure (largest hit count over largest found count) is an estimate, usually
+ * low. A sharded run that misses the threshold is re-run unsplit before it
+ * fails. See docs/explanation/test-sharding.md.
+ *
  * Usage:
  *   bun run ../scripts/check-coverage.ts [--threshold=95]
  */
 import {spawn} from "node:child_process";
 import {existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync} from "node:fs";
+import {availableParallelism} from "node:os";
 import {basename, isAbsolute, join, relative, resolve} from "node:path";
+
+import {
+  findIsolatedFiles,
+  formatShardSummary,
+  isolatedFileEnv,
+  resolveShardCount,
+  runPool,
+  runShards,
+} from "./ci/testShards/lib";
 
 export interface ParsedArgs {
   threshold: number;
@@ -45,20 +64,6 @@ export const parseArgs = (argv: readonly string[]): ParsedArgs => {
   }
   return {threshold};
 };
-
-/**
- * admin-frontend isolated suites that run with the real API module (`ADMIN_USE_REAL_API=1`),
- * matching admin-frontend/scripts/run-tests.sh.
- */
-const REAL_API_ISOLATED_FILES = new Set([
-  "././src/isolated/hooks.isolated.tsx",
-  "././src/isolated/adminModelTable.ssr.isolated.tsx",
-  "././src/isolated/adminModelForm.ssr.isolated.tsx",
-  "././src/isolated/adminModelTable.windowedSeed.isolated.tsx",
-  "././src/isolated/adminRouteSeeds.ssr.isolated.tsx",
-  "././src/isolated/jobsCommsRouteSeeds.ssr.isolated.tsx",
-  "././src/isolated/orgsRouteSeeds.ssr.isolated.tsx",
-]);
 
 const ESC = String.fromCharCode(27);
 const ANSI_PATTERN = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
@@ -408,6 +413,26 @@ export const mergeLcov = (
   return target;
 };
 
+const functionRatio = (entry: FileCoverage): number =>
+  entry.functionsFound === 0 ? 1 : entry.functionsHit / entry.functionsFound;
+
+/**
+ * Averages each file's percentages, the way Bun computes the "All files" row of its text
+ * table, so a sharded run is gated on the same metric as an unsplit one.
+ */
+export const summarizeLcovByFile = (coverage: Map<string, FileCoverage>): CoverageSummary => {
+  if (coverage.size === 0) {
+    return {functions: 100, lines: 100};
+  }
+  let functions = 0;
+  let lines = 0;
+  for (const entry of coverage.values()) {
+    functions += functionRatio(entry) * 100;
+    lines += entry.lines.size === 0 ? 100 : (countHitLines(entry) / entry.lines.size) * 100;
+  }
+  return {functions: functions / coverage.size, lines: lines / coverage.size};
+};
+
 export const summarizeLcov = (coverage: Map<string, FileCoverage>): CoverageSummary => {
   let totalLines = 0;
   let hitLines = 0;
@@ -503,11 +528,8 @@ export const writeMergedLcov = (cwd: string, coverage: Map<string, FileCoverage>
   return lcovPath;
 };
 
-const runBunTest = async (
-  args: readonly string[],
-  options?: {env?: Record<string, string>; workingDirectory?: string}
-): Promise<{exitCode: number; output: string}> => {
-  const workingDirectory = options?.workingDirectory ?? process.cwd();
+/** `bun test` arguments every coverage pass in this package needs before its own. */
+const baseBunTestArgs = (args: readonly string[], workingDirectory: string): string[] => {
   const srcRoot = join(workingDirectory, "src");
   const prependSrcRoot =
     existsSync(srcRoot) &&
@@ -524,8 +546,16 @@ const runBunTest = async (
     basename(workingDirectory)
   );
   const mcpServerConcurrency = serialPackage ? (["--max-concurrency=1"] as const) : [];
+  return [...mcpServerConcurrency, ...srcRootArg, ...args];
+};
+
+const runBunTest = async (
+  args: readonly string[],
+  options?: {env?: Record<string, string>; isBuffered?: boolean; workingDirectory?: string}
+): Promise<{exitCode: number; output: string}> => {
+  const workingDirectory = options?.workingDirectory ?? process.cwd();
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn("bun", ["test", ...mcpServerConcurrency, ...srcRootArg, ...args], {
+    const child = spawn("bun", ["test", ...baseBunTestArgs(args, workingDirectory)], {
       cwd: workingDirectory,
       env: {...process.env, ...options?.env, FORCE_COLOR: "0"},
       stdio: ["ignore", "pipe", "pipe"],
@@ -534,12 +564,16 @@ const runBunTest = async (
     child.stdout.on("data", (chunk) => {
       const text = chunk.toString();
       output += text;
-      process.stdout.write(text);
+      if (!options?.isBuffered) {
+        process.stdout.write(text);
+      }
     });
     child.stderr.on("data", (chunk) => {
       const text = chunk.toString();
       output += text;
-      process.stderr.write(text);
+      if (!options?.isBuffered) {
+        process.stderr.write(text);
+      }
     });
     child.on("error", rejectPromise);
     child.on("close", (code) => {
@@ -548,25 +582,59 @@ const runBunTest = async (
   });
 };
 
-const findIsolatedFiles = (cwd: string): string[] => {
-  const files: string[] = [];
-  const srcDir = join(cwd, "src");
-  if (existsSync(srcDir)) {
-    for (const f of readdirSync(srcDir)) {
-      if (f.endsWith(".isolated.ts") || f.endsWith(".isolated.tsx")) {
-        files.push(`././src/${f}`);
-      }
-    }
+/** True when Bun reported that this shard was assigned no test files. */
+export const isEmptyShardOutput = (output: string): boolean =>
+  /--shard=\d+\/\d+: running 0\/\d+ test files/.test(stripAnsi(output));
+
+/**
+ * Runs the main suite as `total` concurrent coverage shards and returns the union of their
+ * LCOV reports. Exits when a shard's tests fail.
+ */
+const runShardedCoverage = async ({
+  cwd,
+  dirPrefix,
+  total,
+}: {
+  cwd: string;
+  dirPrefix: string;
+  total: number;
+}): Promise<{coverage: Map<string, FileCoverage>; coverageDirs: string[]}> => {
+  const dirFor = (index: number): string => resolve(cwd, `${dirPrefix}-shard-${index}`);
+  const coverageDirs = Array.from({length: total}, (_, offset) => dirFor(offset + 1));
+  for (const dir of coverageDirs) {
+    rmSync(dir, {force: true, recursive: true});
   }
-  const isolatedDir = join(cwd, "src", "isolated");
-  if (existsSync(isolatedDir)) {
-    for (const f of readdirSync(isolatedDir)) {
-      if (f.endsWith(".isolated.ts") || f.endsWith(".isolated.tsx")) {
-        files.push(`././src/isolated/${f}`);
-      }
-    }
+  const {results} = await runShards({
+    argsForShard: (index) =>
+      baseBunTestArgs(
+        [
+          "--coverage",
+          "--coverage-reporter=text",
+          "--coverage-reporter=lcov",
+          `--coverage-dir=${dirFor(index)}`,
+        ],
+        cwd
+      ),
+    cwd,
+    env: {...process.env, FORCE_COLOR: "0"},
+    total,
+  });
+  console.info(`\n${formatShardSummary({results}).text}`);
+  for (const result of results) {
+    failIfTestsFailed(result.exitCode, result.output, `bun test --shard=${result.index}/${total}`);
   }
-  return files.sort();
+  const coverage = new Map<string, FileCoverage>();
+  for (const result of results) {
+    const dir = dirFor(result.index);
+    // An empty shard writes no report. Any other shard without one would drop its files from
+    // the merged numbers and let the gate pass on partial data.
+    if (!existsSync(join(dir, "lcov.info")) && !isEmptyShardOutput(result.output)) {
+      console.error(`\nShard ${result.index}/${total} wrote no LCOV report at ${dir}.`);
+      process.exit(1);
+    }
+    mergeLcov(coverage, readLcov(dir, cwd));
+  }
+  return {coverage, coverageDirs};
 };
 
 const readLcov = (coverageDir: string, cwd: string = process.cwd()): Map<string, FileCoverage> => {
@@ -631,10 +699,35 @@ export const summaryFromCompleteLcov = (cwd: string): CoverageSummary | null => 
   return summarizeLcov(coverage);
 };
 
-const main = async (): Promise<void> => {
-  const {threshold} = parseArgs(process.argv.slice(2));
-  const cwd = process.cwd();
-  const isolated = findIsolatedFiles(cwd);
+/**
+ * Runs every coverage pass for the package and returns the gated summary. With more than one
+ * shard the line figure is exact and the function figure is an estimate.
+ */
+const measureCoverage = async ({
+  cwd,
+  isolated,
+  shardTotal,
+}: {
+  cwd: string;
+  isolated: readonly string[];
+  shardTotal: number;
+}): Promise<CoverageSummary> => {
+  if (isolated.length === 0 && shardTotal > 1) {
+    const {coverage, coverageDirs} = await runShardedCoverage({
+      cwd,
+      dirPrefix: "coverage",
+      total: shardTotal,
+    });
+    rmSync(resolve(cwd, "coverage"), {force: true, recursive: true});
+    writeMergedLcov(cwd, coverage);
+    if (!process.env.KEEP_COVERAGE) {
+      for (const dir of coverageDirs) {
+        rmSync(dir, {force: true, recursive: true});
+      }
+    }
+    // Same metric as the "All files" row an unsplit run is gated on.
+    return summarizeLcovByFile(coverage);
+  }
 
   if (isolated.length === 0) {
     const coverageDir = resolve(cwd, "coverage");
@@ -666,8 +759,7 @@ const main = async (): Promise<void> => {
         "\nCoverage text table was missing. Using the LCOV report, which includes every source file."
       );
     }
-    reportSummary(summary, threshold);
-    return;
+    return summary;
   }
 
   console.info(
@@ -677,43 +769,87 @@ const main = async (): Promise<void> => {
   const mergedCoverage = new Map<string, FileCoverage>();
   const coverageDirs: string[] = [];
 
-  const mainDir = resolve(cwd, "coverage-main");
-  coverageDirs.push(mainDir);
-  rmSync(mainDir, {force: true, recursive: true});
+  if (shardTotal > 1) {
+    const main = await runShardedCoverage({cwd, dirPrefix: "coverage-main", total: shardTotal});
+    coverageDirs.push(...main.coverageDirs);
+    mergeLcov(mergedCoverage, main.coverage);
+  } else {
+    const mainDir = resolve(cwd, "coverage-main");
+    coverageDirs.push(mainDir);
+    rmSync(mainDir, {force: true, recursive: true});
 
-  const mainRun = await runBunTest([
-    "--coverage",
-    "--coverage-reporter=text",
-    "--coverage-reporter=lcov",
-    `--coverage-dir=${mainDir}`,
-  ]);
-  failIfTestsFailed(mainRun.exitCode, mainRun.output, "bun test");
-  mergeLcov(mergedCoverage, readLcov(mainDir));
+    const mainRun = await runBunTest([
+      "--coverage",
+      "--coverage-reporter=text",
+      "--coverage-reporter=lcov",
+      `--coverage-dir=${mainDir}`,
+    ]);
+    failIfTestsFailed(mainRun.exitCode, mainRun.output, "bun test");
+    mergeLcov(mergedCoverage, readLcov(mainDir));
+  }
 
-  for (let index = 0; index < isolated.length; index += 1) {
-    const testFile = isolated[index];
-    const dir = resolve(cwd, `coverage-iso-${index}`);
+  // Each isolated file is its own process, so a pool runs them without changing what they see.
+  const isolatedRuns = await runPool(
+    isolated.map((testFile, index) => async () => {
+      const dir = resolve(cwd, `coverage-iso-${index}`);
+      rmSync(dir, {force: true, recursive: true});
+      if (shardTotal === 1) {
+        console.info(`\n--- Isolated coverage pass for ${testFile} ---`);
+      }
+      const run = await runBunTest(
+        [testFile, "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${dir}`],
+        {
+          env: isolatedFileEnv({file: testFile}).env,
+          isBuffered: shardTotal > 1,
+        }
+      );
+      if (shardTotal > 1) {
+        process.stdout.write(`\n--- Isolated coverage pass for ${testFile} ---\n${run.output}`);
+      }
+      return {dir, run, testFile};
+    }),
+    shardTotal
+  );
+  for (const {dir, run, testFile} of isolatedRuns) {
     coverageDirs.push(dir);
-    rmSync(dir, {force: true, recursive: true});
-    console.info(`\n--- Isolated coverage pass for ${testFile} ---`);
-    const needsReducedPreload = REAL_API_ISOLATED_FILES.has(testFile);
-    const run = await runBunTest(
-      [testFile, "--coverage", "--coverage-reporter=lcov", `--coverage-dir=${dir}`],
-      needsReducedPreload ? {env: {ADMIN_USE_REAL_API: "1"}} : undefined
-    );
     failIfTestsFailed(run.exitCode, run.output, `bun test ${testFile}`);
     mergeIsolatedLcov(mergedCoverage, onlyHitFiles(readLcov(dir)));
   }
 
-  const summary = summarizeLcov(mergedCoverage);
   writeMergedLcov(cwd, mergedCoverage);
-  reportSummary(summary, threshold);
-
   if (!process.env.KEEP_COVERAGE) {
     for (const dir of coverageDirs) {
       rmSync(dir, {force: true, recursive: true});
     }
   }
+  return summarizeLcov(mergedCoverage);
+};
+
+const main = async (): Promise<void> => {
+  const {threshold} = parseArgs(process.argv.slice(2));
+  const cwd = process.cwd();
+  const isolated = findIsolatedFiles(cwd);
+  const {error: shardError, total: shardTotal} = resolveShardCount({
+    cpuCount: availableParallelism(),
+    env: process.env,
+  });
+  if (shardError) {
+    console.error(shardError);
+    process.exit(2);
+  }
+
+  let summary = await measureCoverage({cwd, isolated, shardTotal});
+  if (shardTotal > 1 && evaluateCoverage(summary, threshold).length > 0) {
+    // Bun's LCOV cannot say which functions each shard hit, so the merged function figure is an
+    // estimate that usually reads low. Confirm a failure with one unsplit pass.
+    console.error(
+      `\nSharded coverage is below ${threshold}% ` +
+        `(functions=${summary.functions.toFixed(2)}%, lines=${summary.lines.toFixed(2)}%). ` +
+        "The sharded function figure is an estimate; re-running unsplit for the exact numbers."
+    );
+    summary = await measureCoverage({cwd, isolated, shardTotal: 1});
+  }
+  reportSummary(summary, threshold);
 };
 
 const reportSummary = (summary: CoverageSummary, threshold: number): void => {

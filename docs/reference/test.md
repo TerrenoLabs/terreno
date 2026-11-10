@@ -361,7 +361,10 @@ exist or has no `smoke` script is an error.
 ## Coverage gates
 
 Package CI uses `scripts/check-coverage.ts` (`bun run test:coverage`, default 95%
-functions and lines) as the live gate. Bun 1.4.2+ may exit 1 on bunfig
+functions and lines) as the live gate. It runs the suite as concurrent
+`bun test --shard` processes and gates the merged LCOV; a sharded run below the
+threshold is confirmed with one unsplit pass
+([Test sharding](../explanation/test-sharding.md)). Bun 1.4.2+ may exit 1 on bunfig
 `coverageThreshold` before isolated LCOV merges; the script continues when tests
 reported `0 fail` and then enforces 95% on the merged report. The blocks
 coverage pass sets `--max-concurrency=1`, because Bun's default 20-way run

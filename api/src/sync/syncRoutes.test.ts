@@ -1,6 +1,7 @@
-import {beforeAll, beforeEach, describe, expect, it} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, setSystemTime} from "bun:test";
 import {assert} from "chai";
 import type express from "express";
+import {DateTime} from "luxon";
 import {type Model, model, Schema, Types} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -891,6 +892,9 @@ describe("sync routes", () => {
       // cannot spread across the 1-second rolling window under machine load
       // (a sequential loop's wall-clock time is unbounded and would let the
       // window reset mid-flood, making the final request wrongly succeed).
+      // Freeze the clock as well: on a loaded machine even the concurrent flood can take
+      // longer than the window. The package preload restores real time after each test.
+      setSystemTime(DateTime.now().toJSDate());
       const body = (mutationId: string) => ({
         collection: "routeStuff",
         data: {name: "flood", ownerId: notAdminId},

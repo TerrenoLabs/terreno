@@ -405,8 +405,12 @@ export const mergeLcov = (
         existing.functions.set(name, hits);
       }
     }
-    mergeFunctionAggregates(existing, src);
-    alignFunctionAggregatesWhenAllLinesHit(existing);
+    if (src.functionsFound > existing.functionsFound) {
+      existing.functionsFound = src.functionsFound;
+    }
+    if (src.functionsHit > existing.functionsHit) {
+      existing.functionsHit = src.functionsHit;
+    }
     if (src.hasFnRecords) {
       existing.hasFnRecords = true;
     }

@@ -1,5 +1,9 @@
 # Debug a Terreno app with MCP
 
+**This is the standard agent workflow** for finding and fixing issues on Terreno apps: run the
+dev stack, call **`terreno-local`** MCP tools to observe and drive the app, edit code, then
+observe again. Installable skill: **`debug-with-mcp`**. SyncDB-only depth: **`debug-syncdb-with-mcp`**.
+
 Use the local MCP server (`terreno-mcp-local`) to go from a symptom to a verified fix without
 pasting logs into the chat. This guide follows one real failure from start to finish, then lists
 what each tool does. Every tool output below was copied unchanged from a real run against
@@ -12,6 +16,11 @@ what each tool does. Every tool output below was copied unchanged from a real ru
 | API returns 500 | `last_error` with `sources: ["backend"]`. The stack is inside `message`. | `read_logs` with `sources: ["backend"]` and `since` to see the requests around it. |
 | API returns 403 (or another 4xx) | `read_logs` with `sources: ["backend"]` and `level: "warn"`. Every `APIError` under 500 is logged at `warn` as `ForbiddenError(403): <title> — <detail>`, so `last_error` does not show it. | `database_query` to compare the document's `ownerId` with the user in the log line. |
 | App crashes on a screen | Web: `last_error` with `sources: ["browser"]`. An uncaught error carries a separate `stack` field. A render error caught by an error boundary has no `stack`; its `message` names the component instead (see [A screen crashes on web](#a-screen-crashes-on-web)). Native: `last_error` with `sources: ["app"]`. | Native: `navigate` to the screen and call `last_error` again. Web: the `browser` tool. |
+| Wrong API URL or status on device | `read_logs` with `sources: ["network"]` after reproducing the tap. | `database_query` or backend logs to compare server truth. |
+| Auth/session oddities (token in storage) | `read_local_storage` with `prefix: "persist:"` or known key names. | `write_local_storage` only with `TERRENO_MCP_EVAL=1` to fix dev keys; prefer fixing app code for prod. |
+| Native-only crash (no Hermes console) | `read_logs` with `sources: ["native"]` (needs `adb` or iOS Simulator). | `last_error` with `sources: ["app"]` when Hermes is attached. |
+| Need a one-off dev action in the app | `list_dev_commands`, then `invoke_dev_command` with `TERRENO_MCP_EVAL=1`. | Register handlers with `registerTerrenoDevCommand` in app code. |
+| Redux state wrong but SyncDB OK | `get_client_state` or `dispatch_client_action` with a known action type. | `syncdb_action` only for collection CRUD, not Redux. |
 | Data looks wrong | `database_query` to read what the server stored. | `get_client_state` (RTK cache) or `get_syncdb_state` (SyncDB) to compare the client's copy. |
 | Screen renders empty | `get_client_state` or `get_syncdb_state` on native. On web, `browser` with `snapshot`. | `read_logs` with `sources: ["backend"]` to check that the list request ran and returned 200. |
 | Bundler fails | The terminal that runs `expo start`. The `metro` source is always empty under Expo CLI 57: the `/events` socket connects but Expo never sends on it. | On native, `read_logs` with `sources: ["app"]` once the app loads again. |
@@ -161,7 +170,7 @@ On web this returns `layer: "none"`:
 ```json
 {
   "connection": "CDP: Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?); Metro events: not connected",
-  "hint": "No client data layer found. For RTK Query, call `registerTerrenoDevStore(store)` from @terreno/rtk in __DEV__. For SyncDB, create the client with `createSyncDb({debug: true})`. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).",
+  "hint": "No client data layer found. For SyncDB, create the client with `createSyncDb({debug: true})`. For custom client actions, call `registerTerrenoDevClientDispatch` from `@terreno/syncdb` in __DEV__. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).",
   "layer": "none",
   "reasons": {
     "rtk": "Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?)",

@@ -1,4 +1,9 @@
-/** Verifies the Vercel Functions entry (src/app.ts) boots onto a host-owned http.Server. */
+/**
+ * Vercel socket.io wiring depends on BACKEND_SERVICE=websockets before `./conf` loads.
+ * Sharded runs import `server` in api mode first, so this suite stays isolated.
+ */
+process.env.BACKEND_SERVICE = "websockets";
+
 import {afterAll, beforeAll, describe, expect, it} from "bun:test";
 import type {Server} from "node:http";
 import type {AddressInfo} from "node:net";
@@ -8,8 +13,7 @@ describe("Vercel entry", () => {
   let baseUrl: string;
 
   beforeAll(async () => {
-    // Importing the entry boots it, as Vercel's launcher does.
-    server = (await import("./app")).default;
+    server = (await import("../app")).default;
   });
 
   afterAll(async () => {
@@ -35,7 +39,6 @@ describe("Vercel entry", () => {
   });
 
   it("mounts socket.io on the same server", async () => {
-    // engine.io answers its own path with a JSON error; Express would answer 404.
     const res = await fetch(`${baseUrl}/socket.io/?EIO=4&transport=unknown`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as {code: number; message: string};

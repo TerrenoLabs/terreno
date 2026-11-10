@@ -50,6 +50,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "model-router-actions",
       "terreno-ui",
       "terreno-data-fetching",
+      "debug-with-mcp",
       "debug-syncdb-with-mcp",
       "mongoose-schema-safety",
       "generate-sdk",

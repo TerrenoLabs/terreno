@@ -8,6 +8,7 @@ import type {BetterAuthConfig} from "../betterAuth";
 import type {BetterAuthApp} from "../betterAuthApp";
 import {logger} from "../logger";
 import {
+  ACCOUNT_SECURITY_HOOK_TIMEOUT_MS,
   access,
   betterAuthCollection,
   betterAuthIdFor,
@@ -193,11 +194,11 @@ const registerPasskey = async (app: express.Application, token: string): Promise
 describe("security notification emails", () => {
   beforeAll(async () => {
     await access.roles.seedDefaults();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   beforeEach(async () => {
     await resetAccountSecurityState();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   afterEach(async () => {
     await flushSecurityNotificationsForTests();

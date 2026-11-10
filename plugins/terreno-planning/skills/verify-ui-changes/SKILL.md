@@ -19,7 +19,9 @@ Use this skill automatically whenever a task changes UI behavior, UI layout, vis
 
 If you made a user-facing change, you must run it, check that it actually works, and
 show evidence. No evidence, no completion claim. A passing build, type check, or unit
-test is necessary, not sufficient. **User-facing** is anything a user could notice:
+test is necessary, not sufficient. When **`terreno-local`** is configured, prefer
+**`browser`** (web) or **`navigate`** + **`read_logs`** (native) from **`debug-with-mcp`**
+to reproduce and capture proof, in addition to manual or Maestro steps below. **User-facing** is anything a user could notice:
 components, screens, routes, navigation, styles, layout, responsive behavior, theming,
 forms, validation, error / empty / loading states, copy, translations, API changes whose
 output a client renders, emails, push, SMS, exported files. Pure refactors, internal

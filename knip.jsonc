@@ -21,7 +21,8 @@
     "skills/store-assets/scripts/**"
   ],
   // Maestro is installed by CI and developer toolchains rather than package.json.
-  "ignoreBinaries": ["maestro"],
+  // adb is spawned by terreno-mcp-local native log capture when Android tooling is present.
+  "ignoreBinaries": ["maestro", "adb"],
   // Root tooling loads Biome through package scripts and hooks rather than imports.
   //
   // `@terreno/test` is a devDependency of every package so each package's real-process smoke
@@ -177,10 +178,15 @@
       ]
     },
     "syncdb": {
+      // devMcpRegistry dynamically imports AsyncStorage / SecureStore when the host app
+      // registers MCP storage; apps supply those packages, not @terreno/syncdb.
+      "ignoreDependencies": ["@react-native-async-storage/async-storage", "expo-secure-store"],
       "entry": [
         "e2e/smoke.{ts,spec.ts}",
         "{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
         "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
+        "src/**/*.isolated.ts",
+        "src/**/*.isolated.tsx",
         "src/isolated/**/*.isolated.{ts,tsx}",
         // Platform resolvers select these shipped implementations without an extension.
         "src/persisters/defaultPersisterFactory.native.ts!",
@@ -384,7 +390,9 @@
         "tests/testPreload.ts",
         // `test:ci` hands these globs to scripts/test-shards.ts, so the Bun plugin no longer
         // reads them from a `bun test <globs>` script.
-        "**/*.test.{ts,tsx}"
+        "**/*.test.{ts,tsx}",
+        "**/*.isolated.ts",
+        "**/*.isolated.tsx"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -450,7 +458,9 @@
         "src/scripts/syncConsents.ts",
         "src/scripts/configuration-example.ts",
         "src/scripts/seed-admin-spa-admin.ts",
-        "src/scripts/seedConsents.ts"
+        "src/scripts/seedConsents.ts",
+        "src/**/*.isolated.ts",
+        "src/isolated/**/*.isolated.ts"
       ],
       "project": [
         "**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!",
@@ -488,11 +498,15 @@
       // the array form in bunfig.toml; with bun: false Knip cannot discover that
       // preload file from the plugin, so it is listed as an entry.
       "bun": false,
+      // Android platform logs spawn the host `adb` binary when present.
+      "ignoreBinaries": ["adb"],
       "entry": [
         "e2e/smoke.{ts,spec.ts}",
         "src/index.ts",
         "src/local/index.ts",
         "src/**/*.test.ts",
+        "src/**/*.isolated.ts",
+        "src/**/*.isolated.tsx",
         "src/__tests__/**/*.test.ts",
         "src/__tests__/preload.ts"
       ],

@@ -14,7 +14,39 @@ interface RingEntry {
 }
 
 const cdpConsoleRing: RingEntry[] = [];
+const cdpNetworkRing: RingEntry[] = [];
 const metroEventsRing: RingEntry[] = [];
+
+const SENSITIVE_HEADER_NAMES = new Set(["authorization", "cookie", "set-auth-token", "set-cookie"]);
+
+/** Maps CDP Network.requestId → request URL for loadingFailed events. */
+const networkRequestUrls = new Map<string, string>();
+
+const redactHeaders = (headers: unknown): Record<string, string> | undefined => {
+  if (!headers || typeof headers !== "object") {
+    return undefined;
+  }
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+    const lower = key.toLowerCase();
+    if (SENSITIVE_HEADER_NAMES.has(lower)) {
+      out[key] = "[REDACTED]";
+    } else if (typeof value === "string") {
+      out[key] = value;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+};
+
+const pushNetworkEntry = (payload: Record<string, unknown>): void => {
+  const line = JSON.stringify(payload);
+  pushRing(cdpNetworkRing, {
+    level: typeof payload.level === "string" ? payload.level : "info",
+    raw: line,
+    source: "network",
+    timestamp: typeof payload.timestamp === "string" ? payload.timestamp : DateTime.utc().toISO(),
+  });
+};
 
 let cdpWs: WebSocket | undefined;
 let metroWs: WebSocket | undefined;
@@ -210,6 +242,71 @@ const handleCdpMessage = (text: string): void => {
       source: "app",
       timestamp: DateTime.utc().toISO(),
     });
+    return;
+  }
+  if (msg.method === "Network.requestWillBeSent") {
+    const params = msg.params as Record<string, unknown> | undefined;
+    const request = params?.request as Record<string, unknown> | undefined;
+    const url = typeof request?.url === "string" ? request.url : "";
+    const requestId = typeof params?.requestId === "string" ? params.requestId : "";
+    if (requestId && url) {
+      networkRequestUrls.set(requestId, url);
+    }
+    const method = typeof request?.method === "string" ? request.method : "GET";
+    pushNetworkEntry({
+      event: "requestWillBeSent",
+      level: "info",
+      message: `${method} ${url}`,
+      method,
+      requestHeaders: redactHeaders(request?.headers),
+      requestId: params?.requestId,
+      source: "network",
+      timestamp: DateTime.utc().toISO(),
+      url,
+    });
+    return;
+  }
+  if (msg.method === "Network.responseReceived") {
+    const params = msg.params as Record<string, unknown> | undefined;
+    const response = params?.response as Record<string, unknown> | undefined;
+    const url = typeof response?.url === "string" ? response.url : "";
+    const status = typeof response?.status === "number" ? response.status : undefined;
+    const timing = response?.timing as Record<string, unknown> | undefined;
+    const durationMs =
+      typeof timing?.receiveHeadersEnd === "number"
+        ? Math.round(timing.receiveHeadersEnd as number)
+        : undefined;
+    pushNetworkEntry({
+      durationMs,
+      event: "responseReceived",
+      level: "info",
+      message: `${status ?? "?"} ${url}`,
+      mimeType: typeof response?.mimeType === "string" ? response.mimeType : undefined,
+      requestId: params?.requestId,
+      responseHeaders: redactHeaders(response?.headers),
+      source: "network",
+      status,
+      timestamp: DateTime.utc().toISO(),
+      url,
+    });
+    return;
+  }
+  if (msg.method === "Network.loadingFailed") {
+    const params = msg.params as Record<string, unknown> | undefined;
+    const requestId = typeof params?.requestId === "string" ? params.requestId : "";
+    const url =
+      (requestId ? networkRequestUrls.get(requestId) : undefined) ??
+      (typeof params?.documentURL === "string" ? params.documentURL : "");
+    pushNetworkEntry({
+      errorText: params?.errorText,
+      event: "loadingFailed",
+      level: "error",
+      message: `failed ${url}`,
+      requestId: params?.requestId,
+      source: "network",
+      timestamp: DateTime.utc().toISO(),
+      url,
+    });
   }
 };
 
@@ -297,7 +394,12 @@ export const ensureCdpConnected = async (): Promise<{ok: boolean; detail: string
     });
 
     await sendCdp("Runtime.enable", {});
-    lastCdpStatus = `connected to ${String(target?.title ?? "target")}`;
+    try {
+      await sendCdp("Network.enable", {});
+      lastCdpStatus = `connected to ${String(target?.title ?? "target")}`;
+    } catch {
+      lastCdpStatus = `connected to ${String(target?.title ?? "target")} (Network domain unavailable)`;
+    }
   })();
 
   try {
@@ -423,6 +525,10 @@ export const snapshotCdpConsoleRing = (): RingEntry[] => {
   return [...cdpConsoleRing];
 };
 
+export const snapshotNetworkRing = (): RingEntry[] => {
+  return [...cdpNetworkRing];
+};
+
 export const snapshotMetroEventsRing = (): RingEntry[] => {
   return [...metroEventsRing];
 };
@@ -437,6 +543,8 @@ export const resetMetroDevSessionForTests = (): void => {
   metroConnectPromise = undefined;
   rejectPendingCdp("CDP session reset");
   cdpConsoleRing.length = 0;
+  cdpNetworkRing.length = 0;
+  networkRequestUrls.clear();
   metroEventsRing.length = 0;
   nextCdpId = 1;
   lastCdpStatus = "not connected";

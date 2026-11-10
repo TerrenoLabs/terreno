@@ -8,6 +8,7 @@ import {resetAuditRecorderForTests} from "../audit/record";
 import type {BetterAuthApp} from "../betterAuthApp";
 import {logger} from "../logger";
 import {
+  ACCOUNT_SECURITY_HOOK_TIMEOUT_MS,
   access,
   betterAuthCollection,
   betterAuthIdFor,
@@ -189,11 +190,11 @@ const interleaveNextDelete = async (
 describe("credential recovery actions", () => {
   beforeAll(async () => {
     await access.roles.seedDefaults();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   beforeEach(async () => {
     await resetAccountSecurityState();
-  });
+  }, ACCOUNT_SECURITY_HOOK_TIMEOUT_MS);
 
   afterEach(() => {
     resetAuditRecorderForTests();

@@ -91,9 +91,15 @@ export const Avatar: FC<AvatarProps> = ({
     console.warn("Avatars with the status of 'imagePicker' should also have an onChange property.");
   }
 
-  const handleImageError = (event: ImageErrorEvent) => {
+  /**
+   * Falls back to initials when the image cannot load, and logs only the native error message.
+   * The event object must never be passed to console: it carries native view and fiber references,
+   * and in release builds where Sentry turns console arguments into breadcrumbs, logging it hung
+   * the JS thread and froze the whole app.
+   */
+  const handleImageError = (event?: ImageErrorEvent): void => {
     setIsImageLoaded(false);
-    console.warn("Image load error: ", event);
+    console.warn(`Image load error: ${event?.nativeEvent?.error ?? "unknown error"}`);
   };
 
   const pickImage = async () => {

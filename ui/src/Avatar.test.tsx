@@ -102,6 +102,26 @@ describe("Avatar", () => {
     expect(getByText("JD")).toBeTruthy();
   });
 
+  it("logs only the error message, never the event object, when the image fails", () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const {getByText, getByTestId} = renderWithTheme(<Avatar {...defaultProps} name="John Doe" />);
+    // A native error event carries view and fiber references; this stands in for that graph.
+    const cyclicTarget: Record<string, unknown> = {};
+    cyclicTarget.self = cyclicTarget;
+
+    fireEvent(getByTestId("avatar-image"), "onError", {
+      nativeEvent: {error: "403 Forbidden"},
+      target: cyclicTarget,
+    });
+
+    expect(getByText("JD")).toBeTruthy();
+    const imageErrorCalls = warnSpy.mock.calls.filter((call) =>
+      String(call[0]).includes("Image load error")
+    );
+    expect(imageErrorCalls).toEqual([["Image load error: 403 Forbidden"]]);
+    warnSpy.mockRestore();
+  });
+
   it("applies correct size class", () => {
     const size = "lg";
     const {getByTestId} = renderWithTheme(<Avatar {...defaultProps} size={size} />);

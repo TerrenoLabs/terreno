@@ -20,6 +20,31 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.0.3] - 2026-11-11
+
+Upgrade note: [`mcp-server/src/docs/upgrades/58.0.3.md`](mcp-server/src/docs/upgrades/58.0.3.md).
+
+### Added
+
+- `fix-code-scanning-alerts` skill: clears every open CodeQL alert on one PR. Fixes close on the master rescan; reviewed false positives go in `.github/code-scanning/dismissals.json` and a workflow dismisses them after merge. CodeQL now also scans pull requests and ignores test files. See `docs/how-to/fix-code-scanning-alerts.md`.
+- **@terreno/syncdb:** `registerTerrenoDevClientDispatch`, `registerTerrenoDevStorage`, and `registerTerrenoDevCommand` for `terreno-mcp-local` dev tooling.
+- **@terreno/mcp-server:** `read_logs` sources `network` and `native`; `dispatch_client_action`, storage read/write, and dev command list/invoke; CDP network capture with header redaction.
+
+### Changed
+
+- Package tests run as concurrent `bun test --shard` processes through `scripts/test-shards.ts` (half the cores by default, `TERRENO_TEST_SHARDS` to override), and `test:coverage` merges the shards' LCOV. CircleCI now pins Bun 1.4.4, the same version as the local toolchain.
+
+### Fixed
+
+- `Avatar` no longer freezes release builds when its image fails to load. The image error handler passed the native error event to `console.warn`, and with Sentry enabled the app hung while turning that event into a breadcrumb. It now logs only the error message.
+- Mongo filters built from request values reject non-string input with 400 instead of running it as a query operator: AI request explorer `model`, observability review `status`, review batch `promptName`, experiment `datasetId`, trace list filters, push-token `platform`, and `loadDocOr404` ids (404). Sync conflict reloads and tombstone lookups match `_id` with `$eq`.
+- Nested-path helpers in `populate`, RBAC field views, and MCP `excludeFields` skip `__proto__`, `constructor`, and `prototype`, so a crafted path can no longer touch `Object.prototype`.
+- Removed polynomial-time regexes from bearer-header parsing, trailing-slash trimming (syncdb, ui `ListDetailLayout`, jobs Cloud Tasks runner, admin route paths), prompt references, judge score ranges, AI JSON fence stripping, and the MCP import parser.
+- Dataset schema validation stops at the first error (`allErrors` off) to bound work on untrusted input.
+- `isTestUser` in `@terreno/ui` matches `nang.io` and `example.com` as the email domain or a subdomain, not as a substring, and always returns a boolean.
+- MCP OAuth metadata responses set an explicit JSON content type.
+- The example app's AI session id comes from `expo-crypto` `randomUUID` instead of `Math.random`.
+
 ## [58.0.2] - 2026-11-09
 
 ### Fixed

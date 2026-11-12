@@ -24,7 +24,7 @@ Five agents ran in parallel, read-only:
 | Enhancements + AI tooling | `audit-enhancements`, `audit-ai-optimization` | `enhancements-ai.md` |
 | UI components | `ui-craft` `audit`, 112 screenshots of the demo at 1280 / 768 / 375 px, light and dark | `ui-ux.md` |
 
-The first four are the `audit-comprehensive` domain groupings. All five are in this folder. The screenshots were not committed; they were captured to `/opt/cursor/artifacts/ui-audit/` in the audit session.
+The first four are the `audit-comprehensive` domain groupings. All five are in this folder. The 112 screenshots are not in the repository; they are attached to [PR #1705](https://github.com/TerrenoLabs/terreno/pull/1705#issuecomment-6837725576).
 
 What was and was not verified:
 

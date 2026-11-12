@@ -107,6 +107,30 @@ describe("ConsentApp", () => {
       await userAgent.get("/consent-forms").expect(405);
     });
 
+    it("accepts every sort the admin consent form list sends", async () => {
+      await ConsentForm.create({
+        active: true,
+        content: new Map([["en", "# Terms"]]),
+        order: 1,
+        slug: "terms-sort",
+        title: "Terms",
+        type: "terms",
+        version: 1,
+      });
+
+      // ConsentFormList defaults to -created and sorts by each data column.
+      for (const sort of ["-created", "title", "-type", "version", "-active", "order"]) {
+        const res = await adminAgent.get(`/consent-forms?limit=20&page=1&sort=${sort}`);
+        expect({sort, status: res.status}).toEqual({sort, status: 200});
+        expect(res.body.data).toHaveLength(1);
+      }
+    });
+
+    it("still rejects sorting consent forms by fields that are not sortable", async () => {
+      const res = await adminAgent.get("/consent-forms?sort=content").expect(400);
+      expect(res.body.code).toBe("sort-field-not-allowed");
+    });
+
     it("creates a consent form as admin", async () => {
       const res = await adminAgent
         .post("/consent-forms")
@@ -228,6 +252,18 @@ describe("ConsentApp", () => {
       const res = await adminAgent.get("/consent-responses").expect(200);
       expect(res.body.data).toHaveLength(1);
       expect(res.body.data[0].agreed).toBe(true);
+    });
+
+    it("accepts sorting responses by the fields the admin metadata marks sortable", async () => {
+      for (const sort of ["-created", "-agreedAt", "agreed", "provisional", "locale"]) {
+        const res = await adminAgent.get(`/consent-responses?limit=20&page=1&sort=${sort}`);
+        expect({sort, status: res.status}).toEqual({sort, status: 200});
+      }
+    });
+
+    it("still rejects sorting responses by fields that are not sortable", async () => {
+      const res = await adminAgent.get("/consent-responses?sort=signature").expect(400);
+      expect(res.body.code).toBe("sort-field-not-allowed");
     });
 
     it("populates consentFormId and userId on read", async () => {

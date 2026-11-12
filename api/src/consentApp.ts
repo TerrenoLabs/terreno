@@ -114,6 +114,16 @@ const buildConsentOpenApi = (
   };
 };
 
+/**
+ * Fields the consent form admin list sorts by: `ConsentFormList` defaults to `-created` and sorts
+ * by each data column. The router needs them as `sortFields` because list sorts are limited to
+ * declared fields; without them the admin list loads with a 400.
+ */
+const CONSENT_FORM_SORT_FIELDS = ["title", "type", "version", "active", "order", "created"];
+
+/** Fields the consent response admin metadata marks sortable, allowed on the response list too. */
+const CONSENT_RESPONSE_SORT_FIELDS = ["agreed", "provisional", "locale", "agreedAt", "created"];
+
 const PROVISIONAL_NOTE_MAX_LENGTH = 2000;
 
 const provisionalSignBody = z
@@ -384,7 +394,7 @@ export class ConsentApp implements TerrenoPlugin {
             listDisplay: ["title", "type", "version", "active", "order"],
             listFields: ["title", "type", "version", "active", "order"],
             searchFields: ["title", "slug"],
-            sortableFields: ["title", "type", "version", "active", "order", "created"],
+            sortableFields: CONSENT_FORM_SORT_FIELDS,
           },
           model: ConsentForm as unknown as import("mongoose").Model<unknown>,
           routePath: "/consent-forms",
@@ -406,7 +416,7 @@ export class ConsentApp implements TerrenoPlugin {
             group: "Compliance",
             listFields: ["userId", "agreed", "provisional", "locale", "agreedAt"],
             searchFields: ["locale"],
-            sortableFields: ["agreed", "provisional", "locale", "agreedAt", "created"],
+            sortableFields: CONSENT_RESPONSE_SORT_FIELDS,
           },
           model: ConsentResponse as unknown as import("mongoose").Model<unknown>,
           populatePaths: consentResponsePopulatePaths,
@@ -547,6 +557,7 @@ export class ConsentApp implements TerrenoPlugin {
         },
         queryFields: ["slug", "type", "active", "version"],
         sort: "order",
+        sortFields: CONSENT_FORM_SORT_FIELDS,
       })
     );
 
@@ -735,6 +746,7 @@ export class ConsentApp implements TerrenoPlugin {
           update: [],
         },
         populatePaths: consentResponsePopulatePaths,
+        sortFields: CONSENT_RESPONSE_SORT_FIELDS,
       })
     );
 

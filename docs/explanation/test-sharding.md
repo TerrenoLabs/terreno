@@ -34,8 +34,10 @@ A backend shard keeps a Bun process and a `mongod` busy, about two cores. More s
 half the cores slows every shard down and makes timing-sensitive tests fail.
 
 CircleCI jobs set `TERRENO_TEST_SHARDS` themselves, because a container reports the host's
-cores and not its own CPU limit. Medium jobs (2 vCPU) run 1 shard. `api-ci`, the longest
-test job, runs on `large` (4 vCPU) with 2 shards.
+cores and not its own CPU limit. Medium jobs (2 vCPU) run 1 shard. Backend jobs run 1 shard
+even on `large`: CircleCI gives a job one sidecar `mongod`, and every shard connects to the
+same `mongodb://127.0.0.1/terreno` database, so concurrent shards clear each other's
+collections mid-test. `api-ci` ran 2 shards until that broke its tests.
 
 Root `bun run test` and `bun run test:agent` set `TERRENO_TEST_SHARDS=1`: they already run
 every package at the same time.

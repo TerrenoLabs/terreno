@@ -165,8 +165,9 @@ executors:
   #
   # Package tests run as concurrent `bun test --shard` processes (scripts/test-shards.ts).
   # A container reports the host's cores, so each job states its shard count in
-  # TERRENO_TEST_SHARDS: 1 on medium (2 vCPU, which one backend shard already fills) and 2 on
-  # api-ci, the longest test job, which runs on large.
+  # TERRENO_TEST_SHARDS: 1 on medium (2 vCPU, which one backend shard already fills). Backend
+  # jobs stay at 1 even on large: every shard connects to the same sidecar mongod and database
+  # (mongodb://127.0.0.1/terreno), so concurrent shards clear each other's collections.
   node22:
     docker:
       - image: cimg/node:22.11
@@ -712,7 +713,7 @@ jobs:
     executor: node22_mongo
     resource_class: large
     environment:
-      TERRENO_TEST_SHARDS: "2"
+      TERRENO_TEST_SHARDS: "1"
     working_directory: ~/project
     steps:
       - checkout

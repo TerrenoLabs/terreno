@@ -54,8 +54,9 @@ spawns a no-context subagent to run the root `prepush` package script when prese
 pushes and watches CI. Brew also waits until
 review bots such as Bugbot or CodeQL finish so they can react in the same invocation.
 Taste observes product CI on every discovered host (GitHub Actions, CircleCI,
-Buildkite, and similar), not only GitHub checks. See `plugins/README.md` and
-`docs/reference/lifecycle-plugin.md`.
+Buildkite, and similar), not only GitHub checks. See `docs/reference/lifecycle-plugin.md`.
+The skills live in [TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills),
+not in this repository.
 
 The installed planning plugin also ships the reusable Terreno app, docs, upgrade,
 deployment, and verification skills used by consumer projects. Repository-only roadmap,
@@ -86,14 +87,12 @@ Human-facing docs are the architecture source. Before changing code, read the
 explanation and reference pages for the affected area. Update those pages in the
 same slice using the `update-docs` skill. Missing docs for a user-visible or
 architectural change fails the slice. Install the published skill set with
-`npx skills add TerrenoLabs/terreno`; regenerate `skills/` with
-`bun run skills:sync`. The combined lifecycle and Terreno app skill set installs as the Cursor plugin
-`terreno-planning` from `.cursor-plugin/marketplace.json` (invoke `/terreno-1-grow`),
-as the Codex plugin `terreno-planning` from `.agents/plugins/marketplace.json`
-(invoke `$terreno-1-grow`), or as the Claude Code plugin `terreno` via
-`/plugin marketplace add TerrenoLabs/terreno` then
-`/plugin install terreno@terreno-plugins` (invoke `/terreno:1-grow`). The Claude copy under
-`plugins/terreno-claude/` is generated; never hand-edit it.
+`npx skills add TerrenoLabs/terreno-skills` (one part: `--skill lifecycle`, `scan`, `app`,
+`ship`, `design`, or `dx`). The combined skill set installs as the Cursor and Codex plugin
+`terreno-planning` (invoke `/terreno-1-grow` or `$terreno-1-grow`), or as the Claude Code
+plugin `terreno` via `/plugin marketplace add TerrenoLabs/terreno-skills` then
+`/plugin install terreno@terreno-plugins` (invoke `/terreno:1-grow`). Change those skills in
+the terreno-skills repository. Expo skills come from upstream: `npx skills add expo/skills`.
 
 ## Development
 

@@ -1,4 +1,0 @@
-interface:
-  display_name: "Terreno UI"
-  short_description: "Choose and compose @terreno/ui components — Box, Page, forms, tables, modals, and theming for cross-platform apps"
-  default_prompt: "Use $terreno-ui to pick the right @terreno/ui components and theme props for a layout, form, or feedback pattern."

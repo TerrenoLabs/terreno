@@ -1,4 +1,0 @@
-interface:
-  display_name: "Track upstream Expo"
-  short_description: "Morning Expo SDK loop: probe, fail fast if idle, else work release-X.Y.Z and write the loop log"
-  default_prompt: "Use $track-upstream-expo. Run bun run expo:track-probe first. Exit 1 means stop. Exit 0: create, continue, or resume the reported release-* branch. Read scripts/track-upstream-expo/loop-log.md before any edit. Do not retry items in Do not retry. End by updating loop-log.md and tracked.json so tomorrow can resume."

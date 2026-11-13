@@ -5,7 +5,7 @@ screen, which chat agents read to answer "how do I…" questions.
 
 Run `bun run check:user-guide` after you edit a page. The page format, frontmatter, and
 writing bar are in the planning plugin's
-[user-guide contract](../../plugins/terreno-planning/references/user-guide.md). To draft
+[user-guide contract](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/user-guide.md). To draft
 pages for features that shipped without one, run the `backfill-user-guide` skill.
 
 ## Pages

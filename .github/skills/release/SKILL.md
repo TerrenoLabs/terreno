@@ -103,7 +103,7 @@ Rules:
 
 - Lead with breaking changes, then features, then fixes. Omit empty sections.
 - `[coverage]`, `[alignRules]`, lockfile updates, `update-dependencies` bumps, and similar mechanical commits go in the collapsed **Tests & housekeeping** section, one line each.
-- Expo SDK, React Native, and other `isFingerprintSkip` packages are **not** bumped by `update-dependencies`. Include those native upgrades in this release (see `upgrading-expo`).
+- Expo SDK, React Native, and other `isFingerprintSkip` packages are **not** bumped by `update-dependencies`. Include those native upgrades in this release (see the upstream `upgrading-expo` skill: `npx skills add expo/skills`).
 - Merge commits that belong to one feature (e.g. an IP/plan commit plus its implementation) into a single bullet.
 - Describe user-facing impact, not implementation detail. Keep `(#123)` PR references — GitHub autolinks them.
 - Save the notes to `/tmp/release-notes.md`. They are posted in Step 6, after the changelog pull request is on master.
@@ -118,7 +118,7 @@ Before creating the tag:
 2. Run `bun run changelog:assemble X.Y.Z`. That command uses today's ISO date via Luxon (`DateTime.now().toISODate()`), folds fragments into a new `## [X.Y.Z] - YYYY-MM-DD` section in [`CHANGELOG.md`](../../CHANGELOG.md), leaves `## [Unreleased]` as a pointer at `changelog/unreleased/`, and deletes the assembled fragment files. It also regenerates the example app's what's new data (`example-frontend/constants/whatsNew.generated.json`); if you edit `CHANGELOG.md` afterwards (for example to add an upgrade note line), rerun `bun run whats-new:generate`. Commit it with `CHANGELOG.md`, or `bun run check:whats-new` fails in CI.
 3. Confirm the new version section is **non-empty** and grouped under Keep a Changelog headings.
 4. If the new section has a `### Breaking`, `### Changed`, `### Deprecated`, or `### Removed` heading, write `mcp-server/src/docs/upgrades/X.Y.Z.md` **in the same commit as the assembled changelog**, using the template in [`mcp-server/src/docs/upgrades/README.md`](../../mcp-server/src/docs/upgrades/README.md). Add a changelog line `Upgrade note: [\`mcp-server/src/docs/upgrades/X.Y.Z.md\`](mcp-server/src/docs/upgrades/X.Y.Z.md).` under the version heading. The tag-time upgrade-docs check fails the release without the file. Verify locally with `bun run check:upgrade-docs X.Y.Z`.
-5. If this skill (or another `.rulesync/` source) needs to change, prefer a separate pull request so **Bot merge** can land the release; otherwise edit `.rulesync/` in this same commit, run `bun run rules`, then run `bun run skills:sync` so `skills/release/SKILL.md` matches. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
+5. If this skill (or another `.rulesync/` source) needs to change, prefer a separate pull request so **Bot merge** can land the release; otherwise edit `.rulesync/` in this same commit, run `bun run rules`. `bun run rules:check` must pass. Commit the generated copies in the changelog pull request.
 
 ## Step 5c: Open the changelog pull request and merge it when CI is green (required)
 
@@ -236,7 +236,7 @@ Create the draft right after the tag push. The CI jobs that need it wait up to 1
 
 4. **Announce breaking changes or deprecations** — post a [Discussions → Announcements](https://github.com/TerrenoLabs/terreno/discussions/categories/announcements) thread summarizing what changed, linking the `## Breaking changes` section of the release notes, the matching `CHANGELOG.md` entry, and the upgrade note in `mcp-server/src/docs/upgrades/$VERSION.md` when one exists.
 
-5. After editing this skill or other `.rulesync/` sources, run `bun run rules` and `bun run skills:sync`, and confirm `bun run rules:check` passes. That edit belongs in the Step 5c pull request, before the tag.
+5. After editing this skill or other `.rulesync/` sources, run `bun run rules`, and confirm `bun run rules:check` passes. That edit belongs in the Step 5c pull request, before the tag.
 
 ## Step 8: If a publish job fails
 

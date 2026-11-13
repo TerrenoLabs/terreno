@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {assert} from "chai";
-import {handleToolCall, tools} from "../tools.js";
+import {handleToolCall, toCollectionName, tools} from "../tools.js";
 
 // Run the CLI source with bun so the test does not depend on install-time bin links.
 const blocksCli = fileURLToPath(new URL("../../../blocks/src/cli.ts", import.meta.url));
@@ -212,11 +212,13 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductListScreen");
-      expect(content).toContain("useGetProductsQuery");
-      expect(content).toContain("isLoading");
-      expect(content).toContain("error");
-      expect(content).toContain("refetch");
-      expect(content).toContain("ScrollView");
+      expect(content).toContain('import { useQuery, useSyncStatus } from "@terreno/syncdb/react";');
+      expect(content).toContain('useQuery<ProductRow>("products")');
+      expect(content).toContain("item.title");
+      expect(content).toContain("isSyncing");
+      expect(content).not.toContain("openApiSdk");
+      expect(content).toContain("SYNC_COLLECTIONS");
+      expect(content).toContain("@/store/apiSdk");
     });
 
     test("should generate form screen", async () => {
@@ -230,7 +232,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("CreateProductScreen");
-      expect(content).toContain("useCreateProductMutation");
+      expect(content).toContain('const {create} = useMutate("products");');
+      expect(content).toContain("create({data: { title, description }});");
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useState");
       expect(content).toContain("TextField");
       expect(content).toContain("handleSubmit");
@@ -248,7 +252,8 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("ProductDetailScreen");
-      expect(content).toContain("useGetProductQuery");
+      expect(content).toContain('useEntity<ProductRow>("products", id ?? "")');
+      expect(content).not.toContain("openApiSdk");
       expect(content).toContain("useLocalSearchParams");
       expect(content).toContain("item.title");
       expect(content).toContain("item.price");
@@ -264,9 +269,9 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("TextField");
-      expect(content).toContain('label="Full Name"');
+      expect(content).toContain('title="Full Name"');
       expect(content).toContain("value={name}");
-      expect(content).toContain("onChangeText={setName}");
+      expect(content).toContain("onChange={setName}");
     });
 
     test("should generate email field", async () => {
@@ -277,7 +282,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("EmailField");
-      expect(content).toContain("error={errors.email}");
+      expect(content).toContain("errorText={errors.email}");
     });
 
     test("should generate select field with options", async () => {
@@ -299,7 +304,9 @@ describe("tools", () => {
       expect(content).toContain("SelectField");
       expect(content).toContain("USA");
       expect(content).toContain("Canada");
-      expect(content).toContain("onChangeValue={setCountry}");
+      expect(content).toContain("onChange={setCountry}");
+      expect(content).not.toContain("onChangeValue");
+      expect(content).not.toContain('label="Country"');
     });
 
     test("should generate boolean field", async () => {
@@ -321,7 +328,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="date"');
+      expect(content).toContain('type="date"');
     });
 
     test("should generate multiple fields", async () => {
@@ -410,6 +417,92 @@ describe("tools", () => {
 
       expect(result.content[0].text).toContain("findOne");
       expect(result.content[0].text).toContain("findOneOrThrow");
+    });
+
+    const conventionalOptions = `{
+          strict: "throw",
+          toJSON: {virtuals: true},
+          toObject: {virtuals: true},
+        }`;
+
+    test("accepts Document and Model types imported from src/types/models/", async () => {
+      // The example backend layout: types live in src/types/models/todoTypes.ts.
+      const schema = `
+        import mongoose from "mongoose";
+        import type {TodoDocument, TodoModel} from "../types/models/todoTypes";
+        import {addDefaultPlugins} from "./modelPlugins";
+
+        const todoSchema = new mongoose.Schema<TodoDocument, TodoModel>({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("✓");
+    });
+
+    test("accepts Document and Model types imported from modelInterfaces", async () => {
+      const schema = `
+        import mongoose from "mongoose";
+        import {
+          UserDocument,
+          UserModel,
+        } from "../modelInterfaces";
+
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+    });
+
+    test("accepts the create-terreno-app types barrel and inline type aliases", async () => {
+      const fromTypes = `
+        import type {UserDocument, UserModel} from "../types";
+        const userSchema = new mongoose.Schema<UserDocument, UserModel>({}, ${conventionalOptions});
+        addDefaultPlugins(userSchema);
+      `;
+      const inlineAlias = `
+        export type NoteDocument = DefaultDoc & {body: string};
+        const noteSchema = new mongoose.Schema<NoteDocument>({}, ${conventionalOptions});
+        addDefaultPlugins(noteSchema);
+      `;
+
+      for (const schema of [fromTypes, inlineAlias]) {
+        const result = await handleToolCall("terreno_validate_model_schema", {schema});
+        expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
+      }
+    });
+
+    test("still reports missing types when the model has none", async () => {
+      // mongoose's own Document types are not the model's Document type.
+      const schema = `
+        import mongoose, {type HydratedDocument, Document} from "mongoose";
+        const todoSchema = new mongoose.Schema({
+          title: {description: "Title", type: String},
+        }, ${conventionalOptions});
+        addDefaultPlugins(todoSchema);
+      `;
+
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(result.content[0].text).toContain("Missing TypeScript interfaces");
+      expect(result.content[0].text).toContain("src/types/models/");
+    });
+
+    test("scans many unclosed named imports in linear time", async () => {
+      const schema = `${"import {{|".repeat(20_000)}\nimport {UserDocument} from "../types";`;
+
+      const start = performance.now();
+      const result = await handleToolCall("terreno_validate_model_schema", {schema});
+
+      expect(performance.now() - start).toBeLessThan(500);
+      expect(result.content[0].text).not.toContain("Missing TypeScript interfaces");
     });
 
     test("should detect Date usage", async () => {
@@ -531,9 +624,11 @@ describe("tools", () => {
       });
       const content = result.content[0].text;
 
-      expect(content).toContain("PasswordField");
-      expect(content).toContain('label="Password"');
-      expect(content).toContain("error={errors.password}");
+      // PasswordField is a placeholder with no props; TextField type="password" is the real one.
+      expect(content).not.toContain("PasswordField");
+      expect(content).toContain('type="password"');
+      expect(content).toContain('title="Password"');
+      expect(content).toContain("errorText={errors.password}");
     });
 
     test("should generate textarea field", async () => {
@@ -552,7 +647,7 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("DateTimeField");
-      expect(content).toContain('mode="datetime"');
+      expect(content).toContain('type="datetime"');
     });
 
     test("should generate select field with empty options", async () => {
@@ -563,6 +658,26 @@ describe("tools", () => {
 
       expect(content).toContain("SelectField");
       expect(content).toContain("options={[]}");
+    });
+  });
+
+  describe("toCollectionName", () => {
+    test("derives kebab-case plural collection names from model names", () => {
+      expect(toCollectionName("Product")).toBe("products");
+      expect(toCollectionName("TodoItem")).toBe("todo-items");
+      expect(toCollectionName("Category")).toBe("categories");
+      expect(toCollectionName("Day")).toBe("days");
+      expect(toCollectionName("Settings")).toBe("settings");
+    });
+
+    test("screen tool honors an explicit collection", async () => {
+      const result = await handleToolCall("terreno_generate_screen", {
+        collection: "catalog-products",
+        modelName: "Product",
+        name: "Catalog",
+        type: "list",
+      });
+      expect(result.content[0].text).toContain('useQuery<ProductRow>("catalog-products")');
     });
   });
 
@@ -587,6 +702,14 @@ describe("tools", () => {
       const content = result.content[0].text;
 
       expect(content).toContain("# Install Admin Panel");
+      expect(content).toContain("frontend/app/(tabs)/admin/_layout.tsx");
+      expect(content).toContain("<AdminProvider");
+      expect(content).toContain("getAuthHeaders={getAdminAuthHeaders}");
+      expect(content).toContain('import {baseUrl} from "@terreno/syncdb/config";');
+      expect(content).toContain('import {authProvider} from "@/store/syncdb";');
+      expect(content).toContain("await authProvider.getToken()");
+      expect(content).not.toContain("@terreno/rtk");
+      expect(content).not.toContain("api={");
       expect(content).toContain("frontend/app/(tabs)/admin/index.tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model].tsx");
       expect(content).toContain("frontend/app/(tabs)/admin/[model]/create.tsx");

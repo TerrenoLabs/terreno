@@ -74,6 +74,14 @@ describe("Avatar", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("takes keyboard focus only when the avatar is editable", () => {
+    const {UNSAFE_getAllByProps, rerender} = renderWithTheme(<Avatar name="John Doe" />);
+    expect(UNSAFE_getAllByProps({"aria-role": "button"})[0].props.focusable).toBe(false);
+
+    rerender(<Avatar name="John Doe" status="imagePicker" />);
+    expect(UNSAFE_getAllByProps({"aria-role": "button"})[0].props.focusable).toBe(true);
+  });
+
   it("renders initials when no image is provided", () => {
     const {getByText} = renderWithTheme(<Avatar name="John Doe" testID="avatar" />);
     expect(getByText("JD")).toBeTruthy();
@@ -92,6 +100,26 @@ describe("Avatar", () => {
     fireEvent(getByTestId("avatar-image"), "onError");
 
     expect(getByText("JD")).toBeTruthy();
+  });
+
+  it("logs only the error message, never the event object, when the image fails", () => {
+    const warnSpy = spyOn(console, "warn").mockImplementation(() => {});
+    const {getByText, getByTestId} = renderWithTheme(<Avatar {...defaultProps} name="John Doe" />);
+    // A native error event carries view and fiber references; this stands in for that graph.
+    const cyclicTarget: Record<string, unknown> = {};
+    cyclicTarget.self = cyclicTarget;
+
+    fireEvent(getByTestId("avatar-image"), "onError", {
+      nativeEvent: {error: "403 Forbidden"},
+      target: cyclicTarget,
+    });
+
+    expect(getByText("JD")).toBeTruthy();
+    const imageErrorCalls = warnSpy.mock.calls.filter((call) =>
+      String(call[0]).includes("Image load error")
+    );
+    expect(imageErrorCalls).toEqual([["Image load error: 403 Forbidden"]]);
+    warnSpy.mockRestore();
   });
 
   it("applies correct size class", () => {

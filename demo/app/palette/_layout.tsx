@@ -1,22 +1,40 @@
-import {isNarrowViewport} from "@terreno/ui";
+import {isSupportedDesktopWidth} from "@terreno/ui";
 import {router, Stack} from "expo-router";
 import {StatusBar} from "expo-status-bar";
-import {Pressable, StyleSheet, Text} from "react-native";
+import {type ReactElement, useCallback, useEffect, useState} from "react";
+import {Pressable, Text, useWindowDimensions} from "react-native";
 
-const Layout = () => {
+const Layout = (): ReactElement => {
+  const {width} = useWindowDimensions();
+  const [hasMounted, setHasMounted] = useState(false);
+  const isDesktopLayout = isSupportedDesktopWidth({width});
+  const showHeaderBack = hasMounted && !isDesktopLayout;
+  const hideHeaderBack = useCallback((): null => null, []);
+
+  // Static export SSR has no reliable window width, so keep header chrome stable until mount.
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
   return (
     <>
       <StatusBar style="auto" />
       <Stack
         screenOptions={{
           headerBackTitle: "Back",
-          headerBackVisible: isNarrowViewport(),
+          headerBackVisible: showHeaderBack,
+          headerLeft: showHeaderBack ? undefined : hideHeaderBack,
           headerRight: () => (
             <Pressable
               onPress={async () => {
                 router.navigate("demo");
               }}
-              style={styles.header}
+              style={{
+                alignItems: "center",
+                height: "100%",
+                justifyContent: "center",
+                marginRight: hasMounted && isDesktopLayout ? 16 : 0,
+              }}
             >
               <Text style={{fontWeight: "bold"}}>Demo Mode</Text>
             </Pressable>
@@ -29,12 +47,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    height: "100%",
-    justifyContent: "center",
-    marginRight: isNarrowViewport() ? 0 : 16,
-  },
-});

@@ -13,7 +13,7 @@ import {AIService, TemperaturePresets} from "./aiService";
 // Create a mock LanguageModelV2
 const createMockModel = (responseText = "Mock response") => {
   return {
-    doGenerate: mock(async () => ({
+    doGenerate: mock(async (_options: unknown) => ({
       content: [{text: responseText, type: "text" as const}],
       finishReason: "stop" as const,
       usage: {inputTokens: 5, outputTokens: 10},
@@ -1199,6 +1199,27 @@ describe("AIService", () => {
 
       expect(sink.traces[0].sensitive).toBe(true);
       expect(sink.traces[0].prompts).toEqual([{label: "production", name: "greeter", version: 2}]);
+    });
+
+    it("records a prompt's shared includes on the trace after the prompt itself", async () => {
+      const sink = new MemoryTraceSink();
+      registerLocalApp({
+        promptVersion: {
+          ...productionVersion,
+          includes: [{includedBy: "greeter", label: "production", name: "base-rules", version: 4}],
+        },
+        traceSink: sink,
+      });
+      const model = createMockModel("Hello world");
+      const service = new AIService({model: model as unknown as LanguageModel});
+
+      await service.generateText({prompt: "User says hi", promptName: "greeter"});
+
+      expect(sink.traces[0].name).toBe("greeter");
+      expect(sink.traces[0].prompts).toEqual([
+        {label: "production", name: "greeter", version: 2},
+        {includedBy: "greeter", label: "production", name: "base-rules", version: 4},
+      ]);
     });
 
     it("still writes AIRequest for a chat stream when a sink is registered", async () => {

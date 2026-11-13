@@ -1,10 +1,10 @@
 import {mock} from "bun:test";
+import {randomUUID as nodeRandomUUID} from "node:crypto";
 import React from "react";
 
 // Loaded after tests/testPreload.ts registers the @terreno/test Expo environment (which mocks
 // react-native). Static imports would be evaluated too early and parse react-native's Flow entry.
 const actualUi = await import("@terreno/ui");
-const actualSdk = await import("@/store/sdk");
 const actualSyncDbSdk = await import("@/store/syncDbSdk");
 
 (
@@ -93,20 +93,13 @@ mock.module("@terreno/ui", () => uiModuleMock);
 mock.module("../../ui/dist/index.js", () => uiModuleMock);
 mock.module("../../ui/src/index.tsx", () => uiModuleMock);
 
-const sdkModuleMock = {
-  ...actualSdk,
-  useSummarizeExampleTextMutation: () => [
-    () => ({unwrap: async (): Promise<{output: string}> => ({output: ""})}),
-    {isLoading: false},
-  ],
-};
-
-mock.module("@/store/sdk", () => sdkModuleMock);
-
 const syncDbSdkMocks = {
   ...actualSyncDbSdk,
   useTodos: () => ({data: []}),
 };
+
+// expo-crypto's native module does not load under Bun; Node's crypto is the same secure source.
+mock.module("expo-crypto", () => ({randomUUID: nodeRandomUUID}));
 
 mock.module("@/store/syncDbSdk", () => syncDbSdkMocks);
 mock.module("../store/syncDbSdk.ts", () => syncDbSdkMocks);

@@ -1,5 +1,5 @@
 import {describe, expect, it} from "bun:test";
-import {model, Schema} from "mongoose";
+import {model, Schema, Types} from "mongoose";
 
 import type {AdminConfig} from "./adminTypes";
 import {scrubAdminFields, stripAdminBodyFields} from "./scrubAdminFields";
@@ -162,6 +162,41 @@ describe("scrubAdminFields", () => {
   });
 });
 
+describe("scrubAdminFields with ObjectId values", () => {
+  const todoAdmin: AdminConfig = {displayName: "Todos", listFields: ["title"]};
+  const userAdmin: AdminConfig = {displayName: "Users", excludeFields: ["hash"], listFields: []};
+
+  it("keeps an unpopulated ObjectId ref as an ObjectId", () => {
+    const ownerId = new Types.ObjectId();
+    const result = scrubAdminFields(
+      {ownerId, title: "Task"},
+      {admin: todoAdmin, allModelAdmins: {ScrubUser: userAdmin}, schema: Todo.schema}
+    ) as {ownerId: unknown};
+
+    expect(result.ownerId).toBeInstanceOf(Types.ObjectId);
+    expect(String(result.ownerId)).toBe(ownerId.toHexString());
+  });
+
+  it("keeps every ObjectId in an array field as an ObjectId", () => {
+    const ids = [new Types.ObjectId(), new Types.ObjectId()];
+    const result = scrubAdminFields({ids, title: "Task"}, {admin: todoAdmin}) as {ids: unknown[]};
+
+    expect(result.ids).toHaveLength(2);
+    for (const [index, id] of result.ids.entries()) {
+      expect(id).toBeInstanceOf(Types.ObjectId);
+      expect(String(id)).toBe(ids[index].toHexString());
+    }
+  });
+
+  it("keeps Dates in an array field as Dates", () => {
+    const when = new Date("2026-01-02T03:04:05.000Z");
+    const result = scrubAdminFields({dates: [when]}, {admin: todoAdmin}) as {dates: unknown[]};
+
+    expect(result.dates[0]).toBeInstanceOf(Date);
+    expect((result.dates[0] as Date).toISOString()).toBe(when.toISOString());
+  });
+});
+
 describe("stripAdminBodyFields", () => {
   const admin: AdminConfig = {
     displayName: "Todos",
@@ -176,7 +211,7 @@ describe("stripAdminBodyFields", () => {
       {internal: "n", role: "admin", slug: "fixed", title: "x"},
       admin
     );
-    expect(result).toEqual({title: "x"});
+    expect<unknown>(result).toEqual({title: "x"});
   });
 
   it("strips keys from every object in an array body and leaves non-objects alone", () => {

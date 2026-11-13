@@ -12,6 +12,9 @@ const getNestedValue = (doc: Record<string, unknown>, path: string): unknown => 
     if (!isPlainObject(current)) {
       return undefined;
     }
+    if (part === "__proto__" || part === "constructor" || part === "prototype") {
+      return undefined;
+    }
     current = current[part];
   }
   return current;
@@ -22,13 +25,21 @@ const setNestedValue = (doc: Record<string, unknown>, path: string, value: unkno
   let current: Record<string, unknown> = doc;
   for (let index = 0; index < parts.length - 1; index++) {
     const part = parts[index];
+    // A mask path must never reach a prototype.
+    if (part === "__proto__" || part === "constructor" || part === "prototype") {
+      return;
+    }
     const next = current[part];
     if (!isPlainObject(next)) {
       current[part] = {};
     }
     current = current[part] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const lastPart = parts[parts.length - 1];
+  if (lastPart === "__proto__" || lastPart === "constructor" || lastPart === "prototype") {
+    return;
+  }
+  current[lastPart] = value;
 };
 
 const pickPaths = (doc: Record<string, unknown>, paths: string[]): Record<string, unknown> => {
@@ -44,13 +55,17 @@ const pickPaths = (doc: Record<string, unknown>, paths: string[]): Record<string
 
 const omitPath = (doc: Record<string, unknown>, omitPathName: string): void => {
   const parts = omitPathName.split(".");
+  const lastPart = parts[parts.length - 1];
+  if (lastPart === "__proto__" || lastPart === "constructor" || lastPart === "prototype") {
+    return;
+  }
   if (parts.length === 1) {
-    delete doc[parts[0]];
+    delete doc[lastPart];
     return;
   }
   const parent = getNestedValue(doc, parts.slice(0, -1).join("."));
   if (isPlainObject(parent)) {
-    delete parent[parts[parts.length - 1]];
+    delete parent[lastPart];
   }
 };
 

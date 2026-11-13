@@ -1,17 +1,17 @@
 import type http from "node:http";
 import * as Sentry from "@sentry/bun";
-import {AdminApp, DocumentStorageApp} from "@terreno/admin-backend";
-import {AdminSpaServeApp} from "@terreno/admin-spa";
 import {
-  AIAdminApp,
-  AIService,
-  createLocalObservabilityPlugin,
-  LangfuseApp,
-  ObservabilityApp,
-} from "@terreno/ai";
+  AdminApp,
+  DocumentStorageApp,
+  mcpAdminModels,
+  mcpAdminScripts,
+} from "@terreno/admin-backend";
+import {AdminSpaServeApp} from "@terreno/admin-spa";
+import {AIAdminApp, AIService, createLocalObservabilityPlugin, ObservabilityApp} from "@terreno/ai";
 import {HarnessApp} from "@terreno/ai/harness";
 import {AnnouncementsApp} from "@terreno/announcements";
 import {
+  AccountSecurityApp,
   AuditApp,
   BetterAuthApp,
   backfillAdmins,
@@ -61,7 +61,6 @@ import {
 } from "./api/ai";
 import {commsDevRouter} from "./api/commsDev";
 import {fileUploadsEnabledForRequest} from "./api/fileUploads";
-import {mcpServiceTokenAdminModel} from "./api/mcpServiceTokensAdmin";
 import {addDevNotificationRoutes} from "./api/notificationsDev";
 import {photoLibraryRouter} from "./api/photoLibrary";
 import {projectOrgContextPlugin, projectRouter} from "./api/projects";
@@ -88,7 +87,12 @@ import "./types/models/organizationSettingsTypes";
 import {resolveTwilioSmsEnvConfig} from "./twilioSmsEnv";
 import {resolveTwilioVerifyEnvConfig} from "./twilioVerifyEnv";
 import type {UserDocument} from "./types/models/userTypes";
-import {buildBetterAuthConfig, getAuthProvider, getCorsOrigins} from "./utils/betterAuthConfig";
+import {
+  buildBetterAuthConfig,
+  getAuthProvider,
+  getCorsOrigins,
+  getFrontendUrl,
+} from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
 import {createExampleInboundWebhooks} from "./webhooksExample";
@@ -190,7 +194,7 @@ export const start = async (
     const terraApp = new TerrenoApp({
       accessControl: access,
       authOptions: {
-        publicAppUrl: process.env.FRONTEND_URL || "http://localhost:8082",
+        publicAppUrl: getFrontendUrl(),
         sendMail: async (message) => {
           await getCommsService().sendMail(message);
         },
@@ -207,16 +211,31 @@ export const start = async (
         level: Configuration.get<string>("LOGGING_LEVEL") as "debug" | "info" | "warn" | "error",
         logRequests: Boolean(!isDeployed),
       },
+      // Opt-in OAuth for remote MCP clients; consent runs on the admin SPA's built-in screen.
+      mcpOAuth:
+        process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
+          ? {
+              allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost", "127.0.0.1"],
+              consentUrl: `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
+              dynamicClientRegistration: true,
+              enabled: true,
+              issuer: process.env.PUBLIC_API_URL,
+            }
+          : undefined,
+      mcpRequestLog: {enabled: true, retentionDays: 30},
       mcpServiceTokens: {
         enabled: true,
         publicMcpUrl: process.env.PUBLIC_API_URL ?? process.env.BETTER_AUTH_URL,
       },
+      mcpToolSettings: true,
       migrations: {dir: resolveExampleMigrationsDir()},
       organizations: {
         settingsSchema: organizationSettingsSchema,
       },
-      // App-owned env: @terreno/api does not read RATE_LIMIT_ENABLED. Unset = limiter off.
-      rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+      // The limiter is on by default. Deployed: Cloud Run is one Google Front End hop, so
+      // trust it to key unauthenticated traffic by client IP. Local dev, Playwright, and
+      // Maestro log in many times from one IP, so the limiter is off there.
+      rateLimit: isDeployed ? {trustProxy: 1} : false,
       skipListen,
       userModel: User as unknown as TerrenoAuthUserModel,
     }).configure(AppConfiguration);
@@ -282,18 +301,19 @@ export const start = async (
         })
       );
 
+    // Kept so FeatureFlagsApp live updates emit on the same socket the syncdb client uses.
+    let realtimeApp: RealtimeApp | undefined;
     if (isWebsocketService) {
-      terraApp.register(
-        new RealtimeApp({
-          changeStream: {
-            ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
-          },
-          debug: websocketsDebug,
-          // Required by the tenant-scoped `projects` sync stream: socket authorization
-          // must load the persisted user id before Membership-based tenant streams resolve.
-          userModel: User as unknown as TerrenoAuthUserModel,
-        })
-      );
+      realtimeApp = new RealtimeApp({
+        changeStream: {
+          ignoredCollections: ["socketio", "sessions", "socketio_realtime"],
+        },
+        debug: websocketsDebug,
+        // Required by the tenant-scoped `projects` sync stream: socket authorization
+        // must load the persisted user id before Membership-based tenant streams resolve.
+        userModel: User as unknown as TerrenoAuthUserModel,
+      });
+      terraApp.register(realtimeApp);
     } else {
       logger.info("RealtimeApp disabled because BACKEND_SERVICE is not websockets/all");
     }
@@ -410,7 +430,7 @@ export const start = async (
       .register(
         new FeatureFlagsApp({
           liveUpdates: {
-            socketIoServer: () => io,
+            socketIoServer: () => realtimeApp?.getIo() ?? io,
           },
           segments: exampleFeatureFlagSegments,
         })
@@ -438,6 +458,9 @@ export const start = async (
         })
       )
       .register(new AuditApp())
+      // Platform account recovery at /users/:id/security/* (operators and superadmins).
+      // Needs AuditApp: every recovery action writes a security AuditEvent.
+      .register(new AccountSecurityApp({accessControl: access}))
       .register(new AIAdminApp());
 
     const exampleJobsApp = createExampleJobsApp({accessControl: access});
@@ -485,13 +508,15 @@ export const start = async (
           ],
           home: exampleAdminHome,
           migrations: {dir: resolveExampleMigrationsDir()},
-          models: [mcpServiceTokenAdminModel],
+          models: mcpAdminModels({requestLog: true, toolSettings: true}),
           organizations: true,
-          scripts: adminScripts,
+          scripts: [...adminScripts, ...mcpAdminScripts()],
         })
       )
       .register(
         new ConsentApp({
+          // Staff whose roles grant consentResponse:signOnBehalf may sign consent for others.
+          accessControl: access,
           auditTrail: true,
           resolveConsentForms: (user, forms) => (user.admin ? [] : forms),
           supportedLocales: ["en", "es"],
@@ -539,28 +564,22 @@ export const start = async (
       );
     }
 
-    // Langfuse OTEL/client init has crashed Cloud Run preview revisions before PORT
-    // opens. Smoke tests omit these keys; production deploy still registers Langfuse.
-    if (
-      process.env.LANGFUSE_SECRET_KEY &&
-      process.env.LANGFUSE_PUBLIC_KEY &&
-      !process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
-    ) {
-      terraApp.register(
-        new LangfuseApp({
-          baseUrl: process.env.LANGFUSE_BASE_URL,
-          organization: process.env.LANGFUSE_ORGANIZATION,
-          project: process.env.LANGFUSE_PROJECT,
-          projectId: process.env.LANGFUSE_PROJECT_ID,
-          publicKey: process.env.LANGFUSE_PUBLIC_KEY,
-          secretKey: process.env.LANGFUSE_SECRET_KEY,
-        })
-      );
+    const isPrPreviewDatabase = Boolean(
+      process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-")
+    );
+
+    // PR preview deploys smoke-test /health before Cloud Run's startup budget; seed after listen.
+    if (!isPrPreviewDatabase) {
+      await seedDefaultDataOnBoot({isDeployed});
     }
 
-    await seedDefaultDataOnBoot({isDeployed});
-
     const app = terraApp.start();
+
+    if (isPrPreviewDatabase) {
+      void seedDefaultDataOnBoot({isDeployed}).catch((error: unknown) => {
+        logger.error("PR preview default seed failed", {error});
+      });
+    }
 
     // A host-owned server takes traffic as soon as this returns, so finish the sync
     // indexes and startup migrations first instead of racing the first requests.

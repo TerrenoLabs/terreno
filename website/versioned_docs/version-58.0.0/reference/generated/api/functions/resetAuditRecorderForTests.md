@@ -1,0 +1,5 @@
+> **resetAuditRecorderForTests**(): `void`
+
+## Returns
+
+`void`

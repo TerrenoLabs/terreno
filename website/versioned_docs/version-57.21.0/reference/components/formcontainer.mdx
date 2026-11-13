@@ -1,0 +1,26 @@
+---
+title: "FormContainer"
+description: "Groups a form's fields. On web it renders a real <form> (display: contents, so layout is the inner Box's) so browsers and password managers pair a username with its password, autofill saved credentials, and offer to save new ones; without it Chrome warns \"Password field is not contained in a form\". On native it is a Box. ref.requestSubmit() submits through the form element on web, so password managers see a real submit."
+sidebar_label: "FormContainer"
+slug: /reference/components/formcontainer
+---
+
+import ComponentDemo from '@site/src/components/ComponentDemo';
+
+# FormContainer
+
+Groups a form's fields. On web it renders a real \<form\> (display: contents, so layout is the inner Box's) so browsers and password managers pair a username with its password, autofill saved credentials, and offer to save new ones; without it Chrome warns "Password field is not contained in a form". On native it is a Box. ref.requestSubmit() submits through the form element on web, so password managers see a real submit.
+
+**Package:** `@terreno/ui`  
+**Categories:** Form, Foundation  
+**Props interface:** `FormContainerProps`  
+**Story source:** [`demo/stories/FormContainer.stories.tsx`](https://github.com/TerrenoLabs/terreno/blob/master/demo/stories/FormContainer.stories.tsx)
+
+## Live demo
+
+<ComponentDemo name="FormContainer" />
+
+## Props
+
+_No documented props were extracted from TypeDoc._
+

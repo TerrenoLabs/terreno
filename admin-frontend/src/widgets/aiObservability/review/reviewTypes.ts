@@ -4,19 +4,27 @@ export type ReviewStatus = "done" | "in_progress" | "pending" | "skipped";
 
 export interface ReviewListItem {
   assigneeId?: string;
+  batchId?: string;
+  /** Set when reviewers judge a dataset item. */
+  datasetItemId?: string;
   enqueuedAt: string;
   evaluatorId: string;
   id: string;
+  /** Short preview of what the AI wrote; the queue falls back to the trace name without it. */
+  outputPreview?: string;
   promptName?: string;
   reason: string;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
   traceName: string;
 }
 
 export interface EvaluatorDimension {
   dataType: "boolean" | "categorical" | "numeric";
   key: string;
+  /** Question shown to human reviewers in place of the score key. */
+  question?: string;
   range?: string;
   required: boolean;
 }
@@ -29,6 +37,8 @@ export interface ReviewPanelField {
 }
 
 export interface ReviewDetail {
+  batchId?: string;
+  batchName?: string;
   comment?: string;
   dimensions: EvaluatorDimension[];
   evaluatorId: string;
@@ -42,7 +52,10 @@ export interface ReviewDetail {
   rawOutput?: unknown;
   scores?: Record<string, boolean | number | string>;
   status: ReviewStatus;
-  traceId: string;
+  /** Unset when the reviewed dataset item has no source trace. */
+  traceId?: string;
+  /** Set when reviewers judge a dataset item; answers are saved on that item. */
+  datasetItemId?: string;
 }
 
 export const REVIEW_STATUSES: ReviewStatus[] = ["pending", "in_progress", "done", "skipped"];
@@ -136,10 +149,79 @@ export const displayReviewValue = (value: unknown): string => {
   return JSON.stringify(value, null, 2);
 };
 
+interface ParsedNumber {
+  end: number;
+  // Where the next match attempt starts when no range follows: the fraction can begin a number.
+  retryFrom: number;
+  value: number;
+}
+
+const isDigit = (char: string | undefined): boolean =>
+  char !== undefined && char >= "0" && char <= "9";
+
+const isSpace = (char: string | undefined): boolean => char !== undefined && /\s/.test(char);
+
+// Reads `-?\d+(\.\d+)?` at `start`.
+const readNumber = (text: string, start: number): ParsedNumber | undefined => {
+  let index = text[start] === "-" ? start + 1 : start;
+  const digitsStart = index;
+  while (isDigit(text[index])) {
+    index += 1;
+  }
+  if (index === digitsStart) {
+    return undefined;
+  }
+  let retryFrom = index;
+  if (text[index] === "." && isDigit(text[index + 1])) {
+    index += 1;
+    retryFrom = index;
+    while (isDigit(text[index])) {
+      index += 1;
+    }
+  }
+  return {end: index, retryFrom, value: Number(text.slice(start, index))};
+};
+
+const skipSpaces = (text: string, start: number): number => {
+  let index = start;
+  while (isSpace(text[index])) {
+    index += 1;
+  }
+  return index;
+};
+
+// Finds the first `<number> - <number>` or `<number> .. <number>` in one left-to-right pass.
+// A regex here backtracks quadratically on long digit runs with no separator.
+const findNumericRange = (text: string): {max: number; min: number} | undefined => {
+  let index = 0;
+  while (index < text.length) {
+    const first = readNumber(text, index);
+    if (!first) {
+      index += 1;
+      continue;
+    }
+    let cursor = skipSpaces(text, first.end);
+    if (text[cursor] === "-") {
+      cursor += 1;
+    } else if (text.startsWith("..", cursor)) {
+      cursor += 2;
+    } else {
+      index = first.retryFrom;
+      continue;
+    }
+    const second = readNumber(text, skipSpaces(text, cursor));
+    if (second) {
+      return {max: second.value, min: first.value};
+    }
+    index = first.retryFrom;
+  }
+  return undefined;
+};
+
 export const numericRange = (range?: string): {max: number; min: number; step: number} => {
-  const matches = range?.match(/(-?\d+(?:\.\d+)?)\s*(?:-|\.\.)\s*(-?\d+(?:\.\d+)?)/);
-  const min = matches?.[1] ? Number(matches[1]) : 0;
-  const max = matches?.[2] ? Number(matches[2]) : 1;
+  const found = range ? findNumericRange(range) : undefined;
+  const min = found?.min ?? 0;
+  const max = found?.max ?? 1;
   return {max, min, step: max - min <= 1 ? 0.1 : 1};
 };
 
@@ -151,4 +233,51 @@ export const categoricalOptions = (range?: string): string[] => {
     .split(/[|,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
+};
+
+/** Reviewer-facing label for a score: its question when set, otherwise the key. */
+export const dimensionLabel = (dimension: EvaluatorDimension): string => {
+  return dimension.question?.trim() || dimension.key;
+};
+
+/** Key of the first required-or-optional dimension still missing an answer. */
+const firstUnanswered = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return dimensions.find((dimension) => scores[dimension.key] === undefined)?.key;
+};
+
+/** The first unanswered question after `fromKey`, wrapping to the start; undefined when all are answered. */
+export const nextUnansweredAfter = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>,
+  fromKey?: string
+): string | undefined => {
+  const start = dimensions.findIndex((dimension) => dimension.key === fromKey) + 1;
+  return firstUnanswered([...dimensions.slice(start), ...dimensions.slice(0, start)], scores);
+};
+
+/** Move the highlighted question up or down one row, stopping at the first and last question. */
+export const stepQuestionKey = (
+  dimensions: EvaluatorDimension[],
+  currentKey: string | undefined,
+  step: 1 | -1
+): string | undefined => {
+  const index = dimensions.findIndex((dimension) => dimension.key === currentKey);
+  if (index < 0) {
+    return (step > 0 ? dimensions[0] : dimensions.at(-1))?.key;
+  }
+  return dimensions[Math.min(dimensions.length - 1, Math.max(0, index + step))]?.key;
+};
+
+/** Key of the first unanswered yes/no question: the one the list highlights and Y or N answers. */
+export const firstUnansweredBoolean = (
+  dimensions: EvaluatorDimension[],
+  scores: Record<string, boolean | number | string>
+): string | undefined => {
+  return firstUnanswered(
+    dimensions.filter((dimension) => dimension.dataType === "boolean"),
+    scores
+  );
 };

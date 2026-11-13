@@ -57,7 +57,7 @@ describe("evaluatorTypes helpers", () => {
     assert.deepEqual(missing, ["correct"]);
   });
 
-  it("parses API error titles from RTK shapes", () => {
+  it("parses API error titles from request error shapes", () => {
     assert.equal(parseApiErrorTitle({data: {title: "Conflict"}}), "Conflict");
     assert.equal(parseApiErrorTitle({message: "Network down"}), "Network down");
     assert.isUndefined(parseApiErrorTitle("plain"));
@@ -83,6 +83,13 @@ describe("evaluatorTypes helpers", () => {
         "boolean"
       ),
       {dataType: "boolean", key: "score", required: true}
+    );
+    assert.deepEqual(
+      dimensionForDataType(
+        {dataType: "boolean", key: "faithful", question: "Is it faithful?", required: true},
+        "boolean"
+      ),
+      {dataType: "boolean", key: "faithful", question: "Is it faithful?", required: true}
     );
     assert.equal(
       dimensionForDataType({dataType: "boolean", key: "score", required: true}, "categorical")

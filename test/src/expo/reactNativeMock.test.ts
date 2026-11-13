@@ -12,9 +12,14 @@ import {registerExpoTestEnvironment} from "./registerExpoTestEnvironment";
 
 registerExpoTestEnvironment({setProcessEnv: false});
 
-const {createElement, createRef} = await import("react");
-const {render} = await import("@testing-library/react-native");
-const ReactNative = await import("react-native");
+// Required, not imported, so react-native resolves to the mock the environment registers.
+const {createElement, createRef} = require("react") as typeof import("react");
+const {render} =
+  require("@testing-library/react-native") as typeof import("@testing-library/react-native");
+// The mock also exposes itself as `default`, which the CommonJS typings do not declare.
+const ReactNative = require("react-native") as typeof import("react-native") & {
+  default: typeof import("react-native");
+};
 
 interface AnimatedNode {
   _value: number;
@@ -45,14 +50,18 @@ describe("react-native mock", () => {
   it("flattens styles and processes colors", () => {
     expect(flattenStyle([{margin: 1}, [{padding: 2}], null])).toEqual({margin: 1, padding: 2});
     expect(flattenStyle(undefined)).toEqual({});
-    expect(ReactNative.StyleSheet.compose({a: 1}, {b: 2})).toEqual([{a: 1}, {b: 2}]);
-    expect(ReactNative.StyleSheet.compose(undefined, {b: 2})).toEqual({b: 2});
+    const compose = ReactNative.StyleSheet.compose as unknown as (
+      a: unknown,
+      b: unknown
+    ) => unknown;
+    expect(compose({margin: 1}, {padding: 2})).toEqual([{margin: 1}, {padding: 2}]);
+    expect(compose(undefined, {padding: 2})).toEqual({padding: 2});
     expect(ReactNative.StyleSheet.create({box: {flex: 1}})).toEqual({box: {flex: 1}});
     expect(processColor(null)).toBeNull();
     expect(processColor(0x112233)).toBe(0x112233);
     expect(processColor("red")).toBe(0xff000000);
-    expect(ReactNative.DynamicColorIOS({dark: "black", light: "white"})).toBe("white");
-    expect(ReactNative.PlatformColor("systemBlue", "blue")).toBe("systemBlue");
+    expect<unknown>(ReactNative.DynamicColorIOS({dark: "black", light: "white"})).toBe("white");
+    expect<unknown>(ReactNative.PlatformColor("systemBlue", "blue")).toBe("systemBlue");
   });
 
   it("completes composite animations and runs their children", () => {
@@ -105,8 +114,7 @@ describe("react-native mock", () => {
         createElement(ReactNative.SectionList<string>, {
           renderItem: ({item}: {item: string}) =>
             createElement(ReactNative.Text, null, `item ${item}`),
-          renderSectionHeader: ({section}: {section: {title: string}}) =>
-            createElement(ReactNative.Text, null, section.title),
+          renderSectionHeader: ({section}) => createElement(ReactNative.Text, null, section.title),
           sections: [{data: ["x"], title: "Section"}] as never,
         }),
         createElement(ReactNative.SectionList<string>, {
@@ -131,12 +139,15 @@ describe("react-native mock", () => {
     expect(ReactNative.findNodeHandle(null)).toBeNull();
     expect(await ReactNative.Linking.canOpenURL("https://example.com")).toBe(true);
     const task = mock(() => {});
-    ReactNative.InteractionManager.runAfterInteractions(task);
-    ReactNative.InteractionManager.runAfterInteractions();
+    const {InteractionManager} = ReactNative as unknown as {
+      InteractionManager: {runAfterInteractions: (task?: () => void) => void};
+    };
+    InteractionManager.runAfterInteractions(task);
+    InteractionManager.runAfterInteractions();
     expect(task).toHaveBeenCalled();
     const emitter = new ReactNative.NativeEventEmitter();
     emitter.addListener("event", () => {}).remove();
-    expect(ReactNative.PanResponder.create({}).panHandlers).toEqual({});
+    expect((ReactNative.PanResponder.create({}) as {panHandlers: unknown}).panHandlers).toEqual({});
   });
 });
 
@@ -149,8 +160,11 @@ describe("react-native internals", () => {
   });
 
   it("resolves sources and native component configs", async () => {
-    const resolveAssetSource = (await import("react-native/Libraries/Image/resolveAssetSource"))
-      .default as unknown as (source: unknown) => unknown;
+    const resolveAssetSource = (
+      (await import("react-native/Libraries/Image/resolveAssetSource" as string)) as {
+        default: unknown;
+      }
+    ).default as unknown as (source: unknown) => unknown;
     expect(resolveAssetSource({uri: "a.png"})).toEqual({
       height: 0,
       scale: 1,
@@ -166,7 +180,7 @@ describe("react-native internals", () => {
     expect(resolveAssetSource({})).toEqual({height: 0, scale: 1, uri: "", width: 0});
     expect(resolveAssetSource(null)).toBeNull();
     const {default: AssetSourceResolver} = (await import(
-      "react-native/Libraries/Image/AssetSourceResolver"
+      "react-native/Libraries/Image/AssetSourceResolver" as string
     )) as unknown as {
       default: new () => {defaultAsset: () => unknown};
     };

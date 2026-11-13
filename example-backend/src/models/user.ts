@@ -1,4 +1,4 @@
-import {emailVerificationPlugin, rbacUserPlugin} from "@terreno/api";
+import {emailVerificationPlugin, isDisabledPlugin, rbacUserPlugin} from "@terreno/api";
 import mongoose from "mongoose";
 import _passportLocalMongoose from "passport-local-mongoose";
 import {DEFAULT_USER_ROLE} from "../rbacRoles";
@@ -58,6 +58,9 @@ userSchema.plugin(passportLocalMongoose, {
 });
 userSchema.plugin(rbacUserPlugin, {defaultRoles: [DEFAULT_USER_ROLE]});
 userSchema.plugin(emailVerificationPlugin);
+// `disabled` lets platform staff disable an account from the security routes; a disabled user's
+// requests and socket handshakes are refused.
+userSchema.plugin(isDisabledPlugin);
 
 addDefaultPlugins(userSchema);
 

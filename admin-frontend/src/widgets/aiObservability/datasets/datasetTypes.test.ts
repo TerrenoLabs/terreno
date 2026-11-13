@@ -3,7 +3,6 @@ import {assert} from "chai";
 import type {DatasetItemRecord, DatasetRecord} from "./datasetTypes";
 import {
   filterDatasetItemsByTab,
-  formatProvenanceBar,
   summarizeJson,
   unwrapDatasetItems,
   unwrapDatasetList,
@@ -22,7 +21,6 @@ const dataset: DatasetRecord = {
 const item = (partial: Partial<DatasetItemRecord> & {id: string}): DatasetItemRecord => ({
   created: "2026-01-01T00:00:00.000Z",
   datasetId: "ds-1",
-  id: partial.id,
   input: {q: "hi"},
   origin: "manual",
   proofread: true,
@@ -50,18 +48,6 @@ describe("datasetTypes helpers", () => {
     assert.deepEqual(unwrapDatasetItems(rows), rows);
     assert.deepEqual(unwrapDatasetItems({data: rows}), rows);
     assert.deepEqual(unwrapDatasetItems([{bad: true}]), []);
-  });
-
-  it("formats provenance bar and handles empty totals", () => {
-    assert.equal(formatProvenanceBar({auto: 0, human: 0, needsReview: 0, total: 0}), "—");
-    assert.equal(
-      formatProvenanceBar({auto: 2, human: 1, needsReview: 0, total: 3}),
-      "33% human · 67% auto"
-    );
-    assert.equal(
-      formatProvenanceBar({auto: 1, human: 1, needsReview: 0, total: 1}),
-      "100% human · 0% auto"
-    );
   });
 
   it("filters items by tab", () => {

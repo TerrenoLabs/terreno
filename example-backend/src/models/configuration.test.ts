@@ -12,6 +12,9 @@ mock.module("@google-cloud/secret-manager", () => ({
   },
 }));
 
+// Registers the app's configurations; the "pre-registered" tests must not rely on another
+// test file having loaded it first.
+import "../conf";
 import {connectToMongoDB} from "../utils/database";
 import {Configuration, ConfigurationDB} from "./configuration";
 

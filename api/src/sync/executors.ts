@@ -147,6 +147,27 @@ export const isExecutorConflictError = (error: unknown): error is ExecutorConfli
 const stubRequest = (user?: User): express.Request => ({user}) as unknown as express.Request;
 
 /**
+ * The request a hook sees for an update or delete of `id`. Over HTTP it is the real request. Over
+ * sync it is a stub (or the socket's `{user}` object) with no `params`, so `params.id` is filled
+ * in, as in the REST routes: hooks that read `req.params.id` must work over sync too.
+ */
+const requestForId = ({
+  id,
+  req,
+  user,
+}: {
+  id: string;
+  req?: express.Request;
+  user?: User;
+}): express.Request => {
+  const request = req ?? stubRequest(user);
+  if (request.params === undefined) {
+    request.params = {id};
+  }
+  return request;
+};
+
+/**
  * True for the Mongoose error thrown when an `optimisticConcurrency` save matched no
  * document (its `__v` filter failed) — i.e. another write landed since the load.
  * Name-checked rather than `instanceof` for the same ES5-dist reason as
@@ -167,7 +188,10 @@ const reloadDocForConflict = async <T>(
   id: string
 ): Promise<ExecutorDoc<T> | undefined> => {
   try {
-    const found = await model.find({_id: id, deleted: {$in: [true, false]}} as never).limit(1);
+    // $eq pins the id to an equality match so a client-supplied object cannot add operators.
+    const found = await model
+      .find({_id: {$eq: id}, deleted: {$in: [true, false]}} as never)
+      .limit(1);
     return found[0] as ExecutorDoc<T> | undefined;
   } catch {
     return undefined;
@@ -523,7 +547,7 @@ export const executeUpdate = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&
@@ -805,7 +829,7 @@ export const executeDelete = async <T>({
   /** When true, skip modelRouter permission checks (admin-window sync mutations). */
   skipPermissionChecks?: boolean;
 }): Promise<ExecutorResult<T>> => {
-  const request = req ?? stubRequest(user);
+  const request = requestForId({id, req, user});
 
   if (
     !skipPermissionChecks &&
@@ -833,7 +857,9 @@ export const executeDelete = async <T>({
         (error.meta as {deleted?: string} | undefined)?.deleted === "true";
       if (alreadyDeleted) {
         // Hydrate the tombstone bypassing the isDeletedPlugin find filter.
-        const tombstone = await model.find({_id: id, deleted: {$in: [true, false]}}).limit(1);
+        const tombstone = await model
+          .find({_id: {$eq: id}, deleted: {$in: [true, false]}} as never)
+          .limit(1);
         const resolved = tombstone[0] as ExecutorDoc<T> & {deleted?: boolean};
         if (!resolved) {
           throw error;

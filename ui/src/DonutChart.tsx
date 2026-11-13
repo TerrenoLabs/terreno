@@ -55,6 +55,9 @@ export const DonutChart: FC<DonutChartProps> = ({
   formatValue = String,
   height = DEFAULT_SIZE,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   onPeriodPress,
   periodLabel,
   testID,
@@ -94,6 +97,9 @@ export const DonutChart: FC<DonutChartProps> = ({
       emptyText={emptyText}
       isEmpty={data.length === 0}
       loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
       testID={testID}
       tooltipText={tooltipText}
     >

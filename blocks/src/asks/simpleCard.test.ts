@@ -1,5 +1,10 @@
 import {describe, expect, it} from "bun:test";
-import {type ValidAskFixture, validAskFixtures, validAskFixturesOf} from "../tests/askFixtures";
+import {
+  fixtureAsk,
+  type ValidAskFixture,
+  validAskFixtures,
+  validAskFixturesOf,
+} from "../tests/askFixtures";
 import {ASK_LIMITS} from "./limits";
 import type {
   ChoiceAskInput,
@@ -192,9 +197,9 @@ const expectedCard = (fixture: ValidAskFixture): {buttons: ExpectedButton[]; han
 describe("toSimpleCard golden fixtures", () => {
   for (const fixture of validAskFixtures()) {
     it(`derives the expected card for valid/${fixture.name}`, () => {
-      expect(
-        toSimpleCard({input: fixture.input, kind: fixture.kind, toolCallId: TOOL_CALL_ID})
-      ).toEqual(fixture.simple);
+      expect(toSimpleCard({...fixtureAsk(fixture), toolCallId: TOOL_CALL_ID})).toEqual(
+        fixture.simple
+      );
     });
   }
 });
@@ -202,11 +207,7 @@ describe("toSimpleCard golden fixtures", () => {
 describe("toSimpleCard properties over every valid fixture", () => {
   for (const fixture of validAskFixtures()) {
     describe(`valid/${fixture.name}`, () => {
-      const card = toSimpleCard({
-        input: fixture.input,
-        kind: fixture.kind,
-        toolCallId: TOOL_CALL_ID,
-      });
+      const card = toSimpleCard({...fixtureAsk(fixture), toolCallId: TOOL_CALL_ID});
 
       it("passes simpleCardSchema", () => {
         expect(simpleCardSchema.safeParse(card).success).toBe(true);
@@ -232,9 +233,9 @@ describe("toSimpleCard properties over every valid fixture", () => {
       it("has the buttons and handoff of its rule-table row", () => {
         const expected = expectedCard(fixture);
         expect(card.handoff).toBe(expected.handoff);
-        expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-          expected.buttons
-        );
+        expect<ExpectedButton[]>(
+          card.buttons.map(({id, response, style}) => ({id, response, style}))
+        ).toEqual(expected.buttons);
       });
 
       it("never shows two buttons with the same label", () => {
@@ -442,9 +443,9 @@ describe("toSimpleCard properties over compact asks", () => {
 
   it("follows the optionsFit row of the rule table", () => {
     for (const {card, input} of cards) {
-      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-        buttonsForRow(input, "optionsFit")
-      );
+      expect<ExpectedButton[]>(
+        card.buttons.map(({id, response, style}) => ({id, response, style}))
+      ).toEqual(buttonsForRow(input, "optionsFit"));
     }
   });
 
@@ -744,9 +745,9 @@ describe("toSimpleCard confirm rules", () => {
 
   it("puts approve first and deny last, with no Skip even when the ask allows declining", () => {
     for (const {card, input} of cards) {
-      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-        confirmButtons(input)
-      );
+      expect<ExpectedButton[]>(
+        card.buttons.map(({id, response, style}) => ({id, response, style}))
+      ).toEqual(confirmButtons(input));
     }
   });
 
@@ -841,9 +842,9 @@ describe("toSimpleCard markdown rules", () => {
 
   it("offers Approve draft exactly when the draft meets the length rules, then Cancel", () => {
     for (const {card, fits, input} of cards) {
-      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-        markdownButtons(input, fits)
-      );
+      expect<ExpectedButton[]>(
+        card.buttons.map(({id, response, style}) => ({id, response, style}))
+      ).toEqual(markdownButtons(input, fits));
     }
   });
 
@@ -935,9 +936,9 @@ describe("toSimpleCard form rules", () => {
 
   it("offers Submit defaults exactly when there is a default and every required field has one", () => {
     for (const {card, input, values} of cards) {
-      expect(card.buttons.map(({id, response, style}) => ({id, response, style}))).toEqual(
-        formButtons(input, values)
-      );
+      expect<ExpectedButton[]>(
+        card.buttons.map(({id, response, style}) => ({id, response, style}))
+      ).toEqual(formButtons(input, values));
     }
   });
 

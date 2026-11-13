@@ -1573,6 +1573,7 @@ exports[`HeightField snapshots should match snapshot with all props 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",
@@ -3229,6 +3230,7 @@ exports[`HeightField snapshots should match snapshot with error state 1`] = `
         },
       ],
       "props": {
+        "nativeID": undefined,
         "style": {
           "alignItems": "center",
           "flexDirection": "row",

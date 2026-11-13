@@ -465,6 +465,34 @@ describe("executeUpdate", () => {
     expect(error.status).toBe(404);
   });
 
+  it("gives preUpdate the document id as req.params.id when no request is passed", async () => {
+    const doc = await createDoc();
+    const seenIds: unknown[] = [];
+    const options = baseOptions({
+      preUpdate: (body, req) => {
+        seenIds.push(req.params.id);
+        return body as ExecStuff;
+      },
+    });
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      user: owner,
+    });
+    // A socket sync mutation passes a `{user}` request that has no params.
+    await executeUpdate<ExecStuff>({
+      body: {name: "renamed again"},
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options,
+      req: {user: owner} as unknown as express.Request,
+      user: owner,
+    });
+    expect(seenIds).toEqual([doc._id.toString(), doc._id.toString()]);
+  });
+
   it("returns 403 when preUpdate returns null", async () => {
     const doc = await createDoc();
     const options = baseOptions({preUpdate: () => null});
@@ -807,6 +835,20 @@ describe("executeDelete", () => {
 
     assert.equal(doc._id, id);
     assert.isTrue(doc.deleted);
+  });
+
+  it("rejects an operator object as an id without deleting anything", async () => {
+    await createDoc();
+    const error = await caught(
+      executeDelete<ExecStuff>({
+        id: {$ne: null} as unknown as string,
+        model: ExecStuffModel,
+        options: baseOptions(),
+        user: owner,
+      })
+    );
+    assert.equal(error.status, 404);
+    expect(await ExecStuffModel.countDocuments({deleted: true})).toBe(0);
   });
 
   it("checks object permissions before returning an idempotent tombstone", async () => {
@@ -1293,7 +1335,7 @@ describe("soft-delete flag in client write bodies", () => {
       body: {name: "archived"},
       id: doc._id.toString(),
       model: ExecStuffModel,
-      options: baseOptions({preUpdate: (body) => ({...body, deleted: true})}),
+      options: baseOptions({preUpdate: (body) => ({...body, deleted: true}) as ExecStuff}),
       user: owner,
     });
     expect(await ExecStuffModel.countDocuments({_id: doc._id})).toBe(0);

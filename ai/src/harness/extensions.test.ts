@@ -198,9 +198,6 @@ const llmSpans = (task: HarnessTaskDocument) =>
 
 describe("Extensions, hooks, wraps, and memos", () => {
   beforeAll(async () => {
-    // The shared preload's beforeEach imports this lazily under a 5 s hook timeout; a
-    // cold first import can exceed it, so load it here first.
-    await import("../langfuseClient");
     createLocalObservabilityPlugin();
     SpanModel = registerObsSpan();
     TraceModel = registerObsTrace();
@@ -233,7 +230,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
       expect(() => section("s", "x" as never)).toThrow(
         harnessErrorMatching("definitionInvalid", "section(s): build must be a function")
       );
-      expect(() => hook("onEverything" as never, () => undefined)).toThrow(
+      expect(() => hook("onEverything" as never, (() => undefined) as never)).toThrow(
         harnessErrorMatching(
           "definitionInvalid",
           'hook: kind must be one of afterTool, beforeModelRequest, beforeTool, not "onEverything"'
@@ -774,7 +771,8 @@ describe("Extensions, hooks, wraps, and memos", () => {
           ...tool,
           execute: async (args, api) => {
             ran.push(`${tag}:before`);
-            return {[tag]: await tool.execute(args, api)};
+            // `args` was parsed by the wrapped tool's own `parameters`.
+            return {[tag]: await tool.execute(args as never, api)};
           },
         });
       // The wrapping extension comes before the overriding one, yet wraps its tool.
@@ -996,6 +994,12 @@ describe("Extensions, hooks, wraps, and memos", () => {
     it("rejects blank keys, non-JSON values, and writes after the phase committed", async () => {
       const errors: string[] = [];
       const lateRead: unknown[] = [];
+      // The task reads as completed from the commit on, before the phase function returns.
+      // Wait for the function itself, or the post-commit calls race the assertions below.
+      let markPhaseReturned = (): void => {};
+      const phaseReturned = new Promise<void>((resolve) => {
+        markPhaseReturned = resolve;
+      });
       const capture = async (work: () => Promise<unknown>): Promise<void> => {
         try {
           await work();
@@ -1015,6 +1019,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
               await rt.commit({terminal: {status: "completed"}});
               await capture(() => rt.memo("late", 1));
               lateRead.push(await rt.memo("late"));
+              markPhaseReturned();
             },
           },
         },
@@ -1023,6 +1028,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
       const harness = await openHarness({registry: [task]});
       const created = await harness.createTask(task, {});
       await harness.waitForTask(created._id, {timeout: {seconds: 10}});
+      await phaseReturned;
       expect(errors).toEqual([
         "memo requires a non-empty key",
         'memo "big": value is not JSON-serializable (JSON.stringify cannot serialize BigInt.)',
@@ -1053,7 +1059,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
           version: 1,
         });
         const harness = await openHarness({registry: [task]});
-        const ids = [];
+        const ids: mongoose.Types.ObjectId[] = [];
         for (let n = 0; n < count; n++) {
           ids.push((await harness.createTask(task, {n}))._id);
         }
@@ -1106,7 +1112,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
       it("lets exactly one of two independent runs win a key (first write wins)", async () => {
         const {release, rows} = await hangTasks(2);
         try {
-          const [first, second] = rows as [HarnessTaskDocument, HarnessTaskDocument];
+          const [first, second] = rows;
           // Two runs fencing different task rows race on one shared key, so neither queues
           // behind the other's lease write and the unique index decides.
           const scope = first._id;
@@ -1128,7 +1134,7 @@ describe("Extensions, hooks, wraps, and memos", () => {
       it("refuses a write from a run whose lease token is stale", async () => {
         const {release, rows} = await hangTasks(1);
         try {
-          const [row] = rows as [HarnessTaskDocument];
+          const [row] = rows;
           const stale = memoFor(row, row._id, "stale-token")("choice", "a");
           await expect(stale).rejects.toBeInstanceOf(HarnessCommitConflictError);
           await expect(stale).rejects.toThrow(

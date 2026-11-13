@@ -91,6 +91,15 @@ const requireNonEmpty = (value: string | undefined, label: string): string => {
   return trimmed;
 };
 
+// A loop instead of `/\/+$/` keeps trimming linear on inputs with long runs of slashes.
+const trimTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
 const normalizePublicUrl = (publicUrl: string): string => {
   let parsed: URL;
   try {
@@ -105,7 +114,7 @@ const normalizePublicUrl = (publicUrl: string): string => {
     throw new Error(`GcpCloudTasksRunner publicUrl must use http or https, received: ${publicUrl}`);
   }
 
-  return parsed.toString().replace(/\/+$/, "");
+  return trimTrailingSlashes(parsed.toString());
 };
 
 const normalizeBasePath = (basePath: string | undefined): string => {
@@ -113,7 +122,7 @@ const normalizeBasePath = (basePath: string | undefined): string => {
   if (!trimmed.startsWith("/")) {
     throw new Error(`GcpCloudTasksRunner basePath must start with "/", received: ${basePath}`);
   }
-  return trimmed.replace(/\/+$/, "") || "/";
+  return trimTrailingSlashes(trimmed) || "/";
 };
 
 const validateDispatchDeadlineSeconds = (dispatchDeadlineSeconds: number | undefined): number => {

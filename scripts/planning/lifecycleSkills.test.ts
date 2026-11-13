@@ -1,8 +1,12 @@
 import {describe, it} from "bun:test";
-import {readFileSync} from "node:fs";
-import {resolve} from "node:path";
+import {cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {dirname, join, resolve} from "node:path";
 import {assert} from "chai";
 import {
+  PORTABILITY_MARKERS,
+  readTestingPlanContract,
+  readUserGuideContract,
   validateAsyncReviewBotsContract,
   validateClaudePluginHost,
   validateCodexPluginHost,
@@ -13,6 +17,8 @@ import {
   validatePrDeploymentsContract,
   validateProductCiContract,
   validateStageContent,
+  validateTestingPlanContract,
+  validateUserGuideContract,
 } from "./lifecycleSkills.ts";
 
 const ROOT_DIRECTORY = resolve(import.meta.dir, "../..");
@@ -32,16 +38,54 @@ const readGrilling = (): string =>
     "utf8"
   );
 
+const readTestingPlan = (): string =>
+  readFileSync(
+    resolve(ROOT_DIRECTORY, "plugins/terreno-planning/references/testing-plan.md"),
+    "utf8"
+  );
+
+const readUserGuide = (): string =>
+  readFileSync(
+    resolve(ROOT_DIRECTORY, "plugins/terreno-planning/references/user-guide.md"),
+    "utf8"
+  );
+
+const GROW_DEFINITION = {
+  directory: "terreno-1-grow",
+  nextMarkers: ["next: pick", "next: grow", "next: null"],
+  stage: "grow" as const,
+};
+
 const validateGrilling = (grillingContent: string): string[] =>
   validateStageContent({
     content: readStage("terreno-1-grow"),
-    definition: {
-      directory: "terreno-1-grow",
-      nextMarkers: ["next: pick", "next: grow", "next: null"],
-      stage: "grow",
-    },
+    definition: GROW_DEFINITION,
     grillingContent,
   });
+
+/** Paths validateLifecyclePlugin reads, copied so a fixture can drop one file. */
+const PLUGIN_FIXTURE_PATHS = [
+  "plugins",
+  "skills-lock.json",
+  ".github/PULL_REQUEST_TEMPLATE.md",
+  ".cursor-plugin",
+  ".agents/plugins",
+  ".claude-plugin",
+  "CONTRIBUTING.md",
+];
+
+const withPluginFixture = (run: (rootDirectory: string) => void): void => {
+  const rootDirectory = mkdtempSync(join(tmpdir(), "lifecycle-skills-"));
+  try {
+    for (const path of PLUGIN_FIXTURE_PATHS) {
+      mkdirSync(dirname(join(rootDirectory, path)), {recursive: true});
+      cpSync(join(ROOT_DIRECTORY, path), join(rootDirectory, path), {recursive: true});
+    }
+    run(rootDirectory);
+  } finally {
+    rmSync(rootDirectory, {force: true, recursive: true});
+  }
+};
 
 describe("lifecycle skill architecture", (): void => {
   it("validates the real plugin lifecycle", (): void => {
@@ -587,6 +631,260 @@ describe("lifecycle skill architecture", (): void => {
     assert.isTrue(errors.some((error) => error.includes("question that prompted them")));
   });
 
+  for (const [search, replacement, expected] of [
+    [
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "terreno-1-grow: Grow must load the testing-plan contract",
+    ],
+    [
+      "## E2E tests",
+      "an e2e note",
+      "terreno-1-grow: Grow must require the IP section ## E2E tests",
+    ],
+    [
+      "## Regression cases",
+      "a regression note",
+      "terreno-1-grow: Grow must require the IP section ## Regression cases",
+    ],
+    [
+      "neither may be missing",
+      "either may be skipped",
+      "terreno-1-grow: Grow must forbid omitting a testing-plan section",
+    ],
+  ] as const) {
+    it(`rejects Grow without ${search}`, (): void => {
+      const content = readStage("terreno-1-grow").replaceAll(search, replacement);
+
+      assert.deepEqual(validateStageContent({content, definition: GROW_DEFINITION}), [expected]);
+    });
+  }
+
+  for (const [directory, stage, nextMarkers, search, replacement, expected] of [
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Pick must load the testing-plan contract",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Pick must write the task's planned ## E2E tests rows",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "e2e guide",
+      "test notes",
+      "Pick must follow the e2e guide for planned specs",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "skip a row silently",
+      "drop a row",
+      "Pick must never skip a planned row silently",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "Written in",
+      "Owned by",
+      "Pick must write the rows whose Written in names this task",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Roast must load the testing-plan contract",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Roast must run the task's planned ## E2E tests rows",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "## Regression cases",
+      "the manual list",
+      "Roast must check ## Regression cases rows",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "`deferred`",
+      "`skipped`",
+      "Roast must record unreachable rows as `deferred`",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: brew", "next: pick", "next: null"],
+      "regression-step bar",
+      "case style",
+      "Roast must hold regression rows to the regression-step bar",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Brew must load the testing-plan contract",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Brew must gate on planned ## E2E tests rows",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "## Regression cases",
+      "the manual list",
+      "Brew must merge ## Regression cases rows into the suite",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "Regression suites",
+      "case folder",
+      "Brew must write cases to the resolved Regression suites",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "next free ID",
+      "any ID",
+      "Brew must assign each new case the next free ID",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "../../references/testing-plan.md",
+      "missing-testing-plan",
+      "Taste must load the testing-plan contract",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "## E2E tests",
+      "the e2e list",
+      "Taste must re-run affected ## E2E tests rows after fixes",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "re-check both testing-plan sections",
+      "glance at the plan",
+      "Taste must re-check both testing-plan sections after fixes",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "renumber regression ID",
+      "keep regression ID",
+      "Taste must renumber regression ID collisions",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "Smoke command",
+      "quick check",
+      "Taste must run the declared Smoke command before push",
+    ],
+  ] as const) {
+    it(`rejects ${stage} without ${search}`, (): void => {
+      const content = readStage(directory).replaceAll(search, replacement);
+
+      assert.deepEqual(
+        validateStageContent({
+          content,
+          definition: {directory, nextMarkers: [...nextMarkers], stage},
+        }),
+        [`${directory}: ${expected}`]
+      );
+    });
+  }
+
+  it("rejects an approval brief without E2E and Regression lines", (): void => {
+    const content = readGrilling()
+      .replaceAll("E2E: <", "Specs: <")
+      .replaceAll("Regression: <", "Manual: <");
+
+    assert.deepEqual(validateGrilling(content), [
+      "grilling: the approval brief plan must include the E2E: line",
+      "grilling: the approval brief plan must include the Regression: line",
+    ]);
+  });
+
+  it("accepts the real testing-plan contract", (): void => {
+    assert.deepEqual(validateTestingPlanContract(readTestingPlan()), []);
+  });
+
+  it("rejects a plugin whose testing-plan contract is missing", (): void => {
+    withPluginFixture((rootDirectory): void => {
+      const pluginDirectory = join(rootDirectory, "plugins/terreno-planning");
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), []);
+
+      rmSync(join(pluginDirectory, "references/testing-plan.md"));
+
+      assert.isUndefined(readTestingPlanContract({pluginDirectory}));
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), [
+        "testing-plan contract is missing: references/testing-plan.md",
+      ]);
+    });
+  });
+
+  it("rejects a testing-plan contract that drops its tables or rules", (): void => {
+    const content = readTestingPlan()
+      .replaceAll("| ID | Spec or flow | Layer | Proves | Written in |", "| Spec | Notes |")
+      .replaceAll("## Deferral rule", "## Later")
+      .replaceAll("predates contract", "is old");
+
+    assert.deepEqual(validateTestingPlanContract(content), [
+      "testing-plan contract must define | ID | Spec or flow | Layer | Proves | Written in |",
+      "testing-plan contract must define ## Deferral rule",
+      "testing-plan contract must define predates contract",
+    ]);
+  });
+
+  it("keeps the testing-plan contract portable", (): void => {
+    const content = readTestingPlan();
+
+    for (const marker of PORTABILITY_MARKERS) {
+      assert.notInclude(content, marker);
+    }
+  });
+
   it("accepts the real grilling approval brief", (): void => {
     assert.deepEqual(validateGrilling(readGrilling()), []);
   });
@@ -686,5 +984,105 @@ describe("lifecycle skill architecture", (): void => {
     assert.isTrue(errors.some((error) => error.includes("product-CI procedure")));
     assert.isTrue(errors.some((error) => error.includes("native watch hooks")));
     assert.isTrue(errors.some((error) => error.includes("timer waiting")));
+  });
+});
+
+describe("user-guide contract", (): void => {
+  for (const [directory, stage, nextMarkers, search, replacement, expected] of [
+    [
+      "terreno-1-grow",
+      "grow",
+      ["next: pick", "next: grow", "next: null"],
+      "None — user guide off",
+      "None — skipped",
+      "Grow must write the opt-out entry",
+    ],
+    [
+      "terreno-2-pick",
+      "pick",
+      ["next: roast", "next: pick", "next: brew", "next: null"],
+      "skip a guide row silently",
+      "drop a guide row",
+      "Pick must never skip a guide row silently",
+    ],
+    [
+      "terreno-3-roast",
+      "roast",
+      ["next: pick", "next: brew", "next: null"],
+      "shipped screens",
+      "code",
+      "Roast must check pages against the shipped screens",
+    ],
+    [
+      "terreno-4-brew",
+      "brew",
+      ["next: taste", "next: pick", "next: roast", "next: brew", "next: null"],
+      "guide index",
+      "page list",
+      "Brew must check the guide index",
+    ],
+    [
+      "terreno-5-taste",
+      "taste",
+      ["next: taste", "next: null"],
+      "../../references/user-guide.md",
+      "missing-user-guide",
+      "Taste must load the user-guide contract",
+    ],
+  ] as const) {
+    it(`rejects ${stage} without ${search}`, (): void => {
+      const content = readStage(directory).replaceAll(search, replacement);
+
+      assert.deepEqual(
+        validateStageContent({
+          content,
+          definition: {directory, nextMarkers: [...nextMarkers], stage},
+        }),
+        [`${directory}: ${expected}`]
+      );
+    });
+  }
+
+  it("rejects an approval brief without the User guide line", (): void => {
+    const content = readGrilling().replaceAll("User guide: <", "Help: <");
+
+    assert.deepEqual(validateGrilling(content), [
+      "grilling: the approval brief plan must include the User guide: line",
+    ]);
+  });
+
+  it("accepts the real user-guide contract", (): void => {
+    assert.deepEqual(validateUserGuideContract(readUserGuide()), []);
+  });
+
+  it("rejects a plugin whose user-guide contract is missing", (): void => {
+    withPluginFixture((rootDirectory): void => {
+      const pluginDirectory = join(rootDirectory, "plugins/terreno-planning");
+      rmSync(join(pluginDirectory, "references/user-guide.md"));
+
+      assert.isUndefined(readUserGuideContract({pluginDirectory}));
+      assert.deepEqual(validateLifecyclePlugin({rootDirectory}), [
+        "user-guide contract is missing: references/user-guide.md",
+      ]);
+    });
+  });
+
+  it("rejects a user-guide contract that drops the opt-out or the entry bar", (): void => {
+    const content = readUserGuide()
+      .replaceAll("### Opting out", "### Skipping")
+      .replaceAll("## Guide-entry bar", "## Style");
+
+    assert.deepEqual(validateUserGuideContract(content), [
+      "user-guide contract must define ### Opting out",
+      "user-guide contract must define ## Guide-entry bar",
+    ]);
+  });
+
+  it("keeps the user-guide contract portable", (): void => {
+    const content = readUserGuide();
+
+    for (const marker of PORTABILITY_MARKERS) {
+      assert.notInclude(content, marker);
+    }
   });
 });

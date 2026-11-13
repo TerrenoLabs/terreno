@@ -18,7 +18,7 @@ const DEFAULT_THRESHOLD = 90;
 const normalizePath = (path: string): string => path.split(sep).join("/");
 const SOURCE_FILE_PATTERN = /\.(?:ts|tsx)$/;
 const EXCLUDED_SOURCE_PATTERN =
-  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|openApiSdk\.ts$/;
+  /(?:^|\/)(?:dist|coverage|e2e|node_modules|isolated|tests|testing|fixtures)(?:\/|$)|(?:^|\/)types\/.+\.ts$|(?:^|\/)types\.ts$|(?:^|\/)jobsWorker\.ts$|(?:^|\/)story-config\/.+\.config\.tsx$|\.(?:test|spec|stories)\.(?:ts|tsx)$|\.isolated\.(?:ts|tsx)$|(?:^|\/)(?:apiSdk|syncDbSdk|openApiSdk)\.ts$/;
 /**
  * Expo Router route files under `app/`: `index`, `_layout`, `+not-found`, dynamic
  * segments such as `[id]`, thin `create` wrappers, and named recovery routes
@@ -26,6 +26,9 @@ const EXCLUDED_SOURCE_PATTERN =
  * Playwright e2e; submit logic lives in `lib/authRecoveryActions.ts`. Ordinary
  * modules under `app/` stay gated.
  */
+/** Scaffold templates are copied into generated apps as text, never executed here. */
+const TEMPLATE_FILE_PATTERN = /\.template\.(?:ts|tsx)$/;
+
 const EXPO_ROUTER_ENTRY_PATTERN =
   /(?:^|\/)app\/(?:.*\/)?(?:index|_layout|create|\+[^/]+|\[[^/]+\]|forgotPassword|resetPassword|verifyEmail)\.tsx$/;
 
@@ -61,7 +64,6 @@ export const PACKAGE_CI_LCOV_SKIP: {packageName: string; pipelineParameter: stri
   {packageName: "feature-flags", pipelineParameter: "run-feature-flags"},
   {packageName: "jobs", pipelineParameter: "run-jobs"},
   {packageName: "mcp-server", pipelineParameter: "run-mcp-server"},
-  {packageName: "rtk", pipelineParameter: "run-rtk"},
   {packageName: "syncdb", pipelineParameter: "run-syncdb"},
   {packageName: "test", pipelineParameter: "run-test-package"},
   {packageName: "ui", pipelineParameter: "run-ui"},
@@ -112,6 +114,8 @@ export const colocatedTestCandidates = (repoRelativeSource: string): string[] =>
     `${withoutExt}.test.tsx`,
     `${withoutExt}.spec.ts`,
     `${withoutExt}.spec.tsx`,
+    `${withoutExt}.isolated.ts`,
+    `${withoutExt}.isolated.tsx`,
   ];
 };
 
@@ -133,10 +137,26 @@ export const findColocatedTests = ({
       return null;
     }
     for (const match of matches) {
-      tests.add(normalizePath(relative(packageRoot, resolve(repoRoot, match))));
+      const packageRelative = normalizePath(relative(packageRoot, resolve(repoRoot, match)));
+      tests.add(packageRelative.startsWith(".") ? packageRelative : `./${packageRelative}`);
     }
   }
-  return [...tests].sort();
+  const sorted = [...tests].sort();
+  // Run shared-suite files before *.isolated.* so a prior mock.module in an isolated file
+  // cannot replace modules still needed by colocated *.test.* files in the same process.
+  return sorted.sort((left, right) => {
+    const rank = (path: string): number => {
+      if (path.includes(".isolated.")) {
+        return 1;
+      }
+      return 0;
+    };
+    const diff = rank(left) - rank(right);
+    if (diff !== 0) {
+      return diff;
+    }
+    return left.localeCompare(right);
+  });
 };
 
 const terrenoPackageDir = (packageName: string): string => {
@@ -185,8 +205,66 @@ export const isCoverageSourceFile = (path: string): boolean => {
   return (
     SOURCE_FILE_PATTERN.test(path) &&
     !EXCLUDED_SOURCE_PATTERN.test(path) &&
+    !TEMPLATE_FILE_PATTERN.test(path) &&
     !EXPO_ROUTER_ENTRY_PATTERN.test(path)
   );
+};
+
+/**
+ * Subpath entry files (`syncdb/src/auth/auth.ts`) hold only comments and `export … from`
+ * statements. Bun emits no LCOV record for them, so they would read as 0% covered.
+ */
+export const isReExportOnlySource = (source: string): boolean => {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .trim();
+  if (code.length === 0) {
+    return false;
+  }
+  const statements = code
+    .split(/;\s*/)
+    .map((statement) => statement.trim())
+    .filter((statement) => statement.length > 0);
+  return statements.every((statement) =>
+    /^export\s+(?:type\s+)?(?:\*|\{[\s\S]*\})(?:\s+as\s+\w+)?\s+from\s+["'][^"']+["']$/.test(
+      statement
+    )
+  );
+};
+
+const stripCommentsAndStrings = (source: string): string => {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/\/\/.*$/gm, "")
+    .replace(/'(?:\\.|[^'\\])*'/g, "''")
+    .replace(/"(?:\\.|[^"\\])*"/g, '""')
+    .replace(/`(?:\\.|[^`\\])*`/g, "``")
+    .trim();
+};
+
+/**
+ * Modules that export only `interface` and `type` aliases. TypeScript erases them, so Bun
+ * writes no LCOV record and the new-file gate would treat the file as 0% covered.
+ */
+export const isTypeOnlySource = (source: string): boolean => {
+  const code = stripCommentsAndStrings(source);
+  if (code.length === 0) {
+    return false;
+  }
+  if (/\b(?:function|class|enum|const|let|var|namespace)\b/.test(code)) {
+    return false;
+  }
+  if (/^import(?!\s+type\b)/m.test(code)) {
+    return false;
+  }
+  if (/export\s+default\b/.test(code)) {
+    return false;
+  }
+  if (/export\s+(?!type\b|interface\b)/.test(code)) {
+    return false;
+  }
+  return /export\s+(?:type|interface)\b/.test(code);
 };
 
 const findFileCoverage = (
@@ -284,7 +362,11 @@ const getAddedSourceFiles = (repoRoot: string, base: string): string[] => {
   return output
     .split("\n")
     .map((path) => path.trim())
-    .filter((path) => path.length > 0 && isCoverageSourceFile(path));
+    .filter((path) => path.length > 0 && isCoverageSourceFile(path))
+    .filter((path) => {
+      const source = readFileSync(join(repoRoot, path), "utf8");
+      return !isReExportOnlySource(source) && !isTypeOnlySource(source);
+    });
 };
 
 export const groupFilesByWorkspace = ({

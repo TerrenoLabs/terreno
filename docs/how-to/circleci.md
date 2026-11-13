@@ -47,6 +47,21 @@ list pipelines on the slug above.
 | `.circleci/config.yml` | Setup workflow + `path-filtering` (this is the live config) |
 | `.circleci/continue-config.yml` | Real jobs/workflows gated by those params |
 
+## Bun version is pinned
+
+`install_bun_and_deps` pins Bun with `node/install-bun` `version`, currently 1.4.4, the
+same version as the local toolchain and the GitHub workflows. Package tests run through
+`bun test --shard`, which needs 1.4.4 or newer. Bump the pin together with the local
+toolchain and re-run `bun run test:coverage` in each package first: coverage numbers move
+between Bun releases.
+
+## Test shards
+
+Each executor sets `TERRENO_TEST_SHARDS`, the number of concurrent `bun test --shard`
+processes a package's tests use. Medium executors set 1. `api-ci`, the longest test
+job, overrides it to 2 and runs on `large`. See
+[Test sharding](../explanation/test-sharding.md).
+
 ## Bun install is uncached
 
 `install_bun_and_deps` runs `bun install --frozen-lockfile` with
@@ -87,8 +102,8 @@ The example-backend Docker job runs only when its image recipe changes
 (`Dockerfile`, `.dockerignore`, package manifests, or `bun.lock`). API/source
 changes are covered by preview CD builds and do not start a duplicate image job.
 
-UI, RTK, and admin-frontend changes do **not** start `example-backend-ci`.
-Those packages are covered by `ui-ci` / `rtk-ci` / `packages-ci` plus e2e and
+UI, syncdb, and admin-frontend changes do **not** start `example-backend-ci`.
+Those packages are covered by `ui-ci` / `syncdb-ci` / `packages-ci` plus e2e and
 admin-spa. `new-file-coverage` starts on package `src/` (and example app
 runtime paths including `example-frontend/components/`), not on every `*.ts`
 file in the repo (Playwright specs no longer compile the world). Package CI
@@ -106,11 +121,14 @@ when the package imports them. Coverage-script unit tests run in the cheap
 Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
 `admin-table`, `syncdb`) instead of one container per spec file. Each shard
 first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. Repository
+file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+which builds its own web bundle and backend (`playwright.config.ts` with
+`E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
 sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
-Require `repo-policies` in branch protection. Require `e2e-auth` /
+The `typecheck` job runs in the same workflow: it compiles every package, then
+runs `bun run typecheck`. Require `repo-policies` and `typecheck` in branch protection. Require `e2e-auth` /
 `e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
 as the smoke shard and do not run the other four. Do not require the old
 `no-barrel-imports` / `e2e-login` names.
@@ -166,13 +184,13 @@ non-PR branch builds.
 | Path (examples) | Parameter | PR job | `master` job |
 | --- | --- | --- | --- |
 | `demo/**`, `ui/**` | `run-deploy-demo` | `deploy-demo-preview` | `deploy-demo` |
-| `example-frontend/**`, `admin-frontend/**`, `rtk/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
+| `example-frontend/**`, `admin-frontend/**`, `ui/**`, `ai/**`, `blocks/**`, `syncdb/**`, `bun.lock` | `run-deploy-frontend` | `deploy-frontend-preview` | `deploy-frontend` |
 | `docs/**`, `website/**` | `run-deploy-docs` | `deploy-docs-preview` | `deploy-docs` |
 | `example-backend/**`, `api/**`, `comms/**`, `jobs/**`, `admin-spa/**`, `feature-flags/**`, `announcements/**`, plus every frontend path above | `run-cd-backend` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `terraform/**`, `infra/**` | `run-cd-terraform` | `gcp-cd-preview` | `gcp-cd-prod` |
 | `mcp-server/**`, `ui/**` | `run-cd-mcp` | _(none)_ | `gcp-cd-prod` (runs `mcp-server` `test:ci` first) |
 
-The backend image bundles the admin SPA (ui, rtk, admin-frontend, syncdb), so
+The backend image bundles the admin SPA (ui, admin-frontend, syncdb), so
 those paths redeploy the backend too. Every frontend PR preview therefore gets
 an isolated `pr-N` backend: `deploy-frontend-preview` always points
 `EXPO_PUBLIC_API_URL` at it (the prod backend rejects preview CORS) and waits
@@ -280,7 +298,7 @@ ambient OIDC token for GCP impersonation.
 Branch protection must require the CircleCI job names below. Remove disabled
 GitHub check names or pull requests will wait for checks that can no longer run.
 
-Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `rtk-ci`, `ui-ci`, `syncdb-ci`,
+Dedicated package jobs (`api-ci`, `ai-ci`, `blocks-ci`, `ui-ci`, `syncdb-ci`,
 `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run `bun run test:coverage`
 (`scripts/check-coverage.ts`, 95% functions and lines). Isolated `syncdb` tests
 are included by that script. Published packages without a dedicated workflow
@@ -294,6 +312,7 @@ the same commands through the parameterized `packages-ci` job, gated by
 |----------------------------|--------------|
 | Repository policies (barrels, source rules, explicit any, licenses, changelog, parity, lifecycle, static analysis) | `repo-policies` |
 | Verify rules are in sync | `rulesync-check` |
+| (none) — every package's `typecheck` (src + tests) | `typecheck` (runs with `run-repo-policies`) |
 | `dco` | `dco` |
 | (none) | `approve` |
 | Run all tests (API CI) | `api-ci` |
@@ -301,7 +320,6 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin frontend lint, compile, coverage | `packages-ci` (`admin-frontend`) |
 | Run all tests (AI CI) | `ai-ci` |
 | Lint, compile, and test blocks | `blocks-ci` |
-| RTK Lint and Build | `rtk-ci` |
 | Syncdb Lint, Build, and Tests | `syncdb-ci` |
 | UI Lint, Build, Types, and Tests + demo typecheck | `ui-ci` |
 | Demo Lint and TypeScript Check | `ui-demo-ci` (demo-only PRs) |
@@ -314,8 +332,10 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Run admin script CLI (when backend CI did not already run) | `example-backend-script-runner` |
 | Build backend Docker image | `example-backend-docker` |
 | Admin SPA Build and E2E | `admin-spa-ci` |
+| (none) | `smoke` (every workspace `smoke` script; any package change) |
 | Lint, compile, and coverage (matrix package) | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) |
 | E2E · `<shard>` | `e2e` (matrix `shard`: `auth`, `app`, `admin-core`, `admin-table`, `syncdb`) |
+| _(cross-site bearer specs, not required)_ | `e2e-cross-site` (after `e2e-prepare`; also the explicit-linking pass) |
 | E2E Load · syncdb-loadlab | `e2e-load` (trigger-gated, see below) |
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |
@@ -368,10 +388,17 @@ To teach the agent from what reviewers actually say, run
 <file>` of pasted comments): it opens one PR editing `docs/approval-rubric.md` and the
 path rules from the review comments since the last pass.
 
-Rollout: `approveLevels` is `[]`, so every PR gets a `COMMENT` review that says the
-risk level and why, and nothing approves. After a dozen PRs, compare the levels with
-how humans reviewed them, tune the path rules and rubric, then set
-`"approveLevels": ["low"]` in a one-line PR. The prompts and answers behind each
+Levels and human approvals (defined in `docs/approval-rubric.md`):
+
+| Level | Human approvals | Examples |
+| --- | --- | --- |
+| low | None once automated review and security checks are green | docs, copy, internal-only features, additive changes behind a flag |
+| medium | One person | ordinary product changes, and sensitive areas such as caching, app updates, and AI system prompts |
+| high | One person | security-related code: auth, permissions, secrets, crypto, PHI handling |
+
+`approveLevels` is `["low"]`, so the App's approval satisfies master's one-review rule
+for low PRs. Medium and high PRs get a `COMMENT` review that says the risk level and
+why, and a human approves. The prompts and answers behind each
 verdict are stored as the `brewery-approve` job artifact. Full reference:
 [brewery `docs/approve.md`](https://github.com/joshgachnang/brewery/blob/master/docs/approve.md).
 
@@ -398,7 +425,9 @@ a closed PR.
 `manual-publish-package` also accepts `feature-flags`. Versions must be semver.
 Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release`; prereleases publish to their prerelease npm dist-tag.
-`publish-release` compiles the 16 lockstep packages once with
+`publish-release` first requires the tag to be on `master` with its assembled
+`CHANGELOG.md` section ([release automation](release-automation.md)), then
+compiles the lockstep packages once with
 `bun run --filter ... compile` (dependency order), then runs
 `scripts/ci/publish-package.sh` for all of them in parallel with
 `TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
@@ -417,8 +446,8 @@ dependencies and runs `test:ci` when that script exists, not `test`.
 tag version is already on npm, `publish-package.sh` skips it so a recut of
 the same tag can finish the rest.
 
-The release skill pushes the tag and creates the GitHub release with
-`gh release create --draft`. The repository has immutable releases on: a
+The **Bot merge** workflow (or the release skill, when a human merges) pushes
+the tag and creates the GitHub release with `gh release create --draft`. The repository has immutable releases on: a
 published release cannot take new assets (GitHub answers `422`). So CI publishes
 the draft last with `scripts/ci/github-release.sh publish`.
 `archive-docs-version` does it right after the upload on `X.Y.0` tags.

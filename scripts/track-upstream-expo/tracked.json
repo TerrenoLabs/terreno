@@ -1,8 +1,8 @@
 {
-  "expoVersion": "57.0.14",
-  "loopStatus": "idle",
+  "expoVersion": "58.0.14",
+  "loopStatus": "ready",
   "npmTag": "latest",
-  "releaseBranch": null,
-  "sdkLine": "57.0.0",
-  "updatedAt": "2026-09-07T00:00:00.000Z"
+  "releaseBranch": "release-58.0.0",
+  "sdkLine": "58.0.0",
+  "updatedAt": "2026-10-18T12:00:00.000Z"
 }

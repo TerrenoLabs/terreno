@@ -1,7 +1,7 @@
 import {describe, it} from "bun:test";
 import assert from "node:assert/strict";
 import {spawnSync} from "node:child_process";
-import {mkdtempSync, writeFileSync} from "node:fs";
+import {mkdtempSync, readFileSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 
@@ -149,7 +149,7 @@ describe("resolve-preview-pr.sh", () => {
       }),
       "1225"
     );
-    const args = spawnSync("cat", [join(dir, "curl-args")], {encoding: "utf8"}).stdout;
+    const args = readFileSync(join(dir, "curl-args"), "utf8");
     assert.match(args, /repos\/TerrenoLabs\/terreno\/pulls\?head=TerrenoLabs:/);
     assert.doesNotMatch(args, /FlourishHealth/);
   });

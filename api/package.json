@@ -7,7 +7,9 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^8.5.0",
+    "@asteasolutions/zod-to-openapi": "^9.1.0",
+    "@better-auth/expo": "^1.6.25",
+    "@better-auth/passkey": "catalog:",
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",
@@ -36,11 +38,12 @@
     "passport-local": "^1.0.0",
     "path-to-regexp": "^8.4.2",
     "qs": "catalog:",
+    "reflect-metadata": "^0.2.2",
     "router": "^2.2.0",
     "serve-static": "^2.2.1",
     "socket.io": "catalog:",
     "swagger-parser": "^10.0.3",
-    "swagger-ui-dist": "^5.11.8",
+    "swagger-ui-dist": "^5.33.0",
     "winston": "catalog:",
     "yaml": "^2.4.0"
   },
@@ -74,11 +77,26 @@
       "default": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./sentry": {
+      "default": "./dist/sentryV10DataCollection.js",
+      "types": "./dist/sentryV10DataCollection.d.ts"
+    },
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
+    },
+    "./testing/openApi": {
+      "default": "./dist/tests/openApiResponseSchema.js",
+      "types": "./dist/tests/openApiResponseSchema.d.ts"
     }
   },
+  "files": [
+    "LICENSE",
+    "CHANGELOG.md",
+    "dist/**/*",
+    "src/**/*",
+    ".ai/**/*"
+  ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
     "rest",
@@ -118,19 +136,21 @@
     "compile:watch": "bun tsc -w",
     "dev": "bun tsc -w",
     "docs": "bunx typedoc@0.28.19 --out docs src/index.ts",
-    "lint": "biome check ./src",
-    "lint:fix": "biome check --write ./src",
+    "lint": "biome check ./src ./e2e",
+    "lint:fix": "biome check --write ./src ./e2e",
     "lint:unsafefix": "biome check --fix --unsafe ./src",
     "load": "bun src/sync/loadHarness.ts",
-    "test": "bun test --update-snapshots",
-    "test:agent": "AGENT=1 bun test --only-failures",
+    "smoke": "bun e2e/smoke.ts",
+    "test": "bun ../scripts/test-shards.ts -- --update-snapshots",
+    "test:agent": "AGENT=1 bun ../scripts/test-shards.ts -- --only-failures",
     "test:cache:clean": "bun ./src/tests/mongoTestSetup.ts clean",
     "test:cache:setup": "bun ./src/tests/mongoTestSetup.ts setup",
     "test:cache:status": "bun ./src/tests/mongoTestSetup.ts status",
-    "test:ci": "bun test",
+    "test:ci": "bun ../scripts/test-shards.ts",
     "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "updateSnapshot": "bun test --update-snapshots"
   },
   "types": "dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "58.0.4"
 }

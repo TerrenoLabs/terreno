@@ -676,7 +676,7 @@ describe("JobsRunner", () => {
   });
 
   it("is not reachable from the root @terreno/ai or @terreno/ai/harness imports", () => {
-    const srcRoot = resolve(import.meta.dir, "../..");
+    const srcRoot = resolve(__dirname, "../..");
     const seen = new Set<string>();
     const importsJobs: string[] = [];
     const visit = (file: string): void => {

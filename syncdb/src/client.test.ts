@@ -8,7 +8,11 @@ import {Server} from "socket.io";
 
 import {betterAuthAdapter} from "./auth/betterAuthAdapter";
 import {createSyncDb, type SyncDbConfig} from "./client";
-import {createLocalKeyProvider, DEFAULT_KEY_CACHE_DB_NAME} from "./crypto/keyProviders";
+import {
+  createLocalKeyProvider,
+  createServerKeyProvider,
+  DEFAULT_KEY_CACHE_DB_NAME,
+} from "./crypto/keyProviders";
 import {getConflict} from "./mutations/conflicts";
 import {createDefaultPersisterFactory as createWebPersisterFactory} from "./persisters/defaultPersisterFactory.web";
 import {memoryPersisterFactory} from "./persisters/memoryPersister";
@@ -16,7 +20,7 @@ import type {PersisterFactory} from "./persisters/types";
 import {idbGet} from "./storage/idb";
 import {SYNC_SCHEMA_VERSION} from "./storage/schema";
 import {CURSORS_TABLE} from "./storage/types";
-import {AuthRequiredError, type HttpChannel} from "./sync/httpChannel";
+import {AuthRequiredError, createHttpChannel, type HttpChannel} from "./sync/httpChannel";
 import type {SyncTransport} from "./sync/transport";
 import {createFakeTransport, type FakeTransport} from "./testing/fakeTransport";
 import type {
@@ -371,6 +375,42 @@ describe("createSyncDb", () => {
       await client.stop();
     });
 
+    it("mints UUIDs by default and ObjectIds for collections configured with idFormats objectId", async () => {
+      const harness = makeHarness({
+        collections: ["todos", "notes"],
+        idFormats: {notes: "objectId"},
+      });
+      harness.transport.setDefaultResponder(async () => {
+        await flush();
+        throw new Error("offline");
+      });
+      const client = createSyncDb(harness.config);
+      await client.start();
+
+      const todo = client.mutate({collection: "todos", data: {title: "t"}, operation: "create"});
+      assert.match(todo.id, /^[0-9a-f]{8}-[0-9a-f]{4}-/);
+
+      const note = client.mutate({collection: "notes", data: {body: "n"}, operation: "create"});
+      assert.match(note.id, /^[0-9a-f]{24}$/);
+      assert.deepEqual(client.store.getEntity({collection: "notes", id: note.id})?.data, {
+        body: "n",
+      });
+
+      // An explicit id is kept when it is a valid ObjectId and refused before queuing when not.
+      const explicit = "65f0c0ffee0000000000abcd";
+      assert.equal(
+        client.mutate({collection: "notes", data: {}, id: explicit, operation: "create"}).id,
+        explicit
+      );
+      const queuedBefore = client.getSyncStatus().queuedCount;
+      expect(() =>
+        client.mutate({collection: "notes", data: {}, id: "not-hex", operation: "create"})
+      ).toThrow("24-character hex ObjectId for notes");
+      assert.equal(client.getSyncStatus().queuedCount, queuedBefore);
+      assert.isUndefined(client.store.getEntity({collection: "notes", id: "not-hex"}));
+      await client.stop();
+    });
+
     it("applies creates optimistically and immediately", async () => {
       const harness = makeHarness();
       // Hold replies so the pre-ack state is observable.
@@ -407,6 +447,7 @@ describe("createSyncDb", () => {
       const entity = client.store.getEntity({collection: "todos", id});
       expect(entity?.pendingMutationId).toBeUndefined();
       expect(entity?.seq).toBe(11);
+      expect(entity?.awaitingServerDelta).toBe(true);
       expect(client.getSyncStatus().queuedCount).toBe(0);
       await client.stop();
     });
@@ -2405,7 +2446,8 @@ describe("createSyncDb", () => {
 
       harness.auth.setUserId("u2");
       harness.auth.emitAuthChange();
-      await flush();
+      // The wipe is asynchronous; a fixed 5ms wait loses to it on a loaded machine.
+      await waitUntil(() => client.store.getLastUserId() === "u2");
       expect(client.store.listEntities({collection: "todos"})).toEqual([]);
       expect(client.store.getLastUserId()).toBe("u2");
       await client.stop();
@@ -2787,6 +2829,47 @@ describe("createSyncDb", () => {
   });
 
   describe("lifecycle serialization (E1)", () => {
+    it("drops a startup reconcile's streams request that a stop() overtook while it read the token", async () => {
+      // The app stops syncdb, then signs out. A reconcile fired just before the stop is still
+      // awaiting getToken(); sending its request after the stop would carry a token the
+      // sign-out is revoking.
+      let releaseToken = (): void => {};
+      const tokenGate = new Promise<void>((resolve) => {
+        releaseToken = (): void => resolve();
+      });
+      const sent: string[] = [];
+      const httpChannel = createHttpChannel({
+        authProvider: {
+          getToken: async (): Promise<string> => {
+            await tokenGate;
+            return "token";
+          },
+        },
+        baseUrl: "http://api",
+        fetchImpl: async (input: string): Promise<Response> => {
+          sent.push(input);
+          return new Response(JSON.stringify({streams: []}), {status: 200});
+        },
+      });
+      const harness = makeHarness({httpChannel});
+      const client = createSyncDb(harness.config);
+      const originalWarn = console.warn;
+      const warnings: unknown[][] = [];
+      console.warn = (...args: unknown[]): void => {
+        warnings.push(args);
+      };
+      try {
+        await client.start();
+        await client.stop();
+        releaseToken();
+        await flush();
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.deepEqual(sent, []);
+      assert.deepEqual(warnings, []);
+    });
+
     it("a rapid stop()-then-start() for a new user leaves the new user's persistence working", async () => {
       const name = uniqueName();
       const harness = makeHarness({name});
@@ -2829,6 +2912,32 @@ describe("createSyncDb", () => {
         title: "user two",
       });
       await reopened.stop();
+    });
+
+    it("an auth change queued behind a stop() does not reconnect the stopped client", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+      // start() subscribes to auth changes, then holds the mutex on its connect.
+      const releaseConnect = observable.gateNextConnect();
+      const startPromise = client.start();
+      await waitUntil(() => observable.events.includes("connect"));
+
+      // A sign-out stops the client while start() is still connecting, and an auth change
+      // (still the same signed-in user) fires before stop() runs: it queues behind the stop.
+      const stopPromise = client.stop();
+      harness.auth.emitAuthChange();
+      releaseConnect();
+      await startPromise;
+      await stopPromise;
+      const eventsAtStop = observable.events.length;
+      const streamsAtStop = harness.http.state.streamsCount;
+      await flush();
+      await flush();
+
+      expect(observable.events.slice(eventsAtStop)).toEqual([]);
+      expect(harness.http.state.streamsCount).toBe(streamsAtStop);
+      expect(client.getSyncStatus().isOnline).toBe(false);
     });
 
     it("double start() is a no-op: listeners are not double-registered", async () => {
@@ -2887,6 +2996,74 @@ describe("createSyncDb", () => {
       // still armed post-stop it would fire another send here.
       await new Promise((resolve) => setTimeout(resolve, 60));
       expect(harness.transport.sentMutations.length).toBe(sentBeforeWait);
+    });
+  });
+
+  describe("logout while start() is running", () => {
+    const keyMaterial = Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64");
+
+    it("persists without a post-logout /sync/key fetch and never connects after stop()", async () => {
+      const session = {active: true};
+      const keyFetches: Array<"ok" | "401"> = [];
+      const keyProvider = createServerKeyProvider({
+        appName: "logout-race",
+        cacheDbName: uniqueName(),
+        fetchKeyMaterial: async (): Promise<string> => {
+          if (!session.active) {
+            keyFetches.push("401");
+            throw new Error("401 from /sync/key");
+          }
+          keyFetches.push("ok");
+          return keyMaterial;
+        },
+      });
+      const webFactory = createWebPersisterFactory({keyProvider, saveDebounceMs: 20});
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      let stopPromise: Promise<void> | undefined;
+      // The user logs out while start() is still opening persistence: the session
+      // ends, and the host app's logout effect calls stop().
+      const persisterFactory: PersisterFactory = (args) => {
+        const persister = webFactory(args);
+        return {
+          ...persister,
+          startAutoSave: async (): Promise<typeof persister> => {
+            if (!stopPromise) {
+              session.active = false;
+              harness.auth.setUserId(null);
+              stopPromise = client.stop();
+            }
+            return persister.startAutoSave();
+          },
+        };
+      };
+      const client = createSyncDb({
+        ...harness.config,
+        persisterFactory,
+        transport: observable.transport,
+      });
+
+      await client.start();
+      await stopPromise;
+
+      expect(keyFetches).toEqual(["ok"]);
+      expect(client.getSyncStatus().persistence).toBe("durable");
+      expect(observable.events).not.toContain("connect");
+    });
+
+    it("stop() called before a queued start() runs cancels that start()", async () => {
+      const harness = makeHarness();
+      const observable = makeObservableTransport(harness.transport);
+      const client = createSyncDb({...harness.config, transport: observable.transport});
+
+      const startPromise = client.start();
+      const stopPromise = client.stop();
+      await Promise.all([startPromise, stopPromise]);
+
+      expect(observable.events).not.toContain("connect");
+      expect((): unknown =>
+        client.mutate({collection: "todos", data: {title: "x"}, operation: "create"})
+      ).toThrow("requires start()");
     });
   });
 
@@ -3097,11 +3274,21 @@ describe("createSyncDb", () => {
 
       harness.auth.setUserId("u2");
       harness.auth.emitAuthChange();
-      await flush();
+      // The wipe is asynchronous; a fixed 5ms wait loses to it on a loaded machine. Poll the
+      // cache until the key is gone, then assert on the final read.
+      let cached: CryptoKey | undefined;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await flush();
+        cached = await idbGet<CryptoKey>({
+          databaseName: DEFAULT_KEY_CACHE_DB_NAME,
+          key: "local:local",
+        });
+        if (cached === undefined) {
+          break;
+        }
+      }
 
-      expect(
-        await idbGet<CryptoKey>({databaseName: DEFAULT_KEY_CACHE_DB_NAME, key: "local:local"})
-      ).toBeUndefined();
+      expect(cached).toBeUndefined();
       await client.stop();
     });
   });

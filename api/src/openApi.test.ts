@@ -461,7 +461,7 @@ describe("openApi middleware no-op paths", () => {
     listOpenApiMiddleware(
       FoodModel,
       {
-        openApi: createOpenApiStub((spec: Record<string, unknown>) => {
+        openApi: createOpenApiStub((spec?: Record<string, unknown>) => {
           captured = spec;
           return createPassThroughMiddleware();
         }),
@@ -482,7 +482,7 @@ describe("openApi middleware no-op paths", () => {
   it("listOpenApiMiddleware omits x-terreno-sync when sync is not configured", () => {
     let captured: Record<string, unknown> | undefined;
     listOpenApiMiddleware(FoodModel, {
-      openApi: createOpenApiStub((spec: Record<string, unknown>) => {
+      openApi: createOpenApiStub((spec?: Record<string, unknown>) => {
         captured = spec;
         return createPassThroughMiddleware();
       }),
@@ -500,7 +500,7 @@ describe("openApi middleware no-op paths", () => {
   it("listOpenApiMiddleware falls back to the model collection name without routePath", () => {
     let captured: Record<string, unknown> | undefined;
     listOpenApiMiddleware(FoodModel, {
-      openApi: createOpenApiStub((spec: Record<string, unknown>) => {
+      openApi: createOpenApiStub((spec?: Record<string, unknown>) => {
         captured = spec;
         return createPassThroughMiddleware();
       }),
@@ -521,7 +521,7 @@ describe("openApi middleware no-op paths", () => {
 
   it("listOpenApiMiddleware maps tenant and custom sync scopes", () => {
     let captured: Record<string, unknown> | undefined;
-    const capturePath = (spec: Record<string, unknown>): express.RequestHandler => {
+    const capturePath = (spec?: Record<string, unknown>): express.RequestHandler => {
       captured = spec;
       return createPassThroughMiddleware();
     };

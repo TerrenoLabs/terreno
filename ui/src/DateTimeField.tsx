@@ -1,7 +1,7 @@
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {DateTime} from "luxon";
 import React, {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
-import {Pressable, TextInput, View} from "react-native";
+import {Pressable, TextInput, type TextInputInstance, View} from "react-native";
 
 import type {ActionSheet} from "./ActionSheet";
 import {Box} from "./Box";
@@ -47,7 +47,7 @@ interface DateTimeSegmentProps {
   getFieldValue: (index: number) => string;
   handleFieldChange: (index: number, text: string, config: FieldConfig) => void;
   onBlur: (override?: {amPm?: "am" | "pm"; timezone?: string}) => void;
-  onRef: (ref: TextInput | null, index: number) => void;
+  onRef: (ref: TextInputInstance | null, index: number) => void;
   index: number;
   error?: string;
 }
@@ -74,7 +74,7 @@ const DateTimeSegment: FC<DateTimeSegmentProps> = ({
       style={{
         alignItems: "center",
         backgroundColor: "transparent",
-        borderColor: error ? theme.border.error : "transparent",
+        borderColor: error ? theme.field.borderError : "transparent",
         flexDirection: "row",
         flexShrink: 1,
         height: 40,
@@ -237,7 +237,7 @@ const MobileTimeDisplay: FC<MobileTimeDisplayProps> = ({
         paddingVertical: showBorder ? 8 : 4,
         ...(showBorder
           ? {
-              backgroundColor: disabled ? theme.surface.disabled : theme.surface.base,
+              backgroundColor: disabled ? theme.surface.disabled : theme.field.background,
               borderColor,
               borderRadius: 4,
               borderWidth: 1,
@@ -461,20 +461,22 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     providedTimezone ?? DateTime.local().zoneName ?? "UTC"
   );
 
-  const breakpoint = 395; // Breakpoint for switching to action sheet
+  // Parent width, in pt, below which inline controls do not fit. This is the field's own
+  // minimum, not a viewport breakpoint.
+  const inlineControlsMinWidth = 395;
   let minimumWidth = 230; // Minimum width for the field container
   if (type === "date") {
     minimumWidth = 200;
   }
 
-  let maximumWidth = breakpoint; // Maximum width for the field container
+  let maximumWidth = inlineControlsMinWidth; // Maximum width for the field container
   if (["date", "time"].includes(type)) {
     maximumWidth = minimumWidth + 10;
   }
 
   const [parentWidth, setParentWidth] = useState<number | null>(null);
   const parentIsLessThanBreakpointOrIsMobile =
-    (parentWidth !== null && parentWidth < breakpoint) || isNarrowViewport();
+    (parentWidth !== null && parentWidth < inlineControlsMinWidth) || isNarrowViewport();
 
   // We need to store the pending value in a ref because the state changes don't trigger
   // immediately, so onBlur may use stale values.
@@ -493,13 +495,13 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 
   // Use provided timezone if available, otherwise use local
   const timezone = providedTimezone ?? localTimezone;
-  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const inputRefs = useRef<(TextInputInstance | null)[]>([]);
 
-  let borderColor = theme.border.dark;
+  let borderColor = theme.field.border;
   if (disabled) {
-    borderColor = theme.border.activeNeutral;
+    borderColor = theme.field.borderDisabled;
   } else if (errorText || Object.values(fieldErrors).some((error) => error !== undefined)) {
-    borderColor = theme.border.error;
+    borderColor = theme.field.borderError;
   }
 
   /** Builds the ordered array of {@link FieldConfig} for each input segment based on the field type. */
@@ -991,7 +993,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     getFieldValue,
     handleFieldChange,
     onBlur,
-    onRef: (el: TextInput | null, i: number) => (inputRefs.current[i] = el),
+    onRef: (el: TextInputInstance | null, i: number) => (inputRefs.current[i] = el),
   };
 
   const isMobile = isNarrowViewport();
@@ -1080,7 +1082,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
           onPress={openActionSheet}
           style={{
             alignItems: parentIsLessThanBreakpointOrIsMobile ? "stretch" : "center",
-            backgroundColor: theme.surface.base,
+            backgroundColor: theme.field.background,
             borderColor,
             borderRadius: 4,
             borderWidth: 1,

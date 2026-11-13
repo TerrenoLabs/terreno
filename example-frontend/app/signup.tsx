@@ -1,17 +1,26 @@
+import {useAuthMethods, useSession} from "@terreno/syncdb/auth";
 import type {SignUpScreenProps} from "@terreno/ui";
 import {SignUpScreen, simplePasswordRequirements} from "@terreno/ui";
 import {useRouter} from "expo-router";
 import type React from "react";
 import {useCallback, useMemo, useState} from "react";
-import {betterAuthClient, signInWithSocial} from "@/lib/betterAuth";
-import {syncBetterAuthSession, useAppDispatch} from "@/store/index";
+import {
+  type BrandedOAuthProvider,
+  betterAuthClient,
+  brandedOAuthProviders,
+  signInWithSocial,
+} from "@/lib/betterAuth";
 
 const SignUp: React.FC = () => {
   const router = useRouter();
-  const dispatch = useAppDispatch();
+  // Re-read the session right after sign-in so the root layout sees the new user before navigating.
+  const {refresh: refreshSession} = useSession();
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Only the providers the server reports are shown; none while the methods load.
+  const {methods} = useAuthMethods(betterAuthClient);
+  const configuredProviders = methods?.providers;
 
   const handleSubmit = useCallback(
     async (values: Record<string, string>): Promise<void> => {
@@ -24,7 +33,7 @@ const SignUp: React.FC = () => {
           setErrorMessage(result.error.message ?? "Sign up failed.");
           return;
         }
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch {
         setErrorMessage("Sign up failed. Please try again.");
@@ -32,11 +41,11 @@ const SignUp: React.FC = () => {
         setIsSubmitting(false);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const handleSocialLogin = useCallback(
-    async (provider: "google" | "github" | "apple"): Promise<void> => {
+    async (provider: BrandedOAuthProvider): Promise<void> => {
       setSocialLoading(provider);
       setErrorMessage(undefined);
       try {
@@ -45,7 +54,7 @@ const SignUp: React.FC = () => {
           // The page is leaving for the provider; the session is read when it comes back.
           return;
         }
-        await syncBetterAuthSession(dispatch);
+        await refreshSession();
         router.replace("/(tabs)");
       } catch {
         setErrorMessage("Sign up failed. Please try again.");
@@ -55,17 +64,17 @@ const SignUp: React.FC = () => {
         setSocialLoading(null);
       }
     },
-    [dispatch, router]
+    [refreshSession, router]
   );
 
   const oauthProviders = useMemo((): SignUpScreenProps["oauthProviders"] => {
-    return (["google", "github", "apple"] as const).map((provider) => ({
+    return brandedOAuthProviders(configuredProviders).map((provider) => ({
       disabled: isSubmitting || Boolean(socialLoading),
       loading: socialLoading === provider,
       onPress: () => handleSocialLogin(provider),
       provider,
     }));
-  }, [isSubmitting, socialLoading, handleSocialLogin]);
+  }, [configuredProviders, isSubmitting, socialLoading, handleSocialLogin]);
 
   const isLoading = isSubmitting || Boolean(socialLoading);
 
@@ -74,7 +83,7 @@ const SignUp: React.FC = () => {
       error={errorMessage}
       fields={[
         {label: "Name", name: "name", required: true, type: "text"},
-        {autoComplete: "off", label: "Email", name: "email", required: true, type: "email"},
+        {autoComplete: "username", label: "Email", name: "email", required: true, type: "email"},
         {label: "Password", name: "password", required: true, type: "password"},
       ]}
       loading={isLoading}

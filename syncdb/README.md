@@ -2,7 +2,7 @@
 
 Local-first data layer for @terreno apps: TinyBase MergeableStore, durable outbox, websocket delta sync, encrypted web persistence.
 
-Local-first data layer for Terreno apps. A TinyBase `MergeableStore` (encrypted IndexedDB on web, expo-sqlite on native) is the UI's source of truth: reads come from the local store, writes apply optimistically and enqueue in a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Every mutation executes the existing `@terreno/api` modelRouter write path — identical permissions, hooks, and validation as REST. Supersedes `@terreno/rtk` for data-synchronization concerns (see [the migration guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)).
+Local-first data layer for Terreno apps. A TinyBase `MergeableStore` (encrypted IndexedDB on web, expo-sqlite on native) is the UI's source of truth: reads come from the local store, writes apply optimistically and enqueue in a durable outbox, and the server reconciles asynchronously over a socket delta protocol with HTTP snapshot catch-up. Every mutation executes the existing `@terreno/api` modelRouter write path — identical permissions, hooks, and validation as REST. It also ships the request client, generated API hooks, auth session, feature flags, and app utilities that replaced `@terreno/rtk` in Terreno 58 (see [the upgrade guide](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/migrate-rtk-to-syncdb.md)).
 
 ## Architecture
 
@@ -116,15 +116,16 @@ Index requirement: `TerrenoApp.start()` awaits `ensureSyncIndexes()` before list
 ### Frontend
 
 ```typescript
-import {betterAuthAdapter, createSyncDb} from "@terreno/syncdb";
+import {betterAuthAdapter, bridgeBetterAuthReactClient, createSyncDb} from "@terreno/syncdb";
+import {createBetterAuthClient} from "@terreno/syncdb/auth";
+import {baseUrl} from "@terreno/syncdb/config";
 import {SyncDbProvider, useMutate, useQuery, useSyncStatus} from "@terreno/syncdb/react";
-import {createBetterAuthClient} from "@terreno/rtk";
 
-const authClient = createBetterAuthClient({baseURL: "http://localhost:4000"});
+const authClient = createBetterAuthClient({baseURL: baseUrl, scheme: "myapp"});
 
 export const syncDb = createSyncDb({
-  authProvider: betterAuthAdapter(authClient),
-  baseUrl: "http://localhost:4000",
+  authProvider: betterAuthAdapter(bridgeBetterAuthReactClient(authClient)),
+  baseUrl,
   collections: ["todos"],
   name: "myapp",
 });
@@ -209,11 +210,12 @@ return <>{ids.map((id) => <TodoRow id={id} key={id} />)}</>; // TodoRow calls us
 
 ### Public API surface
 
-The package has three entry points, and only what they export is API:
+The package has four entry points, and only what they export is API:
 
 - `@terreno/syncdb` — the client (`createSyncDb`), protocol/status/conflict types, the Better Auth adapter, key providers and codecs, persister factories, the transport/HTTP-channel constructors (for DI), `wipeLocalData`, `generateMutationId`, `listConflicts`, and `OUTBOX_TABLE` for inspecting queued mutations via `client.store.raw.getTable(...)`.
 - `@terreno/syncdb/react` — the hooks above plus `SyncDbProvider` (a separate subpath because `react` is an optional peer dependency).
 - `@terreno/syncdb/testing` — test doubles (`createFakeTransport`), kept out of production bundles.
+- `@terreno/syncdb/devConsoleLogger` — `installTerrenoDevConsoleLogger` by itself, so a caller can install the dev console logger without bundling the sync client. The same function is exported from `@terreno/syncdb`.
 
 Everything else under `src/` is internal and can change in a patch release. In particular the cursor mutators, outbox/conflict writers, raw row shapes, the IndexedDB helpers, and the debug broadcast bridge are deliberately unexported: writing to a reserved table behind the client's back breaks the invariants replay and reconcile depend on.
 
@@ -448,12 +450,11 @@ This writes `store/syncDbSdk.ts` with `SYNC_COLLECTIONS`, entity types, and hook
 
 ## Known limitations
 
-- **Synced models need a String `_id`** (or clients must mint ObjectId-format ids): offline clients generate entity ids (UUIDs) locally and the mutation channel writes them through as `_id`. A default ObjectId `_id` would cast-fail every client-side create. Declare `_id: {type: String, ...}` on synced schemas.
+- **Match the client id format to the model `_id`**: offline clients mint entity ids locally and the mutation channel writes them through as `_id`. The default is a UUID, which needs `_id: {type: String, ...}`. For a model that keeps the default ObjectId `_id`, pass `idFormats: {collection: "objectId"}` to `createSyncDb` so the client mints 24-hex ObjectIds; otherwise the server nacks client creates with `reason: "invalid_id"`.
 - **Multi-tab web**: two tabs of the same user share one IndexedDB blob; concurrent persister saves are last-writer-wins at the blob level and can drop the other tab's queued outbox rows. Single-writer coordination (Web Locks) is not implemented yet — avoid relying on offline writes from multiple simultaneous tabs.
 - **`Model.bulkWrite` is unavailable on synced models**: it skips Mongoose middleware, so it can never stamp seqs. `registerSync` replaces the static with one that throws — bulk updates to a synced collection have to loop per document.
 - **Native plaintext by design**: no SQLCipher; the OS sandbox is deemed sufficient.
 - **Whole-store persistence**: each save serializes and (on web) encrypts the full store — cost scales with store size, not change size. Bound it by scoping which collections sync; saves are debounced, and a burst of transactions costs one serialization per write, not one per transaction.
-- **`realtime` + `sync` coexistence**: a model may enable both (distinct events, `sync` vs `sync:delta`, so clients never double-apply), at the cost of double emission work. `modelRouter` `realtime` is **deprecated and will be removed in Terreno 58**; use `sync` only.
 - **Cold start scales with row count, not stream count**: streams page together through `POST /sync/snapshot/batch`, one round trip per round of up to 5,000 rows. Against a server without that route, every stream costs at least one `GET /sync/snapshot` round trip (`snapshotConcurrency` at a time, default 6). Sync only the collections the client reads. See [Use syncdb correctly](https://github.com/TerrenoLabs/terreno/blob/master/docs/how-to/use-syncdb-correctly.md) for this and the write-path pitfalls apps must handle.
 - **Seq counter write amplification**: every synced write does an atomic `$inc` on a per-stream counter doc. Acceptable at current scale; Redis-based counters are the documented upgrade path.
 

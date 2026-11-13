@@ -13,7 +13,10 @@ const DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS = 10 * 60;
 const DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS = 60;
 const DEFAULT_SCOPES = ["mcp"];
 
-export const SUPPORTED_GRANT_TYPES = ["authorization_code", "refresh_token"];
+/** Grants a public PKCE client may register. Dynamic registration rejects anything else. */
+export const PUBLIC_CLIENT_GRANT_TYPES = ["authorization_code", "refresh_token"];
+const SUPPORTED_GRANT_TYPES = [...PUBLIC_CLIENT_GRANT_TYPES, "client_credentials"];
+const SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"];
 export const SUPPORTED_RESPONSE_TYPES = ["code"];
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
@@ -178,7 +181,9 @@ export const resolveMcpOAuthOption = (
  * get exactly the RFC-defined members.
  */
 export const sendProtocolJson = (res: Response, status: number, body: unknown): void => {
-  res.status(status).type("application/json").send(JSON.stringify(body));
+  // An explicit JSON content type keeps reflected request values from rendering as HTML.
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.status(status).send(JSON.stringify(body));
 };
 
 /** RFC 9728 protected-resource metadata. */
@@ -208,7 +213,7 @@ export const buildAuthorizationServerMetadata = (
   revocation_endpoint_auth_methods_supported: ["none"],
   scopes_supported: oauth.scopesSupported,
   token_endpoint: `${oauth.issuer}/oauth/token`,
-  token_endpoint_auth_methods_supported: ["none"],
+  token_endpoint_auth_methods_supported: SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS,
 });
 
 /**

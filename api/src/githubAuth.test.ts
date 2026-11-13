@@ -1,4 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, setSystemTime} from "bun:test";
+import {createHmac} from "node:crypto";
 import type express from "express";
 import mongoose, {type Model, model, Schema} from "mongoose";
 import passport from "passport";
@@ -314,7 +315,7 @@ const invokeGitHubVerify = (
   if (!strategy) {
     throw new Error("github strategy not registered");
   }
-  return new Promise<{err: VerifyError | null; user: VerifiedUser}>((resolve) => {
+  return new Promise<{err: VerifyError | null; user?: VerifiedUser}>((resolve) => {
     const done = (err: VerifyError | null, user?: VerifiedUser) => resolve({err, user});
     strategy._verify(req, accessToken, refreshToken, profile, done);
   });
@@ -399,9 +400,9 @@ describe("GitHub strategy verify callback", () => {
     const result = await invokeGitHubVerify({}, "access", "refresh", profile);
     expect(result.err).toBeNull();
     expect(result.user).toBeDefined();
-    expect(result.user.githubId).toBe("gh-new-1");
-    expect(result.user.githubUsername).toBe("newghuser");
-    expect(result.user.email).toBe("new@example.com");
+    expect(result.user?.githubId).toBe("gh-new-1");
+    expect(result.user?.githubUsername).toBe("newghuser");
+    expect(result.user?.email).toBe("new@example.com");
   });
 
   it("logs in existing GitHub user", async () => {
@@ -423,7 +424,7 @@ describe("GitHub strategy verify callback", () => {
       username: "ghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).toBe(existingUser._id.toString());
+    expect(result.user?._id.toString()).toBe(existingUser._id.toString());
   });
 
   it("links GitHub to authenticated user when allowAccountLinking=true", async () => {
@@ -447,9 +448,9 @@ describe("GitHub strategy verify callback", () => {
       username: "linkedghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).toBe(existingUser._id.toString());
-    expect(result.user.githubId).toBe("gh-link-1");
-    expect(result.user.githubUsername).toBe("linkedghuser");
+    expect(result.user?._id.toString()).toBe(existingUser._id.toString());
+    expect(result.user?.githubId).toBe("gh-link-1");
+    expect(result.user?.githubUsername).toBe("linkedghuser");
   });
 
   it("does not treat an ambient req.user as a link target", async () => {
@@ -467,7 +468,7 @@ describe("GitHub strategy verify callback", () => {
       id: "gh-ambient-1",
     });
     expect(result.err).toBeNull();
-    expect(result.user._id.toString()).not.toBe(ambientUser._id.toString());
+    expect(result.user?._id.toString()).not.toBe(ambientUser._id.toString());
     const ambientRow = await GitHubTestUserModel.findById(ambientUser._id);
     expect(ambientRow?.githubId).toBeUndefined();
   });
@@ -547,8 +548,8 @@ describe("GitHub strategy verify callback", () => {
       username: "emailuserghuser",
     });
     expect(result.err).toBeNull();
-    expect(result.user.githubId).toBe("gh-email-link-1");
-    expect(result.user.email).toBe("emailuser@example.com");
+    expect(result.user?.githubId).toBe("gh-email-link-1");
+    expect(result.user?.email).toBe("emailuser@example.com");
   });
 
   it("rejects email-link when allowAccountLinking=false", async () => {
@@ -1135,6 +1136,44 @@ describe("GitHub OAuth state binding", () => {
       .get(`/auth/github/callback?code=gh-late-1&state=${state}`)
       .expect(302);
     expect(res.headers.location).toContain("/auth/github/failure");
+  });
+
+  describe("signed state link targets", () => {
+    const signedStateCookie = (state: string | null, linkUserId: unknown): string => {
+      const payload = Buffer.from(
+        JSON.stringify({expiresAt: Date.now() + 60_000, linkUserId, nonce: state})
+      ).toString("base64url");
+      const signature = createHmac("sha256", process.env.SESSION_SECRET ?? "")
+        .update(payload)
+        .digest("base64url");
+      return `terreno_github_oauth_state=${payload}.${signature}`;
+    };
+
+    it("a correctly signed string link target links that user", async () => {
+      const user = await GitHubTestUserModel.create({email: "signed-link@example.test"});
+      const start = await supertest(app).get("/auth/github").expect(302);
+      const state = stateFromLocation(start.headers.location);
+
+      const res = await supertest(app)
+        .get(`/auth/github/callback?code=gh-signed-1&state=${state}`)
+        .set("cookie", signedStateCookie(state, String(user._id)))
+        .expect(200);
+      expect(String(res.body.data.userId)).toBe(String(user._id));
+    });
+
+    it("a signed state whose link target is not a string is rejected", async () => {
+      const victim = await GitHubTestUserModel.create({email: "victim6@example.test"});
+      const start = await supertest(app).get("/auth/github").expect(302);
+      const state = stateFromLocation(start.headers.location);
+
+      const res = await supertest(app)
+        .get(`/auth/github/callback?code=gh-operator-1&state=${state}`)
+        .set("cookie", signedStateCookie(state, {$ne: null}))
+        .expect(302);
+      expect(res.headers.location).toContain("/auth/github/failure");
+      const victimRow = await GitHubTestUserModel.findById(victim._id);
+      expect(victimRow?.githubId).toBeUndefined();
+    });
   });
 
   it("a tampered state cookie is rejected", async () => {

@@ -51,7 +51,13 @@ import {
   toolNamesOf,
   USER_PROMPT,
 } from "../tests/chatHarness";
-import {authAsUser, ensureTestUsers, UserModel} from "../tests/helpers";
+import {
+  authAsUser,
+  ensureTestUsers,
+  historyRouterOptions,
+  terrenoUserModel,
+  UserModel,
+} from "../tests/helpers";
 import type {GptHistoryDocument} from "../types";
 import {addGptRoutes} from "./gpt";
 import {addGptHistoryRoutes} from "./gptHistories";
@@ -68,7 +74,7 @@ describe("/gpt/prompt asks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   describe("pausing on an ask", () => {
@@ -1724,6 +1730,18 @@ describe("/gpt/prompt asks", () => {
       expect(res.status).toBe(404);
       expect(res.body.title).toBe("History not found");
     });
+
+    it("returns 400 for a history id that is not an ObjectId hex string", async () => {
+      const model = createScriptedModel({steps: []});
+      const agent = await authAsUser(buildApp({asks: true, model}), "notAdmin");
+
+      for (const historyId of [crypto.randomUUID(), "abcdefghijkl", {$ne: null}]) {
+        const res = await agent.post("/gpt/prompt").send({historyId, prompt: "Hi"});
+        expect(res.status).toBe(400);
+        expect(res.body.title).toBe("historyId is not valid");
+      }
+      expect(model.doStream).not.toHaveBeenCalled();
+    });
   });
 
   describe("a prompt while an ask is pending", () => {
@@ -2840,7 +2858,7 @@ describe("/gpt/prompt asks", () => {
             asks: true,
           };
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             chat,
             responseHandler: async (value) => {
               const history = (value as GptHistoryDocument).toObject();
@@ -2850,7 +2868,7 @@ describe("/gpt/prompt asks", () => {
           addGptRoutes(router, chat);
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const historyId = await pauseOnPlanAsk(agent);
@@ -2894,7 +2912,7 @@ describe("/gpt/prompt asks", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             openApiOverwrite: {
               create: {summary: "Start a conversation"},
               update: {requestBody: {description: "The fields to change"}},
@@ -2902,7 +2920,7 @@ describe("/gpt/prompt asks", () => {
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
 
@@ -2920,12 +2938,12 @@ describe("/gpt/prompt asks", () => {
       const app = new TerrenoApp({
         configureApp: (router, options) => {
           addGptHistoryRoutes(router, {
-            ...options,
+            ...historyRouterOptions(options),
             preUpdate: (body) => ({...body, title: `${body.title} (edited)`}) as GptHistoryDocument,
           });
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: terrenoUserModel,
       }).build();
       const agent = await authAsUser(app, "notAdmin");
       const created = await agent
@@ -2980,13 +2998,14 @@ const STEPPER_HOST_ACTIONS = {
   scaleStepper: {handles: "stepper" as const},
 };
 
-const blocksEventOf = (
-  events: Record<string, unknown>[]
-): {errors: {code: string; path: string}[]; ok: boolean} =>
-  events.find((event) => "blocks" in event)?.blocks as {
-    errors: {code: string; path: string}[];
-    ok: boolean;
-  };
+interface BlocksEvent {
+  errors: {code: string; path: string}[];
+  ok: boolean;
+  warnings?: unknown[];
+}
+
+const blocksEventOf = (events: Record<string, unknown>[]): BlocksEvent =>
+  events.find((event) => "blocks" in event)?.blocks as BlocksEvent;
 
 describe("/gpt/prompt uiBlocks", () => {
   beforeAll(async () => {
@@ -2995,7 +3014,7 @@ describe("/gpt/prompt uiBlocks", () => {
 
   afterEach(async () => {
     await AIRequest.deleteMany({});
-    await GptHistory.deleteMany({});
+    await GptHistory.collection.deleteMany({});
   });
 
   it("leaves the prompt and the event list unchanged when uiBlocks is off", async () => {

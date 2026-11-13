@@ -278,6 +278,10 @@ export const unpopulate = <T>(doc: Document<T>, path: string): Document<T> => {
   // Recursive because we need to support nested paths.
   const recursiveUnpopulate = (current: NestedRecord, parts: string[]): NestedRecord => {
     const part = parts[0];
+    // Never read from or assign to a prototype through a configured path.
+    if (part === "__proto__" || part === "constructor" || part === "prototype") {
+      return asRecord(doc);
+    }
     const value = current[part];
 
     // If the path doesn't exist, return the original doc

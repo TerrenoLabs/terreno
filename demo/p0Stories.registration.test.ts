@@ -20,6 +20,11 @@ const registeredConfigurationExports = (source: string): string[] => {
 };
 
 describe("P0 demo story registration", () => {
+  it("registers ListDetailLayout in demoConfig", () => {
+    const source = readFileSync(DEMO_CONFIG_PATH, "utf8");
+    expect(registeredConfigurationExports(source)).toContain("ListDetailLayoutConfiguration");
+  });
+
   it("registers GPTChat, SocialLoginButton, and SplitPage in demoConfig", () => {
     const source = readFileSync(DEMO_CONFIG_PATH, "utf8");
     const registered = registeredConfigurationExports(source);

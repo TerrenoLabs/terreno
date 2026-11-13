@@ -1,7 +1,8 @@
 import type express from "express";
 
-import {asyncHandler} from "./api";
+import {asyncHandler, type OpenApiMiddleware} from "./api";
 import {VersionConfig} from "./models/versionConfig";
+import {createOpenApiBuilder} from "./openApiBuilder";
 import type {TerrenoPlugin} from "./terrenoPlugin";
 
 export type VersionCheckStatus = "ok" | "warning" | "required";
@@ -26,9 +27,47 @@ const DEFAULT_POLLING_INTERVAL_MINUTES = 1440;
  * Compares client build number against admin-configured thresholds per platform.
  */
 export class VersionCheckPlugin implements TerrenoPlugin {
-  register(app: express.Application): void {
+  register(app: express.Application, openApi?: unknown): void {
+    // Documentation only: request validation stays off so unparseable versions still get "ok".
+    const versionCheckOpenApi = createOpenApiBuilder(
+      openApi ? {openApi: openApi as OpenApiMiddleware} : {}
+    )
+      .withTags(["version"])
+      .withSummary("Check whether the client build must or should update")
+      .withQueryParameter(
+        "platform",
+        {enum: ["web", "mobile"], type: "string"},
+        {description: "Client platform. Any other value is treated as web."}
+      )
+      .withQueryParameter(
+        "version",
+        {type: "integer"},
+        {description: "Client build number. When missing or not a number, the status is ok."}
+      )
+      .withResponse(
+        200,
+        {
+          message: {
+            description: "Message to show when status is warning or required",
+            type: "string",
+          },
+          pollingIntervalMs: {
+            description: "How often the client should poll for updates, in milliseconds",
+            type: "number",
+          },
+          requiredVersion: {description: "Minimum supported build number", type: "number"},
+          status: {enum: ["ok", "warning", "required"], type: "string"},
+          updateUrl: {description: "Where the user can get the update", type: "string"},
+          warningVersion: {description: "Builds below this number get a warning", type: "number"},
+        },
+        {required: ["status"]}
+      )
+      .withValidation({enabled: false})
+      .build();
+
     app.get(
       "/version-check",
+      versionCheckOpenApi,
       asyncHandler(async (req, res) => {
         const versionParam = req.query.version;
         const platform = req.query.platform as string | undefined;

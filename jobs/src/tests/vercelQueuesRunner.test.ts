@@ -35,6 +35,16 @@ import {
   type VercelQueuesRunnerConfig,
 } from "../runners/vercelQueues";
 
+/** A fixed, valid instant; the runner helpers take `DateTime<true>`. */
+const parseValidUtc = (iso: string): DateTime<true> => {
+  const parsed = DateTime.fromISO(iso, {zone: "utc"});
+  if (!parsed.isValid) {
+    throw new Error(`Invalid ISO timestamp: ${iso}`);
+  }
+  return parsed;
+};
+const FIXED_NOW = parseValidUtc("2026-06-01T12:00:00.000Z");
+
 interface RecordedSendCall {
   options?: VercelQueueSendOptions;
   payload: unknown;
@@ -87,7 +97,7 @@ const createFakeHandleCallback = (): {
         return new Response("ok", {status: 200});
       } catch (error: unknown) {
         const directive = options?.retry?.(error, sampleMetadata());
-        if (directive?.acknowledge === true) {
+        if (directive && "acknowledge" in directive) {
           return new Response("acknowledged", {status: 200});
         }
         if (directive && "afterSeconds" in directive) {
@@ -139,7 +149,7 @@ describe("VercelQueuesRunner", () => {
     const runner = new VercelQueuesRunner(baseConfig());
 
     assert.equal(runner.requiresExecuteRoute, false);
-    assert.isUndefined(runner.start);
+    assert.isUndefined(Reflect.get(runner, "start"));
   });
 
   it("throws when topic is missing or blank", (): void => {
@@ -194,7 +204,7 @@ describe("VercelQueuesRunner", () => {
   });
 
   it("bumps retention to cover delaySeconds beyond 24h with a fixed now", (): void => {
-    const now = DateTime.fromISO("2026-06-01T12:00:00.000Z", {zone: "utc"});
+    const now = FIXED_NOW;
     const runAt = now.plus({hours: 30});
     const job = buildJob({runAt: runAt.toJSDate()});
     const options = buildVercelQueueSendOptions(job, {}, now);
@@ -258,7 +268,7 @@ describe("VercelQueuesRunner", () => {
 });
 
 describe("computeVercelQueueRetryAfterSeconds", () => {
-  const now = DateTime.fromISO("2026-06-01T12:00:00.000Z", {zone: "utc"});
+  const now = FIXED_NOW;
 
   it("clamps retry visibility to the vendor 30..3600 second range", (): void => {
     assert.equal(

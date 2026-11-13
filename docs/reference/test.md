@@ -1,6 +1,6 @@
 # @terreno/test
 
-Shared Bun test helpers for Terreno backend packages: in-memory MongoDB lifecycle, auth env defaults, HTTP fixtures, and log silencing.
+Shared Bun test helpers for Terreno packages: in-memory MongoDB lifecycle, auth env defaults, HTTP fixtures, log silencing, and real-process smoke helpers.
 
 ## Install
 
@@ -79,7 +79,7 @@ Defaults: `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRE
 | Variable | Effect |
 |----------|--------|
 | `TERRENO_TEST_USE_MEMORY_MONGO` | When `"true"`, `registerSimpleMongoPreload` starts `mongodb-memory-server` if `TERRENO_TEST_MONGODB_URI` is unset. |
-| `TERRENO_TEST_MONGODB_URI` | External MongoDB URI. Takes priority over in-memory server in `startMongoServer` and `registerSimpleMongoPreload`. |
+| `TERRENO_TEST_MONGODB_URI` | External MongoDB URI. Takes priority over in-memory server in `startMongoServer`, `registerSimpleMongoPreload`, and `smokeMongoUri`. |
 | `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` | Per-mongod start timeout for in-memory servers started by `startMongoServer`. Default `60000` (mongodb-memory-server's own default is 10s). Startup is tried twice. |
 | `BUN_TEST_DISABLE_DB` | When `"true"`, `registerBackendPreload` skips all Mongo `beforeAll`/`afterAll` hooks (no DB startup). |
 
@@ -282,6 +282,76 @@ per-file, per-rule counts so CI fails only on new violations. Suppress one line 
 `test-hygiene-disable-next-line <rule>[, <rule>]` comment. Exit codes: 0 clean, 1 new
 violations, 2 usage error.
 
+### Documented-response checks (`@terreno/api/testing`)
+
+`expectDocumentedResponse({spec, path, method, response})` validates a real response body
+against the schema `/openapi.json` documents for that path, method, and status (AJV, with
+`#/components/...` refs and `nullable` resolved). It throws listing every violation, or when
+the route, status, or media type is not documented. `validateDocumentedResponse` returns
+`{valid, errors}` instead of throwing. `path` is the OpenAPI template
+(`/announcements/{id}/click`); pass the supertest response as `response`.
+
+`@terreno/api/testing` also registers api's own test models (including `User`). A package
+that defines its own `User` model imports the same two functions from the side-effect-free
+`@terreno/api/testing/openApi` entry instead, so one test process never compiles `User` twice.
+
+```typescript
+import {authAsUser, expectDocumentedResponse} from "@terreno/api/testing";
+
+const spec = (await supertest(app).get("/openapi.json")).body;
+const agent = await authAsUser(app, "notAdmin");
+const res = await agent.get("/auth/me").expect(200);
+expectDocumentedResponse({method: "get", path: "/auth/me", response: res, spec});
+```
+
+## Smoke helpers
+
+A package smoke is a real-process check of the package's built output. It lives in
+`<package>/e2e/smoke.ts` (`e2e/smoke.spec.ts` for browser packages), runs with the package's
+`smoke` script after `bun run compile`, and takes 30 s or less. It starts a server on a real
+port, runs the compiled binary, or opens a page, then walks one happy path. It exits non-zero on
+the first failed check. These helpers do the process work:
+
+| Export | Description |
+|--------|-------------|
+| `freePort()` | An unused TCP port on `127.0.0.1`. |
+| `smokeMongoUri({databaseName?})` | MongoDB URI with the database name (default `terrenoSmoke`). Uses `TERRENO_TEST_MONGODB_URI` when set (the CI sidecar). Otherwise it starts one single-node in-memory replica set per process, so change streams work. `stopSmokeMongo()` stops it. |
+| `spawnUntilReady({cmd, url, timeoutMs?, cwd?, env?, stopGraceMs?})` | Starts a long-running child and resolves once `url` answers 2xx (default timeout 20 s). Returns `{pid, output, stop}`. It rejects with the child's output when the child exits first or is not ready in time. `stop()` sends SIGTERM, then SIGKILL after `stopGraceMs` (default 5 s). |
+| `spawnExampleBackend({mongoUri, port?, env?, timeoutMs?, backendDir?})` | Starts the monorepo's `example-backend` by path with dev auth secrets and the demo AI model, then waits for `/health` (default timeout 60 s). `env` overrides the defaults; `backendDir` points at another directory holding `src/index.ts`. Returns `{baseUrl, port, pid, output, stop}`. Client smokes (rtk, syncdb, admin-frontend, example-frontend) use it, so they never import `@terreno/api`. Its `stop()` waits only 0.5 s after SIGTERM: example-backend's SIGTERM hook stops the jobs worker but keeps serving, so a longer grace only adds time. |
+| `runBin({bin, args?, cwd?, env?, timeoutMs?})` | Runs a binary to completion and resolves `{exitCode, stdout, stderr}`. A `.js`, `.mjs`, `.cjs`, or `.ts` path runs with Bun. Running past `timeoutMs` (default 30 s) rejects. Background processes the binary leaves behind are killed when it exits. |
+
+Each child that `spawnUntilReady`, `spawnExampleBackend`, or `runBin` starts runs in its own
+process group. `stop()`, a timeout, and the smoke process exiting, crashing, or receiving
+`SIGINT` or `SIGTERM` kill the whole group, so a wrapper command (`sh -c`, `bun run`) and the
+server it started both die and no server is left on a port. A smoke killed with `SIGKILL`
+cannot clean up.
+
+A server smoke can host its own server by re-running its file with an argument, which keeps
+one file per package. `api/e2e/smoke.ts` is the reference:
+
+```typescript
+import {freePort, smokeMongoUri, spawnUntilReady, stopSmokeMongo} from "@terreno/test";
+
+const port = await freePort();
+const server = await spawnUntilReady({
+  cmd: [process.execPath, __filename, "serve"],
+  env: {MONGO_URI: await smokeMongoUri({databaseName: "apiSmoke"}), PORT: String(port)},
+  url: `http://127.0.0.1:${port}/health`,
+});
+try {
+  // fetch() the happy path and throw on the first unexpected response
+} finally {
+  await server.stop();
+  await stopSmokeMongo();
+}
+```
+
+Run one package's smoke with `bun run --cwd <package> smoke`. From the repo root,
+`bun run smoke` runs every workspace's `smoke` script one at a time and prints each package's
+time. It keeps going after a failure and exits 1 if any package failed. Pass workspace
+directory names to run a subset: `bun run smoke api rtk`. Naming a workspace that does not
+exist or has no `smoke` script is an error.
+
 ## Conventions
 
 - Preload once per package via `bunfig.toml`; do not start Mongo in individual test files.
@@ -291,7 +361,10 @@ violations, 2 usage error.
 ## Coverage gates
 
 Package CI uses `scripts/check-coverage.ts` (`bun run test:coverage`, default 95%
-functions and lines) as the live gate. Bun 1.4.2+ may exit 1 on bunfig
+functions and lines) as the live gate. It runs the suite as concurrent
+`bun test --shard` processes and gates the merged LCOV; a sharded run below the
+threshold is confirmed with one unsplit pass
+([Test sharding](../explanation/test-sharding.md)). Bun 1.4.2+ may exit 1 on bunfig
 `coverageThreshold` before isolated LCOV merges; the script continues when tests
 reported `0 fail` and then enforces 95% on the merged report. The blocks
 coverage pass sets `--max-concurrency=1`, because Bun's default 20-way run
@@ -299,7 +372,7 @@ exits 0 on a 2-vCPU worker before it prints the `All files` row. When that
 row is still missing after one retry, the script uses `coverage/lcov.info`
 only if it lists every non-test source file under `src/`. Dedicated CircleCI
 jobs (`api-ci`, `ai-ci`, `blocks-ci`,
-`rtk-ci`, `ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
+`ui-ci`, `syncdb-ci`, `comms-ci`, `mcp-server-ci`, `admin-spa-ci`) run
 that script. Published packages without a dedicated workflow
 (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `@terreno/test`)
 run the same lint, compile, and coverage commands via the parameterized
@@ -309,7 +382,7 @@ including `.github/workflows/packages-ci.yml`. Those twins run
 pass `secrets.CODECOV_TOKEN` into `upload-codecov`.
 
 Each of those jobs then uploads `coverage/lcov.info` to Codecov with a distinct
-flag (`api`, `ui`, `rtk`, …) via `scripts/upload-codecov.sh`. The script
+flag (`api`, `ui`, `syncdb`, …) via `scripts/upload-codecov.sh`. The script
 downloads the linux uploader over HTTPS and refuses to run it unless the
 SHA-256 digest matches the pin in the script (`CODECOV_UPLOADER_SHA256`).
 `codecov.yml` sets per-package flags, `target: auto` with a 1% threshold so
@@ -346,7 +419,10 @@ registered `DemoConfig` demo and story through `renderWithTheme` from
 Pull requests also run the `New file coverage` workflow. Every newly added workspace
 `.ts` or `.tsx` implementation file must have at least 90% function coverage and 90%
 line coverage. Test, spec, story, generated OpenAPI SDK, `dist`, isolated-test,
-`src/types` type modules, demo `story-config/*.config.tsx`, and Expo Router route
+`src/types` type modules, modules whose only exports are `interface` and `type`
+aliases (comments and string literals do not count; TypeScript erases them, so
+Bun writes no LCOV record), demo
+`story-config/*.config.tsx`, and Expo Router route
 files (`index`, `_layout`, `+not-found`, `[param]`, plus example recovery screens
 `forgotPassword` / `resetPassword` / `verifyEmail`) are excluded. A new implementation
 file that is absent from LCOV is treated as 0% covered, except files listed in

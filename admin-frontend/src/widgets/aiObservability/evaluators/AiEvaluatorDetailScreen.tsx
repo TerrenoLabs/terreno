@@ -1,26 +1,27 @@
 import {Box, Spinner, Text} from "@terreno/ui";
-import {useLocalSearchParams} from "expo-router";
+import {router, useLocalSearchParams} from "expo-router";
 import {DateTime} from "luxon";
-import React, {useMemo} from "react";
+import React, {useCallback, useMemo} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
 import {unwrapExperimentList} from "../experiments/experimentTypes";
 import {useAiObservabilityExperimentsApi} from "../experiments/useAiObservabilityExperimentsApi";
 import {judgeOutputSchemaFromDetail, unwrapPromptDetail} from "../prompts/promptTypes";
 import {useAiObservabilityPromptsApi} from "../prompts/useAiObservabilityPromptsApi";
 import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
-import {AiEvaluatorDetailView} from "./AiEvaluatorPanels";
+import {ObservabilityErrorState} from "../shell/ObservabilityStates";
+import {AiEvaluatorDetailMeta, AiEvaluatorDetailView} from "./AiEvaluatorPanels";
 import {type EvaluatorUsageRow, unwrapEvaluatorRecord} from "./evaluatorTypes";
 import {useAiObservabilityEvaluatorsApi} from "./useAiObservabilityEvaluatorsApi";
 
 export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useDetailQuery} = useAiObservabilityEvaluatorsApi(api);
-  const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi(api);
-  const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi(api);
-  const {data, isError, isLoading} = useDetailQuery(id ?? "", {skip: !id});
+  const {useDetailQuery} = useAiObservabilityEvaluatorsApi();
+  const {useListQuery: useExperimentsQuery} = useAiObservabilityExperimentsApi();
+  const {useDetailQuery: usePromptDetailQuery} = useAiObservabilityPromptsApi();
+  const {data, isError, isLoading, refetch} = useDetailQuery(id ?? "", {skip: !id});
   const {data: experimentsRaw, isError: isExperimentsError} = useExperimentsQuery();
   const evaluator = useMemo(() => unwrapEvaluatorRecord(data), [data]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
@@ -74,11 +75,18 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
       });
   }, [evaluator, experimentsRaw]);
 
+  const handleOpenExperiment = useCallback(
+    (experimentId: string): void => {
+      router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
+    },
+    [prefix]
+  );
+
   if (!id) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
         <Box padding={4}>
-          <Text>Missing evaluator id.</Text>
+          <Text color="secondaryLight">Missing evaluator id.</Text>
         </Box>
       </AiObservabilityChrome>
     );
@@ -86,8 +94,13 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
 
   if (isLoading) {
     return (
-      <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
-        <Box alignItems="center" padding={4} testID="ai-evaluator-detail-loading">
+      <AiObservabilityChrome
+        {...props}
+        backHref={backHref}
+        hideHeader
+        screenName="ai-evaluator-detail"
+      >
+        <Box alignItems="center" padding={5} testID="ai-evaluator-detail-loading">
           <Spinner />
         </Box>
       </AiObservabilityChrome>
@@ -97,19 +110,29 @@ export const AiEvaluatorDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (
   if (isError || !evaluator) {
     return (
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
-        <Box padding={4}>
-          <Text color="error">Failed to load evaluator.</Text>
-        </Box>
+        <ObservabilityErrorState
+          onRetry={refetch}
+          testID="ai-evaluator-detail-error"
+          text="Could not load evaluator."
+        />
       </AiObservabilityChrome>
     );
   }
 
   return (
-    <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-evaluator-detail">
+    <AiObservabilityChrome
+      {...props}
+      backHref={backHref}
+      description={evaluator.description}
+      meta={<AiEvaluatorDetailMeta evaluator={evaluator} />}
+      screenName="ai-evaluator-detail"
+      title={evaluator.name}
+    >
       <AiEvaluatorDetailView
         evaluator={evaluator}
         judgeOutputSchema={judgeOutputSchema}
         judgePromptStatus={judgePromptStatus}
+        onOpenExperiment={handleOpenExperiment}
         routeBase={prefix}
         usageError={isExperimentsError ? "Could not load experiments." : undefined}
         usageRows={usageRows}

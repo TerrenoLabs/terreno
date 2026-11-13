@@ -11,12 +11,13 @@ import React, {useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
-  type Text as NativeText,
   Platform,
   Image as RNImage,
-  type ScrollView as RNScrollView,
-  type TextInput as RNTextInput,
+  type ScrollViewInstance,
+  type TextInputInstance,
+  type TextInstance,
   View,
+  type ViewInstance,
 } from "react-native";
 
 import {AttachmentPreview} from "./AttachmentPreview";
@@ -31,6 +32,7 @@ import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
+import {FormContainer} from "./FormContainer";
 import {Heading} from "./Heading";
 import {Icon} from "./Icon";
 import {IconButton} from "./IconButton";
@@ -1019,10 +1021,10 @@ const AskFocusTarget = ({
   renderCard,
 }: {
   label: string;
-  renderCard: (promptRef: React.RefObject<NativeText | null>) => React.ReactElement;
+  renderCard: (promptRef: React.RefObject<TextInstance | null>) => React.ReactElement;
 }): React.ReactElement => {
-  const viewRef = useRef<View>(null);
-  const promptRef = useRef<NativeText>(null);
+  const viewRef = useRef<ViewInstance>(null);
+  const promptRef = useRef<TextInstance>(null);
 
   // Focus the ask once, when it mounts; later renders of the same ask leave focus alone.
   useEffect(() => {
@@ -1063,7 +1065,7 @@ const AskTranscriptItem = ({
   onAskSubmit?: AskSubmitHandler;
   resolveAskFiles?: AskFilesResolver;
 }): React.ReactElement => {
-  const renderCard = (promptRef?: React.Ref<NativeText>): React.ReactElement => (
+  const renderCard = (promptRef?: React.Ref<TextInstance>): React.ReactElement => (
     <AskCard
       ask={ask}
       errors={errors}
@@ -1383,15 +1385,20 @@ const ApiKeyModal = ({
       title="Gemini API Key"
       visible={isVisible}
     >
-      <Box padding={2}>
+      {/* A form keeps the browser from warning about a password field outside one. */}
+      <FormContainer onSubmit={handleSaveApiKey} padding={2}>
         <TextField
+          accessibilityLabel="Gemini API key"
+          autoComplete="off"
           onChange={setApiKeyDraft}
+          onEnter={handleSaveApiKey}
           placeholder="Enter Gemini API key..."
+          returnKeyType="done"
           testID="gpt-api-key-input"
           type="password"
           value={apiKeyDraft}
         />
-      </Box>
+      </FormContainer>
     </Modal>
   );
 };
@@ -1447,7 +1454,7 @@ export const GPTChat = ({
   const [inputValue, setInputValue] = useState("");
   const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
-  const scrollViewRef = useRef<RNScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const [isScrolledUp, setIsScrolledUp] = useState(false);
   const contentHeightRef = useRef(0);
   const scrollOffsetRef = useRef(0);
@@ -1552,7 +1559,7 @@ export const GPTChat = ({
   const [inputElement, setInputElement] = useState<HTMLElement | null>(null);
 
   // On React Native Web the TextInput ref is the underlying DOM element.
-  const handleInputRef = useCallback((ref: RNTextInput | null) => {
+  const handleInputRef = useCallback((ref: TextInputInstance | null) => {
     setInputElement(ref as unknown as HTMLElement | null);
   }, []);
 

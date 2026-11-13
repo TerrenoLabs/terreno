@@ -1,21 +1,17 @@
+import {useSession} from "@terreno/syncdb/auth";
 import {Box, Button, Card, Heading, Page, Spinner, TapToEdit, Text, TextField} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useEffect, useMemo, useState} from "react";
-import {signOut} from "@/lib/betterAuth";
-import {logout, syncBetterAuthSession, useAppDispatch} from "@/store/index";
-import {useGetMeQuery, usePatchMeMutation} from "@/store/sdk";
+import {useGetAuthMeQuery, usePatchAuthMeMutation} from "@/store/apiSdk";
 
 const ProfileScreen: React.FC = () => {
-  const dispatch = useAppDispatch();
-  const {data: profile, isLoading} = useGetMeQuery();
-  const [updateProfile] = usePatchMeMutation();
+  const {logout} = useSession();
+  const {data: user, isLoading} = useGetAuthMeQuery();
+  const [updateProfile] = usePatchAuthMeMutation();
   const [name, setName] = useState<string>("");
   const [email, setEmail] = useState<string>("");
-  const [password, setPassword] = useState<string>("");
   const [currentPassword, setCurrentPassword] = useState<string>("");
   const [saveError, setSaveError] = useState<string | null>(null);
-
-  const user = profile?.data;
 
   // Copy the server name into local state without resetting an in-progress email edit.
   useEffect(() => {
@@ -33,11 +29,10 @@ const ProfileScreen: React.FC = () => {
     setEmail(user.email || "");
   }, [user?.email]);
 
+  // logout signs syncDb out, then Better Auth, and clears cached API responses.
   const handleLogout = useCallback(async (): Promise<void> => {
-    await signOut();
-    dispatch(logout());
-    await syncBetterAuthSession(dispatch);
-  }, [dispatch]);
+    await logout();
+  }, [logout]);
 
   const handleSaveName = useCallback(
     async (value: string): Promise<void> => {
@@ -73,23 +68,6 @@ const ProfileScreen: React.FC = () => {
       }
     },
     [currentPassword, isEmailChanged, updateProfile]
-  );
-
-  const handleSavePassword = useCallback(
-    async (value: string): Promise<void> => {
-      if (!value) {
-        return;
-      }
-      setSaveError(null);
-      try {
-        await updateProfile({password: value}).unwrap();
-        setPassword("");
-      } catch (err) {
-        console.error("Error updating password:", err);
-        setSaveError("Failed to update password");
-      }
-    },
-    [updateProfile]
   );
 
   if (isLoading) {
@@ -132,14 +110,6 @@ const ProfileScreen: React.FC = () => {
                 value={currentPassword}
               />
             )}
-            <TapToEdit
-              helperText="Leave blank to keep your current password"
-              onSave={handleSavePassword}
-              setValue={setPassword}
-              title="New Password"
-              type="password"
-              value={password}
-            />
             {saveError && <Text color="error">{saveError}</Text>}
           </Box>
         </Card>

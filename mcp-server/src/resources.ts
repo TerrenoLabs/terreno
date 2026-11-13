@@ -259,17 +259,11 @@ const buildResources = (): Resource[] => {
     },
     {
       content: loadMarkdown("syncdb.md"),
-      description: "Local-first data layer (@terreno/syncdb) — primary path for collection CRUD",
+      description:
+        "@terreno/syncdb — synced collections, request client + generated API hooks, auth session, config, flags",
       mimeType: "text/markdown",
       name: "@terreno/syncdb Documentation",
       uri: "terreno://docs/syncdb",
-    },
-    {
-      content: loadMarkdown("rtk.md"),
-      description: "Legacy @terreno/rtk docs — OpenAPI SDK, auth, feature flags (not data sync)",
-      mimeType: "text/markdown",
-      name: "@terreno/rtk Documentation (legacy)",
-      uri: "terreno://docs/rtk",
     },
     {
       content: loadMarkdown("patterns.md"),

@@ -2,7 +2,7 @@
 
 > **Generated** from the [Terreno Roadmap](https://github.com/orgs/TerrenoLabs/projects/1) GitHub Project. The board is the source of
 > truth; this file is refreshed by CI. **Target** versions are directional — no calendar
-> dates are promised. Last updated: 2026-10-26T15:55:54.710Z.
+> dates are promised. Last updated: 2026-11-09T22:24:15.777Z.
 
 Discuss priorities in [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
 See [roadmap process](docs/explanation/roadmap-process.md) for how work is triaged.
@@ -12,6 +12,10 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### api
 
 - [Remove legacy RTK realtime in Terreno 58](https://github.com/TerrenoLabs/terreno/issues/1392) (Breaking, Planned) — IP: [remove-legacy-realtime](docs/implementationPlans/remove-legacy-realtime.md) · Tasks: [remove-legacy-realtime](docs/tasks/remove-legacy-realtime.md)
+
+### syncdb
+
+- [Remove @terreno/rtk and Redux in Terreno 58](https://github.com/TerrenoLabs/terreno/issues/1685) (Breaking, Planned) — IP: [remove-rtk](docs/implementationPlans/remove-rtk.md) · Tasks: [remove-rtk](docs/tasks/remove-rtk.md)
 
 ### dx
 
@@ -26,11 +30,13 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 - [Comms adapter — Twilio SMS](https://github.com/TerrenoLabs/terreno/issues/1020) (Feature, Shipped) — IP: [comms-adapter-twilio-sms](docs/implementationPlans/comms-adapter-twilio-sms.md) · Tasks: [comms-adapter-twilio-sms](docs/tasks/comms-adapter-twilio-sms.md)
 - [Invitations and seat management](https://github.com/TerrenoLabs/terreno/issues/1173) (Feature, Planned)
 - [Stripe billing and subscriptions](https://github.com/TerrenoLabs/terreno/issues/1025) (Feature, Planned) — IP: [billing-stripe](docs/implementationPlans/billing-stripe.md) · Tasks: [billing-stripe](docs/tasks/billing-stripe.md)
+- [SyncDB: high-churn fields without a sequence claim per write](https://github.com/TerrenoLabs/terreno/issues/1696) (Feature, Shaping) — IP: [syncdb-high-churn-fields](docs/implementationPlans/syncdb-high-churn-fields.md)
 
 ### ui
 
 - [Charts and dashboard primitives](https://github.com/TerrenoLabs/terreno/issues/1175) (Feature, Shipped) — IP: [charts-and-dashboards](docs/implementationPlans/charts-and-dashboards.md) · Tasks: [charts-and-dashboards](docs/tasks/charts-and-dashboards.md)
 - [First-class dark mode](https://github.com/TerrenoLabs/terreno/issues/1176) (Feature, Planned)
+- [ListDetailLayout: a route-driven list/detail layout for phone and tablet](https://github.com/TerrenoLabs/terreno/issues/1652) (Feature, Planned) — IP: [list-detail-layout](docs/implementationPlans/list-detail-layout.md)
 - [Native module baseline for the next major release](https://github.com/TerrenoLabs/terreno/issues/1026) (Breaking, Shipped) — IP: [native-module-baseline](docs/implementationPlans/native-module-baseline.md) · Tasks: [native-module-baseline](docs/tasks/native-module-baseline.md)
 - [Ops dashboard chart parity](https://github.com/TerrenoLabs/terreno/issues/1494) (Feature, Planned) — IP: [dashboard-chart-parity](docs/implementationPlans/dashboard-chart-parity.md) · Tasks: [dashboard-chart-parity](docs/tasks/dashboard-chart-parity.md)
 
@@ -38,7 +44,7 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 
 - [Agent UI Asks — agents ask the user for a typed answer inside the chat](https://github.com/TerrenoLabs/terreno/issues/1501) (Feature, In progress) — IP: [agent-ui-asks](docs/implementationPlans/agent-ui-asks.md) · Tasks: [agent-ui-asks](docs/tasks/agent-ui-asks.md)
 - [Agent UI Blocks — a strict YAML DSL for agent-rendered Terreno components](https://github.com/TerrenoLabs/terreno/issues/1389) (Feature, Planned) — IP: [agent-ui-blocks](docs/implementationPlans/agent-ui-blocks.md) · Tasks: [agent-ui-blocks](docs/tasks/agent-ui-blocks.md)
-- [AI observability in production: live evals, alerts, threads, CI suites, prompt optimizer](https://github.com/TerrenoLabs/terreno/issues/1593) (Feature, Planned) — IP: [ai-observability-production-loop](docs/implementationPlans/ai-observability-production-loop.md)
+- [AI observability in production: live evals, alerts, threads, CI suites, prompt optimizer](https://github.com/TerrenoLabs/terreno/issues/1593) (Feature, Planned) — IP: [ai-observability-production-loop](docs/implementationPlans/ai-observability-production-loop.md) · Tasks: [ai-observability-production-loop](docs/tasks/ai-observability-production-loop.md)
 - [Durable agent harness (@terreno/ai/harness)](https://github.com/TerrenoLabs/terreno/issues/1503) (Feature, Planned) — IP: [durable-agent-harness](docs/implementationPlans/durable-agent-harness.md) · Tasks: [durable-agent-harness](docs/tasks/durable-agent-harness.md)
 
 ### mcp
@@ -58,8 +64,10 @@ See [roadmap process](docs/explanation/roadmap-process.md) for how work is triag
 ### dx
 
 - [Agent UI Rich Replies: steppers, checklists, galleries, and copy](https://github.com/TerrenoLabs/terreno/issues/1546) (Feature, Planned) — IP: [agent-ui-rich-replies](docs/implementationPlans/agent-ui-rich-replies.md) · Tasks: [agent-ui-rich-replies](docs/tasks/agent-ui-rich-replies.md)
+- [An end-user guide that grows with every feature](https://github.com/TerrenoLabs/terreno/issues/1642) (Feature, Shaping) — IP: [lifecycle-user-guide](docs/implementationPlans/lifecycle-user-guide.md)
 - [create-terreno-app scaffolding CLI](https://github.com/TerrenoLabs/terreno/issues/1174) (Feature, Shipped) — IP: [create-terreno-app](docs/implementationPlans/create-terreno-app.md) · Tasks: [create-terreno-app](docs/tasks/create-terreno-app.md)
 - [Demo workshop](https://github.com/TerrenoLabs/terreno/issues/1470) (Feature, Planned) — IP: [demo-workshop](docs/implementationPlans/demo-workshop.md) · Tasks: [demo-workshop](docs/tasks/demo-workshop.md)
+- [E2E tests and manual regression cases in every plan](https://github.com/TerrenoLabs/terreno/issues/1641) (Feature, In review) — IP: [e2e-and-regression-testing](docs/implementationPlans/e2e-and-regression-testing.md)
 - [Migrate CI/CD to CircleCI](https://github.com/TerrenoLabs/terreno/issues/1088) (Improvement, Shipped) — IP: [migrate-cicd-to-circleci](docs/implementationPlans/migrate-cicd-to-circleci.md) · Tasks: [migrate-cicd-to-circleci](docs/tasks/migrate-cicd-to-circleci.md)
 - [Open source launch program](https://github.com/TerrenoLabs/terreno/issues/1094) (Improvement, In progress) — IP: [oss-launch-program](docs/implementationPlans/oss-launch-program.md)
 

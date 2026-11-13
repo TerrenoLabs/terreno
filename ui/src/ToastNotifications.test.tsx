@@ -1,7 +1,7 @@
 import {beforeAll, describe, expect, it, mock} from "bun:test";
 import {act, render, waitFor} from "@testing-library/react-native";
 import React from "react";
-import {Text} from "react-native";
+import {type ScaledSize, Text} from "react-native";
 
 import ToastContainer, {
   GlobalToast,
@@ -18,8 +18,8 @@ beforeAll(() => {
   global.requestAnimationFrame = (callback: FrameRequestCallback) => {
     return setTimeout(() => callback(Date.now()), 0) as unknown as number;
   };
-  global.cancelAnimationFrame = (id: number) => {
-    clearTimeout(id);
+  global.cancelAnimationFrame = (id: number | null | undefined) => {
+    clearTimeout(id ?? undefined);
   };
 });
 
@@ -55,7 +55,7 @@ describe("ToastNotifications", () => {
 
   describe("useToastNotifications hook", () => {
     it("should return toast methods from context", () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -73,7 +73,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have show method available after mount", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -93,7 +93,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have hide method available after mount", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -113,7 +113,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have hideAll method available after mount", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -133,7 +133,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have update method available after mount", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -153,7 +153,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have isOpen method available after mount", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -189,7 +189,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast functionality", () => {
     it("lets clicks pass through the full-width safe area around toasts", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -225,7 +225,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should show a toast and return an id", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -253,7 +253,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should show a toast with custom id", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -280,7 +280,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have isOpen method that returns false for non-existent toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -302,7 +302,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have hide method available", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -324,7 +324,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have hideAll method available", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -346,7 +346,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should have update method available", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -370,7 +370,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast types", () => {
     it("should show success toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -397,7 +397,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should show danger toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -424,7 +424,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should show warning toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -482,7 +482,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast options", () => {
     it("should accept custom duration", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -509,7 +509,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should accept duration of 0 for persistent toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -536,7 +536,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should call onClose callback when toast is hidden", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onCloseMock = mock(() => {});
 
       const TestComponent = () => {
@@ -565,7 +565,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should accept custom animation duration", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -612,7 +612,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with React elements", () => {
     it("should accept React element as message", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -641,7 +641,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast update and hideAll", () => {
     it("should update an existing toast message", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -674,7 +674,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should hide all toasts at once", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -711,7 +711,7 @@ describe("ToastNotifications", () => {
       queryAllByText: ReturnType<typeof render>["queryAllByText"];
       getRef: () => ToastType | null;
     } => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         toastRef = useToastNotifications();
         return <Text>Test</Text>;
@@ -790,7 +790,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast placement rendering", () => {
     it("should render toast with top placement", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -817,7 +817,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should render toast with center placement", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -846,7 +846,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast icon and color variants", () => {
     it("should render success toast with custom icon", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -873,7 +873,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should render danger toast with custom icon", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -900,7 +900,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should render warning toast with custom icon", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -969,7 +969,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with renderToast custom renderer", () => {
     it("should use renderToast when provided", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -999,7 +999,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with renderType map", () => {
     it("should use renderType for matching toast type", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1031,7 +1031,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast onPress handler", () => {
     it("should accept onPress callback on toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onPressMock = mock((_id: string) => {});
 
       const TestComponent = () => {
@@ -1061,7 +1061,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with swipe enabled", () => {
     it("should render toast with swipe enabled (pan responder)", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1090,7 +1090,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with zoom-in animation", () => {
     it("should render toast with zoom-in animation type", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1118,7 +1118,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast custom colors", () => {
     it("should render toasts with custom colors", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1161,7 +1161,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast with offsets", () => {
     it("should render with custom offsetTop and offsetBottom", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1192,7 +1192,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast icon override", () => {
     it("should use explicit icon over type-specific icon", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1231,7 +1231,7 @@ describe("ToastNotifications", () => {
     it("should auto-close toast after short duration and call onClose", async () => {
       const origOS = Platform.OS;
       Platform.OS = "web";
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onCloseMock = mock(() => {});
 
       const TestComponent = () => {
@@ -1275,7 +1275,7 @@ describe("ToastNotifications", () => {
     it("should hide toast when hide() is called (exercises open effect)", async () => {
       const origOS = Platform.OS;
       Platform.OS = "web";
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1333,7 +1333,7 @@ describe("ToastNotifications", () => {
         return origCreate(config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1402,7 +1402,7 @@ describe("ToastNotifications", () => {
         return origCreate(config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1458,7 +1458,7 @@ describe("ToastNotifications", () => {
         return origCreate(config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1507,7 +1507,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast zoom-in animation with swipe", () => {
     it("renders toast with both zoom-in and swipe enabled", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1544,7 +1544,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast onPress interaction", () => {
     it("should trigger onPress when pressing the toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onPressMock = mock((_id: string) => {});
 
       const TestComponent = () => {
@@ -1592,7 +1592,7 @@ describe("ToastNotifications", () => {
       const {Platform: P} = await import("react-native");
       const origOS = P.OS;
       P.OS = "web";
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1643,7 +1643,7 @@ describe("ToastNotifications", () => {
     it("exercises dimension change via Dimensions event", async () => {
       const rn = await import("react-native");
       const Dims = rn.Dimensions;
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1669,9 +1669,12 @@ describe("ToastNotifications", () => {
 
       // Capture the original addEventListener to spy on it
       // Instead, we'll spy on the subscription by monkey-patching Dimensions
-      const listeners: Array<(data: {window: rn.ScaledSize}) => void> = [];
+      const listeners: Array<(data: {window: ScaledSize}) => void> = [];
       const origAddEventListener = Dims.addEventListener.bind(Dims);
-      const patchedAdd = (event: string, handler: (data: {window: rn.ScaledSize}) => void) => {
+      const patchedAdd = (
+        event: Parameters<typeof Dims.addEventListener>[0],
+        handler: (data: {window: ScaledSize}) => void
+      ) => {
         if (event === "change") {
           listeners.push(handler);
         }
@@ -1695,7 +1698,7 @@ describe("ToastNotifications", () => {
       await act(async () => {
         for (const listener of listeners) {
           listener({
-            window: {fontScale: 1, height: 900, scale: 1, width: 500} as rn.ScaledSize,
+            window: {fontScale: 1, height: 900, scale: 1, width: 500} as ScaledSize,
           });
         }
       });
@@ -1718,7 +1721,7 @@ describe("ToastNotifications", () => {
         return originalCreate.call(PanResponder, config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         const toast = useToastNotifications();
         toastRef = toast;
@@ -1792,7 +1795,7 @@ describe("ToastNotifications", () => {
         return originalCreate.call(PanResponder, config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         const toast = useToastNotifications();
         toastRef = toast;
@@ -1840,7 +1843,7 @@ describe("ToastNotifications", () => {
         return originalCreate.call(PanResponder, config);
       };
 
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         const toast = useToastNotifications();
         toastRef = toast;
@@ -1882,7 +1885,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast lifecycle and auto-close", () => {
     it("should auto-close toast after duration expires", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1916,7 +1919,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should trigger handleClose when hiding a toast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -1954,7 +1957,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should auto-destroy toast after animation completes", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onCloseMock = mock(() => {});
 
       const TestComponent = () => {
@@ -1993,7 +1996,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast swipe gestures", () => {
     it("should render swipe-enabled toast and handle pan gestures", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2023,7 +2026,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast animation types", () => {
     it("should show toast with zoom-in animation", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2051,7 +2054,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should show toast with bottom placement and slide-in", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2081,7 +2084,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast renderType and renderToast", () => {
     it("should render custom toast via renderType", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2113,7 +2116,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should render custom toast via renderToast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2146,7 +2149,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast onPress", () => {
     it("should call onPress when toast is pressed", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onPressMock = mock((_id: string) => {});
 
       const TestComponent = () => {
@@ -2177,7 +2180,7 @@ describe("ToastNotifications", () => {
 
   describe("Toast custom colors", () => {
     it("should render with custom success/danger/warning/normal colors", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();
@@ -2213,7 +2216,7 @@ describe("ToastNotifications", () => {
 
   describe("center placement toast rendering", () => {
     it("should fully render center toast content including filter and map callbacks", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         const toast = useToastNotifications();
         toastRef = toast;
@@ -2245,7 +2248,7 @@ describe("ToastNotifications", () => {
     });
 
     it("should render multiple center toasts through filter and map", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const TestComponent = () => {
         const toast = useToastNotifications();
         toastRef = toast;
@@ -2289,7 +2292,7 @@ describe("ToastNotifications", () => {
 
   describe("auto-close timer callback", () => {
     it("should fire the setTimeout callback that calls handleClose", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       const onCloseMock = mock(() => {});
 
       const TestComponent = () => {
@@ -2327,7 +2330,7 @@ describe("ToastNotifications", () => {
 
   describe("onHide callback on toast props", () => {
     it("should exercise the onHide function via renderToast", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
       let capturedOnHide: (() => void) | null = null;
 
       const customRenderToast = (toast: ToastProps) => {
@@ -2382,7 +2385,7 @@ describe("ToastNotifications", () => {
 
   describe("update map callback with toast in state", () => {
     it("should invoke the map callback inside update when toasts exist", async () => {
-      let toastRef: ToastType | null = null;
+      let toastRef = null as ToastType | null;
 
       const TestComponent = () => {
         const toast = useToastNotifications();

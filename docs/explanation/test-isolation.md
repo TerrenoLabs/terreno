@@ -1,6 +1,7 @@
 # Test isolation in Bun suites
 
-`bun test` runs every test file of a package in one process. `mock.module` replaces a
+`bun test` runs every test file of a package, or of one [shard](test-sharding.md) of it,
+in one process. `mock.module` replaces a
 module for that whole process, and `mock.restore()` does not undo it. A test that
 mocks a module can pass on its own, then break other files, or be broken by them,
 when the whole package runs. CI always runs the whole package, so this kind of

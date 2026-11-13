@@ -60,6 +60,10 @@ const deleteAtPath = (obj: unknown, segments: string[]): void => {
     return;
   }
   const [head, ...rest] = segments;
+  // Never walk into or delete from a prototype through a configured path.
+  if (head === "__proto__" || head === "constructor" || head === "prototype") {
+    return;
+  }
   if (rest.length === 0) {
     delete obj[head];
     return;

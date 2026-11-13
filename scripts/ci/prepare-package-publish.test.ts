@@ -12,6 +12,7 @@ describe("prepare-package-publish", () => {
     try {
       mkdirSync(join(repoRoot, "mcp-server"), {recursive: true});
       writeFileSync(join(repoRoot, "package.json"), JSON.stringify({catalog: {}}));
+      writeFileSync(join(repoRoot, "CHANGELOG.md"), "# Changelog\n\n## [58.0.0] - 2026-10-26\n");
       writeFileSync(
         join(repoRoot, "mcp-server/package.json"),
         JSON.stringify({
@@ -38,6 +39,44 @@ describe("prepare-package-publish", () => {
       assert.equal(publishedPackage.version, "58.0.0");
       assert.equal(publishedPackage.dependencies["@terreno/api"], "58.0.0");
       assert.equal(publishedPackage.dependencies["create-terreno-app"], "58.0.0");
+      assert.include(
+        readFileSync(join(repoRoot, "mcp-server/CHANGELOG.md"), "utf8"),
+        "## [58.0.0]",
+        "the root changelog ships inside the package"
+      );
+    } finally {
+      rmSync(repoRoot, {force: true, recursive: true});
+    }
+  });
+
+  it("stamps the release version into a Claude plugin manifest", () => {
+    const repoRoot = mkdtempSync(join(tmpdir(), "prepare-package-publish-"));
+    try {
+      mkdirSync(join(repoRoot, "plugins/terreno-claude/.claude-plugin"), {recursive: true});
+      writeFileSync(join(repoRoot, "package.json"), JSON.stringify({catalog: {}}));
+      writeFileSync(join(repoRoot, "CHANGELOG.md"), "# Changelog\n");
+      writeFileSync(
+        join(repoRoot, "plugins/terreno-claude/package.json"),
+        JSON.stringify({name: "@terreno/agent-plugin", version: "0.0.0"})
+      );
+      writeFileSync(
+        join(repoRoot, "plugins/terreno-claude/.claude-plugin/plugin.json"),
+        JSON.stringify({name: "terreno", skills: "./skills/"})
+      );
+
+      const result = Bun.spawnSync({
+        cmd: ["bun", SCRIPT_PATH, "plugins/terreno-claude", "58.0.0", "release"],
+        cwd: repoRoot,
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+      assert.equal(result.exitCode, 0, result.stderr.toString());
+
+      const manifest = JSON.parse(
+        readFileSync(join(repoRoot, "plugins/terreno-claude/.claude-plugin/plugin.json"), "utf8")
+      ) as {name: string; version: string};
+      assert.equal(manifest.version, "58.0.0");
+      assert.equal(manifest.name, "terreno");
     } finally {
       rmSync(repoRoot, {force: true, recursive: true});
     }

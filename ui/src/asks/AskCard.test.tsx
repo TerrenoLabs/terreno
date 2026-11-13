@@ -9,12 +9,12 @@ import {
 import {act, fireEvent, render, waitFor, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import {createRef} from "react";
-import type {Text as NativeText} from "react-native";
+import type {TextInstance, TextProps} from "react-native";
 import {ThemeProvider} from "../Theme";
 import {TimezonePicker} from "../TimezonePicker";
-import {renderWithTheme} from "../test-utils";
+import {elementProps, findAllByHostType, renderWithTheme} from "../test-utils";
 import {AskCard, type AskCardProps} from "./AskCard";
-import type {AskSubmission, ChatAsk} from "./askTypes";
+import type {AskSubmission, ChatAsk, ChatAskState} from "./askTypes";
 
 const PLAN_INPUT: ChoiceAskInput = {
   default: ["team"],
@@ -49,7 +49,7 @@ const COUNTRY_INPUT: ChoiceAskInput = {
   select: "one",
 };
 
-const pendingAsk = (input: ChoiceAskInput, state: Partial<ChatAsk> = {}): ChatAsk => ({
+const pendingAsk = (input: ChoiceAskInput, state: Partial<ChatAskState> = {}): ChatAsk => ({
   input,
   kind: "choice",
   status: "pending",
@@ -67,7 +67,7 @@ const ARCHIVE_INPUT: ConfirmAskInput = {
 
 const REPORT_INPUT: ConfirmAskInput = {prompt: "Send the weekly report to the team now?"};
 
-const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingConfirm = (input: ConfirmAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "confirm", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const DRAFT = "# We're live\n\nToday we launched.";
@@ -82,7 +82,7 @@ const DRAFT_INPUT: MarkdownAskInput = {
   title: "Launch announcement",
 };
 
-const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingMarkdown = (input: MarkdownAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "markdown", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const INVOICE_INPUT: FormAskInput = {
@@ -145,7 +145,7 @@ const DEFAULTS_INPUT: FormAskInput = {
   prompt: "Check the details.",
 };
 
-const pendingForm = (input: FormAskInput, state: Partial<ChatAsk> = {}): ChatAsk =>
+const pendingForm = (input: FormAskInput, state: Partial<ChatAskState> = {}): ChatAsk =>
   ({input, kind: "form", status: "pending", toolCallId: "call_1", ...state}) as ChatAsk;
 
 const renderCard = (props: Partial<AskCardProps> & Pick<AskCardProps, "ask">) =>
@@ -556,7 +556,7 @@ describe("AskCard", () => {
 
       await press(getByTestId("ask-card-button-approve"));
       assert.lengthOf(
-        getByTestId("ask-card-button-approve").findAll((node) => node.type === "ActivityIndicator"),
+        findAllByHostType(getByTestId("ask-card-button-approve"), "ActivityIndicator"),
         1
       );
       assert.isTrue(isDisabled(getByTestId("ask-card-button-deny")));
@@ -1011,8 +1011,11 @@ describe("AskCard", () => {
       assert.isNull(card.queryByText("Enter a complete date and time, or clear it."));
       await press(card.getByTestId("ask-card-submit"));
       assert.deepInclude(
-        (onSubmit.mock.calls[0]?.[0]?.response as {content: {values: Record<string, unknown>}})
-          ?.content?.values ?? {},
+        (
+          onSubmit.mock.calls[0]?.[0]?.response as unknown as {
+            content: {values: Record<string, unknown>};
+          }
+        )?.content?.values ?? {},
         {meeting: "2026-10-01T09:30:00Z", reminder: "10:30"}
       );
     });
@@ -1244,8 +1247,9 @@ describe("AskCard", () => {
     const {getByTestId} = renderCard({ask: pendingAsk(PLAN_INPUT), onSubmit});
 
     await press(getByTestId("ask-card-button-option:team"));
-    const spinners = getByTestId("ask-card-button-option:team").findAll(
-      (node) => node.type === "ActivityIndicator"
+    const spinners = findAllByHostType(
+      getByTestId("ask-card-button-option:team"),
+      "ActivityIndicator"
     );
     assert.lengthOf(spinners, 1);
     assert.isTrue(isDisabled(getByTestId("ask-card-button-option:team")));
@@ -1301,18 +1305,19 @@ describe("AskCard", () => {
   });
 
   it("shows the question as an accessible header the host can focus through promptRef", () => {
-    const promptRef = createRef<NativeText>();
+    const promptRef = createRef<TextInstance>();
     const prompt = {focus: (): void => {}};
     const {getByRole} = render(
       <AskCard ask={pendingAsk(PLAN_INPUT)} onSubmit={async () => {}} promptRef={promptRef} />,
       {
-        createNodeMock: (element) => (element.props.accessibilityRole === "header" ? prompt : null),
+        createNodeMock: (element) =>
+          elementProps<TextProps>(element).accessibilityRole === "header" ? prompt : null,
         wrapper: ThemeProvider,
       }
     );
 
     assert.isOk(getByRole("header", {name: "Which plan should I set up for your workspace?"}));
-    assert.strictEqual(promptRef.current, prompt as unknown as NativeText);
+    assert.strictEqual(promptRef.current, prompt as unknown as TextInstance);
   });
 
   it("disables its controls when the host takes no answers", () => {

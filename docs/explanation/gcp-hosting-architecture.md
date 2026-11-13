@@ -191,7 +191,7 @@ gs://bucket/
 
 ### Production Deploy
 
-1. **Trigger**: Push to `master` branch with changes to `demo/**`, `ui/**`, `example-frontend/**`, `rtk/**`
+1. **Trigger**: Push to `master` branch with changes to `demo/**`, `ui/**`, `example-frontend/**`, `syncdb/**`
 2. **Build**: GitHub Actions runs `bun run export` to generate static files
 3. **Ensure negative caching disabled**: Update backend bucket to prevent cached 404s
 4. **Upload**:

@@ -19,6 +19,8 @@ const E2E_SHARDS: Record<string, string[]> = {
     "admin-form",
     "admin-todo-crud",
     "admin-title-update-depth",
+    "org-admin-security",
+    "admin-user-security",
   ],
   "admin-table": [
     "admin-table-search-filter",
@@ -28,8 +30,29 @@ const E2E_SHARDS: Record<string, string[]> = {
     "harness-approvals",
     "harness-intake",
   ],
-  app: ["todos", "todo-windows", "profile", "realtime", "ai-chat", "pdf", "notifications"],
-  auth: ["login", "signup", "consents", "forgot-password", "reset-password", "verify-email"],
+  app: [
+    "todos",
+    "todo-windows",
+    "todo-browser",
+    "profile",
+    "realtime",
+    "ai-chat",
+    "pdf",
+    "notifications",
+    "socket-flags",
+    "mcp-tokens",
+  ],
+  auth: [
+    "login",
+    "login-form",
+    "signup",
+    "consents",
+    "provisionalConsent",
+    "forgot-password",
+    "reset-password",
+    "verify-email",
+    "two-factor",
+  ],
   syncdb: [
     "syncdb-load-delta",
     "syncdb-offline",
@@ -125,14 +148,14 @@ describe("CircleCI concurrency", () => {
     assert.deepEqual([...listed].sort(), [...prSpecs].sort());
   });
 
-  it("does not start example-backend CI for ui or rtk-only changes", () => {
+  it("does not start example-backend CI for ui or syncdb-only changes", () => {
     const mappings = readMappings({repoRoot});
     assert.equal(
       mappingMatches({mappings, parameter: "run-example-backend", path: "ui/src/Box.tsx"}),
       false
     );
     assert.equal(
-      mappingMatches({mappings, parameter: "run-example-backend", path: "rtk/src/index.ts"}),
+      mappingMatches({mappings, parameter: "run-example-backend", path: "syncdb/src/index.ts"}),
       false
     );
     assert.equal(

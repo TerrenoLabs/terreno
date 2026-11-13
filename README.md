@@ -95,7 +95,6 @@ Published together from [`.github/workflows/publish-on-tag.yml`](.github/workflo
 - **api/** — REST API framework for Express/Mongoose (modelRouter, auth, OpenAPI) (published as `@terreno/api`)
 - **test/** — Shared Bun test helpers, MongoDB preload utilities, and HTTP fixtures (published as `@terreno/test`)
 - **ui/** — React Native UI component library for iOS, Android, and web (published as `@terreno/ui`)
-- **rtk/** — OpenAPI SDK, Better Auth Redux, and feature flags for Terreno frontends (published as `@terreno/rtk`; **deprecated for collection data sync**)
 - **admin-backend/** — Admin panel backend plugin for `@terreno/api` (published as `@terreno/admin-backend`)
 - **admin-frontend/** — Admin panel frontend screens for `@terreno/api` backends (published as `@terreno/admin-frontend`)
 - **admin-spa/** — Standalone admin SPA (Expo Router web) plus Express serve plugin (published as `@terreno/admin-spa`)
@@ -107,7 +106,7 @@ Published together from [`.github/workflows/publish-on-tag.yml`](.github/workflo
 - **jobs/** — Durable background jobs plugin for `@terreno/api` (published as `@terreno/jobs`)
 - **create-terreno-app/** — Scaffold CLI for a deployable full-stack Terreno app (published as unscoped `create-terreno-app`)
 - **mcp-server/** — MCP server that gives coding agents Terreno docs, codegen tools, and prompts (published as `@terreno/mcp`)
-- **syncdb/** — Local-first data layer with TinyBase, durable outbox, and delta sync (published as `@terreno/syncdb`)
+- **syncdb/** — Frontend data layer: local-first collections (TinyBase, durable outbox, delta sync), request client with generated API hooks, auth session, and feature flags (published as `@terreno/syncdb`)
 
 Workspace apps (not published): **example-backend/**, **example-frontend/**, **demo/**.
 
@@ -124,21 +123,21 @@ Workspace apps (not published): **example-backend/**, **example-frontend/**, **d
               |                               |
      /openapi.json                    sync protocol
               |                               |
-     RTK Query SDK Codegen            @terreno/syncdb
-     (non-synced routes)              (collection CRUD)
+     terreno-syncdb-codegen            terreno-syncdb-codegen
+     --api-out (non-synced routes)    --out (synced collections)
               |                               |
                            FRONTEND
-  @terreno/rtk                         @terreno/syncdb
-  - Generated hooks (auth, admin, AI)  - useQuery / useMutate (local-first)
-  - Better Auth session Redux          - Offline outbox + conflict UI
-  - Feature flags + sockets
+                       @terreno/syncdb
+  - Request client + generated hooks   - useQuery / useMutate (local-first)
+  - SessionProvider / useSession       - Offline outbox + conflict UI
+  - Feature flags on the sync socket
                               +
   @terreno/ui
   - React Native components (Box, Button, TextField, etc.)
   - TerrenoProvider for theming
 ```
 
-New collection CRUD uses `@terreno/syncdb`. Keep `@terreno/rtk` for the generated OpenAPI SDK (non-synced routes), Better Auth session Redux, feature flags, and sockets. Migration: [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md).
+`@terreno/syncdb` is the only frontend data layer. Terreno 58 removed `@terreno/rtk` and Redux; upgrade with [migrate-rtk-to-syncdb.md](docs/how-to/migrate-rtk-to-syncdb.md).
 
 ## Live examples
 
@@ -162,13 +161,15 @@ Every `@terreno/ui` component, live, with its variants and states. Source:
 ### More
 
 - [Docs](https://terreno-docs.netlify.app)
-- MCP server: `https://mcp.terreno.app`
+- MCP server: `https://mcp.terreno.app/mcp`
 
 To deploy your own apps, follow [Deploy to GCP](docs/how-to/deploy-to-gcp.md).
 
 ## MCP server
 
 Terreno's MCP server is the **tool** layer of the AI-native pillar: codegen, documentation search, and component reference. Pair it with the `/terreno-*` SDLC pipeline described in [positioning.md](docs/explanation/positioning.md) (the **process** layer; consumer packaging is still in progress).
+
+A second server, `terreno-mcp-local`, runs inside your app repository and adds what the hosted server cannot see: merged backend and client logs, `last_error`, client state, and read-only database inspection. [Set up Terreno MCP](docs/how-to/set-up-terreno-mcp.md) configures both servers; the snippets below cover only the hosted one.
 
 ### Cursor
 
@@ -178,8 +179,8 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }
@@ -191,12 +192,15 @@ Add this to `.cursor/mcp.json`:
 {
   "mcpServers": {
     "terreno": {
-      "type": "sse",
-      "url": "https://mcp.terreno.app"
+      "type": "http",
+      "url": "https://mcp.terreno.app/mcp"
     }
   }
 }
 ```
+
+If `mcp.terreno.app` does not resolve on your network yet, use
+`https://mcp.terreno.flourish.health/mcp`, which serves the same server.
 
 Claude Desktop config paths: macOS `~/Library/Application Support/Claude/claude_desktop_config.json`; Windows `%APPDATA%\Claude\claude_desktop_config.json`.
 

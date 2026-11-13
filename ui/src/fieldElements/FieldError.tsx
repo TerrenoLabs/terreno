@@ -17,6 +17,7 @@ export const FieldError: FC<FieldErrorProps> = ({text, testID}) => {
 
   return (
     <View
+      nativeID={testID}
       style={{alignItems: "center", flexDirection: "row", marginVertical: 2}}
       {...toTestProps(testID)}
     >

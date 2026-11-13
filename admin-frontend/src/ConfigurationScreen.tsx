@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   Card,
+  FormContainer,
   Heading,
   MarkdownEditorField,
   Page,
@@ -13,7 +14,6 @@ import {
 } from "@terreno/ui";
 import startCase from "lodash/startCase";
 import React, {useCallback, useMemo, useState} from "react";
-import type {AdminApi} from "./types";
 import {useConfigurationApi} from "./useConfigurationApi";
 
 /**
@@ -47,8 +47,6 @@ interface ConfigurationMetaResponse {
 interface ConfigurationScreenProps {
   /** Base URL for configuration routes (e.g., "/configuration"). */
   basePath?: string;
-  /** RTK Query API instance. */
-  api: AdminApi;
   /** Optional title override. Defaults to "Configuration". */
   title?: string;
 }
@@ -111,6 +109,8 @@ const ConfigField: React.FC<{
   if (fieldMeta.secret) {
     return (
       <TextField
+        accessibilityLabel={`${label} (Secret)`}
+        autoComplete="off"
         helperText={helperText ? `${helperText} (secret)` : "Secret value"}
         onChange={onChange}
         testID={testID}
@@ -184,19 +184,17 @@ const EmptySections: React.FC = () => (
  * @example
  * ```typescript
  * import {ConfigurationScreen} from "@terreno/admin-frontend";
- * import {api} from "@/store/openApiSdk";
  *
  * export default function ConfigScreen() {
- *   return <ConfigurationScreen api={api} />;
+ *   return <ConfigurationScreen />;
  * }
  * ```
  */
 export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
   basePath = "/configuration",
-  api,
   title = "Configuration",
 }) => {
-  const {useMetaQuery, useValuesQuery, useUpdateMutation} = useConfigurationApi({api, basePath});
+  const {useMetaQuery, useValuesQuery, useUpdateMutation} = useConfigurationApi({basePath});
 
   const {data: meta, isLoading: isMetaLoading} = useMetaQuery();
   const {data: valuesResponse, isLoading: isValuesLoading} = useValuesQuery();
@@ -209,8 +207,7 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
   const toast = useToast();
 
   const configMeta = meta as ConfigurationMetaResponse | undefined;
-  // The baseQuery in emptyApi.ts unwraps {data: ...} responses, so valuesResponse
-  // is already the config document — not a wrapper object.
+  // `useValuesQuery` unwraps the API's `{data: ...}` envelope, so this is the config document.
   const configValues = valuesResponse as Record<string, ConfigValue> | undefined;
 
   // Derived synchronously so the form is never blank when data is already cached.
@@ -316,7 +313,8 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
       scroll
       title={title}
     >
-      <Box gap={4} padding={4}>
+      {/* A form holds the secret (password-type) fields, so browsers do not warn about them. */}
+      <FormContainer gap={4} padding={4} testID="config-form">
         {sections.length === 0 ? (
           <EmptySections />
         ) : (
@@ -329,7 +327,7 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
             />
           ))
         )}
-      </Box>
+      </FormContainer>
     </Page>
   );
 };

@@ -32,7 +32,7 @@ Use [MongoDB Atlas](https://www.mongodb.com/atlas) or a single-node replica set 
 
 **3 — Short-lived serverless timeouts**
 
-The RTK/socket client enables reconnection (`reconnection: true`, `reconnectionAttempts: 5` in `rtk/src/socket.ts`). When the backend drops idle connections (for example Cloud Run's default 300s request timeout), clients reconnect but realtime state may lag until the new socket attaches.
+The syncdb socket client enables reconnection (`reconnection: true` in `syncdb/src/sync/socketTransport.ts`). When the backend drops idle connections (for example Cloud Run's default 300s request timeout), clients reconnect and catch up from their sync cursors, but deltas may lag until the new socket attaches.
 
 **5 — Build-time API URL**
 

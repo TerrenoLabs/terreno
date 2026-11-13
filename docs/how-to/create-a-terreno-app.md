@@ -37,7 +37,7 @@ Optional flags:
 | `appName` (positional) | yes | — kebab-case directory and package name (`^[a-z][a-z0-9-]*$`) |
 | `--display-name` | unless `--yes` | derived from `appName` when `--yes` |
 | `--description` | no | empty |
-| `--mcp-server-url` | no | `https://mcp.terreno.app` |
+| `--mcp-server-url` | no | `https://mcp.terreno.app` (base URL; the CLI appends `/mcp`) |
 | `--yes` | no | off |
 
 The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/TerrenoLabs/terreno/tree/master/create-terreno-app) in the Terreno monorepo.
@@ -58,16 +58,28 @@ cd .. && bunx create-terreno-app my-app --yes
 | Path | Purpose |
 | --- | --- |
 | `backend/` | Express/Mongoose API (`@terreno/api`, Better Auth, admin, sync) |
-| `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`, `@terreno/rtk`) |
+| `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`). No Redux: session from `@terreno/syncdb/auth`, requests through `store/apiClient.ts`, generated hooks in `store/apiSdk.ts` |
 | `Dockerfile` | Consumer backend image (`backend/` only — not the Terreno monorepo) |
 | `.dockerignore` | Excludes local env secrets, dependencies, and build output from the image context |
-| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold) |
+| `backend/.env`, `frontend/.env` | Gitignored local-dev defaults (written on scaffold). `backend/.env` sets `NODE_ENV=development`, which turns on the dev-only `POST /__terreno/browser-logs` route |
 | `backend/.env.example`, `frontend/.env.example` | Committed templates for production and export |
 | `.github/workflows/` | Backend and frontend CI |
-| `.cursor/mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling |
-| `README.md` | App-specific next steps and deploy links |
+| `.cursor/mcp.json`, `.mcp.json`, `.cursorrules`, `CLAUDE.md` | Agent tooling ([Set up Terreno MCP](set-up-terreno-mcp.md)) |
+| `README.md` | App-specific next steps, deploy links, and a link to [Set up Terreno MCP](set-up-terreno-mcp.md) |
 
 Generated `@terreno/*` dependencies pin to `^<create-terreno-app version>` at scaffold time.
+
+### Frontend data and session wiring
+
+| File | What it does |
+| --- | --- |
+| `frontend/lib/betterAuth.ts` | `createBetterAuthClient` from `@terreno/syncdb/auth`, pointed at `baseUrl` from `@terreno/syncdb/config` |
+| `frontend/store/syncdb.ts` | `authProvider` (Better Auth session token) and the `syncDb` client for synced collections |
+| `frontend/store/apiClient.ts` | `createApiClient` from `@terreno/syncdb/api` with the same `authProvider`, `App-Version` / `App-Platform` headers, and `getAdminAuthHeaders` for `AdminProvider` |
+| `frontend/store/apiSdk.ts` | Typed hooks for non-synced routes (`useGetAuthMeQuery`, `usePatchAuthMeMutation`, ...). The scaffold ships the `/auth/me` hooks; `bun run sdk` regenerates the file for every route |
+| `frontend/app/_layout.tsx` | `ApiClientProvider` + `SessionProvider` (`useSession()` gives `userId`, `isLoading`, `refresh`, `logout`) + `SyncDbProvider`; starts `syncDb` after login |
+
+`bun run sdk` runs the `api-sdk` script: `terreno-syncdb-codegen --schema $OPENAPI_URL --api-out ./store/apiSdk.ts` (default schema `http://localhost:4000/openapi.json`). Never edit `apiSdk.ts` by hand.
 
 ## 2. Install dependencies
 
@@ -122,13 +134,15 @@ Health check: `curl http://localhost:4000/health` → `"healthy":true`.
 Terminal 2 — web UI (port `8082`):
 
 ```bash
-(cd frontend && bun run sdk)   # after backend is up; regenerates OpenAPI hooks
+(cd frontend && bun run sdk)   # after backend is up; regenerates store/apiSdk.ts
 (cd frontend && bun run web)
 ```
 
 Open `http://localhost:8082` and sign in as `test@example.com` / `testpassword123`.
 
 `frontend/.env` defaults `EXPO_PUBLIC_API_URL` to `http://localhost:4000`. For production web builds, set it **before** export — see [Build for web](build-for-web.md).
+
+In development, `frontend/app/_layout.tsx` calls `installTerrenoDevConsoleLogger({baseUrl})` from `@terreno/syncdb` at startup. It sends console errors, warnings, and uncaught errors to the backend's `POST /__terreno/browser-logs`, which writes `backend/.terreno/logs/browser.log`. `terreno-mcp-local` reads that file for `read_logs` and `last_error` with the `browser` source. The call does nothing in production builds. See [Set up Terreno MCP](set-up-terreno-mcp.md).
 
 ## Deploy
 
@@ -142,10 +156,11 @@ docker run --rm -p 8080:8080 \
   -e MONGO_URI='mongodb+srv://...' \
   -e BETTER_AUTH_SECRET='...' \
   -e BETTER_AUTH_URL='https://api.example.com' \
+  -e FRONTEND_URL='https://app.example.com' \
   my-app-backend
 ```
 
-Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. `GET /users` list and read require an admin.
+Cloud Run concepts and commands: [Deploy backend to Cloud Run](deploy-backend-to-cloud-run.md). That guide targets Terreno's monorepo example; for a generated app, keep the root `Dockerfile`, port `8080`, and Better Auth variables shown here. The generated backend throws if `BETTER_AUTH_SECRET` is unset. Set `FRONTEND_URL` to the web app's URL: until it is set, a production backend leaves passkeys off (see [Auth features in generated apps](configure-better-auth.md#auth-features-in-generated-apps)). `GET /users` list and read require an admin.
 
 **Frontend:** [Build for web](build-for-web.md) — set `EXPO_PUBLIC_API_URL` at export time.
 

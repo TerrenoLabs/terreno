@@ -1,12 +1,39 @@
 import type {Tool} from "@modelcontextprotocol/server";
-
 import {applicationInfo} from "./tools/applicationInfo.js";
 import {isBrowserAction, useBrowser} from "./tools/browser.js";
+import {
+  dispatchClientAction,
+  invokeDevCommand,
+  listDevCommands,
+  readLocalStorage,
+  writeLocalStorage,
+} from "./tools/clientDev.js";
 import {databaseQuery} from "./tools/databaseQuery.js";
 import {databaseSchema} from "./tools/databaseSchema.js";
 import {lastError, readLogs} from "./tools/readLogs.js";
-import {evaluate, getRtkState, navigate} from "./tools/runtime.js";
+import {evaluate, navigate} from "./tools/runtime.js";
 import {getSyncDbState, syncDbAction, syncDbSnapshot} from "./tools/syncDb.js";
+
+const SYNCDB_STATE_INPUT_SCHEMA: Tool["inputSchema"] = {
+  additionalProperties: false,
+  properties: {
+    collection: {description: "SyncDB: optional collection filter", type: "string"},
+    entityId: {description: "SyncDB: optional entity id filter", type: "string"},
+    includeDebugEvents: {
+      description: "SyncDB: set false to return debug stats without event bodies",
+      type: "boolean",
+    },
+    limit: {
+      description: "SyncDB: entity limit per collection (default 500, max 2000)",
+      type: "number",
+    },
+    name: {
+      description: "SyncDB: client/store name; defaults to the first registered client",
+      type: "string",
+    },
+  },
+  type: "object",
+};
 
 export const localMcpTools: Tool[] = [
   {
@@ -54,7 +81,7 @@ export const localMcpTools: Tool[] = [
   },
   {
     description:
-      "Merged log tail from `.terreno/logs/app.log` (backend JSONL), `.terreno/logs/browser.log`, Metro `/events`, and Hermes console via CDP when Metro is reachable.",
+      "Merged log tail from `.terreno/logs/app.log` (backend JSONL), `.terreno/logs/browser.log`, Metro `/events`, Hermes console and CDP **network** via Metro, and optional **native** platform logs (adb/simctl).",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -84,44 +111,8 @@ export const localMcpTools: Tool[] = [
   },
   {
     description:
-      "Inspect Redux store (auth + RTK Query cache summary) via `registerTerrenoDevStore` / `globalThis.__TERRENO_STORE__`, or via CDP when the MCP process cannot see the app heap.",
-    inputSchema: {
-      additionalProperties: false,
-      properties: {
-        query: {
-          description:
-            "When slice is rtk/terreno-rtk, filter cache rows whose endpoint name or serialized args contain this substring (case-insensitive).",
-          type: "string",
-        },
-        slice: {type: "string"},
-      },
-      type: "object",
-    },
-    name: "get_rtk_state",
-  },
-  {
-    description:
       "Inspect a live SyncDB client registered by createSyncDb({debug: true}): status, entities (including tombstones/pending metadata), decoded outbox, conflicts, cursors, streams, repairs, values, and debugger events. Sensitive fields are redacted.",
-    inputSchema: {
-      additionalProperties: false,
-      properties: {
-        collection: {description: "Optional collection filter", type: "string"},
-        entityId: {description: "Optional entity id filter", type: "string"},
-        includeDebugEvents: {
-          description: "Set false to return debug stats without event bodies",
-          type: "boolean",
-        },
-        limit: {
-          description: "Entity limit per collection (default 500, max 2000)",
-          type: "number",
-        },
-        name: {
-          description: "Client/store name; defaults to the first registered client",
-          type: "string",
-        },
-      },
-      type: "object",
-    },
+    inputSchema: SYNCDB_STATE_INPUT_SCHEMA,
     name: "get_syncdb_state",
   },
   {
@@ -211,6 +202,67 @@ export const localMcpTools: Tool[] = [
       type: "object",
     },
     name: "navigate",
+  },
+  {
+    description:
+      "Dispatch a dev client action on `globalThis.__TERRENO_DEV_CLIENT_DISPATCH__` (requires `registerTerrenoDevClientDispatch` from `@terreno/syncdb` in __DEV__). Gated by `TERRENO_MCP_EVAL=1`. Prefer `syncdb_action` for synced collection writes.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        payload: {description: "Optional JSON-serializable action payload"},
+        type: {description: "Redux action type string", type: "string"},
+      },
+      required: ["type"],
+      type: "object",
+    },
+    name: "dispatch_client_action",
+  },
+  {
+    description:
+      "Read AsyncStorage keys registered through `registerTerrenoDevStorage()` in the running app (via CDP when needed).",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        keys: {items: {type: "string"}, type: "array"},
+        prefix: {description: "Filter keys starting with this prefix", type: "string"},
+      },
+      type: "object",
+    },
+    name: "read_local_storage",
+  },
+  {
+    description:
+      "Write one AsyncStorage key through the dev storage adapter. Gated by `TERRENO_MCP_EVAL=1`.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        key: {type: "string"},
+        value: {type: "string"},
+      },
+      required: ["key", "value"],
+      type: "object",
+    },
+    name: "write_local_storage",
+  },
+  {
+    description:
+      "List dev commands registered with `registerTerrenoDevCommand()` in the running app.",
+    inputSchema: {additionalProperties: false, properties: {}, type: "object"},
+    name: "list_dev_commands",
+  },
+  {
+    description:
+      "Invoke a dev command by name. Gated by `TERRENO_MCP_EVAL=1`. Use `list_dev_commands` first.",
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        arguments: {additionalProperties: true, type: "object"},
+        name: {type: "string"},
+      },
+      required: ["name"],
+      type: "object",
+    },
+    name: "invoke_dev_command",
   },
   {
     description:
@@ -316,13 +368,6 @@ export const createLocalToolCallHandler = (
         });
         return {content: [{text, type: "text"}]};
       }
-      case "get_rtk_state": {
-        const text = await getRtkState({
-          query: typeof args.query === "string" ? args.query : undefined,
-          slice: typeof args.slice === "string" ? args.slice : undefined,
-        });
-        return {content: [{text, type: "text"}]};
-      }
       case "get_syncdb_state": {
         const text = await getSyncDbState({
           collection: typeof args.collection === "string" ? args.collection : undefined,
@@ -377,6 +422,43 @@ export const createLocalToolCallHandler = (
       }
       case "navigate": {
         const text = await navigate({path: typeof args.path === "string" ? args.path : ""});
+        return {content: [{text, type: "text"}]};
+      }
+      case "dispatch_client_action": {
+        const text = await dispatchClientAction({
+          payload: args.payload,
+          type: typeof args.type === "string" ? args.type : "",
+        });
+        return {content: [{text, type: "text"}]};
+      }
+      case "read_local_storage": {
+        const text = await readLocalStorage({
+          keys: Array.isArray(args.keys)
+            ? args.keys.filter((k): k is string => typeof k === "string")
+            : undefined,
+          prefix: typeof args.prefix === "string" ? args.prefix : undefined,
+        });
+        return {content: [{text, type: "text"}]};
+      }
+      case "write_local_storage": {
+        const text = await writeLocalStorage({
+          key: typeof args.key === "string" ? args.key : "",
+          value: typeof args.value === "string" ? args.value : "",
+        });
+        return {content: [{text, type: "text"}]};
+      }
+      case "list_dev_commands": {
+        const text = await listDevCommands();
+        return {content: [{text, type: "text"}]};
+      }
+      case "invoke_dev_command": {
+        const text = await invokeDevCommand({
+          arguments:
+            typeof args.arguments === "object" && args.arguments !== null
+              ? (args.arguments as Record<string, unknown>)
+              : undefined,
+          name: typeof args.name === "string" ? args.name : "",
+        });
         return {content: [{text, type: "text"}]};
       }
       case "browser": {

@@ -28,7 +28,6 @@ export const WORKFLOW_PARAMETERS: Record<string, string> = {
   "mcp-server-ci": "run-mcp-server",
   "new-file-coverage": "run-new-file-coverage",
   "repo-policies": "run-repo-policies",
-  "rtk-ci": "run-rtk",
   "rulesync-check": "run-rulesync",
   "syncdb-ci": "run-syncdb",
   "ui-ci": "run-ui",

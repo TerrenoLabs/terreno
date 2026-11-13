@@ -35,9 +35,11 @@ src/
   AdminShellLayout.tsx   # Sidebar + main column shell for Expo admin apps
   AdminFieldRenderer.tsx # Renders individual fields in table cells
   AdminRefField.tsx      # Renders reference fields as clickable links
-  useAdminConfig.tsx     # Hook to fetch admin config from backend
-  adminRequest.ts        # Host-bound native fetch for framework admin RPC
-  useAdminApi.tsx        # Deprecated Terreno 57 RTK compatibility for ObjectId CRUD
+  AdminProvider.tsx      # Host auth binding (fetch client), syncDb, widget registry
+  useAdminConfig.ts      # Hook to fetch admin config from backend
+  adminRequest.ts        # Native fetch client every admin request goes through
+  useAdminRpc.ts         # useAdminRpc / useAdminRpcQuery / useAdminRpcMutation
+  useAdminModelApi.ts    # Fetch CRUD hooks for one admin model
 ```
 
 ## Key Exports
@@ -47,12 +49,14 @@ import {
   AdminModelList,        // Model list screen (entry point)
   AdminModelTable,       // Table view for a specific model
   AdminModelForm,        // Create/edit form
+  AdminProvider,         // Required host binding: auth, apiOrigin, syncDb, widgets
   AdminShellLayout,      // Sidebar + flex main column (default for Expo admin root)
   type AdminShellSidebarVariant, // "colorful" (teal rail, default) | "clinical" (light rail)
   AdminFieldRenderer,    // Field renderer for table cells
   AdminRefField,         // Reference field renderer
   useAdminConfig,        // Hook to fetch admin config
-  useAdminApi,           // Deprecated Terreno 57 ObjectId/API-only compatibility
+  useAdminModelApi,      // Fetch CRUD hooks for one admin model
+  useAdminRpc,           // Host-bound fetch client for custom admin RPC
   SYSTEM_FIELDS,         // Fields to skip in forms
 } from "@terreno/admin-frontend";
 ```
@@ -62,61 +66,70 @@ import {
 ### Setup in Expo Router
 
 ```typescript
-// app/admin/_layout.tsx — wrap the admin Stack once so every route gets the sidebar
-import {AdminShellLayout} from "@terreno/admin-frontend";
+// app/admin/_layout.tsx — wrap the admin Stack once so every route gets auth + sidebar
+import {AdminProvider, AdminShellLayout} from "@terreno/admin-frontend";
+import {baseUrl} from "@terreno/syncdb/config";
 import {Stack} from "expo-router";
-import {api} from "@/store/openApiSdk";
+import {getAdminAuthHeaders} from "@/store/syncdb"; // bearer header from authProvider.getToken()
 
 export default function AdminLayout() {
   return (
-    <AdminShellLayout
-      api={api}
+    <AdminProvider
       apiBase="/admin"
-      configurationPath="/admin/configuration"
+      apiOrigin={baseUrl}
+      getAuthHeaders={getAdminAuthHeaders}
       routeBase="/admin"
-      versionConfigPath="/version-config"
     >
-      <Stack screenOptions={{headerShown: false, contentStyle: {flex: 1}}}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="[model]" />
-      </Stack>
-    </AdminShellLayout>
+      <AdminShellLayout
+        apiBase="/admin"
+        configurationPath="/admin/configuration"
+        routeBase="/admin"
+        versionConfigPath="/version-config"
+      >
+        <Stack screenOptions={{headerShown: false, contentStyle: {flex: 1}}}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="[model]" />
+        </Stack>
+      </AdminShellLayout>
+    </AdminProvider>
   );
 }
 
 // app/admin/index.tsx
 import {AdminModelList} from "@terreno/admin-frontend";
-import {api} from "@/store/openApiSdk";
 
 export default function AdminIndexScreen() {
-  return <AdminModelList baseUrl="/admin" api={api} />;
+  return <AdminModelList baseUrl="/admin" />;
 }
 
 // app/admin/[modelName]/index.tsx
 import {AdminModelTable} from "@terreno/admin-frontend";
-import {api} from "@/store/openApiSdk";
 import {useLocalSearchParams} from "expo-router";
 
 export default function AdminModelScreen() {
   const {modelName} = useLocalSearchParams();
-  return <AdminModelTable baseUrl="/admin" api={api} modelName={modelName as string} />;
+  return <AdminModelTable baseUrl="/admin" modelName={modelName as string} />;
 }
 
 // app/admin/[modelName]/new.tsx and [id].tsx
 import {AdminModelForm} from "@terreno/admin-frontend";
-import {api} from "@/store/openApiSdk";
 import {useLocalSearchParams} from "expo-router";
 
 export default function AdminFormScreen() {
   const {modelName, id} = useLocalSearchParams();
-  return <AdminModelForm 
-    baseUrl="/admin" 
-    api={api} 
-    modelName={modelName as string} 
+  return <AdminModelForm
+    baseUrl="/admin"
+    modelName={modelName as string}
     id={id as string | undefined}
   />;
 }
 ```
+
+`AdminProvider` is required: every admin request (model CRUD and RPC) goes through
+its fetch client. Cookie SPAs pass `credentials="same-origin"` instead of
+`apiOrigin` / `getAuthHeaders`. Admin components take no RTK `api` prop (removed in
+Terreno 58). Product screens that reuse admin components (`DocumentStorageBrowser`,
+`ConsentHistory`) also need an `AdminProvider` with the same auth binding.
 
 ### AdminShellLayout chrome
 
@@ -131,7 +144,6 @@ Entry point that displays all available admin models as cards.
 ```typescript
 <AdminModelList
   baseUrl="/admin"         // Base URL for admin routes
-  api={api}                // RTK Query API instance
 />
 ```
 
@@ -148,7 +160,6 @@ Table view for a specific model with pagination, sorting, and actions.
 ```typescript
 <AdminModelTable
   baseUrl="/admin"
-  api={api}
   modelName="User"
 />
 ```
@@ -169,7 +180,6 @@ Create or edit form for a model instance.
 ```typescript
 <AdminModelForm
   baseUrl="/admin"
-  api={api}
   modelName="User"
   id="507f1f77bcf86cd799439011"  // Optional, for edit mode
 />
@@ -230,7 +240,7 @@ Renders reference fields as clickable links that navigate to the referenced mode
 Fetches admin configuration from backend.
 
 ```typescript
-const {config, isLoading, error} = useAdminConfig(api, baseUrl);
+const {config, isLoading, error} = useAdminConfig(baseUrl);
 
 // config: AdminConfigResponse | undefined
 // {
@@ -251,27 +261,30 @@ const {config, isLoading, error} = useAdminConfig(api, baseUrl);
 // }
 ```
 
-### useAdminApi (deprecated compatibility)
+### useAdminModelApi
 
-Terreno 57 keeps RTK Query hooks for ObjectId model CRUD and API-only hosts.
-Do not add new `injectEndpoints`; Terreno 58 removes `useAdminApi` and the
-required admin `api` prop. String-`_id` models with `adminBroadcast` use
-windowed syncdb, and framework admin RPC uses `adminRequest`.
+Fetch CRUD hooks for one admin model over the `AdminProvider` client. Pass the
+model's `routePath` from config (for example `/admin/users`). Replaces the removed
+Terreno 57 `useAdminApi(api, routePath, modelName)`. String-`_id` models with
+`adminBroadcast` still use windowed syncdb inside `AdminModelTable` / `AdminModelForm`.
 
 ```typescript
 const {
-  useListQuery,         // GET {baseUrl}{routePath} (list with pagination)
-  useGetQuery,          // GET {baseUrl}{routePath}/:id (single item)
-  useCreateMutation,    // POST {baseUrl}{routePath} (create)
-  useUpdateMutation,    // PATCH {baseUrl}{routePath}/:id (update)
-  useDeleteMutation,    // DELETE {baseUrl}{routePath}/:id (delete)
-} = useAdminApi(api, baseUrl, modelName);
+  useListQuery,         // GET {routePath} (list envelope with pagination)
+  useReadQuery,         // GET {routePath}/:id (document)
+  useCreateMutation,    // POST {routePath}
+  useUpdateMutation,    // PATCH {routePath}/:id — trigger({id, body})
+  useDeleteMutation,    // DELETE {routePath}/:id
+  useBulkPatchMutation, // POST {routePath}/bulk-patch — trigger({ids, patch})
+} = useAdminModelApi("/admin/users", "User");
 
-// Example usage
 const {data, isLoading} = useListQuery({limit: 20, page: 1});
 const [create, {isLoading: isCreating}] = useCreateMutation();
 await create({email: "test@example.com", name: "Test User"}).unwrap();
 ```
+
+Custom admin RPC: `const rpc = useAdminRpc();` then
+`useAdminRpcQuery({rpc, url})` / `useAdminRpcMutation(rpc, {invalidatesTags})`.
 
 ## Types
 
@@ -299,8 +312,9 @@ interface AdminConfigResponse {
 }
 
 interface AdminScreenProps {
-  baseUrl: string;             // Base URL for admin routes
-  api: Api<any, any, any, any>;  // RTK Query API instance
+  baseUrl?: string;            // Deprecated alias for apiBase + routeBase
+  apiBase?: string;            // Base path for admin HTTP requests ("/admin")
+  routeBase?: string;          // Base path for in-app navigation
 }
 ```
 
@@ -323,10 +337,10 @@ export const SYSTEM_FIELDS = new Set([
 
 - Always use @terreno/ui components (Box, Button, TextField, etc.) — never raw React Native components
 - Use functional components with `React.FC` type
-- Use windowed syncdb for String-`_id` models with `adminBroadcast`; keep
-  `useAdminApi` only for ObjectId/compatibility CRUD in Terreno 57
-- Use host-bound `adminRequest` for framework RPC; never use axios or add new
-  admin `injectEndpoints`
+- Use windowed syncdb for String-`_id` models with `adminBroadcast`; use
+  `useAdminModelApi` for ObjectId/API-only model CRUD
+- Every admin request goes through the `AdminProvider` fetch client; never pass
+  an RTK `api` prop, use axios, or call `injectEndpoints` for admin
 - Handle loading, error, and empty states in all screens
 - Use `console.info/debug/warn/error` for permanent logs
 - Use Luxon for date operations
@@ -347,19 +361,25 @@ Frontend expects backend to:
 
 ```typescript
 // app/_layout.tsx
-import {useSelectCurrentUser} from "@/store/openApiSdk";
-import {Redirect} from "expo-router";
+import {Spinner} from "@terreno/ui";
+import {Redirect, Stack, usePathname} from "expo-router";
+import {useGetAuthMeQuery} from "@/store/apiSdk"; // generated by `bun run sdk`
 
-function RootLayout() {
-  const user = useSelectCurrentUser();
-  
+const RootLayout: React.FC = () => {
+  const pathname = usePathname();
+  const {data: user, isLoading} = useGetAuthMeQuery();
+
+  if (isLoading) {
+    return <Spinner />;
+  }
+
   // Redirect non-admin users away from admin routes
   if (!user?.admin && pathname.startsWith("/admin")) {
     return <Redirect href="/" />;
   }
-  
+
   return <Stack />;
-}
+};
 ```
 
 ### Custom Field Renderers
@@ -381,4 +401,4 @@ const CustomFieldRenderer = ({value, field, ...props}) => {
 - Backend errors (401, 403, 500) are displayed in error states
 - Form validation errors highlight invalid fields
 - Network errors show error messages with retry option
-- All mutations handle `.unwrap()` to catch errors
+- All mutations call `.unwrap()` to catch errors (`AdminAPIError` with `status` and `data.title`)

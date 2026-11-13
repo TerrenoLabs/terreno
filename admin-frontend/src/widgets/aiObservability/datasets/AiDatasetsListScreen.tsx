@@ -1,3 +1,4 @@
+import {Button} from "@terreno/ui";
 import {router} from "expo-router";
 import React, {useCallback, useMemo, useState} from "react";
 import type {AdminScreenWidgetProps} from "../../../types";
@@ -10,10 +11,13 @@ import {buildCsvImportPayload, detectImportFormat, parseImportText} from "./data
 import {type DatasetImportResult, unwrapDatasetList} from "./datasetTypes";
 import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
 
+const DATASETS_DESCRIPTION =
+  "Fixed sets of inputs to test prompts and judges on. Build one from traces, then have people answer it once.";
+
 export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
-  const {api, routeBase} = props;
-  const {useCreateMutation, useImportMutation, useListQuery} = useAiObservabilityDatasetsApi(api);
-  const {useStatusQuery} = useAiObservabilityPromptsApi(api);
+  const {routeBase} = props;
+  const {useCreateMutation, useImportMutation, useListQuery} = useAiObservabilityDatasetsApi();
+  const {useStatusQuery} = useAiObservabilityPromptsApi();
   const {data, isError, isLoading, refetch} = useListQuery();
   const statusQuery = useStatusQuery();
   const canCreate = observabilityActionAllowed({
@@ -92,6 +96,7 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
       setImportFormat(format);
       setImportPaste(content);
       setImportPreview(content.slice(0, 400));
+      setImportError("");
     },
     []
   );
@@ -113,22 +118,53 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
         datasetId: importDatasetId,
       }).unwrap();
       setImportResult(result);
-      refetch();
+      void refetch();
     } catch (error) {
       const title =
         error && typeof error === "object" && "data" in error
           ? (error as {data?: {title?: string}}).data?.title
           : undefined;
-      setImportError(title ?? "Import failed.");
+      setImportError(title ?? "Could not import these items.");
     }
   }, [importDatasetId, importFilename, importFormat, importItems, importPaste, refetch]);
 
-  const loadError = isError ? "Failed to load datasets." : undefined;
+  const handleOpenCreate = useCallback((): void => {
+    setCreateError("");
+    setCreateOpen(true);
+  }, []);
+
+  const handleDismissCreate = useCallback((): void => {
+    setCreateOpen(false);
+  }, []);
+
+  const handleDismissImport = useCallback((): void => {
+    setImportOpen(false);
+  }, []);
+
+  const handleGoToTraces = useCallback((): void => {
+    router.push(`${prefix}/ai-traces`);
+  }, [prefix]);
+
+  const loadError = isError ? "Could not load datasets." : undefined;
 
   return (
-    <AiObservabilityChrome {...props} screenName="ai-datasets">
+    <AiObservabilityChrome
+      {...props}
+      actions={
+        canCreate ? (
+          <Button
+            iconName="plus"
+            onClick={handleOpenCreate}
+            testID="ai-datasets-create"
+            text="New dataset"
+            variant="primary"
+          />
+        ) : undefined
+      }
+      description={DATASETS_DESCRIPTION}
+      screenName="ai-datasets"
+    >
       <AiDatasetsListView
-        canCreate={canCreate}
         canImport={canImport}
         createError={createError}
         createName={createName}
@@ -150,18 +186,13 @@ export const AiDatasetsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) 
         onCreate={handleCreate}
         onCreateNameChange={setCreateName}
         onCreatePromptBindingChange={setCreatePromptBinding}
-        onDismissCreate={() => {
-          setCreateOpen(false);
-        }}
-        onDismissImport={() => {
-          setImportOpen(false);
-        }}
+        onDismissCreate={handleDismissCreate}
+        onDismissImport={handleDismissImport}
         onFilePicked={handleFilePicked}
+        onFileReadError={setImportError}
+        onGoToTraces={handleGoToTraces}
         onImportPasteChange={setImportPaste}
         onImportSubmit={handleImportSubmit}
-        onOpenCreate={() => {
-          setCreateOpen(true);
-        }}
         onOpenDetail={handleOpenDetail}
         onOpenImport={handleOpenImport}
         onRetry={refetch}

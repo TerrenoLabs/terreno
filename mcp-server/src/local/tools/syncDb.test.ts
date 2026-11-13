@@ -1,7 +1,12 @@
 import {afterEach, beforeEach, describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {clearSyncDbSnapshotsForTests, getSyncDbState, syncDbAction, syncDbSnapshot} from "./syncDb";
+import {
+  clearSyncDbSnapshotsForTests,
+  getSyncDbState,
+  syncDbAction,
+  syncDbSnapshot,
+} from "./syncDb.js";
 
 interface FakeSyncDbState {
   collections: Record<string, {entities: Array<{data: Record<string, unknown>; id: string}>}>;

@@ -25,17 +25,18 @@ export interface ParseFailure {
 
 export type ParseResult<T> = ParseFailure | ParseSuccess<T>;
 
+const FENCE_LANGUAGE = /^(?:json|javascript|js|typescript|ts)/i;
+
 /**
  * Strip leading/trailing markdown code fences when the whole payload is fenced,
  * otherwise strip a common opening ```lang line and trailing ``` block.
  */
 const stripFences = (input: string): string => {
   const trimmed = input.trim();
-  const fullyFenced = /^```(?:json|javascript|js|typescript|ts)?\s*\n?([\s\S]*?)\n?```$/i.exec(
-    trimmed
-  );
-  if (fullyFenced) {
-    return fullyFenced[1].trim();
+  // String ops instead of one fenced regex: `\s*` and a lazy body made that regex quadratic.
+  if (trimmed.length >= 6 && trimmed.startsWith("```") && trimmed.endsWith("```")) {
+    const inner = trimmed.slice(3, -3);
+    return inner.replace(FENCE_LANGUAGE, "").trim();
   }
 
   let t = trimmed;

@@ -1,4 +1,5 @@
 import {describe, expect, it} from "bun:test";
+import {createRef} from "react";
 
 import {DateTimeActionSheet} from "./DateTimeActionSheet";
 import {renderWithTheme} from "./test-utils";
@@ -8,6 +9,7 @@ import {renderWithTheme} from "./test-utils";
 
 describe("DateTimeActionSheet", () => {
   const defaultProps = {
+    actionSheetRef: createRef<unknown>(),
     onChange: () => {},
     onDismiss: () => {},
     visible: true,

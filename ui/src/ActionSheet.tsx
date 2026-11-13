@@ -20,6 +20,7 @@ import {
   TextInput,
   UIManager,
   View,
+  type ViewInstance,
 } from "react-native";
 
 import type {ActionSheetProps} from "./Common";
@@ -175,7 +176,7 @@ export class ActionSheet extends Component<Props, State, unknown> {
 
   scrollViewRef: React.RefObject<FlatList<string> | null>;
 
-  safeAreaViewRef: React.RefObject<View | null>;
+  safeAreaViewRef: React.RefObject<ViewInstance | null>;
 
   transformValue: Animated.Value;
 
@@ -592,9 +593,15 @@ export class ActionSheet extends Component<Props, State, unknown> {
     const keyboardHeight = event.endCoordinates.height;
     const {height: windowHeight} = Dimensions.get("window");
 
-    const currentlyFocusedField = TextInput.State.currentlyFocusedField
-      ? findNodeHandle(TextInput.State.currentlyFocusedField())
-      : TextInput.State.currentlyFocusedField();
+    const textInputState = TextInput.State as {
+      currentlyFocusedField?: () => number | null | undefined;
+      currentlyFocusedInput?: () => Parameters<typeof findNodeHandle>[0] | null | undefined;
+    };
+    const currentlyFocusedInput = textInputState.currentlyFocusedInput?.();
+    const currentlyFocusedField =
+      currentlyFocusedInput != null
+        ? findNodeHandle(currentlyFocusedInput)
+        : textInputState.currentlyFocusedField?.();
 
     if (!currentlyFocusedField) {
       return;
@@ -736,6 +743,12 @@ export class ActionSheet extends Component<Props, State, unknown> {
       keyboardShouldPersistTaps,
       statusBarTranslucent,
     } = this.props;
+    const persistTaps =
+      keyboardShouldPersistTaps === true
+        ? "always"
+        : keyboardShouldPersistTaps === false
+          ? "never"
+          : keyboardShouldPersistTaps;
 
     return (
       <Modal
@@ -767,7 +780,7 @@ export class ActionSheet extends Component<Props, State, unknown> {
               width: this.state.deviceWidth,
             }}
             data={dummyData}
-            keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+            keyboardShouldPersistTaps={persistTaps}
             keyExtractor={this._keyExtractor}
             onMomentumScrollBegin={this._onScrollBegin}
             onMomentumScrollEnd={this._onScrollEnd}

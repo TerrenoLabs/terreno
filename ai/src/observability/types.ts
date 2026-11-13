@@ -8,7 +8,7 @@ export type ObservabilityCapability =
   | "scores"
   | "traces";
 
-export type ControlPrimary = "langfuse" | "local";
+export type ControlPrimary = "local";
 
 export interface ObservabilityControlConfig {
   datasets: ControlPrimary;
@@ -50,7 +50,7 @@ export interface TraceRecord {
   metadata?: Record<string, unknown>;
   name: string;
   output?: unknown;
-  prompts: {label?: string; name: string; version: number}[];
+  prompts: {includedBy?: string; label?: string; name: string; version: number}[];
   sensitive: boolean;
   sessionId?: string;
   spans: SpanRecord[];
@@ -78,7 +78,10 @@ export interface ScoreRecord {
 }
 
 export interface PromptVersionRef {
+  /** `body` with every prompt reference resolved. */
   body: string;
+  /** Prompt versions pulled in by references, recorded on the trace after this prompt. */
+  includes?: {includedBy?: string; label?: string; name: string; version: number}[];
   label?: string;
   name: string;
   sensitive?: boolean;

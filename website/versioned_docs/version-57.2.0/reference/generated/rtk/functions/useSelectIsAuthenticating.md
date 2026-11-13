@@ -1,5 +1,0 @@
-> **useSelectIsAuthenticating**(): `boolean`
-
-## Returns
-
-`boolean`

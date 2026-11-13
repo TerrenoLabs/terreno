@@ -165,7 +165,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "AnnouncementNavigator",
     reason:
-      "Requires a consumer RTK Query `api` and pending queue; exercise in example-frontend, not the isolated UI demo",
+      "Requires a consumer request `client` and pending queue; exercise in example-frontend, not the isolated UI demo",
   },
   {
     name: "AnnouncementScreen",
@@ -180,15 +180,11 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "ConsentNavigator",
     reason:
-      "Requires a consumer RTK Query `api` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
+      "Requires a consumer request `client` to fetch and submit forms; ConsentFormScreen already demos the consent UI",
   },
   {
     name: "DateTimeActionSheet",
     reason: "Imperative sheet opened by DateTimeField; DateTimeField stories already open it",
-  },
-  {
-    name: "Filter",
-    reason: "Deprecated alias of DropdownPanel, which has its own story; removed in Terreno 58",
   },
   {
     name: "FilterAccordion",
@@ -216,6 +212,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   },
   {name: "Host", reason: "Portal host is application shell, not a visual story"},
   {name: "IconRegistryProvider", reason: "Icon registry is application shell"},
+  {name: "ListDetailIndex", reason: "Covered by the ListDetailLayout story"},
   {
     name: "NotificationBell",
     reason:
@@ -234,10 +231,23 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {name: "Portal", reason: "Portal is a host primitive, not a visual story"},
   {name: "PortalContext", reason: "React context object, not a visual component"},
   {
+    name: "ProvisionalConsentSigner",
+    reason:
+      "Requires a consumer RTK Query `api` and a ConsentApp backend; example-frontend /consent-sign/[userId] exercises it",
+  },
+  {
     name: "ScrollView",
     reason: "Thin React Native ScrollView re-export, not a Terreno visual component",
   },
   {name: "SidebarNavigationPanel", reason: "Covered by the Sidebar navigation stories"},
+  {name: "SkeletonCard", reason: "Skeleton story Shapes and Animations sections render it"},
+  {name: "SkeletonCircle", reason: "Skeleton story Shapes section renders it"},
+  {
+    name: "SkeletonGroup",
+    reason: "Loading containers wrap loadingComponent in it; the Skeleton loading stories run it",
+  },
+  {name: "SkeletonList", reason: "Skeleton story Shapes section and Box loading story render it"},
+  {name: "SkeletonText", reason: "Skeleton story Shapes section renders it"},
   {name: "TableContextProvider", reason: "Table stories already wrap table context"},
   {name: "TableHeader", reason: "Table story already renders header rows"},
   {name: "TableHeaderCell", reason: "Table story already renders header cells"},

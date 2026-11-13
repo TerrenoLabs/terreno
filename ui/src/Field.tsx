@@ -90,6 +90,8 @@ export const Field: FC<FieldProps> = ({type, ...rest}) => {
       }
     }
 
+    // Defaults only: a password field that sets a new password passes autoComplete="new-password",
+    // which the spread below applies.
     return (
       <TextField
         autoComplete={autoComplete}

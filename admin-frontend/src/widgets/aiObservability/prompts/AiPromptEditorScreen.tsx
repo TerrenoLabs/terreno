@@ -12,6 +12,7 @@ import {
   type PlaygroundRunResult,
   type PromptDetail,
   unwrapPromptDetail,
+  unwrapPromptList,
   unwrapPromptPayload,
 } from "./promptTypes";
 import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
@@ -26,32 +27,51 @@ export interface AiPromptEditorScreenWidgetProps extends AdminScreenWidgetProps 
 
 export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProps> = (props) => {
   const {apiKey, apiKeyLoading = false, playgroundApiKeyHint} = props;
-  const {api, routeBase} = props;
+  const {routeBase} = props;
   const params = useLocalSearchParams<{name?: string | string[]}>();
   const nameParam = params.name;
   const name = Array.isArray(nameParam) ? nameParam[0] : nameParam;
   const {
     useCreateVersionMutation,
     useDetailQuery,
+    useListQuery,
     usePlaygroundMutation,
     useSetLabelMutation,
     useStatusQuery,
-  } = useAiObservabilityPromptsApi(api);
+  } = useAiObservabilityPromptsApi();
   const [selectedVersion, setSelectedVersion] = useState<number | undefined>(undefined);
   const [pinnedQueryVersion, setPinnedQueryVersion] = useState<number | undefined>(undefined);
   const [cachedDetail, setCachedDetail] = useState<
     {detail: PromptDetail; name: string} | undefined
   >(undefined);
+  const [scopeName, setScopeName] = useState(name);
+  const nameChanged = name !== scopeName;
+  // Used by navigates to another prompt on this same screen. Drop the previous
+  // version pin during render so the new name is not queried at that version.
+  if (nameChanged) {
+    setScopeName(name);
+    setSelectedVersion(undefined);
+    setPinnedQueryVersion(undefined);
+    setCachedDetail(undefined);
+  }
 
   const detailQueryArg = useMemo(() => {
     if (!name) {
       return {name: ""};
     }
-    if (pinnedQueryVersion === undefined) {
+    if (nameChanged || pinnedQueryVersion === undefined) {
       return {name};
     }
     return {name, promptVersion: pinnedQueryVersion};
-  }, [name, pinnedQueryVersion]);
+  }, [name, nameChanged, pinnedQueryVersion]);
+
+  const promptListQuery = useListQuery({});
+  const promptNames = useMemo(() => {
+    return unwrapPromptList(promptListQuery.data)
+      .map((prompt) => prompt.name)
+      .filter((promptName) => promptName !== name)
+      .sort((left, right) => left.localeCompare(right));
+  }, [name, promptListQuery.data]);
 
   const {data, isError, isFetching, isLoading, refetch} = useDetailQuery(detailQueryArg, {
     skip: !name,
@@ -63,7 +83,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
 
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const detail = useMemo(() => unwrapPromptDetail(data), [data]);
-  // Keep the last loaded hub when a version pin changes the RTK cache key.
+  // Keep the last loaded hub when a version pin changes the detail request URL.
   // A fresh query starts with empty `data` and `isLoading`, which would unmount the hub.
   useEffect(() => {
     if (!detail || !name) {
@@ -197,7 +217,12 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
       <AiObservabilityChrome {...props} backHref={backHref} screenName="ai-prompt-editor">
         <Box gap={2} padding={4}>
           <Text color="error">{`Could not load ${name}.`}</Text>
-          <Button onClick={() => refetch()} text="Retry" />
+          <Button
+            onClick={() => {
+              void refetch();
+            }}
+            text="Retry"
+          />
         </Box>
       </AiObservabilityChrome>
     );
@@ -215,6 +240,9 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
         onOpenExperiment={(experimentId) => {
           router.push(`${prefix}/ai-experiment-results?id=${encodeURIComponent(experimentId)}`);
         }}
+        onOpenPrompt={(promptName) => {
+          router.push(`${prefix}/ai-prompt-editor?name=${encodeURIComponent(promptName)}`);
+        }}
         onOpenTrace={(traceId) => {
           router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(traceId)}`);
         }}
@@ -227,6 +255,7 @@ export const AiPromptEditorScreenWidget: React.FC<AiPromptEditorScreenWidgetProp
         playgroundError={playgroundError}
         playgroundResult={playgroundResult}
         productionError={labelState.isError ? "Could not set production." : undefined}
+        promptNames={promptNames}
         relationshipsError={relationshipsError}
         saveError={createState.isError ? "Could not save a new version." : undefined}
         selectedVersion={version}

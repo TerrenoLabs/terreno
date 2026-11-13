@@ -15,8 +15,6 @@ export const allowOfflineNoise = (consoleGuard: ConsoleGuard): void => {
   consoleGuard.allow("Failed to load resource: net::ERR_INTERNET_DISCONNECTED");
   consoleGuard.allow("[useConsentForms] Failed to fetch pending consent forms");
   consoleGuard.allow("[ConsentNavigator] Error fetching pending consents");
-  // RTK mutation rejections while offline are logged by store/errors.ts.
-  consoleGuard.allow("rejected mutation: Network unavailable");
   consoleGuard.allow("Sentry not initialized, captured exception Error:");
   // Conflict-detection tests deliberately trigger 409s from the backend.
   consoleGuard.allow("Failed to load resource: the server responded with a status of 409");

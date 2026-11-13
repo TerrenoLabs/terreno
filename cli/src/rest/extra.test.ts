@@ -6,6 +6,11 @@ import {defaultBaseUrl, loadOpenApiDocument, parseOpenApiDocument} from "./loadS
 import {findRestOperation, listRestOperations} from "./operations";
 import {runAppRestCli} from "./runAppRestCli";
 
+/** Bun's `typeof fetch` also carries `preconnect`; add a no-op so stubs satisfy it. */
+const stubFetch = (
+  handler: (...args: Parameters<typeof fetch>) => Promise<Response>
+): typeof fetch => Object.assign(handler, {preconnect: (): void => {}});
+
 const specText = `{
   "openapi": "3.0.0",
   "info": {"title": "Demo", "version": "1"},
@@ -30,7 +35,7 @@ describe("loadSpec and invoke edges", () => {
     await expect(
       loadOpenApiDocument(
         "https://x.test/missing.json",
-        async () => new Response("no", {status: 404})
+        stubFetch(async () => new Response("no", {status: 404}))
       )
     ).rejects.toThrow("HTTP 404");
     const spec = parseOpenApiDocument(specText);
@@ -68,7 +73,7 @@ describe("loadSpec and invoke edges", () => {
     await expect(
       invokeRestOperation({
         baseUrl: "",
-        fetch: (async () => new Response()) as typeof fetch,
+        fetch: stubFetch(async () => new Response()),
         operation,
       })
     ).rejects.toThrow("base URL");
@@ -78,8 +83,9 @@ describe("loadSpec and invoke edges", () => {
 describe("runAppRestCli call/request", () => {
   it("calls and requests operations", async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () =>
-      new Response(JSON.stringify({ok: true}), {status: 200})) as typeof fetch;
+    globalThis.fetch = stubFetch(
+      async () => new Response(JSON.stringify({ok: true}), {status: 200})
+    );
     const originalInfo = console.info;
     const logs: string[] = [];
     console.info = (...args: unknown[]) => {

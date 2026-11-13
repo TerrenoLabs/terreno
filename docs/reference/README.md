@@ -5,9 +5,10 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 ## Packages
 
 - [@terreno/api](api.md) — modelRouter, auth, permissions, setupServer
+- [Account security](account-security.md) — `AccountSecurityApp`: per-user security summary, recovery actions (2FA reset, passkeys, providers, sessions, password reset, disable, sign-in links), security audit events
 - [@terreno/ui](ui.md) — Components, theming, layout
 - [@terreno/syncdb](syncdb.md) — Local-first data layer (reads, writes, offline sync)
-- [@terreno/ai](ai.md) — AI service, GPT routes, Langfuse integration
+- [@terreno/ai](ai.md) — AI service, GPT routes, observability
 - [@terreno/ai/harness](ai-harness.md) — Durable multi-phase tasks with transactional checkpoints and audit spans
 - [Agent UI Asks](agent-ui-asks.md) — `@terreno/blocks` ask schemas, simple cards, the compact surface, limits, error codes, SSE events, the headless `pendingAsks` and `turn` endpoints, and JSON Schemas for native clients
 - [UI blocks](blocks.md) — whole-reply YAML for leaf, layout, and interactive blocks (stepper, checklist, gallery, list, copy): grammar, limits, and error codes
@@ -26,7 +27,7 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 
 ## Legacy
 
-`@terreno/rtk` is deprecated for **data synchronization**. New apps should use [`@terreno/syncdb`](syncdb.md). Existing RTK consumers: follow [Migrate from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md). Archived RTK reference: [legacy/rtk.md](legacy/rtk.md). `modelRouter` `realtime` and the RTK cache-patching helpers are removed in Terreno 58.
+`@terreno/rtk` and Redux were removed in Terreno 58; [`@terreno/syncdb`](syncdb.md) replaces them. Upgrading: [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](../how-to/migrate-rtk-to-syncdb.md) maps every removed export. Stub: [legacy/rtk.md](legacy/rtk.md).
 
 ## Configuration
 

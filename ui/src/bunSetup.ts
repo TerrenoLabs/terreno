@@ -158,7 +158,7 @@ const createSimpleFlatList = () => {
 const createVirtualizedFlatList = (): React.ForwardRefExoticComponent<
   MockFlatListProps & React.RefAttributes<unknown>
 > =>
-  React.forwardRef((props, ref) => {
+  React.forwardRef((props: MockFlatListProps, ref) => {
     const {
       data,
       renderItem,
@@ -662,10 +662,52 @@ if (typeof globalThis.expo === "undefined") {
     EventEmitter: EventEmitterClass,
     NativeModule: class NativeModule {},
     SharedObject: class SharedObject {},
+    SharedRef: class SharedRef {},
     // noExplicitAny: globalThis.expo is typed by expo-modules-core with many native-only APIs
     // that aren't needed for these mocks, so we cast through unknown to satisfy the type.
   } as unknown as typeof globalThis.expo;
 }
+
+// Expo 58's published expo-modules-core compiles the type-only SharedRef
+// declaration to `export {}`. Real expo-router internals (Screen → useNavigation)
+// require expo-constants, which then imports expo-modules-core and crashes bun.
+// Mock both packages so tests never load that empty module.
+const MockCodedError = class CodedError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+};
+const MockSharedRef = class SharedRef {};
+mock.module("expo-constants", () => ({
+  default: {
+    executionEnvironment: "bare",
+    expoConfig: {extra: {router: {}}},
+  },
+  ExecutionEnvironment: {
+    Bare: "bare",
+    Standalone: "standalone",
+    StoreClient: "storeClient",
+  },
+}));
+mock.module("expo-modules-core", () => ({
+  CodedError: MockCodedError,
+  EventEmitter: class EventEmitter {},
+  NativeModule: class NativeModule {},
+  requireNativeModule: mock(() => ({})),
+  requireOptionalNativeModule: mock(() => null),
+  SharedObject: class SharedObject {},
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-modules-core/build/ts-declarations/SharedRef", () => ({
+  SharedRef: MockSharedRef,
+}));
+mock.module("expo-router/build/views/Screen", () => ({
+  isScreen: mock(() => false),
+  Screen: ({children, ...props}: MockComponentProps) =>
+    React.createElement("Screen", props, children),
+}));
 
 // Mock expo-router
 const mockNavigationFonts = {
@@ -705,6 +747,7 @@ mock.module("expo-router", () => ({
   router: {
     back: mock(() => {}),
     canGoBack: mock(() => true),
+    dismissTo: mock(() => {}),
     navigate: mock(() => {}),
     push: mock(() => {}),
     replace: mock(() => {}),
@@ -717,6 +760,8 @@ mock.module("expo-router", () => ({
   ThemeProvider: ({children}: MockComponentProps) => children,
   useFocusEffect: mock(() => undefined),
   useGlobalSearchParams: mock(() => ({})),
+  // Route loader data is absent in unit tests; a screen falls back to fetching on the client.
+  useLoaderData: mock(() => undefined),
   useLocalSearchParams: mock(() => ({})),
   useNavigation: mock(() => ({
     addListener: mock(() => () => undefined),
@@ -882,9 +927,11 @@ mock.module("react-native-actions-sheet", () => ({
   }),
 }));
 
-// Mock MediaQuery
+// Mock MediaQuery. Desktop floor is 1024pt on web and native; keep this aligned with
+// isSupportedDesktopWidth in ResponsiveBreakpoint.tsx.
 mock.module("./MediaQuery", () => ({
   isNarrowViewport: mock(() => false),
+  isSupportedDesktopWidth: ({width}: {width: number}): boolean => width >= 1024,
   mediaQueryLargerThan: mock(() => false),
   mediaQuerySmallerThan: mock(() => false),
 }));
@@ -932,6 +979,15 @@ mock.module("expo-clipboard", () => ({
   hasStringAsync: mock(() => Promise.resolve(false)),
   setImageAsync: mock(() => Promise.resolve(undefined)),
   setStringAsync: mock(() => Promise.resolve(undefined)),
+}));
+
+// Mock expo-print (native print and PDF export). Tests drive these mocks through
+// `import * as Print from "expo-print"` instead of registering their own module mock.
+mock.module("expo-print", () => ({
+  printAsync: mock(async (_options: {html?: string}): Promise<void> => {}),
+  printToFileAsync: mock(
+    async (_options: {html?: string}): Promise<{uri: string}> => ({uri: "file:///tmp/consent.pdf"})
+  ),
 }));
 
 // Mock expo-localization
@@ -1044,12 +1100,20 @@ mock.module("@react-native-community/slider", () => ({
   Slider: (props: MockComponentProps) => React.createElement("Slider", props),
 }));
 
-// Mock react-native-swiper-flatlist
+// Mock react-native-swiper-flatlist as a host View with testID "swiper-flatlist". The ref exposes
+// scrollToIndex, and tests read the shared spy from the module's `scrollToIndexMock` export.
+// Registered here, not in a test file, so every file sees one shape whatever ran before it.
+const swiperScrollToIndexMock = mock((_options?: {animated?: boolean; index: number}) => {});
+const MockSwiperFlatList = React.forwardRef(
+  ({children, style}: MockComponentProps, ref: React.Ref<{scrollToIndex: unknown}>) => {
+    React.useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndexMock}));
+    return React.createElement("View", {style, testID: "swiper-flatlist"}, children);
+  }
+);
 mock.module("react-native-swiper-flatlist", () => ({
-  default: ({children, ...props}: MockComponentProps) =>
-    React.createElement("SwiperFlatList", props, children),
-  SwiperFlatList: ({children, ...props}: MockComponentProps) =>
-    React.createElement("SwiperFlatList", props, children),
+  default: MockSwiperFlatList,
+  SwiperFlatList: MockSwiperFlatList,
+  scrollToIndexMock: swiperScrollToIndexMock,
 }));
 
 // Mock Unifier module
@@ -1462,12 +1526,6 @@ const PickerComponent = ({children, ...props}: MockComponentProps) =>
 mock.module("@react-native-picker/picker", () => ({
   Picker: PickerComponent,
   PickerIOS: PickerComponent,
-}));
-
-// Mock react-native-picker-select
-mock.module("react-native-picker-select", () => ({
-  default: ({children, ...props}: MockComponentProps) =>
-    React.createElement("RNPickerSelect", props, children),
 }));
 
 // Mock @react-native-community/datetimepicker

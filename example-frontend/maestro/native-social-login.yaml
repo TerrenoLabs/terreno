@@ -1,0 +1,85 @@
+appId: com.terreno.todo
+name: Native social sign-in with the mock OIDC provider
+env:
+  # The dev client's deep link to the Metro server. adb reverse makes the device's localhost:8081
+  # the host's Metro.
+  DEV_SERVER_URL: "http://localhost:8081"
+---
+# Signs in on Android through Better Auth's Expo plugin: the app opens the mock OIDC provider in
+# the system browser (a Custom Tab), the provider approves at once, the backend's callback sends
+# the browser back to the app's `frontend://` scheme with the session, and the app lands on the
+# todos screen. A fresh mock user meets the consent forms (terms with a signature, then privacy)
+# before the todos screen.
+#
+# Prerequisites (see docs/how-to/set-up-social-login.md#native):
+# - A development build of example-frontend installed on the device (`expo run:android`, or an
+#   EAS development build), and `expo start --dev-client` serving it on port 8081.
+# - example-backend with `MOCK_OIDC_ISSUER=http://localhost:<mock port>` and
+#   `BETTER_AUTH_URL=http://localhost:4000`.
+# - The mock provider: `MOCK_OIDC_SERVE=true MOCK_OIDC_PORT=<mock port>
+#   MOCK_OIDC_ISSUER=http://localhost:<mock port>
+#   MOCK_OIDC_REDIRECT_URI=http://localhost:4000/api/auth/callback/mock-oidc
+#   bun e2e/helpers/mockOidcProvider.ts`.
+# - `adb reverse` for 8081, 4000 (the backend) and the mock port, so `localhost` means the same
+#   host to the backend and to the device's browser.
+#
+# Run: maestro --device 127.0.0.1:5555 test example-frontend/maestro/native-social-login.yaml
+
+# A fresh install state, so the mock user's sign-in is the first one on this device.
+- launchApp:
+    clearState: true
+    stopApp: true
+- openLink: "exp+terreno-example://expo-development-client/?url=${encodeURIComponent(DEV_SERVER_URL)}"
+
+# The dev client explains its menu on the first launch after a clear.
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+
+- extendedWaitUntil:
+    visible:
+      id: "login-screen-oauth-mock-oidc"
+    timeout: 180000
+
+- tapOn:
+    id: "login-screen-oauth-mock-oidc"
+
+# Chrome's first-run screens can sit in front of the Custom Tab on a fresh emulator.
+- runFlow:
+    when:
+      visible: "Use without an account"
+    commands:
+      - tapOn: "Use without an account"
+- runFlow:
+    when:
+      visible: "Accept & continue"
+    commands:
+      - tapOn: "Accept & continue"
+- runFlow:
+    when:
+      visible: "No thanks"
+    commands:
+      - tapOn: "No thanks"
+
+# The browser returns to the app, which reads the session and leaves the login screen. A new user
+# then gets each required consent form, one at a time.
+- extendedWaitUntil:
+    notVisible:
+      id: "login-screen-oauth-mock-oidc"
+    timeout: 60000
+
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "consent-form-agree-button"
+          file: subflows/agree-consent-form.yaml
+
+- extendedWaitUntil:
+    visible:
+      id: "todos-screen"
+    timeout: 60000

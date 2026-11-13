@@ -24,7 +24,7 @@ interface SkillGroup {
 const SHARED_PLUGIN_REFERENCE_PREFIX = "../../references/";
 
 /** Plugin trees whose skills install through `npx skills add`; later entries win on name. */
-const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/terreno-scan"];
+const INSTALLABLE_PLUGIN_DIRECTORIES = ["plugins/terreno-planning", "plugins/terreno-loop"];
 
 export const SKILL_GROUPS: SkillGroup[] = [
   {
@@ -50,6 +50,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "model-router-actions",
       "terreno-ui",
       "terreno-data-fetching",
+      "debug-with-mcp",
       "debug-syncdb-with-mcp",
       "mongoose-schema-safety",
       "generate-sdk",
@@ -68,6 +69,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "terreno-frontend-tests",
       "terreno-mobile-tests",
       "backend-test-env",
+      "backfill-regression",
     ],
     title: "Testing",
   },
@@ -75,6 +77,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
     description: "Read architecture docs first; write and regenerate them in the same slice.",
     skills: [
       "update-docs",
+      "backfill-user-guide",
       "update-agent-docs",
       "docs-audit",
       "improve-codebase-architecture",
@@ -99,9 +102,12 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "release",
       "generate-release-announcements",
       "update-dependencies",
+      "fix-code-scanning-alerts",
       "upgrading-terreno",
       "deploy-gcp",
+      "bootstrap-mcp-server",
       "deploy-vercel",
+      "set-up-social-login",
     ],
     title: "GitHub and shipping",
   },
@@ -121,13 +127,13 @@ export const SKILL_GROUPS: SkillGroup[] = [
     description:
       "Charter a measurable long-term goal, map-reduce the repository into findings, and drive each routed PR through the lifecycle.",
     skills: [
-      "terreno-scan-1-aim",
-      "terreno-scan-2-sweep",
-      "terreno-scan-3-sift",
-      "terreno-scan-4-plot",
-      "terreno-scan-5-track",
-      "terreno-scan-campaign",
-      "terreno-scan-loop",
+      "terreno-loop-1-aim",
+      "terreno-loop-2-sweep",
+      "terreno-loop-3-sift",
+      "terreno-loop-4-plot",
+      "terreno-loop-5-track",
+      "terreno-loop-campaign",
+      "terreno-loop-run",
     ],
     title: "Code scans",
   },
@@ -139,6 +145,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "expo-deployment",
       "expo-dev-client",
       "store-assets",
+      "test-expo-release-locally",
       "track-upstream-expo",
       "upgrading-expo",
       "use-dom",

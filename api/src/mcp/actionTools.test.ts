@@ -57,7 +57,9 @@ const widgetRouter = (extra: Record<string, unknown> = {}) =>
     collectionActions: {
       countMine: {
         handler: async ({req, user}) => ({
-          count: await WidgetModel.countDocuments({ownerId: user?._id}),
+          count: await WidgetModel.countDocuments({
+            ownerId: user?._id as mongoose.Types.ObjectId | undefined,
+          }),
           credential: getCurrentRequestContext()?.credential ?? null,
           isMCPRequest: (req as unknown as {isMCPRequest?: boolean}).isMCPRequest ?? false,
         }),
@@ -67,7 +69,7 @@ const widgetRouter = (extra: Record<string, unknown> = {}) =>
       },
       echoId: {
         body: z.object({id: z.string()}).strict(),
-        handler: async ({body}) => ({id: body.id}),
+        handler: async ({body}) => ({id: (body as {id: string}).id}),
         mcp: {name: "widgets_echo_id"},
         method: "POST",
         permissions: [Permissions.IsAuthenticated],
@@ -84,7 +86,10 @@ const widgetRouter = (extra: Record<string, unknown> = {}) =>
     },
     instanceActions: {
       peek: {
-        handler: async ({doc, query}) => ({name: doc.name, verbose: query.verbose}),
+        handler: async ({doc, query}) => ({
+          name: doc.name,
+          verbose: (query as {verbose?: boolean}).verbose,
+        }),
         mcp: {name: "widgets_peek"},
         method: "GET",
         permissions: [Permissions.IsAuthenticated],
@@ -94,10 +99,11 @@ const widgetRouter = (extra: Record<string, unknown> = {}) =>
         body: z.object({amount: z.number().int().min(1)}).strict(),
         description: "Add stars to a widget",
         handler: async ({body, doc, req}) => {
-          await WidgetModel.updateOne({_id: doc._id}, {$inc: {stars: body.amount}});
+          const {amount} = body as {amount: number};
+          await WidgetModel.updateOne({_id: doc._id}, {$inc: {stars: amount}});
           return {
             isMCPRequest: (req as unknown as {isMCPRequest?: boolean}).isMCPRequest ?? false,
-            stars: doc.stars + body.amount,
+            stars: doc.stars + amount,
           };
         },
         mcp: {name: "widgets_star"},
@@ -161,7 +167,7 @@ describe("modelRouter actions as MCP tools", () => {
     const [, notAdmin] = await setupDb();
     ownerId = notAdmin._id as mongoose.Types.ObjectId;
     await WidgetModel.deleteMany({});
-    await McpServiceToken.deleteMany({});
+    await McpServiceToken.collection.deleteMany({});
     clearMCPRegistry();
     app = new TerrenoApp({mcpServiceTokens: true, skipListen: true, userModel: typedUserModel})
       .register(widgetRouter())
@@ -314,7 +320,7 @@ describe("modelRouter actions as MCP tools", () => {
   });
 
   it("records the credential type inside the tool handler", async () => {
-    const created = await ownerAgent.post("/mcp/service-tokens").send({name: "Agent"});
+    const created = await ownerAgent.post("/mcp/service-tokens/create").send({name: "Agent"});
     const serviceToken = created.body.data.token as string;
 
     const jwtResult = await callTool(ownerAgent, "widgets_count_mine", {});

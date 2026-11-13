@@ -3,14 +3,9 @@ import mongoose from "mongoose";
 
 import type {User} from "../auth";
 import {Permissions} from "../permissions";
-import type {RealtimeRegistryEntry} from "../realtime/registry";
 import {setupDb} from "../tests";
 import {createAccess} from "./access";
-import {
-  canReadDocumentRealtime,
-  canSubscribeRealtime,
-  maskRealtimeDocument,
-} from "./realtimeAccess";
+import {canReadDocumentRealtime} from "./realtimeAccess";
 import {OwnerScope} from "./scopes";
 import {terrenoStatements} from "./statements";
 import type {
@@ -39,13 +34,9 @@ const createTestUser = (
   };
 };
 
-const makeEntry = (options: RealtimeRegistryEntry["options"]): RealtimeRegistryEntry => ({
-  collectionName: "todos",
-  config: {methods: ["create", "update", "delete"], roomStrategy: "owner"},
-  modelName: "Todo",
-  options,
-  routePath: "/todos",
-});
+type RealtimeAccessEntry = Parameters<typeof canReadDocumentRealtime>[0];
+
+const makeEntry = (options: RealtimeAccessEntry["options"]): RealtimeAccessEntry => ({options});
 
 const makeStubAccess = ({
   allowed,
@@ -61,86 +52,29 @@ const makeStubAccess = ({
   }) as unknown as AnyTerrenoAccess;
 
 describe("realtimeAccess", () => {
-  it("uses accessControl permissions for subscriptions", async () => {
-    await setupDb();
-    const access = createAccess({
-      connection: mongoose.connection,
-      defaultRoles: [
-        {
-          displayName: "Reader",
-          name: "reader",
-          permissions: {todo: ["read", "list"]},
-        },
-      ],
-      statements: appStatements,
-    });
-    await access.roles.seedDefaults();
-
-    const user = createTestUser({roles: ["reader"]});
-    const entry = makeEntry({
-      access: {resource: "todo"},
-      accessControl: access as AnyTerrenoAccess,
-    });
-
-    expect(await canSubscribeRealtime(entry, "list", user)).toBe(true);
-    expect(await canSubscribeRealtime(entry, "read", user)).toBe(true);
-  });
-
-  it("returns false when the realtime action override is null", async () => {
-    await setupDb();
-    const access = createAccess({
-      connection: mongoose.connection,
-      statements: appStatements,
-    });
-    await access.roles.seedDefaults();
-
-    const user = createTestUser({roles: ["superadmin"]});
-    const entry = makeEntry({
-      access: {actions: {list: null}, resource: "todo"},
-      accessControl: access as AnyTerrenoAccess,
-    });
-
-    expect(await canSubscribeRealtime(entry, "list", user)).toBe(false);
-  });
-
-  it("honors custom action overrides for realtime subscriptions", async () => {
-    await setupDb();
-    const access = createAccess({
-      connection: mongoose.connection,
-      defaultRoles: [
-        {
-          displayName: "Updater",
-          name: "updater",
-          permissions: {todo: ["update"]},
-        },
-      ],
-      statements: appStatements,
-    });
-    await access.roles.seedDefaults();
-
-    const user = createTestUser({roles: ["updater"]});
-    const entry = makeEntry({
-      access: {actions: {list: "update"}, resource: "todo"},
-      accessControl: access as AnyTerrenoAccess,
-    });
-
-    expect(await canSubscribeRealtime(entry, "list", user)).toBe(true);
-  });
-
-  it("falls back to legacy permissions when access config is absent", async () => {
+  it("falls back to router read permissions when access config is absent", async () => {
     const user = createTestUser({admin: true});
+    const entry = makeEntry({permissions: {read: [Permissions.IsAdmin]}});
+
+    expect(await canReadDocumentRealtime(entry, user, {title: "Any"})).toBe(true);
+    expect(await canReadDocumentRealtime(entry, createTestUser(), {title: "Any"})).toBe(false);
+  });
+
+  it("uses a custom read action override for document reads", async () => {
+    const permissionRequests: PermissionRequest<Statements>[] = [];
     const entry = makeEntry({
-      permissions: {
-        create: [Permissions.IsAdmin],
-        delete: [Permissions.IsAdmin],
-        list: [Permissions.IsAdmin],
-        read: [Permissions.IsAdmin],
-        update: [Permissions.IsAdmin],
-      },
+      access: {actions: {read: "list"}, resource: "todo"},
+      accessControl: makeStubAccess({
+        allowed: true,
+        onCheck: (args) => {
+          permissionRequests.push(args.permissions);
+          return undefined;
+        },
+      }),
     });
 
-    expect(await canSubscribeRealtime(entry, "list", user)).toBe(true);
-    expect(await canSubscribeRealtime(entry, "list", createTestUser())).toBe(false);
+    expect(await canReadDocumentRealtime(entry, createTestUser(), {title: "Any"})).toBe(true);
+    expect(permissionRequests).toEqual([{todo: ["list"]}]);
   });
 
   it("checks document-level access with scopes", async () => {
@@ -213,78 +147,6 @@ describe("realtimeAccess", () => {
         title: "Other",
       })
     ).toBe(false);
-  });
-
-  it("masks realtime documents using field views", async () => {
-    await setupDb();
-    const access = createAccess({
-      connection: mongoose.connection,
-      defaultRoles: [
-        {
-          displayName: "Reader",
-          name: "reader",
-          permissions: {todo: ["read"]},
-        },
-      ],
-      fieldViews: {
-        todo: {
-          select: () => "public",
-          views: {
-            public: {omit: [], read: ["title"], write: ["title"]},
-          },
-        },
-      },
-      statements: appStatements,
-    });
-    await access.roles.seedDefaults();
-
-    const user = createTestUser({roles: ["reader"]});
-    const entry = makeEntry({
-      access: {resource: "todo"},
-      accessControl: access as AnyTerrenoAccess,
-    });
-
-    const masked = await maskRealtimeDocument(
-      entry,
-      user,
-      {secret: "hidden", title: "Visible"},
-      "read"
-    );
-    expect(masked).toEqual({title: "Visible"});
-  });
-
-  it("returns documents unchanged when access config is missing", async () => {
-    const entry = makeEntry({});
-    const doc = {title: "Plain"};
-    expect(await maskRealtimeDocument(entry, undefined, doc, "read")).toBe(doc);
-  });
-
-  it("falls back to the read action when the resource has no list statement", async () => {
-    await setupDb();
-    const readOnlyStatements = {
-      ...terrenoStatements,
-      note: ["create", "read", "update", "delete"],
-    } as const;
-    const access = createAccess({
-      connection: mongoose.connection,
-      defaultRoles: [
-        {
-          displayName: "Note Reader",
-          name: "note-reader",
-          permissions: {note: ["read"]},
-        },
-      ],
-      statements: readOnlyStatements,
-    });
-    await access.roles.seedDefaults();
-
-    const user = createTestUser({roles: ["note-reader"]});
-    const entry = makeEntry({
-      access: {resource: "note"},
-      accessControl: access as AnyTerrenoAccess,
-    });
-
-    expect(await canSubscribeRealtime(entry, "list", user)).toBe(true);
   });
 
   it("returns false for document reads when the read action override is null", async () => {
@@ -376,18 +238,5 @@ describe("realtimeAccess", () => {
 
     expect(await canReadDocumentRealtime(entry, owner, doc)).toBe(true);
     expect(await canReadDocumentRealtime(entry, other, doc)).toBe(false);
-  });
-
-  it("applies access.also to realtime subscriptions", async () => {
-    const admin = createTestUser({admin: true});
-    const member = createTestUser();
-    const entry = makeEntry({
-      access: {also: {list: [Permissions.IsAdmin]}, resource: "todo"},
-      accessControl: makeStubAccess({allowed: true}),
-    });
-
-    expect(await canSubscribeRealtime(entry, "list", admin)).toBe(true);
-    expect(await canSubscribeRealtime(entry, "list", member)).toBe(false);
-    expect(await canSubscribeRealtime(entry, "read", member)).toBe(true);
   });
 });

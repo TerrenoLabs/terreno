@@ -6,6 +6,7 @@ import {
   DateTimeField,
   Heading,
   IconButton,
+  isSupportedDesktopWidth,
   Modal,
   SelectField,
   Text,
@@ -20,11 +21,9 @@ import {
   adminFilterStateHasValues,
   areAdminFilterStatesEqual,
 } from "./adminModelListQueryParams";
-import {ADMIN_FILTER_MOBILE_BREAKPOINT} from "./Constants";
-import type {AdminApi, AdminFieldConfig, AdminModelConfig} from "./types";
+import type {AdminFieldConfig, AdminModelConfig} from "./types";
 
 interface AdminFilterDrawerProps {
-  api: AdminApi;
   appliedFilterState: AdminListFilterState;
   fields: Record<string, AdminFieldConfig>;
   filters: NonNullable<AdminModelConfig["filters"]>;
@@ -43,7 +42,6 @@ const getRefRoutePath = (
 };
 
 interface FilterFieldsProps {
-  api: AdminApi;
   draftState: AdminListFilterState;
   fields: Record<string, AdminFieldConfig>;
   filters: NonNullable<AdminModelConfig["filters"]>;
@@ -52,7 +50,6 @@ interface FilterFieldsProps {
 }
 
 const FilterFields: React.FC<FilterFieldsProps> = ({
-  api,
   draftState,
   fields,
   filters,
@@ -144,13 +141,11 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
           );
         }
         if (f.kind === "ref") {
-          const refModelName =
-            (f as {refModel?: string}).refModel ?? fields[f.field]?.ref ?? undefined;
+          const refModelName = f.refModel ?? fields[f.field]?.ref ?? undefined;
           const routePath = getRefRoutePath(modelConfigs, refModelName);
           return (
             <Box key={f.field} width="100%">
               <AdminRefField
-                api={api}
                 autocomplete
                 onChange={(next: string) => {
                   setField(f.field, next);
@@ -186,7 +181,6 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
  * Uses draft/apply so list queries update only when the user clicks Apply.
  */
 export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
-  api,
   appliedFilterState,
   fields,
   filters,
@@ -194,7 +188,7 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
   onApply,
 }) => {
   const {width: windowWidth} = useWindowDimensions();
-  const isMobileLayout = windowWidth < ADMIN_FILTER_MOBILE_BREAKPOINT;
+  const isMobileLayout = !isSupportedDesktopWidth({width: windowWidth});
   const [isExpanded, setIsExpanded] = useState(true);
   const [draftState, setDraftState] = useState<AdminListFilterState>(appliedFilterState);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -239,7 +233,6 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
   const filterContent = useMemo(
     () => (
       <FilterFields
-        api={api}
         draftState={draftState}
         fields={fields}
         filters={filters}
@@ -247,7 +240,7 @@ export const AdminFilterDrawer: React.FC<AdminFilterDrawerProps> = ({
         onDraftChange={setDraftState}
       />
     ),
-    [api, draftState, fields, filters, modelConfigs]
+    [draftState, fields, filters, modelConfigs]
   );
 
   const hasDraftChanges = !areAdminFilterStatesEqual(draftState, appliedFilterState);

@@ -4,11 +4,16 @@ import {Tabs} from "expo-router";
 import type React from "react";
 import type {ColorValue} from "react-native";
 
+type IconColor = React.ComponentProps<typeof FontAwesome>["color"];
+
 const TabBarIcon: React.FC<{
   name: React.ComponentProps<typeof FontAwesome>["name"];
   color: ColorValue;
 }> = ({name, color}) => {
-  return <FontAwesome color={color} name={name} size={24} style={{marginBottom: -3}} />;
+  // React Native 0.88's ColorValue also admits number and null; tab tints are theme strings.
+  return (
+    <FontAwesome color={color as IconColor} name={name} size={24} style={{marginBottom: -3}} />
+  );
 };
 
 const TabLayout: React.FC = () => {

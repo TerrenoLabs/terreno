@@ -6,21 +6,49 @@ import supertest from "supertest";
 
 import {start} from "./server";
 
-const FIXTURE_INDEX_HTML =
-  '<html><head><link href="/_expo/static/app.css" rel="stylesheet"></head>' +
-  "<body>console-dist-dir-fixture</body></html>";
+const BAKED_BASE_URL = "/console";
+
+// Minimal stand-in for an `expo export` (web.output: "server"): client/ plus the server/
+// files expo-server's node environment loads. render.js reads the config that the serve plugin
+// publishes on the process global, like the real bundle does.
+const writeFixtureExport = (root: string): void => {
+  const clientJs = path.join(root, "client", "_expo", "static", "js", "web");
+  fs.mkdirSync(clientJs, {recursive: true});
+  fs.writeFileSync(path.join(clientJs, "entry.abc.js"), "console-dist-dir-fixture-asset");
+  const serverExpo = path.join(root, "server", "_expo");
+  fs.mkdirSync(path.join(serverExpo, "server"), {recursive: true});
+  fs.writeFileSync(
+    path.join(serverExpo, "routes.json"),
+    JSON.stringify({
+      apiRoutes: [],
+      assets: {css: [], js: [`${BAKED_BASE_URL}/_expo/static/js/web/entry.abc.js`]},
+      htmlRoutes: [{file: "login.js", namedRegex: "^/login(?:/)?$", page: "/login", routeKeys: {}}],
+      notFoundRoutes: [],
+      redirects: [],
+      rendering: {file: "_expo/server/render.js", mode: "ssr"},
+      rewrites: [],
+    })
+  );
+  fs.writeFileSync(
+    path.join(serverExpo, "server", "render.js"),
+    `exports.getStaticContent = async () => {
+  const published = globalThis[Symbol.for("terreno.adminSpa.server")];
+  return "<html><body>console-dist-dir-fixture " + published.appConfig.brandName + "</body></html>";
+};\n`
+  );
+};
 
 /**
  * Covers the ADMIN_SPA_DIST_DIR override used by compiled deploys (Cloud Run), where
  * the serve plugin's __dirname-relative bundle resolution cannot work. The server must
- * serve the export from the configured directory at /console.
+ * serve the export (client/ + server/) from the configured directory at /console.
  */
 describe("admin SPA serving with ADMIN_SPA_DIST_DIR", () => {
   let fixtureDistDir: string;
 
   beforeAll(() => {
     fixtureDistDir = fs.mkdtempSync(path.join(os.tmpdir(), "admin-spa-dist-"));
-    fs.writeFileSync(path.join(fixtureDistDir, "index.html"), FIXTURE_INDEX_HTML);
+    writeFixtureExport(fixtureDistDir);
   });
 
   afterAll(() => {
@@ -34,15 +62,14 @@ describe("admin SPA serving with ADMIN_SPA_DIST_DIR", () => {
     const app = await start(true);
     const server = supertest(app);
 
-    const indexRes = await server.get("/console").expect(200);
-    expect(indexRes.text).toContain("console-dist-dir-fixture");
-    // Asset refs are rewritten to the mount path and the base global is injected.
-    expect(indexRes.text).toContain('href="/console/_expo/static/app.css"');
-    expect(indexRes.text).toContain('window.__ADMIN_SPA_BASE__="/console"');
+    // The page is rendered on the server from <distDir>/server, with the plugin's brand name.
+    const loginRes = await server.get("/console/login").expect(200);
+    expect(loginRes.headers["content-type"]).toContain("text/html");
+    expect(loginRes.text).toContain("console-dist-dir-fixture Terreno Example");
 
-    // Deep routes fall back to the same index.html.
-    const deepRes = await server.get("/console/some/deep/route").expect(200);
-    expect(deepRes.text).toContain("console-dist-dir-fixture");
+    // Static client files come from <distDir>/client under the mount path.
+    const assetRes = await server.get("/console/_expo/static/js/web/entry.abc.js").expect(200);
+    expect(assetRes.text).toBe("console-dist-dir-fixture-asset");
 
     const configRes = await server.get("/console/app-config.json").expect(200);
     expect(configRes.body.brandName).toBe("Terreno Example");

@@ -39,7 +39,6 @@ const COVERAGE_PACKAGES: Record<string, string> = {
   "run-feature-flags": "feature-flags",
   "run-jobs": "jobs",
   "run-mcp-server": "mcp-server",
-  "run-rtk": "rtk",
   "run-syncdb": "syncdb",
   "run-test-package": "test",
   "run-ui": "ui",
@@ -48,6 +47,8 @@ const COVERAGE_PACKAGES: Record<string, string> = {
 /** Parameters whose CI jobs need infrastructure a laptop run should not assume. */
 const CI_ONLY_HINTS: Record<string, string> = {
   "run-admin-spa": "cd admin-spa && bun run test:e2e (Playwright)",
+  "run-admin-spa-image-smoke":
+    "docker build -f example-backend/Dockerfile ., run it with ADMIN_SPA_ENABLED=true, then scripts/admin-spa-image-smoke.sh <base-url>",
   "run-admin-spa-integration":
     "cd admin-spa && bun run test:integration (needs Mongo + example-backend)",
   "run-circleci-config": "config-only change; CircleCI validates the continuation config",
@@ -59,6 +60,8 @@ const CI_ONLY_HINTS: Record<string, string> = {
   "run-maestro": "bun run maestro:test (needs the Maestro CLI and a running example-frontend)",
   "run-maestro-demo": "bun run demo:maestro:test",
   "run-mcp-server-docker": "docker build -f mcp-server/Dockerfile .",
+  "run-smoke":
+    "bun run smoke (after bun run compile, cd admin-spa && bun run build:web, cd demo && bun run export, cd example-frontend && bun run export:smoke); bun run smoke:local does all of it",
 };
 
 /** Deploy parameters: they ship artifacts rather than verify the change. */
@@ -74,7 +77,7 @@ const DEPLOY_PARAMETERS = [
 /** GitHub Actions-only checks that the CircleCI mapping does not cover. */
 const EXTRA_MAPPINGS: Mapping[] = [
   {parameter: "run-cli", regex: "cli/.*"},
-  {parameter: "run-docs-api-reference", regex: "(api|rtk)/src/.*"},
+  {parameter: "run-docs-api-reference", regex: "api/src/.*"},
   {
     parameter: "run-docs-site",
     regex: "(docs|website)/.*|ui/src/.*|demo/story-config/.*|demo/demoConfig\\.tsx",
@@ -97,6 +100,14 @@ const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
     name: "repo-policies: planning + CI tools",
   },
   {command: "bun run skills:check", name: "repo-policies: generated skills in sync"},
+  {
+    command: "bun run check:regression-suites && bun test scripts/regression/",
+    name: "repo-policies: regression suites",
+  },
+  {
+    command: "bun run check:user-guide && bun test scripts/userGuide/",
+    name: "repo-policies: user guide",
+  },
   {command: "bun run check:licenses", name: "repo-policies: license coverage"},
   {command: "bun run check:circleci-parity", name: "repo-policies: CircleCI path-filter parity"},
   {
@@ -167,8 +178,9 @@ export const planPrepush = ({
   const has = (parameter: string): boolean => parameters.includes(parameter);
 
   const steps: PrepushStep[] = [
-    {command: "bun run lint", name: "lint (all packages)"},
+    // Compile first: root lint runs typecheck, which reads workspace dist types.
     {command: "bun run compile", name: "compile (all packages)"},
+    {command: "bun run lint", name: "lint + typecheck (all packages)"},
   ];
 
   if (has("run-rulesync")) {
@@ -201,9 +213,9 @@ export const planPrepush = ({
 
   if (has("run-admin-spa")) {
     steps.push({
-      command: "bunx tsc --noEmit -p tsconfig.json && bun run build:web && bun run smoke",
+      command: "bunx tsc --noEmit -p tsconfig.json && bun run build:web",
       cwd: "admin-spa",
-      name: "admin-spa-ci: typecheck, web build, smoke",
+      name: "admin-spa-ci: typecheck, web build",
     });
   }
   if (has("run-example-backend")) {

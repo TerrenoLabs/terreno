@@ -588,7 +588,7 @@ export const createQueryWindows = ({
     const key = keyFor(query);
     const flightKey = `${key}#${nextPage ? "next" : "first"}`;
     const existing = inFlight.get(flightKey);
-    if (existing) {
+    if (existing !== undefined) {
       return existing;
     }
     const myReset = resetGeneration;
@@ -613,7 +613,7 @@ export const createQueryWindows = ({
     // Serialize per window: a refetch and a next-page load both read `pages` and
     // write membership, so overlapping them could drop a just-loaded page.
     const prior = queues.get(key);
-    const started = prior ? prior.catch(() => undefined).then(run) : run();
+    const started = prior !== undefined ? prior.catch(() => undefined).then(run) : run();
     const promise = started.finally(() => {
       if (myReset !== resetGeneration) {
         return;

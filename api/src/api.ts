@@ -56,8 +56,6 @@ import type {PopulatePath} from "./populate";
 import {resolveModelRouterAccess, validateAccessWriteBody} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
-import {warnRealtimeDeprecated} from "./realtime/deprecation";
-import type {RealtimeConfig} from "./realtime/types";
 import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
   type ExecutorConcurrencyCheck,
@@ -264,7 +262,7 @@ export interface ModelRouterOptions<T> {
   preCreate?: (
     value: Partial<T> | (Partial<T> | undefined)[] | null | undefined,
     request: express.Request
-  ) => T | Promise<T> | null;
+  ) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before changes are made for update operations.
    * Can update the body fields based on the request or the user.
@@ -274,7 +272,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The request body relative to the model update (type: Partial<T>). Note: this does not contain the entire document to be updated, only the fields being updated.
    * @param request - The Express request object.
    */
-  preUpdate?: (value: Partial<T>, request: express.Request) => T | Promise<T> | null;
+  preUpdate?: (value: Partial<T>, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after `transformer.transform` but before the object is deleted.
    * Return null to return a generic 403 error.
@@ -283,7 +281,7 @@ export interface ModelRouterOptions<T> {
    * @param value - The document to be deleted, before the soft update of deleted: true (type: T).
    * @param request - The Express request object.
    */
-  preDelete?: (value: T, request: express.Request) => T | Promise<T> | null;
+  preDelete?: (value: T, request: express.Request) => T | null | Promise<T | null>;
   /**
    * Hook that runs after the object is created but before the responseHandler serializes and
    * returned. This is a good spot to perform dependent changes to other models or performing async
@@ -404,18 +402,6 @@ export interface ModelRouterOptions<T> {
    * ```
    */
   mcp?: MCPConfig;
-  /**
-   * Enable real-time sync for this model via WebSocket events.
-   * When configured, CRUD operations will emit events to connected clients
-   * through the RealtimeApp plugin's change stream watcher.
-   *
-   * Requires the RealtimeApp plugin to be registered with TerrenoApp.
-   *
-   * @deprecated Removed in Terreno 58. Use `sync` with
-   * `@terreno/syncdb` instead. `RealtimeApp` remains required for sync sockets.
-   * See docs/how-to/migrate-rtk-to-syncdb.md.
-   */
-  realtime?: RealtimeConfig;
   /**
    * Enable local-first sync (@terreno/syncdb) for this model. Documents are scoped
    * into streams (owner/tenant/broadcast/custom) with monotonic per-stream cursors.
@@ -746,15 +732,15 @@ export function modelRouter<T>(
   const shouldDeferBuild = path !== undefined && Boolean(options.access) && !options.accessControl;
 
   if (path !== undefined) {
-    if (options.realtime) {
-      warnRealtimeDeprecated(model.modelName, path);
-    }
     registerCollection({model, options, routePath: path});
   }
 
-  const router = shouldDeferBuild ? express.Router() : _buildModelRouter(model, options, path);
-
   if (path !== undefined) {
+    // TerrenoApp mounts _buildWithContext's router, which has OpenAPI wired in. Build the
+    // standalone router only if something reads `.router` (a hand-mounted registration), so
+    // registering doesn't build every router twice and log "No options.openApi provided" for
+    // each model at import.
+    let standaloneRouter: express.Router | undefined;
     return {
       __type: "modelRouter",
       _buildWithContext: (context: ModelRouterBuildContext) => {
@@ -773,17 +759,15 @@ export function modelRouter<T>(
       model,
       options,
       path,
-      router,
+      get router(): express.Router {
+        standaloneRouter ??= shouldDeferBuild
+          ? express.Router()
+          : _buildModelRouter(model, options, path);
+        return standaloneRouter;
+      },
     };
   }
 
-  if (options.realtime) {
-    warnRealtimeDeprecated(model.modelName);
-    logger.warn(
-      `modelRouter for ${model.modelName} has realtime config but was called without a path. ` +
-        "Realtime sync only works with the three-argument form: modelRouter('/path', Model, options)"
-    );
-  }
   if (options.sync) {
     logger.warn(
       `modelRouter for ${model.modelName} has sync config but was called without a path. ` +
@@ -791,7 +775,7 @@ export function modelRouter<T>(
     );
   }
 
-  return router;
+  return _buildModelRouter(model, options, path);
 }
 
 const _buildModelRouter = <T>(
@@ -1373,14 +1357,15 @@ const _buildModelRouter = <T>(
         });
       }
       // For PATCHing an item by ID, we need to merge the objects so we don't override the _id or
-      // other parts of the subdocument. Merge into a detached copy: the array elements are the
-      // loaded document's live subdocuments, and only the body that survives the hooks below
-      // may change the document.
+      // other parts of the subdocument. Merge plain data from the detached copy: $clone() loses
+      // the subdocument's parent, so assigning a nested document array to it can throw in
+      // Mongoose's setters. The loaded document's live subdocuments must not change until only
+      // the body that survives the hooks below is applied.
       if (operation === "PATCH" && isValidObjectId(itemId)) {
-        const current = array[index] as {$clone?: () => object} | object;
+        const current = array[index] as {toObject?: () => object} | object;
         const detached =
-          typeof (current as {$clone?: unknown}).$clone === "function"
-            ? (current as {$clone: () => object}).$clone()
+          typeof (current as {toObject?: unknown}).toObject === "function"
+            ? (current as {toObject: () => object}).toObject()
             : {...current};
         Object.assign(detached, req.body[field]);
         array[index] = detached;
@@ -1429,7 +1414,37 @@ const _buildModelRouter = <T>(
     // Using .save here runs the risk of a versioning error if you try to make two simultaneous
     // updates. We won't wind up with corrupted data, just an API error.
     try {
-      Object.assign(doc, body);
+      const bodyRecord = body as Record<string, unknown>;
+      const finalArray = bodyRecord[field];
+      const liveArray = (doc as unknown as Record<string, unknown>)[field];
+      if (Array.isArray(finalArray) && Array.isArray(liveArray)) {
+        const mergedArray = finalArray.map((item) => {
+          if (!item || typeof item !== "object") {
+            return item;
+          }
+          const itemIdValue = (item as {id?: unknown}).id ?? (item as {_id?: unknown})._id;
+          if (itemIdValue == null) {
+            return item;
+          }
+          const liveItem = liveArray.find((live) => {
+            if (!live || typeof live !== "object") {
+              return false;
+            }
+            const liveId = (live as {id?: unknown}).id ?? (live as {_id?: unknown})._id;
+            return String(liveId) === String(itemIdValue);
+          });
+          if (liveItem && typeof liveItem === "object" && (liveItem as {$__?: unknown}).$__) {
+            Object.assign(liveItem, item);
+            return liveItem;
+          }
+          return item;
+        });
+        (doc as unknown as Record<string, unknown>)[field] = mergedArray;
+        const {[field]: _arrayField, ...restBody} = bodyRecord;
+        Object.assign(doc, restBody);
+      } else {
+        Object.assign(doc, body);
+      }
       await doc.save();
     } catch (error: unknown) {
       throw passthroughOrWrapWrite(error, {

@@ -5,14 +5,14 @@ import {assert} from "chai";
 import {buildClaudePluginFiles, CLAUDE_PLUGIN_TARGETS} from "./syncClaudePlugin.ts";
 
 const ROOT_DIRECTORY = resolve(import.meta.dir, "../..");
-const CANONICAL_DIRECTORY = join(ROOT_DIRECTORY, "plugins/terreno-scan");
+const CANONICAL_DIRECTORY = join(ROOT_DIRECTORY, "plugins/terreno-loop");
 
 const SCAN_STAGES = [
-  {directory: "terreno-scan-1-aim", next: ["next: sweep", "next: aim", "next: null"]},
-  {directory: "terreno-scan-2-sweep", next: ["next: sift", "next: sweep"]},
-  {directory: "terreno-scan-3-sift", next: ["next: plot", "next: track", "next: sift"]},
-  {directory: "terreno-scan-4-plot", next: ["next: track", "next: plot"]},
-  {directory: "terreno-scan-5-track", next: ["next: plot", "next: sweep", "next: null"]},
+  {directory: "terreno-loop-1-aim", next: ["next: sweep", "next: aim", "next: null"]},
+  {directory: "terreno-loop-2-sweep", next: ["next: sift", "next: sweep"]},
+  {directory: "terreno-loop-3-sift", next: ["next: plot", "next: track", "next: sift"]},
+  {directory: "terreno-loop-4-plot", next: ["next: track", "next: plot"]},
+  {directory: "terreno-loop-5-track", next: ["next: plot", "next: sweep", "next: null"]},
 ];
 
 const STAGE_SECTIONS = [
@@ -69,8 +69,8 @@ describe("scan plugin", (): void => {
   });
 
   it("drives the campaign through the lifecycle without becoming a stage", (): void => {
-    const content = readSkill("terreno-scan-campaign");
-    assert.include(content, "name: terreno-scan-campaign");
+    const content = readSkill("terreno-loop-campaign");
+    assert.include(content, "name: terreno-loop-campaign");
     assert.include(content, "Not a stage");
     assert.include(content, "terreno-1-grow");
     assert.include(content, "terreno-4-brew");
@@ -113,18 +113,18 @@ describe("scan plugin", (): void => {
     const marketplaces: Array<[string, (plugins: Array<Record<string, unknown>>) => boolean]> = [
       [
         ".cursor-plugin/marketplace.json",
-        (plugins) => plugins.some((p) => p.name === "terreno-scan"),
+        (plugins) => plugins.some((p) => p.name === "terreno-loop"),
       ],
       [
         ".claude-plugin/marketplace.json",
         (plugins) =>
           plugins.some(
-            (p) => p.name === "terreno-scan" && p.source === "./plugins/terreno-scan-claude"
+            (p) => p.name === "terreno-loop" && p.source === "./plugins/terreno-loop-claude"
           ),
       ],
       [
         ".agents/plugins/marketplace.json",
-        (plugins) => plugins.some((p) => p.name === "terreno-scan"),
+        (plugins) => plugins.some((p) => p.name === "terreno-loop"),
       ],
     ];
 
@@ -132,13 +132,13 @@ describe("scan plugin", (): void => {
       const marketplace = JSON.parse(readFileSync(join(ROOT_DIRECTORY, path), "utf8")) as {
         plugins?: Array<Record<string, unknown>>;
       };
-      assert.isTrue(predicate(marketplace.plugins ?? []), `${path} must publish terreno-scan`);
+      assert.isTrue(predicate(marketplace.plugins ?? []), `${path} must publish terreno-loop`);
     }
   });
 
   it("runs resident with a heartbeat that answers each comment once", (): void => {
-    const content = readSkill("terreno-scan-loop");
-    assert.include(content, "name: terreno-scan-loop");
+    const content = readSkill("terreno-loop-run");
+    assert.include(content, "name: terreno-loop-run");
     assert.include(content, "../../references/heartbeat.md");
     assert.include(content, "../../references/pr-routing.md");
     assert.include(content, "terreno-5-taste");
@@ -173,17 +173,26 @@ describe("scan plugin", (): void => {
     assert.include(routing, "Do not approve its own PRs");
     assert.include(routing, "mergePolicy");
 
-    const aim = readSkill("terreno-scan-1-aim");
+    const aim = readSkill("terreno-loop-1-aim");
     assert.include(aim, "Settle review routing");
     assert.include(aim, "../../references/pr-routing.md");
 
-    const plot = readSkill("terreno-scan-4-plot");
+    const plot = readSkill("terreno-loop-4-plot");
     assert.include(plot, "the reviewer and assignee this slice routes to");
 
     const state = JSON.parse(
       readFileSync(join(CANONICAL_DIRECTORY, "references/scan-state.schema.json"), "utf8")
     ) as {properties: {goal: {properties: Record<string, unknown>}}};
     assert.property(state.properties.goal.properties, "review");
+  });
+
+  it("plans e2e specs and regression cases in every Plot brief", (): void => {
+    const plot = readSkill("terreno-loop-4-plot");
+    assert.include(plot, "## E2E tests");
+    assert.include(plot, "## Regression cases");
+    assert.include(plot, "None — <reason>");
+    assert.include(plot, "references/testing-plan.md");
+    assert.match(plot, /briefs missing verification methods or a testing-plan\s+section/);
   });
 
   it("generates a Claude copy with shortened scan and lifecycle names", (): void => {
@@ -193,17 +202,17 @@ describe("scan plugin", (): void => {
     assert.include(paths, "skills/1-aim/SKILL.md");
     assert.include(paths, "skills/5-track/SKILL.md");
     assert.include(paths, "skills/campaign/SKILL.md");
-    assert.include(paths, "skills/loop/SKILL.md");
+    assert.include(paths, "skills/run/SKILL.md");
     assert.include(paths, "references/scan-contract.md");
-    assert.notInclude(paths, "skills/terreno-scan-1-aim/SKILL.md");
+    assert.notInclude(paths, "skills/terreno-loop-1-aim/SKILL.md");
 
     const aim = files.find(({path}) => path === "skills/1-aim/SKILL.md");
     assert.include(aim?.contents ?? "", "name: 1-aim");
 
-    const loop = files.find(({path}) => path === "skills/loop/SKILL.md");
-    assert.include(loop?.contents ?? "", "name: loop");
+    const loop = files.find(({path}) => path === "skills/run/SKILL.md");
+    assert.include(loop?.contents ?? "", "name: run");
     assert.include(loop?.contents ?? "", "`5-taste`");
-    assert.notInclude(loop?.contents ?? "", "terreno-scan-loop");
+    assert.notInclude(loop?.contents ?? "", "terreno-loop-run");
 
     const campaign = files.find(({path}) => path === "skills/campaign/SKILL.md");
     assert.include(campaign?.contents ?? "", "name: campaign");
@@ -213,7 +222,7 @@ describe("scan plugin", (): void => {
     const manifest = JSON.parse(
       files.find(({path}) => path === ".claude-plugin/plugin.json")?.contents ?? "{}"
     ) as {agents?: string[]; name: string; skills: string};
-    assert.equal(manifest.name, "terreno-scan");
+    assert.equal(manifest.name, "terreno-loop");
     assert.equal(manifest.skills, "./skills/");
     assert.isUndefined(manifest.agents, "the scan plugin ships no agents");
   });
@@ -221,8 +230,8 @@ describe("scan plugin", (): void => {
   it("installs through the skills tree", (): void => {
     for (const skillName of [
       ...SCAN_STAGES.map(({directory}) => directory),
-      "terreno-scan-campaign",
-      "terreno-scan-loop",
+      "terreno-loop-campaign",
+      "terreno-loop-run",
     ]) {
       assert.isTrue(
         existsSync(join(ROOT_DIRECTORY, "skills", skillName, "SKILL.md")),
@@ -230,7 +239,7 @@ describe("scan plugin", (): void => {
       );
     }
     assert.isTrue(
-      existsSync(join(ROOT_DIRECTORY, "skills/terreno-scan-1-aim/references/scan-contract.md")),
+      existsSync(join(ROOT_DIRECTORY, "skills/terreno-loop-1-aim/references/scan-contract.md")),
       "linked plugin references must travel with the installable skill"
     );
   });

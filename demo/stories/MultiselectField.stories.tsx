@@ -1,4 +1,11 @@
-import {Box, isNarrowViewport, MultiselectField, type MultiselectFieldProps} from "@terreno/ui";
+import {
+  Box,
+  isSupportedDesktopWidth,
+  MultiselectField,
+  type MultiselectFieldProps,
+} from "@terreno/ui";
+import type {ReactElement} from "react";
+import {useWindowDimensions} from "react-native";
 
 export const MultiselectFieldDemo = (props: Partial<MultiselectFieldProps>) => {
   return (
@@ -20,8 +27,9 @@ export const MultiselectFieldDemo = (props: Partial<MultiselectFieldProps>) => {
   );
 };
 
-export const MultiselectVariants = () => {
-  const isMobile = isNarrowViewport();
+export const MultiselectVariants = (): ReactElement => {
+  const {width} = useWindowDimensions();
+  const isMobile = !isSupportedDesktopWidth({width});
   return (
     <Box width={isMobile ? undefined : "30%"}>
       <Box padding={3}>

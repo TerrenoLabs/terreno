@@ -10,7 +10,7 @@ How to talk to third-party HTTP APIs (payment processors, health integrations, m
 | Calling an external service through its own SDK (Twilio, Google APIs, Stripe) | `withApiErrorHandling` around the SDK calls — the SDK owns transport, you standardize failures |
 | Logging or classifying a caught error from any external call | `normalizeApiError` |
 | Surfacing an external failure to your API's consumers from a route handler | `withApiErrorHandling` with `rethrowAs: "apiError"` |
-| Making internal requests to your own `@terreno/api` backend | None of these — use `@terreno/rtk` on the frontend or direct function calls on the backend |
+| Making internal requests to your own `@terreno/api` backend | None of these — use the generated `store/apiSdk.ts` hooks (`@terreno/syncdb/api` request client) or syncdb collection hooks on the frontend, or direct function calls on the backend |
 
 **Rule of thumb:** any file that would otherwise contain `axios.create(...)` plus a token variable plus a `try/catch → axios.isAxiosError → log → throw` block should use these utilities instead.
 
@@ -92,7 +92,7 @@ Note the hook's output classification also feeds the client's retry decision —
 
 ## When not to use this
 
-- **Your own backend's routes** — use the generated `@terreno/rtk` SDK (frontend) or call the function directly (backend).
+- **Your own backend's routes** — use syncdb collection hooks or the generated `store/apiSdk.ts` hooks (frontend) or call the function directly (backend).
 - **SDK-managed transport** (Twilio, googleapis) — don't fight the SDK's HTTP layer; adopt only `normalizeApiError`/`withApiErrorHandling` for consistent failure handling.
 - **Webhook notifiers** — `sendToSlack`/`sendToGoogleChat`/`sendToZoom` post to a fixed webhook. Slack channel creation, invites, and bot posts use `createSlackPrivateChannel`, `inviteSlackUsersToChannel`, and `postSlackMessage` with `SLACK_BOT_TOKEN`. See [Webhooks & Notifications](../reference/api.md#webhooks--notifications).
 

@@ -183,6 +183,21 @@ describe("BarChart", () => {
     expect(queryByTestId("chart.tooltip")).toBeNull();
   });
 
+  it("records a positive plot width from layout", () => {
+    const {getByTestId} = renderWithTheme(<BarChart data={POINTS} testID="chart" />);
+
+    act(() => {
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 0, width: 0}},
+      });
+      fireEvent(getByTestId("chart.plot"), "layout", {
+        nativeEvent: {layout: {height: 180, width: 640}},
+      });
+    });
+
+    expect(getByTestId("chart.plot")).toBeTruthy();
+  });
+
   it("shows tooltip copy after pressing a zero-value bar", async () => {
     const {getByTestId, getByText} = renderWithTheme(<BarChart data={POINTS} testID="chart" />);
 

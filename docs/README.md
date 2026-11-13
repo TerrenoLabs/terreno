@@ -53,9 +53,21 @@ Canonical copy, language rules, and the Django/Rails comparison:
 
 | Package | Description |
 |---------|-------------|
-| [@terreno/rtk](reference/legacy/rtk.md) (deprecated for data sync) | OpenAPI SDK, Better Auth Redux, and feature flags for Terreno frontends |
+| [@terreno/rtk](reference/legacy/rtk.md) (removed in 58) | Replaced by `@terreno/syncdb` |
 
-**Migrating from RTK?** See [How to migrate from @terreno/rtk to @terreno/syncdb](how-to/migrate-rtk-to-syncdb.md).
+**Upgrading from RTK?** See [How to upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](how-to/migrate-rtk-to-syncdb.md).
+
+## Testing
+
+- [E2E testing guide](testing/e2e.md) — the test tiers, smoke conventions, Playwright and
+  Maestro specs, and one page per package on how it is e2e-tested
+- [Regression suites](regression/README.md) — the manual cases a person walks before a release,
+  one file per area
+
+## User guide
+
+- [User guide](user-guide/README.md) — one page per example-app feature, in end-user words,
+  for chat agents answering "how do I…" questions
 
 ## Quick links
 

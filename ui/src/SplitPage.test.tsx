@@ -1,7 +1,26 @@
-import {afterAll, afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  type Mock,
+  mock,
+  spyOn,
+} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
-import {forwardRef, type ReactElement, type ReactNode, type Ref, useImperativeHandle} from "react";
-import {type ScaledSize, ScrollView, StyleSheet, useWindowDimensions, View} from "react-native";
+import type {ReactElement} from "react";
+import {
+  type ScaledSize,
+  ScrollView,
+  type StyleProp,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from "react-native";
+import * as swiperFlatListModule from "react-native-swiper-flatlist";
 import type {ReactTestInstance} from "react-test-renderer";
 
 import {getRounding, getSpacing} from "./Common";
@@ -13,25 +32,13 @@ interface PagerScrollOptions {
   index: number;
 }
 
-const swiperScrollToIndex = mock((_options?: PagerScrollOptions) => {});
-
-// Mock react-native-swiper-flatlist. The host tree stays a View with testID "swiper-flatlist"
-// so existing snapshots keep matching. The ref exposes scrollToIndex for the opt-in pager tests.
-mock.module("react-native-swiper-flatlist", () => ({
-  SwiperFlatList: forwardRef(
-    (
-      {children, style}: {children?: ReactNode; style?: object},
-      ref: Ref<{scrollToIndex: (options: PagerScrollOptions) => void}>
-    ) => {
-      useImperativeHandle(ref, () => ({scrollToIndex: swiperScrollToIndex}));
-      return (
-        <View style={style} testID="swiper-flatlist">
-          {children}
-        </View>
-      );
-    }
-  ),
-}));
+// The package preload (bunSetup.ts) mocks react-native-swiper-flatlist as a View with testID
+// "swiper-flatlist" and exports the scrollToIndex spy its ref exposes.
+const swiperScrollToIndex = (
+  swiperFlatListModule as unknown as {
+    scrollToIndexMock: Mock<(options?: PagerScrollOptions) => void>;
+  }
+).scrollToIndexMock;
 
 type WindowDimensionsImpl = () => ScaledSize;
 type MockableUseWindowDimensions = WindowDimensionsImpl & {
@@ -53,11 +60,13 @@ const setWindowWidth = (width: number): (() => void) => {
   };
 };
 
-const styleWidth = (style: unknown): unknown => StyleSheet.flatten(style)?.width;
+const styleWidth = (style: StyleProp<ViewStyle>): ViewStyle["width"] =>
+  StyleSheet.flatten(style)?.width;
 
-const styleBorderRadius = (style: unknown): unknown => StyleSheet.flatten(style)?.borderRadius;
+const styleBorderRadius = (style: StyleProp<ViewStyle>): ViewStyle["borderRadius"] =>
+  StyleSheet.flatten(style)?.borderRadius;
 
-const flattenedStyle = (style: unknown): ReturnType<typeof StyleSheet.flatten> => {
+const flattenedStyle = (style: StyleProp<ViewStyle>): ViewStyle => {
   return StyleSheet.flatten(style) ?? {};
 };
 
@@ -1102,7 +1111,7 @@ describe("SplitPage", () => {
     const expectClippingPane = (
       pane: ReactTestInstance,
       borderRadius: number,
-      width: number | string
+      width: ViewStyle["width"]
     ): void => {
       const style = flattenedStyle(pane.props.style);
       expect(style.borderRadius).toBe(borderRadius);

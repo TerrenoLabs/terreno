@@ -1,7 +1,7 @@
 import {afterEach, describe, expect, it, jest, mock} from "bun:test";
 import {readdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
-import type {Block} from "@terreno/blocks";
+import type {Block, BlocksDocument} from "@terreno/blocks";
 import {act, fireEvent, waitFor} from "@testing-library/react-native";
 import {setStringAsync} from "expo-clipboard";
 import {ActivityIndicator, Image as NativeImage, ScrollView, StyleSheet} from "react-native";
@@ -13,6 +13,11 @@ import {sharedResponsiveBreakpointStore} from "../ResponsiveBreakpoint";
 import {renderWithTheme} from "../test-utils";
 import {BlocksView} from "./BlocksView";
 import {renderBlock} from "./blockRenderers";
+
+/** Treats a document assembled field by field, as untyped model JSON arrives, as a BlocksDocument. */
+const untypedDocument = (fields: Record<string, unknown>): BlocksDocument => {
+  return fields as unknown as BlocksDocument;
+};
 
 const ACTIONS = `v: 1
 datasets:
@@ -357,8 +362,9 @@ blocks:
     data: lamb
 `;
     type StyledNode = {parent: StyledNode | null; props: {style?: unknown}};
-    const flatStyle = (node: StyledNode): {textAlign?: string; width?: number} =>
+    const flatStyle = (node: StyledNode): {height?: number; textAlign?: string; width?: number} =>
       (StyleSheet.flatten(node.props.style as never) ?? {}) as {
+        height?: number;
         textAlign?: string;
         width?: number;
       };
@@ -771,9 +777,10 @@ blocks:
     block.type = "html";
     block.title = "Invoice preview";
     block.html = "<h1>Invoice #1042</h1>";
-    const document: Record<string, unknown> = {};
-    document.v = 1;
-    document.blocks = [block];
+    const fields: Record<string, unknown> = {};
+    fields.v = 1;
+    fields.blocks = [block];
+    const document = untypedDocument(fields);
 
     const off = renderWithTheme(<BlocksView document={document} />);
     expect(off.getByText("HTML preview is turned off.")).toBeTruthy();
@@ -804,9 +811,10 @@ blocks:
     details.type = "details";
     details.title = "Invoice notes";
     details.text = "Twelve seats, billed monthly.";
-    const document: Record<string, unknown> = {};
-    document.v = 1;
-    document.blocks = [callout, picture, details];
+    const fields: Record<string, unknown> = {};
+    fields.v = 1;
+    fields.blocks = [callout, picture, details];
+    const document = untypedDocument(fields);
 
     const {getByText} = renderWithTheme(<BlocksView document={document} />);
 
@@ -821,9 +829,10 @@ blocks:
     block.type = "image";
     block.alt = "Pixel";
     block.src = "https://evil.test/pixel.png";
-    const document: Record<string, unknown> = {};
-    document.v = 1;
-    document.blocks = [block];
+    const fields: Record<string, unknown> = {};
+    fields.v = 1;
+    fields.blocks = [block];
+    const document = untypedDocument(fields);
 
     const blocked = renderWithTheme(<BlocksView document={document} />);
     expect(blocked.getByText(/IMAGE_HOST_NOT_ALLOWED|allowed host/)).toBeTruthy();

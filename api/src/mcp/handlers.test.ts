@@ -1,4 +1,4 @@
-import {beforeEach, describe, it, spyOn} from "bun:test";
+import {afterEach, beforeEach, describe, it, spyOn} from "bun:test";
 import {assert} from "chai";
 import mongoose, {Schema} from "mongoose";
 
@@ -143,6 +143,29 @@ describe("MCP handlers", () => {
     it("returns not found when delete gets a non-string id", async () => {
       const result = await handleDelete(entry, {id: null}, asUser(owner));
       assert.equal(errorText(result), "Document null not found");
+    });
+  });
+
+  describe("excludeFields prototype safety", () => {
+    afterEach(() => {
+      delete (Object.prototype as Record<string, unknown>).__terrenoProbe;
+    });
+
+    it("does not delete from Object.prototype through a __proto__ exclude path", async () => {
+      Object.defineProperty(Object.prototype, "__terrenoProbe", {
+        configurable: true,
+        enumerable: false,
+        value: "kept",
+        writable: true,
+      });
+      const doc = await NoteModel.create({ownerId: owner._id, title: "Mine"});
+      const redacted: MCPRegistryEntry = {
+        ...entry,
+        config: {...entry.config, excludeFields: ["__proto__.__terrenoProbe"]},
+      };
+      const result = await handleRead(redacted, {id: doc._id.toString()}, asUser(owner));
+      assert.notEqual(result.isError, true);
+      assert.equal(({} as Record<string, unknown>).__terrenoProbe, "kept");
     });
   });
 

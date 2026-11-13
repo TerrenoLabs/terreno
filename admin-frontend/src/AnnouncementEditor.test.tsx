@@ -1,14 +1,17 @@
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use type-erased admin model API doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
-import {beforeEach, describe, expect, it, mock} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, mock} from "bun:test";
 import {SelectField} from "@terreno/ui";
 import {act, fireEvent} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi} from "./types";
+import {AdminProvider} from "./AdminProvider";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
 
 interface State {
   formData: Record<string, unknown> | null;
@@ -29,63 +32,76 @@ let updateImpl: (args: unknown) => Promise<unknown> = async (a) => ({
 let publishImpl: (id: string) => Promise<unknown> = async () => ({data: {status: "published"}});
 let archiveImpl: (id: string) => Promise<unknown> = async () => ({data: {status: "archived"}});
 
-const mutationSpecs: unknown[] = [];
-const querySpecs: unknown[] = [];
+const requests: Array<{method: string; url: string}> = [];
 interface ConfigState {
   data: {defaultAcknowledgementPolicy?: string} | undefined;
-  error: unknown;
+  error: boolean;
   isLoading: boolean;
 }
-const configState: ConfigState = {data: undefined, error: null, isLoading: false};
+const configState: ConfigState = {data: undefined, error: false, isLoading: false};
+const pendingConfig: Array<() => void> = [];
+const originalFetch = globalThis.fetch;
 
-const makeApi = () => ({
-  injectEndpoints: ({endpoints}: {endpoints: (b: unknown) => Record<string, unknown>}) => {
-    endpoints({
-      mutation: (spec: Record<string, unknown>) => {
-        if (typeof spec?.query === "function") {
-          mutationSpecs.push(spec.query("announcement-id"));
-        }
-        return spec;
-      },
-      query: (spec: Record<string, unknown>) => {
-        if (typeof spec?.query === "function") {
-          querySpecs.push(spec.query());
-        }
-        return spec;
-      },
-    });
-    return {
-      useAnnouncementConfigQuery: (_arg: unknown, opts?: {skip?: boolean}) => {
-        if (opts?.skip) {
-          return {data: undefined, error: null, isLoading: false};
-        }
-        return {
-          data: configState.data,
-          error: configState.error,
-          isLoading: configState.isLoading,
-        };
-      },
-      useArchiveAnnouncementMutation: () => [
-        (id: string) => ({
-          unwrap: async () => {
-            archiveCalls.push(id);
-            return archiveImpl(id);
-          },
-        }),
-        {isLoading: false},
-      ],
-      usePublishAnnouncementMutation: () => [
-        (id: string) => ({
-          unwrap: async () => {
-            publishCalls.push(id);
-            return publishImpl(id);
-          },
-        }),
-        {isLoading: false},
-      ],
-    };
-  },
-});
+const jsonResponse = (body: unknown, status = 200): Response =>
+  new Response(JSON.stringify(body), {headers: {"Content-Type": "application/json"}, status});
+
+const respondConfig = (): Response => {
+  if (configState.error) {
+    return jsonResponse({title: "config unavailable"}, 500);
+  }
+  return jsonResponse({data: configState.data ?? {}});
+};
+
+const respondAction = async (
+  impl: (id: string) => Promise<unknown>,
+  calls: string[],
+  id: string
+): Promise<Response> => {
+  calls.push(id);
+  try {
+    return jsonResponse(await impl(id));
+  } catch (error) {
+    return jsonResponse({title: (error as Error).message}, 500);
+  }
+};
+
+const installFetch = (): void => {
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    requests.push({method, url: String(url)});
+    if (url === "/announcements/config") {
+      if (configState.isLoading) {
+        return await new Promise<Response>((resolve) => {
+          pendingConfig.push(() => resolve(respondConfig()));
+        });
+      }
+      return respondConfig();
+    }
+    const action = /^\/announcements\/([^/]+)\/(publish|archive)$/.exec(String(url));
+    if (method === "POST" && action) {
+      const [, id, verb] = action;
+      return verb === "publish"
+        ? respondAction(publishImpl, publishCalls, id as string)
+        : respondAction(archiveImpl, archiveCalls, id as string);
+    }
+    return jsonResponse({title: "not found"}, 404);
+  }) as typeof fetch;
+};
+
+const releaseConfig = (): void => {
+  for (const resolve of pendingConfig.splice(0)) {
+    resolve();
+  }
+};
+
+type EditorProps = React.ComponentProps<typeof AnnouncementEditor>;
+
+/** AnnouncementEditor bound to the admin fetch client. */
+const Editor: React.FC<EditorProps> = (props) => (
+  <AdminProvider apiBase="/admin" credentials="same-origin" routeBase="/admin">
+    <AnnouncementEditor {...props} />
+  </AdminProvider>
+);
 
 import {AnnouncementEditor} from "./AnnouncementEditor";
 
@@ -98,8 +114,8 @@ const press = async (el: ReactTestInstance): Promise<void> => {
 
 describe("AnnouncementEditor", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useCreateMutation: () => [
         (body: unknown) => ({
           unwrap: async () => {
@@ -131,30 +147,31 @@ describe("AnnouncementEditor", () => {
     updateCalls.length = 0;
     publishCalls.length = 0;
     archiveCalls.length = 0;
-    mutationSpecs.length = 0;
-    querySpecs.length = 0;
+    requests.length = 0;
+    pendingConfig.length = 0;
     configState.data = undefined;
-    configState.error = null;
+    configState.error = false;
     configState.isLoading = false;
+    installFetch();
     createImpl = async (b) => ({_id: "new-id", ...(b as Record<string, unknown>)});
     updateImpl = async (a) => ({_id: (a as Record<string, unknown>).id});
     publishImpl = async () => ({data: {status: "published"}});
     archiveImpl = async () => ({data: {status: "archived"}});
   });
 
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   it("renders loading state in edit mode", () => {
     state.isFormLoading = true;
-    const {toJSON} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {toJSON} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     expect(toJSON()).toBeDefined();
   });
 
   it("survives the loading → loaded transition without a hook-order error", async () => {
     state.isFormLoading = true;
-    const {rerender, getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {rerender, getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await act(async () => {
       state.isFormLoading = false;
       state.formData = {
@@ -167,33 +184,25 @@ describe("AnnouncementEditor", () => {
         title: "Loaded",
         version: 1,
       };
-      rerender(
-        <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-      );
+      rerender(<Editor baseUrl="/admin" id="a1" />);
     });
     expect(getByTestId("announcement-title-input")).toBeDefined();
   });
 
   it("renders create mode with default values", () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     expect(getByTestId("announcement-title-input")).toBeDefined();
   });
 
   it("fails validation without title or body", async () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await press(getByTestId("announcement-save-button"));
     expect(createCalls.length).toBe(0);
   });
 
   it("creates an announcement on save", async () => {
     const onSave = mock((_: unknown) => undefined);
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" onSave={onSave} />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" onSave={onSave} />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Hello");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "World");
@@ -217,9 +226,7 @@ describe("AnnouncementEditor", () => {
       title: "Draft",
       version: 1,
     };
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-save-button"));
     expect(updateCalls.length).toBe(1);
     expect((updateCalls[0] as Record<string, unknown>).id).toBe("a1");
@@ -230,26 +237,20 @@ describe("AnnouncementEditor", () => {
 
   it("publishes a draft announcement", async () => {
     state.formData = {body: "B", status: "draft", title: "T"};
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-publish-button"));
     expect(publishCalls).toEqual(["a1"]);
   });
 
   it("archives a published announcement", async () => {
     state.formData = {body: "B", status: "published", title: "T", version: 1};
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-archive-button"));
     expect(archiveCalls).toEqual(["a1"]);
   });
 
   it("rejects invalid audience JSON", async () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -260,24 +261,23 @@ describe("AnnouncementEditor", () => {
     expect(createCalls.length).toBe(0);
   });
 
-  it("injects publish and archive mutation URLs", () => {
-    renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
-    const urls = mutationSpecs.map((spec) => (spec as {url?: string}).url);
-    expect(urls).toContain("/announcements/announcement-id/publish");
-    expect(urls).toContain("/announcements/announcement-id/archive");
+  it("posts publish and archive to the announcement action URLs", async () => {
+    state.formData = {body: "B", status: "draft", title: "T"};
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
+    await press(getByTestId("announcement-publish-button"));
+    state.formData = {body: "B", status: "published", title: "T", version: 1};
+    const archiveView = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
+    await press(archiveView.getByTestId("announcement-archive-button"));
+    const posts = requests.filter((request) => request.method === "POST");
+    expect(posts.map((request) => request.url)).toEqual([
+      "/announcements/a1/publish",
+      "/announcements/a1/archive",
+    ]);
   });
 
   it("invokes onCancel from the cancel button", async () => {
     const onCancel = mock(() => undefined);
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor
-        api={makeApi() as unknown as AdminApi}
-        baseUrl="/admin"
-        onCancel={onCancel}
-      />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" onCancel={onCancel} />);
     await press(getByTestId("announcement-cancel-button"));
     expect(onCancel).toHaveBeenCalled();
   });
@@ -289,22 +289,16 @@ describe("AnnouncementEditor", () => {
       title: "Published title",
       version: 3,
     };
-    const published = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const published = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     expect(published.getByText("Published (v3)")).toBeDefined();
 
     state.formData = {body: "Body", status: "archived", title: "Archived title", version: 2};
-    const archived = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a2" />
-    );
+    const archived = renderWithTheme(<Editor baseUrl="/admin" id="a2" />);
     expect(archived.getByText("Archived")).toBeDefined();
   });
 
   it("creates announcements with a primary action", async () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -328,9 +322,7 @@ describe("AnnouncementEditor", () => {
     createImpl = async () => {
       throw new Error("create failed");
     };
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -345,9 +337,7 @@ describe("AnnouncementEditor", () => {
       throw new Error("archive failed");
     };
     state.formData = {body: "B", status: "published", title: "T", version: 1};
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-archive-button"));
     expect(archiveCalls).toEqual(["a1"]);
   });
@@ -357,17 +347,13 @@ describe("AnnouncementEditor", () => {
       throw new Error("publish failed");
     };
     state.formData = {body: "B", status: "draft", title: "T"};
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-publish-button"));
     expect(publishCalls).toEqual(["a1"]);
   });
 
   it("fails validation when the body is empty", async () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title only");
       await new Promise((r) => setTimeout(r, 50));
@@ -377,9 +363,7 @@ describe("AnnouncementEditor", () => {
   });
 
   it("rejects a partial primary action", async () => {
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -391,9 +375,7 @@ describe("AnnouncementEditor", () => {
   });
 
   it("updates delivery platforms through the multiselect field", async () => {
-    const {getByLabelText, getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByLabelText, getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.press(getByLabelText("iOS"));
       await new Promise((r) => setTimeout(r, 50));
@@ -409,9 +391,7 @@ describe("AnnouncementEditor", () => {
   });
 
   it("requires at least one platform before save", async () => {
-    const {getByLabelText, getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByLabelText, getByTestId} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "Title");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -436,25 +416,32 @@ describe("AnnouncementEditor", () => {
       status: "draft",
       title: "Scheduled",
     };
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await press(getByTestId("announcement-save-button"));
     expect(updateCalls.length).toBe(1);
     expect(getByTestId("announcement-title-input")).toBeDefined();
   });
 
-  it("wires the config query to GET /announcements/config", () => {
-    renderWithTheme(<AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />);
-    assert.isAtLeast(querySpecs.length, 1);
-    assert.deepEqual(querySpecs[0], {method: "GET", url: "/announcements/config"});
+  it("wires the config query to GET /announcements/config", async () => {
+    renderWithTheme(<Editor baseUrl="/admin" />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.deepEqual(requests[0], {method: "GET", url: "/announcements/config"});
+  });
+
+  it("skips the config query in edit mode", async () => {
+    state.formData = {body: "B", status: "draft", title: "T"};
+    renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    assert.lengthOf(requests, 0);
   });
 
   it("pre-fills acknowledgement policy from plugin config on create", async () => {
     configState.data = {defaultAcknowledgementPolicy: "required"};
-    const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
     });
@@ -465,10 +452,8 @@ describe("AnnouncementEditor", () => {
   });
 
   it("defaults acknowledgement policy to dismiss-only when config fetch fails", async () => {
-    configState.error = new Error("config unavailable");
-    const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    configState.error = true;
+    const {UNSAFE_root} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
     });
@@ -480,9 +465,7 @@ describe("AnnouncementEditor", () => {
 
   it("does not overwrite user-changed acknowledgement policy when config arrives late", async () => {
     configState.isLoading = true;
-    const {UNSAFE_root, rerender} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {UNSAFE_root, rerender} = renderWithTheme(<Editor baseUrl="/admin" />);
     const policySelect = () =>
       UNSAFE_root.findAllByType(SelectField).find(
         (node: ReactTestInstance) =>
@@ -495,7 +478,8 @@ describe("AnnouncementEditor", () => {
     configState.isLoading = false;
     configState.data = {defaultAcknowledgementPolicy: "dismiss-only"};
     await act(async () => {
-      rerender(<AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />);
+      releaseConfig();
+      rerender(<Editor baseUrl="/admin" />);
       await new Promise((r) => setTimeout(r, 50));
     });
     assert.equal(policySelect()?.props.value, "required");
@@ -514,9 +498,7 @@ describe("AnnouncementEditor", () => {
       title: "Staff banner",
       version: 1,
     };
-    const {UNSAFE_root} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {UNSAFE_root} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
     });
@@ -538,9 +520,7 @@ describe("AnnouncementEditor", () => {
 
   it("persists structured targeting fields on create without requiresAcknowledgement", async () => {
     configState.data = {defaultAcknowledgementPolicy: "dismiss-only"};
-    const {getByTestId, UNSAFE_root} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" />
-    );
+    const {getByTestId, UNSAFE_root} = renderWithTheme(<Editor baseUrl="/admin" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-title-input"), "New");
       fireEvent.changeText(getByTestId("announcement-body-input-input"), "Body");
@@ -583,9 +563,7 @@ describe("AnnouncementEditor", () => {
       title: "Draft",
       version: 1,
     };
-    const {getByTestId} = renderWithTheme(
-      <AnnouncementEditor api={makeApi() as unknown as AdminApi} baseUrl="/admin" id="a1" />
-    );
+    const {getByTestId} = renderWithTheme(<Editor baseUrl="/admin" id="a1" />);
     await act(async () => {
       fireEvent.changeText(getByTestId("announcement-min-build-input"), "");
       await new Promise((r) => setTimeout(r, 50));

@@ -1,4 +1,5 @@
 import {AccordionConfiguration} from "@story-config/Accordion.config";
+import {AccountSecurityScreenConfiguration} from "@story-config/AccountSecurityScreen.config";
 import {ActionSheetConfiguration} from "@story-config/ActionSheet.config";
 import {AddressFieldConfiguration} from "@story-config/AddressField.config";
 import {AIRequestExplorerConfiguration} from "@story-config/AIRequestExplorer.config";
@@ -38,6 +39,7 @@ import {ErrorBoundaryConfiguration} from "@story-config/ErrorBoundary.config";
 import {ErrorPageConfiguration} from "@story-config/ErrorPage.config";
 import {FieldConfiguration} from "@story-config/Field.config";
 import {FilePickerButtonConfiguration} from "@story-config/FilePickerButton.config";
+import {FormContainerConfiguration} from "@story-config/FormContainer.config";
 import {GPTChatConfiguration} from "@story-config/GPTChat.config";
 import {GPTMemoryModalConfiguration} from "@story-config/GPTMemoryModal.config";
 import {HeadingConfiguration} from "@story-config/Heading.config";
@@ -51,6 +53,8 @@ import {InfoModalIconConfiguration} from "@story-config/InfoModalIcon.config";
 import {InfoTooltipButtonConfiguration} from "@story-config/InfoTooltipButton.config";
 import {LineChartConfiguration} from "@story-config/LineChart.config";
 import {LinkConfiguration} from "@story-config/Link.config";
+import {LinkedAccountsCardConfiguration} from "@story-config/LinkedAccountsCard.config";
+import {ListDetailLayoutConfiguration} from "@story-config/ListDetailLayout.config";
 import {LoginScreenConfiguration} from "@story-config/LoginScreen.config";
 import {MarkdownEditorConfiguration} from "@story-config/MarkdownEditor.config";
 import {MarkdownEditorFieldConfiguration} from "@story-config/MarkdownEditorField.config";
@@ -58,12 +62,16 @@ import {MarkdownViewConfiguration} from "@story-config/MarkdownView.config";
 import {MobileAddressAutocompleteConfiguration} from "@story-config/MobileAddressAutocomplete.config";
 import {ModalConfiguration} from "@story-config/Modal.config";
 import {MultiselectFieldConfiguration} from "@story-config/MultiselectField.config";
+import {NativeModulesConfiguration} from "@story-config/NativeModules.config";
 import {NumberFieldConfiguration} from "@story-config/NumberField.config";
 import {NumberPickerActionSheetConfiguration} from "@story-config/NumberPickerActionSheet.config";
 import {OAuthButtonsConfiguration} from "@story-config/OAuthButtons.config";
 import {OfflineBannerConfiguration} from "@story-config/OfflineBanner.config";
+import {OtpFieldConfiguration} from "@story-config/OtpField.config";
 import {PageConfiguration} from "@story-config/Page.config";
 import {PaginationConfiguration} from "@story-config/Pagination.config";
+import {PasskeysCardConfiguration} from "@story-config/PasskeysCard.config";
+import {PasswordCardConfiguration} from "@story-config/PasswordCard.config";
 import {PasswordFieldConfiguration} from "@story-config/PasswordField.config";
 import {PasswordRequirementsConfiguration} from "@story-config/PasswordRequirements.config";
 import {PhoneNumberConfiguration} from "@story-config/PhoneNumberField.config";
@@ -75,6 +83,7 @@ import {SectionDividerConfiguration} from "@story-config/SectionDivider.config";
 import {SegmentedControlConfiguration} from "@story-config/SegmentedControl.config";
 import {SelectBadgeConfiguration} from "@story-config/SelectBadge.config";
 import {SelectFieldConfiguration} from "@story-config/SelectField.config";
+import {SessionsCardConfiguration} from "@story-config/SessionsCard.config";
 import {
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
@@ -86,6 +95,7 @@ import {SignatureFieldConfiguration} from "@story-config/SignatureField.config";
 import {SignUpScreenConfiguration} from "@story-config/SignUpScreen.config";
 import {SimpleAskCardConfiguration} from "@story-config/SimpleAskCard.config";
 import {SimpleContentConfiguration} from "@story-config/SimpleContent.config";
+import {SkeletonConfiguration} from "@story-config/Skeleton.config";
 import {SliderConfiguration} from "@story-config/Slider.config";
 import {SocialLoginButtonConfiguration} from "@story-config/SocialLoginButton.config";
 import {SparklineChartConfiguration} from "@story-config/SparklineChart.config";
@@ -109,6 +119,8 @@ import {ThemeConfiguration} from "@story-config/Theme.config";
 import {ThumbsUpDownFeedbackConfiguration} from "@story-config/ThumbsUpDownFeedback.config";
 import {ToastConfiguration} from "@story-config/Toast.config";
 import {TooltipConfiguration} from "@story-config/Tooltip.config";
+import {TwoFactorChallengeScreenConfiguration} from "@story-config/TwoFactorChallengeScreen.config";
+import {TwoFactorSettingsCardConfiguration} from "@story-config/TwoFactorSettingsCard.config";
 import {TypedSignatureFieldConfiguration} from "@story-config/TypedSignatureField.config";
 import {UnifiedAddressAutoCompleteFieldConfiguration} from "@story-config/UnifiedAddressAutoCompleteField.config";
 import {UpgradeRequiredScreenConfiguration} from "@story-config/UpgradeRequiredScreen.config";
@@ -161,6 +173,8 @@ interface DemoConfigurationBase {
   // noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   // biome-ignore lint/suspicious/noExplicitAny: each story-config supplies a demo with its own concrete prop shape (e.g. HeadingProps & {text: string}). A narrower contract like Record<string, unknown> would reject those narrower functions due to parameter contravariance.
   demo: (props: any) => React.ReactElement;
+  // Hidden configs stay routable (deep links, dev mode) but are left out of catalog lists.
+  hidden?: boolean;
   demoOptions: {
     // On large screens, "md" will either generate a smaller box with controls to the right
     // or just a small box. On small screens, it will be full width with controls below.
@@ -284,6 +298,7 @@ const OpenAPIContextConfiguration: DemoConfigurationBase = {
 
 const Config: DemoConfigurationBase[] = [
   AccordionConfiguration,
+  AccountSecurityScreenConfiguration,
   ActionSheetConfiguration,
   AIRequestExplorerConfiguration,
   AiSuggestionBoxConfiguration,
@@ -324,6 +339,7 @@ const Config: DemoConfigurationBase[] = [
   ErrorPageConfiguration,
   FieldConfiguration,
   FilePickerButtonConfiguration,
+  FormContainerConfiguration,
   GPTChatConfiguration,
   GPTMemoryModalConfiguration,
   HeadingConfiguration,
@@ -337,6 +353,8 @@ const Config: DemoConfigurationBase[] = [
   InfoTooltipButtonConfiguration,
   LineChartConfiguration,
   LinkConfiguration,
+  LinkedAccountsCardConfiguration,
+  ListDetailLayoutConfiguration,
   LoginScreenConfiguration,
   MarkdownEditorConfiguration,
   MarkdownEditorFieldConfiguration,
@@ -346,13 +364,17 @@ const Config: DemoConfigurationBase[] = [
   ModalConfiguration,
   MobileAddressAutocompleteConfiguration,
   MultiselectFieldConfiguration,
+  NativeModulesConfiguration,
   NumberFieldConfiguration,
   NumberPickerActionSheetConfiguration,
   OAuthButtonsConfiguration,
   OfflineBannerConfiguration,
+  OtpFieldConfiguration,
   OpenAPIContextConfiguration,
   PageConfiguration,
   PaginationConfiguration,
+  PasskeysCardConfiguration,
+  PasswordCardConfiguration,
   PasswordFieldConfiguration,
   PasswordRequirementsConfiguration,
   PopoverConfiguration,
@@ -364,6 +386,7 @@ const Config: DemoConfigurationBase[] = [
   SegmentedControlConfiguration,
   SelectBadgeConfiguration,
   SelectFieldConfiguration,
+  SessionsCardConfiguration,
   SidebarNavigationConfiguration,
   SidebarNavigationExpoRouterConfiguration,
   SideDrawerConfiguration,
@@ -373,6 +396,7 @@ const Config: DemoConfigurationBase[] = [
   SignatureConfiguration,
   SignatureCaptureFieldConfiguration,
   SignatureFieldConfiguration,
+  SkeletonConfiguration,
   SliderConfiguration,
   SocialLoginButtonConfiguration,
   SparklineChartConfiguration,
@@ -396,6 +420,8 @@ const Config: DemoConfigurationBase[] = [
   ThumbsUpDownFeedbackConfiguration,
   ToastConfiguration,
   TooltipConfiguration,
+  TwoFactorChallengeScreenConfiguration,
+  TwoFactorSettingsCardConfiguration,
   TypedSignatureFieldConfiguration,
   UnifiedAddressAutoCompleteFieldConfiguration,
   UpgradeRequiredScreenConfiguration,
@@ -411,6 +437,9 @@ export const DemoConfig: DemoConfiguration[] = Config.map((c) => ({
     .flatMap((mod) => mod.children ?? [])
     .find((json) => json.name === c.interfaceName),
 })).sort((a, b) => a.name.localeCompare(b.name));
+
+/** Configs shown in the demo and dev catalog lists (hidden diagnostics pages excluded). */
+export const ListedDemoConfig: DemoConfiguration[] = DemoConfig.filter((c) => !c.hidden);
 
 const normalizeComponentName = (name: string): string =>
   name.trim().toLowerCase().replace(/\s+/g, " ");

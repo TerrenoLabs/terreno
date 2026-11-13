@@ -6,9 +6,9 @@ Understanding how authentication works in @terreno/api — Better Auth sessions 
 
 **Better Auth is the default path** for new Terreno apps. It provides session-based authentication with MongoDB storage, built-in social OAuth (Google, GitHub, Apple), and clean integration with `@terreno/syncdb` (`betterAuthAdapter`, `RealtimeApp` socket sessions).
 
-Set `AUTH_PROVIDER=better-auth` and register `BetterAuthApp` on the server. On the client, use `createBetterAuthClient` + `generateBetterAuthSlice` from `@terreno/rtk` for session Redux state, then wire `betterAuthAdapter` into `createSyncDb`.
+Set `AUTH_PROVIDER=better-auth` and register `BetterAuthApp` on the server. On the client, use `createBetterAuthClient` and `SessionProvider` / `useSession()` from `@terreno/syncdb/auth` for session state (React context, no Redux), then wire `betterAuthAdapter` into `createSyncDb` and the API client.
 
-**JWT/Passport (legacy)** remains supported through the current major release line for existing deployments. It uses stateless tokens, Passport strategies (email/password, GitHub OAuth, anonymous), and manual token refresh via `@terreno/rtk`. New projects should not start on JWT unless they have a specific requirement (custom token contracts, non-cookie clients, or a phased migration).
+**JWT/Passport (legacy)** remains supported through the current major release line for existing deployments. It uses stateless tokens, Passport strategies (email/password, GitHub OAuth, anonymous), and client-side token refresh via `jwtAuthAdapter` from `@terreno/syncdb/auth`. New projects should not start on JWT unless they have a specific requirement (custom token contracts, non-cookie clients, or a phased migration).
 
 Both systems can run in parallel during migration (`AUTH_PROVIDER` selects the primary path; legacy JWT routes stay available).
 
@@ -23,7 +23,7 @@ Both systems can run in parallel during migration (`AUTH_PROVIDER` selects the p
 | `@terreno/syncdb` local-first data | Non-cookie API clients only |
 | Socket sessions via `RealtimeApp` | Gradual migration in progress |
 
-**Setup:** [Configure Better Auth](../how-to/configure-better-auth.md). **Data layer:** migrate auth before or with syncdb — see [Migrate from RTK to syncdb](../how-to/migrate-rtk-to-syncdb.md) §7.
+**Setup:** [Configure Better Auth](../how-to/configure-better-auth.md). **Data layer:** migrate auth before or with syncdb — see [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md) §3–4.
 
 ## Authentication Strategies
 
@@ -37,10 +37,54 @@ Modern session-based authentication with built-in social OAuth support.
 3. Backend redirects to OAuth provider or validates credentials
 4. Better Auth creates session in MongoDB
 5. Frontend receives a session cookie (web, default), a bearer session token (native), or, on web with `webAuth: "bearer"`, a bearer token from the `set-auth-token` header. Bearer on web is the option when the web app and the API are on different sites, where browsers block the third-party session cookie. See [Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites)
-6. On the first authenticated request or socket handshake, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`). An email alone does not prove someone owns an existing account, so an existing app `User` with the same email is linked only after Better Auth verifies that email, and never when the row already belongs to another Better Auth account. Linking removes a legacy password the row never proved with a verified email. `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
+6. As the session is created, Terreno looks up the app `User` by `betterAuthId` and creates it if missing (`syncBetterAuthUser`), recording the OAuth provider in `oauthProvider`. An email alone does not prove someone owns an existing account, so a Better Auth user claims an existing `User` with the same email only when Better Auth verified that email or its sign-up password matches that `User`'s passport hash; otherwise the sign-up answers 409 "Verify your email to use this account" before any Better Auth user is created. A `User` that already belongs to another Better Auth account is never relinked (409 `ACCOUNT_ALREADY_EXISTS`). Linking through a verified email removes a legacy password the row never proved with a verified email, and bumps `tokenEpoch`. See [Account linking](account-linking.md). The first authenticated request or socket handshake retries the sync if it did not run. `RealtimeApp` uses the registered `BetterAuthApp` instance for socket sessions without extra wiring
 7. `req.user` is that app document for subsequent `modelRouter` permissions. A session whose app `User` has `disabled: true` no longer authenticates: `req.user` stays unset, so protected routes answer 401 and disabling an account ends its live sessions. Better Auth's own routes, such as sign-out, still work
 
 Email/password create omits `oauthProvider`. Apps that never use social login can keep `strict: "throw"` without declaring that field. OAuth create sets `oauthProvider` and the User schema must declare it.
+
+#### Challenges without cookies
+
+Bearer mode sends no cookies, but Better Auth keeps three short-lived values in signed cookies:
+the two-factor challenge set when a sign-in needs a second factor, the trust-device token set
+when the user ticks "trust this device", and the passkey challenge set by the WebAuthn options
+endpoints. A cross-site bearer client never sends them back, so without help it could not finish
+a 2FA or passkey sign-in.
+
+When `twoFactor` or `passkey` is configured, Terreno adds a plugin that carries those cookies in
+the `X-Terreno-Auth-Challenge` header instead:
+
+1. A bearer client sends the header on every `{basePath}/two-factor/*`, `/passkey/*`, and
+   `/sign-in/*` call. It sends `-` when it holds nothing, which opts it in.
+2. For a request that sent the header, the response copies each challenge cookie it sets into
+   the header as `name=value` pairs (URL search params), still signed with the auth secret. Only
+   values that response sets are copied, never cookies the request already had. An expired
+   cookie comes back with an empty value. A `rememberMe: false` sign-in's `dont_remember` cookie
+   rides along with the two-factor challenge, so the verified session stays short. The header is
+   added to `Access-Control-Expose-Headers`, the same way `bearer()` exposes `set-auth-token`.
+   A sign-in answered with a two-factor challenge loses its `set-auth-token`, which named the
+   session two-factor had just deleted.
+3. On those paths the server turns the header back into cookies before Better Auth reads them.
+   A real cookie always wins, and only the challenge cookies (plus `dont_remember`) are accepted. The header can
+   never set a session cookie, and a tampered value fails Better Auth's signature check (the 2FA
+   verify answers 401, a passkey verify 400 `CHALLENGE_NOT_FOUND`, and a tampered trust value
+   just asks for the second factor).
+4. `@terreno/syncdb/auth`'s bearer mode stores the header under `${storagePrefix}_auth_challenge` in the same
+   `bearerStorage` as the bearer token. It never stores a token from a response that asks for a
+   second factor. It drops the 2FA challenge and `dont_remember` after a successful verify, and
+   everything but the trust-device value on sign-out. The trust-device value stays until the server
+   expires it or `trustDeviceDays` runs out, so the device stays trusted across sign-outs.
+
+Clients that do not send the header (cookie mode, native) never receive it, so their challenge
+cookies stay httpOnly. That holds only for requests the page's own code does not send with the
+header: a script on the page that adds it to a sign-in or verify call can read the challenge
+values that call's response sets.
+
+Exposure: in bearer mode the trust-device token lives in web storage beside the bearer token.
+Any XSS on the frontend's origin can read both, and a stolen trust value skips the second factor
+for that account until it expires (it is still useless without the password). Apps that handle
+PHI should pass `bearerStorage: window.sessionStorage`, which ends trust with the tab, and serve
+a strict Content-Security-Policy. See
+[Frontend and API on different sites](../how-to/configure-better-auth.md#frontend-and-api-on-different-sites).
 
 **Key properties:**
 - Session-based (cookies / bearer session) vs. stateless JWT
@@ -103,7 +147,7 @@ short-lived cookie. The callback rejects a response without matching state.
 
 ### MCP service tokens (opt-in, `/mcp` only)
 
-Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) that cannot hold a session cookie. `TerrenoApp` must set `mcpServiceTokens`. Users mint keys from `POST /mcp/service-tokens` or **Profile → MCP connections**. The plaintext secret is returned **once**; the database stores SHA-256 `tokenHash`.
+Personal `mcp_` keys for remote MCP clients (Perplexity, Cursor JSON config) that cannot hold a session cookie. `TerrenoApp` must set `mcpServiceTokens`. Users mint keys from `POST /mcp/service-tokens/create` or **Profile → MCP connections**. The plaintext secret is returned **once**; the database stores SHA-256 `tokenHash`.
 
 `extractUserFromHeaders` on `/mcp` tries a `mcp_` Bearer first, then Better Auth, then JWT. A match loads the owning `User` and updates `lastUsedAt`. Revoked, expired, or disabled-user keys resolve to no user, and so does a key minted before the user's last password reset or session revocation (`tokenEpoch` changed since it was issued). MCP OAuth grants end the same way. The same Bearer is ignored on REST, sync, admin, and on the mint/list/revoke routes (a key cannot mint another key).
 
@@ -166,19 +210,21 @@ modelRouter(Model, {
 
 ### Token Payload
 
-Access tokens contain:
+Access and refresh tokens contain:
 
 ``````json
 {
-  "sub": "507f1f77bcf86cd799439011",  // User ID
-  "admin": false,                      // Admin status
-  "iat": 1709000000,                   // Issued at (timestamp)
-  "exp": 1709000900,                   // Expires at (timestamp)
-  "iss": "your-app-name"               // Issuer (from TOKEN_ISSUER env var)
+  "id": "507f1f77bcf86cd799439011",  // User ID (the frontend reads the signed-in user from it)
+  "sid": "4f9c…",                     // Session ID, kept across refreshes
+  "te": 0,                            // User token epoch; bumping it revokes refresh tokens
+  "iat": 1709000000,                  // Issued at (timestamp)
+  "exp": 1709000900,                  // Expires at (timestamp)
+  "iss": "your-app-name"              // Issuer (from TOKEN_ISSUER env var)
 }
 ``````
 
-Customize the payload with `authOptions.generateJWTPayload`:
+Add claims with `authOptions.generateJWTPayload`. `id`, `sid`, and `te` always win over
+custom claims:
 
 ``````typescript
 setupServer({
@@ -194,42 +240,58 @@ setupServer({
 
 ### Token Refresh Flow
 
-1. Access token expires (after 15 minutes)
-2. API request returns `401 Unauthorized`
-3. Frontend middleware detects 401
-4. Frontend calls `POST /auth/refresh_token` with refresh token
-5. Backend validates refresh token
-6. Backend issues new access token and refresh token
-7. Frontend retries original request with new token
+1. Before each request, the frontend checks the stored access token. With under two minutes
+   left (or already expired), it calls `POST /auth/refresh_token` with the refresh token first.
+2. If a request still returns `401 Unauthorized`, the frontend refreshes and retries the
+   request once.
+3. The backend verifies the refresh token and the user's token epoch, then returns a new
+   access and refresh token pair (`{data: {token, refreshToken}}`).
+4. Concurrent requests share one refresh call.
+5. If the backend rejects the refresh, the frontend clears both tokens and signs out. A
+   network failure or timeout keeps the session and the current token.
 
-This is handled automatically by @terreno/rtk's `emptyApi` configuration.
+`jwtAuthAdapter` from `@terreno/syncdb/auth` does this for the syncdb request client and
+`createSyncDb` (it replaces `@terreno/rtk`'s `emptyApi` base query).
 
 ## Frontend Integration
 
-### Redux Store Setup (with @terreno/rtk)
+### Session State (Better Auth)
 
-``````typescript
-import {generateAuthSlice} from "@terreno/rtk";
-import {configureStore} from "@reduxjs/toolkit";
-import {openapi} from "./openApiSdk";
+`@terreno/syncdb/auth` owns the frontend session. One Better Auth client feeds three
+consumers:
 
-const {authReducer, middleware, logout} = generateAuthSlice(openapi);
+- `SessionProvider` / `useSession()` — `{userId, user, isLoading, isAuthenticated, error,
+  logout, refresh}` for screens and routing.
+- `betterAuthAdapter(bridgeBetterAuthReactClient(client))` — the `AuthProvider` that
+  `createSyncDb` and the API client use for bearer tokens and 401 refresh.
+- The Better Auth client itself — `signIn.email`, `signIn.social`, password reset.
 
-export const store = configureStore({
-  reducer: {
-    auth: authReducer,
-    [openapi.reducerPath]: openapi.reducer,
-  },
-  middleware: (getDefault) =>
-    getDefault().concat(openapi.middleware, ...middleware),
-});
-``````
+The session store reads `getSession()` on start and then follows Better Auth's session atom,
+which fires after sign-in, sign-out, and user switches. A failed background read keeps the
+current session: a network blip is not a logout. `logout()` signs out of Better Auth, signs
+out syncdb clients (which wipe local data when created with `wipeOnSignOut`), runs the app's
+`onLogout`, and clears the session. This replaces the `@terreno/rtk` Better Auth Redux slice.
+See [syncdb reference: Auth](../reference/syncdb.md#auth).
 
-**What this provides:**
-- Automatic token storage (SecureStore on mobile, AsyncStorage on web)
-- Token refresh middleware
-- Login/logout state management
-- Auth header injection for all API requests
+### Session State (JWT, legacy)
+
+JWT apps use the same `SessionProvider` / `useSession()` with a different session source.
+`jwtAuthAdapter({baseUrl})` returns one object that is both:
+
+- the `AuthProvider` for `createSyncDb` and `createApiClient` (bearer token, refresh before
+  expiry, refresh on 401), and
+- the `source` for `SessionProvider` (it pushes every sign-in and sign-out to the session).
+
+`useJwtAuth({adapter})` gives screens `login`, `signup`, `googleLogin`, `resetPassword`, and
+`logout`, plus `isAuthenticating` and `error`. `logout` goes through the `SessionProvider`, so
+syncdb clients sign out and `onLogout` runs. The signed-in user is the `id` claim of the stored
+token (`user` is `{id}`); load the profile from `/auth/me`. A refresh the server rejects signs
+the session out on its own. This replaces `@terreno/rtk`'s `generateAuthSlice` and Redux store.
+See [syncdb reference: JWT auth](../reference/syncdb.md#jwt-auth-legacy).
+
+`getTokenExpirationTimes()` and `shouldShowStillThereModal()` read the stored tokens for
+"are you still there?" prompts (the modal shows with 65 seconds or less left on the refresh
+token).
 
 ### Token Storage
 
@@ -242,7 +304,8 @@ export const store = configureStore({
 - Falls back to localStorage
 - SSR-safe (checks `typeof window`)
 
-**Storage keys:**
+**Storage keys** (the same keys `@terreno/rtk` used, so signed-in users stay signed in after
+the move):
 - `AUTH_TOKEN` — Access token
 - `REFRESH_TOKEN` — Refresh token
 
@@ -324,7 +387,7 @@ address is the signal that lets the owner react. Status codes and messages are i
 - Use HTTPS in production
 - Validate token issuer (`TOKEN_ISSUER`)
 - Set appropriate token expiration times
-- Enable `TerrenoApp` `rateLimit` so login/signup/refresh use the stricter `auth` bucket (20 / 15 min). See [Rate limiting](../how-to/rate-limiting.md).
+- `TerrenoApp` rate limiting (on by default) puts login/signup/refresh in the stricter `auth` bucket (20 / 15 min). Keep it on and pass `trustProxy: 1` on Cloud Run. See [Rate limiting](../how-to/rate-limiting.md).
 - Keep login/signup/refresh reachable when the client still sends an expired access JWT. Those three routes skip JWT verification; `/auth/me` and other APIs still 401.
 - Log authentication failures
 
@@ -494,4 +557,4 @@ See [Receive inbound webhooks](../how-to/inbound-webhooks.md).
 - [Add GitHub OAuth](../how-to/add-github-oauth.md)
 - [Create a model](../how-to/create-a-model.md)
 - [API reference](../reference/api.md)
-- [@terreno/rtk reference (legacy)](../reference/legacy/rtk.md)
+- [Upgrade from @terreno/rtk to @terreno/syncdb](../how-to/migrate-rtk-to-syncdb.md)

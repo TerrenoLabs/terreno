@@ -4,9 +4,6 @@ dist/
 # Compiled server plugin output
 src/dist/
 
-# Generated RTK Query SDK
-store/openApiSdk.ts
-
 # Expo / Metro
 .expo/
 web-build/

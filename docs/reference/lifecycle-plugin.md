@@ -1,6 +1,6 @@
 # Lifecycle plugin reference
 
-Plugin: `terreno-planning` (`2.12.0`)
+Plugin: `terreno-planning` (`2.14.0`)
 
 Planning skills are model-invocable: agents may select them from descriptions, not only
 from slash commands. Grow, Brew, and Taste each implement one bounded transition. Pick continues an inner loop until the
@@ -106,6 +106,12 @@ changes but otherwise keeps the body stable instead of summarizing the latest tu
 These are the only visible PR sections; optional detail is expandable; comments are
 reserved for blocked decisions or non-obvious review resolutions.
 
+The body is also the approval bot's input (`brewery approve`, scored with
+`docs/approval-rubric.md`), so its shape is strict. The headings are spelled exactly as
+above. `Why` ends with the plan's repository path and the task ids the PR delivers.
+Every `Verification` row starts with `✅`, `🧭`, or `⚠️` and names the outcome, not only
+the command. The stage-result `ip` is the plan's filename, and later stages keep it.
+
 Every stage follows the
 [documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
 read architecture docs before acting, update them in the same slice, and fail the slice
@@ -143,6 +149,10 @@ and `.codex-plugin/plugin.json` on the canonical plugin. Claude Code:
 /plugin install terreno@terreno-plugins
 ```
 
+That tracks `master`. For a pinned release or the latest release from npm
+(`@terreno/agent-plugin`, marketplace `terreno-releases`), see
+[Install agent skills](../how-to/install-agent-skills.md#pick-a-channel).
+
 Claude Code resolves a plugin skill's command from the frontmatter `name`, so the short
 names ship as a generated Claude-only copy at
 [`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude).
@@ -159,3 +169,137 @@ docs, upgrade, deployment, and UI-verification workflows, plus `pre-commit` and
 `ui-verifier` agents on Cursor and Claude Code. Codex consumes the combined skills
 without plugin-defined agents. Repository-local skills supply only project-specific
 roadmap, release, and maintenance conventions discovered at stage start.
+
+## Testing plan
+
+Every IP plans its e2e tests and its manual regression cases up front, per
+[testing-plan.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/testing-plan.md).
+Grow writes both sections; later stages read them and never invent rows.
+
+| Stage | Duty |
+| --- | --- |
+| Grow | Reads the spot, writes `## E2E tests` and `## Regression cases`, adds a guide-writing task when no e2e guide exists |
+| Pick | Writes each `## E2E tests` row whose `Written in` names the current task, at its path, following the e2e guide |
+| Roast | Runs the task's rows (missing or failing is `FAIL`, unreachable is `deferred`) and holds regression rows to the regression-step bar |
+| Brew | Gates on every row passing, merges regression rows into the suite with the next free ID, lists the IDs in the PR `Verification` section |
+| Taste | Re-runs affected rows after a behaviour-changing fix, renumbers regression ID collisions with the base, runs the declared `Smoke command` before push |
+
+### Standardized spot
+
+The e2e guide is `docs/testing/e2e.md` and the suites live in `docs/regression/`. A repo
+with a different layout overrides them with a `## Testing conventions` table in AGENTS.md
+or CLAUDE.md:
+
+```markdown
+## Testing conventions
+
+| Key | Value |
+| --- | --- |
+| E2E guide | docs/testing/e2e.md |
+| Regression suites | docs/regression/ |
+| Smoke command | bun run smoke:local |
+```
+
+Set `Regression suites` to `none` to opt out of manual regression suites. Every IP's
+`## Regression cases` then reads `None — regression suites opted out`, Brew and Taste skip
+all suite work, and `backfill-regression` stops at once. E2E tests are unaffected.
+
+### IP sections
+
+Both sections are required. Either may be `None — <reason>`; neither may be missing. An
+IP approved before the contract reads as `None — predates contract`, and stages warn
+instead of failing. Regression IDs in an IP are provisional (`<AREA>-new-<n>`).
+
+```markdown
+## E2E tests
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | `e2e/todos-due-date.spec.ts` | browser | A user sets a due date and sees it in the list | T2 |
+
+## Regression cases
+
+Destination: TODO → docs/regression/todos.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| TODO-new-1 | Due date survives a reinstall | Signed in on a phone with one dated todo, delete and reinstall the app, then sign in | The todo shows the same due date | iOS, Android | manual | todos-due-date |
+```
+
+A stage that cannot reach a row's layer records it `deferred` with its exact command.
+Only Brew accepts a deferred row, and only after that command passes locally or in
+product CI on the branch.
+
+### Suite file format
+
+One living file per area at `<Regression suites>/<area>.md`. IDs are `<AREA>-NNN` and
+never reused; Brew assigns the next free ID when it writes the case.
+
+```markdown
+# Todos regression suite
+
+Area: TODO
+Owner: mobile team
+Last full run: never
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| TODO-001 | Due date survives a reinstall | Signed in on a phone with one dated todo, delete and reinstall the app, then sign in | The todo shows the same due date | iOS, Android | manual | todos-due-date |
+```
+
+## User guide
+
+Every IP says which end-user guide pages it adds, updates, or retires, per
+[user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/user-guide.md).
+A page explains one feature in the words users see on screen. Chat agents read the pages
+to answer "how do I…" questions, so a page describes shipped behavior only.
+
+| Stage | Duty |
+| --- | --- |
+| Grow | Writes `## User guide` rows (`G<n>`), or `None — <reason>`, and a `User guide:` line in the brief |
+| Pick | Writes or edits each page whose row names the current task, and updates the guide index |
+| Roast | Holds each page to the guide-entry bar and checks its steps against the shipped screens |
+| Brew | Confirms every row's page exists or is retired and the index matches the pages on disk |
+| Taste | Updates affected pages after a fix that changes user-visible behavior |
+
+### Spot and opt-out
+
+The guide lives in `docs/user-guide/`, one page per feature at `<area>/<feature>.md`, with
+a `README.md` index. A repo overrides the path, or opts out, with a
+`## User guide conventions` table in AGENTS.md or CLAUDE.md:
+
+```markdown
+## User guide conventions
+
+| Key | Value |
+| --- | --- |
+| User guide | none — command-line tool with no in-app users |
+```
+
+With `none`, Grow writes `None — user guide off` and every stage, check, and backfill
+skips the guide.
+
+### Page format
+
+```markdown
+---
+title: Set a due date on a todo
+area: todos
+audience: user            # user | admin | staff
+platforms: [web, ios, android]
+questions:
+  - How do I set a due date on a todo?
+added: todos-due-date     # IP slug, or user-guide-backfill
+---
+
+# Set a due date on a todo
+
+## What it does
+## How to use it         # numbered steps naming on-screen labels in bold
+## Intended use          # what it is for, and what it is not for
+```
+
+`questions` is what retrieval matches; `audience` keeps a chat agent from describing an
+admin feature to a user. Pages never hold personal or health information, secrets, or
+internal URLs. The `backfill-user-guide` skill drafts pages for features that shipped
+before the contract and writes only the ones the human approves.

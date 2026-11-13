@@ -1,39 +1,17 @@
 import {Badge} from "@terreno/ui";
-import React, {useMemo} from "react";
-import {asDynamicHookApi} from "../../../dynamicHookApi";
-import type {AdminApi, EndpointBuilder} from "../../../types";
+import React from "react";
 import {
   formatObservabilityStatusChip,
   type ObservabilityStatusPayload,
   unwrapObservabilityStatus,
 } from "./aiObservabilityNav";
-
-const STATUS_ENDPOINT_KEY = "aiObservabilityStatus";
-
-interface StatusResponse {
-  data: ObservabilityStatusPayload;
-}
+import {OBSERVABILITY_STATUS_URL, useObservabilityQuery} from "./observabilityRequest";
 
 export interface AiObservabilityStatusChipProps {
-  api?: AdminApi;
   error?: boolean;
   isLoading?: boolean;
   status?: ObservabilityStatusPayload;
 }
-
-const createStatusApi = (api: AdminApi) => {
-  return api.injectEndpoints({
-    endpoints: (build: EndpointBuilder) => ({
-      [STATUS_ENDPOINT_KEY]: build.query({
-        query: () => ({
-          method: "GET",
-          url: "/ai/observability/status",
-        }),
-      }),
-    }),
-    overrideExisting: true,
-  });
-};
 
 const StatusChipView: React.FC<{
   error?: boolean;
@@ -42,13 +20,19 @@ const StatusChipView: React.FC<{
 }> = ({error, isLoading, status}) => {
   if (isLoading) {
     return (
-      <Badge status="info" testID="ai-observability-status-chip" value="Checking observability…" />
+      <Badge
+        secondary
+        status="neutral"
+        testID="ai-observability-status-chip"
+        value="Checking observability…"
+      />
     );
   }
 
   if (error || !status) {
     return (
       <Badge
+        secondary
         status="error"
         testID="ai-observability-status-chip"
         value="Observability unavailable"
@@ -58,22 +42,20 @@ const StatusChipView: React.FC<{
 
   return (
     <Badge
-      status={status.localOn ? "success" : "warning"}
+      iconName={status.localOn ? "circle-check" : "circle-minus"}
+      secondary
+      status={status.localOn ? "success" : "neutral"}
       testID="ai-observability-status-chip"
       value={formatObservabilityStatusChip(status)}
     />
   );
 };
 
-const FetchedStatusChip: React.FC<{api: AdminApi}> = ({api}) => {
-  const enhancedApi = useMemo(() => {
-    return createStatusApi(api);
-  }, [api]);
-  const query = asDynamicHookApi(enhancedApi).useAiObservabilityStatusQuery() as {
-    data?: StatusResponse | ObservabilityStatusPayload;
-    isError: boolean;
-    isLoading: boolean;
-  };
+/** Reads plugin status through the host-bound admin client when the screen has none. */
+const FetchedStatusChip: React.FC = () => {
+  const query = useObservabilityQuery<
+    {data: ObservabilityStatusPayload} | ObservabilityStatusPayload
+  >({url: OBSERVABILITY_STATUS_URL});
   return (
     <StatusChipView
       error={query.isError}
@@ -84,13 +66,12 @@ const FetchedStatusChip: React.FC<{api: AdminApi}> = ({api}) => {
 };
 
 export const AiObservabilityStatusChip: React.FC<AiObservabilityStatusChipProps> = ({
-  api,
   error,
   isLoading,
   status,
 }) => {
-  if (status || isLoading || error || !api) {
+  if (status || isLoading || error) {
     return <StatusChipView error={error} isLoading={isLoading} status={status} />;
   }
-  return <FetchedStatusChip api={api} />;
+  return <FetchedStatusChip />;
 };

@@ -3,13 +3,13 @@ import {router, useNavigation} from "expo-router";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {AdminConflictSheet} from "./AdminConflictSheet";
 import {AdminFieldRenderer} from "./AdminFieldRenderer";
+import {buildNestedObjectDefault, isNestedObjectField} from "./AdminNestedObjectField";
 import {useAdminContext} from "./adminContext";
 import {isWindowedAdminTable} from "./adminWindowedTable";
 import {markAdminWindowMembershipStale} from "./adminWindowRefresh";
 import {shouldSkipOrgScopedAdminQuery} from "./orgs/shouldSkipOrgScopedAdminQuery";
 import {useOptionalOrgContext} from "./orgs/useOrgContext";
 import type {
-  AdminApi,
   AdminFieldConfig,
   AdminFieldValue,
   AdminModelConfig,
@@ -17,8 +17,8 @@ import type {
   RefRendererMap,
 } from "./types";
 import {resolveAdminBases, SYSTEM_FIELDS} from "./types";
-import {useAdminApi} from "./useAdminApi";
 import {useAdminConfig} from "./useAdminConfig";
+import {useAdminModelApi} from "./useAdminModelApi";
 
 /** Parameters for {@link AdminModelFormProps.getScreenTitle}. */
 export interface AdminModelFormScreenTitleParams {
@@ -36,7 +36,6 @@ interface AdminModelFormProps {
   apiBase?: string;
   /** Base path used for in-app navigation. Falls back to `baseUrl`. */
   routeBase?: string;
-  api: AdminApi;
   modelName: string;
   mode: "create" | "edit";
   itemId?: string;
@@ -108,6 +107,9 @@ const getVisibleFieldEntries = (
 const getFieldDefault = (fieldConfig: AdminFieldConfig): AdminFieldValue => {
   if (fieldConfig.default !== undefined) {
     return fieldConfig.default;
+  }
+  if (isNestedObjectField(fieldConfig) && fieldConfig.items) {
+    return buildNestedObjectDefault(fieldConfig.items);
   }
   if (fieldConfig.type === "boolean") {
     return false;
@@ -237,7 +239,6 @@ const inferEditRecordTitle = (params: {
  *
  * @param props - Component props
  * @param props.baseUrl - Base URL for admin routes (e.g., "/admin")
- * @param props.api - RTK Query API instance for making authenticated requests
  * @param props.modelName - Name of the model to create/edit (e.g., "User")
  * @param props.mode - Form mode: "create" for new items, "edit" for existing items
  * @param props.itemId - ID of the item to edit (required when mode is "edit")
@@ -248,7 +249,6 @@ const inferEditRecordTitle = (params: {
  * @example
  * ```typescript
  * import {AdminModelForm} from "@terreno/admin-frontend";
- * import {api} from "@/store/openApiSdk";
  * import {useLocalSearchParams} from "expo-router";
  *
  * function AdminCreateScreen() {
@@ -256,7 +256,7 @@ const inferEditRecordTitle = (params: {
  *   return (
  *     <AdminModelForm
  *       baseUrl="/admin"
- *       api={api}
+ *
  *       modelName={modelName as string}
  *       mode="create"
  *     />
@@ -268,7 +268,7 @@ const inferEditRecordTitle = (params: {
  *   return (
  *     <AdminModelForm
  *       baseUrl="/admin"
- *       api={api}
+ *
  *       modelName={modelName as string}
  *       mode="edit"
  *       itemId={id as string}
@@ -285,7 +285,6 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
   baseUrl,
   apiBase,
   routeBase,
-  api,
   modelName,
   mode,
   itemId,
@@ -302,7 +301,7 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
     baseUrl,
     routeBase,
   });
-  const {config, isLoading: isConfigLoading} = useAdminConfig(api, resolvedApiBase);
+  const {config, isLoading: isConfigLoading} = useAdminConfig(resolvedApiBase);
   const adminContext = useAdminContext();
   const organizationId = useOptionalOrgContext()?.organizationId;
   const [formState, setFormState] = useState<Record<string, AdminFieldValue>>({});
@@ -324,8 +323,7 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
 
   const toast = useToast();
 
-  const {useReadQuery, useCreateMutation, useUpdateMutation, useDeleteMutation} = useAdminApi(
-    api,
+  const {useReadQuery, useCreateMutation, useUpdateMutation, useDeleteMutation} = useAdminModelApi(
     modelConfig?.routePath ?? "",
     modelName
   );
@@ -343,29 +341,28 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
   const [updateItem, {isLoading: isUpdating}] = useUpdateMutation();
   const [deleteItem, {isLoading: isDeleting}] = useDeleteMutation();
   const isWindowed = isWindowedAdminTable({
-    hasFetchClient: Boolean(adminContext?.adminRpc),
     modelConfig,
     syncDb: adminContext?.syncDb,
   });
 
-  // Initialize form state from fetched item data in edit mode
-  useEffect(() => {
-    if (mode === "edit" && itemData && !isInitialized) {
-      const initial: Record<string, AdminFieldValue> = {};
-      if (modelConfig) {
-        for (const [key, fieldConfig] of getVisibleFieldEntries(
-          modelConfig.fields,
-          modelConfig.fieldOrder,
-          modelConfig.hiddenFields
-        )) {
-          const raw = itemData[key];
-          initial[key] = raw ?? getFieldDefault(fieldConfig);
-        }
+  // Initialize form state from the item in edit mode during render, not in an effect: when the
+  // item is already present (a server-rendered seed), the fields show its values on the first
+  // render, and fetched data fills them before paint as before.
+  if (mode === "edit" && itemData && !isInitialized) {
+    const initial: Record<string, AdminFieldValue> = {};
+    if (modelConfig) {
+      for (const [key, fieldConfig] of getVisibleFieldEntries(
+        modelConfig.fields,
+        modelConfig.fieldOrder,
+        modelConfig.hiddenFields
+      )) {
+        const raw = itemData[key];
+        initial[key] = raw ?? getFieldDefault(fieldConfig);
       }
-      setFormState(initial);
-      setIsInitialized(true);
     }
-  }, [mode, itemData, modelConfig, isInitialized]);
+    setFormState(initial);
+    setIsInitialized(true);
+  }
 
   // Initialize form state with defaults in create mode
   useEffect(() => {
@@ -804,7 +801,6 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
                 <Box gap={3}>
                   {section.entries.map(([fieldKey, fieldConfig]) => (
                     <AdminFieldRenderer
-                      api={api}
                       apiBase={resolvedApiBase}
                       autocompleteFields={modelConfig.autocompleteFields}
                       errorText={errors[fieldKey]}
@@ -825,7 +821,6 @@ export const AdminModelForm: React.FC<AdminModelFormProps> = ({
             ))
           : visibleFields.map(([fieldKey, fieldConfig]) => (
               <AdminFieldRenderer
-                api={api}
                 apiBase={resolvedApiBase}
                 autocompleteFields={modelConfig.autocompleteFields}
                 errorText={errors[fieldKey]}

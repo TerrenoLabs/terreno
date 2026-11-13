@@ -1,5 +1,5 @@
 import {DevHomePage} from "@components/DevHomePage";
-import {DemoConfig} from "@config";
+import {ListedDemoConfig} from "@config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {useTheme} from "@terreno/ui";
 import {router, useGlobalSearchParams, useRootNavigationState} from "expo-router";
@@ -74,7 +74,7 @@ const Dev = (): ReactElement => {
       }}
     >
       <DevHomePage
-        demoConfig={DemoConfig}
+        demoConfig={ListedDemoConfig}
         onPress={(component: string, story: string) => {
           router.navigate({
             params: {component, story, ...previewParams},

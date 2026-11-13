@@ -1,37 +1,62 @@
 # Rate limiting
 
-Turn on HTTP rate limiting for `@terreno/api` by passing `rateLimit` on `TerrenoApp`. The framework does **not** read `RATE_LIMIT_ENABLED`.
+`TerrenoApp` turns on HTTP rate limiting by default (Terreno 58 and later). Omitting `rateLimit` mounts the limiter with the memory store and the default limits. The framework does **not** read `RATE_LIMIT_ENABLED`.
 
-Terreno 58 will default the limiter **on**. Until then, omit `rateLimit` to leave it off.
+## Default (memory)
 
-## Terreno 58 (not this release)
+```typescript
+new TerrenoApp({userModel: User});
+```
 
-When Terreno 58 is cut, `TerrenoApp` will enable the limiter by default. Apps that must stay unlimited will pass an explicit off (documented in the 58 upgrade note). Until then, omitted `rateLimit` is unlimited. Stub: [`mcp-server/src/docs/upgrades/58.0.0.md`](../../mcp-server/src/docs/upgrades/58.0.0.md).
+That is the same as `rateLimit: {}` or `rateLimit: {store: "memory"}`: auth 20 / 15 min, api 600 / 15 min, one bucket per Node process.
 
-## Enable (memory)
+## Cloud Run
+
+Cloud Run sits behind one Google Front End hop. Without `trustProxy`, every unauthenticated request shares the front end's address, so all users share one auth bucket (20 logins per 15 minutes for the whole service). Pass `trustProxy: 1`:
 
 ```typescript
 new TerrenoApp({
   userModel: User,
-  rateLimit: process.env.RATE_LIMIT_ENABLED === "true" ? {store: "memory"} : undefined,
+  rateLimit: {trustProxy: 1},
 });
 ```
 
-Empty `{}` is the same as `{store: "memory"}`.
+The limiter sets Express `trust proxy` from `rateLimit.trustProxy` when it mounts. Set it there, not with `app.set("trust proxy", …)` before `build()`.
+
+## Turn it off
+
+Pass `false`:
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  rateLimit: false,
+});
+```
+
+Apps that want an env toggle own it:
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  rateLimit: process.env.RATE_LIMIT_DISABLED === "true" ? false : {trustProxy: 1},
+});
+```
+
+## Tests
+
+Each `build()` creates a fresh memory store, so most suites never reach a limit. A suite that logs in more than 20 times or sends more than 600 requests against one app instance should pass `rateLimit: false` in its shared app helper, or raise `limits`.
 
 ## Redis on Cloud Run
 
 1. Add a Valkey or Redis instance (Memorystore or equivalent).
 2. Set `VALKEY_URL` (preferred) or `REDIS_URL` on the Cloud Run service. Same URL as realtime Redis.
-3. Pass `store: "redis"` only when you intend to enable the limiter:
+3. Pass `store: "redis"`:
 
 ```typescript
 new TerrenoApp({
   userModel: User,
-  rateLimit:
-    process.env.RATE_LIMIT_ENABLED === "true"
-      ? {store: "redis", trustProxy: 1}
-      : undefined,
+  rateLimit: {store: "redis", trustProxy: 1},
 });
 ```
 
@@ -50,7 +75,7 @@ new TerrenoApp({
 
 Pass `{store: "mongo"}`. Hits live in `rateLimitHits` on the same mongoose connection as the app. A TTL index on `expiresAt` expires windows. This collection is not a `modelRouter` resource.
 
-Unauthenticated keys use `req.ip`. Express `trust proxy` defaults to **off** so a client cannot rotate `X-Forwarded-For` to bypass the auth bucket. On Cloud Run (one hop via GFE), pass `trustProxy: 1`. Extra proxies: hop count or a subnet list. `trustProxy: false` is the same as the default.
+Unauthenticated keys use `req.ip`. Express `trust proxy` defaults to **off** so a client cannot rotate `X-Forwarded-For` to bypass the auth bucket. On Cloud Run (one hop via GFE), pass `trustProxy: 1` (see [Cloud Run](#cloud-run)). Extra proxies: hop count or a subnet list. `trustProxy: false` is the same as the default.
 
 ## Limit one route
 
@@ -90,6 +115,3 @@ JWT login/signup/refresh and password-reset paths skip access-token verification
 Auth-bucket keys are always the client IP, even if a Better Auth session already set `req.user`. API traffic still keys by user when authenticated.
 
 When `BetterAuthApp` is registered, TerrenoApp copies its `config.basePath` into the limiter unless you set `rateLimit.betterAuthBasePath`.
-
-
-

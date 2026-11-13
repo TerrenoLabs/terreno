@@ -3,6 +3,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
+    "@terreno/syncdb": "workspace:*",
     "@terreno/ui": "workspace:*",
     "expo-router": "catalog:",
     "jspdf": "catalog:",
@@ -16,18 +17,19 @@
   "devDependencies": {
     "@biomejs/biome": "catalog:",
     "@react-native-community/slider": "catalog:",
-    "@reduxjs/toolkit": "catalog:",
+    "@terreno/test": "workspace:*",
     "@testing-library/react-native": "catalog:",
     "@types/lodash": "catalog:",
     "@types/luxon": "catalog:",
     "@types/qs": "catalog:",
     "@types/react": "catalog:",
+    "mongoose": "catalog:",
     "react": "catalog:",
-    "react-redux": "catalog:",
     "typescript": "catalog:"
   },
   "files": [
     "LICENSE",
+    "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
     ".ai/**/*"
@@ -43,10 +45,8 @@
   "main": "dist/index.js",
   "name": "@terreno/admin-frontend",
   "peerDependencies": {
-    "@reduxjs/toolkit": "catalog:",
     "react": "catalog:",
-    "react-native-webview": "catalog:",
-    "react-redux": "catalog:"
+    "react-native-webview": "catalog:"
   },
   "peerDependenciesMeta": {
     "react-native-webview": {
@@ -67,11 +67,13 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:unsafefix": "biome check --write --unsafe .",
-    "test": "bash scripts/run-tests.sh",
-    "test:agent": "AGENT=1 bash scripts/run-tests.sh agent",
+    "smoke": "bun e2e/smoke.spec.ts",
+    "test": "bun ../scripts/test-shards.ts --isolated -- --max-concurrency=1",
+    "test:agent": "AGENT=1 bun ../scripts/test-shards.ts --isolated -- --only-failures --max-concurrency=1",
     "test:ci": "bun run test",
-    "test:coverage": "bun run ../scripts/check-coverage.ts"
+    "test:coverage": "bun run ../scripts/check-coverage.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json"
   },
   "types": "dist/index.d.ts",
-  "version": "57.18.0"
+  "version": "58.0.4"
 }

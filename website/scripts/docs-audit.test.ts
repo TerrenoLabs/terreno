@@ -30,8 +30,7 @@ publish-feature-flags:
     expect(parsePublishWorkingDirectories(yaml)).toEqual(["api", "feature-flags", "ui"]);
   });
 
-  it("maps rtk and mcp-server to their reference pages", () => {
-    expect(referencePageForPackage("rtk")).toBe("docs/reference/legacy/rtk.md");
+  it("maps mcp-server and other packages to their reference pages", () => {
     expect(referencePageForPackage("mcp-server")).toBe("docs/reference/mcp-server.md");
     expect(referencePageForPackage("feature-flags")).toBe("docs/reference/feature-flags.md");
   });

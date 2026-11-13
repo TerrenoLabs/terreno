@@ -11,7 +11,7 @@ section).
 ## Do now — prepush mirrors CI
 
 ```bash
-bun run prepush            # lint, compile, then every CI job this branch triggers
+bun run prepush            # compile, lint + typecheck, then every CI job this branch triggers
 bun run prepush --dry-run  # print the plan only
 bun run prepush --all      # every check, regardless of changed files
 ```
@@ -21,13 +21,27 @@ with `origin/master`. It applies the CircleCI path-filter mapping in
 `.circleci/config.yml`, then runs the local command for each triggered job: package
 `test:coverage` plus the 90% new-file LCOV gate, `ui` types, demo typecheck,
 example-backend and example-frontend tests, every `repo-policies` step, rulesync drift,
-and the typedoc API reference when `api/src` or `rtk/src` changes. Every step runs even
+and the typedoc API reference when `api/src` changes. Every step runs even
 after a failure, so a single pass lists every problem. Fix them all, then push once.
 
 Jobs that need infrastructure (Playwright e2e, Maestro, admin-spa integration, Docker)
 are listed at the end with the command to run by hand. A test in
 `scripts/ci/prepush/plan.test.ts` fails when the mapping gains a parameter that
 `prepush` neither runs nor lists.
+
+## Typecheck
+
+Every package has a `typecheck` script that runs `tsc` with its
+`tsconfig.typecheck.json`. That config extends the build `tsconfig.json`, emits
+nothing, and includes the test files the build excludes (`*.test.ts(x)`,
+`*.isolated.ts(x)`, `src/tests/**`). Root `bun run lint` ends with `bun run typecheck`.
+CircleCI runs it in the `typecheck` job beside `repo-policies`.
+
+```bash
+bun run compile                # typecheck reads workspace packages' dist types
+bun run typecheck              # every package
+cd ui && bun run typecheck     # one package
+```
 
 ## Package tests
 
@@ -37,6 +51,11 @@ From the repo root after `bun bootstrap`:
 bun run test          # every workspace `test:ci`
 bun run test:agent    # same suites; passing cases suppressed
 ```
+
+Each package's `test`, `test:ci`, `test:agent`, and `test:coverage` scripts split the suite
+into concurrent `bun test --shard` processes, half the cores by default. Set
+`TERRENO_TEST_SHARDS=1` for one unsplit process. See
+[Test sharding](../explanation/test-sharding.md).
 
 Closest package during a red/green cycle:
 
@@ -50,7 +69,6 @@ bun test --only-failures <path>
 | `ai-ci` | `cd ai && bun run test:ci` |
 | `blocks-ci` | `bun run blocks:test` |
 | `ui-ci` | `bun run ui:test` |
-| `rtk-ci` | `bun run rtk:test` |
 | `syncdb-ci` | `bun run syncdb:test` |
 | `comms-ci` | `bun run comms:test` |
 | `jobs-ci` / jobs package | `bun run jobs:test` |
@@ -58,12 +76,42 @@ bun test --only-failures <path>
 | `create-terreno-app-ci` | `cd create-terreno-app && bun run test:ci` |
 | `packages-ci` (`admin-backend`, `admin-frontend`, `api-health`, `feature-flags`, `test`) | `cd <package> && bun run test:ci` |
 | `example-backend-ci` | `cd example-backend && bun run test:ci` |
+| `smoke` | `bun run smoke` (see [Package smokes](#package-smokes-smoke)) |
 | `example-frontend-ci` | `bun run frontend:test` |
 | `ui-demo-ci` | `cd demo && bun run test:ci` then `bun run check:demo-coverage` |
 | `new-file-coverage` | `bun run check:new-file-coverage --base=origin/master --threshold=90` |
 | `repo-policies` | `bun run prepush` (runs every repo-policies step) |
 
 Coverage gate for a published package: `cd <package> && bun run test:coverage`.
+
+## Package smokes (`smoke`)
+
+The CircleCI `smoke` job runs on any package change. It compiles the workspace, builds
+the admin-spa, demo, and example-frontend smoke web exports, installs Playwright Chromium, then runs every
+workspace `smoke` script against the job's replica-set Mongo sidecar
+(`TERRENO_TEST_MONGODB_URI`). `prepush` lists it with the command below instead of
+running it.
+
+`bun run smoke:local` runs every step below in order. Run them yourself to reuse builds:
+
+```bash
+bun run compile
+(cd admin-spa && bun run build:web) && (cd demo && bun run export)
+(cd example-frontend && bun run export:smoke)
+bunx playwright install --with-deps chromium   # once
+bun run smoke              # every package; prints each one's time, flags any over 30 s
+bun run smoke api rtk      # only these workspaces
+```
+
+A package over 30 s is flagged, not failed: the CircleCI `smoke` job's table judges the budget
+([smoke conventions](../testing/e2e.md#smoke-conventions)). If a browser smoke fails with
+`Executable doesn't exist`, the preinstalled Playwright browsers do not match the locked
+version; install Chromium with `PLAYWRIGHT_BROWSERS_PATH=$HOME/.cache/ms-playwright` set and run
+`bun run smoke` with the same variable.
+
+Without `TERRENO_TEST_MONGODB_URI`, a smoke that needs Mongo starts its own in-memory
+replica set. To reuse a local replica-set `mongod`, export
+`TERRENO_TEST_MONGODB_URI="mongodb://127.0.0.1:27017/?replicaSet=rs0"` first.
 
 ## Playwright (example-frontend e2e)
 
@@ -79,9 +127,10 @@ MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
 
 | CircleCI shard | Specs |
 | --- | --- |
-| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` |
-| `e2e` `app` | `todos` `profile` `realtime` `ai-chat` `pdf` |
-| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` |
+| `e2e` `auth` | `login` `signup` `consents` `forgot-password` `reset-password` `verify-email` `two-factor` |
+| `e2e` `app` | `todos` `todo-windows` `todo-browser` `profile` `realtime` `ai-chat` `pdf` `notifications` `socket-flags` `mcp-tokens` |
+| `e2e` `admin-core` | `admin` `admin-home` `admin-form` `admin-todo-crud` `admin-title-update-depth` `org-admin-security` `admin-user-security` |
+| `e2e-cross-site` (not required) | the cross-site specs below, then `account-linking` with `E2E_ACCOUNT_LINKING=explicit` |
 | `e2e` `admin-table` | `admin-table-search-filter` `admin-table-bulk-actions` `admin-custom-screens` `admin-comms-back` `harness-approvals` `harness-intake` |
 | `e2e` `syncdb` | `syncdb-load-delta` `syncdb-offline` `syncdb-conflicts` `syncdb-storage` `syncdb-chaos` |
 
@@ -89,14 +138,42 @@ Full local suite: `bun run frontend:e2e`. Nightly load (`e2e-load` / `syncdb-loa
 not PR-blocking; run `bunx playwright test e2e/syncdb-loadlab.spec.ts` only when that job
 failed.
 
-`e2e/crossSiteBearer.spec.ts` and `e2e/crossSiteOAuth.spec.ts` have no CircleCI job: they need
-a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000`,
-`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true` and `EXPO_PUBLIC_MOCK_OIDC_SIGN_IN=true`, a backend
-with `BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
-`MOCK_OIDC_ISSUER`, and the mock OIDC provider on `127.0.0.1:4555`. Naming either spec file (or
+The cross-site specs (`CROSS_SITE_SPEC_FILES` in `playwright.config.ts`:
+`e2e/crossSiteBearer.spec.ts`, `e2e/crossSiteOAuth.spec.ts`, `e2e/authMethods.spec.ts`,
+`e2e/crossSiteChallenges.spec.ts`, `e2e/crossSiteLogin.spec.ts`,
+`e2e/account-linking.spec.ts`, `e2e/account-security.spec.ts`) run in CircleCI's `e2e-cross-site` job, which is not a required
+check, rather than in an `e2e` shard: they need
+a web server built with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4000` and
+`EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true`, a backend with
+`BETTER_AUTH_URL=http://127.0.0.1:4000`, `BETTER_AUTH_OAUTH_HANDOFF=true` and
+`MOCK_OIDC_ISSUER` (the login page shows the mock provider's button because
+`/api/auth/terreno/methods` then lists `mock-oidc`), and the mock OIDC provider on
+`127.0.0.1:4555`. Naming any of those spec files (or
 setting `E2E_CROSS_SITE_BEARER=true`) makes `playwright.config.ts` start all three and run only
 the cross-site specs, so stop any other backend on 4000 and web server on 8082 first:
-`cd example-frontend && bunx playwright test e2e/crossSiteBearer.spec.ts e2e/crossSiteOAuth.spec.ts`.
+`cd example-frontend && E2E_CROSS_SITE_BEARER=true bunx playwright test`. CI serves a static
+export instead of a Metro dev server, which gets OOM-killed bundling beside the backend and
+Chromium. To run the specs exactly as `e2e-cross-site` does:
+
+```bash
+cd example-frontend
+EXPO_PUBLIC_API_URL=http://127.0.0.1:4000 EXPO_PUBLIC_BETTER_AUTH_WEB_BEARER=true \
+  bun expo export --platform web --output-dir dist-cross-site --clear
+bunx serve dist-cross-site -s -l 8082 &
+CI=true E2E_CROSS_SITE_BEARER=true MONGO_URI="mongodb://127.0.0.1:27017/terreno-e2e?replicaSet=rs0" \
+  bunx playwright test --config playwright.circleci.config.ts --reporter=list
+```
+
+`--clear` matters: Metro's cache keeps the `EXPO_PUBLIC_*` values of an earlier export. A new
+spec that needs
+the mock provider or cookie-less sessions joins `CROSS_SITE_SPEC_FILES` and the
+`cross-site-bearer` shard in `scripts/ci/e2eAffected/shards.ts`.
+
+`e2e/account-linking.spec.ts` has cases for the backend's `explicit` linking mode, which skip
+unless the backend reports that mode. `E2E_ACCOUNT_LINKING=explicit` starts the backend with
+`AUTH_ACCOUNT_LINKING=explicit`; run that spec alone, because the other specs expect the default
+`verified-email` (`e2e-cross-site` does this as its second step):
+`cd example-frontend && E2E_ACCOUNT_LINKING=explicit bunx playwright test e2e/account-linking.spec.ts`.
 
 ### Deployed bearer smoke (`deploy-frontend-preview`)
 
@@ -151,6 +228,19 @@ bun run test:ci
 bunx playwright install --with-deps chromium
 bun run test:e2e
 bun run test:integration    # needs Mongo + example-backend; job `admin-spa-integration`
+```
+
+For `test:integration`, start example-backend with `ADMIN_SPA_ENABLED=true`,
+`AUTH_PROVIDER=better-auth`, and, for the MCP OAuth consent spec, `MCP_OAUTH_ENABLED=true` and
+`PUBLIC_API_URL=http://localhost:4000`. Without the last two the consent spec is skipped.
+
+Job `admin-spa-image-smoke` builds `example-backend/Dockerfile` and checks the image's
+server-rendered admin SPA. Locally, with Docker, or against any running backend:
+
+```bash
+docker build --file example-backend/Dockerfile --tag terreno-example-backend:admin-spa-smoke .
+# run it with ADMIN_SPA_ENABLED=true and a Mongo replica set (see the job), then:
+ADMIN_SPA_SMOKE_BRAND="Terreno Example" bash scripts/admin-spa-image-smoke.sh http://localhost:4000
 ```
 
 ## Maestro web e2e

@@ -2,6 +2,7 @@ import type {FC} from "react";
 import {Text} from "react-native";
 
 import type {TableTitleProps} from "../Common";
+import {DATA_TABLE_HEADER_FONT_SIZE} from "../dataTableColumnWidths";
 import {useTheme} from "../Theme";
 
 export const TableTitle: FC<TableTitleProps> = ({title, align = "left"}) => {
@@ -17,7 +18,7 @@ export const TableTitle: FC<TableTitleProps> = ({title, align = "left"}) => {
         color: theme.text.primary,
         flexWrap: "wrap",
         fontFamily: "text",
-        fontSize: 10,
+        fontSize: DATA_TABLE_HEADER_FONT_SIZE,
         fontWeight: "700",
         lineHeight: 16,
         overflow: "hidden",

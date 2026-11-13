@@ -8,7 +8,9 @@ import {
   getCdpConnectionStatus,
   snapshotCdpConsoleRing,
   snapshotMetroEventsRing,
+  snapshotNetworkRing,
 } from "../metro/metroDevSession.js";
+import {snapshotNativeLogs} from "../native/nativeLogs.js";
 import {resolveTerrenoProjectRoot} from "../projectRoot.js";
 
 interface LogEntry {
@@ -94,7 +96,9 @@ export interface ReadLogsArgs {
 
 export const readLogs = async (args: ReadLogsArgs): Promise<string> => {
   const maxEntries = Math.min(Math.max(args.entries ?? 200, 1), 2000);
-  const want = (args.sources ?? ["backend", "browser", "metro", "app"]).map((s) => s.toLowerCase());
+  const want = (args.sources ?? ["backend", "browser", "metro", "app", "network"]).map((s) =>
+    s.toLowerCase()
+  );
   const levelFilter = args.level?.toLowerCase();
   const sinceDt = args.since ? DateTime.fromISO(args.since) : undefined;
   const sinceThreshold = sinceDt?.isValid ? sinceDt : undefined;
@@ -123,6 +127,18 @@ export const readLogs = async (args: ReadLogsArgs): Promise<string> => {
     const cdp = await ensureCdpConnected();
     status.push(cdp.detail);
     merged.push(...ringToEntries(snapshotCdpConsoleRing()));
+  }
+
+  if (want.includes("network")) {
+    const cdp = await ensureCdpConnected();
+    status.push(cdp.detail);
+    merged.push(...ringToEntries(snapshotNetworkRing()));
+  }
+
+  if (want.includes("native")) {
+    const native = await snapshotNativeLogs(maxEntries);
+    status.push(native.status);
+    merged.push(...native.entries);
   }
 
   let filtered = merged;
@@ -160,7 +176,9 @@ export interface LastErrorArgs {
 }
 
 export const lastError = async (args: LastErrorArgs): Promise<string> => {
-  const want = (args.sources ?? ["backend", "browser", "metro", "app"]).map((s) => s.toLowerCase());
+  const want = (args.sources ?? ["backend", "browser", "metro", "app", "network", "native"]).map(
+    (s) => s.toLowerCase()
+  );
   let last: LogEntry | undefined;
 
   const consider = (entries: LogEntry[]): void => {
@@ -194,6 +212,14 @@ export const lastError = async (args: LastErrorArgs): Promise<string> => {
   if (want.includes("app")) {
     await ensureCdpConnected();
     pool.push(...ringToEntries(snapshotCdpConsoleRing()));
+  }
+  if (want.includes("network")) {
+    await ensureCdpConnected();
+    pool.push(...ringToEntries(snapshotNetworkRing()));
+  }
+  if (want.includes("native")) {
+    const native = await snapshotNativeLogs(200);
+    pool.push(...ringToEntries(native.entries));
   }
 
   consider(mergeByTimestamp(pool));

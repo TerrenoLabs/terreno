@@ -1,6 +1,7 @@
-import {beforeAll, beforeEach, describe, expect, it} from "bun:test";
+import {beforeAll, beforeEach, describe, expect, it, setSystemTime} from "bun:test";
 import {assert} from "chai";
 import type express from "express";
+import {DateTime} from "luxon";
 import {type Model, model, Schema, Types} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -95,7 +96,7 @@ interface SnapshotEntity {
   id: string;
   seq: number;
   deleted: boolean;
-  data: {name: string} | null;
+  data: {name?: string; title?: string} | null;
 }
 
 interface StreamInfo {
@@ -287,7 +288,7 @@ describe("sync routes", () => {
         .expect(200);
       expect(res.body.stream).toBe(ownerStream());
       expect(res.body.entities).toHaveLength(2);
-      expect(res.body.entities.map((e: SnapshotEntity) => e.data.name)).toEqual([
+      expect(res.body.entities.map((e: SnapshotEntity) => e.data?.name)).toEqual([
         "mine 1",
         "mine 2",
       ]);
@@ -349,7 +350,7 @@ describe("sync routes", () => {
       expect(page3.body.hasMore).toBe(false);
 
       const names = [...page1.body.entities, ...page2.body.entities, ...page3.body.entities].map(
-        (e: SnapshotEntity) => e.data.name
+        (e: SnapshotEntity) => e.data?.name
       );
       expect(names).toEqual(["item 1", "item 2", "item 3", "item 4", "item 5"]);
     });
@@ -388,7 +389,7 @@ describe("sync routes", () => {
       clearSyncRegistry();
       registerSync({
         config: {
-          responseHandler: (doc) => ({redactedName: `x-${(doc as RouteStuff).name}`}),
+          responseHandler: (doc) => ({redactedName: `x-${(doc as unknown as RouteStuff).name}`}),
           scope: {type: "owner"},
         },
         model: RouteStuffModel as unknown as Model<unknown>,
@@ -429,10 +430,10 @@ describe("sync routes", () => {
         tenantStream,
         ownerStream(),
       ]);
-      expect(res.body.pages[0].entities.map((e: SnapshotEntity) => e.data.title)).toEqual([
+      expect(res.body.pages[0].entities.map((e: SnapshotEntity) => e.data?.title)).toEqual([
         "visible",
       ]);
-      expect(res.body.pages[1].entities.map((e: SnapshotEntity) => e.data.name)).toEqual(["mine"]);
+      expect(res.body.pages[1].entities.map((e: SnapshotEntity) => e.data?.name)).toEqual(["mine"]);
       expect(res.body.pages[1].hasMore).toBe(false);
       expect(res.body.pages[1].cursor).toBe(res.body.pages[1].frontierSeq);
     });
@@ -457,7 +458,7 @@ describe("sync routes", () => {
         .post("/sync/snapshot/batch")
         .send({limit: 4, streams: [{cursor: ownerPage.cursor, stream: ownerStream()}]})
         .expect(200);
-      expect(second.body.pages[0].entities.map((e: SnapshotEntity) => e.data.name)).toEqual([
+      expect(second.body.pages[0].entities.map((e: SnapshotEntity) => e.data?.name)).toEqual([
         "item 3",
         "item 4",
         "item 5",
@@ -891,6 +892,9 @@ describe("sync routes", () => {
       // cannot spread across the 1-second rolling window under machine load
       // (a sequential loop's wall-clock time is unbounded and would let the
       // window reset mid-flood, making the final request wrongly succeed).
+      // Freeze the clock as well: on a loaded machine even the concurrent flood can take
+      // longer than the window. The package preload restores real time after each test.
+      setSystemTime(DateTime.now().toJSDate());
       const body = (mutationId: string) => ({
         collection: "routeStuff",
         data: {name: "flood", ownerId: notAdminId},
@@ -1021,12 +1025,16 @@ describe("sync routes", () => {
   // Task 9.27(b): bad caller input on the repair-fetch endpoint used to come back as a 500
   // (CastError) or, worse, a truncated 200 the client read as "those entities are gone".
   describe("GET /sync/entities input validation (Task 9.27)", () => {
-    it("400s (not 500s) for ids that cannot be cast to the model's _id type", async () => {
+    it("returns ids that cannot be cast to the model's _id type as absent (not a 500)", async () => {
       const doc = await RouteStuffModel.create({name: "real", ownerId: notAdminId});
+      // A rejected client-minted UUID create is queued for repair under that id; it must not
+      // fail the rest of the repair batch.
       const res = await agent
-        .get(`/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id`)
-        .expect(400);
-      expect(res.body.title).toMatch(/not-an-object-id/);
+        .get(
+          `/sync/entities?collection=routeStuff&ids=${doc._id},not-an-object-id,${crypto.randomUUID()},abcdefghijkl`
+        )
+        .expect(200);
+      expect(res.body.entities.map((e: SnapshotEntity) => e.id)).toEqual([String(doc._id)]);
     });
 
     it("400s instead of silently truncating an over-cap id list", async () => {
@@ -1279,7 +1287,7 @@ describe("sync routes", () => {
       const res = await agent
         .get(`/sync/snapshot?stream=${encodeURIComponent(`routeStuff|owner:${notAdminId}`)}`)
         .expect(200);
-      expect(res.body.entities.map((e: SnapshotEntity) => e.data.name)).toEqual(["keep"]);
+      expect(res.body.entities.map((e: SnapshotEntity) => e.data?.name)).toEqual(["keep"]);
     });
   });
 });

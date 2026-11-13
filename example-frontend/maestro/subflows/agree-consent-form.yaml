@@ -1,0 +1,27 @@
+appId: com.terreno.todo
+---
+# Agrees to the consent form on screen: scrolls to the bottom (the forms require it), signs when
+# the form asks for a signature, and taps the agree button.
+- repeat:
+    times: 4
+    commands:
+      - swipe:
+          from:
+            id: "consent-form-scroll-view"
+          direction: UP
+- runFlow:
+    when:
+      visible:
+        id: "consent-form-signature"
+    commands:
+      - swipe:
+          from:
+            id: "consent-form-signature"
+          direction: RIGHT
+          duration: 600
+- tapOn:
+    id: "consent-form-agree-button"
+- extendedWaitUntil:
+    notVisible:
+      id: "consent-navigator-loading"
+    timeout: 30000

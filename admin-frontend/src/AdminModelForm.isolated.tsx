@@ -1,9 +1,9 @@
 /**
- * Isolated: `mock.module("expo-router")` and `./useAdminApi` leak across the
+ * Isolated: `mock.module("expo-router")` and `./useAdminModelApi` leak across the
  * main suite and flake header-action tests. Keep this file next to
  * `AdminModelForm.tsx` so those specifiers match the component imports.
  */
-// noExplicitAny: test mocks use type-erased RTK Query API doubles and UNSAFE_root traversal
+// noExplicitAny: test mocks use loosely typed hook doubles and UNSAFE_root traversal
 // biome-ignore-all lint/suspicious/noExplicitAny: test mock typing
 import {beforeEach, describe, expect, it, mock} from "bun:test";
 import {act, fireEvent} from "@testing-library/react-native";
@@ -11,8 +11,11 @@ import {assert} from "chai";
 import React from "react";
 import type {ReactTestInstance} from "react-test-renderer";
 import {renderWithTheme} from "../../ui/src/test-utils";
-import {configureUseAdminApiDouble, resetUseAdminApiDouble} from "./testing/useAdminApiDouble";
-import type {AdminApi, AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
+import {
+  configureAdminModelApiDouble,
+  resetAdminModelApiDouble,
+} from "./testing/useAdminModelApiDouble";
+import type {AdminConfigResponse, AdminSyncConflicts, AdminSyncDb} from "./types";
 
 const routerBack = mock(() => {});
 const routerPush = mock(() => {});
@@ -67,7 +70,6 @@ const renderWithSyncAdmin = (
 ): ReturnType<typeof renderWithTheme> =>
   renderWithTheme(
     <AdminProvider
-      api={{} as unknown as AdminApi}
       apiBase="/admin"
       getAuthHeaders={() => ({})}
       syncConflicts={syncConflicts}
@@ -96,8 +98,8 @@ const config = {customScreens: [], models: [modelConfig], scripts: []};
 
 describe("AdminModelForm", () => {
   beforeEach(() => {
-    resetUseAdminApiDouble();
-    configureUseAdminApiDouble({
+    resetAdminModelApiDouble();
+    configureAdminModelApiDouble({
       useCreateMutation: () => [createFn, {isLoading: false}],
       useDeleteMutation: () => [deleteFn, {isLoading: false}],
       useListQuery: () => ({data: {data: [], total: 0}, isLoading: false}),
@@ -146,7 +148,6 @@ describe("AdminModelForm", () => {
 
     const createForm = renderWithSyncAdmin(
       <AdminModelForm
-        api={{} as unknown as AdminApi}
         apiBase="/admin"
         mode="create"
         modelName="Todo"
@@ -175,13 +176,7 @@ describe("AdminModelForm", () => {
 
     readState.data = {active: true, age: 1, email: "todo@example.com", name: "Todo"};
     const editForm = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        itemId="todo-1"
-        mode="edit"
-        modelName="Todo"
-      />
+      <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />
     );
     await act(async () => {
       fireEvent.press(editForm.getByTestId("admin-save-button"));
@@ -244,7 +239,6 @@ describe("AdminModelForm", () => {
     );
     const form = renderWithSyncAdmin(
       <AdminModelForm
-        api={{} as unknown as AdminApi}
         apiBase="/admin"
         mode="create"
         modelName="Todo"
@@ -292,13 +286,7 @@ describe("AdminModelForm", () => {
         })
     );
     const form = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        itemId="todo-1"
-        mode="edit"
-        modelName="Todo"
-      />
+      <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />
     );
     const deleteButton = form.UNSAFE_root.findAll(
       (node: ReactTestInstance) =>
@@ -355,13 +343,7 @@ describe("AdminModelForm", () => {
     };
 
     const view = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        itemId="todo-1"
-        mode="edit"
-        modelName="Todo"
-      />,
+      <AdminModelForm apiBase="/admin" itemId="todo-1" mode="edit" modelName="Todo" />,
       syncConflicts
     );
 
@@ -386,12 +368,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const form = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm apiBase="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -403,13 +380,7 @@ describe("AdminModelForm", () => {
 
     readState.data = {active: true, age: 1, email: "user@example.com", name: "User"};
     const editForm = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        itemId="object-id"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm apiBase="/admin" itemId="object-id" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(editForm.getByTestId("admin-save-button"));
@@ -442,12 +413,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const form = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm apiBase="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -477,12 +443,7 @@ describe("AdminModelForm", () => {
     });
 
     const form = renderWithSyncAdmin(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        apiBase="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm apiBase="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -495,12 +456,7 @@ describe("AdminModelForm", () => {
   it("renders loading state while config loads", () => {
     configState.isLoading = true;
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -508,12 +464,7 @@ describe("AdminModelForm", () => {
   it("renders loading state when the model config is missing", () => {
     configState.config = {customScreens: [], models: [], scripts: []};
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -522,7 +473,6 @@ describe("AdminModelForm", () => {
     configState.config = config;
     const {toJSON} = renderWithTheme(
       <AdminModelForm
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         footerContent={React.createElement("FooterMarker")}
         mode="create"
@@ -548,13 +498,7 @@ describe("AdminModelForm", () => {
       name: "Read only",
     };
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="readonly"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="readonly" mode="edit" modelName="User" />
     );
 
     assert.isNull(form.queryByTestId("admin-save-button"));
@@ -565,13 +509,7 @@ describe("AdminModelForm", () => {
     configState.config = config;
     readState.isLoading = true;
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
     expect(setOptions).toHaveBeenCalledWith(expect.objectContaining({title: "User"}));
@@ -586,13 +524,7 @@ describe("AdminModelForm", () => {
       name: "Existing",
     };
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
     expect(setOptions).toHaveBeenCalledWith(expect.objectContaining({title: "Existing"}));
@@ -618,13 +550,7 @@ describe("AdminModelForm", () => {
       name: "Other",
     };
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
     expect(setOptions).toHaveBeenCalledWith(expect.objectContaining({title: "pick@me.com"}));
@@ -643,12 +569,7 @@ describe("AdminModelForm", () => {
       scripts: [],
     };
     const {toJSON, getByText} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
     expect(getByText("No editable fields.")).toBeDefined();
@@ -661,12 +582,7 @@ describe("AdminModelForm", () => {
       scripts: [],
     };
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -687,12 +603,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const header = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(header.getByTestId("admin-save-button"));
@@ -720,12 +631,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -752,7 +658,6 @@ describe("AdminModelForm", () => {
     const onSaveSuccess = mock(async () => undefined);
     const form = renderWithTheme(
       <AdminModelForm
-        api={{} as unknown as AdminApi}
         baseUrl="/admin"
         mode="create"
         modelName="User"
@@ -776,12 +681,7 @@ describe("AdminModelForm", () => {
       },
     }));
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -795,13 +695,7 @@ describe("AdminModelForm", () => {
     configState.config = config;
     readState.data = {active: true, age: 1, email: "e@x.com", name: "Name"};
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     // Open confirmation modal.
     await act(async () => {
@@ -828,13 +722,7 @@ describe("AdminModelForm", () => {
       },
     }));
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     assert.isNotNull(form.getByTestId("admin-delete-button"));
   });
@@ -848,13 +736,7 @@ describe("AdminModelForm", () => {
       },
     }));
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -887,13 +769,7 @@ describe("AdminModelForm", () => {
       tags: ["a", null, "b"],
     };
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -925,13 +801,7 @@ describe("AdminModelForm", () => {
     };
     readState.data = {email: "e@x.com"};
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -955,12 +825,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const {getByTestId} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     const nameField = getByTestId("admin-field-name");
     await act(async () => {
@@ -987,12 +852,7 @@ describe("AdminModelForm", () => {
       ],
     };
     const {toJSON} = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        mode="create"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" mode="create" modelName="User" />
     );
     expect(toJSON()).toBeDefined();
   });
@@ -1004,13 +864,7 @@ describe("AdminModelForm", () => {
     deleteFn.mockReset();
     deleteFn.mockImplementation(() => ({unwrap: async () => ({})}));
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     // Invoke the delete Button's onClick callback directly so we exercise
     // handleDelete's success branch (calls deleteItem + router.back).
@@ -1035,13 +889,7 @@ describe("AdminModelForm", () => {
       },
     }));
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     const deleteBtns = form.UNSAFE_root.findAll(
       (n: ReactTestInstance) => n.props?.testID === "admin-delete-button"
@@ -1072,13 +920,7 @@ describe("AdminModelForm", () => {
     };
     readState.data = {email: "locked@x.com", name: "N"};
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));
@@ -1094,13 +936,7 @@ describe("AdminModelForm", () => {
     configState.config = config;
     readState.data = {active: true, age: 1, email: "e@x.com", name: "Name"};
     const form = renderWithTheme(
-      <AdminModelForm
-        api={{} as unknown as AdminApi}
-        baseUrl="/admin"
-        itemId="u1"
-        mode="edit"
-        modelName="User"
-      />
+      <AdminModelForm baseUrl="/admin" itemId="u1" mode="edit" modelName="User" />
     );
     await act(async () => {
       fireEvent.press(form.getByTestId("admin-save-button"));

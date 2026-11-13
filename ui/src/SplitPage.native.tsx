@@ -1,4 +1,6 @@
-// TODO: Update SplitPage native to have desktop UX for tablet sized screens
+// Native SplitPage stays a stacked list/detail at every mobile breakpoint, including tablet `lg`.
+// Prefer `ListDetailLayout` for new list/detail screens: it keeps the selected item in the route
+// and splits into two panes when the layout is wide enough.
 import {useCallback, useEffect, useState} from "react";
 import flattenChildren from "react-keyed-flatten-children";
 import {Dimensions, type ListRenderItemInfo, View} from "react-native";
@@ -9,11 +11,15 @@ import type {SplitPageListItem, SplitPageProps} from "./Common";
 import {FlatList} from "./FlatList";
 import {IconButton} from "./IconButton";
 import {Spinner} from "./Spinner";
+import {SplitPageLoading} from "./SplitPageLoading";
 import {Unifier} from "./Unifier";
 
 export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
   children,
   loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
   color,
   keyboardOffset,
   renderListViewItem,
@@ -156,8 +162,15 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
       keyboardOffset={keyboardOffset}
       width="100%"
     >
-      {loading === true && <Spinner color="light" size="md" />}
-      {selectedId === undefined ? renderList() : renderMainContent}
+      <SplitPageLoading
+        loading={loading}
+        loadingAnimation={loadingAnimation}
+        loadingComponent={loadingComponent}
+        loadingLabel={loadingLabel}
+        spinner={<Spinner color="light" size="md" />}
+      >
+        {selectedId === undefined ? renderList() : renderMainContent}
+      </SplitPageLoading>
     </Box>
   );
 };

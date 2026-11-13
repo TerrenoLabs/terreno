@@ -1,5 +1,7 @@
 import type {ReactNode} from "react";
 
+import type {IconName} from "../Common";
+
 /**
  * Supported OAuth providers for social login buttons.
  */
@@ -20,6 +22,26 @@ export interface OAuthProviderConfig {
 }
 
 /**
+ * Configuration for a sign-in provider without a branded `SocialLoginButton`, such as a Better
+ * Auth generic OAuth/OIDC provider (`mock-oidc`, a company SSO). It renders as an outline
+ * `Button` reading "Continue with {label}".
+ */
+export interface GenericOAuthProviderConfig {
+  /** Provider id, matching the id passed to `signIn.social` and to `lastUsedMethod`. */
+  id: string;
+  /** Display name. The button reads "Continue with {label}". */
+  label: string;
+  /** Callback triggered when the provider button is pressed. */
+  onPress: () => Promise<void>;
+  /** Whether the button is in a loading state. */
+  loading?: boolean;
+  /** Whether the button is disabled. */
+  disabled?: boolean;
+  /** Optional FontAwesome icon shown before the label. */
+  iconName?: IconName;
+}
+
+/**
  * Configuration for a sign-up form field.
  */
 export interface SignUpFieldConfig {
@@ -34,7 +56,7 @@ export interface SignUpFieldConfig {
   /** Whether the field is required. */
   required?: boolean;
   /** Auto-complete hint for the field. */
-  autoComplete?: "current-password" | "on" | "off" | "username";
+  autoComplete?: "current-password" | "email" | "new-password" | "on" | "off" | "username";
 }
 
 /**

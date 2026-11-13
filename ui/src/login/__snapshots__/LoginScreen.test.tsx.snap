@@ -22,295 +22,61 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                         {
                           "$$typeof": Symbol(react.test.json),
                           "children": [
-                            "Log In",
-                          ],
-                          "props": {
-                            "numberOfLines": 0,
-                            "style": {
-                              "color": "#1C1C1C",
-                              "fontFamily": "heading-bold",
-                              "fontSize": 16,
-                            },
-                            "testID": "login-screen-title",
-                          },
-                          "type": "Text",
-                        },
-                      ],
-                      "props": {
-                        "onPointerEnter": [Function: AsyncFunction],
-                        "onPointerLeave": [Function: AsyncFunction],
-                        "style": {
-                          "marginBottom": 48,
-                        },
-                        "testID": undefined,
-                      },
-                      "type": "View",
-                    },
-                    {
-                      "$$typeof": Symbol(react.test.json),
-                      "children": [
-                        {
-                          "$$typeof": Symbol(react.test.json),
-                          "children": [
-                            {
-                              "$$typeof": Symbol(react.test.json),
-                              "children": [
-                                "Email",
-                              ],
-                              "props": {
-                                "style": {
-                                  "color": "#1C1C1C",
-                                  "fontSize": 14,
-                                  "fontWeight": 600,
-                                  "lineHeight": 22.4,
-                                },
-                                "testID": "login-screen-email-input.label",
-                              },
-                              "type": "Text",
-                            },
                             {
                               "$$typeof": Symbol(react.test.json),
                               "children": [
                                 {
                                   "$$typeof": Symbol(react.test.json),
                                   "children": [
-                                    {
-                                      "$$typeof": Symbol(react.test.json),
-                                      "children": null,
-                                      "props": {
-                                        "accessibilityHint": "Enter text here",
-                                        "accessibilityState": {
-                                          "disabled": true,
-                                        },
-                                        "aria-label": "Text input field",
-                                        "autoCapitalize": "none",
-                                        "autoCorrect": false,
-                                        "blurOnSubmit": true,
-                                        "enterKeyHint": undefined,
-                                        "keyboardType": "email-address",
-                                        "multiline": undefined,
-                                        "nativeID": "login-screen-email-input",
-                                        "numberOfLines": 1,
-                                        "onBlur": [Function],
-                                        "onChangeText": [Function],
-                                        "onContentSizeChange": [Function],
-                                        "onFocus": [Function],
-                                        "onSubmitEditing": [Function],
-                                        "placeholder": "Email",
-                                        "placeholderTextColor": "#686868",
-                                        "readOnly": true,
-                                        "ref": [Function],
-                                        "secureTextEntry": false,
-                                        "style": {
-                                          "color": "#1C1C1C",
-                                          "flex": 1,
-                                          "fontFamily": "text",
-                                          "fontSize": 16,
-                                          "gap": 10,
-                                          "height": 24,
-                                          "paddingVertical": 0,
-                                          "width": "100%",
-                                        },
-                                        "testID": "login-screen-email-input",
-                                        "textContentType": "emailAddress",
-                                        "underlineColorAndroid": "transparent",
-                                        "value": "",
-                                      },
-                                      "type": "TextInput",
-                                    },
+                                    "Log In",
                                   ],
                                   "props": {
+                                    "numberOfLines": 0,
                                     "style": {
-                                      "alignItems": "center",
-                                      "flexDirection": "row",
+                                      "color": "#1C1C1C",
+                                      "fontFamily": "heading-bold",
+                                      "fontSize": 28,
                                     },
-                                    "testID": undefined,
+                                    "testID": "login-screen-title",
                                   },
-                                  "type": "View",
+                                  "type": "Text",
                                 },
-                              ],
-                              "props": {
-                                "style": {
-                                  "backgroundColor": "#CDCDCD",
-                                  "borderColor": "#4E4E4E",
-                                  "borderRadius": 4,
-                                  "borderWidth": 1,
-                                  "flexDirection": "column",
-                                  "gap": 0,
-                                  "overflow": "hidden",
-                                  "paddingHorizontal": 12,
-                                  "paddingVertical": 8,
-                                },
-                                "testID": undefined,
-                              },
-                              "type": "View",
-                            },
-                          ],
-                          "props": {
-                            "style": {
-                              "flexDirection": "column",
-                              "width": "100%",
-                            },
-                            "testID": undefined,
-                          },
-                          "type": "View",
-                        },
-                        {
-                          "$$typeof": Symbol(react.test.json),
-                          "children": [
-                            {
-                              "$$typeof": Symbol(react.test.json),
-                              "children": [
-                                "Password",
-                              ],
-                              "props": {
-                                "style": {
-                                  "color": "#1C1C1C",
-                                  "fontSize": 14,
-                                  "fontWeight": 600,
-                                  "lineHeight": 22.4,
-                                },
-                                "testID": "login-screen-password-input.label",
-                              },
-                              "type": "Text",
-                            },
-                            {
-                              "$$typeof": Symbol(react.test.json),
-                              "children": [
                                 {
                                   "$$typeof": Symbol(react.test.json),
                                   "children": [
                                     {
                                       "$$typeof": Symbol(react.test.json),
-                                      "children": null,
+                                      "children": [
+                                        "Choose how you want to sign in.",
+                                      ],
                                       "props": {
-                                        "accessibilityHint": "Enter text here",
-                                        "accessibilityState": {
-                                          "disabled": true,
-                                        },
-                                        "aria-label": "Text input field",
-                                        "autoCapitalize": "none",
-                                        "autoCorrect": false,
-                                        "blurOnSubmit": true,
-                                        "enterKeyHint": undefined,
-                                        "keyboardType": "default",
-                                        "multiline": undefined,
-                                        "nativeID": "login-screen-password-input",
-                                        "numberOfLines": 1,
-                                        "onBlur": [Function],
-                                        "onChangeText": [Function],
-                                        "onContentSizeChange": [Function],
-                                        "onFocus": [Function],
-                                        "onSubmitEditing": [Function],
-                                        "placeholder": "Password",
-                                        "placeholderTextColor": "#686868",
-                                        "readOnly": true,
-                                        "ref": [Function],
-                                        "secureTextEntry": true,
+                                        "numberOfLines": 0,
+                                        "selectable": undefined,
                                         "style": {
-                                          "color": "#1C1C1C",
-                                          "flex": 1,
-                                          "fontFamily": "text",
-                                          "fontSize": 16,
-                                          "gap": 10,
-                                          "height": 24,
-                                          "paddingVertical": 0,
-                                          "width": "100%",
+                                          "color": "#686868",
+                                          "fontFamily": "text-regular",
+                                          "fontSize": 14,
+                                          "textAlign": "left",
                                         },
-                                        "testID": "login-screen-password-input",
-                                        "textContentType": "password",
-                                        "underlineColorAndroid": "transparent",
-                                        "value": "",
+                                        "testID": "login-screen-subtitle",
                                       },
-                                      "type": "TextInput",
-                                    },
-                                    {
-                                      "$$typeof": Symbol(react.test.json),
-                                      "children": null,
-                                      "props": {
-                                        "accessibilityLabel": "Show password",
-                                        "accessibilityRole": "button",
-                                        "accessibilityState": {
-                                          "disabled": true,
-                                          "expanded": false,
-                                        },
-                                        "disabled": true,
-                                        "hitSlop": 8,
-                                        "onPress": [Function],
-                                        "style": {
-                                          "alignItems": "center",
-                                          "marginLeft": 8,
-                                          "width": 20,
-                                        },
-                                        "testID": "login-screen-password-input.visibility-toggle",
-                                      },
-                                      "type": "Pressable",
+                                      "type": "Text",
                                     },
                                   ],
-                                  "props": {
-                                    "style": {
-                                      "alignItems": "center",
-                                      "flexDirection": "row",
-                                    },
-                                    "testID": undefined,
-                                  },
+                                  "props": {},
                                   "type": "View",
                                 },
                               ],
                               "props": {
+                                "onPointerEnter": [Function: AsyncFunction],
+                                "onPointerLeave": [Function: AsyncFunction],
                                 "style": {
-                                  "backgroundColor": "#CDCDCD",
-                                  "borderColor": "#4E4E4E",
-                                  "borderRadius": 4,
-                                  "borderWidth": 1,
-                                  "flexDirection": "column",
-                                  "gap": 0,
-                                  "overflow": "hidden",
-                                  "paddingHorizontal": 12,
-                                  "paddingVertical": 8,
+                                  "gap": 4,
                                 },
                                 "testID": undefined,
                               },
                               "type": "View",
                             },
-                          ],
-                          "props": {
-                            "style": {
-                              "flexDirection": "column",
-                              "width": "100%",
-                            },
-                            "testID": undefined,
-                          },
-                          "type": "View",
-                        },
-                        {
-                          "$$typeof": Symbol(react.test.json),
-                          "children": [
-                            {
-                              "$$typeof": Symbol(react.test.json),
-                              "children": [
-                                "Error!",
-                              ],
-                              "props": {
-                                "numberOfLines": 0,
-                                "selectable": undefined,
-                                "style": {
-                                  "color": "#BD1111",
-                                  "fontFamily": "text-regular",
-                                  "fontSize": 14,
-                                  "textAlign": "left",
-                                },
-                                "testID": "login-screen-error",
-                              },
-                              "type": "Text",
-                            },
-                          ],
-                          "props": {},
-                          "type": "View",
-                        },
-                        {
-                          "$$typeof": Symbol(react.test.json),
-                          "children": [
                             {
                               "$$typeof": Symbol(react.test.json),
                               "children": [
@@ -323,44 +89,53 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                         {
                                           "$$typeof": Symbol(react.test.json),
                                           "children": [
-                                            "Log In",
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    "Error!",
+                                                  ],
+                                                  "props": {
+                                                    "numberOfLines": 0,
+                                                    "selectable": undefined,
+                                                    "style": {
+                                                      "color": "#1C1C1C",
+                                                      "fontFamily": "text-regular",
+                                                      "fontSize": 14,
+                                                      "textAlign": "left",
+                                                    },
+                                                    "testID": undefined,
+                                                  },
+                                                  "type": "Text",
+                                                },
+                                              ],
+                                              "props": {},
+                                              "type": "View",
+                                            },
                                           ],
                                           "props": {
+                                            "onPointerEnter": [Function: AsyncFunction],
+                                            "onPointerLeave": [Function: AsyncFunction],
                                             "style": {
-                                              "color": "#FFFFFF",
-                                              "fontSize": 16,
-                                              "fontWeight": "700",
+                                              "display": "flex",
+                                              "flexShrink": 1,
+                                              "gap": 4,
                                             },
+                                            "testID": undefined,
                                           },
-                                          "type": "Text",
-                                        },
-                                      ],
-                                      "props": {
-                                        "style": {
-                                          "flexDirection": "row",
-                                        },
-                                        "testID": undefined,
-                                      },
-                                      "type": "View",
-                                    },
-                                    {
-                                      "$$typeof": Symbol(react.test.json),
-                                      "children": [
-                                        {
-                                          "$$typeof": Symbol(react.test.json),
-                                          "children": null,
-                                          "props": {
-                                            "color": "#FFFFFF",
-                                            "size": "small",
-                                          },
-                                          "type": "ActivityIndicator",
+                                          "type": "View",
                                         },
                                       ],
                                       "props": {
                                         "onPointerEnter": [Function: AsyncFunction],
                                         "onPointerLeave": [Function: AsyncFunction],
                                         "style": {
-                                          "marginLeft": 8,
+                                          "alignItems": "flex-start",
+                                          "display": "flex",
+                                          "flexDirection": "row",
+                                          "gap": 12,
                                         },
                                         "testID": undefined,
                                       },
@@ -369,7 +144,14 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "flexDirection": "row",
+                                      "backgroundColor": "#FDD7D7",
+                                      "borderColor": "#D33232",
+                                      "borderRadius": 16,
+                                      "borderWidth": 1,
+                                      "gap": 12,
+                                      "paddingHorizontal": 16,
+                                      "paddingVertical": 12,
+                                      "width": "100%",
                                     },
                                     "testID": undefined,
                                   },
@@ -377,38 +159,546 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                 },
                               ],
                               "props": {
-                                "accessibilityHint": "Press to perform action",
-                                "accessibilityLabel": "Log In",
-                                "accessibilityRole": "button",
-                                "accessibilityState": {
-                                  "disabled": true,
-                                },
-                                "disabled": true,
-                                "onPress": [Function: debounced],
+                                "role": "alert",
                                 "style": {
-                                  "alignItems": "center",
-                                  "alignSelf": "stretch",
-                                  "backgroundColor": "#949494",
-                                  "borderColor": undefined,
-                                  "borderRadius": 360,
-                                  "borderWidth": undefined,
-                                  "flexDirection": "column",
-                                  "height": undefined,
-                                  "justifyContent": "center",
-                                  "paddingHorizontal": 20,
-                                  "paddingVertical": 8,
                                   "width": "100%",
                                 },
-                                "testID": "login-screen-submit-button",
+                                "testID": "login-screen-error",
                               },
-                              "type": "Pressable",
+                              "type": "View",
+                            },
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": [
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        "Email",
+                                                      ],
+                                                      "props": {
+                                                        "numberOfLines": 0,
+                                                        "selectable": undefined,
+                                                        "style": {
+                                                          "color": "#1C1C1C",
+                                                          "fontFamily": "text-bold",
+                                                          "fontSize": 14,
+                                                          "textAlign": "left",
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "Text",
+                                                    },
+                                                  ],
+                                                  "props": {},
+                                                  "type": "View",
+                                                },
+                                              ],
+                                              "props": {
+                                                "onPointerEnter": [Function: AsyncFunction],
+                                                "onPointerLeave": [Function: AsyncFunction],
+                                                "style": {
+                                                  "alignItems": "center",
+                                                  "display": "flex",
+                                                  "flexDirection": "row",
+                                                  "gap": 8,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "onPointerEnter": [Function: AsyncFunction],
+                                            "onPointerLeave": [Function: AsyncFunction],
+                                            "style": {
+                                              "alignItems": "center",
+                                              "display": "flex",
+                                              "flexDirection": "row",
+                                              "justifyContent": "space-between",
+                                              "width": "100%",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": null,
+                                                      "props": {
+                                                        "accessibilityHint": "Enter text here",
+                                                        "accessibilityState": {
+                                                          "disabled": true,
+                                                        },
+                                                        "aria-describedby": undefined,
+                                                        "aria-invalid": false,
+                                                        "aria-label": "Email",
+                                                        "autoCapitalize": "none",
+                                                        "autoComplete": "username",
+                                                        "autoCorrect": false,
+                                                        "blurOnSubmit": false,
+                                                        "enterKeyHint": "next",
+                                                        "keyboardType": "email-address",
+                                                        "multiline": undefined,
+                                                        "nativeID": "login-screen-email-input",
+                                                        "numberOfLines": 1,
+                                                        "onBlur": [Function],
+                                                        "onChangeText": [Function],
+                                                        "onContentSizeChange": [Function],
+                                                        "onFocus": [Function],
+                                                        "onSubmitEditing": [Function],
+                                                        "placeholder": "you@example.com",
+                                                        "placeholderTextColor": "#686868",
+                                                        "readOnly": true,
+                                                        "ref": [Function],
+                                                        "secureTextEntry": false,
+                                                        "style": {
+                                                          "color": "#1C1C1C",
+                                                          "flex": 1,
+                                                          "fontFamily": "text",
+                                                          "fontSize": 16,
+                                                          "gap": 10,
+                                                          "height": 24,
+                                                          "letterSpacing": undefined,
+                                                          "paddingVertical": 0,
+                                                          "width": "100%",
+                                                        },
+                                                        "testID": "login-screen-email-input",
+                                                        "textContentType": "username",
+                                                        "underlineColorAndroid": "transparent",
+                                                        "value": "",
+                                                      },
+                                                      "type": "TextInput",
+                                                    },
+                                                  ],
+                                                  "props": {
+                                                    "style": {
+                                                      "alignItems": "center",
+                                                      "flexDirection": "row",
+                                                    },
+                                                    "testID": undefined,
+                                                  },
+                                                  "type": "View",
+                                                },
+                                              ],
+                                              "props": {
+                                                "style": {
+                                                  "backgroundColor": "#CDCDCD",
+                                                  "borderColor": "#4E4E4E",
+                                                  "borderRadius": 4,
+                                                  "borderWidth": 1,
+                                                  "flexDirection": "column",
+                                                  "gap": 0,
+                                                  "overflow": "hidden",
+                                                  "paddingHorizontal": 12,
+                                                  "paddingVertical": 8,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "flexDirection": "column",
+                                              "width": "100%",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "onPointerEnter": [Function: AsyncFunction],
+                                        "onPointerLeave": [Function: AsyncFunction],
+                                        "style": {
+                                          "gap": 8,
+                                          "width": "100%",
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        "Password",
+                                                      ],
+                                                      "props": {
+                                                        "numberOfLines": 0,
+                                                        "selectable": undefined,
+                                                        "style": {
+                                                          "color": "#1C1C1C",
+                                                          "fontFamily": "text-bold",
+                                                          "fontSize": 14,
+                                                          "textAlign": "left",
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "Text",
+                                                    },
+                                                  ],
+                                                  "props": {},
+                                                  "type": "View",
+                                                },
+                                              ],
+                                              "props": {
+                                                "onPointerEnter": [Function: AsyncFunction],
+                                                "onPointerLeave": [Function: AsyncFunction],
+                                                "style": {
+                                                  "alignItems": "center",
+                                                  "display": "flex",
+                                                  "flexDirection": "row",
+                                                  "gap": 8,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        "Forgot password?",
+                                                      ],
+                                                      "props": {
+                                                        "numberOfLines": 0,
+                                                        "selectable": undefined,
+                                                        "style": {
+                                                          "color": "#0A7092",
+                                                          "fontFamily": "text-bold",
+                                                          "fontSize": 10,
+                                                          "textAlign": "left",
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "Text",
+                                                    },
+                                                  ],
+                                                  "props": {},
+                                                  "type": "View",
+                                                },
+                                              ],
+                                              "props": {
+                                                "accessibilityRole": "link",
+                                                "accessibilityState": {
+                                                  "disabled": true,
+                                                },
+                                                "disabled": true,
+                                                "onPress": [Function],
+                                                "testID": "login-screen-forgot-password",
+                                              },
+                                              "type": "Pressable",
+                                            },
+                                          ],
+                                          "props": {
+                                            "onPointerEnter": [Function: AsyncFunction],
+                                            "onPointerLeave": [Function: AsyncFunction],
+                                            "style": {
+                                              "alignItems": "center",
+                                              "display": "flex",
+                                              "flexDirection": "row",
+                                              "justifyContent": "space-between",
+                                              "width": "100%",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": null,
+                                                      "props": {
+                                                        "accessibilityHint": "Enter text here",
+                                                        "accessibilityState": {
+                                                          "disabled": true,
+                                                        },
+                                                        "aria-describedby": undefined,
+                                                        "aria-invalid": false,
+                                                        "aria-label": "Password",
+                                                        "autoCapitalize": "none",
+                                                        "autoComplete": "current-password",
+                                                        "autoCorrect": false,
+                                                        "blurOnSubmit": true,
+                                                        "enterKeyHint": "go",
+                                                        "keyboardType": "default",
+                                                        "multiline": undefined,
+                                                        "nativeID": "login-screen-password-input",
+                                                        "numberOfLines": 1,
+                                                        "onBlur": [Function],
+                                                        "onChangeText": [Function],
+                                                        "onContentSizeChange": [Function],
+                                                        "onFocus": [Function],
+                                                        "onSubmitEditing": [Function],
+                                                        "placeholder": undefined,
+                                                        "placeholderTextColor": "#686868",
+                                                        "readOnly": true,
+                                                        "ref": [Function],
+                                                        "secureTextEntry": true,
+                                                        "style": {
+                                                          "color": "#1C1C1C",
+                                                          "flex": 1,
+                                                          "fontFamily": "text",
+                                                          "fontSize": 16,
+                                                          "gap": 10,
+                                                          "height": 24,
+                                                          "letterSpacing": undefined,
+                                                          "paddingVertical": 0,
+                                                          "width": "100%",
+                                                        },
+                                                        "testID": "login-screen-password-input",
+                                                        "textContentType": "password",
+                                                        "underlineColorAndroid": "transparent",
+                                                        "value": "",
+                                                      },
+                                                      "type": "TextInput",
+                                                    },
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": null,
+                                                      "props": {
+                                                        "accessibilityLabel": "Show password",
+                                                        "accessibilityRole": "button",
+                                                        "accessibilityState": {
+                                                          "disabled": true,
+                                                          "expanded": false,
+                                                        },
+                                                        "disabled": true,
+                                                        "hitSlop": 8,
+                                                        "onPress": [Function],
+                                                        "style": {
+                                                          "alignItems": "center",
+                                                          "marginLeft": 8,
+                                                          "width": 20,
+                                                        },
+                                                        "testID": "login-screen-password-input.visibility-toggle",
+                                                      },
+                                                      "type": "Pressable",
+                                                    },
+                                                  ],
+                                                  "props": {
+                                                    "style": {
+                                                      "alignItems": "center",
+                                                      "flexDirection": "row",
+                                                    },
+                                                    "testID": undefined,
+                                                  },
+                                                  "type": "View",
+                                                },
+                                              ],
+                                              "props": {
+                                                "style": {
+                                                  "backgroundColor": "#CDCDCD",
+                                                  "borderColor": "#4E4E4E",
+                                                  "borderRadius": 4,
+                                                  "borderWidth": 1,
+                                                  "flexDirection": "column",
+                                                  "gap": 0,
+                                                  "overflow": "hidden",
+                                                  "paddingHorizontal": 12,
+                                                  "paddingVertical": 8,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "flexDirection": "column",
+                                              "width": "100%",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "onPointerEnter": [Function: AsyncFunction],
+                                        "onPointerLeave": [Function: AsyncFunction],
+                                        "style": {
+                                          "gap": 8,
+                                          "width": "100%",
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    "Signing in",
+                                                  ],
+                                                  "props": {
+                                                    "style": {
+                                                      "color": "#FFFFFF",
+                                                      "fontSize": 16,
+                                                      "fontWeight": "700",
+                                                    },
+                                                  },
+                                                  "type": "Text",
+                                                },
+                                              ],
+                                              "props": {
+                                                "style": {
+                                                  "flexDirection": "row",
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": null,
+                                                  "props": {
+                                                    "color": "#FFFFFF",
+                                                    "size": "small",
+                                                  },
+                                                  "type": "ActivityIndicator",
+                                                },
+                                              ],
+                                              "props": {
+                                                "onPointerEnter": [Function: AsyncFunction],
+                                                "onPointerLeave": [Function: AsyncFunction],
+                                                "style": {
+                                                  "marginLeft": 8,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "flexDirection": "row",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "accessibilityHint": "Press to perform action",
+                                        "accessibilityLabel": "Signing in",
+                                        "accessibilityRole": "button",
+                                        "accessibilityState": {
+                                          "disabled": true,
+                                        },
+                                        "disabled": true,
+                                        "onPress": [Function: debounced],
+                                        "style": {
+                                          "alignItems": "center",
+                                          "alignSelf": "stretch",
+                                          "backgroundColor": "#949494",
+                                          "borderColor": undefined,
+                                          "borderRadius": 360,
+                                          "borderWidth": undefined,
+                                          "flexDirection": "column",
+                                          "height": undefined,
+                                          "justifyContent": "center",
+                                          "paddingHorizontal": 20,
+                                          "paddingVertical": 8,
+                                          "width": "100%",
+                                        },
+                                        "testID": "login-screen-submit-button",
+                                      },
+                                      "type": "Pressable",
+                                    },
+                                  ],
+                                  "props": {
+                                    "onPointerEnter": [Function: AsyncFunction],
+                                    "onPointerLeave": [Function: AsyncFunction],
+                                    "style": {
+                                      "gap": 16,
+                                      "width": "100%",
+                                    },
+                                    "testID": "login-screen-form",
+                                  },
+                                  "type": "View",
+                                },
+                              ],
+                              "props": {
+                                "onPointerEnter": [Function: AsyncFunction],
+                                "onPointerLeave": [Function: AsyncFunction],
+                                "style": {
+                                  "gap": 24,
+                                  "width": "100%",
+                                },
+                                "testID": undefined,
+                              },
+                              "type": "View",
                             },
                           ],
                           "props": {
                             "onPointerEnter": [Function: AsyncFunction],
                             "onPointerLeave": [Function: AsyncFunction],
                             "style": {
-                              "marginTop": 16,
+                              "display": "flex",
+                              "flexGrow": 1,
+                              "flexShrink": 1,
+                              "gap": 24,
+                              "width": "100%",
                             },
                             "testID": undefined,
                           },
@@ -423,84 +713,25 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                 {
                                   "$$typeof": Symbol(react.test.json),
                                   "children": [
-                                    {
-                                      "$$typeof": Symbol(react.test.json),
-                                      "children": [
-                                        {
-                                          "$$typeof": Symbol(react.test.json),
-                                          "children": [
-                                            "Forgot password?",
-                                          ],
-                                          "props": {
-                                            "style": {
-                                              "color": "#FFFFFF",
-                                              "fontSize": 16,
-                                              "fontWeight": "700",
-                                            },
-                                          },
-                                          "type": "Text",
-                                        },
-                                      ],
-                                      "props": {
-                                        "style": {
-                                          "flexDirection": "row",
-                                        },
-                                        "testID": undefined,
-                                      },
-                                      "type": "View",
-                                    },
+                                    "New here?",
                                   ],
                                   "props": {
+                                    "numberOfLines": 0,
+                                    "selectable": undefined,
                                     "style": {
-                                      "flexDirection": "row",
+                                      "color": "#686868",
+                                      "fontFamily": "text-regular",
+                                      "fontSize": 14,
+                                      "textAlign": "left",
                                     },
                                     "testID": undefined,
                                   },
-                                  "type": "View",
+                                  "type": "Text",
                                 },
                               ],
-                              "props": {
-                                "accessibilityHint": "Press to perform action",
-                                "accessibilityLabel": "Forgot password?",
-                                "accessibilityRole": "button",
-                                "accessibilityState": {
-                                  "disabled": true,
-                                },
-                                "disabled": true,
-                                "onPress": [Function: debounced],
-                                "style": {
-                                  "alignItems": "center",
-                                  "alignSelf": "flex-start",
-                                  "backgroundColor": "#949494",
-                                  "borderColor": undefined,
-                                  "borderRadius": 360,
-                                  "borderWidth": undefined,
-                                  "flexDirection": "column",
-                                  "height": undefined,
-                                  "justifyContent": "center",
-                                  "paddingHorizontal": 20,
-                                  "paddingVertical": 8,
-                                  "width": "auto",
-                                },
-                                "testID": "login-screen-forgot-password",
-                              },
-                              "type": "Pressable",
+                              "props": {},
+                              "type": "View",
                             },
-                          ],
-                          "props": {
-                            "onPointerEnter": [Function: AsyncFunction],
-                            "onPointerLeave": [Function: AsyncFunction],
-                            "style": {
-                              "alignItems": "center",
-                              "marginTop": 8,
-                            },
-                            "testID": undefined,
-                          },
-                          "type": "View",
-                        },
-                        {
-                          "$$typeof": Symbol(react.test.json),
-                          "children": [
                             {
                               "$$typeof": Symbol(react.test.json),
                               "children": [
@@ -510,62 +741,30 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                                     {
                                       "$$typeof": Symbol(react.test.json),
                                       "children": [
-                                        {
-                                          "$$typeof": Symbol(react.test.json),
-                                          "children": [
-                                            "Need an account? Sign Up",
-                                          ],
-                                          "props": {
-                                            "style": {
-                                              "color": "#FFFFFF",
-                                              "fontSize": 16,
-                                              "fontWeight": "700",
-                                            },
-                                          },
-                                          "type": "Text",
-                                        },
+                                        "Create an account",
                                       ],
                                       "props": {
+                                        "numberOfLines": 0,
+                                        "selectable": undefined,
                                         "style": {
-                                          "flexDirection": "row",
+                                          "color": "#0A7092",
+                                          "fontFamily": "text-bold",
+                                          "fontSize": 14,
+                                          "textAlign": "left",
                                         },
                                         "testID": undefined,
                                       },
-                                      "type": "View",
+                                      "type": "Text",
                                     },
                                   ],
-                                  "props": {
-                                    "style": {
-                                      "flexDirection": "row",
-                                    },
-                                    "testID": undefined,
-                                  },
+                                  "props": {},
                                   "type": "View",
                                 },
                               ],
                               "props": {
-                                "accessibilityHint": "Press to perform action",
-                                "accessibilityLabel": "Need an account? Sign Up",
-                                "accessibilityRole": "button",
-                                "accessibilityState": {
-                                  "disabled": true,
-                                },
+                                "accessibilityRole": "link",
                                 "disabled": true,
-                                "onPress": [Function: debounced],
-                                "style": {
-                                  "alignItems": "center",
-                                  "alignSelf": "stretch",
-                                  "backgroundColor": "#949494",
-                                  "borderColor": undefined,
-                                  "borderRadius": 360,
-                                  "borderWidth": undefined,
-                                  "flexDirection": "column",
-                                  "height": undefined,
-                                  "justifyContent": "center",
-                                  "paddingHorizontal": 20,
-                                  "paddingVertical": 8,
-                                  "width": "100%",
-                                },
+                                "onPress": [Function],
                                 "testID": "login-screen-signup-link",
                               },
                               "type": "Pressable",
@@ -575,7 +774,13 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                             "onPointerEnter": [Function: AsyncFunction],
                             "onPointerLeave": [Function: AsyncFunction],
                             "style": {
-                              "marginTop": 8,
+                              "alignItems": "center",
+                              "display": "flex",
+                              "flexDirection": "row",
+                              "gap": 4,
+                              "justifyContent": "center",
+                              "paddingBottom": 8,
+                              "paddingTop": 8,
                             },
                             "testID": undefined,
                           },
@@ -586,29 +791,944 @@ exports[`LoginScreen renders correctly with all props 1`] = `
                         "onPointerEnter": [Function: AsyncFunction],
                         "onPointerLeave": [Function: AsyncFunction],
                         "style": {
-                          "gap": 16,
+                          "alignSelf": "center",
+                          "display": "flex",
+                          "flexGrow": 1,
+                          "flexShrink": 1,
+                          "maxWidth": 400,
+                          "padding": 16,
                           "width": "100%",
                         },
-                        "testID": undefined,
+                        "testID": "login-screen",
                       },
                       "type": "View",
                     },
                   ],
                   "props": {
-                    "onPointerEnter": [Function: AsyncFunction],
-                    "onPointerLeave": [Function: AsyncFunction],
+                    "accessibilityState": {
+                      "busy": true,
+                    },
+                    "aria-busy": true,
                     "style": {
                       "alignItems": "center",
-                      "alignSelf": "center",
-                      "display": "flex",
                       "flexGrow": 1,
-                      "flexShrink": 1,
-                      "justifyContent": "center",
-                      "maxWidth": 400,
-                      "padding": 16,
                       "width": "100%",
                     },
-                    "testID": "login-screen",
+                    "testID": undefined,
+                  },
+                  "type": "View",
+                },
+              ],
+              "props": {
+                "onPointerEnter": [Function: AsyncFunction],
+                "onPointerLeave": [Function: AsyncFunction],
+                "style": {
+                  "alignSelf": "center",
+                  "backgroundColor": "#FFFFFF",
+                  "display": "flex",
+                  "flex": undefined,
+                  "flexDirection": "column",
+                  "flexGrow": 1,
+                  "flexShrink": 1,
+                  "height": "100%",
+                  "maxWidth": 800,
+                  "padding": 8,
+                  "width": "100%",
+                },
+                "testID": undefined,
+              },
+              "type": "View",
+            },
+          ],
+          "props": {
+            "contentContainerStyle": {
+              "alignContent": undefined,
+              "alignItems": undefined,
+              "justifyContent": undefined,
+            },
+            "horizontal": false,
+            "keyboardShouldPersistTaps": "handled",
+            "nestedScrollEnabled": true,
+            "onScroll": [Function],
+            "ref": {
+              "current": null,
+            },
+            "scrollEventThrottle": 50,
+            "style": {
+              "alignSelf": "center",
+              "backgroundColor": "#FFFFFF",
+              "display": "flex",
+              "flex": undefined,
+              "flexDirection": "column",
+              "flexGrow": 1,
+              "flexShrink": 1,
+              "height": "100%",
+              "maxWidth": 800,
+              "padding": 8,
+              "width": "100%",
+            },
+          },
+          "type": "ScrollView",
+        },
+      ],
+      "props": {
+        "style": {
+          "display": "flex",
+          "flex": 1,
+        },
+      },
+      "type": "SafeAreaView",
+    },
+  ],
+  "props": {
+    "behavior": "padding",
+    "keyboardVerticalOffset": undefined,
+    "style": {
+      "display": "flex",
+      "flex": 1,
+    },
+  },
+  "type": "KeyboardAvoidingView",
+}
+`;
+
+exports[`LoginScreen v2 snapshot renders every new state together 1`] = `
+{
+  "$$typeof": Symbol(react.test.json),
+  "children": [
+    {
+      "$$typeof": Symbol(react.test.json),
+      "children": [
+        {
+          "$$typeof": Symbol(react.test.json),
+          "children": [
+            {
+              "$$typeof": Symbol(react.test.json),
+              "children": [
+                {
+                  "$$typeof": Symbol(react.test.json),
+                  "children": [
+                    {
+                      "$$typeof": Symbol(react.test.json),
+                      "children": [
+                        {
+                          "$$typeof": Symbol(react.test.json),
+                          "children": [
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": [
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    "Welcome back",
+                                  ],
+                                  "props": {
+                                    "numberOfLines": 0,
+                                    "style": {
+                                      "color": "#1C1C1C",
+                                      "fontFamily": "heading-bold",
+                                      "fontSize": 28,
+                                    },
+                                    "testID": "login-screen-title",
+                                  },
+                                  "type": "Text",
+                                },
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        "Pick up where you left off.",
+                                      ],
+                                      "props": {
+                                        "numberOfLines": 0,
+                                        "selectable": undefined,
+                                        "style": {
+                                          "color": "#686868",
+                                          "fontFamily": "text-regular",
+                                          "fontSize": 14,
+                                          "textAlign": "left",
+                                        },
+                                        "testID": "login-screen-subtitle",
+                                      },
+                                      "type": "Text",
+                                    },
+                                  ],
+                                  "props": {},
+                                  "type": "View",
+                                },
+                              ],
+                              "props": {
+                                "onPointerEnter": [Function: AsyncFunction],
+                                "onPointerLeave": [Function: AsyncFunction],
+                                "style": {
+                                  "gap": 4,
+                                },
+                                "testID": undefined,
+                              },
+                              "type": "View",
+                            },
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": [
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    "Sign in with Google to link GitHub.",
+                                                  ],
+                                                  "props": {
+                                                    "numberOfLines": 0,
+                                                    "selectable": undefined,
+                                                    "style": {
+                                                      "color": "#1C1C1C",
+                                                      "fontFamily": "text-regular",
+                                                      "fontSize": 14,
+                                                      "textAlign": "left",
+                                                    },
+                                                    "testID": undefined,
+                                                  },
+                                                  "type": "Text",
+                                                },
+                                              ],
+                                              "props": {},
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "onPointerEnter": [Function: AsyncFunction],
+                                            "onPointerLeave": [Function: AsyncFunction],
+                                            "style": {
+                                              "display": "flex",
+                                              "flexShrink": 1,
+                                              "gap": 4,
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "onPointerEnter": [Function: AsyncFunction],
+                                        "onPointerLeave": [Function: AsyncFunction],
+                                        "style": {
+                                          "alignItems": "flex-start",
+                                          "display": "flex",
+                                          "flexDirection": "row",
+                                          "gap": 12,
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                  ],
+                                  "props": {
+                                    "style": {
+                                      "backgroundColor": "#FFE3C6",
+                                      "borderColor": "#F36719",
+                                      "borderRadius": 16,
+                                      "borderWidth": 1,
+                                      "gap": 12,
+                                      "paddingHorizontal": 16,
+                                      "paddingVertical": 12,
+                                      "width": "100%",
+                                    },
+                                    "testID": undefined,
+                                  },
+                                  "type": "View",
+                                },
+                              ],
+                              "props": {
+                                "role": "alert",
+                                "style": {
+                                  "width": "100%",
+                                },
+                                "testID": "login-screen-notice",
+                              },
+                              "type": "View",
+                            },
+                            {
+                              "$$typeof": Symbol(react.test.json),
+                              "children": [
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            "Continue as",
+                                          ],
+                                          "props": {
+                                            "numberOfLines": 0,
+                                            "style": {
+                                              "color": "#1C1C1C",
+                                              "fontFamily": "heading-semibold",
+                                              "fontSize": 14,
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "Text",
+                                        },
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    "Edit",
+                                                  ],
+                                                  "props": {
+                                                    "numberOfLines": 0,
+                                                    "selectable": undefined,
+                                                    "style": {
+                                                      "color": "#0A7092",
+                                                      "fontFamily": "text-bold",
+                                                      "fontSize": 14,
+                                                      "textAlign": "left",
+                                                    },
+                                                    "testID": undefined,
+                                                  },
+                                                  "type": "Text",
+                                                },
+                                              ],
+                                              "props": {},
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "accessibilityRole": "button",
+                                            "onPress": [Function],
+                                            "testID": "login-screen-accounts-edit",
+                                          },
+                                          "type": "Pressable",
+                                        },
+                                      ],
+                                      "props": {
+                                        "onPointerEnter": [Function: AsyncFunction],
+                                        "onPointerLeave": [Function: AsyncFunction],
+                                        "style": {
+                                          "alignItems": "center",
+                                          "display": "flex",
+                                          "flexDirection": "row",
+                                          "justifyContent": "space-between",
+                                          "marginBottom": 8,
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        {
+                                                          "$$typeof": Symbol(react.test.json),
+                                                          "children": [
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "A",
+                                                                "L",
+                                                                ],
+                                                                "props": {
+                                                                "style": {
+                                                                "color": "#FFFFFF",
+                                                                "fontSize": 16,
+                                                                "fontWeight": 500,
+                                                                },
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                              ],
+                                                              "props": {
+                                                                "style": {
+                                                                "alignItems": "center",
+                                                                "backgroundColor": "#2B6072",
+                                                                "borderColor": "transparent",
+                                                                "borderRadius": 19,
+                                                                "borderWidth": 0,
+                                                                "display": "flex",
+                                                                "height": 38,
+                                                                "justifyContent": "center",
+                                                                "width": 38,
+                                                                },
+                                                                "testID": undefined,
+                                                              },
+                                                              "type": "View",
+                                                            },
+                                                          ],
+                                                          "props": {
+                                                            "aria-role": "button",
+                                                            "focusable": false,
+                                                            "style": {
+                                                              "borderRadius": 1,
+                                                              "cursor": "auto",
+                                                              "overflow": "hidden",
+                                                              "position": "relative",
+                                                            },
+                                                          },
+                                                          "type": "Pressable",
+                                                        },
+                                                      ],
+                                                      "props": {
+                                                        "accessibilityHint": "Avatar image",
+                                                        "aria-label": "Ada Lovelace's avatar",
+                                                        "aria-role": "image",
+                                                        "style": {
+                                                          "height": 38,
+                                                          "position": "relative",
+                                                          "width": 38,
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "View",
+                                                    },
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        {
+                                                          "$$typeof": Symbol(react.test.json),
+                                                          "children": [
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "Ada Lovelace",
+                                                                ],
+                                                                "props": {
+                                                                "numberOfLines": 1,
+                                                                "selectable": undefined,
+                                                                "style": {
+                                                                "color": "#1C1C1C",
+                                                                "fontFamily": "text-bold",
+                                                                "fontSize": 14,
+                                                                "textAlign": "left",
+                                                                },
+                                                                "testID": undefined,
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                              ],
+                                                              "props": {},
+                                                              "type": "View",
+                                                            },
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "Last used",
+                                                                ],
+                                                                "props": {
+                                                                "numberOfLines": 0,
+                                                                "selectable": undefined,
+                                                                "style": {
+                                                                "color": "#092E3A",
+                                                                "fontFamily": "text-bold",
+                                                                "fontSize": 10,
+                                                                "textAlign": "left",
+                                                                },
+                                                                "testID": undefined,
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                                ],
+                                                                "props": {},
+                                                                "type": "View",
+                                                                },
+                                                              ],
+                                                              "props": {
+                                                                "style": {
+                                                                "backgroundColor": "#F2F9FA",
+                                                                "borderColor": "#B6CDD5",
+                                                                "borderRadius": 360,
+                                                                "borderWidth": 1,
+                                                                "paddingHorizontal": 8,
+                                                                "paddingVertical": 2,
+                                                                },
+                                                                "testID": "login-screen-last-used-account-0",
+                                                              },
+                                                              "type": "View",
+                                                            },
+                                                          ],
+                                                          "props": {
+                                                            "onPointerEnter": [Function: AsyncFunction],
+                                                            "onPointerLeave": [Function: AsyncFunction],
+                                                            "style": {
+                                                              "alignItems": "center",
+                                                              "display": "flex",
+                                                              "flexDirection": "row",
+                                                              "gap": 8,
+                                                            },
+                                                            "testID": undefined,
+                                                          },
+                                                          "type": "View",
+                                                        },
+                                                        {
+                                                          "$$typeof": Symbol(react.test.json),
+                                                          "children": [
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": null,
+                                                              "props": {
+                                                                "style": {
+                                                                "backgroundColor": "#3EA45C",
+                                                                "borderRadius": 4,
+                                                                "height": 8,
+                                                                "width": 8,
+                                                                },
+                                                                "testID": undefined,
+                                                              },
+                                                              "type": "View",
+                                                            },
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "Signed in · ada@example.com",
+                                                                ],
+                                                                "props": {
+                                                                "numberOfLines": 1,
+                                                                "selectable": undefined,
+                                                                "style": {
+                                                                "color": "#686868",
+                                                                "fontFamily": "text-regular",
+                                                                "fontSize": 10,
+                                                                "textAlign": "left",
+                                                                },
+                                                                "testID": undefined,
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                              ],
+                                                              "props": {},
+                                                              "type": "View",
+                                                            },
+                                                          ],
+                                                          "props": {
+                                                            "onPointerEnter": [Function: AsyncFunction],
+                                                            "onPointerLeave": [Function: AsyncFunction],
+                                                            "style": {
+                                                              "alignItems": "center",
+                                                              "display": "flex",
+                                                              "flexDirection": "row",
+                                                              "gap": 8,
+                                                            },
+                                                            "testID": undefined,
+                                                          },
+                                                          "type": "View",
+                                                        },
+                                                      ],
+                                                      "props": {
+                                                        "onPointerEnter": [Function: AsyncFunction],
+                                                        "onPointerLeave": [Function: AsyncFunction],
+                                                        "style": {
+                                                          "display": "flex",
+                                                          "flexShrink": 1,
+                                                          "gap": 4,
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "View",
+                                                    },
+                                                  ],
+                                                  "props": {
+                                                    "accessibilityHint": "Switches to this signed-in account",
+                                                    "accessibilityRole": "button",
+                                                    "accessibilityState": {
+                                                      "disabled": false,
+                                                    },
+                                                    "aria-label": "Continue as Ada Lovelace, GitHub",
+                                                    "disabled": false,
+                                                    "onPress": [Function],
+                                                    "style": {
+                                                      "alignItems": "center",
+                                                      "flexDirection": "row",
+                                                      "flexGrow": 1,
+                                                      "gap": 12,
+                                                    },
+                                                    "testID": "login-screen-continue-0",
+                                                  },
+                                                  "type": "Pressable",
+                                                },
+                                              ],
+                                              "props": {
+                                                "onPointerEnter": [Function: AsyncFunction],
+                                                "onPointerLeave": [Function: AsyncFunction],
+                                                "style": {
+                                                  "alignItems": "center",
+                                                  "display": "flex",
+                                                  "flexDirection": "row",
+                                                  "gap": 12,
+                                                  "minHeight": 68,
+                                                  "paddingBottom": 12,
+                                                  "paddingLeft": 16,
+                                                  "paddingRight": 16,
+                                                  "paddingTop": 12,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "borderTopColor": "#D9D9D9",
+                                              "borderTopWidth": 0,
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                {
+                                                  "$$typeof": Symbol(react.test.json),
+                                                  "children": [
+                                                    {
+                                                      "$$typeof": Symbol(react.test.json),
+                                                      "children": [
+                                                        {
+                                                          "$$typeof": Symbol(react.test.json),
+                                                          "children": [
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "Continue with Google",
+                                                                ],
+                                                                "props": {
+                                                                "numberOfLines": 1,
+                                                                "selectable": undefined,
+                                                                "style": {
+                                                                "color": "#1C1C1C",
+                                                                "fontFamily": "text-bold",
+                                                                "fontSize": 14,
+                                                                "textAlign": "left",
+                                                                },
+                                                                "testID": undefined,
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                              ],
+                                                              "props": {},
+                                                              "type": "View",
+                                                            },
+                                                          ],
+                                                          "props": {
+                                                            "onPointerEnter": [Function: AsyncFunction],
+                                                            "onPointerLeave": [Function: AsyncFunction],
+                                                            "style": {
+                                                              "alignItems": "center",
+                                                              "display": "flex",
+                                                              "flexDirection": "row",
+                                                              "gap": 8,
+                                                            },
+                                                            "testID": undefined,
+                                                          },
+                                                          "type": "View",
+                                                        },
+                                                        {
+                                                          "$$typeof": Symbol(react.test.json),
+                                                          "children": [
+                                                            {
+                                                              "$$typeof": Symbol(react.test.json),
+                                                              "children": [
+                                                                {
+                                                                "$$typeof": Symbol(react.test.json),
+                                                                "children": [
+                                                                "Google",
+                                                                ],
+                                                                "props": {
+                                                                "numberOfLines": 1,
+                                                                "selectable": undefined,
+                                                                "style": {
+                                                                "color": "#686868",
+                                                                "fontFamily": "text-regular",
+                                                                "fontSize": 10,
+                                                                "textAlign": "left",
+                                                                },
+                                                                "testID": undefined,
+                                                                },
+                                                                "type": "Text",
+                                                                },
+                                                              ],
+                                                              "props": {},
+                                                              "type": "View",
+                                                            },
+                                                          ],
+                                                          "props": {
+                                                            "onPointerEnter": [Function: AsyncFunction],
+                                                            "onPointerLeave": [Function: AsyncFunction],
+                                                            "style": {
+                                                              "alignItems": "center",
+                                                              "display": "flex",
+                                                              "flexDirection": "row",
+                                                              "gap": 8,
+                                                            },
+                                                            "testID": undefined,
+                                                          },
+                                                          "type": "View",
+                                                        },
+                                                      ],
+                                                      "props": {
+                                                        "onPointerEnter": [Function: AsyncFunction],
+                                                        "onPointerLeave": [Function: AsyncFunction],
+                                                        "style": {
+                                                          "display": "flex",
+                                                          "flexShrink": 1,
+                                                          "gap": 4,
+                                                        },
+                                                        "testID": undefined,
+                                                      },
+                                                      "type": "View",
+                                                    },
+                                                  ],
+                                                  "props": {
+                                                    "accessibilityHint": "Signs in to this account",
+                                                    "accessibilityRole": "button",
+                                                    "accessibilityState": {
+                                                      "disabled": false,
+                                                    },
+                                                    "aria-label": "Continue with Google",
+                                                    "disabled": false,
+                                                    "onPress": [Function],
+                                                    "style": {
+                                                      "alignItems": "center",
+                                                      "flexDirection": "row",
+                                                      "flexGrow": 1,
+                                                      "gap": 12,
+                                                    },
+                                                    "testID": "login-screen-continue-1",
+                                                  },
+                                                  "type": "Pressable",
+                                                },
+                                              ],
+                                              "props": {
+                                                "onPointerEnter": [Function: AsyncFunction],
+                                                "onPointerLeave": [Function: AsyncFunction],
+                                                "style": {
+                                                  "alignItems": "center",
+                                                  "display": "flex",
+                                                  "flexDirection": "row",
+                                                  "gap": 12,
+                                                  "minHeight": 68,
+                                                  "paddingBottom": 12,
+                                                  "paddingLeft": 16,
+                                                  "paddingRight": 16,
+                                                  "paddingTop": 12,
+                                                },
+                                                "testID": undefined,
+                                              },
+                                              "type": "View",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "borderTopColor": "#D9D9D9",
+                                              "borderTopWidth": 1,
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "onPointerEnter": [Function: AsyncFunction],
+                                        "onPointerLeave": [Function: AsyncFunction],
+                                        "style": {
+                                          "borderColor": "#CDCDCD",
+                                          "borderRadius": 16,
+                                          "borderWidth": 1,
+                                          "overflow": "hidden",
+                                          "width": "100%",
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                  ],
+                                  "props": {
+                                    "onPointerEnter": [Function: AsyncFunction],
+                                    "onPointerLeave": [Function: AsyncFunction],
+                                    "style": {
+                                      "width": "100%",
+                                    },
+                                    "testID": "login-screen-accounts",
+                                  },
+                                  "type": "View",
+                                },
+                                {
+                                  "$$typeof": Symbol(react.test.json),
+                                  "children": [
+                                    {
+                                      "$$typeof": Symbol(react.test.json),
+                                      "children": [
+                                        {
+                                          "$$typeof": Symbol(react.test.json),
+                                          "children": [
+                                            {
+                                              "$$typeof": Symbol(react.test.json),
+                                              "children": [
+                                                "Sign in another way",
+                                              ],
+                                              "props": {
+                                                "style": {
+                                                  "color": "#353535",
+                                                  "fontSize": 16,
+                                                  "fontWeight": "700",
+                                                },
+                                              },
+                                              "type": "Text",
+                                            },
+                                          ],
+                                          "props": {
+                                            "style": {
+                                              "flexDirection": "row",
+                                            },
+                                            "testID": undefined,
+                                          },
+                                          "type": "View",
+                                        },
+                                      ],
+                                      "props": {
+                                        "style": {
+                                          "flexDirection": "row",
+                                        },
+                                        "testID": undefined,
+                                      },
+                                      "type": "View",
+                                    },
+                                  ],
+                                  "props": {
+                                    "accessibilityHint": "Press to perform action",
+                                    "accessibilityLabel": "Sign in another way",
+                                    "accessibilityRole": "button",
+                                    "accessibilityState": {
+                                      "disabled": false,
+                                    },
+                                    "disabled": false,
+                                    "onPress": [Function: debounced],
+                                    "style": {
+                                      "alignItems": "center",
+                                      "alignSelf": "stretch",
+                                      "backgroundColor": "#B6CDD5",
+                                      "borderColor": undefined,
+                                      "borderRadius": 360,
+                                      "borderWidth": undefined,
+                                      "flexDirection": "column",
+                                      "height": undefined,
+                                      "justifyContent": "center",
+                                      "paddingHorizontal": 20,
+                                      "paddingVertical": 8,
+                                      "width": "100%",
+                                    },
+                                    "testID": "login-screen-another-way",
+                                  },
+                                  "type": "PressableScale",
+                                },
+                              ],
+                              "props": {
+                                "onPointerEnter": [Function: AsyncFunction],
+                                "onPointerLeave": [Function: AsyncFunction],
+                                "style": {
+                                  "gap": 24,
+                                  "width": "100%",
+                                },
+                                "testID": undefined,
+                              },
+                              "type": "View",
+                            },
+                          ],
+                          "props": {
+                            "onPointerEnter": [Function: AsyncFunction],
+                            "onPointerLeave": [Function: AsyncFunction],
+                            "style": {
+                              "display": "flex",
+                              "flexGrow": 1,
+                              "flexShrink": 1,
+                              "gap": 24,
+                              "width": "100%",
+                            },
+                            "testID": undefined,
+                          },
+                          "type": "View",
+                        },
+                      ],
+                      "props": {
+                        "onPointerEnter": [Function: AsyncFunction],
+                        "onPointerLeave": [Function: AsyncFunction],
+                        "style": {
+                          "alignSelf": "center",
+                          "display": "flex",
+                          "flexGrow": 1,
+                          "flexShrink": 1,
+                          "maxWidth": 400,
+                          "padding": 16,
+                          "width": "100%",
+                        },
+                        "testID": "login-screen",
+                      },
+                      "type": "View",
+                    },
+                  ],
+                  "props": {
+                    "accessibilityState": {
+                      "busy": false,
+                    },
+                    "aria-busy": false,
+                    "style": {
+                      "alignItems": "center",
+                      "flexGrow": 1,
+                      "width": "100%",
+                    },
+                    "testID": undefined,
                   },
                   "type": "View",
                 },

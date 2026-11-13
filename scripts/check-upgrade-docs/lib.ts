@@ -15,7 +15,7 @@ interface CheckUpgradeDocumentationOptions {
   version: string;
 }
 
-const getReleaseChangelogSection = ({
+export const getReleaseChangelogSection = ({
   changelog,
   version,
 }: {

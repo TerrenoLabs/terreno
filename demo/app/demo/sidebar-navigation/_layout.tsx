@@ -2,11 +2,16 @@ import {SidebarNavigation, type SidebarNavigationItem} from "@terreno/ui";
 import {router} from "expo-router";
 import {Pressable, StyleSheet, Text} from "react-native";
 
+export const unstable_settings = {
+  initialRouteName: "index",
+};
+
 const topItems: SidebarNavigationItem[] = [
   {iconName: "house", label: "Home", route: "index"},
   {iconName: "chart-line", label: "Dashboard", route: "dashboard"},
   {badge: 5, iconName: "folder", label: "Projects", route: "projects"},
   {badge: 142, iconName: "envelope", label: "Messages", route: "messages"},
+  {iconName: "inbox", label: "Mail", route: "mail"},
   {badge: true, iconName: "code", label: "Tools", route: "projects"},
 ];
 
@@ -40,6 +45,7 @@ const SidebarNavigationLayout = () => {
       <SidebarNavigation.Screen name="dashboard" options={{title: "Dashboard"}} />
       <SidebarNavigation.Screen name="projects" options={{title: "Projects"}} />
       <SidebarNavigation.Screen name="messages" options={{title: "Messages"}} />
+      <SidebarNavigation.Screen name="mail" options={{title: "Mail"}} />
       <SidebarNavigation.Screen name="settings" options={{title: "Settings"}} />
       <SidebarNavigation.Screen name="help" options={{title: "Help"}} />
     </SidebarNavigation>

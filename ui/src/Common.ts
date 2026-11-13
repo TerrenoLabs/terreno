@@ -1,18 +1,19 @@
 import type {Block, BlockAction, BlocksDocument, InlineDataset} from "@terreno/blocks";
+import type {Href, Stack} from "expo-router";
 import type {CountryCode} from "libphonenumber-js";
 import type React from "react";
-import type {FC, ReactElement, ReactNode} from "react";
+import type {ComponentProps, FC, ReactElement, ReactNode} from "react";
 import type {
+  DimensionValue,
   ImageStyle,
   ListRenderItemInfo,
-  Text as NativeText,
-  ScrollView,
+  ScrollViewInstance,
   StyleProp,
-  TextInput,
+  TextInputInstance,
+  TextInstance,
   TextStyle,
   ViewStyle,
 } from "react-native";
-import type {DimensionValue} from "react-native/Libraries/StyleSheet/StyleSheetTypes";
 import type {Styles} from "react-native-google-places-autocomplete";
 import type {SvgProps} from "react-native-svg";
 
@@ -89,7 +90,7 @@ export interface AccordionProps extends InfoModalIconProps {
 
   /**
    * If true, the accordion will be collapsed.
-   * @default true
+   * @default false
    */
   isCollapsed?: boolean;
 
@@ -261,6 +262,16 @@ export interface BorderThemeConfig {
   warning: keyof ThemePrimitiveColors;
 }
 
+/** Maps form field (TextField, TextArea, SelectField, etc.) colors to primitives. */
+export interface FieldThemeConfig {
+  background: keyof ThemePrimitiveColors;
+  backgroundDisabled: keyof ThemePrimitiveColors;
+  border: keyof ThemePrimitiveColors;
+  borderFocus: keyof ThemePrimitiveColors;
+  borderError: keyof ThemePrimitiveColors;
+  borderDisabled: keyof ThemePrimitiveColors;
+}
+
 export interface StatusThemeConfig {
   active: keyof ThemePrimitiveColors;
   doNotDisturb: keyof ThemePrimitiveColors;
@@ -336,6 +347,22 @@ export interface BorderTheme {
   warning: string;
 }
 
+/** Computed form field colors: the input box background and border in each state. */
+export interface FieldTheme {
+  /** Input background when enabled. */
+  background: string;
+  /** Input background when disabled. */
+  backgroundDisabled: string;
+  /** Input border at rest. */
+  border: string;
+  /** Input border while focused. */
+  borderFocus: string;
+  /** Input border when the field has an error. */
+  borderError: string;
+  /** Input border when disabled. */
+  borderDisabled: string;
+}
+
 export interface StatusTheme {
   active: string;
   doNotDisturb: string;
@@ -379,6 +406,7 @@ export interface TerrenoTheme {
   text: TextTheme;
   surface: SurfaceTheme;
   border: BorderTheme;
+  field: FieldTheme;
   status: StatusTheme;
   radius: RadiusTheme;
   spacing: SpacingTheme;
@@ -391,6 +419,7 @@ export interface TerrenoThemeConfig {
   text: TextThemeConfig;
   surface: SurfaceThemeConfig;
   border: BorderThemeConfig;
+  field: FieldThemeConfig;
   status: StatusThemeConfig;
   radius: RadiusThemeConfig;
   spacing: SpacingThemeConfig;
@@ -581,11 +610,6 @@ export interface DropdownPanelProps extends WithTestID {
   maxPanelHeight?: number;
 }
 
-/**
- * @deprecated Renamed to {@link DropdownPanelProps}. Removed in Terreno 58.
- */
-export type FilterProps = DropdownPanelProps;
-
 export type AlignContent = "start" | "end" | "center" | "between" | "around" | "stretch";
 export type AlignSelf = "auto" | "start" | "end" | "center" | "baseline" | "stretch";
 export type AlignItems = "start" | "end" | "center" | "baseline" | "stretch";
@@ -686,16 +710,132 @@ export interface AccessibilityProps {
   accessibilityRole?: string;
 }
 
-/** Checked and disabled state a `Box` reports to screen readers. */
+/** Checked, disabled, and selected state a `Box` reports to screen readers. */
 export interface BoxAccessibilityState {
+  /** Set automatically while `loading` is true; sent as `aria-busy` on web. */
+  busy?: boolean;
   checked?: boolean;
   disabled?: boolean;
+  selected?: boolean;
 }
 
-export interface BoxPropsBase extends WithTestID {
+/** How skeleton placeholders animate. `none` renders a static block. */
+export type SkeletonAnimation = "pulse" | "shimmer" | "none";
+
+/**
+ * Shared loading contract. Box, Card, ChartCard, Scorecard, Page, SplitPage, and the charts
+ * accept it, and custom components can extend it and hand it to a `Box` or `withLoading`.
+ */
+export interface LoadingProps {
+  /** When true, renders `loadingComponent` in place of the children. */
+  loading?: boolean;
   /**
-   * Checked and disabled state for screen readers, sent as `accessibilityState` and as
-   * `aria-checked` / `aria-disabled`. On a clickable Box, `disabled: true` also stops presses.
+   * Placeholder rendered while `loading` is true, usually built from `Skeleton`, `SkeletonText`,
+   * `SkeletonCircle`, `SkeletonCard`, or `SkeletonList`. Each component documents its default.
+   */
+  loadingComponent?: ReactNode;
+  /**
+   * Animation for skeletons inside `loadingComponent` that do not set their own `animation`.
+   * Falls back to `none` when the OS reduce-motion setting is on.
+   * @default "pulse"
+   */
+  loadingAnimation?: SkeletonAnimation;
+  /**
+   * Screen reader label announced while loading.
+   * @default "Loading"
+   */
+  loadingLabel?: string;
+}
+
+export interface SkeletonProps extends WithTestID {
+  /**
+   * Overrides the nearest `SkeletonGroup` (or loading container) animation.
+   * @default "pulse"
+   */
+  animation?: SkeletonAnimation;
+  /**
+   * Placeholder fill.
+   * @default "neutralExtraLight"
+   */
+  color?: SurfaceColor;
+  /** @default 16 */
+  height?: NumberOrPercentage;
+  /** @default "sm" */
+  rounding?: Rounding | "circle";
+  /** @default "100%" */
+  width?: NumberOrPercentage;
+}
+
+export interface SkeletonTextProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Width of the final line, so a paragraph does not end flush.
+   * @default "60%"
+   */
+  lastLineWidth?: NumberOrPercentage;
+  /** @default 3 */
+  lines?: number;
+  /**
+   * Matches the line height of `Text` at this size.
+   * @default "md"
+   */
+  size?: TextSize;
+}
+
+export interface SkeletonCircleProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Diameter in pixels.
+   * @default 40
+   */
+  size?: number;
+}
+
+export interface SkeletonCardProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /** @default 2 */
+  lines?: number;
+  /**
+   * Height of the media block when `showMedia` is true.
+   * @default 160
+   */
+  mediaHeight?: number;
+  /** @default true */
+  showAvatar?: boolean;
+  /** Adds a full-width media block above the text, like a display `Card` with an image. */
+  showMedia?: boolean;
+}
+
+export interface SkeletonListProps extends WithTestID {
+  animation?: SkeletonAnimation;
+  /**
+   * Text lines per row.
+   * @default 2
+   */
+  lines?: number;
+  /** @default 3 */
+  rows?: number;
+  /** @default true */
+  showAvatar?: boolean;
+}
+
+export interface SkeletonGroupProps {
+  /**
+   * Animation inherited by every skeleton inside the group. Skeletons in one group pulse in sync.
+   * @default "pulse"
+   */
+  animation?: SkeletonAnimation;
+  children?: ReactNode;
+}
+
+export interface BoxPropsBase extends WithTestID, LoadingProps {
+  /**
+   * Checked, disabled, and selected state for screen readers, sent as `accessibilityState` and as
+   * `aria-checked` / `aria-disabled`. `selected` is sent as `aria-selected` on a selectable
+   * `accessibilityRole` (`tab`, `option`, `row`, ...) and as `aria-current="true"` on any other Box,
+   * such as a clickable list row. On web that row does not also keep `selected` in
+   * `accessibilityState`, because react-native-web would emit `aria-selected` on the button.
+   * On a clickable Box, `disabled: true` also stops presses.
    */
   accessibilityState?: BoxAccessibilityState;
   /**
@@ -802,7 +942,8 @@ export interface BoxPropsBase extends WithTestID {
 
   avoidKeyboard?: boolean;
   keyboardOffset?: number;
-  scrollRef?: React.RefObject<ScrollView | null>;
+  /** Native ScrollView instance (RN 0.87 `ScrollViewInstance`). */
+  scrollRef?: React.RefObject<ScrollViewInstance | null>;
   onScroll?: (offsetY: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }
@@ -990,6 +1131,11 @@ export interface HelperTextProps {
 
 export interface ErrorTextProps {
   errorText?: string;
+  /**
+   * Where `errorText` sits relative to the control.
+   * @default "above"
+   */
+  errorPosition?: "above" | "below";
 }
 
 export interface AiSuggestionProps {
@@ -1022,7 +1168,24 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
    */
   showVisibilityToggle?: boolean;
 
-  autoComplete?: "current-password" | "on" | "off" | "username";
+  /**
+   * Autofill hint. On web it is set as the input's `autocomplete` attribute; `"username webauthn"`
+   * asks the browser to offer saved passkeys in the field's autofill. On native it is sent as
+   * React Native's `autoComplete` (Android's autofill hint) and as the matching iOS
+   * `textContentType`: `username` → `username`, `email` → `emailAddress`, `current-password` →
+   * `password`, `new-password` → `newPassword` (iOS offers a strong password), `one-time-code` →
+   * `oneTimeCode`, `off` → `none`. Without it (or with `"on"`) the field's `type` picks the iOS
+   * hint.
+   */
+  autoComplete?:
+    | "current-password"
+    | "email"
+    | "new-password"
+    | "on"
+    | "off"
+    | "one-time-code"
+    | "username"
+    | "username webauthn";
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
@@ -1034,10 +1197,18 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
   multiline?: boolean;
   rows?: number;
 
-  inputRef?: (ref: TextInput | null) => void;
+  /** Native TextInput instance (RN 0.87 `TextInputInstance`). */
+  inputRef?: (ref: TextInputInstance | null) => void;
   trimOnBlur?: boolean;
+  /** Renders the value in a monospace face with tracking, for codes such as backup codes. */
+  mono?: boolean;
 
   aiSuggestion?: AiSuggestionProps;
+
+  /**
+   * Accessible name for the input. Screen readers otherwise announce "Text input field".
+   */
+  accessibilityLabel?: string;
 }
 
 export interface TextAreaProps extends Omit<TextFieldProps, "multiline" | "type"> {}
@@ -1146,6 +1317,12 @@ export interface HeadingProps extends WithTestID {
   align?: "left" | "right" | "center" | "justify"; // default "left"
   children?: React.ReactNode;
   color?: TextColor;
+  /**
+   * Outline level, 1 for the page title. When set, the heading is exposed to assistive
+   * technology as a heading: `role="heading"` with `aria-level` (an `<h1>`–`<h6>` on web, the
+   * header accessibility role on native). When omitted, the heading is plain text.
+   */
+  level?: 1 | 2 | 3 | 4 | 5 | 6;
   overflow?: "normal" | "breakWord"; // default "breakWord"
   size?: "sm" | "md" | "lg" | "xl" | "2xl"; // default "sm"
   truncate?: boolean; // default false
@@ -1171,7 +1348,7 @@ export interface MetaProps {
 
 export interface ImageProps {
   alt?: string;
-  color: BoxColor;
+  color?: BoxColor;
   naturalHeight?: number;
   naturalWidth?: number;
   maxWidth?: number;
@@ -1237,7 +1414,8 @@ export interface SplitPageListItem {
   id: string;
 }
 
-export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListItem> {
+export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListItem>
+  extends LoadingProps {
   /**
    * can accept either one React Child or any array of ReactChild. If this is not provided,
    * renderContent must return one or many ReactChild.
@@ -1319,6 +1497,79 @@ export interface SplitPageProps<TItem extends SplitPageListItem = SplitPageListI
   childColumnRounding?: Rounding;
 }
 
+/**
+ * Props for ListDetailLayout, the route-driven list/detail layout used as a route group's
+ * `_layout.tsx`. The group's `index.tsx` renders `ListDetailIndex`, and a dynamic child route
+ * (default `[id].tsx`) renders the detail.
+ */
+export interface ListDetailLayoutProps {
+  /**
+   * The list. Rendered in the left pane when split, and by `ListDetailIndex` when not split.
+   */
+  list: ReactElement;
+  /**
+   * Where selecting an item navigates, e.g. `(id) => \`/mail/${id}\``.
+   */
+  detailHref: (id: string) => Href;
+  /**
+   * The group's own path, e.g. `/mail`. `clear()` returns here, and `selectedId` is only read
+   * from routes directly below it.
+   */
+  indexHref: string;
+  /**
+   * Shown in the detail pane when split and no item is open.
+   */
+  emptyDetail?: ReactElement;
+  /**
+   * Split into list and detail panes when the layout's measured width is at least this many
+   * pixels. Defaults to 768.
+   */
+  splitAtWidth?: number;
+  /**
+   * Width in pixels of the list pane when split. Defaults to 360.
+   */
+  listWidth?: number;
+  /**
+   * The child route name that holds the detail. Defaults to `"[id]"`.
+   */
+  detailRoute?: string;
+  /**
+   * The route param that holds the item id. Defaults to `"id"`.
+   */
+  paramName?: string;
+  /**
+   * Screen options passed through to the underlying expo-router Stack.
+   */
+  screenOptions?: ComponentProps<typeof Stack>["screenOptions"];
+  /**
+   * Optional `Stack.Screen` definitions passed through to the underlying expo-router Stack.
+   */
+  children?: React.ReactNode;
+}
+
+/**
+ * The value returned by `useListDetail()` inside a ListDetailLayout.
+ */
+export interface ListDetailState {
+  /**
+   * True when the list and detail panes are shown side by side.
+   */
+  isSplit: boolean;
+  /**
+   * The id of the open item, read from the detail route. Undefined on the index route.
+   */
+  selectedId?: string;
+  /**
+   * Open an item. Pushes the detail route, or replaces the open detail when split, so back
+   * always returns to the list.
+   */
+  select: (id: string) => void;
+  /**
+   * Close the open item and return to the group's index route.
+   */
+  clear: () => void;
+}
+
 export type PermissionKind =
   | "location"
   | "locationAlways"
@@ -1375,36 +1626,39 @@ export interface AddressAutocompleteProps extends WithTestID {
   googlePlacesMobileStyles?: Styles;
 }
 
+/** Imperative methods exposed by an ActionSheet ref. */
+export interface ActionSheetHandle {
+  /**
+   * Open or close the ActionSheet.
+   */
+  setModalVisible(visible?: boolean): void;
+
+  /**
+   * Open the Action Sheet.
+   */
+  show(): void;
+
+  /**
+   * Close the ActionSheet.
+   */
+  hide(): void;
+
+  /**
+   * Attach this to any child ScrollView Component's onScrollEndDrag,
+   * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
+   * closing and bouncing back properly.
+   */
+  handleChildScrollEnd(): void;
+
+  /**
+   * Snap ActionSheet to given offset
+   */
+  snapToOffset(offset: number): void;
+}
+
 export interface ActionSheetProps extends WithTestID {
   children?: React.ReactNode;
-  ref?: React.MutableRefObject<{
-    /**
-     * Open or close the ActionSheet.
-     */
-    setModalVisible(visible?: boolean): void;
-
-    /**
-     * Open the Action Sheet.
-     */
-    show(): void;
-
-    /**
-     * Close the ActionSheet.
-     */
-    hide(): void;
-
-    /**
-     * Attach this to any child ScrollView Component's onScrollEndDrag,
-     * onMomentumScrollEnd,onScrollAnimationEnd callbacks to handle the ActionSheet
-     * closing and bouncing back properly.
-     */
-    handleChildScrollEnd(): void;
-
-    /**
-     * Snap ActionSheet to given offset
-     */
-    snapToOffset(offset: number): void;
-  }>;
+  ref?: React.Ref<ActionSheetHandle>;
   /**
    * Animate the opening and closing of ActionSheet.
 
@@ -2189,6 +2443,11 @@ export interface ButtonProps extends WithTestID {
  */
 export interface SocialLoginButtonProps extends WithTestID {
   /**
+   * Accessible name. Defaults to the button text.
+   */
+  accessibilityLabel?: string;
+
+  /**
    * The OAuth provider for the social login.
    */
   provider: "google" | "github" | "apple";
@@ -2207,10 +2466,18 @@ export interface SocialLoginButtonProps extends WithTestID {
   /**
    * The visual variant of the button.
    * - "primary": Uses the provider's brand colors
-   * - "outline": Uses an outline style with neutral colors
+   * - "outline": Neutral outline pill, matching the other sign-in methods
    * @default "primary"
    */
   variant?: "primary" | "outline";
+
+  /**
+   * When set on the outline variant, highlights the pill and shows this label inside it.
+   */
+  lastUsedLabel?: string;
+
+  /** Test ID of the last-used label. Requires `lastUsedLabel`. */
+  lastUsedTestID?: string;
 
   /**
    * If true, the button will be disabled.
@@ -2580,7 +2847,7 @@ export interface NumberPickerActionSheetProps {
   actionSheetRef: React.RefObject<any>;
 }
 
-export interface PageProps extends WithTestID {
+export interface PageProps extends WithTestID, LoadingProps {
   // noExplicitAny: React Navigation type varies by navigation stack configuration
   // biome-ignore lint/suspicious/noExplicitAny: React Navigation type varies by navigation stack configuration
   navigation?: any;
@@ -2837,7 +3104,7 @@ export interface PaginationProps extends WithTestID {
   totalPages: number;
 }
 
-export interface LineChartProps extends WithTestID {
+export interface LineChartProps extends WithTestID, LoadingProps {
   /** Summary announced for the whole chart. */
   accessibilityLabel?: string;
   /** Optional previous-period values drawn as a dotted overlay. */
@@ -2852,7 +3119,9 @@ export interface LineChartProps extends WithTestID {
   height?: number;
   /** Series name shown under the plot. */
   legendLabel?: string;
-  /** When true, shows a spinner instead of the plot. */
+  /**
+   * When true, shows `loadingComponent` (default: a spinner) instead of the plot.
+   */
   loading?: boolean;
   /** Makes `periodLabel` pressable when provided. */
   onPeriodPress?: () => void;
@@ -2877,7 +3146,11 @@ export interface SparklineChartProps extends WithTestID {
   height?: number;
 }
 
-export interface ChartCardProps extends WithTestID {
+/**
+ * While `loading`, the title row stays visible and the body shows `loadingComponent`
+ * (default: a 160px `Skeleton`).
+ */
+export interface ChartCardProps extends WithTestID, LoadingProps {
   children: React.ReactNode;
   /** Optional context shown below the title row. */
   filterSummary?: string;
@@ -2889,7 +3162,11 @@ export interface ChartCardProps extends WithTestID {
   title: string;
 }
 
-export interface ScorecardProps extends WithTestID {
+/**
+ * While `loading`, the title row stays visible and the value shows `loadingComponent`
+ * (default: a heading-sized `Skeleton`).
+ */
+export interface ScorecardProps extends WithTestID, LoadingProps {
   /** Optional previous-period sparkline values. */
   comparisonData?: Array<{label: string; value: number}>;
   /** Formats numeric values. String values render unchanged. */
@@ -2970,7 +3247,11 @@ export interface DataTableQueryParams {
 export interface DataTableColumn {
   title: string;
   columnType: "text" | "number" | "date" | "boolean" | string;
-  width: number;
+  /**
+   * Fixed column width in pixels. Omit it to size the column from its title and a sample of its
+   * content; auto-sized columns then grow to fill the table's container.
+   */
+  width?: number;
   highlight?: SurfaceColor;
   sortable?: boolean;
   infoModalText?: string;
@@ -3013,6 +3294,11 @@ export interface DataTableProps extends WithTestID {
    * Returns a stable key for row test ids. Defaults to row index when omitted.
    */
   getRowTestID?: (row: DataTableCellData[], rowIndex: number) => string | number;
+  /**
+   * Vertical alignment of the search field and Filters button. `end` lines the button up with
+   * the search input when the field has a title.
+   */
+  toolbarAlign?: "center" | "end";
   /** Toolbar search string (controlled). Omit with `searchFields` to hide search. */
   search?: string;
   /** Fields included in generic `$or` search params. */
@@ -3145,7 +3431,7 @@ export interface TextProps extends WithTestID {
    * The native text, for example to move screen reader focus to it with
    * `AccessibilityInfo.setAccessibilityFocus`.
    */
-  ref?: React.Ref<NativeText>;
+  ref?: React.Ref<TextInstance>;
   skipLinking?: boolean;
 }
 
@@ -3629,8 +3915,8 @@ export interface SelectFieldPropsBase extends WithTestID {
   /**
    * Web only. When true, the dropdown menu renders in a fixed portal on
    * `document.body` (zIndex 9999) instead of a React Native `Modal`. Use this
-   * when the select lives inside another portaled/high-zIndex overlay (e.g. the
-   * `Filter` panel) where a `Modal` would stack behind the overlay and be
+   * when the select lives inside another portaled/high-zIndex overlay (e.g. a
+   * `DropdownPanel`) where a `Modal` would stack behind the overlay and be
    * invisible and unclickable.
    * @default false
    */
@@ -3736,7 +4022,7 @@ export interface TableNumberProps {
   /**
    * The number to display in the text field.
    */
-  value: string;
+  value: string | number;
   /**
    * Callback to save the text field value.
    */
@@ -3745,7 +4031,7 @@ export interface TableNumberProps {
    * Numbers generally should be right aligned for ease of scanability.
    * @default "right"
    */
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
 }
 
 export interface SliderProps extends HelperTextProps, ErrorTextProps {
@@ -3946,6 +4232,9 @@ export interface SidebarNavigationProps {
   onNavigate?: (route: string) => void;
   /**
    * The route to show when the navigator first renders.
+   *
+   * Expo Router 58 ignores this on `Navigator`. Set
+   * `unstable_settings.initialRouteName` on the layout file instead.
    */
   initialRouteName?: string;
   /**

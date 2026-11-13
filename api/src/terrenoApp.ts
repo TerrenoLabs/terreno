@@ -5,6 +5,7 @@ import cors from "cors";
 import express from "express";
 import mongoose from "mongoose";
 import qs from "qs";
+import {AccountSecurityApp} from "./accountSecurity/accountSecurityApp";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
 import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
@@ -29,6 +30,7 @@ import {
 import {type AddRoutes, type AuthOptions, logRequests} from "./expressServer";
 import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./githubAuth";
 import {type LoggingOptions, logger, setupLogging} from "./logger";
+import {type McpRequestLogAppOption, resolveMcpRequestLogOption} from "./mcp/adminTracking";
 import {addMcpOAuthRoutes} from "./mcp/oauth";
 import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
@@ -128,11 +130,13 @@ export interface TerrenoAppOptions {
    */
   configureApp?: AddRoutes;
   /**
-   * Optional HTTP rate limiting. Omitted or `undefined` leaves the limiter off
-   * (Terreno 58 will default it on). Pass `{}` or `{store, limits, trustProxy}`
-   * to enable. See [Rate limiting](../how-to/rate-limiting.md).
+   * HTTP rate limiting. On by default: omitted or `undefined` mounts the limiter with the
+   * memory store and default limits (auth 20 / 15 min, api 600 / 15 min). Pass
+   * `{store, limits, trustProxy, skip}` to configure it (`{}` is the same as omitting it).
+   * Pass `false` to turn it off. On Cloud Run pass `trustProxy: 1` so unauthenticated
+   * traffic keys by client IP. See [Rate limiting](../how-to/rate-limiting.md).
    */
-  rateLimit?: RateLimitOptions;
+  rateLimit?: RateLimitOptions | false;
   /**
    * Opt-in personal MCP service tokens. `true` is `{enabled: true}`. When enabled,
    * mounts `/mcp/service-tokens` and accepts `Authorization: Bearer mcp_…` on `/mcp`.
@@ -147,6 +151,17 @@ export interface TerrenoAppOptions {
    * [Enable MCP OAuth](../how-to/enable-mcp-oauth.md).
    */
   mcpOAuth?: McpOAuthAppOption;
+  /**
+   * Opt-in log of MCP tool calls for the admin panel. `true` keeps rows 30 days. Rows hold
+   * metadata only (tool, user, credential ids, duration, outcome, error class), never tool
+   * arguments, results, or error text. See [Manage MCP from the admin panel](../how-to/manage-mcp-in-admin.md).
+   */
+  mcpRequestLog?: McpRequestLogAppOption;
+  /**
+   * Opt-in MCP tool registry. When true, every tool is recorded in `McpToolSetting` at startup,
+   * and tools an admin switches off are hidden from `tools/list` and rejected by `tools/call`.
+   */
+  mcpToolSettings?: boolean;
   /**
    * Versioned MongoDB migrations. `runOnStart` defaults to false. When true, wet `up`
    * runs after listen and `ensureSyncIndexes`. Production still requires
@@ -268,6 +283,13 @@ export class TerrenoApp {
   }
 
   /**
+   * The RBAC access control passed as `accessControl`, if any.
+   */
+  getAccessControl(): TerrenoAppOptions["accessControl"] {
+    return this.options.accessControl;
+  }
+
+  /**
    * The application user model this app authenticates against.
    */
   getUserModel(): TerrenoAppOptions["userModel"] {
@@ -351,7 +373,7 @@ export class TerrenoApp {
    * Build the Express application without starting the server.
    *
    * Configures the complete middleware stack including:
-   * - CORS, JSON parsing, JWT decode, optional HTTP rate limiting, auth routes
+   * - CORS, JSON parsing, JWT decode, HTTP rate limiting (unless `rateLimit: false`), auth routes
    * - Better Auth session (when BetterAuthApp is registered) before the limiter
    * - Logging, Sentry, OpenAPI, model routers and plugins
    * - Error handling middleware
@@ -376,6 +398,9 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
+    // instance exists, so the app User guard and sync are installed with it.
+    findBetterAuthProvider(this.registrations)?.adoptUserModel?.(options.userModel);
     // Resolve first so a misconfigured issuer or consent URL fails at boot.
     const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
 
@@ -423,11 +448,13 @@ export class TerrenoApp {
       betterAuthForLimiter.markSessionMiddlewareMounted?.();
     }
 
-    if (options.rateLimit) {
+    // Rate limiting is on unless the app passes `rateLimit: false`.
+    const rateLimitOptions = options.rateLimit === false ? undefined : (options.rateLimit ?? {});
+    if (rateLimitOptions) {
       const betterAuthBasePath =
-        options.rateLimit.betterAuthBasePath ?? betterAuthForLimiter?.getBetterAuthBasePath?.();
+        rateLimitOptions.betterAuthBasePath ?? betterAuthForLimiter?.getBetterAuthBasePath?.();
       const rateLimit = {
-        ...options.rateLimit,
+        ...rateLimitOptions,
         ...(betterAuthBasePath ? {betterAuthBasePath} : {}),
       };
       applyRateLimitTrustProxy(app, rateLimit);
@@ -441,7 +468,17 @@ export class TerrenoApp {
       options.authOptions = {};
     }
     const authOptions = options.authOptions;
-    addAuthRoutes(app, options.userModel, authOptions);
+    // The OpenAPI generator walks the router stack on each /openapi.json request, so the
+    // instance can exist before it is mounted below. Auth routes need it to document themselves.
+    const oapi = openapi({
+      info: {
+        description: "Generated docs from an Express api",
+        title: "Express Application",
+        version: "1.0.0",
+      },
+      openapi: "3.0.0",
+    });
+    addAuthRoutes(app, options.userModel, authOptions, oapi);
 
     if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
@@ -477,14 +514,6 @@ export class TerrenoApp {
     app.use(openApiCompatMiddleware);
     app.use(openApiEtagMiddleware);
     app.use(jsonResponseRequestIdMiddleware);
-    const oapi = openapi({
-      info: {
-        description: "Generated docs from an Express api",
-        title: "Express Application",
-        version: "1.0.0",
-      },
-      openapi: "3.0.0",
-    });
     app.use(oapi);
 
     if (process.env.ENABLE_SWAGGER === "true") {
@@ -545,6 +574,8 @@ export class TerrenoApp {
       betterAuth,
       mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
+      requestLog: resolveMcpRequestLogOption(options.mcpRequestLog),
+      toolSettings: options.mcpToolSettings === true,
       userModel: options.userModel,
     });
 
@@ -554,7 +585,7 @@ export class TerrenoApp {
 
     // /auth/me must be registered after plugins so that session middleware
     // (e.g. Better Auth) has a chance to populate req.user first.
-    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl);
+    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl, oapi);
 
     Sentry.setupExpressErrorHandler(app);
 
@@ -603,10 +634,19 @@ export class TerrenoApp {
       if (!hasOrgsPlugin) {
         const orgConfig =
           typeof this.options.organizations === "object" ? this.options.organizations : {};
+        // Org-admins get member recovery routes only when the app registered AccountSecurityApp.
+        const accountSecurity =
+          orgConfig.accountSecurity ??
+          this.registrations.find(
+            (registration): registration is AccountSecurityApp =>
+              !this.isModelRouterRegistration(registration) &&
+              registration instanceof AccountSecurityApp
+          );
         this.register(
           new OrgsApp({
             ...orgConfig,
             access: this.options.accessControl,
+            accountSecurity,
             userModel: this.options.userModel,
           })
         );

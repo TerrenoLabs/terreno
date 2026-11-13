@@ -2,19 +2,31 @@ import type {Schema, SchemaType} from "mongoose";
 
 import type {AdminConfig, AdminModelAdminMap} from "./adminTypes";
 
-const toPlainObject = (value: unknown): Record<string, unknown> => {
-  if (
-    value &&
-    typeof value === "object" &&
-    "toObject" in value &&
-    typeof (value as {toObject?: unknown}).toObject === "function"
-  ) {
+const hasToObject = (value: object): boolean =>
+  "toObject" in value && typeof (value as {toObject?: unknown}).toObject === "function";
+
+/**
+ * True for values whose own keys are their fields: plain objects and Mongoose documents.
+ * ObjectId, Date, Buffer, Map and other class instances are values to pass through untouched.
+ * Copying their own keys would turn an ObjectId into a plain `{i0, i1, i2, i3}` object
+ * (bson keeps its bytes in own keys) and a Date into `{}`.
+ */
+const isScrubbableObject = (value: unknown): value is object => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  if (hasToObject(value)) {
+    return true;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const toPlainObject = (value: object): Record<string, unknown> => {
+  if (hasToObject(value)) {
     return (value as {toObject: () => Record<string, unknown>}).toObject();
   }
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
+  return value as Record<string, unknown>;
 };
 
 const adminFieldsToStrip = (admin: AdminConfig): Set<string> => {
@@ -33,7 +45,8 @@ const getRefModelName = (schemaPath: SchemaType | undefined): string | undefined
 };
 
 const isPopulatedDocument = (value: unknown): value is Record<string, unknown> => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  // A bare ObjectId is not a populated doc, even though Mongoose gives ObjectId an `_id` getter.
+  if (!isScrubbableObject(value)) {
     return false;
   }
   const plain = value as Record<string, unknown>;
@@ -106,7 +119,7 @@ export const scrubAdminFields = (value: unknown, params: ScrubAdminFieldsParams)
     return value.map((item) => scrubAdminFields(item, params));
   }
 
-  if (typeof value !== "object") {
+  if (!isScrubbableObject(value)) {
     return value;
   }
 

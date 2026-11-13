@@ -1,0 +1,12 @@
+# CodeQL scans shipped code. Tests build throwaway Express apps and fake
+# credentials on purpose, so their alerts are noise. Alerts in ignored paths
+# close as fixed on the next master scan.
+name: terreno-codeql
+paths-ignore:
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/__tests__/**"
+  - "**/__mocks__/**"
+  - "**/e2e/**"
+  - "**/node_modules/**"
+  - "**/dist/**"

@@ -16,27 +16,34 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 
 - [Create a Terreno app](create-a-terreno-app.md) — Scaffold a full-stack app with `create-terreno-app` (Bun or npm)
 - [Update dependencies](update-dependencies.md) — Daily rolling PR, exercise test, Expo fingerprint freeze
+- [Fix code scanning alerts](fix-code-scanning-alerts.md) — One PR per sweep; fixes close on rescan, reviewed false positives are dismissed after merge
 - [CircleCI](circleci.md) — Dual-run CI on CircleCI (package CI / policy / e2e; deploys later)
+- [Release automation](release-automation.md) — Let agents merge release notes and roadmap updates; publish only merged notes
 - [Set up tests in a Terreno app](set-up-app-tests.md) — Bun backend and frontend tests, Playwright web E2E, Maestro on iOS/Android
 - [Run tests locally](run-tests-locally.md) — Map every CircleCI test job to a Cursor Cloud / laptop command
 - [GitHub Actions CI](github-actions-ci.md) — Cut PR runtime: docs previews, compile-once e2e, pinned Bun
 - [Add feature flags](add-feature-flags.md) — Add feature flags, A/B testing, and OpenFeature migration
-- [Rate limiting](rate-limiting.md) — Opt-in HTTP limiter on `TerrenoApp` (memory or Redis)
+- [Rate limiting](rate-limiting.md) — Default-on HTTP limiter on `TerrenoApp` (memory, Redis, or Mongo; `rateLimit: false` turns it off)
 - [Receive inbound webhooks](inbound-webhooks.md) — HMAC, Stripe, Twilio, and SendGrid signatures on `WebhooksApp`
 - [Durable background jobs](background-jobs.md) — `@terreno/jobs`: enqueue, workers, schedules, Cloud Tasks / Vercel Queues
 - [Create a Mongoose model](create-a-model.md) — Define models with proper conventions
 - [Enable the framework audit log](audit-log.md) — `AuditApp`, per-router `audit`, append-only events
+- [Sign consent on a user's behalf](sign-consent-on-behalf.md) — Provisional consent signatures: RBAC grant, signer screen, status checks, void, print
 - [Seed a database](seed-a-database.md) — Idempotent sync, dry runs, and guarded reset-and-reseed
 - [Run MongoDB migrations](run-mongodb-migrations.md) — Versioned `up`/`down` files, `terreno-migrate`, production gate
 - [Add GitHub OAuth authentication](add-github-oauth.md) — Enable GitHub login for your API
 - [Configure Better Auth](configure-better-auth.md) — Set up Better Auth with social OAuth (Google, GitHub, Apple)
+- [Set up social login](set-up-social-login.md) — Register Google, GitHub, and Apple once on the stable deploy, proxy previews through it, and move stable onto one domain
 - [Password reset and email verification](password-reset.md) — JWT routes, comms templates, Better Auth hooks
+- [Recover a locked-out user](recover-locked-out-user.md) — Platform and org-admin recovery: 2FA, passkeys, providers, sessions, suspend
 - [Add WebSocket integration](websocket-integration.md) — Set up real-time Socket.io connections
 - [Expose Model Context Protocol tools](expose-mcp-tools.md) — Turn `modelRouter` models into MCP tools an LLM can call
-- [Set up Terreno MCP](set-up-terreno-mcp.md) — Configure hosted docs/codegen and local runtime tools
-- [Debug with MCP](debug-with-mcp.md) — Diagnose backend, browser, Metro, app, and client-state failures
+- [Set up Terreno MCP](set-up-terreno-mcp.md) — Connect Cursor or Claude Code to the hosted docs/codegen server and the local runtime server
+- [Debug with MCP](debug-with-mcp.md) — Follow a failure from symptom to verified fix with the local MCP tools
 - [Connect an MCP client with a service token](connect-mcp-service-token.md) — Mint a personal `mcp_` key for Perplexity and other remote clients
 - [Enable MCP OAuth for a JWT app](enable-mcp-oauth.md) — Let Claude.ai and ChatGPT connect to `/mcp` through OAuth 2.1 with your own consent screen
+- [Manage MCP from the admin panel](manage-mcp-in-admin.md) — Service tokens, OAuth clients and connections, request log, tool on/off switches, and sign-out-everywhere
+- [Expose an MCP server safely](expose-mcp-server-safely.md) — Put `/mcp` on the internet with OAuth, service tokens, a named Cloudflare Tunnel, and Access on the console
 - [Install agent skills](install-agent-skills.md) — `npx skills`, the Cursor plugin, the Codex plugin, or the Claude Code plugin
 - [Develop an AI feature](ai-feature-development.md) — Dataset → prompt → evaluators → experiment → production label → live traces (SOP)
 - [Observe LLM calls](observe-llm-calls.md) — Register ObservabilityApp, primaries, price map, sampleRate
@@ -47,12 +54,17 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Call external APIs](call-external-apis.md) — Authenticated HTTP client, retries, and error normalization for third-party integrations
 - [Upgrade banner](upgrade-banner.md) — Soft warning and hard-block app update UX
 - [Upgrade Terreno](upgrade-terreno.md) — Lockstep `@terreno/*` bumps, note range, order, rollback
+- [Automate Terreno upgrades](automate-terreno-upgrades.md) — Hourly workflow that launches one upgrade agent when a week-old release is out and no upgrade is open
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
+- [Build a list/detail screen](build-list-detail-screens.md) — `ListDetailLayout` route group: list on a phone, list + detail panes on a tablet, selection in the URL
+- [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots
-- [Migrate from @terreno/rtk to @terreno/syncdb](migrate-rtk-to-syncdb.md) — Move data sync to the local-first layer
+- [Upgrade from @terreno/rtk to @terreno/syncdb (Terreno 58)](migrate-rtk-to-syncdb.md) — Remove `@terreno/rtk` and Redux; every removed export mapped to its replacement
+- [Upgrade to the server-rendered admin SPA](upgrade-admin-spa-ssr.md) — New `dist/client` + `dist/server` layout, the baked `/console` mount, `internalOrigin`, and proxy cache rules
 - [Use syncdb correctly](use-syncdb-correctly.md) — Serial snapshot startup, outbox-halting 403s, phantom creates, conflicts, and other library behavior apps must handle
 - [Generate a REST CLI from OpenAPI](generate-a-rest-cli.md) — Scaffold `terreno generate rest-cli` for an app API
+- [Generate the client SDK](generate-the-client-sdk.md) — `terreno-syncdb-codegen` writes collection hooks and typed request hooks from OpenAPI
 - [In-app notifications](in-app-notifications.md) — Register `NotificationsApp`, syncdb inbox, and UI bell
 - [Add organizations](add-organizations.md) — Opt into Membership-backed tenancy, RBAC, admin, and seeded examples
 - [Add a GPT chat mascot](add-gpt-chat-mascot.md) — Optional consumer-owned character on empty `GPTChat`

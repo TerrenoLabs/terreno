@@ -8,7 +8,7 @@ import {MAX_PASSWORD_LENGTH} from "./auth";
 import {changeUserPassword} from "./authRecovery";
 import {AuthToken} from "./authTokens";
 import {TerrenoApp} from "./terrenoApp";
-import {setupDb, UserModel} from "./tests";
+import {authUserModel, setupDb, UserModel} from "./tests";
 
 interface CapturedMail {
   html?: string;
@@ -41,7 +41,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
   });
 
@@ -171,7 +171,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noLegacyAliasApp).post("/resetPassword").send({}).expect(404);
@@ -185,7 +185,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noPasswordResetApp).post("/auth/forgotPassword").send({}).expect(404);
@@ -200,7 +200,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(noEmailVerificationApp).post("/auth/sendVerification").send({}).expect(404);
@@ -220,7 +220,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
 
     await supertest(bridgedApp)
@@ -291,6 +291,29 @@ describe("password reset routes", () => {
       .expect(200);
   });
 
+  it("lets an account with no password set one in a pure JWT app", async () => {
+    // Without Better Auth the legacy routes are the only recovery path, so they keep working for
+    // an account that has no password yet (for example one an admin created).
+    await UserModel.create({email: "no-password@example.com"});
+    const stored = await UserModel.collection.findOne({email: "no-password@example.com"});
+    assert.isUndefined(stored?.hash);
+
+    await supertest(app)
+      .post("/auth/forgotPassword")
+      .send({email: "no-password@example.com"})
+      .expect(202);
+    assert.lengthOf(sentMail, 1);
+    const token = tokenFromResetUrl(sentMail[0]?.text ?? "");
+    await supertest(app)
+      .post("/auth/resetPassword")
+      .send({password: "first-password-123", token})
+      .expect(200);
+    await supertest(app)
+      .post("/auth/login")
+      .send({email: "no-password@example.com", password: "first-password-123"})
+      .expect(200);
+  });
+
   it("returns 202 without issuing a token when publicAppUrl is missing", async () => {
     const noUrlApp = new TerrenoApp({
       authOptions: {
@@ -299,7 +322,7 @@ describe("password reset routes", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const before = await AuthToken.countDocuments({});
     await supertest(noUrlApp)
@@ -336,7 +359,7 @@ describe("password reset routes", () => {
         publicAppUrl: "https://app.example.com",
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     await supertest(consoleApp)
       .post("/auth/forgotPassword")
@@ -353,7 +376,7 @@ describe("password reset routes", () => {
           publicAppUrl: "https://app.example.com",
         },
         skipListen: true,
-        userModel: UserModel,
+        userModel: authUserModel,
       }).build();
       await supertest(consoleApp)
         .post("/auth/forgotPassword")
@@ -379,7 +402,7 @@ describe("changeUserPassword", () => {
         },
       },
       skipListen: true,
-      userModel: UserModel,
+      userModel: authUserModel,
     }).build();
     const login = await supertest(app)
       .post("/auth/login")

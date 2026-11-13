@@ -52,6 +52,7 @@ import {connectToMongoDB} from "../utils/database";
 import {CHAT_SAFETY_DATASET_NAME, seedChatSafetyDataset} from "./chatSafetyDataset";
 import {seedAnnouncements} from "./seed-announcements";
 import {seedFeatureFlags} from "./seed-feature-flags";
+import {seedAiObservabilityDemo} from "./seedAiObservabilityDemo";
 import {seedFakeEhr} from "./seedFakeEhr";
 
 const ensureNotificationSyncRegistered = (): void => {
@@ -788,6 +789,9 @@ const seedObservability = async (context: SeedContext): Promise<void> => {
     key: JSON.stringify({name: CHAT_SAFETY_DATASET_NAME}),
     model: "ObsDataset",
   });
+
+  const demo = await seedAiObservabilityDemo({dryRun: context.dryRun});
+  context.changes.push(...demo.changes);
 };
 
 export const seedSteps: SeedStep[] = [
@@ -939,8 +943,9 @@ export const seedDefaultData = async (): Promise<SeedRunResult> => {
 
 /**
  * Seeds the default example data at server start when `SEED_DEFAULTS=true`. A deployed process
- * never seeds on boot: the default accounts, admins included, use a password published in this
- * repository.
+ * never seeds on boot, because the default accounts, admins included, use a password published in
+ * this repository. The exception is a PR preview, which runs against its own throwaway
+ * `terreno-example-pr-<n>` database.
  */
 export const seedDefaultDataOnBoot = async ({
   isDeployed,
@@ -950,7 +955,8 @@ export const seedDefaultDataOnBoot = async ({
   if (process.env.SEED_DEFAULTS !== "true") {
     return undefined;
   }
-  if (isDeployed) {
+  const isPrPreviewDatabase = Boolean(process.env.MONGO_DB_NAME?.startsWith("terreno-example-pr-"));
+  if (isDeployed && !isPrPreviewDatabase) {
     logger.warn(
       "SEED_DEFAULTS ignored: a deployed process does not seed accounts with published passwords"
     );

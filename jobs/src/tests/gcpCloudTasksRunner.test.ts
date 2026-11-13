@@ -141,7 +141,7 @@ describe("GcpCloudTasksRunner", () => {
     const {client: _client, ...configWithoutClient} = baseConfig();
     let isPeerAvailable = true;
     try {
-      createRequire(import.meta.url)("@google-cloud/tasks");
+      createRequire(__filename)("@google-cloud/tasks");
     } catch {
       isPeerAvailable = false;
     }
@@ -303,6 +303,25 @@ describe("GcpCloudTasksRunner", () => {
     assert.equal(
       fake.calls[0].request.task.httpRequest?.url,
       "https://api.example.com/jobs/execute"
+    );
+  });
+
+  it("trims a long run of trailing slashes from basePath quickly", async (): Promise<void> => {
+    const fake = createFakeClient();
+    const start = performance.now();
+    const runner = new GcpCloudTasksRunner(
+      baseConfig({
+        basePath: `/background${"/".repeat(100_000)}`,
+        client: fake.client,
+      })
+    );
+    assert.isBelow(performance.now() - start, 100);
+
+    await runner.enqueue(buildJob());
+
+    assert.equal(
+      fake.calls[0].request.task.httpRequest?.url,
+      "https://api.example.com/background/execute"
     );
   });
 

@@ -1,4 +1,10 @@
-import {createdUpdatedPlugin, findExactlyOne, findOneOrNone, isDeletedPlugin} from "@terreno/api";
+import {
+  createdUpdatedPlugin,
+  findExactlyOne,
+  findOneOrNone,
+  isDeletedPlugin,
+  syncPlugin,
+} from "@terreno/api";
 import {ASK_KINDS} from "@terreno/blocks";
 import mongoose from "mongoose";
 
@@ -185,6 +191,8 @@ gptHistorySchema.plugin(createdUpdatedPlugin);
 gptHistorySchema.plugin(isDeletedPlugin);
 gptHistorySchema.plugin(findOneOrNone);
 gptHistorySchema.plugin(findExactlyOne);
+// Stamps a per-stream _syncSeq on every write; required by the /gpt/histories sync config.
+gptHistorySchema.plugin(syncPlugin);
 
 // Virtual ownerId alias so Permissions.IsOwner works with userId field
 gptHistorySchema.virtual("ownerId").get(function () {

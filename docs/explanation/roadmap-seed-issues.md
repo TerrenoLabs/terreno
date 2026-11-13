@@ -554,7 +554,7 @@ org-admins manage only the current org. Invites and billing are design-only plac
 - **Implementation plan:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/org-management-ui.md)
 - **Tasks:** [org-management-ui.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/org-management-ui.md)
 - **RTK flag:** Partial — custom non-synced routes use the generated SDK;
-  ObjectId admin compatibility may use `useAdminApi` in Terreno 57, while
+  ObjectId admin CRUD uses the admin fetch client (`useAdminModelApi`), while
   eligible String-`_id` CRUD uses windowed syncdb
 - **Depends on:** rbac-permissions
 
@@ -585,7 +585,7 @@ are a separate item.
 **Title:** `Native module baseline for the next major release`
 
 **Labels:** `area:ui`, `type:chore`, `breaking`
-**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=`native-module-baseline`, Status=`Shaping`
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Breaking`, IP=`native-module-baseline`, Status=`In progress`
 
 Adding a native module to a Terreno app forces a new dev-client/store binary, so every
 native dependency the B2B program needs lands in one major release: Stripe payment sheet,
@@ -871,9 +871,10 @@ Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1186
 **Labels:** `area:api`, `type:feature`
 **Project fields:** Area=`api`, Target=`Released`, Impact=`Feature`, IP=`rate-limiting`, Status=`Shipped`
 
-Adds opt-in HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
+Adds HTTP rate limiting to `@terreno/api`: per-user or per-IP keys, stricter
 auth/OTP buckets (including login), memory Redis or Mongo stores, and 429 rate-limit
-headers. Default is off until Terreno 58. Sync mutation nacks stay a separate limiter.
+headers. Opt-in in 57.x; on by default from Terreno 58 (`rateLimit: false` turns it off).
+Sync mutation nacks stay a separate limiter.
 
 Shipping this work **closes** https://github.com/TerrenoLabs/terreno/issues/1187.
 
@@ -1157,15 +1158,43 @@ Delete the **legacy RTK cache-patching realtime path** in Terreno 58. Collection
 
 ## ai-observability
 
-**Title:** `AI observability (Langfuse-light, pluggable)`
+**Title:** `AI observability (built in, pluggable)`
 
 **Labels:** `area:ai`, `type:feature`  
 **Project fields:** Area=`ai`, Target=`Future`, Impact=`Feature`, IP=`ai-observability`, Status=`Planned`
 
-Ship **Langfuse-like** prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
+Ship built-in prompt versioning, nested traces (user / session / cost), multidimensional evaluators (LLM-as-judge + structured I/O), datasets, experiments, and a **local human review queue** — **inside Terreno**, as **plugins on `@terreno/ai`**, with an operator UI in **`admin-frontend` only**.
 
 - **Implementation plan:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability.md)
 - **Tasks:** [ai-observability.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability.md)
+
+---
+
+## ai-observability-production-loop
+
+**Title:** `AI observability in production: live evals, alerts, threads, CI suites, prompt optimizer`
+
+**Labels:** `area:ai`, `type:feature`  
+**Project fields:** Area=`ai`, Target=`Next`, Impact=`Feature`, IP=`ai-observability-production-loop`, Status=`Planned`
+
+Terreno's AI observability covers building an AI feature: versioned prompts, traces, evaluators, datasets, experiments, and human review. It stops at production. The evaluator's live-sampling setting is never run. There's no view of quality, cost, or latency over time, nothing alerts on a regression, and a chat conversation is a loose set of traces. Prompt changes can't be gated in CI.
+
+This work adds:
+
+- Online evaluation of sampled production traces.
+- Named trace groups (conversations, or any id the app chooses) with a timeline view.
+- A monitoring dashboard.
+- Threshold alerts, delivered as signed, metadata-only webhooks to Slack or any URL.
+- Stored eval suites that `terreno ai test <suite>` runs from CI with a scoped service token.
+- A prompt optimizer that proposes better prompt versions from failing dataset items.
+
+Everything stays local to `@terreno/ai`, with screens in `admin-frontend`.
+
+Out of scope: conversation-level evaluators, eval backfill and budgets, email alerts, custom dashboards, and other optimizer algorithms.
+
+- **Implementation plan:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/ai-observability-production-loop.md)
+- **Tasks:** [ai-observability-production-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/ai-observability-production-loop.md)
+- **Depends on:** `ai-observability` (phases 1–4)
 
 ---
 
@@ -1339,6 +1368,99 @@ One easy-to-use harness inside `@terreno/ai` that runs long-lived agentic work d
 **Project fields:** Area=`dx`, Target=`Future`, Impact=`Feature`, IP=`circleci-pr-speed-loop`, Status=`In progress`
 
 - **Implementation plan:** [circleci-pr-speed-loop.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/circleci-pr-speed-loop.md)
+
+---
+
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`In review`
+
+Today an implementation plan never says which end-to-end tests a feature needs, so bots decide alone whether a slice deserves a Playwright spec, and the manual checks a person should repeat before a release live in nobody's file. Most packages are tested only in-process.
+
+Every IP will carry `## E2E tests` and `## Regression cases` sections (either may be `None — <reason>`, neither may be missing). Grow plans the rows, Pick writes each spec with its feature, Roast runs them, Brew merges manual cases into one living suite per area under `docs/regression/`, and Taste keeps both current after fixes. Regression stays minimal: only what a developer or QA must check by hand, such as push notifications, real email delivery, or how the app feels. Terreno itself gains a real-process smoke test and an e2e guide page for every package, and brewery mirrors the contract.
+
+Out of scope: running manual cases automatically, and coverage targets.
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+- **Pull requests:** [#1628](https://github.com/TerrenoLabs/terreno/pull/1628), brewery [#15](https://github.com/joshgachnang/brewery/pull/15)
+
+---
+
+## lifecycle-user-guide
+
+**Title:** `An end-user guide that grows with every feature`
+
+**Labels:** `area:dx`, `type:feature`  
+**Project fields:** Area=`dx`, Target=`Next`, Impact=`Feature`, IP=`lifecycle-user-guide`, Status=`Shaping`
+
+Chat agents cannot answer "how do I…" questions about an app today, because no text describes its features in the words users see, and a guide written once drifts from the app the first time a label changes.
+
+Every IP will gain a `## User guide` section, and the task that ships a feature writes its page: one plain-text file per feature under `docs/user-guide/<area>/<feature>.md`, with `audience`, `platforms`, and the `questions` users would ask in its frontmatter, then what it does, how to use it, and what it is meant for. Roast checks the steps against the shipped screens, and Brew gates on the page. A repository with no end users opts out with `User guide: none`. A `backfill-user-guide` skill drafts pages for features that already shipped, for a human to approve.
+
+Open for discussion: how this relates to the support agent's `support/kb/` docs (one corpus or two), whether pages ship in the app or are served by the backend, and who reviews the wording.
+
+- **Implementation plan:** [lifecycle-user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/lifecycle-user-guide.md)
+- **Pull request:** [#1633](https://github.com/TerrenoLabs/terreno/pull/1633)
+
+---
+
+## list-detail-layout
+
+**Title:** `ListDetailLayout: a route-driven list/detail layout for phone and tablet`
+
+**Labels:** `area:ui`, `type:feature`  
+**Project fields:** Area=`ui`, Target=`Next`, Impact=`Feature`, IP=`list-detail-layout`, Status=`Planned`
+
+- **Implementation plan:** [list-detail-layout.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/list-detail-layout.md)
+
+---
+
+## e2e-and-regression-testing
+
+**Title:** `E2E tests and manual regression cases in every plan`
+
+**Labels:** `area:tooling`, `type:feature`  
+**Project fields:** Area=`tooling`, Target=`Next`, Impact=`Feature`, IP=`e2e-and-regression-testing`, Status=`Planned`
+
+- **Implementation plan:** [e2e-and-regression-testing.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/e2e-and-regression-testing.md)
+
+---
+
+## remove-rtk
+
+**Title:** `Remove @terreno/rtk and Redux in Terreno 58`
+
+**Labels:** `area:syncdb`, `type:feature`  
+**Project fields:** Area=`syncdb`, Target=`58`, Impact=`Breaking`, IP=`remove-rtk`, Status=`Planned`
+
+Delete the `@terreno/rtk` package and every Redux dependency from the monorepo. After this change `@terreno/syncdb` is the only frontend data and session layer:
+
+- Synced collections use `useQuery` / `useMutate` (unchanged).
+- Every other HTTP call (`/auth/me`, modelRouter actions, AI, consents, announcements,
+  version check) goes through a new syncdb request client with generated, typed hooks.
+- Session state comes from `@terreno/syncdb/auth` (Better Auth, plus a ported JWT adapter).
+- Feature flags and server pushes ride syncdb's existing socket.
+- GptHistory and McpServiceToken become synced collections.
+- All unit and e2e tests exercise these syncdb paths. No test imports RTK or Redux.
+
+- **Implementation plan:** [remove-rtk.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/remove-rtk.md)
+- **Tasks:** [remove-rtk.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/tasks/remove-rtk.md)
+
+---
+
+## syncdb-high-churn-fields
+
+**Title:** `SyncDB: high-churn fields without a sequence claim per write`
+
+**Labels:** `area:api`, `type:feature`  
+**Project fields:** Area=`api`, Target=`Next`, Impact=`Feature`, IP=`syncdb-high-churn-fields`, Status=`Shaping`
+
+A synced document can carry fields that change every few seconds (a gauge, a heartbeat, a progress counter) without each change costing three replicated writes and a round trip through the stream's counter document.
+
+- **Implementation plan:** [syncdb-high-churn-fields.md](https://github.com/TerrenoLabs/terreno/blob/master/docs/implementationPlans/syncdb-high-churn-fields.md)
 
 ---
 

@@ -1,6 +1,7 @@
 import mongoose, {type Model, model, Schema, type StringSchemaDefinition} from "mongoose";
 import passportLocalMongoose from "passport-local-mongoose";
 
+import type {UserModel as AuthUserModel} from "../auth";
 import {
   createdUpdatedPlugin,
   DateOnly,
@@ -9,6 +10,8 @@ import {
 } from "../plugins";
 
 export interface User {
+  _id: mongoose.Types.ObjectId;
+  id: string;
   admin: boolean;
   name?: string;
   username: string;
@@ -31,10 +34,15 @@ export interface StaffUser extends User {
 
 export interface FoodCategory {
   _id?: string;
+  addendums?: FoodCategoryAddendum[];
   name: string;
   show: boolean;
   created: Date;
   updated: Date;
+}
+
+interface FoodCategoryAddendum {
+  text: string;
 }
 
 export interface Food {
@@ -108,6 +116,13 @@ userSchema.methods.postCreate = async function (body: {age?: number}) {
 
 export const UserModel = model<User>("User", userSchema);
 
+/**
+ * `UserModel` typed as the auth `UserModel` for `setupAuth`, `TerrenoApp({userModel})`, and
+ * friends. passport-local-mongoose adds the statics at runtime but ships no types, and the auth
+ * `User._id` uses mongoose's schema `ObjectId` type, so the models are not structurally related.
+ */
+export const authUserModel = UserModel as unknown as AuthUserModel;
+
 const superUserSchema = new Schema<SuperUser>({
   superTitle: {description: "The super user's title", required: true, type: String},
 });
@@ -124,6 +139,14 @@ export const StaffUserModel = UserModel.discriminator("Staff", staffUserSchema);
 
 const foodCategorySchema = new Schema<FoodCategory>(
   {
+    addendums: {
+      description: "Extra details about this food category",
+      type: [
+        new Schema<FoodCategoryAddendum>({
+          text: {description: "The additional category detail", type: String},
+        }),
+      ],
+    },
     name: {description: "The name of the food category", type: String},
     show: {description: "Whether this category is visible", type: Boolean},
   },

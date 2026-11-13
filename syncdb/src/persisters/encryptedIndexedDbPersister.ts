@@ -247,5 +247,8 @@ export const createEncryptedIndexedDbPersister = ({
       return originalDestroy();
     },
     flush,
+    prepare: async (): Promise<void> => {
+      await codec.prepare?.();
+    },
   };
 };

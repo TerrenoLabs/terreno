@@ -1,5 +1,0 @@
-> **isWebsocketsDebugEnabled**(): `boolean`
-
-## Returns
-
-`boolean`

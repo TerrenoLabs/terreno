@@ -1,9 +1,8 @@
 import {Box, Button, NumberField, Page, Spinner, Text, TextField, useToast} from "@terreno/ui";
 import {router} from "expo-router";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
+import React, {useCallback, useEffect, useState} from "react";
 import {asJsonBody} from "./adminRpc";
-import {asDynamicHookApi} from "./dynamicHookApi";
-import {type AdminApi, type EndpointBuilder, resolveAdminBases} from "./types";
+import {resolveAdminBases} from "./types";
 import {useAdminRpc, useAdminRpcMutation, useAdminRpcQuery} from "./useAdminRpc";
 
 interface VersionConfigData {
@@ -19,7 +18,6 @@ interface VersionConfigData {
 }
 
 interface AdminVersionConfigProps {
-  api: AdminApi;
   /** @deprecated Use `apiBase`/`routeBase`. Kept as a backward-compatible alias. */
   baseUrl?: string;
   /** Base path where admin API requests are sent. Falls back to `baseUrl`. */
@@ -33,10 +31,7 @@ interface AdminVersionConfigProps {
   embedded?: boolean;
 }
 
-const VERSION_CONFIG_ENDPOINT = "adminVersionConfig";
-
 export const AdminVersionConfig: React.FC<AdminVersionConfigProps> = ({
-  api,
   baseUrl,
   apiBase,
   routeBase,
@@ -48,57 +43,24 @@ export const AdminVersionConfig: React.FC<AdminVersionConfigProps> = ({
   const toast = useToast();
 
   const rpc = useAdminRpc();
-  const fetchState = useAdminRpcQuery<VersionConfigData>({
-    rpc,
-    skip: !rpc,
-    url: `${resolvedApiBase}/version-config`,
-  });
-  const [rpcUpdate] = useAdminRpcMutation(rpc);
-
-  const enhancedApi = useMemo(() => {
-    return api.injectEndpoints({
-      endpoints: (build: EndpointBuilder) => ({
-        [VERSION_CONFIG_ENDPOINT]: build.query({
-          query: () => ({
-            method: "GET",
-            url: `${resolvedApiBase}/version-config`,
-          }),
-        }),
-        updateVersionConfig: build.mutation({
-          query: (body: VersionConfigData) => ({
-            body,
-            method: "PUT",
-            url: `${resolvedApiBase}/version-config`,
-          }),
-        }),
-      }),
-      overrideExisting: true,
-    });
-  }, [api, resolvedApiBase]);
-
-  const enhanced = asDynamicHookApi(enhancedApi);
-  const useVersionConfigQuery = enhanced.useAdminVersionConfigQuery;
-  const [updateConfigRtk] = enhanced.useUpdateVersionConfigMutation();
-  const rtkQuery = useVersionConfigQuery(undefined, {skip: Boolean(rpc)}) as {
-    data?: VersionConfigData;
-    error?: unknown;
-    isLoading: boolean;
-  };
   const {
     data,
     isLoading: isFetching,
     error: fetchError,
-  } = rpc
-    ? {data: fetchState.data, error: fetchState.error, isLoading: fetchState.isLoading}
-    : rtkQuery;
-  const updateConfig = rpc
-    ? (body: VersionConfigData) =>
-        rpcUpdate({
-          body: asJsonBody(body),
-          method: "PUT",
-          url: `${resolvedApiBase}/version-config`,
-        })
-    : updateConfigRtk;
+  } = useAdminRpcQuery<VersionConfigData>({
+    rpc,
+    url: `${resolvedApiBase}/version-config`,
+  });
+  const [rpcUpdate] = useAdminRpcMutation(rpc);
+  const updateConfig = useCallback(
+    (body: VersionConfigData) =>
+      rpcUpdate({
+        body: asJsonBody(body),
+        method: "PUT",
+        url: `${resolvedApiBase}/version-config`,
+      }),
+    [resolvedApiBase, rpcUpdate]
+  );
 
   // Populate form state with fetched config data or defaults when the query completes
   useEffect(() => {

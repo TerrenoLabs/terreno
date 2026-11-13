@@ -4,9 +4,13 @@ description: >-
   Invoke when debugging SyncDB local state, stale data, outbox stalls,
   conflicts, cursor/stream drift, reconciliation, or offline behavior in a
   running Terreno app. Uses terreno-mcp-local to inspect, snapshot, compare,
-  mutate, flush, merge, and repair SyncDB state.
+  mutate, flush, merge, and repair SyncDB state. For general Terreno debugging
+  (logs, API, web drive, Redux, storage), start with debug-with-mcp.
 ---
 # Debug SyncDB with MCP
+
+For setup, observe/act/verify outside SyncDB, and web vs native routing, read
+**`debug-with-mcp`** first. This skill is the SyncDB-specific path only.
 
 Use the fixed SyncDB MCP tools instead of arbitrary `evaluate` snippets.
 

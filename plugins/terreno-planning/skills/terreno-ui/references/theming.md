@@ -77,6 +77,9 @@ current system scheme. `themeColorSchemeOptions` exposes those three choices
 as Light, Dark, and Follow system. Call `setColorScheme("system")` to change
 the choice after startup. `colorSchemeSetting` keeps the selected choice, while
 `useTheme().colorScheme` is always the resolved `"light"` or `"dark"` value.
+
+Primitives are shared by both modes, and `setTheme` overrides apply to both modes. To audit
+an app for hardcoded colors and light/dark contrast, use the `audit-color-schemes` skill.
 The exported `lightThemeConfig` and `darkThemeConfig` match the Flourish Health
 Figma modes.
 

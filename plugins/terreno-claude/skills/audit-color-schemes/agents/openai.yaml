@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit color schemes"
+  short_description: "Audit light and dark mode: hardcoded colors to theme tokens, WCAG contrast in both modes"
+  default_prompt: "Use $audit-color-schemes to find hardcoded colors, move them to @terreno/ui theme tokens, and prove WCAG contrast in light and dark mode."

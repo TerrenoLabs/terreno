@@ -88,7 +88,7 @@ Claude Code does not auto-update third-party marketplaces by default. Run
 | Group | Skills |
 | --- | --- |
 | Lifecycle | `terreno-1-grow` … `terreno-5-taste`, `terreno-pick-roast-loop`, `terreno-planning-loop`, `terreno-taste-sweep` |
-| Terreno apps | backend, UI, admin interfaces, data, schema, SDK, prompts, upgrades, deployment |
+| Terreno apps | backend, UI, light/dark mode audit (`audit-color-schemes`), admin interfaces, data, schema, SDK, prompts, upgrades, deployment |
 | Testing | `terreno-test-setup` (bootstrap backend, frontend, mobile), `terreno-backend-tests`, `terreno-frontend-tests`, `terreno-mobile-tests`, `backend-test-env`, `backfill-regression` (propose manual regression cases for approval) |
 | Docs | `update-docs`, `backfill-user-guide` (draft end-user guide pages for approval), `update-agent-docs`, architecture skills |
 | GitHub | issues, review, UI verification, PR screenshots (`attach-pr-media`), release, dependency updates |

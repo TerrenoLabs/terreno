@@ -49,6 +49,7 @@ export const SKILL_GROUPS: SkillGroup[] = [
       "terreno-backend-api",
       "model-router-actions",
       "terreno-ui",
+      "audit-color-schemes",
       "terreno-data-fetching",
       "debug-with-mcp",
       "debug-syncdb-with-mcp",

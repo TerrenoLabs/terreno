@@ -57,6 +57,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 - [Automate Terreno upgrades](automate-terreno-upgrades.md) — Hourly workflow that launches one upgrade agent when a week-old release is out and no upgrade is open
 - [Track upstream Expo](track-upstream-expo.md) — Morning probe for SDK betas; `release-X.Y.Z` loop log + native fingerprint deps
 - [Build a list/detail screen](build-list-detail-screens.md) — `ListDetailLayout` route group: list on a phone, list + detail panes on a tablet, selection in the URL
+- [Audit light and dark mode](audit-dark-mode.md) — Move hardcoded colors to theme tokens and prove WCAG contrast in both modes with the `audit-color-schemes` skill
 - [Show loading skeletons](show-loading-skeletons.md) — `loading`, `loadingComponent`, and `loadingAnimation` on Box, Card, charts, and Page; `withLoading` for custom components
 - [Compose charts in a dashboard grid](charts-and-dashboards.md) — `LineChart` / `BarChart` / `AreaChart` / `DonutChart` inside `Card`s in `DashboardGrid` (ops-dashboard scorecards and spans: [dashboard-chart-parity](../implementationPlans/dashboard-chart-parity.md))
 - [Compare rendered chart snapshots](compare-chart-rendered-snapshots.md) — PNG goldens for the chart visual gallery, not JSON snapshots

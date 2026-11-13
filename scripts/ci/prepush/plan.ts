@@ -88,7 +88,7 @@ const EXTRA_MAPPINGS: Mapping[] = [
 const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
   {
     command: "bun run check",
-    name: "repo-policies: barrels, explicit-any, lifecycle skills, source rules",
+    name: "repo-policies: barrels, explicit-any, source rules",
   },
   {command: "bun test scripts/check-source-rules/", name: "repo-policies: source-rule tests"},
   {
@@ -99,7 +99,6 @@ const repoPolicySteps = ({baseSha}: {baseSha: string}): PrepushStep[] => [
     command: "bun test scripts/planning/ && bun run test:ci-tools",
     name: "repo-policies: planning + CI tools",
   },
-  {command: "bun run skills:check", name: "repo-policies: generated skills in sync"},
   {
     command: "bun run check:regression-suites && bun test scripts/regression/",
     name: "repo-policies: regression suites",

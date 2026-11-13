@@ -1,135 +1,91 @@
 # Install agent skills
 
-Install Terreno's agent skills into another repo or agent with the skills CLI.
+Terreno's agent skills live in their own repository,
+[TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills). Install them
+into another repo or agent with the skills CLI:
 
 ```bash
-npx skills add TerrenoLabs/terreno
-npx skills add TerrenoLabs/terreno --skill terreno-1-grow
+npx skills add TerrenoLabs/terreno-skills
+npx skills add TerrenoLabs/terreno-skills --skill terreno-1-grow
 ```
 
-That copies the committed `skills/` tree: lifecycle stages (Grow, Pick, Roast, Brew,
-Taste), three outer loops, combined Terreno app workflows, and optional repository
-skills.
+The first command opens a picker grouped by bundle. To install one part of Terreno, name
+its bundle:
+
+| Bundle | What you get |
+| --- | --- |
+| `lifecycle` | PRD, Grow → Pick ⇄ Roast → Brew → Taste, and the Pick-Roast, planning, and taste-sweep loops |
+| `scan` | Goal-driven code scans: Aim → Sweep → Sift → Plot → Track, plus the campaign and resident loops |
+| `app` | Backend, UI, light/dark mode, data, schema, admin, and test conventions for Terreno apps |
+| `ship` | UI verification, PR evidence, docs, releases, upgrades, store assets, GCP deploys |
+| `design` | Claude design handoff to a Terreno plan and Linear work |
+| `dx` | Debug over MCP, test setup and writing, regression and user-guide backfills, MCP servers, social login |
+
+```bash
+npx skills add TerrenoLabs/terreno-skills --skill lifecycle --skill app
+```
+
+The [terreno-skills README](https://github.com/TerrenoLabs/terreno-skills#readme) lists
+every skill in each bundle.
 
 ## Install as a host plugin
 
-Two plugins ship from this marketplace: the combined lifecycle and Terreno app workflows,
-and the optional goal-driven scan plugin. Stage names differ by host because Claude Code
-takes a plugin skill's command from the frontmatter `name`.
+One plugin carries the lifecycle, scan, and app skills. Stage names differ by host because
+Claude Code takes a plugin skill's command from the frontmatter `name`.
 
-| Host | Plugin | Invoke Grow | Scan plugin | Invoke Aim |
-| --- | --- | --- | --- | --- |
-| Cursor | `terreno-planning` | `/terreno-1-grow` | `terreno-loop` | `/terreno-loop-1-aim` |
-| Codex | `terreno-planning` | `$terreno-1-grow` | `terreno-loop` | `$terreno-loop-1-aim` |
-| Claude Code | `terreno` | `/terreno:1-grow` | `terreno-loop` | `/terreno-loop:1-aim` |
-
-`terreno-loop` depends on the lifecycle plugin: Plot hands each slice to Grow. Its
-resident loop (`/terreno-loop:run`, `/terreno-loop-run`, `$terreno-loop-run`) keeps a
-goal running and heartbeats over the PRs it opens. See the
-[scan plugin reference](../reference/scan-plugin.md).
-
-### Cursor
-
-Install `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.cursor-plugin/marketplace.json), then invoke `/terreno-1-grow`.
-
-### Codex
-
-```text
-codex plugin marketplace add TerrenoLabs/terreno
-codex plugin install terreno-planning --source terreno-plugins
-codex plugin install terreno-loop --source terreno-plugins
-$terreno-1-grow
-```
-
-Marketplace: [`.agents/plugins/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.agents/plugins/marketplace.json).
-Codex installs the canonical plugin at
-[`plugins/terreno-planning/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-planning)
-(`.codex-plugin/plugin.json`). A clone of this repo already exposes that marketplace.
+| Host | Plugin | Invoke Grow | Invoke Aim |
+| --- | --- | --- | --- |
+| Cursor | `terreno-planning` | `/terreno-1-grow` | `/terreno-scan-1-aim` |
+| Codex | `terreno-planning` | `$terreno-1-grow` | `$terreno-scan-1-aim` |
+| Claude Code | `terreno` | `/terreno:1-grow` | `/terreno:scan-1-aim` |
 
 ### Claude Code
 
 ```text
-/plugin marketplace add TerrenoLabs/terreno
+/plugin marketplace add TerrenoLabs/terreno-skills
 /plugin install terreno@terreno-plugins
-/plugin install terreno-loop@terreno-plugins
 /terreno:1-grow
 ```
 
-Marketplace: [`.claude-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.claude-plugin/marketplace.json).
-Claude Code stages, app skills, and agents come from the generated copy at
-[`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude);
-scan stages come from
-[`plugins/terreno-loop-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-loop-claude).
-
-#### Pick a channel
-
-Register one channel. Each one provides plugins named `terreno` and `terreno-loop`, so
-two channels give duplicate `/terreno:*` skills.
-
-| Channel | Tracks | Add the marketplace | Install |
-| --- | --- | --- | --- |
-| Master | Every merge to `master` | `/plugin marketplace add TerrenoLabs/terreno` | `/plugin install terreno@terreno-plugins` |
-| Pinned release | One release tag, frozen | `/plugin marketplace add TerrenoLabs/terreno#<version>` | `/plugin install terreno@terreno-plugins` |
-| Latest release | The newest stable release, from npm | `/plugin marketplace add https://raw.githubusercontent.com/TerrenoLabs/terreno/master/plugins/claude-release/.claude-plugin/marketplace.json` | `/plugin install terreno@terreno-releases` |
-
-The release channel installs `@terreno/agent-plugin` and `@terreno/agent-plugin-loop`
-from npm. Both are published in lockstep with every other `@terreno/*` package, and
-their plugin version is the Terreno release. To move a pinned install to another release, remove
-the marketplace and add it again at the new tag. Only tags from 57.21.0 on carry
-distinct plugin versions. Older tags all report `2.12.0`, so switching between two of
-them can be skipped as already up to date.
+Each bundle is also its own plugin (`terreno-lifecycle`, `terreno-app`, `terreno-dx`, …)
+for installing one part. Install the whole `terreno` plugin or bundle plugins, not both.
 
 Claude Code does not auto-update third-party marketplaces by default. Run
-`/plugin update terreno@<marketplace>`, or turn on auto-update for the marketplace in
+`/plugin update terreno@terreno-plugins`, or turn on auto-update for the marketplace in
 `/plugin` → **Marketplaces**.
 
-## What you get
+### Codex
 
-| Group | Skills |
-| --- | --- |
-| Lifecycle | `terreno-1-grow` … `terreno-5-taste`, `terreno-pick-roast-loop`, `terreno-planning-loop`, `terreno-taste-sweep` |
-| Terreno apps | backend, UI, admin interfaces, data, schema, SDK, prompts, upgrades, deployment |
-| Testing | `terreno-test-setup` (bootstrap backend, frontend, mobile), `terreno-backend-tests`, `terreno-frontend-tests`, `terreno-mobile-tests`, `backend-test-env`, `backfill-regression` (propose manual regression cases for approval) |
-| Docs | `update-docs`, `backfill-user-guide` (draft end-user guide pages for approval), `update-agent-docs`, architecture skills |
-| GitHub | issues, review, UI verification, PR screenshots (`attach-pr-media`), release, dependency updates |
-| Code scans | `terreno-loop-1-aim` … `terreno-loop-5-track`, `terreno-loop-campaign`, `terreno-loop-run` |
-| Expo and native | `track-upstream-expo`, `upgrading-expo`, `store-assets`, deployment / EAS skills |
-| Plugin agents | `pre-commit`, `ui-verifier` |
-
-`skills.sh.json` at the repo root groups those names on [skills.sh](https://skills.sh).
-Cursor and Claude Code load the bundled plugin agents. Codex loads the combined skill
-set but does not currently expose plugin-defined agents.
-
-## Keep copies in sync (Terreno maintainers)
-
-Canonical sources:
-
-1. `plugins/terreno-planning/skills/` — lifecycle and reusable Terreno app workflows
-2. `plugins/terreno-planning/agents/` — reusable verification agents
-3. `plugins/terreno-loop/skills/` — scan stages and the campaign loop
-4. `.rulesync/skills/` — repository-only and optional Expo skills (`bun run rules` generates agent copies)
-5. `<package>/.ai/skills/` — package/MCP-specific copies; not installable overlays
-
-`plugins/terreno-claude/` is generated from sources 1 and 2, and
-`plugins/terreno-loop-claude/` from source 3, both with shortened skill names.
-Codex uses the canonical plugin plus committed `.codex-plugin/plugin.json` and
-`.agents/plugins/marketplace.json` — do not generate a third plugin tree.
-
-Regenerate the installable tree and the Claude plugin:
-
-```bash
-bun run skills:sync
-bun run check:lifecycle-skills
+```text
+codex plugin marketplace add TerrenoLabs/terreno-skills
+codex plugin install terreno-planning --source terreno-plugins
+$terreno-1-grow
 ```
 
-Do not hand-edit `skills/`.
+### Cursor
 
-A `.rulesync/skills/` skill that links a lifecycle reference as
-`references/<name>.md` (for example `references/push-ownership.md`) gets its own copy of
-`plugins/terreno-planning/references/<name>.md`, so the link still resolves once the skill
-is installed elsewhere. `skills:sync` rewrites those copies and `skills:check` fails when
-one drifts. Edit the plugin reference, never the copy, then run `bun run skills:sync` and
-`bun run rules`.
+Install `terreno-planning` from the terreno-skills Cursor marketplace, then invoke
+`/terreno-1-grow`.
+
+Cursor and Claude Code also load the bundled `pre-commit` and `ui-verifier` agents. Codex
+loads the skills but does not currently expose plugin-defined agents.
+
+## Expo skills
+
+Expo's own skills (`upgrading-expo`, `expo-deployment`, `expo-dev-client`,
+`expo-cicd-workflows`, `expo-api-routes`, `use-dom`) come from upstream:
+
+```bash
+npx skills add expo/skills
+```
+
+## Change a skill
+
+Edit framework skills in the terreno-skills repository and open the pull request there.
+This repository keeps only its own repository-only skills (release, roadmap, issue, and
+maintenance workflows) in `.rulesync/skills/`; `bun run rules` generates the per-agent
+copies. Package-specific guidance stays in `<package>/.ai/skills/` and
+`<package>/.ai/guidelines/`, which the MCP server bundles.
 
 ## Keep native hooks in sync
 
@@ -144,4 +100,4 @@ an agent finishes.
 Skills read architecture docs before changing code. After a user-visible or architectural
 change, update `docs/` in the same slice using `update-docs`. See
 [lifecycle plugin](../reference/lifecycle-plugin.md) and the
-[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md).
+[documentation contract](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/documentation-contract.md).

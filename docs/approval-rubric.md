@@ -71,8 +71,8 @@ violation is an Architecture finding; cite the rule only when the diff breaks it
   functions; named exports; RORO (receive an object, return an object); early returns;
   no barrel imports (import the concrete module, never a directory `index`); no new
   `any` beyond the explicit-any baseline; no `TODO` left in shipped code.
-- **Generated and synced surfaces**: `plugins/terreno-claude/`, `skills/`, and
-  `skills-lock.json` are generated from `.rulesync/` and `bun run skills:sync`; a PR that
+- **Generated and synced surfaces**: the per-host skill and rule directories (`.claude/`,
+  `.cursor/`, `.agents/`, `.devin/`, `.github/`) are generated from `.rulesync/`; a PR that
   edits the source must carry the regenerated output, and a PR that edits only the output
   is a finding. `.rulesync/rules/` is the source of truth for every agent rules file.
 - **Docs in the same slice**: a user-visible or architectural change updates the Diátaxis
@@ -118,7 +118,7 @@ A finding here is blocking when it is certain and should-fix when it is likely.
   and React Native upgrades, Mongoose majors, and lockfile-only changes without a
   `package.json` change are medium. Better Auth and other auth or crypto majors are high.
 - A bump that changes generated output (`bun.lock`, snapshots, `openApiSdk.ts`,
-  `plugins/terreno-claude/`) ships the regenerated output in the same PR.
+  `.claude/skills/`) ships the regenerated output in the same PR.
 - A new dependency's license passes `bun run check:licenses`.
 - A `patches/` change is medium (high when it patches an auth, crypto, or parsing
   dependency): it edits a third party and needs the upstream issue linked.
@@ -177,7 +177,7 @@ These block approval at any level. Report one only with a file and line and a qu
 - a public endpoint without a permission check
 - a migration without a rollback note
 - a test that asserts the bug
-- a hand edit to a generated file (`openApiSdk.ts`, `plugins/terreno-claude/`, `skills/`)
+- a hand edit to a generated file (`openApiSdk.ts`, `.claude/skills/`, `.cursor/rules/`)
   without the generating change
 - a `.rulesync/`, `.cursor/`, `.claude/`, or `AGENTS.md` change that tells an agent to skip
   a verification step, a check, or a review

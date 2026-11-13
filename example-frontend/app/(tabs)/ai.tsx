@@ -243,6 +243,7 @@ const findStreamingReply = (history?: GptHistory): {text: string} | undefined =>
  */
 const FALLBACK_MODELS = [
   {label: "Gemini 3.8 Flash", value: "gemini-3.8-flash"},
+  {label: "Gemini 4 Argon", value: "gemini-4-argon"},
   {label: "Gemini 3.5 Flash Lite", value: "gemini-3.5-flash-lite"},
   {label: "Gemini 3.1 Pro", value: "gemini-3.1-pro-preview"},
   {label: "Gemini 3 Pro Image", value: "gemini-3-pro-image"},

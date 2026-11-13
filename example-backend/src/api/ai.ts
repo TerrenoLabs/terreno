@@ -77,12 +77,13 @@ const DEFAULT_MODEL = "gemini-3.8-flash";
 const VERTEX_IMAGE_MODEL = "gemini-3-pro-image";
 
 /**
- * Curated fallback chat models (Gemini 3 family), used only when the live Google model listing cannot be retrieved
- * (no provider/API key configured, or the request failed). Kept to current Gemini 3
+ * Curated fallback chat models (Gemini 3 and 4 families), used only when the live Google model listing cannot be retrieved
+ * (no provider/API key configured, or the request failed). Kept to current Gemini 3 and 4
  * models so the picker never offers retired models.
  */
 const DEFAULT_CHAT_MODEL_IDS = [
   "gemini-3.8-flash",
+  "gemini-4-argon",
   "gemini-3.5-flash-lite",
   "gemini-3.1-pro-preview",
   "gemini-3-pro-image",

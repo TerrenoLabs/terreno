@@ -14,11 +14,12 @@ const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
 
 /**
- * Curated fallback models (Gemini 3 family) for the picker when the live model list cannot be
+ * Curated fallback models (Gemini 3 and 4 families) for the picker when the live model list cannot be
  * fetched. When an API key is set, `listGeminiModels` replaces these with the live set for the key.
  */
 export const DEFAULT_GEMINI_MODELS = [
   "gemini-3.8-flash",
+  "gemini-4-argon",
   "gemini-3.5-flash-lite",
   "gemini-3.1-pro-preview",
   "gemini-3-pro-image",

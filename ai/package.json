@@ -4,7 +4,7 @@
     "url": "https://github.com/TerrenoLabs/terreno/issues"
   },
   "dependencies": {
-    "@ai-sdk/mcp": "^1.0.104",
+    "@ai-sdk/mcp": "catalog:",
     "@google-cloud/storage": "catalog:",
     "@terreno/blocks": "workspace:*",
     "ai": "catalog:",
@@ -17,7 +17,7 @@
   },
   "description": "Provider-agnostic AI service with streaming chat, request logging, and admin tools — part of Terreno, the batteries-included TypeScript framework for universal apps.",
   "devDependencies": {
-    "@ai-sdk/google-vertex": "^4.0.199",
+    "@ai-sdk/google-vertex": "catalog:",
     "@biomejs/biome": "catalog:",
     "@terreno/admin-backend": "workspace:*",
     "@terreno/api": "workspace:*",

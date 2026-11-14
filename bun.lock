@@ -140,7 +140,7 @@
       "name": "@terreno/ai",
       "version": "58.0.4",
       "dependencies": {
-        "@ai-sdk/mcp": "^1.0.104",
+        "@ai-sdk/mcp": "catalog:",
         "@google-cloud/storage": "catalog:",
         "@terreno/blocks": "workspace:*",
         "ai": "catalog:",
@@ -152,7 +152,7 @@
         "sanitize-html": "catalog:",
       },
       "devDependencies": {
-        "@ai-sdk/google-vertex": "^4.0.199",
+        "@ai-sdk/google-vertex": "catalog:",
         "@biomejs/biome": "catalog:",
         "@terreno/admin-backend": "workspace:*",
         "@terreno/api": "workspace:*",
@@ -471,8 +471,8 @@
       "name": "@terreno/example-backend",
       "version": "1.0.0",
       "dependencies": {
-        "@ai-sdk/google": "^3.0.122",
-        "@ai-sdk/google-vertex": "^4.0.199",
+        "@ai-sdk/google": "catalog:",
+        "@ai-sdk/google-vertex": "catalog:",
         "@google-cloud/opentelemetry-cloud-trace-exporter": "^3.0.0",
         "@google-cloud/secret-manager": "^7.1.0",
         "@google-cloud/trace-agent": "^8.0.0",
@@ -940,6 +940,9 @@
     "ws": "^8.18.3",
   },
   "catalog": {
+    "@ai-sdk/google": "^3.0.122",
+    "@ai-sdk/google-vertex": "^4.0.199",
+    "@ai-sdk/mcp": "^1.0.104",
     "@better-auth/passkey": "1.7.7",
     "@biomejs/biome": "2.5.13",
     "@expo-google-fonts/nunito": "^0.4.2",

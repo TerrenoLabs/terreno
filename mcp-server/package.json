@@ -109,5 +109,5 @@
     "typecheck": "NODE_OPTIONS=--max-old-space-size=8192 tsc -p tsconfig.typecheck.json"
   },
   "type": "module",
-  "version": "58.0.5"
+  "version": "58.0.6"
 }

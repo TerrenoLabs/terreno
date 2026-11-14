@@ -24,7 +24,7 @@
     },
     "admin-backend": {
       "name": "@terreno/admin-backend",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@google-cloud/storage": "catalog:",
         "@terreno/api": "workspace:*",
@@ -51,7 +51,7 @@
     },
     "admin-frontend": {
       "name": "@terreno/admin-frontend",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@terreno/syncdb": "workspace:*",
         "@terreno/ui": "workspace:*",
@@ -86,7 +86,7 @@
     },
     "admin-spa": {
       "name": "@terreno/admin-spa",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@better-auth/expo": "^1.6.25",
         "@expo/vector-icons": "catalog:",
@@ -138,7 +138,7 @@
     },
     "ai": {
       "name": "@terreno/ai",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@ai-sdk/mcp": "catalog:",
         "@google-cloud/storage": "catalog:",
@@ -183,7 +183,7 @@
     },
     "announcements": {
       "name": "@terreno/announcements",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -206,7 +206,7 @@
     },
     "api": {
       "name": "@terreno/api",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "terreno-migrate": "./src/migrations/cli.ts",
       },
@@ -288,7 +288,7 @@
     },
     "api-health": {
       "name": "@terreno/api-health",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "express": "catalog:",
@@ -305,7 +305,7 @@
     },
     "blocks": {
       "name": "@terreno/blocks",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "terreno-blocks": "./dist/cli.js",
       },
@@ -341,7 +341,7 @@
     },
     "comms": {
       "name": "@terreno/comms",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "libphonenumber-js": "catalog:",
@@ -372,7 +372,7 @@
     },
     "create-terreno-app": {
       "name": "create-terreno-app",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "create-terreno-app": "./dist/cli.js",
       },
@@ -586,7 +586,7 @@
     },
     "feature-flags": {
       "name": "@terreno/feature-flags",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@openfeature/server-sdk": "catalog:",
         "@terreno/api": "workspace:*",
@@ -613,7 +613,7 @@
     },
     "jobs": {
       "name": "@terreno/jobs",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@terreno/api": "workspace:*",
         "cron": "^4.3.4",
@@ -643,7 +643,7 @@
     },
     "mcp-server": {
       "name": "@terreno/mcp",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "terreno-mcp": "./dist/index.js",
         "terreno-mcp-local": "./dist/local/index.js",
@@ -673,7 +673,7 @@
     },
     "syncdb": {
       "name": "@terreno/syncdb",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "terreno-syncdb-codegen": "./src/codegen/cli.ts",
       },
@@ -746,7 +746,7 @@
     },
     "test": {
       "name": "@terreno/test",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "bin": {
         "terreno-test-hygiene": "./dist/cli/testHygieneCli.js",
         "terreno-test-shard": "./dist/cli/testShardCli.js",
@@ -795,7 +795,7 @@
     },
     "ui": {
       "name": "@terreno/ui",
-      "version": "58.0.4",
+      "version": "58.0.5",
       "dependencies": {
         "@expo-google-fonts/caveat": "^0.4.2",
         "@expo-google-fonts/dancing-script": "^0.4.2",
@@ -942,7 +942,7 @@
   "catalog": {
     "@ai-sdk/google": "^3.0.122",
     "@ai-sdk/google-vertex": "^4.0.199",
-    "@ai-sdk/mcp": "^1.0.104",
+    "@ai-sdk/mcp": "^1.0.21",
     "@better-auth/passkey": "1.7.7",
     "@biomejs/biome": "2.5.13",
     "@expo-google-fonts/nunito": "^0.4.2",

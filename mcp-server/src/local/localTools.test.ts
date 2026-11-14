@@ -5,11 +5,18 @@ import {join} from "node:path";
 import {assert} from "chai";
 import {DateTime} from "luxon";
 
+import {LOCAL_TOOL_NAMES} from "./localToolNames.js";
 import {handleLocalToolCall, localMcpTools} from "./localTools.js";
 import {resolveTerrenoLogDirs} from "./logPaths.js";
 import {resolveMetroHttpBase} from "./metro/metroDevSession.js";
 import {lastError, readLogs} from "./tools/readLogs.js";
 import {evaluate, navigate} from "./tools/runtime.js";
+
+describe("local tool names", () => {
+  it("lists exactly the tools the local server defines", (): void => {
+    expect(localMcpTools.map((tool) => tool.name)).toEqual([...LOCAL_TOOL_NAMES]);
+  });
+});
 
 describe("local MCP runtime tools", () => {
   let projectRoot: string;

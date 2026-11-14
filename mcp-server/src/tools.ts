@@ -874,23 +874,31 @@ ${fieldComponents.join("\n")}
 const formatBlockIssue = (error: BlockError): string =>
   `${error.path}  ${error.code}  ${error.message} — ${error.fix}`;
 
-/** Same stdout as `terreno-blocks validate` for one document. */
-export const validateUiBlocks = (args: {document?: string}): string => {
+/**
+ * Validates one block document. `report` is the same stdout as `terreno-blocks validate`;
+ * `ok` is false exactly when that command would exit non-zero (warnings alone stay ok).
+ */
+export const checkUiBlocks = (args: {document?: string}): {ok: boolean; report: string} => {
   if (typeof args.document !== "string") {
-    return "document is required\n";
+    return {ok: false, report: "document is required\n"};
   }
   const parsed = parseBlocks(args.document);
   if (!parsed.ok) {
-    return `${parsed.errors.map(formatBlockIssue).join("\n")}\n`;
+    return {ok: false, report: `${parsed.errors.map(formatBlockIssue).join("\n")}\n`};
   }
   const validated = validateBlocks(parsed.value);
   if (!validated.ok) {
-    return `${validated.errors.map(formatBlockIssue).join("\n")}\n`;
+    return {ok: false, report: `${validated.errors.map(formatBlockIssue).join("\n")}\n`};
   }
   if (validated.warnings.length === 0) {
-    return "";
+    return {ok: true, report: ""};
   }
-  return `${validated.warnings.map(formatBlockIssue).join("\n")}\n`;
+  return {ok: true, report: `${validated.warnings.map(formatBlockIssue).join("\n")}\n`};
+};
+
+/** Same stdout as `terreno-blocks validate` for one document. */
+export const validateUiBlocks = (args: {document?: string}): string => {
+  return checkUiBlocks(args).report;
 };
 
 // `[^{}]` rather than `[^}]` stops a failed match at the next `{`, so sources with many

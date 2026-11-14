@@ -4,6 +4,10 @@ Configure both Terreno servers: the hosted server supplies documentation and gen
 stdio server inspects the app, database, logs, Metro, SyncDB state, web and native navigation.
 After setup, invoke **`debug-with-mcp`** (and when applicable **`debug-syncdb-with-mcp`**) for the
 standard diagnostic workflow.
+
+MCP setup is optional for an agent that has a shell. The `terreno` CLI (`bun add -g @terreno/cli`)
+runs every tool on both servers with no configuration: see the [CLI reference](../reference/cli.md).
+Set up MCP when you want the tools listed in the editor itself.
 - **`terreno`** (hosted, Streamable HTTP) supplies documentation search and code generators.
 - **`terreno-local`** (stdio, runs in your repository) reads the app's packages, database, logs,
   Metro, and client state.

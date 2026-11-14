@@ -44,6 +44,11 @@ Local runtime tools (`terreno-mcp-local`):
 Create the SyncDB client with `debug: true`. State changes require
 `TERRENO_MCP_EVAL=1`; reads and snapshots do not.
 
+Every tool on both servers is also a `terreno` command in
+[`@terreno/cli`](https://www.npmjs.com/package/@terreno/cli) (`terreno logs`, `terreno state`,
+`terreno syncdb action`, `terreno browser`, `terreno tool call <name>`, ...). The CLI needs no
+MCP configuration, so prefer it for agents that have a shell.
+
 ### Prompts
 
 Code generation prompts:
@@ -91,7 +96,7 @@ Restart the editor, then ask the agent to call `terreno_search_docs` or `applica
   `terreno_get_update_note`, `terreno_ask_update_help`, `terreno_generate_model`,
   `terreno_generate_route`, `terreno_generate_screen`, `terreno_generate_form_fields`,
   `terreno_validate_model_schema`, `terreno_validate_ui_blocks`, `terreno_install_admin`
-- Local `terreno-mcp-local` tools (15): `application_info`, `database_schema`, `database_query`,
+- Local `terreno-mcp-local` tools (16): `application_info`, `database_schema`, `database_query`,
   `read_logs`, `last_error`, `get_syncdb_state`, `syncdb_snapshot`, `syncdb_action`, `evaluate`,
   `navigate`, `dispatch_client_action`, `read_local_storage`, `write_local_storage`,
   `list_dev_commands`, `invoke_dev_command`, `browser`

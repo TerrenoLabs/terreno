@@ -1,4 +1,5 @@
 import {runApiCommand} from "./commands/api";
+import {runLoginCommand, runLogoutCommand} from "./commands/auth";
 import {runBootstrapCommand} from "./commands/bootstrap";
 import {runDocsCommand} from "./commands/docs";
 import {runGenerateCommand, runValidateCommand} from "./commands/generate";
@@ -10,6 +11,14 @@ import {
   runNavigateCommand,
   runStateCommand,
 } from "./commands/project";
+import {
+  runBrowserCommand,
+  runDevCommand,
+  runDispatchCommand,
+  runStorageCommand,
+  runSyncDbCommand,
+} from "./commands/runtime";
+import {runSessionCommand, runToolCommand} from "./commands/tool";
 import {runWebCommand} from "./commands/web";
 import {commandHelp, HELP_TEXT} from "./help";
 import {type CliIo, createProcessIo, printJson} from "./io";
@@ -43,8 +52,14 @@ export const runCli = async (argv: string[], io: CliIo = createProcessIo()): Pro
         return await runApiCommand(parsed, io, json);
       case "bootstrap":
         return await runBootstrapCommand(parsed, io, json);
+      case "browser":
+        return await runBrowserCommand(parsed, io, json);
       case "db":
         return await runDbCommand(parsed, io, json);
+      case "dev":
+        return await runDevCommand(parsed, io, json);
+      case "dispatch":
+        return await runDispatchCommand(parsed, io, json);
       case "docs":
         return await runDocsCommand(parsed, io, json);
       case "eval":
@@ -53,12 +68,24 @@ export const runCli = async (argv: string[], io: CliIo = createProcessIo()): Pro
         return await runGenerateCommand(parsed, io, json);
       case "info":
         return await runInfoCommand(io, json);
+      case "login":
+        return await runLoginCommand(parsed, io, json);
+      case "logout":
+        return await runLogoutCommand(io, json);
       case "logs":
         return await runLogsCommand(parsed, io, json);
       case "navigate":
         return await runNavigateCommand(parsed, io, json);
+      case "session":
+        return await runSessionCommand(parsed, io, json);
       case "state":
         return await runStateCommand(parsed, io, json);
+      case "storage":
+        return await runStorageCommand(parsed, io, json);
+      case "syncdb":
+        return await runSyncDbCommand(parsed, io, json);
+      case "tool":
+        return await runToolCommand(parsed, io, json);
       case "validate":
         return await runValidateCommand(parsed, io, json);
       case "web":

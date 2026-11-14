@@ -1,5 +1,8 @@
 {
   "catalog": {
+    "@ai-sdk/google": "^3.0.122",
+    "@ai-sdk/google-vertex": "^4.0.199",
+    "@ai-sdk/mcp": "^1.0.104",
     "@better-auth/passkey": "1.7.7",
     "@biomejs/biome": "2.5.13",
     "@expo-google-fonts/nunito": "^0.4.2",

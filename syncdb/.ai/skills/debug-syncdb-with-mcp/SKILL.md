@@ -55,9 +55,8 @@ local mutation, outbox send, ack/nack, delta, cursor, or reconcile phase.
 ## 4. Change state only when required
 
 Set `TERRENO_MCP_EVAL=1` on the process that runs the tool, then use
-`terreno syncdb action <action>` (`syncdb_action`). For the CLI that is the shell, or the
-session if one is running: `terreno session stop`, then
-`TERRENO_MCP_EVAL=1 terreno session start`. For MCP, restart `terreno-mcp-local` with it set.
+`terreno syncdb action <action>` (`syncdb_action`). For the CLI that is the shell running the
+command. For MCP, restart `terreno-mcp-local` with it set.
 
 ```bash
 TERRENO_MCP_EVAL=1 terreno syncdb action mutate --collection todos --operation update \

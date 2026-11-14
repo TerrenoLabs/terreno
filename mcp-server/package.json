@@ -43,6 +43,11 @@
       "default": "./dist/bootstrap.js",
       "types": "./dist/bootstrap.d.ts"
     },
+    "./local-tool-names": {
+      "bun": "./dist/local/localToolNames.js",
+      "default": "./dist/local/localToolNames.js",
+      "types": "./dist/local/localToolNames.d.ts"
+    },
     "./local-tools": {
       "bun": "./dist/local/localTools.js",
       "default": "./dist/local/localTools.js",

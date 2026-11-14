@@ -73,9 +73,8 @@ the frontend package).
 
 Set **`TERRENO_MCP_EVAL=1`** on the process that runs the tool: the shell for the CLI
 (`TERRENO_MCP_EVAL=1 terreno navigate /profile`), or the MCP server process, restarted, for
-`terreno-local`. A running CLI session keeps the environment it started with, so start it
-with the variable set: `TERRENO_MCP_EVAL=1 terreno session start`. Never set it in generated
-app env by default.
+`terreno-local`. The CLI reads it from each command's own shell, with or without a running
+CLI session. Never set it in generated app env by default.
 
 | Goal | CLI | MCP tool | Avoid |
 | --- | --- | --- | --- |

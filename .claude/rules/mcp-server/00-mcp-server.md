@@ -77,8 +77,10 @@ SyncDB state changes and other gated tools require `TERRENO_MCP_EVAL=1` on the p
 runs the tool. Read and snapshot operations remain available without that opt-in. Follow
 `docs/how-to/debug-with-mcp.md`.
 
-When you add a local tool, add its CLI command and its row in `COMMAND_FOR_TOOL`
-(`cli/src/mcpParity.test.ts`); that test fails until every tool has one.
+When you add a local tool, add its name to `LOCAL_TOOL_NAMES`
+(`src/local/localToolNames.ts`), its CLI command, and its row in `COMMAND_FOR_TOOL`
+(`cli/src/mcpParity.test.ts`). `localTools.test.ts` fails until the name is listed, and the
+CLI test fails until the tool has a command.
 
 ## Available Prompts
 

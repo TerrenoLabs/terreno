@@ -1,8 +1,9 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import {existsSync} from "node:fs";
-import {mkdtemp, readFile, rm, stat, writeFile} from "node:fs/promises";
+import {mkdtemp, readFile, rm, stat, utimes, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import {LOCAL_TOOL_NAMES} from "@terreno/mcp/local-tool-names";
 
 import type {CliIo, ToolCallResult} from "./io";
 import {runCli} from "./runCli";
@@ -15,14 +16,14 @@ import {
   writePrivateJson,
 } from "./session";
 
-const LOCAL_TOOL_NAMES = ["application_info", "browser", "read_logs", "syncdb_snapshot"];
+const FAKE_TOOL_NAMES = ["application_info", "browser", "read_logs", "syncdb_snapshot"];
 
 /** Stands in for terreno-mcp-local: echoes each call so a test can assert the arguments. */
 const fakeLocalTools: NonNullable<CliIo["localTools"]> = {
   call: async (name: string, args: Record<string, unknown>): Promise<ToolCallResult> => ({
     content: [{text: `${name}:${JSON.stringify(args)}`, type: "text"}],
   }),
-  tools: LOCAL_TOOL_NAMES.map((name) => ({
+  tools: FAKE_TOOL_NAMES.map((name) => ({
     description: `Describe ${name}. More detail.`,
     inputSchema: {properties: {}, type: "object"},
     name,
@@ -198,7 +199,7 @@ describe("MCP parity commands", () => {
     const localIo = createIo(dir);
     expect(await runCli(["tool", "list", "--local", "--json"], localIo)).toBe(0);
     const rows = JSON.parse(localIo.stdoutLines.join("\n")) as Array<{name: string}>;
-    expect(rows.map((row) => row.name)).toEqual(LOCAL_TOOL_NAMES);
+    expect(rows.map((row) => row.name)).toEqual(FAKE_TOOL_NAMES);
 
     const hostedIo = createIo(dir);
     expect(await runCli(["tool", "list", "--hosted", "--json"], hostedIo)).toBe(0);
@@ -250,11 +251,23 @@ describe("MCP parity commands", () => {
     expect(io.stderrLines.join("\n")).toContain("Usage: terreno docs notes");
   });
 
-  it("validates a block document", async (): Promise<void> => {
+  it("validates a block document and fails on an invalid one", async (): Promise<void> => {
     const io = createIo(dir);
-    await writeFile(join(dir, "reply.yaml"), "blocks:\n  - type: text\n    text: hello\n");
+    await writeFile(
+      join(dir, "reply.yaml"),
+      "v: 1\nblocks:\n  - type: text\n    markdown: hello\n"
+    );
     expect(await runCli(["validate", "blocks", "--file", "reply.yaml", "--json"], io)).toBe(0);
-    expect(io.stdoutLines.join("\n")).toContain('"ok": true');
+    expect(JSON.parse(io.stdoutLines.join("\n"))).toEqual({ok: true, result: ""});
+
+    await writeFile(join(dir, "bad.yaml"), "v: 1\nblocks:\n  - type: text\n    text: hello\n");
+    const badIo = createIo(dir);
+    expect(await runCli(["validate", "blocks", "--file", "bad.yaml"], badIo)).toBe(1);
+    expect(badIo.stdoutLines.join("\n")).toContain("blocks[0].markdown  MISSING_REQUIRED");
+    const badJsonIo = createIo(dir);
+    expect(await runCli(["validate", "blocks", "--file", "bad.yaml", "--json"], badJsonIo)).toBe(1);
+    expect(badJsonIo.stdoutLines.join("\n")).toContain('"ok": false');
+
     expect(await runCli(["validate", "nope", "--file", "reply.yaml"], io)).toBe(1);
     expect(await runCli(["validate", "blocks"], io)).toBe(1);
     expect(io.stderrLines.join("\n")).toContain("Usage: terreno validate <schema|blocks>");
@@ -352,7 +365,13 @@ describe("MCP parity commands", () => {
 
     // A state file whose process is gone is dropped, and stateless tools run in process.
     const stateDir = await ensureCliStateDir(io);
-    await writePrivateJson(join(stateDir, "session.json"), {pid: 1, port: 1, token: "gone"});
+    const exited = Bun.spawn(["true"]);
+    await exited.exited;
+    await writePrivateJson(join(stateDir, "session.json"), {
+      pid: exited.pid,
+      port: 1,
+      token: "gone",
+    });
     expect(await findLiveSession(io)).toBeUndefined();
     expect(existsSync(join(stateDir, "session.json"))).toBe(false);
     expect(await runCli(["session", "status"], io)).toBe(0);
@@ -406,6 +425,107 @@ describe("MCP parity commands", () => {
       expect(await runCli(["session", "stop"], io)).toBe(0);
     }
   }, 20000);
+
+  it("applies each command's own eval opt-in inside a shared session", async (): Promise<void> => {
+    const io = createIo(dir);
+    let serving: Promise<void> = Promise.resolve();
+    await startSession({
+      io,
+      spawnServe: (): void => {
+        serving = serveSession({
+          handle: async (): Promise<ToolCallResult> => ({
+            content: [{text: `eval=${process.env.TERRENO_MCP_EVAL ?? "off"}`, type: "text"}],
+          }),
+          idleMinutes: 0,
+          io,
+        });
+      },
+    });
+    const previous = process.env.TERRENO_MCP_EVAL;
+    try {
+      // The session process itself has the gate open; a caller without it still gets it closed.
+      process.env.TERRENO_MCP_EVAL = "1";
+      expect(await runCli(["navigate", "/profile"], io)).toBe(0);
+      expect(io.stdoutLines.at(-1)).toBe("eval=off");
+      io.env.TERRENO_MCP_EVAL = "1";
+      expect(await runCli(["navigate", "/profile"], io)).toBe(0);
+      expect(io.stdoutLines.at(-1)).toBe("eval=1");
+      expect(process.env.TERRENO_MCP_EVAL).toBe("1");
+
+      // And the reverse: a session without the gate honors a caller that opts in.
+      delete process.env.TERRENO_MCP_EVAL;
+      expect(await runCli(["navigate", "/profile"], io)).toBe(0);
+      expect(io.stdoutLines.at(-1)).toBe("eval=1");
+      expect(process.env.TERRENO_MCP_EVAL).toBeUndefined();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TERRENO_MCP_EVAL;
+      } else {
+        process.env.TERRENO_MCP_EVAL = previous;
+      }
+      await stopSession(io);
+      await serving;
+    }
+  });
+
+  it("starts one session when two commands start at once", async (): Promise<void> => {
+    const io = createIo(dir);
+    let spawns = 0;
+    let serving: Promise<void> = Promise.resolve();
+    const spawnServe = (): void => {
+      spawns += 1;
+      serving = serveSession({handle: fakeLocalTools.call, idleMinutes: 0, io});
+    };
+    const [first, second] = await Promise.all([
+      startSession({io, spawnServe}),
+      startSession({io, spawnServe}),
+    ]);
+    expect(spawns).toBe(1);
+    expect(first.state.token).toBe(second.state.token);
+    expect([first.isNew, second.isNew].sort()).toEqual([false, true]);
+    expect(existsSync(join(dir, ".terreno", "cli", "session.lock"))).toBe(false);
+
+    // A second server never replaces one that is answering.
+    await serveSession({handle: fakeLocalTools.call, idleMinutes: 0, io});
+    expect((await findLiveSession(io))?.token).toBe(first.state.token);
+
+    // `tool call` routes a stateful tool the same way the dedicated command does.
+    expect(
+      await runCli(["tool", "call", "syncdb_snapshot", "--args", '{"action":"list"}'], io)
+    ).toBe(0);
+    expect(io.stdoutLines.at(-1)).toBe('syncdb_snapshot:{"action":"list"}');
+
+    await stopSession(io);
+    await serving;
+  });
+
+  it("ends a session process that is alive but not answering", async (): Promise<void> => {
+    const io = createIo(dir);
+    const child = Bun.spawn(["sleep", "30"]);
+    const stateDir = await ensureCliStateDir(io);
+    await writePrivateJson(join(stateDir, "session.json"), {pid: child.pid, port: 1, token: "x"});
+    // Unanswering but alive: the state file stays so stop can still reach the process.
+    expect(await findLiveSession(io)).toBeUndefined();
+    expect(existsSync(join(stateDir, "session.json"))).toBe(true);
+    expect(await stopSession(io)).toBe(true);
+    await child.exited;
+    expect(existsSync(join(stateDir, "session.json"))).toBe(false);
+
+    // A lock left by a command that died while starting is taken over.
+    await writeFile(join(stateDir, "session.lock"), "1");
+    const old = new Date(Date.now() - 60000);
+    await utimes(join(stateDir, "session.lock"), old, old);
+    let serving: Promise<void> = Promise.resolve();
+    const {isNew} = await startSession({
+      io,
+      spawnServe: (): void => {
+        serving = serveSession({handle: fakeLocalTools.call, idleMinutes: 0, io});
+      },
+    });
+    expect(isNew).toBe(true);
+    await stopSession(io);
+    await serving;
+  });
 
   it("idles out, and reports a session that never starts", async (): Promise<void> => {
     const io = createIo(dir);
@@ -563,14 +683,8 @@ describe("CLI coverage of terreno-mcp-local", () => {
   };
 
   it("has a dedicated command for every local tool the server defines", async (): Promise<void> => {
-    // Read the source: another test file in this process may mock the module.
-    const source = await readFile(
-      join(import.meta.dir, "../../mcp-server/src/local/localTools.ts"),
-      "utf8"
-    );
-    const names = [...source.matchAll(/^ {4}name: "([a-z_]+)",$/gm)].map((match) => match[1] ?? "");
-    expect(names.length).toBeGreaterThan(10);
-    expect(names.filter((name) => !COMMAND_FOR_TOOL[name])).toEqual([]);
+    expect(LOCAL_TOOL_NAMES.length).toBeGreaterThan(10);
+    expect(LOCAL_TOOL_NAMES.filter((name) => !COMMAND_FOR_TOOL[name])).toEqual([]);
 
     const io = createIo(tmpdir());
     for (const command of new Set(Object.values(COMMAND_FOR_TOOL))) {

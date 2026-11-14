@@ -201,7 +201,8 @@ A session is a background process for this project that keeps what a single comm
 the open browser page (terreno browser), SyncDB snapshots (terreno syncdb snapshot), and the
 one Hermes debugger connection. While it runs, every local command goes through it.
 terreno browser and terreno syncdb snapshot start it for you. It exits after 30 idle minutes;
---idle-minutes 0 keeps it until terreno session stop.
+--idle-minutes 0 keeps it until terreno session stop. TERRENO_MCP_EVAL is read from each
+command's own shell, not from the session.
 `,
     state: `Usage: terreno state [--collection <name>] [--entity-id <id>] [--limit <n>] [--name <client>] [--no-events]
 
@@ -247,7 +248,7 @@ has no dedicated command yet; arguments are the same JSON object the MCP tool ta
     validate: `Usage: terreno validate <schema|blocks> --file <path>
 
   schema   Check a Mongoose schema against Terreno conventions
-  blocks   Check a whole-reply YAML or JSON agent UI block document
+  blocks   Check a whole-reply YAML or JSON agent UI block document (exit 1 when invalid)
 `,
     web: `Usage: terreno web [url] [options]
 

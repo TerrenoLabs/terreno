@@ -1,13 +1,13 @@
 import {readFile} from "node:fs/promises";
 import {isAbsolute, join} from "node:path";
 import {
+  checkUiBlocks,
   generateFormFields,
   generateInstallAdmin,
   generateModel,
   generateRoute,
   generateScreen,
   validateModelSchema,
-  validateUiBlocks,
 } from "@terreno/mcp/tools";
 import {
   generateApiSdk,
@@ -273,12 +273,21 @@ export const runValidateCommand = async (
     return 1;
   }
   const text = await readFile(resolveFromCwd(io.cwd, file), "utf8");
-  const result =
-    target === "schema" ? validateModelSchema({schema: text}) : validateUiBlocks({document: text});
-  if (json) {
-    printJson(io, {ok: true, result});
-  } else {
-    io.stdout(result);
+  if (target === "schema") {
+    const result = validateModelSchema({schema: text});
+    if (json) {
+      printJson(io, {ok: true, result});
+    } else {
+      io.stdout(result);
+    }
+    return 0;
   }
-  return 0;
+  // Like `terreno-blocks validate`: an invalid document is a failure, warnings are not.
+  const {ok, report} = checkUiBlocks({document: text});
+  if (json) {
+    printJson(io, {ok, result: report});
+  } else if (report) {
+    io.stdout(report.trimEnd());
+  }
+  return ok ? 0 : 1;
 };

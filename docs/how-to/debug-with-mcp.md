@@ -33,9 +33,8 @@ them. Full flags: [CLI reference](../reference/cli.md).
 
 Two commands keep state between invocations, so they run in a background **CLI session** that
 they start themselves: `terreno browser` (the open page) and `terreno syncdb snapshot` (the
-captures). `terreno session status` shows it and `terreno session stop` ends it. A session
-keeps the environment it started with, so to use gated actions through it, start it with
-`TERRENO_MCP_EVAL=1 terreno session start`.
+captures). `terreno session status` shows it and `terreno session stop` ends it. The
+`TERRENO_MCP_EVAL` opt-in is read from each command's own shell, with or without a session.
 
 Use the local MCP server (`terreno-mcp-local`) to go from a symptom to a verified fix without
 pasting logs into the chat. This guide follows one real failure from start to finish, then lists

@@ -37,7 +37,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `bootstrap app` | Full-stack app files (`--name`, `--display-name`, `--dir`, `--description`, `--mcp-url`, `--terreno-path <checkout>`) |
 | `bootstrap rules` | Editor AI rules only (`--packages api,ui`) |
 | `validate schema --file` | Check a Mongoose schema against conventions |
-| `validate blocks --file` | Check a whole-reply YAML or JSON agent UI block document; same report as `terreno-blocks validate` |
+| `validate blocks --file` | Check a whole-reply YAML or JSON agent UI block document; same report and exit code as `terreno-blocks validate` (exit 1 when invalid; `--json` gives `ok: false`) |
 | `api list` | List operations from `--schema` or `TERRENO_OPENAPI` |
 | `api call <operationId>` | Invoke by OpenAPI operation id |
 | `api request <METHOD> <path>` | Invoke by method + path template |
@@ -98,13 +98,17 @@ token.
 - While a session runs, every local command (`logs`, `state`, `db`, `navigate`, ...) goes through
   it, so they share its one Hermes debugger connection.
 - `terreno web` always runs in its own process and never touches the session's page.
-- The session keeps the environment it started with. For gated actions through it, start it with
-  `TERRENO_MCP_EVAL=1 terreno session start`.
+- `TERRENO_MCP_EVAL` is read from each command's own environment and sent with the call. A
+  gated tool runs only when the command that asked for it opted in, whatever the session was
+  started with. The session runs one call at a time.
+- Two commands that start at once share one session: a lock file lets only one of them spawn it.
+  `terreno session stop` also ends a session process that is alive but no longer answering.
 - It exits after 30 idle minutes, or on `terreno session stop`. Snapshots and the open page are
   gone when it exits.
 
 State is under `.terreno/cli/` at the project root (`TERRENO_PROJECT_ROOT`, or the nearest
-directory with `backend/` + `frontend/`): `session.json` (port, pid, token), `session.log`, and
+directory with `backend/` + `frontend/`): `session.json` (port, pid, token), `session.lock`
+(held only while a session starts), `session.log`, and
 `auth.json` from `terreno login`. The directory gets its own `.gitignore` that ignores everything
 in it, and the JSON files are mode `600`.
 

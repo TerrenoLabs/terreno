@@ -1,7 +1,7 @@
 import {spawn} from "node:child_process";
 import {randomBytes} from "node:crypto";
 import {existsSync, openSync} from "node:fs";
-import {chmod, mkdir, readFile, rm, writeFile} from "node:fs/promises";
+import {chmod, mkdir, readFile, rm, stat, writeFile} from "node:fs/promises";
 import {join} from "node:path";
 import {resolveTerrenoProjectRoot} from "@terreno/mcp/project-root";
 
@@ -28,6 +28,9 @@ interface SessionServer {
 const DEFAULT_IDLE_MINUTES = 30;
 const START_TIMEOUT_MS = 10000;
 const START_POLL_MS = 100;
+/** A start lock older than this belongs to a command that died while starting. */
+const STALE_LOCK_MS = 15000;
+const EVAL_ENV = "TERRENO_MCP_EVAL";
 
 export const cliStateDir = (io: CliIo): string => {
   return join(resolveTerrenoProjectRoot(io.cwd), ".terreno", "cli");
@@ -90,21 +93,40 @@ const sessionRequest = async ({
   });
 };
 
-/** Returns the session only when its process answers; clears the state file of a dead one. */
+const isProcessAlive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isSessionHealthy = async (io: CliIo, state: SessionState): Promise<boolean> => {
+  try {
+    const response = await sessionRequest({io, path: "/health", state});
+    return response.ok;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Returns the session only when its process answers. The state file of an exited process is
+ * cleared; one whose process is alive but not answering is kept, so `session stop` can still
+ * end that process.
+ */
 export const findLiveSession = async (io: CliIo): Promise<SessionState | undefined> => {
   const state = await readSessionState(io);
   if (!state) {
     return undefined;
   }
-  try {
-    const response = await sessionRequest({io, path: "/health", state});
-    if (response.ok) {
-      return state;
-    }
-  } catch {
-    // The process is gone; fall through and drop the stale file.
+  if (await isSessionHealthy(io, state)) {
+    return state;
   }
-  await rm(sessionFile(io), {force: true});
+  if (!isProcessAlive(state.pid)) {
+    await rm(sessionFile(io), {force: true});
+  }
   return undefined;
 };
 
@@ -119,7 +141,15 @@ export const callSessionTool = async ({
   name: string;
   state: SessionState;
 }): Promise<ToolCallResult> => {
-  const response = await sessionRequest({body: {args, name}, io, path: "/call", state});
+  // The eval opt-in belongs to the command being run, not to whichever command started the
+  // session, so each call carries the caller's own setting.
+  const evalOptIn = io.env[EVAL_ENV];
+  const response = await sessionRequest({
+    body: {args, evalOptIn: evalOptIn === "1" || evalOptIn === "true", name},
+    io,
+    path: "/call",
+    state,
+  });
   const payload = (await response.json()) as {error?: string; result?: ToolCallResult};
   if (!response.ok || !payload.result) {
     throw new Error(payload.error ?? `Session call failed with HTTP ${String(response.status)}`);
@@ -128,17 +158,24 @@ export const callSessionTool = async ({
 };
 
 export const stopSession = async (io: CliIo): Promise<boolean> => {
-  const state = await findLiveSession(io);
+  const state = await readSessionState(io);
   if (!state) {
     return false;
   }
-  try {
-    await sessionRequest({io, path: "/stop", state});
-  } catch {
-    // The process may exit before it answers.
+  const wasHealthy = await isSessionHealthy(io, state);
+  const wasAlive = isProcessAlive(state.pid);
+  if (wasHealthy) {
+    try {
+      await sessionRequest({io, path: "/stop", state});
+    } catch {
+      // The process may exit before it answers.
+    }
+  } else if (wasAlive && state.pid !== process.pid) {
+    // Alive but not answering: end it so it does not keep the browser and debugger connection.
+    process.kill(state.pid);
   }
   await rm(sessionFile(io), {force: true});
-  return true;
+  return wasHealthy || wasAlive;
 };
 
 /**
@@ -160,6 +197,37 @@ const createSessionServer = ({
   });
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
   let isStopped = false;
+  let callQueue: Promise<unknown> = Promise.resolve();
+
+  /**
+   * Runs one call at a time with the caller's eval opt-in in place of this process's own, so a
+   * gated tool is allowed exactly when the command that asked for it opted in.
+   */
+  const runCall = (
+    name: string,
+    args: Record<string, unknown>,
+    evalOptIn: boolean
+  ): Promise<ToolCallResult> => {
+    const task = callQueue.then(async (): Promise<ToolCallResult> => {
+      const previous = process.env[EVAL_ENV];
+      if (evalOptIn) {
+        process.env[EVAL_ENV] = "1";
+      } else {
+        delete process.env[EVAL_ENV];
+      }
+      try {
+        return await handle(name, args);
+      } finally {
+        if (previous === undefined) {
+          delete process.env[EVAL_ENV];
+        } else {
+          process.env[EVAL_ENV] = previous;
+        }
+      }
+    });
+    callQueue = task.catch((): void => {});
+    return task;
+  };
 
   const server = Bun.serve({
     fetch: async (request: Request): Promise<Response> => {
@@ -181,11 +249,17 @@ const createSessionServer = ({
         return Response.json({error: "not found"}, {status: 404});
       }
       try {
-        const body = (await request.json()) as {args?: Record<string, unknown>; name?: string};
+        const body = (await request.json()) as {
+          args?: Record<string, unknown>;
+          evalOptIn?: boolean;
+          name?: string;
+        };
         if (typeof body.name !== "string") {
           return Response.json({error: "Missing tool name"}, {status: 400});
         }
-        return Response.json({result: await handle(body.name, body.args ?? {})});
+        return Response.json({
+          result: await runCall(body.name, body.args ?? {}, body.evalOptIn === true),
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return Response.json({error: message}, {status: 500});
@@ -232,6 +306,10 @@ export const serveSession = async ({
   io: CliIo;
 }): Promise<void> => {
   const dir = await ensureCliStateDir(io);
+  // Never replace a session that is answering: its browser and snapshots would be orphaned.
+  if (await findLiveSession(io)) {
+    return;
+  }
   const token = randomBytes(24).toString("hex");
   const server = createSessionServer({handle, idleMinutes, token});
   const state: SessionState = {
@@ -265,16 +343,47 @@ export const startSession = async ({
     return {isNew: false, state: existing};
   }
   const dir = await ensureCliStateDir(io);
-  spawnServe({cwd: io.cwd, idleMinutes, logFile: join(dir, "session.log")});
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const state = await findLiveSession(io);
-    if (state) {
-      return {isNew: true, state};
+  const lockFile = join(dir, "session.lock");
+  // Two commands that start at once must not both spawn: only the lock holder does, and the
+  // other waits for that session.
+  const hasLock = await acquireStartLock(lockFile);
+  try {
+    if (hasLock) {
+      spawnServe({cwd: io.cwd, idleMinutes, logFile: join(dir, "session.log")});
     }
-    await Bun.sleep(START_POLL_MS);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const state = await findLiveSession(io);
+      if (state) {
+        return {isNew: hasLock, state};
+      }
+      await Bun.sleep(START_POLL_MS);
+    }
+  } finally {
+    if (hasLock) {
+      await rm(lockFile, {force: true});
+    }
   }
   throw new Error(`The CLI session did not start. See ${join(dir, "session.log")}.`);
+};
+
+const acquireStartLock = async (lockFile: string): Promise<boolean> => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await writeFile(lockFile, String(process.pid), {flag: "wx"});
+      return true;
+    } catch {
+      const age = await stat(lockFile).then(
+        (info) => Date.now() - info.mtimeMs,
+        () => 0
+      );
+      if (age < STALE_LOCK_MS) {
+        return false;
+      }
+      await rm(lockFile, {force: true});
+    }
+  }
+  return false;
 };
 
 const spawnDetachedServe = ({

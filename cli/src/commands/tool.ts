@@ -10,9 +10,6 @@ import {flagBoolean, flagString, type ParsedArgs} from "../parseArgs";
 import {parseJsonValue} from "../rest/flagValues";
 import {findLiveSession, serveSession, startSession, stopSession} from "../session";
 
-/** Tools whose state lives in the serving process, so a one-shot call would lose it. */
-const SESSION_TOOLS = new Set(["browser", "syncdb_snapshot"]);
-
 interface ToolRow {
   description: string;
   inputSchema: unknown;
@@ -103,7 +100,7 @@ export const runToolCommand = async (
     const result =
       row.server === "hosted"
         ? await handleToolCall(name, args)
-        : await callLocalTool({args, io, name, needsSession: SESSION_TOOLS.has(name)});
+        : await callLocalTool({args, io, name});
     return printToolResult(io, json, result);
   }
 

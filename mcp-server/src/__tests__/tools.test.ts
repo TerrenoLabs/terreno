@@ -5,7 +5,7 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 import {assert} from "chai";
-import {handleToolCall, toCollectionName, tools} from "../tools.js";
+import {checkUiBlocks, handleToolCall, toCollectionName, tools} from "../tools.js";
 
 // Run the CLI source with bun so the test does not depend on install-time bin links.
 const blocksCli = fileURLToPath(new URL("../../../blocks/src/cli.ts", import.meta.url));
@@ -851,6 +851,22 @@ describe("tools", () => {
       const out = await handleToolCall("terreno_validate_ui_blocks", {document});
       expect(out.content[0].text).toBe(cliReport(document));
       expect(out.content[0].text).toContain("UNKNOWN_KEY");
+    });
+
+    test("reports ok exactly when the CLI exits zero", () => {
+      const exitCode = (document: string): number | null =>
+        spawnSync(process.execPath, [blocksCli, "validate", "-"], {
+          encoding: "utf8",
+          input: document,
+        }).status;
+      const valid = "v: 1\nblocks:\n  - type: heading\n    text: Hello\n";
+      const invalid = "v: 1\nblocks:\n  - type: heading\n    color: red\n";
+      expect(checkUiBlocks({document: valid})).toEqual({ok: true, report: cliReport(valid)});
+      expect(exitCode(valid)).toBe(0);
+      expect(checkUiBlocks({document: invalid}).ok).toBe(false);
+      expect(exitCode(invalid)).toBe(1);
+      expect(checkUiBlocks({document: "not: [closed"}).ok).toBe(false);
+      expect(checkUiBlocks({})).toEqual({ok: false, report: "document is required\n"});
     });
 
     test("asks for a document when the argument is missing", async () => {

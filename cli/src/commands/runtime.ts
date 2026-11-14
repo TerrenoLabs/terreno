@@ -114,8 +114,6 @@ export const runSyncDbCommand = async (
       }),
       io,
       name: "syncdb_action",
-      // Merging needs the snapshot that an earlier `syncdb snapshot capture` left in the session.
-      needsSession: action === "mergeSnapshot",
     });
     return printToolResult(io, json, result);
   }
@@ -134,7 +132,6 @@ export const runSyncDbCommand = async (
       }),
       io,
       name: "syncdb_snapshot",
-      needsSession: true,
     });
     return printToolResult(io, json, result);
   }
@@ -258,7 +255,6 @@ export const runBrowserCommand = async (
     }),
     io,
     name: "browser",
-    needsSession: true,
   });
   return printToolResult(io, json, result);
 };

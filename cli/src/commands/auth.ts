@@ -17,7 +17,14 @@ const DEFAULT_BETTER_AUTH_PATH = "/api/auth";
 
 const authFile = (io: CliIo): string => join(cliStateDir(io), "auth.json");
 
-const normalizeOrigin = (value: string): string => value.replace(/\/+$/, "");
+/** Drops trailing slashes without a regex, which backtracks badly on long runs of "/". */
+const normalizeOrigin = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
 
 /** The token saved by `terreno login`, only when it was issued by the API being called. */
 export const readStoredToken = async (io: CliIo, baseUrl: string): Promise<string | undefined> => {

@@ -8,12 +8,20 @@ interface CallLocalToolOptions {
   args: Record<string, unknown>;
   io: CliIo;
   name: string;
-  /**
-   * Stateful tools (a browser view, SyncDB snapshots) only make sense in a process that outlives
-   * this command, so they start the project's CLI session when none is running.
-   */
-  needsSession?: boolean;
 }
+
+/**
+ * Stateful tools (a browser view, SyncDB snapshots) only make sense in a process that outlives
+ * one command, so they start the project's CLI session when none is running. This is the one
+ * place that decides it, for dedicated commands and `terreno tool call` alike.
+ */
+const toolNeedsSession = (name: string, args: Record<string, unknown>): boolean => {
+  if (name === "browser" || name === "syncdb_snapshot") {
+    return true;
+  }
+  // Merging reads the snapshot an earlier `syncdb snapshot capture` left in the session.
+  return name === "syncdb_action" && args.action === "mergeSnapshot";
+};
 
 /**
  * Runs one terreno-mcp-local tool. A running CLI session handles the call so state carries
@@ -23,10 +31,9 @@ export const callLocalTool = async ({
   args,
   io,
   name,
-  needsSession = false,
 }: CallLocalToolOptions): Promise<ToolCallResult> => {
   let session = await findLiveSession(io);
-  if (!session && needsSession) {
+  if (!session && toolNeedsSession(name, args)) {
     const started = await startSession({io});
     session = started.state;
     io.stderr(

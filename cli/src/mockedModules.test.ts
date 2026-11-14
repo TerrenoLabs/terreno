@@ -7,6 +7,7 @@ mock.module("@terreno/mcp/local-tools", () => ({
     }
     return {content: [{text: `${name}:${JSON.stringify(args)}`, type: "text"}]};
   },
+  localMcpTools: [],
 }));
 
 mock.module("@terreno/syncdb/codegen", () => ({

@@ -1,9 +1,50 @@
 import {getComponentDocsMarkdown, searchDocs} from "@terreno/mcp/search";
+import {handleToolCall} from "@terreno/mcp/tools";
 import {getUpgradeGuideMarkdown} from "@terreno/mcp/upgrade";
 
 import type {CliIo} from "../io";
 import {printJson} from "../io";
-import {flagString, type ParsedArgs} from "../parseArgs";
+import {printToolResult} from "../localTool";
+import {flagBoolean, flagString, type ParsedArgs} from "../parseArgs";
+
+const NOTES_USAGE = "Usage: terreno docs notes <search|get|ask> <query|id|question...>";
+
+/** Update notes are the release and announcement notes behind the MCP `terreno_*_update_*` tools. */
+const runNotesCommand = async (parsed: ParsedArgs, io: CliIo, json: boolean): Promise<number> => {
+  const action = parsed.positionals[2];
+  const text = parsed.positionals.slice(3).join(" ").trim();
+  if (!text || (action !== "search" && action !== "get" && action !== "ask")) {
+    io.stderr(NOTES_USAGE);
+    return 1;
+  }
+  const includeArchived = flagBoolean(parsed.flags, "include-archived");
+  const limitRaw = flagString(parsed.flags, "limit");
+  const limit = limitRaw ? Number(limitRaw) : undefined;
+  if (action === "search") {
+    return printToolResult(
+      io,
+      json,
+      await handleToolCall("terreno_search_update_notes", {
+        includeArchived,
+        limit,
+        queries: [text],
+        source: flagString(parsed.flags, "source"),
+      })
+    );
+  }
+  if (action === "get") {
+    return printToolResult(
+      io,
+      json,
+      await handleToolCall("terreno_get_update_note", {id: text, includeArchived})
+    );
+  }
+  return printToolResult(
+    io,
+    json,
+    await handleToolCall("terreno_ask_update_help", {includeArchived, limit, question: text})
+  );
+};
 
 export const runDocsCommand = async (
   parsed: ParsedArgs,
@@ -68,6 +109,10 @@ export const runDocsCommand = async (
     return 0;
   }
 
-  io.stderr("Usage: terreno docs <search|component|upgrade>");
+  if (action === "notes") {
+    return runNotesCommand(parsed, io, json);
+  }
+
+  io.stderr("Usage: terreno docs <search|component|upgrade|notes>");
   return 1;
 };

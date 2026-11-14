@@ -1,6 +1,7 @@
 import {readFile} from "node:fs/promises";
 import {isAbsolute, join} from "node:path";
 import {
+  checkUiBlocks,
   generateFormFields,
   generateInstallAdmin,
   generateModel,
@@ -261,21 +262,32 @@ export const runValidateCommand = async (
   json: boolean
 ): Promise<number> => {
   const target = parsed.positionals[1];
-  if (target !== "schema") {
-    io.stderr("Usage: terreno validate schema --file <path>");
+  const usage = "Usage: terreno validate <schema|blocks> --file <path>";
+  if (target !== "schema" && target !== "blocks") {
+    io.stderr(usage);
     return 1;
   }
   const file = flagString(parsed.flags, "file");
   if (!file) {
-    io.stderr("Usage: terreno validate schema --file <path>");
+    io.stderr(usage);
     return 1;
   }
-  const schema = await readFile(resolveFromCwd(io.cwd, file), "utf8");
-  const result = validateModelSchema({schema});
-  if (json) {
-    printJson(io, {ok: true, result});
-  } else {
-    io.stdout(result);
+  const text = await readFile(resolveFromCwd(io.cwd, file), "utf8");
+  if (target === "schema") {
+    const result = validateModelSchema({schema: text});
+    if (json) {
+      printJson(io, {ok: true, result});
+    } else {
+      io.stdout(result);
+    }
+    return 0;
   }
-  return 0;
+  // Like `terreno-blocks validate`: an invalid document is a failure, warnings are not.
+  const {ok, report} = checkUiBlocks({document: text});
+  if (json) {
+    printJson(io, {ok, result: report});
+  } else if (report) {
+    io.stdout(report.trimEnd());
+  }
+  return ok ? 0 : 1;
 };

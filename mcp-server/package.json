@@ -43,10 +43,20 @@
       "default": "./dist/bootstrap.js",
       "types": "./dist/bootstrap.d.ts"
     },
+    "./local-tool-names": {
+      "bun": "./dist/local/localToolNames.js",
+      "default": "./dist/local/localToolNames.js",
+      "types": "./dist/local/localToolNames.d.ts"
+    },
     "./local-tools": {
       "bun": "./dist/local/localTools.js",
       "default": "./dist/local/localTools.js",
       "types": "./dist/local/localTools.d.ts"
+    },
+    "./project-root": {
+      "bun": "./dist/local/projectRoot.js",
+      "default": "./dist/local/projectRoot.js",
+      "types": "./dist/local/projectRoot.d.ts"
     },
     "./search": {
       "bun": "./dist/search/docIndex.js",

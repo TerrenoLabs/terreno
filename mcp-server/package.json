@@ -48,6 +48,11 @@
       "default": "./dist/local/localTools.js",
       "types": "./dist/local/localTools.d.ts"
     },
+    "./project-root": {
+      "bun": "./dist/local/projectRoot.js",
+      "default": "./dist/local/projectRoot.js",
+      "types": "./dist/local/projectRoot.d.ts"
+    },
     "./search": {
       "bun": "./dist/search/docIndex.js",
       "default": "./dist/search/docIndex.js",

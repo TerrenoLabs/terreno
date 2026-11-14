@@ -7,6 +7,7 @@ import {
   generateRoute,
   generateScreen,
   validateModelSchema,
+  validateUiBlocks,
 } from "@terreno/mcp/tools";
 import {
   generateApiSdk,
@@ -261,17 +262,19 @@ export const runValidateCommand = async (
   json: boolean
 ): Promise<number> => {
   const target = parsed.positionals[1];
-  if (target !== "schema") {
-    io.stderr("Usage: terreno validate schema --file <path>");
+  const usage = "Usage: terreno validate <schema|blocks> --file <path>";
+  if (target !== "schema" && target !== "blocks") {
+    io.stderr(usage);
     return 1;
   }
   const file = flagString(parsed.flags, "file");
   if (!file) {
-    io.stderr("Usage: terreno validate schema --file <path>");
+    io.stderr(usage);
     return 1;
   }
-  const schema = await readFile(resolveFromCwd(io.cwd, file), "utf8");
-  const result = validateModelSchema({schema});
+  const text = await readFile(resolveFromCwd(io.cwd, file), "utf8");
+  const result =
+    target === "schema" ? validateModelSchema({schema: text}) : validateUiBlocks({document: text});
   if (json) {
     printJson(io, {ok: true, result});
   } else {

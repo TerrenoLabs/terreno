@@ -1,27 +1,7 @@
-import {handleLocalToolCall} from "@terreno/mcp/local-tools";
-
 import type {CliIo} from "../io";
-import {printJson} from "../io";
+import {callLocalTool, compactArgs, printToolResult} from "../localTool";
 import {flagBoolean, flagList, flagString, type ParsedArgs} from "../parseArgs";
 import {parseJsonValue} from "../rest/flagValues";
-
-const printToolResult = (
-  io: CliIo,
-  json: boolean,
-  result: {content: Array<{text: string; type: string}>}
-): number => {
-  const text = result.content.map((part) => part.text).join("\n");
-  if (json) {
-    try {
-      printJson(io, JSON.parse(text) as unknown);
-    } catch {
-      printJson(io, {ok: true, result: text});
-    }
-  } else {
-    io.stdout(text);
-  }
-  return 0;
-};
 
 const parseSources = (parsed: ParsedArgs): string[] => {
   return flagList(parsed.flags, "source", "sources")
@@ -31,7 +11,7 @@ const parseSources = (parsed: ParsedArgs): string[] => {
 };
 
 export const runInfoCommand = async (io: CliIo, json: boolean): Promise<number> => {
-  const result = await handleLocalToolCall("application_info", {});
+  const result = await callLocalTool({args: {}, io, name: "application_info"});
   return printToolResult(io, json, result);
 };
 
@@ -42,8 +22,12 @@ export const runLogsCommand = async (
 ): Promise<number> => {
   const action = parsed.positionals[1];
   if (action === "last-error") {
-    const result = await handleLocalToolCall("last_error", {
-      sources: parseSources(parsed),
+    const result = await callLocalTool({
+      args: compactArgs({
+        sources: parseSources(parsed),
+      }),
+      io,
+      name: "last_error",
     });
     return printToolResult(io, json, result);
   }
@@ -52,11 +36,15 @@ export const runLogsCommand = async (
     return 1;
   }
   const entriesRaw = flagString(parsed.flags, "entries");
-  const result = await handleLocalToolCall("read_logs", {
-    entries: entriesRaw ? Number(entriesRaw) : undefined,
-    level: flagString(parsed.flags, "level"),
-    since: flagString(parsed.flags, "since"),
-    sources: parseSources(parsed),
+  const result = await callLocalTool({
+    args: compactArgs({
+      entries: entriesRaw ? Number(entriesRaw) : undefined,
+      level: flagString(parsed.flags, "level"),
+      since: flagString(parsed.flags, "since"),
+      sources: parseSources(parsed),
+    }),
+    io,
+    name: "read_logs",
   });
   return printToolResult(io, json, result);
 };
@@ -79,12 +67,16 @@ export const runStateCommand = async (
     io.stderr("--limit must be a positive integer");
     return 1;
   }
-  const result = await handleLocalToolCall("get_syncdb_state", {
-    collection: flagString(parsed.flags, "collection"),
-    entityId: flagString(parsed.flags, "entity-id", "id"),
-    includeDebugEvents: flagBoolean(parsed.flags, "no-events") ? false : undefined,
-    limit,
-    name: flagString(parsed.flags, "name"),
+  const result = await callLocalTool({
+    args: compactArgs({
+      collection: flagString(parsed.flags, "collection"),
+      entityId: flagString(parsed.flags, "entity-id", "id"),
+      includeDebugEvents: flagBoolean(parsed.flags, "no-events") ? false : undefined,
+      limit,
+      name: flagString(parsed.flags, "name"),
+    }),
+    io,
+    name: "get_syncdb_state",
   });
   return printToolResult(io, json, result);
 };
@@ -99,7 +91,7 @@ export const runEvalCommand = async (
     io.stderr("Usage: terreno eval --code <javascript>");
     return 1;
   }
-  const result = await handleLocalToolCall("evaluate", {code});
+  const result = await callLocalTool({args: compactArgs({code}), io, name: "evaluate"});
   return printToolResult(io, json, result);
 };
 
@@ -113,7 +105,7 @@ export const runNavigateCommand = async (
     io.stderr("Usage: terreno navigate <path>");
     return 1;
   }
-  const result = await handleLocalToolCall("navigate", {path});
+  const result = await callLocalTool({args: compactArgs({path}), io, name: "navigate"});
   return printToolResult(io, json, result);
 };
 
@@ -124,9 +116,13 @@ export const runDbCommand = async (
 ): Promise<number> => {
   const action = parsed.positionals[1];
   if (action === "schema") {
-    const result = await handleLocalToolCall("database_schema", {
-      collectionFilter: flagString(parsed.flags, "collection-filter"),
-      summary: flagBoolean(parsed.flags, "summary"),
+    const result = await callLocalTool({
+      args: compactArgs({
+        collectionFilter: flagString(parsed.flags, "collection-filter"),
+        summary: flagBoolean(parsed.flags, "summary"),
+      }),
+      io,
+      name: "database_schema",
     });
     return printToolResult(io, json, result);
   }
@@ -139,13 +135,17 @@ export const runDbCommand = async (
     const filterRaw = flagString(parsed.flags, "filter");
     const pipelineRaw = flagString(parsed.flags, "pipeline");
     const limitRaw = flagString(parsed.flags, "limit");
-    const result = await handleLocalToolCall("database_query", {
-      collection,
-      field: flagString(parsed.flags, "field"),
-      filter: filterRaw ? parseJsonValue(filterRaw) : undefined,
-      limit: limitRaw ? Number(limitRaw) : undefined,
-      operation: flagString(parsed.flags, "operation") ?? "find",
-      pipeline: pipelineRaw ? parseJsonValue(pipelineRaw) : undefined,
+    const result = await callLocalTool({
+      args: compactArgs({
+        collection,
+        field: flagString(parsed.flags, "field"),
+        filter: filterRaw ? parseJsonValue(filterRaw) : undefined,
+        limit: limitRaw ? Number(limitRaw) : undefined,
+        operation: flagString(parsed.flags, "operation") ?? "find",
+        pipeline: pipelineRaw ? parseJsonValue(pipelineRaw) : undefined,
+      }),
+      io,
+      name: "database_query",
     });
     return printToolResult(io, json, result);
   }

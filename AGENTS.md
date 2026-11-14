@@ -27,7 +27,7 @@ deploy.
 - **admin-spa/** - Standalone admin SPA (Expo Router web app) + Express plugin to serve it from a backend (`@terreno/admin-spa`)
 - **blocks/** - Shared contracts for agent-driven UI: ask schemas, answer validation, simple cards, and JSON Schemas for native clients (`@terreno/blocks`)
 - **comms/** - Pluggable transactional communications (`@terreno/comms`)
-- **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, and OpenAPI REST
+- **cli/** - Operator CLI (`@terreno/cli`, bin `terreno`) for docs, codegen, bootstrap, OpenAPI REST, and every MCP tool (logs, database, SyncDB, web drive) from a shell
 - **jobs/** - Durable background jobs plugin for `@terreno/api` (`@terreno/jobs`)
 - **mcp-server/** - MCP server for AI assistant integration (`@terreno/mcp`, bins `terreno-mcp` + `terreno-mcp-local`)
 - **demo/** - Demo app for showcasing and testing UI components
@@ -56,22 +56,29 @@ The installed planning plugin also ships the reusable Terreno app, docs, upgrade
 deployment, and verification skills used by consumer projects. Repository-only roadmap,
 release, and maintenance workflows remain under `.rulesync/skills/`.
 
-## Standard debugging (MCP)
+## Standard debugging (CLI or MCP)
 
 **Default for every bug, regression, or “does it work?” check on a Terreno app:** invoke the
-**`debug-with-mcp`** skill and use **`terreno-local`** tools on a running dev stack. Do not
-guess from code alone or ask for pasted logs when MCP is configured.
+**`debug-with-mcp`** skill and use the **`terreno` CLI** on a running dev stack. Do not
+guess from code alone or ask for pasted logs.
 
-| Server | Role |
+The CLI reaches every MCP tool from any shell with no MCP configuration, so use it first.
+The MCP servers expose the same handlers when an editor has them loaded.
+
+| Surface | Role |
 | --- | --- |
-| **`terreno`** (hosted) | Docs search, codegen, validators |
-| **`terreno-local`** (stdio) | Merged logs, Mongo reads, client/SyncDB state, web drive, native navigate |
+| **`terreno` CLI** | Everything below; `terreno tool list` / `terreno tool call <name>` reach any tool by name |
+| **`terreno`** MCP (hosted) | Docs search, codegen, validators |
+| **`terreno-local`** MCP (stdio) | Merged logs, Mongo reads, SyncDB state, web drive, native navigate |
 
-Observe with `last_error`, `read_logs` (including `network` / `native` when relevant),
-`get_client_state`, and `database_query`. Reproduce and prove fixes with `browser` (web) or
-`navigate` (native). State changes require `TERRENO_MCP_EVAL=1` on the MCP server process
-(`dispatch_client_action`, `write_local_storage`, `invoke_dev_command`, `syncdb_action`,
-`evaluate`). SyncDB-specific workflows: **`debug-syncdb-with-mcp`**. Architecture:
+Observe with `terreno logs last-error`, `terreno logs` (`--sources network` / `native` when
+relevant), `terreno state`, and `terreno db query` (MCP: `last_error`, `read_logs`,
+`get_syncdb_state`, `database_query`). Reproduce and prove fixes with `terreno browser` or
+`terreno web` (web) or `terreno navigate` (native). State changes require
+`TERRENO_MCP_EVAL=1` on the process that runs the tool (`terreno dispatch`,
+`terreno storage write`, `terreno dev run`, `terreno syncdb action`, `terreno eval`).
+Reference: [`docs/reference/cli.md`](docs/reference/cli.md).
+SyncDB-specific workflows: **`debug-syncdb-with-mcp`**. Architecture:
 [`docs/explanation/ai-development-loop.md`](docs/explanation/ai-development-loop.md). How-to:
 [`docs/how-to/debug-with-mcp.md`](docs/how-to/debug-with-mcp.md).
 
@@ -452,8 +459,9 @@ One `authProvider` feeds `createSyncDb` and `createApiClient`. Use generated SDK
 for non-synced routes — never use `axios` or `fetch` directly in screens.
 
 For running-app SyncDB bugs, invoke **`debug-syncdb-with-mcp`** (after **`debug-with-mcp`**
-preconditions). Use `get_syncdb_state`, `syncdb_snapshot`, and `syncdb_action` from
-`terreno-mcp-local`. Enable the client with `debug: true`; set
+preconditions). Use `terreno state`, `terreno syncdb snapshot`, and `terreno syncdb action`
+(MCP: `get_syncdb_state`, `syncdb_snapshot`, `syncdb_action` from `terreno-mcp-local`).
+Enable the client with `debug: true`; set
 `TERRENO_MCP_EVAL=1` only for state-changing actions. See
 `docs/how-to/debug-with-mcp.md`.
 

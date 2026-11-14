@@ -49,24 +49,37 @@ src/
 
 Each tool returns generated code wrapped with file path instructions and additional setup steps.
 
-The local stdio server also exposes runtime diagnostics (19 tools). Prefer the
-**`debug-with-mcp`** skill for the standard observe → fix → verify loop. For SyncDB-only
-issues use **`debug-syncdb-with-mcp`**. Tool list: [`docs/reference/mcp-server.md`](../../../docs/reference/mcp-server.md).
+The local stdio server also exposes runtime diagnostics (16 tools, defined in
+`src/local/localTools.ts`). Prefer the **`debug-with-mcp`** skill for the standard
+observe → fix → verify loop. For SyncDB-only issues use **`debug-syncdb-with-mcp`**. Tool
+list: [`docs/reference/mcp-server.md`](../../../docs/reference/mcp-server.md).
 
-| Tool | Description |
-|------|-------------|
-| `read_logs` / `last_error` | Merged dev logs (backend, browser, metro, app, network, native) |
-| `get_client_state` | RTK + SyncDB summary from the running app |
-| `get_syncdb_state` | Read entities, outbox, conflicts, cursors, streams, repair markers, status, and debug events |
-| `syncdb_snapshot` | Capture, list, read, compare, and delete in-memory snapshots |
-| `syncdb_action` | Mutate or directly edit local state, flush, reconcile/resync, resolve/retry, toggle offline, clear events, and merge snapshots |
-| `dispatch_client_action` | Redux dispatch on the dev store |
-| `read_local_storage` / `write_local_storage` | Dev AsyncStorage registry |
-| `list_dev_commands` / `invoke_dev_command` | App-registered dev command handlers |
-| `navigate` / `browser` / `evaluate` | Drive native/web runtime |
+Every local tool has a `terreno` CLI command that calls the same handler, so agents with a
+shell need no MCP configuration. Prefer the CLI in docs, skills, and examples.
 
-SyncDB state changes and other gated tools require `TERRENO_MCP_EVAL=1`. Read and snapshot
-operations remain available without that opt-in. Follow `docs/how-to/debug-with-mcp.md`.
+| Tool | CLI | Description |
+|------|-----|-------------|
+| `application_info` | `terreno info` | Project root and key dependency versions |
+| `read_logs` / `last_error` | `terreno logs` / `terreno logs last-error` | Merged dev logs (backend, browser, metro, app, network, native) |
+| `database_schema` / `database_query` | `terreno db schema` / `terreno db query` | Read-only Mongo |
+| `get_syncdb_state` | `terreno state` | Read entities, outbox, conflicts, cursors, streams, repair markers, status, and debug events |
+| `syncdb_snapshot` | `terreno syncdb snapshot` | Capture, list, read, compare, and delete in-memory snapshots |
+| `syncdb_action` | `terreno syncdb action` | Mutate or directly edit local state, flush, reconcile/resync, resolve/retry, toggle offline, clear events, and merge snapshots |
+| `dispatch_client_action` | `terreno dispatch` | Dev client action dispatch |
+| `read_local_storage` / `write_local_storage` | `terreno storage read` / `write` | Dev AsyncStorage registry |
+| `list_dev_commands` / `invoke_dev_command` | `terreno dev list` / `run` | App-registered dev command handlers |
+| `navigate` / `evaluate` | `terreno navigate` / `terreno eval` | Drive the native runtime |
+| `browser` | `terreno browser` (step by step) / `terreno web` (one sequence) | Drive the web app |
+
+`get_client_state` and `get_rtk_state` were removed with Redux in Terreno 58; use
+`get_syncdb_state`.
+
+SyncDB state changes and other gated tools require `TERRENO_MCP_EVAL=1` on the process that
+runs the tool. Read and snapshot operations remain available without that opt-in. Follow
+`docs/how-to/debug-with-mcp.md`.
+
+When you add a local tool, add its CLI command and its row in `COMMAND_FOR_TOOL`
+(`cli/src/mcpParity.test.ts`); that test fails until every tool has one.
 
 ## Available Prompts
 

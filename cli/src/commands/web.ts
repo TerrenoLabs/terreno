@@ -4,6 +4,7 @@ import {handleLocalToolCall} from "@terreno/mcp/local-tools";
 
 import type {CliIo} from "../io";
 import {printJson} from "../io";
+import {toolResultText} from "../localTool";
 import {flagBoolean, flagList, flagString, type ParsedArgs} from "../parseArgs";
 
 interface BrowserAction {
@@ -59,10 +60,13 @@ const loadActions = async (parsed: ParsedArgs, io: CliIo): Promise<BrowserAction
   return [...actions, ...fileValue.map((action) => parseAction(JSON.stringify(action)))];
 };
 
-const callBrowser = async (args: BrowserAction): Promise<unknown> => {
-  const result = await handleLocalToolCall("browser", args);
-  const text = result.content.map((part) => part.text).join("\n");
-  return JSON.parse(text) as unknown;
+/**
+ * `terreno web` owns its browser view from open to close, so it always runs in this process.
+ * A step-by-step view that survives between commands is `terreno browser`.
+ */
+const callBrowser = async (io: CliIo, args: BrowserAction): Promise<unknown> => {
+  const result = await (io.localTools?.call ?? handleLocalToolCall)("browser", args);
+  return JSON.parse(toolResultText(result)) as unknown;
 };
 
 export const runWebCommand = async (
@@ -79,7 +83,7 @@ export const runWebCommand = async (
 
   try {
     results.push(
-      await callBrowser({
+      await callBrowser(io, {
         action: "open",
         dataDir: flagString(parsed.flags, "data-dir"),
         height: parsePositiveInteger(flagString(parsed.flags, "height"), "--height"),
@@ -88,25 +92,25 @@ export const runWebCommand = async (
       })
     );
     results.push(
-      await callBrowser({
+      await callBrowser(io, {
         action: "wait",
         timeout: parseNonNegativeInteger(flagString(parsed.flags, "wait"), "--wait") ?? 1000,
       })
     );
     for (const action of actions) {
-      results.push(await callBrowser(action));
+      results.push(await callBrowser(io, action));
     }
     if (shouldSnapshot) {
-      results.push(await callBrowser({action: "snapshot"}));
+      results.push(await callBrowser(io, {action: "snapshot"}));
     }
     if (screenshot) {
-      results.push(await callBrowser({action: "screenshot", output: screenshot}));
+      results.push(await callBrowser(io, {action: "screenshot", output: screenshot}));
     }
   } catch (error) {
     taskError = error;
   }
   try {
-    await callBrowser({action: "close"});
+    await callBrowser(io, {action: "close"});
   } catch (closeError) {
     taskError ??= closeError;
   }

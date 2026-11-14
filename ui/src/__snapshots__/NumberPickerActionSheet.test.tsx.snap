@@ -178,7 +178,7 @@ exports[`NumberPickerActionSheet renders correctly 1`] = `
                                         "style": {
                                           "alignItems": "center",
                                           "alignSelf": "flex-start",
-                                          "backgroundColor": "#0E9DCD",
+                                          "backgroundColor": "#0C80A7",
                                           "borderColor": undefined,
                                           "borderRadius": 360,
                                           "borderWidth": undefined,
@@ -1507,7 +1507,7 @@ exports[`NumberPickerActionSheet renders with different range 1`] = `
                                         "style": {
                                           "alignItems": "center",
                                           "alignSelf": "flex-start",
-                                          "backgroundColor": "#0E9DCD",
+                                          "backgroundColor": "#0C80A7",
                                           "borderColor": undefined,
                                           "borderRadius": 360,
                                           "borderWidth": undefined,

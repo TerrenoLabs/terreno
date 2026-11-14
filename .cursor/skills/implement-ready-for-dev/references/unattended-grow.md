@@ -3,8 +3,8 @@
 Grow's grilling skill waits for a human. This skill is the operator. Do not send a
 chat round. Do not treat Grow `BLOCKED` as a chat pause.
 
-Read [`terreno-1-grow`](../../../plugins/terreno-planning/skills/terreno-1-grow/SKILL.md)
-and its [`grilling`](../../../plugins/terreno-planning/skills/terreno-1-grow/references/grilling.md)
+Read [`terreno-1-grow`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/skills/terreno-1-grow/SKILL.md)
+and its [`grilling`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/skills/terreno-1-grow/references/grilling.md)
 procedure, then apply the overrides below.
 
 ## Classify every unknown

@@ -111,7 +111,7 @@ UI, and real-app verification knowledge in consumer projects.
 
 ### Terreno's bundled skill layer
 
-Reusable framework skills are canonical inside `plugins/terreno-planning/skills/`.
+Reusable framework skills are canonical in [TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills).
 Repository-only skills remain under `.rulesync/skills/`. High-value composition points
 include:
 
@@ -191,5 +191,5 @@ starts Taste as its next stage instead of exiting.
   terminal/non-failing, no conflicts, and no actionable review findings.
 
 The detailed contract, schemas, and three execution scenarios live under
-[`plugins/terreno-planning/references/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-planning/references).
+[`plugins/terreno-planning/references/`](https://github.com/TerrenoLabs/terreno-skills/tree/master/plugins/terreno-planning/references) in terreno-skills.
 

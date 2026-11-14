@@ -256,6 +256,21 @@ const isGeneratedImageFile = (value: unknown): value is GeneratedImageFile =>
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+/**
+ * True when a provider marks a generated file as part of the model's thinking. Gemini image models
+ * (e.g. gemini-3-pro-image) draw draft images while they reason and return them tagged
+ * `thought: true`, under the `google` or `vertex` metadata key. The final image is usually the same
+ * picture with different bytes, so showing drafts makes one image appear twice.
+ *
+ * @param providerMetadata The `providerMetadata` of a stream `file` part or step content part.
+ * @returns Whether any provider namespace flags the file as a thought.
+ */
+const isThoughtFile = (providerMetadata: unknown): boolean =>
+  isRecord(providerMetadata) &&
+  Object.values(providerMetadata).some(
+    (namespace) => isRecord(namespace) && namespace.thought === true
+  );
+
 /** The tool name an ask's rows store: the host tool for an approval ask, else `ask_<kind>`. */
 const askRowToolName = (ask: {kind: AskKind; toolName?: string}): string =>
   ask.toolName ?? askToolName(ask.kind);
@@ -1415,7 +1430,9 @@ const consumeStream = async ({
   const {askCalls, generatedImages} = record;
   const callOrder = new Map<string, number>();
   const askOrder = new Map<string, number>();
-  // Stream file parts and result.files report the same images; emit each data URL once.
+  // Draft (thought) images are held back; the last one is sent only if no final image arrives.
+  let lastThoughtImage: GeneratedImageFile | undefined;
+  // Stream file parts and step content report the same images; emit each data URL once.
   const sendGeneratedImage = (file: GeneratedImageFile): void => {
     const url = `data:${file.mediaType};base64,${file.base64}`;
     if (generatedImages.some((img) => img.url === url)) {
@@ -1507,8 +1524,13 @@ const consumeStream = async ({
     }
     if (part.type === "file") {
       if (isGeneratedImageFile(part.file)) {
-        sendGeneratedImage(part.file);
-        logger.debug("Sent inline image from stream");
+        if (isThoughtFile(part.providerMetadata)) {
+          lastThoughtImage = part.file;
+          logger.debug("Held back draft image from stream");
+        } else {
+          sendGeneratedImage(part.file);
+          logger.debug("Sent inline image from stream");
+        }
       }
       continue;
     }
@@ -1634,17 +1656,27 @@ const consumeStream = async ({
       (askOrder.get(a.toolCallId) ?? askOrder.size) - (askOrder.get(b.toolCallId) ?? askOrder.size)
   );
 
-  // Check for generated images (e.g. from gemini-2.5-flash-image)
+  // Pick up generated images the stream did not report (e.g. from gemini-2.5-flash-image). Read
+  // step content rather than `result.files`: only step content keeps the provider's thought flag.
   try {
-    const files = await result.files;
-    if (files && files.length > 0) {
-      for (const file of files) {
-        if (isGeneratedImageFile(file)) {
-          sendGeneratedImage(file);
+    const steps = await result.steps;
+    for (const step of steps ?? []) {
+      for (const content of step.content as StreamPart[]) {
+        if (content.type !== "file" || !isGeneratedImageFile(content.file)) {
+          continue;
+        }
+        if (isThoughtFile(content.providerMetadata)) {
+          lastThoughtImage = content.file;
+        } else {
+          sendGeneratedImage(content.file);
         }
       }
-      logger.debug("Sent generated images", {count: generatedImages.length});
     }
+    // A reply that only produced drafts still shows its last one rather than nothing.
+    if (generatedImages.length === 0 && lastThoughtImage) {
+      sendGeneratedImage(lastThoughtImage);
+    }
+    logger.debug("Sent generated images", {count: generatedImages.length});
   } catch (fileErr) {
     logger.debug("No files in response", {
       error: fileErr instanceof Error ? fileErr.message : String(fileErr),

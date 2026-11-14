@@ -1,6 +1,7 @@
 # Scan plugin reference
 
-Plugin: `terreno-loop` (`2.12.0`). Requires the lifecycle plugin `2.14.0` or later
+Scan skills ship in the lifecycle plugin from
+[TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills)
 ([lifecycle plugin reference](lifecycle-plugin.md)).
 
 A scan turns a long-term outcome — "cold builds under 30s", "no unbounded reads", "WCAG
@@ -12,22 +13,22 @@ Scan stages never edit product code. The lifecycle does.
 
 | Skill | Preconditions | Primary output | PASS next |
 | --- | --- | --- | --- |
-| `terreno-loop-1-aim` | goal/outcome + repository | approved charter: metric, measured baseline, dry-run rules, exclusions, validity rule, severity rubric, slice policy, budget | Sweep |
-| `terreno-loop-2-sweep` | approved charter | per-rule hits, deterministic shard manifest, schema-valid candidate findings from parallel workers | Sift |
-| `terreno-loop-3-sift` | candidates for the round | deduped, adversarially verified, ranked findings report plus dropped-candidate summary | Plot, or Track when dry |
-| `terreno-loop-4-plot` | findings report + slice policy | ordered PR-sized slices, one standalone Grow brief each (with `## E2E tests` and `## Regression cases`), findings marked `planned` | Track, with `handoff: grow` |
-| `terreno-loop-5-track` | landed slice or dry round | re-measured metric with command output, findings closed/reopened with evidence, round record, next move | Plot, Sweep, or `null` |
+| `terreno-scan-1-aim` | goal/outcome + repository | approved charter: metric, measured baseline, dry-run rules, exclusions, validity rule, severity rubric, slice policy, budget | Sweep |
+| `terreno-scan-2-sweep` | approved charter | per-rule hits, deterministic shard manifest, schema-valid candidate findings from parallel workers | Sift |
+| `terreno-scan-3-sift` | candidates for the round | deduped, adversarially verified, ranked findings report plus dropped-candidate summary | Plot, or Track when dry |
+| `terreno-scan-4-plot` | findings report + slice policy | ordered PR-sized slices, one standalone Grow brief each (with `## E2E tests` and `## Regression cases`), findings marked `planned` | Track, with `handoff: grow` |
+| `terreno-scan-5-track` | landed slice or dry round | re-measured metric with command output, findings closed/reopened with evidence, round record, next move | Plot, Sweep, or `null` |
 
 Outer loops (not stages):
 
 | Skill | What it walks | Default |
 | --- | --- | --- |
 | `terreno-loop-campaign` | One goal, round after round | Aim once, then Sweep → Sift → Plot → lifecycle → Track until the metric hits target, the budget is spent, or a genuine human gate is reached. Stops at each gate. |
-| `terreno-loop-run` | The same, but resident | Keeps the campaign moving **and** heartbeats over every open campaign PR — routing it to a reviewer, answering review comments through Taste, fixing red CI, tracking merges — refilling work as PRs land. Runs until the goal is met, a stop argument fires, or a human decision is required. |
+| `terreno-loop-resident` | The same, but resident | Keeps the campaign moving **and** heartbeats over every open campaign PR — routing it to a reviewer, answering review comments through Taste, fixing red CI, tracking merges — refilling work as PRs land. Runs until the goal is met, a stop argument fires, or a human decision is required. |
 
 ## Resident loop
 
-`terreno-loop-run` is the "leave it running" entry point. One session holds the goal,
+`terreno-loop-resident` is the "leave it running" entry point. One session holds the goal,
 the state, and the schedule; every unit of work happens in a fresh subagent.
 
 Arguments: `goal=<slug>`, `reviewer=<handle[,handle]>`, `assignee=<handle>`, `wip=<n>`,
@@ -42,7 +43,7 @@ priority order:
 | `unrouted` | Apply the charter's routing, then count the slice in flight |
 | `answered` | A human commented or requested changes → one `terreno-5-taste` in a fresh subagent |
 | `broken` | CI failed or the PR conflicts → one `terreno-5-taste` |
-| `merged` | → `terreno-loop-5-track`: re-measure, close findings with evidence |
+| `merged` | → `terreno-scan-5-track`: re-measure, close findings with evidence |
 | `closed` | Mark the slice abandoned, return its findings to `open`, free its slot |
 | `bot-pending`, `waiting` | Nothing — this is why the next tick exists |
 
@@ -51,7 +52,7 @@ watch hook while CI runs, 2–5 minutes while review bots report, 15–30 minute
 human holds the PR, and no wait at all while backlog work remains. Ticks that find
 nothing print nothing, and every comment is answered exactly once — answered ids live in
 state. See
-[`heartbeat.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/heartbeat.md).
+[`heartbeat.md`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/heartbeat.md).
 
 ## PR routing
 
@@ -65,7 +66,7 @@ Routing is applied right after Brew reports the PR (`gh pr edit --add-reviewer
 --add-assignee --add-label`) and re-requested once when requested changes are addressed.
 The campaign never approves its own PRs, never dismisses a review, and never merges when
 `mergePolicy` is `human` — the default. See
-[`pr-routing.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/pr-routing.md).
+[`pr-routing.md`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/pr-routing.md).
 
 ## Stage anatomy
 
@@ -74,11 +75,11 @@ produced, Success/Failure/Blocked conditions, and a recommended next stage — t
 shape as the lifecycle stages.
 
 Results use `PASS`, `FAIL`, `BLOCKED`, or `PENDING` and the compact `v: 2`
-[`scan-result.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/scan-result.schema.json)
+[`scan-result.schema.json`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/scan-result.schema.json)
 (`v`, `stage`, `status`, `next`, `action`; omit empty keys). Campaign state follows
-[`scan-state.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/scan-state.schema.json)
+[`scan-state.schema.json`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/scan-state.schema.json)
 and findings follow
-[`finding.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/finding.schema.json).
+[`finding.schema.json`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/finding.schema.json).
 Chat shows `status` / `next` / `action` plus the current metric; the YAML lives in a
 Details toggle.
 
@@ -93,7 +94,7 @@ large, never spawn nested agents, and never edit files. Sift then dedupes by
 keeping it, drops what does not reproduce, and ranks by impact × confidence ÷ effort.
 Dropped shards and capped coverage are always reported; silent truncation is a defect.
 See
-[`mapreduce.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/mapreduce.md).
+[`mapreduce.md`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/mapreduce.md).
 
 ## Goal and metric
 
@@ -102,7 +103,7 @@ came from running it. Track re-runs that command with the charter's protocol eve
 and records the value with its output. A finding that cannot be tied to the metric is
 dismissed in Sift, not deferred. Re-baselining without recording both values, the reason,
 and the round is untrustworthy and Track says so. See
-[`goal-tracking.md`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-loop/references/goal-tracking.md).
+[`goal-tracking.md`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/goal-tracking.md).
 
 ## Artifacts
 
@@ -138,20 +139,19 @@ to Grow, and the lifecycle takes it from there.
 
 | Host | Plugin | Invoke Aim | Invoke the campaign |
 | --- | --- | --- | --- |
-| Cursor | `terreno-loop` | `/terreno-loop-1-aim` | `/terreno-loop-campaign` |
-| Codex | `terreno-loop` | `$terreno-loop-1-aim` | `$terreno-loop-campaign` |
-| Claude Code | `terreno-loop` | `/terreno-loop:1-aim` | `/terreno-loop:campaign` |
+| Cursor | `terreno-planning` | `/terreno-scan-1-aim` | `/terreno-loop-campaign` |
+| Codex | `terreno-planning` | `$terreno-scan-1-aim` | `$terreno-loop-campaign` |
+| Claude Code | `terreno` | `/terreno:scan-1-aim` | `/terreno:loop-campaign` |
 
-The resident loop is `/terreno-loop-run` (Cursor), `$terreno-loop-run` (Codex), and
-`/terreno-loop:run` (Claude Code).
-
-`plugins/terreno-loop/` is canonical. `plugins/terreno-loop-claude/` is generated with
-shortened skill names; regenerate it with `bun run skills:sync` and never hand-edit it.
+The resident loop is `/terreno-loop-resident` (Cursor), `$terreno-loop-resident` (Codex),
+and `/terreno:loop-resident` (Claude Code). The scan skills ship in the lifecycle plugin
+from [TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills); install
+only them with `npx skills add TerrenoLabs/terreno-skills --skill scan`.
 
 ## Example
 
 ```text
-/terreno-loop:run reduce cold compile time reviewer=octocat wip=2
+/terreno:loop-resident reduce cold compile time reviewer=octocat wip=2
 ```
 
 Aim grills the target (30s), measures the baseline with `bun run compile` on a clean

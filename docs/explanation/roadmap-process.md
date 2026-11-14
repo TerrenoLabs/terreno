@@ -157,7 +157,7 @@ MCP server setup, Cursor/Claude skills, and agent-driven workflows.
 
 - MCP package: [`mcp-server/`](https://github.com/TerrenoLabs/terreno/tree/master/mcp-server) and hosted `terreno-mcp`.
 - Agent skills: [`.rulesync/skills/`](https://github.com/TerrenoLabs/terreno/tree/master/.rulesync/skills) (mirrored into editor-specific copies).
-- Terreno planning plugin: [`plugins/terreno-planning/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-planning).
+- Terreno planning plugin: [TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills).
 
 General feature ideas → **Ideas**. Doc typos → **Docs feedback** or a docs PR.
 ```

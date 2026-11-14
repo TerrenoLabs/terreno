@@ -1,4 +1,5 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, mock} from "bun:test";
+import {createVertex} from "@ai-sdk/google-vertex";
 import {TerrenoApp} from "@terreno/api";
 import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
 import {assert} from "chai";
@@ -744,6 +745,117 @@ describe("AI Routes", () => {
       expect((assistant?.content?.[0] as ImageContentPart | undefined)?.url).toBe(
         "data:image/png;base64,aGVsbG8="
       );
+    });
+
+    // These run the real Vertex provider against a canned Gemini response, so they also fail if
+    // the installed @ai-sdk/google-vertex speaks a model spec this `ai` major cannot run.
+    describe("Gemini image model through the Vertex provider", () => {
+      const DRAFT = "RFJBRlQ=";
+      const FINAL = "RklOQUw=";
+
+      const inlineImage = (data: string, isThought = false): Record<string, unknown> => ({
+        inlineData: {data, mimeType: "image/png"},
+        ...(isThought ? {thought: true} : {}),
+      });
+
+      /** A Vertex model whose fetch replays the given response chunks as Gemini SSE. */
+      const cannedGeminiModel = (chunks: Record<string, unknown>[][]): LanguageModel => {
+        const body = chunks
+          .map((parts, index) => {
+            const isLast = index === chunks.length - 1;
+            const chunk = {
+              candidates: [
+                {content: {parts, role: "model"}, ...(isLast ? {finishReason: "STOP"} : {})},
+              ],
+              ...(isLast
+                ? {
+                    usageMetadata: {
+                      candidatesTokenCount: 1,
+                      promptTokenCount: 1,
+                      totalTokenCount: 2,
+                    },
+                  }
+                : {}),
+            };
+            return `data: ${JSON.stringify(chunk)}\n\n`;
+          })
+          .join("");
+        const vertex = createVertex({
+          apiKey: "test-key",
+          fetch: (async (): Promise<Response> =>
+            new Response(body, {
+              headers: {"content-type": "text/event-stream"},
+            })) as unknown as typeof fetch,
+        });
+        return vertex("gemini-3-pro-image");
+      };
+
+      const promptForImages = async (
+        model: LanguageModel,
+        prompt: string
+      ): Promise<{savedUrls: string[]; streamedUrls: string[]}> => {
+        const imgApp = new TerrenoApp({
+          configureApp: (router, options) => {
+            addGptRoutes(router, {aiService: new AIService({model}), openApiOptions: options});
+          },
+          skipListen: true,
+          userModel: terrenoUserModel,
+        }).build();
+        const agent = await authAsUser(imgApp, "notAdmin");
+        const res = await agent.post("/gpt/prompt").send({prompt}).buffer(true).parse(sseCollect);
+        expect(res.status).toBe(200);
+        const events = (res as SseResponse).body
+          .split("\n")
+          .filter((line) => line.startsWith("data: "))
+          .map((line) => JSON.parse(line.slice("data: ".length)) as Record<string, unknown>);
+        expect(events.filter((event) => event.error)).toEqual([]);
+        const streamedUrls = events
+          .map((event) => (event.image as {url?: string} | undefined)?.url)
+          .filter((url): url is string => typeof url === "string");
+        const history = await GptHistory.findExactlyOne({"prompts.text": prompt});
+        const assistant = history.prompts.find((p) => p.type === "assistant");
+        const savedUrls = (assistant?.content ?? [])
+          .filter((part): part is ImageContentPart => part.type === "image")
+          .map((part) => part.url);
+        return {savedUrls, streamedUrls};
+      };
+
+      it("streams and saves the final image", async () => {
+        const model = cannedGeminiModel([[{text: "Here you go"}], [inlineImage(FINAL)]]);
+        const {savedUrls, streamedUrls} = await promptForImages(model, "vertex final only");
+        expect(streamedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+        expect(savedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+      });
+
+      it("drops a draft image that differs from the final image", async () => {
+        const model = cannedGeminiModel([
+          [inlineImage(DRAFT, true), {text: "Here you go"}],
+          [inlineImage(FINAL)],
+        ]);
+        const {savedUrls, streamedUrls} = await promptForImages(model, "vertex draft differs");
+        expect(streamedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+        expect(savedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+      });
+
+      it("keeps one image when the draft matches the final image", async () => {
+        const model = cannedGeminiModel([
+          [inlineImage(FINAL, true), {text: "Here you go"}],
+          [inlineImage(FINAL)],
+        ]);
+        const {savedUrls, streamedUrls} = await promptForImages(model, "vertex draft matches");
+        expect(streamedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+        expect(savedUrls).toEqual([`data:image/png;base64,${FINAL}`]);
+      });
+
+      it("keeps the last draft when the model returns no final image", async () => {
+        const model = cannedGeminiModel([
+          [inlineImage("RklSU1Q=", true)],
+          [inlineImage(DRAFT, true), {text: "Here you go"}],
+        ]);
+        const {savedUrls, streamedUrls} = await promptForImages(model, "vertex draft only");
+        expect(streamedUrls).toEqual([`data:image/png;base64,${DRAFT}`]);
+        expect(savedUrls).toEqual([`data:image/png;base64,${DRAFT}`]);
+      });
     });
 
     it("writes an SSE error event when the model stream throws", async () => {

@@ -253,10 +253,12 @@ export const startSession = async ({
   idleMinutes,
   io,
   spawnServe = spawnDetachedServe,
+  timeoutMs = START_TIMEOUT_MS,
 }: {
   idleMinutes?: number;
   io: CliIo;
   spawnServe?: (options: {cwd: string; idleMinutes?: number; logFile: string}) => void;
+  timeoutMs?: number;
 }): Promise<{isNew: boolean; state: SessionState}> => {
   const existing = await findLiveSession(io);
   if (existing) {
@@ -264,7 +266,7 @@ export const startSession = async ({
   }
   const dir = await ensureCliStateDir(io);
   spawnServe({cwd: io.cwd, idleMinutes, logFile: join(dir, "session.log")});
-  const deadline = Date.now() + START_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const state = await findLiveSession(io);
     if (state) {

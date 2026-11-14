@@ -390,6 +390,41 @@ describe("MCP parity commands", () => {
     expect(existsSync(join(stateDir, "session.json"))).toBe(false);
   });
 
+  it("starts a detached session on demand for a stateful command", async (): Promise<void> => {
+    // The session process runs the CLI entry point; under `bun test` argv[1] is not it.
+    const previousEntry = process.argv[1];
+    process.argv[1] = join(import.meta.dir, "bin.ts");
+    const io = createIo(dir);
+    try {
+      expect(await runCli(["syncdb", "snapshot", "list", "--json"], io)).toBe(0);
+      expect(io.stdoutLines.join("\n")).toBe("[]");
+      expect(io.stderrLines.join("\n")).toContain("Started a terreno CLI session");
+      expect(await runCli(["session", "start", "--idle-minutes", "5", "--json"], io)).toBe(0);
+      expect(io.stdoutLines.join("\n")).toContain('"isNew": false');
+    } finally {
+      process.argv[1] = previousEntry ?? "";
+      expect(await runCli(["session", "stop"], io)).toBe(0);
+    }
+  }, 20000);
+
+  it("idles out, and reports a session that never starts", async (): Promise<void> => {
+    const io = createIo(dir);
+    await serveSession({
+      handle: fakeLocalTools.call,
+      idleMinutes: 0.001,
+      io,
+    });
+    expect(await findLiveSession(io)).toBeUndefined();
+
+    let message = "";
+    try {
+      await startSession({io, spawnServe: (): void => {}, timeoutMs: 150});
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("The CLI session did not start. See ");
+  });
+
   it("logs in with Better Auth, saves the token, and sends it from terreno api", async (): Promise<void> => {
     const requests: Array<{authorization: string | null; url: string}> = [];
     const spec = {

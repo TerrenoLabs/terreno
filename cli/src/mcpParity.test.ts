@@ -499,9 +499,41 @@ describe("MCP parity commands", () => {
     await serving;
   });
 
+  it("never signals a reused PID that is not a session process", async (): Promise<void> => {
+    const io = createIo(dir);
+    const unrelated = Bun.spawn(["sleep", "30"]);
+    const stateDir = await ensureCliStateDir(io);
+    await writePrivateJson(join(stateDir, "session.json"), {
+      pid: unrelated.pid,
+      port: 1,
+      token: "x",
+    });
+    expect(await stopSession(io)).toBe(false);
+    expect(existsSync(join(stateDir, "session.json"))).toBe(false);
+    expect(unrelated.killed).toBe(false);
+    expect(unrelated.exitCode).toBeNull();
+
+    await writePrivateJson(join(stateDir, "session.json"), {
+      pid: unrelated.pid,
+      port: 1,
+      token: "x",
+    });
+    expect(await findLiveSession(io)).toBeUndefined();
+    expect(existsSync(join(stateDir, "session.json"))).toBe(false);
+    unrelated.kill();
+    await unrelated.exited;
+  });
+
   it("ends a session process that is alive but not answering", async (): Promise<void> => {
     const io = createIo(dir);
-    const child = Bun.spawn(["sleep", "30"]);
+    // Stands in for a hung `terreno session serve`: same command line, no server.
+    const child = Bun.spawn([
+      process.execPath,
+      "-e",
+      "setInterval(() => {}, 1000)",
+      "session",
+      "serve",
+    ]);
     const stateDir = await ensureCliStateDir(io);
     await writePrivateJson(join(stateDir, "session.json"), {pid: child.pid, port: 1, token: "x"});
     // Unanswering but alive: the state file stays so stop can still reach the process.

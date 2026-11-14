@@ -102,7 +102,9 @@ token.
   gated tool runs only when the command that asked for it opted in, whatever the session was
   started with. The session runs one call at a time.
 - Two commands that start at once share one session: a lock file lets only one of them spawn it.
-  `terreno session stop` also ends a session process that is alive but no longer answering.
+  `terreno session stop` also ends a session process that is alive but no longer answering. It
+  signals a PID only after confirming it is a `terreno session serve` process, so a stale file
+  whose PID was reused is cleared without touching that process.
 - It exits after 30 idle minutes, or on `terreno session stop`. Snapshots and the open page are
   gone when it exits.
 

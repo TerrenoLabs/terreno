@@ -1,4 +1,4 @@
-import {spawn} from "node:child_process";
+import {spawn, spawnSync} from "node:child_process";
 import {randomBytes} from "node:crypto";
 import {existsSync, openSync} from "node:fs";
 import {chmod, mkdir, readFile, rm, stat, writeFile} from "node:fs/promises";
@@ -93,10 +93,18 @@ const sessionRequest = async ({
   });
 };
 
-const isProcessAlive = (pid: number): boolean => {
+/**
+ * True only when the PID is a running `terreno session serve` process. A stale state file can
+ * name a PID the OS has since given to something else, so being alive is not enough to treat
+ * it as ours. Where `ps` is unavailable this is false, and the session is reported as stale.
+ */
+const isSessionProcess = (pid: number): boolean => {
+  if (pid === process.pid) {
+    return false;
+  }
   try {
-    process.kill(pid, 0);
-    return true;
+    const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], {encoding: "utf8"});
+    return result.status === 0 && /\bsession serve\b/.test(result.stdout);
   } catch {
     return false;
   }
@@ -112,9 +120,9 @@ const isSessionHealthy = async (io: CliIo, state: SessionState): Promise<boolean
 };
 
 /**
- * Returns the session only when its process answers. The state file of an exited process is
- * cleared; one whose process is alive but not answering is kept, so `session stop` can still
- * end that process.
+ * Returns the session only when its process answers. A state file is kept only while its PID
+ * is still a session process that is not answering, so `session stop` can end that process;
+ * any other stale file is cleared.
  */
 export const findLiveSession = async (io: CliIo): Promise<SessionState | undefined> => {
   const state = await readSessionState(io);
@@ -124,7 +132,7 @@ export const findLiveSession = async (io: CliIo): Promise<SessionState | undefin
   if (await isSessionHealthy(io, state)) {
     return state;
   }
-  if (!isProcessAlive(state.pid)) {
+  if (!isSessionProcess(state.pid)) {
     await rm(sessionFile(io), {force: true});
   }
   return undefined;
@@ -163,19 +171,20 @@ export const stopSession = async (io: CliIo): Promise<boolean> => {
     return false;
   }
   const wasHealthy = await isSessionHealthy(io, state);
-  const wasAlive = isProcessAlive(state.pid);
+  // Only ever signal a PID that is verifiably a session process.
+  const wasHungSession = !wasHealthy && isSessionProcess(state.pid);
   if (wasHealthy) {
     try {
       await sessionRequest({io, path: "/stop", state});
     } catch {
       // The process may exit before it answers.
     }
-  } else if (wasAlive && state.pid !== process.pid) {
-    // Alive but not answering: end it so it does not keep the browser and debugger connection.
+  } else if (wasHungSession) {
+    // Not answering: end it so it does not keep the browser and debugger connection.
     process.kill(state.pid);
   }
   await rm(sessionFile(io), {force: true});
-  return wasHealthy || wasAlive;
+  return wasHealthy || wasHungSession;
 };
 
 /**

@@ -159,6 +159,10 @@ print_secrets() {
     # Cloud Run refuses a deploy that mounts a secret with no version, so skip empty containers.
     if gcloud secrets versions access latest --secret="$secret" >/dev/null 2>&1; then
       echo "${name}=${secret}:latest"
+    else
+      # stdout carries the secret list, so the warning goes to stderr. Without it a missing
+      # provider only shows up later as PROVIDER_NOT_FOUND at sign-in.
+      echo "warning: ${secret} has no version; ${name} is not set and its sign-in provider is off" >&2
     fi
   done
 }

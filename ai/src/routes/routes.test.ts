@@ -577,6 +577,68 @@ describe("AI Routes", () => {
       expect(body).toContain("done");
     });
 
+    describe("canUseServerModel", () => {
+      const buildGatedApp = (
+        canUseServerModel: (req: express.Request) => boolean | Promise<boolean>,
+        extra: Partial<Parameters<typeof addGptRoutes>[1]> = {}
+      ): express.Application =>
+        new TerrenoApp({
+          configureApp: (router, options) => {
+            addGptRoutes(router, {aiService, canUseServerModel, openApiOptions: options, ...extra});
+          },
+          skipListen: true,
+          userModel: terrenoUserModel,
+        }).build();
+
+      it("refuses a restricted user with no key instead of using the server aiService", async () => {
+        const createServerModelFn = mock(
+          (_modelId?: string) => createMockModel() as unknown as LanguageModel
+        );
+        const gatedApp = buildGatedApp(async () => false, {createServerModelFn});
+        const agent = await authAsUser(gatedApp, "notAdmin");
+
+        const res = await agent.post("/gpt/prompt").send({model: "gemini-4-argon", prompt: "Hi"});
+        expect(res.status).toBe(403);
+        expect(createServerModelFn).not.toHaveBeenCalled();
+
+        const remix = await agent.post("/gpt/remix").send({text: "Hello"});
+        expect(remix.status).toBe(403);
+      });
+
+      it("lets a restricted user chat with their own key", async () => {
+        const createModelFn = mock((_apiKey: string, _modelId?: string) => {
+          return createMockModel() as unknown as LanguageModel;
+        });
+        const canUseServerModel = mock(() => false);
+        const gatedApp = buildGatedApp(canUseServerModel, {createModelFn});
+        const agent = await authAsUser(gatedApp, "notAdmin");
+        const res = await agent
+          .post("/gpt/prompt")
+          .set("x-ai-api-key", "user-key")
+          .send({prompt: "Hi"})
+          .buffer(true)
+          .parse(sseCollect);
+        expect(res.status).toBe(200);
+        expect(createModelFn).toHaveBeenCalled();
+        expect(canUseServerModel).not.toHaveBeenCalled();
+      });
+
+      it("serves an allowed user from the server model", async () => {
+        const createServerModelFn = mock(
+          (_modelId?: string) => createMockModel() as unknown as LanguageModel
+        );
+        const gatedApp = buildGatedApp(async () => true, {createServerModelFn});
+        const agent = await authAsUser(gatedApp, "notAdmin");
+        const res = await agent
+          .post("/gpt/prompt")
+          .send({model: "gemini-4-argon", prompt: "Hi"})
+          .buffer(true)
+          .parse(sseCollect);
+        expect(res.status).toBe(200);
+        expect(createServerModelFn).toHaveBeenCalledWith("gemini-4-argon");
+      });
+    });
+
     it("rejects history from another user", async () => {
       const otherUserId = new mongoose.Types.ObjectId();
       const other = await GptHistory.create({

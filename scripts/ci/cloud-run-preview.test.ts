@@ -396,6 +396,19 @@ describe("backend-auth-env.sh", (): void => {
     });
   });
 
+  it("warns on stderr for each OAuth secret with no version, keeping stdout clean", async (): Promise<void> => {
+    const result = await runSecrets("prod");
+
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.include(
+      result.stderr,
+      "svc-google-client-id has no version; GOOGLE_CLIENT_ID is not set"
+    );
+    assert.include(result.stderr, "svc-google-client-secret has no version");
+    assert.notInclude(result.stderr, "svc-github-client-id");
+    assert.notProperty(result.env, "GOOGLE_CLIENT_ID");
+  });
+
   it("mounts only client IDs on a preview, never a client secret or the Apple key", async (): Promise<void> => {
     const result = await runSecrets("pr-42");
 

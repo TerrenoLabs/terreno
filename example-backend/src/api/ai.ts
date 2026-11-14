@@ -143,6 +143,33 @@ const getVertexProvider = (): TerrenoVertexProvider | undefined => {
   return vertexProviderInstance;
 };
 
+let vertexAccessCheck: ((req: express.Request) => Promise<boolean>) | undefined;
+
+/**
+ * Install the per-request Vertex access check (see `utils/vertexAccess.ts`). Called once at server
+ * start, after Better Auth is registered.
+ */
+export const configureVertexAccess = (
+  check: ((req: express.Request) => Promise<boolean>) | undefined
+): void => {
+  vertexAccessCheck = check;
+};
+
+/**
+ * Whether this request may use the server's own models. Only enforced when Vertex is configured:
+ * a Gemini-API-key-only server keeps serving everyone. With Vertex on and no check installed (for
+ * example Better Auth is off), nobody qualifies.
+ */
+export const canUseServerModel = async (req: express.Request): Promise<boolean> => {
+  if (!getVertexProvider()) {
+    return true;
+  }
+  if (!vertexAccessCheck) {
+    return false;
+  }
+  return vertexAccessCheck(req);
+};
+
 /** Pick a default model that respects the configured allow-list. */
 const resolveDefaultVertexModel = (provider: TerrenoVertexProvider): string => {
   if (provider.isModelAllowed(DEFAULT_MODEL)) {
@@ -262,7 +289,12 @@ const disabledCrud = {
 export const aiModelsRouter = modelRouter("/ai", GptHistory, {
   collectionActions: {
     models: {
-      handler: async () => {
+      handler: async ({req}) => {
+        // Users who may not use Vertex chat with their own Gemini key, so they get the curated
+        // list rather than the project's enabled Vertex models.
+        if (!(await canUseServerModel(req))) {
+          return {models: DEFAULT_CHAT_MODEL_IDS.map(toSelectableModel)};
+        }
         const models = await listAvailableModels();
         return {models};
       },
@@ -691,10 +723,11 @@ export const createJokeGeneratorTool = ({
     description:
       "Generate a joke about any topic. Uses the joke-generator observability prompt when it exists, otherwise a built-in prompt.",
     execute: async ({topic, style}: {topic: string; style?: string}) => {
+      // The caller's own key wins, so a user without Vertex access never reaches a server model.
       const svc =
         aiService ??
-        getAiService() ??
-        (apiKey ? new AIService({model: createModelFromKey(apiKey)}) : undefined);
+        (apiKey ? new AIService({model: createModelFromKey(apiKey)}) : undefined) ??
+        getAiService();
       if (!svc) {
         return {joke: `Why did the developer quit? Because they couldn't find their ${topic}!`};
       }
@@ -794,9 +827,16 @@ export const addAiRoutes = (
       .build(),
     asyncHandler(async (req, res) => {
       const requestApiKey = req.header("x-ai-api-key");
-      const effectiveAiService =
-        aiService ??
-        (requestApiKey ? new AIService({model: createModelFromKey(requestApiKey)}) : undefined);
+      if (!requestApiKey && aiService && !(await canUseServerModel(req))) {
+        throw new APIError({
+          status: 403,
+          title:
+            "Server AI models are not available to this account. Send your own API key instead.",
+        });
+      }
+      const effectiveAiService = requestApiKey
+        ? new AIService({model: createModelFromKey(requestApiKey)})
+        : aiService;
       if (!effectiveAiService) {
         throw new APIError({
           status: 503,
@@ -830,6 +870,7 @@ export const addAiRoutes = (
   const chat: GptRouteOptions = {
     aiService: aiService ?? createDemoAgentService(),
     asks: {approvals: todoToolApprovals},
+    canUseServerModel,
     createModelFn: createModelFromKey,
     createRequestTools: createPerRequestTools as unknown as GptRouteOptions["createRequestTools"],
     createServerModelFn: createServerModel,

@@ -138,6 +138,7 @@ Hosting platforms scope variables per environment. Vercel has **Production**, **
 | `GOOGLE_VERTEX_PROJECT` | `@terreno/ai` | ❌ | — | No | server |
 | `GOOGLE_VERTEX_LOCATION` | `@terreno/ai` | ❌ | `global` | No | server |
 | `GOOGLE_VERTEX_ALLOWED_MODELS` | `@terreno/ai` | ❌ | all | No | server |
+| `VERTEX_ALLOWED_EMAIL_DOMAINS` | example-backend | ❌ | `flourish.health` | No | server |
 | `CLAUDE_KEY` | tooling | ❌ | — | Yes | tooling |
 
 ## Storage (GCS)

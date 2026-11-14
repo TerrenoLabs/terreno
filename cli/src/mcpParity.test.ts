@@ -535,12 +535,20 @@ describe("MCP parity commands", () => {
       "serve",
     ]);
     const stateDir = await ensureCliStateDir(io);
+    // A narrow terminal must not hide the command line the PID check reads.
+    const previousColumns = process.env.COLUMNS;
+    process.env.COLUMNS = "10";
     await writePrivateJson(join(stateDir, "session.json"), {pid: child.pid, port: 1, token: "x"});
     // Unanswering but alive: the state file stays so stop can still reach the process.
     expect(await findLiveSession(io)).toBeUndefined();
     expect(existsSync(join(stateDir, "session.json"))).toBe(true);
     expect(await stopSession(io)).toBe(true);
     await child.exited;
+    if (previousColumns === undefined) {
+      delete process.env.COLUMNS;
+    } else {
+      process.env.COLUMNS = previousColumns;
+    }
     expect(existsSync(join(stateDir, "session.json"))).toBe(false);
 
     // A lock left by a command that died while starting is taken over.

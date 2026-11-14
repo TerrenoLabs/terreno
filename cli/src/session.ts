@@ -103,7 +103,11 @@ const isSessionProcess = (pid: number): boolean => {
     return false;
   }
   try {
-    const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], {encoding: "utf8"});
+    // `-ww` keeps the full command line; without it a narrow COLUMNS can cut off the marker.
+    const result = spawnSync("ps", ["-ww", "-p", String(pid), "-o", "command="], {
+      encoding: "utf8",
+      env: {...process.env, COLUMNS: "4096"},
+    });
     return result.status === 0 && /\bsession serve\b/.test(result.stdout);
   } catch {
     return false;

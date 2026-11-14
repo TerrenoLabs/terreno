@@ -20,6 +20,12 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.0.6] - 2026-11-14
+
+### Fixed
+
+- `@terreno/ai` accepts `@ai-sdk/mcp` from `^1.0.21` again. 58.0.5 required `^1.0.104`, a version published days earlier, which apps that only install packages older than a minimum release age could not resolve.
+
 ## [58.0.5] - 2026-11-14
 
 ### Fixed

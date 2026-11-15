@@ -14,9 +14,11 @@ import {
 } from "./lib";
 
 const createFixtureRepo = ({
+  filterJob = "path-filter",
   mapping,
   workflowPaths,
 }: {
+  filterJob?: string;
   mapping: string;
   workflowPaths: string[];
 }): string => {
@@ -32,7 +34,7 @@ const createFixtureRepo = ({
       "workflows:",
       "  setup:",
       "    jobs:",
-      "      - path-filtering/filter:",
+      `      - ${filterJob}:`,
       "          mapping: |",
       ...mapping.split("\n").map((line) => `            ${line}`),
       "",
@@ -124,6 +126,22 @@ describe("readMappings", () => {
       {parameter: "run-api", regex: "api/.*"},
       {parameter: "run-ui", regex: "ui/.*"},
     ]);
+  });
+
+  it("still reads a circleci/path-filtering orb job", () => {
+    const root = createFixtureRepo({
+      filterJob: "path-filtering/filter",
+      mapping: "api/.* run-api true",
+      workflowPaths: ["api/**"],
+    });
+    assert.deepEqual(readMappings({repoRoot: root}), [{parameter: "run-api", regex: "api/.*"}]);
+  });
+
+  it("reads the mapping of the local path-filter job in .circleci/config.yml", () => {
+    const repoRoot = join(import.meta.dir, "..", "..");
+    const mappings = readMappings({repoRoot});
+    assert.isAbove(mappings.length, 100);
+    assert.deepInclude(mappings, {parameter: "run-api", regex: "api/.*"});
   });
 
   it("prefers an enabled config.yml over a parked config.setup.yml", () => {

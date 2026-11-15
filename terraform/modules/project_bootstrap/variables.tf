@@ -18,6 +18,7 @@ variable "services" {
   description = "GCP services to enable on the project. Override to add more."
   type        = set(string)
   default = [
+    "aiplatform.googleapis.com",
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudtasks.googleapis.com",

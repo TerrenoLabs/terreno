@@ -96,6 +96,11 @@ describe("Cloud Run preview readiness", (): void => {
     assert.include(result.stderr, '"status":"starting"');
   });
 
+  it("sets the Vertex project on every backend deploy", (): void => {
+    assert.include(deployScript, 'GCP_VERTEX_PROJECT="${GCP_VERTEX_PROJECT:-flourish-terreno}"');
+    assert.include(deployScript, "GOOGLE_VERTEX_PROJECT=${GCP_VERTEX_PROJECT}");
+  });
+
   it("sets the documents bucket on every backend deploy and isolates preview prefixes", (): void => {
     assert.include(
       deployScript,

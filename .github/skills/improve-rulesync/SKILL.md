@@ -45,8 +45,9 @@ those homes; do not duplicate the same architecture into both.
 When the guidance belongs to a published Terreno package (`@terreno/api`, `@terreno/ui`, `@terreno/syncdb`, admin packages), prefer updating that package’s **`.ai/guidelines/`** or **`.ai/skills/`** (see `docs/implementationPlans/mcp-boost-parity.md` Phase 2). The MCP server copies those trees at build time; keep monorepo-wide rulesync files for cross-cutting or repo-only concerns. If the same fact is already on a `docs/` page, link it instead of copying.
 
 ### Step 4 — Sync
-After all changes, run `bun run rules` to sync to all AI tool directories, then
-`bun run skills:sync` so the installable `skills/` tree matches.
+After all changes, run `bun run rules` to sync to all AI tool directories. Fixes to
+lifecycle or Terreno app skills belong in
+[TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills).
 
 ### Step 5 — Summary
 Output a brief summary of what was changed and why. Format:

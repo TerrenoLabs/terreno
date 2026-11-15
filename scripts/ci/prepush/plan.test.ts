@@ -29,10 +29,9 @@ describe("planPrepush", () => {
     ]);
   });
 
-  it("runs repo policies when a plugin skill changes (release-announcement regression)", () => {
-    const names = stepNames(["plugins/terreno-planning/skills/terreno-2-pick/SKILL.md"]);
-    expect(names).toContain("repo-policies: barrels, explicit-any, lifecycle skills, source rules");
-    expect(names).toContain("repo-policies: generated skills in sync");
+  it("runs repo policies when a repository skill changes (release-announcement regression)", () => {
+    const names = stepNames([".rulesync/skills/release/SKILL.md"]);
+    expect(names).toContain("repo-policies: barrels, explicit-any, source rules");
   });
 
   it("checks the regression suites when a suite file changes", () => {

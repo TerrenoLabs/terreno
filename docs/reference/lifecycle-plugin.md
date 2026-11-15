@@ -46,16 +46,16 @@ Every stage includes:
 - Recommended next stage
 
 Results use `PASS`, `FAIL`, `BLOCKED`, or `PENDING` and the compact `v: 2` schema
-[`stage-result.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
+[`stage-result.schema.json`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/stage-result.schema.json)
 (`v`, `stage`, `status`, `next`, `action`; omit empty keys). Loop state follows
-[`execution-state.schema.json`](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
+[`execution-state.schema.json`](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/execution-state.schema.json).
 Chat and PRs show `status` / `next` / `action`; the YAML lives in a Details toggle.
 When the current PR has GitHub Deployments, those demo URLs are the last visible
 section of every wait-for-human or done chat.
 
 The outer loop owns state persistence, Taste `PENDING` reinvocation, Grow/Brew/Taste
 invocation, retries, and escalation. Pick owns the
-[pick-roast inner loop](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/pick-roast-loop.md):
+[pick-roast inner loop](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/pick-roast-loop.md):
 one task, roast it, next task. Roast never invokes Pick. Do not start the next task
 until Roast PASS. Exactly one driver continues after each Roast. Brew and Taste wait
 until async review bots (Bugbot, CodeQL, and similar) on the current head have reported,
@@ -113,19 +113,20 @@ Every `Verification` row starts with `✅`, `🧭`, or `⚠️` and names the ou
 the command. The stage-result `ip` is the plan's filename, and later stages keep it.
 
 Every stage follows the
-[documentation contract](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/documentation-contract.md):
+[documentation contract](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/documentation-contract.md):
 read architecture docs before acting, update them in the same slice, and fail the slice
 when user-visible or architectural behavior ships without matching docs. Brew and Taste
 observe product CI per
-[product-ci.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/product-ci.md).
+[product-ci.md](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/product-ci.md).
 
-Install the published skill set directly:
+The skills live in [TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills).
+Install them directly:
 
 ```bash
-npx skills add TerrenoLabs/terreno
+npx skills add TerrenoLabs/terreno-skills --skill lifecycle
 ```
 
-Or install the combined lifecycle and Terreno app plugin:
+Or install the combined plugin:
 
 | Host | Plugin | Stage names | Invoke Pick–Roast loop |
 | --- | --- | --- | --- |
@@ -134,35 +135,23 @@ Or install the combined lifecycle and Terreno app plugin:
 | Claude Code | `terreno` | `1-grow` … `5-taste`, outer loops | `/terreno:pick-roast-loop` |
 | `npx skills` | — | Canonical stage and outer-loop names | `/terreno-pick-roast-loop` |
 
-Cursor installs `terreno-planning` from [`.cursor-plugin/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.cursor-plugin/marketplace.json). Codex:
+Claude Code:
 
 ```text
-codex plugin marketplace add TerrenoLabs/terreno
-codex plugin install terreno-planning --source terreno-plugins
-```
-
-Codex reads [`.agents/plugins/marketplace.json`](https://github.com/TerrenoLabs/terreno/blob/master/.agents/plugins/marketplace.json)
-and `.codex-plugin/plugin.json` on the canonical plugin. Claude Code:
-
-```text
-/plugin marketplace add TerrenoLabs/terreno
+/plugin marketplace add TerrenoLabs/terreno-skills
 /plugin install terreno@terreno-plugins
 ```
 
-That tracks `master`. For a pinned release or the latest release from npm
-(`@terreno/agent-plugin`, marketplace `terreno-releases`), see
-[Install agent skills](../how-to/install-agent-skills.md#pick-a-channel).
+Codex:
 
-Claude Code resolves a plugin skill's command from the frontmatter `name`, so the short
-names ship as a generated Claude-only copy at
-[`plugins/terreno-claude/`](https://github.com/TerrenoLabs/terreno/tree/master/plugins/terreno-claude).
-Stage procedure, Terreno app skills, contracts, agents, and references are generated
-from the canonical `plugins/terreno-planning/` tree.
+```text
+codex plugin marketplace add TerrenoLabs/terreno-skills
+codex plugin install terreno-planning --source terreno-plugins
+```
 
-Regenerate the committed `skills/` tree and the Claude plugin with `bun run skills:sync`.
-Plugin skills are authoritative when names overlap. Package skills under
-`<package>/.ai/skills/` remain package/MCP inputs and do not overlay the installable
-tree.
+See [Install agent skills](../how-to/install-agent-skills.md) for bundles and Cursor.
+Package skills under `<package>/.ai/skills/` remain package/MCP inputs and are separate
+from the terreno-skills set.
 
 The plugin bundles reusable backend/API, UI, data-fetching, schema, SDK, admin, prompt,
 docs, upgrade, deployment, and UI-verification workflows, plus `pre-commit` and
@@ -173,7 +162,7 @@ roadmap, release, and maintenance conventions discovered at stage start.
 ## Testing plan
 
 Every IP plans its e2e tests and its manual regression cases up front, per
-[testing-plan.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/testing-plan.md).
+[testing-plan.md](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/testing-plan.md).
 Grow writes both sections; later stages read them and never invent rows.
 
 | Stage | Duty |
@@ -250,7 +239,7 @@ Last full run: never
 ## User guide
 
 Every IP says which end-user guide pages it adds, updates, or retires, per
-[user-guide.md](https://github.com/TerrenoLabs/terreno/blob/master/plugins/terreno-planning/references/user-guide.md).
+[user-guide.md](https://github.com/TerrenoLabs/terreno-skills/blob/master/plugins/terreno-planning/references/user-guide.md).
 A page explains one feature in the words users see on screen. Chat agents read the pages
 to answer "how do I…" questions, so a page describes shipped behavior only.
 

@@ -3,7 +3,7 @@
 Published npm package for the Terreno Model Context Protocol (MCP) server. The monorepo directory is still `mcp-server/`. The package exposes:
 
 - **`terreno-mcp`** — HTTP server used in Cloud Run and local debugging (`src/index.ts`)
-- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): app/database/log/browser diagnostics and SyncDB state/action/snapshot tools (the Redux `get_rtk_state` tool was removed in Terreno 58). `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
+- **`terreno-mcp-local`** — stdio server for project runtime tools (`src/local/index.ts`): 16 tools for app/database/log/browser diagnostics, SyncDB state/action/snapshot, dev storage, dev commands, and client dispatch (the Redux `get_rtk_state` and `get_client_state` tools were removed in Terreno 58; use `get_syncdb_state`). `evaluate`, `navigate`, and SyncDB state changes are gated by `TERRENO_MCP_EVAL`. Metro URL defaults from `frontend/package.json` `--port` or `TERRENO_METRO_URL`. `application_info` reads bootstrap `backend/` + `frontend/`, or this monorepo's `example-backend/` + `example-frontend/` (bootstrap names win when both exist).
 
 It provides AI coding assistants with documentation access, code generation tools, and workflow prompts.
 For editor configuration and runtime prerequisites, see
@@ -109,6 +109,37 @@ Documentation resources accessible via `terreno://` protocol:
 Set `TERRENO_MCP_DOCS_DIR` environment variable to override default path.
 
 ## Tools
+
+### CLI equivalents
+
+Every tool on both servers is also a [`terreno` CLI](cli.md) command that calls the same
+handler. The CLI needs no MCP configuration, so prefer it for agents that have a shell.
+`terreno tool list` prints this mapping's left column with input schemas (`--json`), and
+`terreno tool call <name> --args '<json>'` calls any tool by name.
+
+| Server | Tool | CLI |
+| --- | --- | --- |
+| local | `application_info` | `terreno info` |
+| local | `read_logs` / `last_error` | `terreno logs` / `terreno logs last-error` |
+| local | `database_schema` / `database_query` | `terreno db schema` / `terreno db query` |
+| local | `get_syncdb_state` | `terreno state` |
+| local | `syncdb_snapshot` | `terreno syncdb snapshot <action>` |
+| local | `syncdb_action` | `terreno syncdb action <action>` |
+| local | `read_local_storage` / `write_local_storage` | `terreno storage read` / `terreno storage write` |
+| local | `list_dev_commands` / `invoke_dev_command` | `terreno dev list` / `terreno dev run <name>` |
+| local | `dispatch_client_action` | `terreno dispatch <type>` |
+| local | `navigate` / `evaluate` | `terreno navigate <path>` / `terreno eval --code <js>` |
+| local | `browser` | `terreno browser <action>` or `terreno web` |
+| hosted | `terreno_search_docs` / `terreno_get_component_docs` | `terreno docs search` / `terreno docs component` |
+| hosted | `terreno_get_upgrade_guide` | `terreno docs upgrade --from --to` |
+| hosted | `terreno_search_update_notes` / `terreno_get_update_note` / `terreno_ask_update_help` | `terreno docs notes search` / `get` / `ask` |
+| hosted | `terreno_generate_model` / `_route` / `_screen` / `_form_fields` | `terreno generate model` / `route` / `screen` / `form` |
+| hosted | `terreno_install_admin` | `terreno generate admin` |
+| hosted | `terreno_validate_model_schema` / `terreno_validate_ui_blocks` | `terreno validate schema` / `terreno validate blocks` |
+| hosted | `terreno_bootstrap_ai_rules` | `terreno bootstrap rules` |
+
+Prompts and resources have no CLI command: prompts are covered by the installable skills, and
+resources by `terreno docs search`.
 
 Code generation tools return TypeScript/JavaScript code as text. **Code generation tools do not
 write files** — the AI assistant receives the code and writes it to appropriate locations. Scaffold

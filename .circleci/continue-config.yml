@@ -1480,9 +1480,8 @@ jobs:
           path: explicit-any-inventory.json
           destination: explicit-any-inventory
       - run:
-          name: Lifecycle contracts and release tooling
+          name: Release tooling
           command: |
-            bun run check:lifecycle-skills
             bun test scripts/planning/
             bun run test:ci-tools
       - run:
@@ -2550,9 +2549,6 @@ jobs:
               api test blocks ui admin-backend admin-frontend admin-spa ai
               api-health announcements comms feature-flags jobs create-terreno-app mcp-server syncdb
             )
-            # Generated Claude Code plugins: no compile step and no master version bump
-            # (their committed package.json stays 0.0.0; publish stamps the release).
-            packages+=(plugins/terreno-claude plugins/terreno-loop-claude)
             export TERRENO_PUBLISH_PREBUILT=1
             # npm does not resolve dependencies at publish time, so order does not
             # matter; xargs exits non-zero if any package fails.

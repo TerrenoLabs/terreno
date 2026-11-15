@@ -191,8 +191,5 @@ jobs:
       - name: Install workspace dependencies
         run: bun install
 
-      - name: Check lifecycle contracts
-        run: bun run check:lifecycle-skills
-
-      - name: Test lifecycle validator
+      - name: Test planning scripts
         run: bun test scripts/planning/

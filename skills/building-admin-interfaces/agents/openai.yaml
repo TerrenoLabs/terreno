@@ -1,4 +1,0 @@
-interface:
-  display_name: "Building Admin Interfaces"
-  short_description: "Build Terreno admin screens with AdminShell nav, AdminScreenRouter, custom screens, and admin-backend config"
-  default_prompt: "Use $building-admin-interfaces to add or change an admin screen, sidebar nav, or operator tool with @terreno/admin-frontend."

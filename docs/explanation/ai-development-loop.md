@@ -2,7 +2,8 @@
 
 A coding agent working on a Terreno app runs the same five-stage loop on every change:
 it asks how something should be done, generates the code, runs the app, observes what the
-app did, and fixes what it finds. Terreno's two MCP servers supply a tool for each stage.
+app did, and fixes what it finds. Terreno's two MCP servers supply a tool for each stage,
+and the `terreno` CLI runs every one of those tools from a shell.
 
 - **`terreno-mcp`** is the hosted server. It holds the docs, the code generators, and the
   convention validators. It knows Terreno but not your app.
@@ -15,11 +16,18 @@ flowchart LR
   ASK["1. Ask<br/>terreno_search_docs<br/>terreno_get_component_docs<br/>application_info"]
   GEN["2. Generate<br/>terreno_generate_*<br/>terreno_validate_model_schema"]
   RUN["3. Run<br/>backend dev server<br/>Metro (Expo)"]
-  OBS["4. Observe<br/>read_logs (backend / browser / metro / app / network / native)<br/>last_error<br/>get_client_state"]
+  OBS["4. Observe<br/>read_logs (backend / browser / metro / app / network / native)<br/>last_error<br/>get_syncdb_state"]
   FIX["5. Fix<br/>edit, then navigate<br/>browser snapshot + screenshot"]
   ASK --> GEN --> RUN --> OBS --> FIX
   FIX -->|"iterate"| ASK
 ```
+
+The CLI and the MCP servers are two ways to reach the same handlers. An agent with a shell and
+no MCP configuration (a subagent, a CI job, a sandbox) runs `terreno logs`, `terreno state`,
+`terreno db query`, `terreno browser`, and the rest directly; `terreno tool call <name>` reaches
+any tool by its MCP name. Prefer the CLI, and use the MCP tool names where an editor already has
+the servers loaded. The mapping is in [Debug a Terreno app with MCP](../how-to/debug-with-mcp.md#use-the-cli-first)
+and the [CLI reference](../reference/cli.md).
 
 This page covers what the agent can see and do at each stage, and where that stops. How
 Terreno's conventions reach the agent in the first place is in
@@ -81,8 +89,7 @@ The agent reads what the app did.
 | --- | --- |
 | `read_logs` | One merged, time-ordered tail from six sources: `backend` (server JSONL), `browser` (web errors and warnings JSONL), `metro` (bundler events), `app` (the Hermes console over CDP), `network` (CDP Network events on the same session), and `native` (adb / iOS Simulator log tail when available). Default sources omit `native`. Its `connection` field says which live sources are attached. |
 | `last_error` | The newest error-level entry across the same sources, as the raw line. It includes a stack when the entry carries one. |
-| `get_client_state` | The client data layer in the running app. It reports which `layer` it found (`rtk`, `syncdb`, both, or `none`) and returns the RTK Query cache and auth state, the SyncDB state, or both. `get_rtk_state` is a deprecated alias. |
-| `get_syncdb_state`, `syncdb_snapshot` | SyncDB entities, outbox, conflicts, cursors, and debug events, plus snapshots to compare before and after a change |
+| `get_syncdb_state`, `syncdb_snapshot` | The client data layer in the running app: SyncDB entities, outbox, conflicts, cursors, and debug events, plus snapshots to compare before and after a change |
 | `database_schema`, `database_query` | The app's MongoDB collections and documents, through a read-only allowlist |
 
 All of these are reads. None of them needs an opt-in.
@@ -183,7 +190,7 @@ The division of labor:
   and show what is on screen. Terreno's `browser` tool covers the same ground on web when a
   lightweight headless session is enough.
 - **Observation is Terreno's job.** After a tap or a click, `read_logs`, `last_error`, and
-  `get_client_state` show what the app did behind the screen.
+  `get_syncdb_state` show what the app did behind the screen.
 - **Durability is Maestro's job.** An agent session ends. A flow that proved a fix and should
   keep proving it becomes a Maestro flow, so CI repeats the check on every change.
 

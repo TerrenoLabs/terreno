@@ -1,12 +1,14 @@
 # Planning plugins
 
-Terreno ships its agentic workflows as **two host plugins**. They divide along one line:
-the lifecycle plugin knows *how to build one approved thing correctly*, and the scan
-plugin knows *what is worth building next and whether it worked*.
+Terreno ships its agentic workflows from
+[TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills) as one host
+plugin carrying **two skill sets**. They divide along one line: the lifecycle skills know
+*how to build one approved thing correctly*, and the scan skills know *what is worth
+building next and whether it worked*.
 
 ```text
-terreno-loop                            terreno (lifecycle)
-------------                            -------------------
+scan                                    lifecycle
+----                                   -------------------
 Aim     charter a measurable goal
 Sweep   shard + map the repository
 Sift    reduce to verified findings
@@ -22,8 +24,7 @@ become. Every slice crosses that boundary exactly once, as an approved IP and ta
 
 ## terreno (lifecycle plugin)
 
-Five bounded transitions plus three outer loops. Canonical source:
-`plugins/terreno-planning/`; Claude Code consumes the generated `plugins/terreno-claude/`.
+Five bounded transitions plus three outer loops, in the terreno-skills `lifecycle` bundle.
 
 | Stage | Owns | PASS next |
 | --- | --- | --- |
@@ -58,11 +59,10 @@ feature keeps it true; a guide written once at the end drifts from the app the f
 a label changes. A repository with no end users opts out in its agent instructions. See
 [User guide](../reference/lifecycle-plugin.md#user-guide).
 
-## terreno-loop (scan plugin)
+## Scan skills
 
-Five bounded transitions plus two outer loops. Canonical source: `plugins/terreno-loop/`;
-Claude Code consumes the generated `plugins/terreno-loop-claude/`. It depends on the
-lifecycle plugin — Plot hands every slice to Grow.
+Five bounded transitions plus two outer loops, in the terreno-skills `scan` bundle. They
+depend on the lifecycle skills — Plot hands every slice to Grow.
 
 | Stage | Owns | PASS next |
 | --- | --- | --- |
@@ -74,8 +74,8 @@ lifecycle plugin — Plot hands every slice to Grow.
 
 | Outer loop | Walks |
 | --- | --- |
-| `campaign` | Bounded rounds: Aim → Sweep → Sift → Plot → lifecycle → Track. Stops at every gate. |
-| `loop` | Resident session: the same rounds, plus a heartbeat over open campaign PRs — route, answer review through Taste, fix red CI, Track merges — refilling work up to `wipLimit`. |
+| `terreno-loop-campaign` | Bounded rounds: Aim → Sweep → Sift → Plot → lifecycle → Track. Stops at every gate. |
+| `terreno-loop-resident` | Resident session: the same rounds, plus a heartbeat over open campaign PRs — route, answer review through Taste, fix red CI, Track merges — refilling work up to `wipLimit`. |
 
 Full contract: [scan plugin reference](../reference/scan-plugin.md).
 
@@ -122,14 +122,13 @@ Three properties fall out of keeping discovery and delivery in separate plugins:
 
 | Host | Lifecycle | Scan |
 | --- | --- | --- |
-| Cursor | `terreno-planning`, `/terreno-1-grow` | `terreno-loop`, `/terreno-loop-1-aim` |
-| Codex | `terreno-planning`, `$terreno-1-grow` | `terreno-loop`, `$terreno-loop-1-aim` |
-| Claude Code | `terreno`, `/terreno:1-grow` | `terreno-loop`, `/terreno-loop:1-aim` |
+| Cursor | `terreno-planning`, `/terreno-1-grow` | `/terreno-scan-1-aim` |
+| Codex | `terreno-planning`, `$terreno-1-grow` | `$terreno-scan-1-aim` |
+| Claude Code | `terreno`, `/terreno:1-grow` | `/terreno:scan-1-aim` |
 
-Install both from the marketplaces described in
-[install agent skills](../how-to/install-agent-skills.md). Claude Code resolves a plugin
-skill's command from its frontmatter `name`, which is why the two `*-claude/` trees are
-generated with shortened names by `bun run skills:sync`.
+Install as described in [install agent skills](../how-to/install-agent-skills.md). Claude
+Code resolves a plugin skill's command from its frontmatter `name`, so the Claude Code
+plugin uses shortened names.
 
 ## Related
 

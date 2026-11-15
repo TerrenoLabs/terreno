@@ -1,8 +1,40 @@
 # Debug a Terreno app with MCP
 
 **This is the standard agent workflow** for finding and fixing issues on Terreno apps: run the
-dev stack, call **`terreno-local`** MCP tools to observe and drive the app, edit code, then
-observe again. Installable skill: **`debug-with-mcp`**. SyncDB-only depth: **`debug-syncdb-with-mcp`**.
+dev stack, observe and drive the app with the **`terreno` CLI** (or the same tools over the
+**`terreno-local`** MCP server), edit code, then observe again. Installable skill:
+**`debug-with-mcp`**. SyncDB-only depth: **`debug-syncdb-with-mcp`**.
+
+## Use the CLI first
+
+Every tool on this page is also a `terreno` command that calls the same handler. The CLI needs
+no MCP configuration, so it works in any shell: a subagent, a CI job, a sandbox. Use it by
+default and use the MCP tool names when your editor already has `terreno-local` loaded.
+
+| MCP tool | CLI |
+| --- | --- |
+| `application_info` | `terreno info` |
+| `last_error` | `terreno logs last-error` |
+| `read_logs` | `terreno logs` |
+| `database_schema` / `database_query` | `terreno db schema` / `terreno db query` |
+| `get_syncdb_state` | `terreno state` |
+| `syncdb_snapshot` | `terreno syncdb snapshot <capture\|list\|get\|compare\|delete>` |
+| `syncdb_action` | `terreno syncdb action <action>` |
+| `read_local_storage` / `write_local_storage` | `terreno storage read` / `terreno storage write` |
+| `list_dev_commands` / `invoke_dev_command` | `terreno dev list` / `terreno dev run <name>` |
+| `dispatch_client_action` | `terreno dispatch <type>` |
+| `navigate` / `evaluate` | `terreno navigate <path>` / `terreno eval --code <js>` |
+| `browser` | `terreno browser <action>` (step by step) or `terreno web` (one sequence) |
+
+`terreno tool list` prints every tool, and `terreno tool call <name> --args '<json>'` calls any
+of them with the same JSON arguments shown in the MCP examples below. Add `--json` to any command
+for machine-readable output. Gated commands need `TERRENO_MCP_EVAL=1` in the shell that runs
+them. Full flags: [CLI reference](../reference/cli.md).
+
+Two commands keep state between invocations, so they run in a background **CLI session** that
+they start themselves: `terreno browser` (the open page) and `terreno syncdb snapshot` (the
+captures). `terreno session status` shows it and `terreno session stop` ends it. The
+`TERRENO_MCP_EVAL` opt-in is read from each command's own shell, with or without a session.
 
 Use the local MCP server (`terreno-mcp-local`) to go from a symptom to a verified fix without
 pasting logs into the chat. This guide follows one real failure from start to finish, then lists
@@ -20,9 +52,9 @@ what each tool does. Every tool output below was copied unchanged from a real ru
 | Auth/session oddities (token in storage) | `read_local_storage` with `prefix: "persist:"` or known key names. | `write_local_storage` only with `TERRENO_MCP_EVAL=1` to fix dev keys; prefer fixing app code for prod. |
 | Native-only crash (no Hermes console) | `read_logs` with `sources: ["native"]` (needs `adb` or iOS Simulator). | `last_error` with `sources: ["app"]` when Hermes is attached. |
 | Need a one-off dev action in the app | `list_dev_commands`, then `invoke_dev_command` with `TERRENO_MCP_EVAL=1`. | Register handlers with `registerTerrenoDevCommand` in app code. |
-| Redux state wrong but SyncDB OK | `get_client_state` or `dispatch_client_action` with a known action type. | `syncdb_action` only for collection CRUD, not Redux. |
-| Data looks wrong | `database_query` to read what the server stored. | `get_client_state` (RTK cache) or `get_syncdb_state` (SyncDB) to compare the client's copy. |
-| Screen renders empty | `get_client_state` or `get_syncdb_state` on native. On web, `browser` with `snapshot`. | `read_logs` with `sources: ["backend"]` to check that the list request ran and returned 200. |
+| App-specific client state wrong but SyncDB OK | `list_dev_commands`, or `dispatch_client_action` with a known action type. | `syncdb_action` only for collection CRUD. |
+| Data looks wrong | `database_query` to read what the server stored. | `get_syncdb_state` to compare the client's copy. |
+| Screen renders empty | `get_syncdb_state` on native. On web, `browser` with `snapshot`. | `read_logs` with `sources: ["backend"]` to check that the list request ran and returned 200. |
 | Bundler fails | The terminal that runs `expo start`. The `metro` source is always empty under Expo CLI 57: the `/events` socket connects but Expo never sends on it. | On native, `read_logs` with `sources: ["app"]` once the app loads again. |
 
 `level` matches one level exactly. `level: "error"` does not include `warn`.
@@ -159,30 +191,22 @@ Did the failed request write anything?
 One row, created at `02:45:26` by the valid request. The malformed request at `02:45:16` wrote
 nothing, so there is no bad data to clean up.
 
-### 5. Check the client with `get_client_state`
+### 5. Check the client with `get_syncdb_state`
 
-```json
-{"name":"get_client_state","arguments":{"slice":"rtk"}}
+```bash
+terreno state --collection todos
 ```
 
-On web this returns `layer: "none"`:
-
 ```json
-{
-  "connection": "CDP: Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?); Metro events: not connected",
-  "hint": "No client data layer found. For SyncDB, create the client with `createSyncDb({debug: true})`. For custom client actions, call `registerTerrenoDevClientDispatch` from `@terreno/syncdb` in __DEV__. Keep the app running; when the MCP process cannot see the app heap, start Metro so CDP can reach Hermes (see `connection`).",
-  "layer": "none",
-  "reasons": {
-    "rtk": "Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?)",
-    "syncdb": "Error: Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?)\nCDP: Error: No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?); Metro events: not connected"
-  }
-}
+{"name":"get_syncdb_state","arguments":{"collection":"todos"}}
 ```
 
-`get_client_state` reads the client through Hermes over CDP. A web page runs in the browser, not
-Hermes, so there is no target even though the store is registered. To check client state on web,
-use the `browser` tool (step 8). On iOS or Android, run a development build attached to Metro and
-the same call returns the RTK or SyncDB state.
+On web this cannot reach the client. `get_syncdb_state` reads a separately running app through
+Hermes over CDP, and a web page runs in the browser, not Hermes, so the call reports
+`No debuggable Hermes/React Native target with webSocketDebuggerUrl (is the app running?)` even
+though the client is registered. To check client state on web, use the `browser` tool (step 8).
+On iOS or Android, run a development build attached to Metro and the same call returns the SyncDB
+state: entities, outbox, conflicts, cursors, and debug events.
 
 This failure is server-side, so the client check only confirms there is nothing to fix there.
 
@@ -413,8 +437,6 @@ Client state lives in `@terreno/syncdb`: synced collections in the local store, 
 `terreno state --slice` were removed with `@terreno/rtk` in Terreno 58). Use the SyncDB tools in
 the next step for data, and `read_logs` / `last_error` above for failed request-client calls.
 
-CLI equivalent of `get_syncdb_state`:
-
 Sensitive fields whose names include `password`, `token`, `secret`, `authorization`, or `cookie` are
 returned as `[REDACTED]` in MCP summaries; use them to inspect state, never to retrieve credentials.
 
@@ -446,7 +468,16 @@ Capture state before and after reproduction, then compare it:
 {"name":"syncdb_snapshot","arguments":{"action":"compare","snapshotId":"syncdb-...-1","otherSnapshotId":"syncdb-...-2"}}
 ```
 
-Snapshots live in the local MCP process. Each capture privately retains the
+From a shell:
+
+```bash
+terreno syncdb snapshot capture
+terreno syncdb snapshot capture
+terreno syncdb snapshot compare --snapshot-id syncdb-...-1 --other-snapshot-id syncdb-...-2
+```
+
+Snapshots live in the process that captured them: the local MCP process, or the CLI session
+that `terreno syncdb snapshot` starts. Each capture privately retains the
 TinyBase mergeable content so `mergeSnapshot` can CRDT-merge it back later
 without wiping newer local rows (later HLCs win, including deletes). `get` and
 `compare` never return that merge payload. To restore a specific captured row,
@@ -465,6 +496,15 @@ outbox, and `reconcile` catches up from server snapshots:
 {"name":"syncdb_action","arguments":{"action":"mutate","collection":"todos","operation":"update","id":"todo-1","data":{"completed":true}}}
 {"name":"syncdb_action","arguments":{"action":"flush"}}
 {"name":"syncdb_action","arguments":{"action":"reconcile"}}
+```
+
+The same from a shell:
+
+```bash
+TERRENO_MCP_EVAL=1 terreno syncdb action mutate --collection todos --operation update \
+  --id todo-1 --data '{"completed":true}'
+TERRENO_MCP_EVAL=1 terreno syncdb action flush
+TERRENO_MCP_EVAL=1 terreno syncdb action reconcile
 ```
 
 Other actions are `forceResync`, `resolveConflict`, `retryFailed`, `goOffline`,
@@ -496,7 +536,18 @@ WebView console output is not added to `browser.log`; call `read_logs` alongside
 running app posts browser logs to the backend collector. The collector accepts local-loopback
 traffic before login; devices or remote browsers must send the app's normal authentication.
 
-The equivalent one-process CLI sequence is:
+The same session from a shell, one step per command, so you can read a snapshot before
+choosing the next click:
+
+```bash
+terreno browser open http://localhost:8082
+terreno browser snapshot
+terreno browser click --selector '[data-testid=save]'
+terreno browser screenshot --output /opt/cursor/artifacts/save-result.png
+terreno browser close
+```
+
+When the steps are known up front, run them in one process:
 
 ```bash
 terreno web http://localhost:8082 \
@@ -530,5 +581,5 @@ the navigation time. A successful fix returns no entries.
 - Set `TERRENO_METRO_URL` if Metro is not on the frontend script's `--port`.
 - Close React Native DevTools when Hermes reports another debugger connection.
 - Use only `backend,browser` sources when Metro is intentionally stopped.
-- Expect `No debuggable Hermes/React Native target` from `get_client_state`, `navigate`, and
+- Expect `No debuggable Hermes/React Native target` from `get_syncdb_state`, `navigate`, and
   `evaluate` on web. Those tools need an iOS or Android build attached to Metro.

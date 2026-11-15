@@ -1,7 +1,7 @@
 {
   "dependencies": {
-    "@ai-sdk/google": "^4.0.79",
-    "@ai-sdk/google-vertex": "^5.0.92",
+    "@ai-sdk/google": "catalog:",
+    "@ai-sdk/google-vertex": "catalog:",
     "@google-cloud/opentelemetry-cloud-trace-exporter": "^3.0.0",
     "@google-cloud/secret-manager": "^7.1.0",
     "@google-cloud/trace-agent": "^8.0.0",

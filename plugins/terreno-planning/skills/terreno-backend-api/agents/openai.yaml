@@ -1,4 +1,0 @@
-interface:
-  display_name: "Terreno Backend API"
-  short_description: "Express/Mongoose APIs with modelRouter, permissions, OpenAPI, and SDK codegen for Terreno full-stack apps"
-  default_prompt: "Use $terreno-backend-api to add a Mongoose model, modelRouter CRUD routes, and wire up the OpenAPI → SDK pipeline."

@@ -148,12 +148,13 @@ See `docs/reference/syncdb.md` for `sync` scoping (`owner`, `tenant`, `broadcast
 Use the **`debug-with-mcp`** skill first (stack + logs + drive). Use
 **`debug-syncdb-with-mcp`** for stale entities, outbox stalls,
 conflicts, cursor/stream drift, reconcile behavior, and offline replay. A client
-created with `debug: true` registers itself with `terreno-mcp-local`.
+created with `debug: true` registers itself with `terreno-mcp-local`. Each tool is also a
+`terreno` CLI command that needs no MCP configuration; prefer it from a shell.
 
-- `get_syncdb_state` reads debugger events plus entities, outbox, conflicts,
+- `terreno state` (`get_syncdb_state`) reads debugger events plus entities, outbox, conflicts,
   cursors, streams, repair markers, and aggregate status.
-- `syncdb_snapshot` captures and compares state; captures can later be CRDT-merged.
-- `syncdb_action` mutates, flushes, reconciles, resyncs, resolves, retries, toggles
+- `terreno syncdb snapshot` (`syncdb_snapshot`) captures and compares state; captures can later be CRDT-merged.
+- `terreno syncdb action` (`syncdb_action`) mutates, flushes, reconciles, resyncs, resolves, retries, toggles
   offline mode, directly edits local rows, or merges snapshots. State changes
   require `TERRENO_MCP_EVAL=1`.
 

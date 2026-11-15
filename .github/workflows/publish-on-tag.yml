@@ -1615,59 +1615,13 @@ jobs:
       - name: Summary
         run: echo "Published @terreno/cli@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
-  publish-agent-plugins:
-    needs: [check-changes]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        directory: [plugins/terreno-claude, plugins/terreno-loop-claude]
-    steps:
-      - uses: actions/checkout@v6.0.3
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
-
-      - name: Use Node.js 22
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      - name: Validate required secrets
-        run: |
-          missing=()
-          if [ -z "${{ secrets.NPM_TOKEN }}" ]; then missing+=("NPM_TOKEN"); fi
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "::error::Missing required secrets: ${missing[*]}"
-            exit 1
-          fi
-
-      # Generated plugin trees: no dependencies, compile, or tests. Stamps the release
-      # into package.json and .claude-plugin/plugin.json and ships the changelog.
-      - name: Prepare package
-        run: bun run scripts/ci/prepare-package-publish.mjs "${{ matrix.directory }}" "${{ needs.check-changes.outputs.version }}" release
-
-      - name: Publish to npm
-        working-directory: ${{ matrix.directory }}
-        run: npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Summary
-        run: echo "Published ${{ matrix.directory }}@${{ needs.check-changes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-
   update-version-on-master:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli, publish-agent-plugins]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     # Run if any package was published and this is not a prerelease tag
     if: |
       always() &&
       needs.check-changes.outputs.isPrerelease != 'true' &&
-      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success' || needs.publish-agent-plugins.result == 'success')
+      (needs.publish-api.result == 'success' || needs.publish-test.result == 'success' || needs.publish-ui.result == 'success' || needs.publish-admin-backend.result == 'success' || needs.publish-admin-frontend.result == 'success' || needs.publish-admin-spa.result == 'success' || needs.publish-blocks.result == 'success' || needs.publish-ai.result == 'success' || needs.publish-api-health.result == 'success' || needs.publish-comms.result == 'success' || needs.publish-feature-flags.result == 'success' || needs.publish-jobs.result == 'success' || needs.publish-announcements.result == 'success' || needs.publish-create-terreno-app.result == 'success' || needs.publish-mcp.result == 'success' || needs.publish-syncdb.result == 'success' || needs.publish-cli.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1910,7 +1864,7 @@ jobs:
         run: scripts/ci/github-release.sh publish "${{ needs.check-changes.outputs.version }}"
 
   notify:
-    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli, publish-agent-plugins]
+    needs: [check-changes, publish-api, publish-test, publish-ui, publish-admin-backend, publish-admin-frontend, publish-admin-spa, publish-blocks, publish-ai, publish-api-health, publish-comms, publish-feature-flags, publish-jobs, publish-announcements, publish-create-terreno-app, publish-mcp, publish-syncdb, publish-cli]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -1962,7 +1916,6 @@ jobs:
           add_status "@terreno/mcp" "${{ needs.publish-mcp.result }}"
           add_status "@terreno/syncdb" "${{ needs.publish-syncdb.result }}"
           add_status "@terreno/cli" "${{ needs.publish-cli.result }}"
-          add_status "@terreno/agent-plugin, @terreno/agent-plugin-loop" "${{ needs.publish-agent-plugins.result }}"
           echo "message=$MESSAGE" >> $GITHUB_OUTPUT
 
       - name: Zoom Chat Notification

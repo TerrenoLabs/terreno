@@ -140,7 +140,7 @@ Capture a screenshot or short recording for each. These are the blog post's evid
 
 ### Phase 5 — Use the AI debugging loop deliberately
 
-Introduce a realistic bug — a missing owner assignment on create, a permission that is too strict, a schema field without a description. Then find and fix it using only `last_error`, `read_logs`, `database_query`, and `get_client_state`.
+Introduce a realistic bug — a missing owner assignment on create, a permission that is too strict, a schema field without a description. Then find and fix it using only `terreno logs last-error`, `terreno logs`, `terreno db query`, and `terreno state` (MCP: `last_error`, `read_logs`, `database_query`, `get_syncdb_state`).
 
 Log how long it took and whether the tools were sufficient. If you needed to read source or add print statements, that is a **major** gap in the AI story and the single most important finding this skill can produce.
 

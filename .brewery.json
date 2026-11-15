@@ -100,7 +100,7 @@
         "floor": "medium"
       },
       {
-        "match": ["**/openApiSdk.ts", "plugins/terreno-claude/**", "skills/**", "skills-lock.json", "skills.sh.json"],
+        "match": ["**/openApiSdk.ts", ".claude/skills/**", ".agents/skills/**", ".cursor/skills/**", ".devin/skills/**", ".github/skills/**"],
         "category": "generated"
       }
     ]

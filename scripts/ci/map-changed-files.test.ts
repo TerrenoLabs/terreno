@@ -38,11 +38,9 @@ const createRepo = (): string => {
 };
 
 const run = ({
-  env = {},
   mapping,
   root,
 }: {
-  env?: Record<string, string>;
   mapping: string;
   root: string;
 }): {
@@ -52,15 +50,16 @@ const run = ({
   stdout: string;
 } => {
   const outputPath = join(root, "..", `${root.split("/").pop()}-params.json`);
+  // CircleCI sets these for the real checkout; the fixture repo must use its own HEAD.
+  const {BASE_REVISION: _base, CIRCLE_SHA1: _sha, ...parentEnv} = process.env;
   const result = spawnSync("bash", [script], {
     cwd: root,
     encoding: "utf8",
     env: {
-      ...process.env,
+      ...parentEnv,
       CHANGED_FILES_PATH: `${outputPath}.files`,
       MAPPING: mapping,
       OUTPUT_PATH: outputPath,
-      ...env,
     },
   });
   const parameters =

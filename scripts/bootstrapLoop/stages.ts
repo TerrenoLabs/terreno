@@ -1,8 +1,22 @@
+import {agentStage} from "./stages/agentStage";
 import {scaffoldStage} from "./stages/scaffold";
 import type {StageDefinition} from "./types";
 
-/** Registry of stages in run order. Later tasks append the remaining stages. */
-export const STAGES: StageDefinition[] = [scaffoldStage];
+const LATER_STAGE_IDS = [
+  "auth",
+  "admin",
+  "theming",
+  "features",
+  "roles",
+  "consent",
+  "ai",
+  "ci",
+  "deploy",
+  "checklist",
+];
+
+/** Registry of the eleven stages in run order. */
+export const STAGES: StageDefinition[] = [scaffoldStage, ...LATER_STAGE_IDS.map(agentStage)];
 
 export const stageIds = (): string[] => STAGES.map((stage) => stage.id);
 

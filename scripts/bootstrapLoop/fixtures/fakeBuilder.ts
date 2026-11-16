@@ -6,9 +6,11 @@
  *   fixture  write a tiny backend/frontend with caret Terreno deps
  *   fail3    exit 3
  *   tserror  fixture plus a TypeScript error
+ *   files    write the JSON map in BOOTSTRAP_LOOP_FAKE_FILES (path -> content)
+ *   noop     exit 0 and write nothing
  */
 import {mkdirSync, writeFileSync} from "node:fs";
-import {join} from "node:path";
+import {dirname, join} from "node:path";
 
 const mode = process.env.BOOTSTRAP_LOOP_FAKE_MODE ?? "fixture";
 const prompt = await Bun.stdin.text();
@@ -43,6 +45,17 @@ const writeFixture = (withTypeError: boolean): void => {
   }
 };
 
+if (mode === "noop") {
+  process.exit(0);
+}
+if (mode === "files") {
+  const files = JSON.parse(process.env.BOOTSTRAP_LOOP_FAKE_FILES ?? "{}") as Record<string, string>;
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(path), {recursive: true});
+    writeFileSync(path, content);
+  }
+  process.exit(0);
+}
 if (mode === "fail3") {
   console.error("fake builder failing");
   process.exit(3);

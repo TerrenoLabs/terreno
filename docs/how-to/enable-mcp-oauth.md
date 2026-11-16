@@ -1,6 +1,6 @@
 # Enable MCP OAuth for a JWT app
 
-Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1. Terreno runs the authorization server; your app hosts one consent screen. A Terreno JWT is the usual way to approve that screen. An app with its own session sets `req.user` first. See [Apps without a Terreno JWT](#apps-without-a-terreno-jwt).
+Let Claude.ai custom connectors, ChatGPT apps, and other remote MCP clients connect to your app's `POST /mcp` through OAuth 2.1. Terreno runs the authorization server; your app hosts one consent screen. The prebuilt `TerrenoOAuthConsentScreen` approves with a Better Auth session; a JWT-only app builds its own page and approves with the user's JWT. An app with its own session sets `req.user` first. See [Apps without a Terreno JWT](#apps-without-a-terreno-jwt).
 
 Use [a service token](connect-mcp-service-token.md) when the client can only hold a static Bearer key (Perplexity, Cursor, Claude Code). For a headless client that can perform a token request, use [client credentials](#headless-clients-client-credentials) instead.
 
@@ -8,7 +8,7 @@ Use [a service token](connect-mcp-service-token.md) when the client can only hol
 
 - A `TerrenoApp` backend with at least one MCP tool ([Expose MCP tools](expose-mcp-tools.md))
 - A public https origin for the API, for example `https://api.example.com`
-- A signed-in page in your app that can call the API with the user's JWT
+- A consent page in your app that can call the API as the signed-in user (step 2)
 
 ## 1. Turn on `mcpOAuth`
 
@@ -60,15 +60,100 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   },
   ```
 
-Booting with an issuer that has a path, a consent URL that is not a URL, or registration on with no redirect hosts throws. Full option list: [API reference → MCP OAuth](../reference/api.md#mcp-oauth).
+### Choose grants
+
+`grants` decides what a client can do once the user approves it. The consent screen shows one checkbox per grant, and `/mcp` enforces the grants on every tool. Without `grants`, the default `mcp` scope is accepted and not enforced.
+
+| Value | Scopes | What the user sees |
+| --- | --- | --- |
+| `"readOnly"` | `mcp:read` | **Read your data** |
+| `"readWrite"` | `mcp:read`, `mcp:write` | **Read your data** and **Change your data** |
+| `McpOAuthGrant[]` | your own | your `label` and `description` per grant |
+
+```typescript
+mcpOAuth: {
+  consentUrl: "https://app.example.com/oauth/consent",
+  enabled: true,
+  grants: "readWrite",
+  issuer: "https://api.example.com",
+},
+```
+
+A custom grant is `{scope, label, description?, access: "read" | "write"}`, for example `{scope: "todos", label: "Manage todos", access: "write"}`. Scopes cannot contain spaces or repeat.
+
+Every tool is a `read` or a `write` tool:
+
+| Tool | Access |
+| --- | --- |
+| modelRouter `list`, `read` | `read` |
+| modelRouter `create`, `update`, `delete` | `write` |
+| Action with `method: "GET"` | `read` |
+| Any other action | `write` |
+| `registerMCPTool` | `access` you pass, default `"write"` |
+
+A token sees, and can call, a `read` tool when any of its grants has `read` or `write` access, so write implies read. It can use a `write` tool only with a `write` grant. A user who unchecks **Change your data** gets a token that sees only the read tools.
+
+To require one specific grant for a tool, give the tool a `scope`: `mcp: {scopes: {delete: "todos:admin"}}` on modelRouter, `mcp: {name, scope}` on an action, or `registerMCPTool({..., scope})`. Such a tool needs exactly that scope, whatever the token's access level.
+
+```typescript
+registerMCPTool({
+  access: "read", // without it the tool is "write" and read-only grants never see it
+  description: "Look up an order by number",
+  handler,
+  name: "orders_lookup",
+  zodSchema,
+});
+```
+
+Grants limit only OAuth tokens (`mcpat_`). JWTs, Better Auth sessions, and `mcp_` service tokens still see every tool their user can call.
+
+Switching an app that already has connected clients to `grants`:
+
+- Live tokens with the old `mcp` scope match no grant and see no tools. Users reconnect their clients.
+- Confidential clients stored with `scope: "mcp"` get `invalid_scope` at `/oauth/token`. Update their stored `scope`.
+- `registerMCPTool` tools default to `write`. Add `access: "read"` to every read-only lookup, or read-only grants never see it.
+
+Booting with an issuer that has a path, a consent URL that is not a URL, registration on with no redirect hosts, both `grants` and `scopesSupported`, an empty or unknown `grants` value, a duplicate scope, or a scope with a space throws. Full option list: [API reference → MCP OAuth](../reference/api.md#mcp-oauth).
 
 ## 2. Host the consent screen
 
-If the backend serves `@terreno/admin-spa` (`AdminSpaServeApp`), it already has one: set `consentUrl` to `${issuer}/console/oauth/consent` (use your `basePath` if it is not `/console`) and skip to step 3. Any signed-in user can approve there, and the page uses the Better Auth session cookie. See [admin-spa reference](../reference/admin-spa.md#mcp-oauth-consent-route).
+The prebuilt screen signs users in through Better Auth. A JWT-only app uses [Build your own consent page](#build-your-own-consent-page) instead, and an app with its own session also reads [Apps without a Terreno JWT](#apps-without-a-terreno-jwt).
 
-To build your own page instead:
+Mount `TerrenoOAuthConsentScreen` from `@terreno/syncdb/auth` at the route `consentUrl` points to. Signed out, it shows `TerrenoLoginScreen` with your `loginProps`; after sign-in it shows the client, the redirect host, a checkbox per grant, and **Approve** and **Deny**. It reads `?request=` from the URL and sends the browser back to the client when the user decides.
 
-The client sends the user's browser to `/oauth/authorize`. Terreno checks the client, redirect URI, and PKCE, stores a pending request, and redirects to `consentUrl?request=<id>`. Your page:
+```tsx
+// app/oauth/consent.tsx
+import {TerrenoOAuthConsentScreen} from "@terreno/syncdb/auth";
+import type React from "react";
+
+import {betterAuthClient, rememberedAccounts} from "@/lib/betterAuth";
+
+const OAuthConsent: React.FC = () => (
+  <TerrenoOAuthConsentScreen
+    loginProps={{
+      client: betterAuthClient,
+      methods: {providers: ["google"]},
+      rememberedAccounts,
+    }}
+  />
+);
+
+export default OAuthConsent;
+```
+
+- Render it inside `SessionProvider` and an `ApiClientProvider` whose client sends the user's credentials.
+- Let the route through your layout's signed-out redirect. The screen signs the user in itself.
+- `loginProps.methods` (`{providers?, emailPassword?, passkey?}`) only narrows the sign-in methods the server already offers. Turning on Google, Apple, or GitHub is server config: `googleOAuth`, `appleOAuth`, or `githubOAuth` in `BetterAuthConfig`. A provider listed in `methods` but not configured on the server shows no button.
+- Social sign-in returns to the same URL, `?request=` included, unless `loginProps.callbackURL` says otherwise.
+- **Bearer mode** (web app and API on different sites): add the consent path to `oauthHandoff.callbackPaths`, for example `["/login", "/oauth/consent"]`. The handoff checks only the path, so `?request=` passes through. The consent page is then a handoff return page: it must run `completeBetterAuthOAuthHandoff` before anything reads the session, and must not redirect first. See [Social sign-in in bearer mode](configure-better-auth.md#social-sign-in-in-bearer-mode). Without the path, social sign-in on the consent screen fails with a 400.
+
+Props and error copy: [syncdb reference → MCP OAuth consent](../reference/syncdb.md#mcp-oauth-consent).
+
+If the backend serves `@terreno/admin-spa` (`AdminSpaServeApp`), it already has a consent page: set `consentUrl` to `${issuer}/console/oauth/consent` (use your `basePath` if it is not `/console`). It uses the Better Auth session cookie and approves every requested grant, with no checkboxes. See [admin-spa reference](../reference/admin-spa.md#mcp-oauth-consent-route).
+
+### Build your own consent page
+
+The client sends the user's browser to `/oauth/authorize`. Terreno checks the client, redirect URI, PKCE, and scope, stores a pending request, and redirects to `consentUrl?request=<id>`. Your page:
 
 1. Makes sure the user is signed in (send them through login and back if not, keeping `request`).
 2. Loads the request to show who is asking:
@@ -78,14 +163,19 @@ The client sends the user's browser to `/oauth/authorize`. Terreno checks the cl
    Authorization: Bearer <user JWT>
    ```
 
-   Response: `{data: {clientName, redirectHost, scope, expiresAt, …}}`. Show the client name and redirect host so the user can spot a client they did not start.
+   Response: `{data: {clientName, redirectHost, scope, grants, expiresAt, …}}`. `grants` is one `{scope, label, description, access}` per requested scope. Show the client name and redirect host so the user can spot a client they did not start, and a checkbox per grant.
 
-3. Posts the decision with the same JWT, then sends the browser to the returned URL:
+3. Posts the decision with the same credentials, then sends the browser to the returned URL:
 
    ```http
    POST /oauth/authorize/<request>/approve   # or /deny
    Authorization: Bearer <user JWT>
+   Content-Type: application/json
+
+   {"scope": "mcp:read"}
    ```
+
+   `scope` is optional: omit it to approve everything requested, or send a space-separated subset. An empty subset is 400 `Choose at least one permission`; a scope the client did not request is 400 `Scope was not requested`.
 
    ```typescript
    const {data} = await approve(requestId);
@@ -151,7 +241,7 @@ curl -X POST https://api.example.com/oauth/token \
   -d grant_type=client_credentials
 ```
 
-The response is an `mcpat_…` access token and no refresh token. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` ends every token that client holds, and a revoked client cannot start a new authorization or token grant. `deleteOne`, `findOneAndDelete`, and `deleteMany` do the same. `bulkWrite` skips those hooks, so use `revoke` when a bulk write removes clients.
+The response is an `mcpat_…` access token and no refresh token. Its scope is the client's stored `scope` limited to the scopes the server supports, or every supported scope when the client stores none. A client whose stored scopes are all unsupported, such as `mcp` after the app switches to `grants`, gets `invalid_scope`. It acts as `userId`, with `credential: "oauth"`. Disabling that user, or bumping `tokenEpoch`, ends the token the same way it ends an authorization-code token. `McpOAuthClient.revoke(clientId)` ends every token that client holds, and a revoked client cannot start a new authorization or token grant. `deleteOne`, `findOneAndDelete`, and `deleteMany` do the same. `bulkWrite` skips those hooks, so use `revoke` when a bulk write removes clients.
 
 ## 4. Check it
 
@@ -170,7 +260,7 @@ curl https://api.example.com/.well-known/oauth-authorization-server
 - Every request that cannot be authenticated, including `initialize` and `tools/list`, gets the 401 challenge. A rejected credential adds `error="invalid_token"` so clients refresh.
 - JWTs, Better Auth sessions, and `mcp_` service tokens keep working.
 - Tools see the approving user. `getCurrentRequestContext()?.credential` is `"oauth"`, so permission code can treat an agent's token differently from the user's own session (for example, no admin bypass). See [Request credential](../reference/api.md#request-credential).
-- Scopes are not enforced for you. A token can call every tool its user can, whatever scope it was granted. If `scopesSupported` lists scopes with different meanings (for example `["read", "write"]`), add `requireOAuthScope("write")` to the permissions of the methods and actions that need it. The granted scopes are in `getCurrentRequestContext()?.oauthScopes`.
+- With `grants` set, an OAuth token's `tools/list` holds only the tools its grants allow, and calling any other tool fails as an unknown tool. See [Choose grants](#choose-grants). Without `grants`, a token can call every tool its user can; apps on `scopesSupported` enforce their own scopes with `requireOAuthScope(scope)` in permissions. The granted scopes are in `getCurrentRequestContext()?.oauthScopes`.
 
 ## Revoking access
 

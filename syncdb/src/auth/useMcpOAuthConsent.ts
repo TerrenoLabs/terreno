@@ -34,7 +34,7 @@ export interface McpOAuthConsentRequest {
   /** Host the authorization code is sent to, so the user can tell where access goes. */
   redirectHost: string;
   redirectUri: string;
-  /** Requested scopes the server knows, in the order the app configured them. */
+  /** The requested scopes, in requested order. A scope without a configured grant has its own name as the label and `access: "write"`. */
   grants: McpOAuthConsentGrant[];
   /** The raw requested scope string, or `null` when the client asked for none. */
   scope: string | null;

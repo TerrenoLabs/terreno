@@ -35,7 +35,7 @@ Local-first data layer for Terreno frontends. A TinyBase `MergeableStore` on dev
 - React (`@terreno/syncdb/react`): `SyncDbProvider`, `useEntity`, `useQuery`, `useEntityIds`, `useWindowQuery`, `useMutate`, `useSyncStatus`, `useConflicts`, `useSyncDebugLog`, `createCollectionHooks`, `ApiClientProvider`, `useApiClient`, `useApiQuery`, `useLazyApiQuery`, `useApiMutation`, `useSocketEvent`
 - API client (`@terreno/syncdb/api`): `createApiClient`, `ApiClient`, `ApiError`, `isApiError`, `apiFetch`, `unwrapEnvelope`, `serializeParams`
 - Config (`@terreno/syncdb/config`): `baseUrl`, `baseWebsocketsUrl`, `baseTasksUrl`, `appHeaders`, `isWeb`, `resolveBaseUrls`, `resolveDevApiPort`, `SAME_ORIGIN_SENTINEL`
-- Auth (`@terreno/syncdb/auth`): `createBetterAuthClient`, `createStorageAdapter`, `repairCookieJar`, `withCookieJarRepair`, `SessionProvider`, `useSession`, `useSessionStore`, `createSessionStore`, `betterAuthSessionSource`, `betterAuthAdapter`, `bridgeBetterAuthReactClient`, Better Auth types; JWT (legacy): `jwtAuthAdapter`, `useJwtAuth`, `getTokenExpirationTimes`, `shouldShowStillThereModal`, `createJwtTokenStorage`, `readJwtTokens`, `decodeJwtClaims`
+- Auth (`@terreno/syncdb/auth`): `createBetterAuthClient`, `createStorageAdapter`, `repairCookieJar`, `withCookieJarRepair`, `SessionProvider`, `useSession`, `useSessionStore`, `createSessionStore`, `betterAuthSessionSource`, `betterAuthAdapter`, `bridgeBetterAuthReactClient`, Better Auth types; MCP OAuth consent: `TerrenoOAuthConsentScreen`, `useMcpOAuthConsent`, `MCP_OAUTH_CONSENT_ERROR_COPY`; JWT (legacy): `jwtAuthAdapter`, `useJwtAuth`, `getTokenExpirationTimes`, `shouldShowStillThereModal`, `createJwtTokenStorage`, `readJwtTokens`, `decodeJwtClaims`
 - App (`@terreno/syncdb/app`): `useUpgradeCheck`, `hasPermission`, `canOpenAdminPage`, `ADMIN_PAGE_PERMISSION`, `installDevConsoleLogger`
 - MCP (`@terreno/syncdb/mcp`): `useMCPTools`
 - Flags (`@terreno/syncdb/flags`): `useFeatureFlags`, `useTerrenoFeatureFlags`, `TerrenoFlagConfiguration`
@@ -694,12 +694,61 @@ Auth](../how-to/configure-better-auth.md) and [Account security](account-securit
 - `toLoginAccountOptions(accounts)` — Maps `RememberedAccount[]` to `@terreno/ui` `LoginAccountOption[]` (`id` is the `userId`) for `LoginScreen`'s `rememberedAccounts`
 - `maskEmail(email)` — `josh@mail.flourish.health` → `j***@m***.health`: first character of the local part and domain, subdomains hidden, top-level domain kept; `undefined` for non-emails
 - `getBetterAuthClientWebAuth(client): {webAuth, bearerToken}` — Whether a client from `createBetterAuthClient` is in web bearer mode, and the token it holds; `{webAuth: "cookie", bearerToken: null}` on native, in cookie mode, and for other clients. No request
-- `useLoginController({client, rememberedAccounts, onSignedIn, onTwoFactorRequired?, rememberIdentity?, callbackURL?, errorCallbackURL?, error?, onSignUpPress?, onForgotPasswordPress?, providerLabels?, passkeyAutofill?, skipWhenSignedIn?, webAuth?, getBearerToken?, initialEmail?})` — Drives a login screen from a Better Auth client. Returns `{step, methods, isEmailPasswordEnabled, screenProps, twoFactor, signInEmail, signInSocial, signInPasskey, continueAs, forget}`: `step` is `"checking"`, `"login"`, `"twoFactor"` or `"signedIn"`; `isEmailPasswordEnabled` is `false` when the server has email and password off (render `LoginScreen` with `fields={[]}`); `screenProps` spreads into `@terreno/ui` `LoginScreen`; `twoFactor` feeds `TwoFactorChallengeScreen`. A live session calls `onSignedIn` without showing the screen (in bearer mode it first finishes a pending OAuth handoff; with no stored token it asks the server nothing). If `onSignedIn` throws, `step` returns to `"login"` with an error. The passkey button and autofill are web-only. Device sessions (`multiSession.listDeviceSessions`, never in bearer mode) become session cards and hide remembered entries for the same user. Social sign-in uses `signInSocialWithHandoff` in bearer mode and `signIn.social` otherwise. Every finished sign-in is recorded in the store. Server refusals become notices through `getLoginFeedback` ([how-to](../how-to/configure-better-auth.md#5-drop-in-login-screen))
+- `useLoginController({client, rememberedAccounts, onSignedIn, onTwoFactorRequired?, rememberIdentity?, callbackURL?, errorCallbackURL?, error?, onSignUpPress?, onForgotPasswordPress?, providerLabels?, passkeyAutofill?, skipWhenSignedIn?, webAuth?, getBearerToken?, initialEmail?, methods?})` — Drives a login screen from a Better Auth client. `methods` (`LoginMethodsFilter`: `{providers?: string[]; emailPassword?: boolean; passkey?: boolean}`) shows only a subset of the server's sign-in methods: `providers` keeps the server's order and ignores ids the server does not offer (`[]` hides every social button, unset shows all), and `emailPassword: false` or `passkey: false` hides that method. It never shows a method the server has off; turn providers on in server config (`googleOAuth`, `appleOAuth`, `githubOAuth`). Returns `{step, methods, isEmailPasswordEnabled, screenProps, twoFactor, signInEmail, signInSocial, signInPasskey, continueAs, forget}`: `step` is `"checking"`, `"login"`, `"twoFactor"` or `"signedIn"`; `isEmailPasswordEnabled` is `false` when the server has email and password off (render `LoginScreen` with `fields={[]}`); `screenProps` spreads into `@terreno/ui` `LoginScreen`; `twoFactor` feeds `TwoFactorChallengeScreen`. A live session calls `onSignedIn` without showing the screen (in bearer mode it first finishes a pending OAuth handoff; with no stored token it asks the server nothing). If `onSignedIn` throws, `step` returns to `"login"` with an error. The passkey button and autofill are web-only. Device sessions (`multiSession.listDeviceSessions`, never in bearer mode) become session cards and hide remembered entries for the same user. Social sign-in uses `signInSocialWithHandoff` in bearer mode and `signIn.social` otherwise. Every finished sign-in is recorded in the store. Server refusals become notices through `getLoginFeedback` ([how-to](../how-to/configure-better-auth.md#5-drop-in-login-screen))
 - `TerrenoLoginScreen` — `LoginScreen` connected through `useLoginController`; takes its options plus `fields?` (default `DEFAULT_LOGIN_FIELDS`), `title?`, `logo?`, `trustDeviceDays?`, `initialTrustDevice?` (pass `false` to start "Trust this device" unchecked), `onStepChange?` (called with each new step: `checking`, `login`, `twoFactor`, `signedIn`), `testID?` (default `login-screen`; spinner `${testID}-checking`). Renders the inline two-factor challenge unless `onTwoFactorRequired` is set
 - `useAccountSecurity({client, callbackURL, methods?, errorCallbackURL?, linkError?, providerLabels?, passkeySupported?, minPasswordLength?})` — Drives an account security screen from a Better Auth client. Returns `{screenProps, methods, user, refetch}`; `screenProps` (`linkedAccounts`, `password`, `passkeys`, `twoFactor`, `sessions`, `isLoading`, `error`, `onRetry`) spreads into `@terreno/ui` `AccountSecurityScreen`. A card's props are `undefined` when the server's methods (or the client's features) leave it off; passkeys are web-only. Loads `listAccounts`, `passkey.listUserPasskeys`, `getSession({query: {disableCookieCache: true}})` and `listSessions`; each Better Auth `{error}` becomes a thrown `Error` for the card, and after each change only the affected section reloads. Never calls `unlinkAccount` for the only account, or `deletePasskey` for the only sign-in method (`LAST_SIGN_IN_METHOD_MESSAGE`). Links through `linkSocialWithHandoff`; "Set a password" posts `{basePath}/terreno/set-password`. `SESSION_NOT_FRESH` becomes `SIGN_IN_AGAIN_MESSAGE`; a change refused with `CREDENTIAL_ACCOUNT_NOT_FOUND` switches the password card to set mode (`NO_PASSWORD_YET_MESSAGE`). `getLinkErrorMessage(code)` maps a link's `?error=` to safe text ([how-to](../how-to/configure-better-auth.md#6-drop-in-security-screen))
 - `TerrenoAccountSecurityScreen` — `AccountSecurityScreen` connected through `useAccountSecurity`; takes its options plus `title?`, `description?`, `header?`, `children?`, `withPage?`, `maxWidth?`, `testID?`
 - `recordRememberedSignIn({store, user, method, rememberIdentity?})` — Records a sign-in the controller did not finish, such as one completed on the app's own two-factor screen
 - `getLoginFeedback({failure, mode?, originalMethod?}): {notice?, error?, isSignUpClosed}` — Maps `{code?, message?, source: "response" | "url"}` to login screen feedback: `account_not_linked` / `OAUTH_LINK_ERROR` / "account not linked" to guidance for the linking mode, `VERIFY_EMAIL_TO_USE_ACCOUNT` to "verify your email", `signup_disabled` / `EMAIL_PASSWORD_SIGN_UP_DISABLED` to "ask your administrator" (and `isSignUpClosed`), `LINKING_DISABLED`, `provider_not_found`; a response's own message otherwise, and never text from a URL
+
+### MCP OAuth consent
+
+`TerrenoOAuthConsentScreen` is a drop-in page for `mcpOAuth.consentUrl` ([Enable MCP OAuth](../how-to/enable-mcp-oauth.md#2-host-the-consent-screen)). Signed out, it renders `TerrenoLoginScreen` with `loginProps`, and its own `onSignedIn` calls `useSession().refresh()`, so the consent card replaces the login with no navigation (an inline two-factor challenge included). Signed in, it shows the client name (or "An unnamed MCP client"), the redirect host, a checkbox per requested grant (all checked), "Signed in as" with the user's email, and **Approve** and **Deny**. **Approve** is disabled while no grant is checked. Render it inside `SessionProvider` and an `ApiClientProvider` whose client sends the user's credentials.
+
+```tsx
+import {TerrenoOAuthConsentScreen} from "@terreno/syncdb/auth";
+
+<TerrenoOAuthConsentScreen
+  loginProps={{client: betterAuthClient, methods: {providers: ["google"]}, rememberedAccounts}}
+/>;
+```
+
+| Prop | Type | Default | Description |
+| --- | --- | --- | --- |
+| `loginProps` | `Omit<TerrenoLoginScreenProps, "onSignedIn">` | required | Passed to the signed-out `TerrenoLoginScreen` (`client`, `rememberedAccounts`, `methods`, `title`, `logo`, `providerLabels`, ...) |
+| `requestId` | `string` | `?request=` from the web URL | The pending authorization request |
+| `title` | `string` | — | Heading above the consent card |
+| `logo` | `ReactNode` | — | Shown above the consent card |
+| `grantLabels` | `Record<string, {label: string; description?: string}>` | — | Replaces the server's label and description per scope |
+| `onRedirect` | `(url: string) => void` | `window.location.assign` on web, `Linking.openURL` on native | Follows the URL returned by approve or deny |
+| `testID` | `string` | `"oauth-consent"` | Prefix for every test id |
+
+`loginProps.callbackURL` defaults to `window.location.href` on web, `?request=` included, in cookie and bearer mode. Bearer-mode apps list the consent path in `oauthHandoff.callbackPaths`.
+
+Test ids: `${testID}-screen`, `-loading`, `-client-name`, `-redirect-warning`, `-redirect-host`, `-grants`, `-grant-${scope}` (the checkbox), `-signed-in-as`, `-approve-button`, `-deny-button`, `-error`.
+
+`MCP_OAUTH_CONSENT_ERROR_COPY: Record<McpOAuthConsentErrorKind, {title, message}>` is the copy `${testID}-error` shows:
+
+| Kind | Cause | Title |
+| --- | --- | --- |
+| `missingRequest` | No `request` in the URL | Missing authorization request |
+| `notFound` | 404 | Request not found |
+| `decided` | 409 | Request already decided |
+| `expired` | 400 | Request expired |
+| `signedOut` | 401 | Sign in required |
+| `unknown` | Anything else | Could not complete the request |
+
+`useMcpOAuthConsent({requestId, onRedirect?})` is the hook behind the card, for a custom layout. It calls `GET /oauth/authorize/:id`, `POST …/approve` with `{scope: selectedScopes.join(" ")}`, and `POST …/deny` through the `ApiClientProvider` client, then calls `onRedirect` with the returned URL.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `state` | `"loading" \| "ready" \| "submitting" \| "error"` | `requestId` undefined goes straight to `error` with no request |
+| `request` | `McpOAuthConsentRequest` | `{requestId, clientId, clientName, redirectHost, redirectUri, grants, scope, resource, expiresAt}`; each grant is `McpOAuthConsentGrant` (`{scope, label, description, access}`) |
+| `selectedScopes` | `string[]` | Starts with every grant, in grant order |
+| `toggleScope` | `(scope: string) => void` | Selects or clears one grant |
+| `approve` | `() => Promise<void>` | Sends nothing while `selectedScopes` is empty |
+| `deny` | `() => Promise<void>` | Denies and redirects |
+| `errorKind` | `McpOAuthConsentErrorKind` | Set when `state` is `error`, from a load or a decision (a 409 on approve is `decided`, and `onRedirect` is not called) |
 
 ### JWT auth (legacy)
 

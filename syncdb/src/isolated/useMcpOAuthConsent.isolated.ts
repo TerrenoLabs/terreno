@@ -42,6 +42,10 @@ interface StubOptions {
   approveStatus?: number;
   /** Delay approve until released, to observe `submitting`. */
   holdApprove?: Promise<void>;
+  /** Delay GET until released, to unmount while it is in flight. */
+  holdGet?: Promise<void>;
+  /** Make GET reject with a network error instead of answering. */
+  getNetworkError?: boolean;
 }
 
 const json = (status: number, body: unknown): Response =>
@@ -59,6 +63,10 @@ const stubServer = (
     const path = new URL(input).pathname;
     calls.push({body: init?.body ? JSON.parse(String(init.body)) : undefined, method, path});
     if (method === "GET") {
+      await options.holdGet;
+      if (options.getNetworkError) {
+        throw new TypeError("Network request failed");
+      }
       const status = options.getStatus ?? 200;
       return status === 200 ? json(200, {data: CONSENT}) : json(status, {title: "failed"});
     }
@@ -218,5 +226,105 @@ describe("useMcpOAuthConsent", () => {
     expect(hook.result.current.state).toBe("error");
     expect(hook.result.current.errorKind).toBe("decided");
     expect(redirects).toEqual([]);
+  });
+
+  it("maps a GET network failure to errorKind unknown", async () => {
+    const {hook} = mount(REQUEST_ID, {getNetworkError: true});
+    await waitFor(() => {
+      expect(hook.result.current.state).toBe("error");
+    });
+    expect(hook.result.current.errorKind).toBe("unknown");
+  });
+
+  it("resets to loading and fetches the new request when requestId changes", async () => {
+    const {calls, wrapper} = stubServer();
+    const hook = renderHook(
+      ({requestId}: {requestId: string}) => useMcpOAuthConsent({onRedirect: () => {}, requestId}),
+      {initialProps: {requestId: REQUEST_ID}, wrapper}
+    );
+    await waitFor(() => {
+      expect(hook.result.current.state).toBe("ready");
+    });
+    hook.rerender({requestId: "req-2"});
+    expect(hook.result.current.state).toBe("loading");
+    expect(hook.result.current.request).toBeUndefined();
+    await waitFor(() => {
+      expect(hook.result.current.state).toBe("ready");
+    });
+    expect(calls.map((call) => call.path)).toEqual([REQUEST_PATH, "/oauth/authorize/req-2"]);
+  });
+
+  for (const getStatus of [200, 404]) {
+    it(`ignores a GET answering ${getStatus} after unmount`, async () => {
+      let release = (): void => {};
+      const holdGet = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const {calls, hook} = mount(REQUEST_ID, {getStatus, holdGet});
+      expect(hook.result.current.state).toBe("loading");
+      hook.unmount();
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toHaveLength(1);
+      expect(hook.result.current.state).toBe("loading");
+    });
+  }
+
+  it("toggleScope and deny do nothing before the request loads", async () => {
+    let release = (): void => {};
+    const holdGet = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const {calls, hook} = mount(REQUEST_ID, {holdGet});
+    act(() => {
+      hook.result.current.toggleScope("mcp:read");
+    });
+    await act(async () => {
+      await hook.result.current.deny();
+    });
+    expect(hook.result.current.state).toBe("loading");
+    expect(hook.result.current.selectedScopes).toEqual([]);
+    expect(calls.filter((call) => call.method === "POST")).toEqual([]);
+    release();
+    await waitFor(() => {
+      expect(hook.result.current.state).toBe("ready");
+    });
+  });
+
+  it("a second approve while the first is in flight posts once", async () => {
+    let release = (): void => {};
+    const holdApprove = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const {calls, hook, redirects} = await mountReady({holdApprove});
+    const {approve} = hook.result.current;
+    await act(async () => {
+      const first = approve();
+      const second = approve();
+      release();
+      await Promise.all([first, second]);
+    });
+    expect(calls.filter((call) => call.method === "POST")).toHaveLength(1);
+    expect(redirects).toEqual(["https://claude.ai/callback?code=abc"]);
+  });
+
+  it("without onRedirect, sends the browser to the redirect URL", async () => {
+    const assigned: string[] = [];
+    const globals = globalThis as {window?: unknown};
+    const previousWindow = globals.window;
+    globals.window = {location: {assign: (url: string): void => void assigned.push(url)}};
+    try {
+      const {wrapper} = stubServer();
+      const hook = renderHook(() => useMcpOAuthConsent({requestId: REQUEST_ID}), {wrapper});
+      await waitFor(() => {
+        expect(hook.result.current.state).toBe("ready");
+      });
+      await act(async () => {
+        await hook.result.current.deny();
+      });
+      expect(assigned).toEqual(["https://claude.ai/callback?error=access_denied"]);
+    } finally {
+      globals.window = previousWindow;
+    }
   });
 });

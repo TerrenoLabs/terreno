@@ -23,7 +23,8 @@ const CONSENT_SIGN_IN_METHODS: LoginMethodsFilter = {
 
 /**
  * The MCP OAuth consent route the example backend's `MCP_OAUTH_CONSENT_URL` points at. Signed out,
- * it shows the same login screen as app/login.tsx, limited to `CONSENT_SIGN_IN_METHODS`; signing in swaps in the consent card for `?request=` without navigating.
+ * it shows the same login screen as app/login.tsx, limited to `CONSENT_SIGN_IN_METHODS`; signing
+ * in swaps in the consent card for `?request=` without navigating.
  * `callbackURL` is left to the screen's default (the current URL) so a social sign-in returns
  * here with the request intact. app/_layout.tsx lets signed-out visitors reach this route, and
  * the legal ConsentNavigator still gates it once signed in.

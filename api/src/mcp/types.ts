@@ -5,6 +5,12 @@ import type {User} from "../auth";
 
 export type MCPMethod = "create" | "list" | "read" | "update" | "delete";
 
+/**
+ * Whether a tool only reads data or can change it. Under `mcpOAuth.grants`, a `read` grant
+ * allows `read` tools and a `write` grant allows both.
+ */
+export type MCPToolAccess = "read" | "write";
+
 /** Arguments an MCP client sends for a tool call, validated against the tool's Zod schema. */
 export type MCPToolArgs = Record<string, unknown>;
 
@@ -79,6 +85,12 @@ export interface MCPConfig {
   excludeFields?: string[];
   /** Max items returned by list tool (default: 50) */
   maxLimit?: number;
+  /**
+   * OAuth scope a token must hold to see and call a method's tool, for example
+   * `{delete: "todos:admin"}`. Only enforced when `mcpOAuth.grants` is set. A method without an
+   * explicit scope follows its access level: `list` and `read` are `read`, the rest `write`.
+   */
+  scopes?: Partial<Record<MCPMethod, string>>;
   /** MCP-specific serialization (separate from REST responseHandler) */
   mcpResponseHandler?: (value: unknown, method: MCPMethod, user?: User) => Promise<JSONValue>;
 }

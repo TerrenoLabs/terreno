@@ -32,6 +32,12 @@ export interface ActionMCPConfig {
   name: string;
   /** Tool description shown to the model. Defaults to the action's description or summary. */
   description?: string;
+  /**
+   * OAuth scope a token must hold to see and call this tool. Only enforced when
+   * `mcpOAuth.grants` is set. Without it, a GET action is a `read` tool and any other a `write`
+   * tool.
+   */
+  scope?: string;
 }
 
 // MCP tool names: letters, digits, underscore, dot, and hyphen, up to 64 characters.

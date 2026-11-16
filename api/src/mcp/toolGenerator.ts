@@ -15,6 +15,7 @@ import {executeTool} from "./toolExecution";
 import type {
   MCPMethod,
   MCPRegistryEntry,
+  MCPToolAccess,
   MCPToolArgs,
   MCPToolInputSchema,
   MCPToolResult,
@@ -26,7 +27,19 @@ export interface MCPToolDefinition {
   inputSchema: MCPToolInputSchema;
   zodSchema: ZodType;
   handler: (args: MCPToolArgs, user?: User) => Promise<MCPToolResult>;
+  /** `read` tools only read data; `write` tools can change it. Enforced for OAuth grants. */
+  access: MCPToolAccess;
+  /** When set, an OAuth token must hold exactly this scope to see and call the tool. */
+  scope?: string;
 }
+
+const METHOD_ACCESS: Record<MCPMethod, MCPToolAccess> = {
+  create: "write",
+  delete: "write",
+  list: "read",
+  read: "read",
+  update: "write",
+};
 
 const getToolPrefix = (entry: MCPRegistryEntry): string => {
   if (entry.config.toolPrefix) {
@@ -82,6 +95,7 @@ export const generateToolsForEntry = (entry: MCPRegistryEntry): MCPToolDefinitio
     const toolName = `${prefix}_${method}`;
 
     tools.push({
+      access: METHOD_ACCESS[method],
       description: generateToolDescription(
         entry.model,
         method,
@@ -98,6 +112,7 @@ export const generateToolsForEntry = (entry: MCPRegistryEntry): MCPToolDefinitio
         }),
       inputSchema: inputSchema as MCPToolInputSchema,
       name: toolName,
+      scope: entry.config.scopes?.[method],
       zodSchema,
     });
   }
@@ -120,10 +135,12 @@ export const generateAllTools = (entries: MCPRegistryEntry[]): MCPToolDefinition
 export const getAllMCPTools = (): MCPToolDefinition[] => {
   const customTools: MCPToolDefinition[] = getMCPCustomTools().map((tool) => {
     return {
+      access: tool.access ?? "write",
       description: tool.description,
       handler: tool.handler,
       inputSchema: toJSONSchema(tool.zodSchema) as MCPToolInputSchema,
       name: tool.name,
+      scope: tool.scope,
       zodSchema: tool.zodSchema,
     };
   });

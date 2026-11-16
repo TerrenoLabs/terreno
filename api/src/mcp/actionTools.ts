@@ -199,6 +199,7 @@ export const generateActionTools = (records: CollectionRecord[]): MCPToolDefinit
       const toolName = entry.config.mcp?.name as string;
       const zodSchema = buildActionInputSchema(entry.scope, entry.config);
       tools.push({
+        access: entry.config.method === "GET" ? "read" : "write",
         description: describeAction(entry),
         handler: (args: MCPToolArgs, user?: User) =>
           executeTool({
@@ -212,6 +213,7 @@ export const generateActionTools = (records: CollectionRecord[]): MCPToolDefinit
           }),
         inputSchema: toJSONSchema(zodSchema) as MCPToolInputSchema,
         name: toolName,
+        scope: entry.config.mcp?.scope,
         zodSchema,
       });
     }

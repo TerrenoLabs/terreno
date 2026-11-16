@@ -92,6 +92,7 @@ export {
   type MCPAuthContext,
   type MCPAuthResult,
 } from "./mcp/auth";
+export {type CanUseMcpToolOptions, canUseMcpTool} from "./mcp/grantAccess";
 export {addMcpOAuthRoutes, type McpOAuthRoutesOptions} from "./mcp/oauth";
 export {
   buildAuthorizationServerMetadata,
@@ -138,6 +139,7 @@ export type {
   MCPMethod,
   MCPRegistryEntry,
   MCPRequest,
+  MCPToolAccess,
   MCPToolArgs,
   MCPToolResult,
 } from "./mcp/types";

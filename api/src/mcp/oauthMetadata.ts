@@ -13,6 +13,51 @@ const DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS = 10 * 60;
 const DEFAULT_AUTHORIZATION_CODE_TTL_SECONDS = 60;
 const DEFAULT_SCOPES = ["mcp"];
 
+/**
+ * One permission an MCP OAuth client can be granted. The consent screen shows its `label` and
+ * `description`; the server enforces its `access` level on every tool the token calls.
+ */
+export interface McpOAuthGrant {
+  /** OAuth scope value. No spaces, since scopes are space-delimited on the wire. */
+  scope: string;
+  /** Short name the consent screen shows next to the grant's checkbox. */
+  label: string;
+  /** Longer explanation shown under the label. */
+  description?: string;
+  /** `read` allows read-only tools; `write` allows every tool, since write implies read. */
+  access: McpOAuthGrantAccess;
+}
+
+/** Access level a grant gives. Write implies read. */
+export type McpOAuthGrantAccess = "read" | "write";
+
+/** Named grant sets for `mcpOAuth.grants`. */
+export type McpOAuthGrantPreset = "readOnly" | "readWrite";
+
+const READ_GRANT: McpOAuthGrant = {
+  access: "read",
+  description: "See your records. It cannot change anything.",
+  label: "Read your data",
+  scope: "mcp:read",
+};
+
+const WRITE_GRANT: McpOAuthGrant = {
+  access: "write",
+  description: "Create, update, and delete records for you.",
+  label: "Change your data",
+  scope: "mcp:write",
+};
+
+/** The grants each `mcpOAuth.grants` preset expands to, in consent-screen order. */
+export const MCP_OAUTH_GRANT_PRESETS: Readonly<
+  Record<McpOAuthGrantPreset, readonly McpOAuthGrant[]>
+> = {
+  readOnly: [READ_GRANT],
+  readWrite: [READ_GRANT, WRITE_GRANT],
+};
+
+const GRANT_ACCESS_LEVELS = new Set<string>(["read", "write"]);
+
 /** Grants a public PKCE client may register. Dynamic registration rejects anything else. */
 export const PUBLIC_CLIENT_GRANT_TYPES = ["authorization_code", "refresh_token"];
 const SUPPORTED_GRANT_TYPES = [...PUBLIC_CLIENT_GRANT_TYPES, "client_credentials"];
@@ -51,8 +96,17 @@ export interface McpOAuthOptions {
   allowedRedirectHosts?: string[];
   /** RFC 8707 resource identifier for `/mcp`. Default: `${issuer}/mcp`. */
   resource?: string;
-  /** Scopes advertised and accepted. Default: `["mcp"]`. */
+  /**
+   * Scopes advertised and accepted, without enforcement. Default: `["mcp"]`. Cannot be combined
+   * with `grants`, which derives the scopes from its grants.
+   */
   scopesSupported?: string[];
+  /**
+   * Enforced grants a client can request and the user can approve: the `"readOnly"` or
+   * `"readWrite"` preset, or your own list. Sets `scopesSupported` to the grants' scopes. While
+   * unset, the default `mcp` scope is accepted and not enforced.
+   */
+  grants?: McpOAuthGrantPreset | McpOAuthGrant[];
   /** Access token lifetime. Default: 3600 (one hour). */
   accessTokenTtlSeconds?: number;
   /** Refresh token lifetime. Default: 30 days. */
@@ -78,6 +132,8 @@ export interface ResolvedMcpOAuthOptions {
   /** URL of the RFC 9728 protected-resource metadata for {@link resource}. */
   resourceMetadataUrl: string;
   scopesSupported: string[];
+  /** Enforced grants, or undefined while `mcpOAuth.grants` is unset. */
+  grants: McpOAuthGrant[] | undefined;
 }
 
 const misconfigured = (detail: string): APIError =>
@@ -104,6 +160,41 @@ const positiveInteger = (value: number | undefined, fallback: number, field: str
     throw misconfigured(`mcpOAuth.${field} must be a positive integer`);
   }
   return value;
+};
+
+const resolveGrants = (grants: McpOAuthOptions["grants"]): McpOAuthGrant[] => {
+  if (typeof grants === "string") {
+    if (!Object.hasOwn(MCP_OAUTH_GRANT_PRESETS, grants)) {
+      throw misconfigured(
+        `mcpOAuth.grants must be "readOnly", "readWrite", or a list of grants, got "${grants}"`
+      );
+    }
+    return MCP_OAUTH_GRANT_PRESETS[grants].map((grant) => ({...grant}));
+  }
+  if (!Array.isArray(grants) || grants.length === 0) {
+    throw misconfigured("mcpOAuth.grants must list at least one grant");
+  }
+  const seen = new Set<string>();
+  for (const grant of grants) {
+    if (typeof grant?.scope !== "string" || !/^[\x21\x23-\x5B\x5D-\x7E]+$/.test(grant.scope)) {
+      throw misconfigured(
+        `mcpOAuth.grants scope must be a non-empty string without spaces, got "${grant?.scope}"`
+      );
+    }
+    if (seen.has(grant.scope)) {
+      throw misconfigured(`mcpOAuth.grants lists scope "${grant.scope}" more than once`);
+    }
+    seen.add(grant.scope);
+    if (typeof grant.label !== "string" || grant.label.trim() === "") {
+      throw misconfigured(`mcpOAuth.grants "${grant.scope}" needs a label`);
+    }
+    if (!GRANT_ACCESS_LEVELS.has(grant.access)) {
+      throw misconfigured(
+        `mcpOAuth.grants "${grant.scope}" access must be "read" or "write", got "${grant.access}"`
+      );
+    }
+  }
+  return grants;
 };
 
 /** RFC 9728 §3.1: the well-known segment goes between the host and the resource's path. */
@@ -141,7 +232,12 @@ export const resolveMcpOAuthOption = (
   const issuer = issuerUrl.origin;
   const resource = option.resource ?? `${issuer}/mcp`;
   parseAbsoluteUrl(resource, "resource");
-  const scopesSupported = option.scopesSupported ?? DEFAULT_SCOPES;
+  if (option.grants !== undefined && option.scopesSupported !== undefined) {
+    throw misconfigured("mcpOAuth: set grants or scopesSupported, not both");
+  }
+  const grants = option.grants === undefined ? undefined : resolveGrants(option.grants);
+  const scopesSupported =
+    grants?.map((grant) => grant.scope) ?? option.scopesSupported ?? DEFAULT_SCOPES;
   if (scopesSupported.length === 0) {
     throw misconfigured("mcpOAuth.scopesSupported must list at least one scope");
   }
@@ -164,6 +260,7 @@ export const resolveMcpOAuthOption = (
     ),
     consentUrl: option.consentUrl,
     dynamicClientRegistration,
+    grants,
     issuer,
     refreshTokenTtlSeconds: positiveInteger(
       option.refreshTokenTtlSeconds,

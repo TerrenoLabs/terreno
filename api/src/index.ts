@@ -96,7 +96,11 @@ export {addMcpOAuthRoutes, type McpOAuthRoutesOptions} from "./mcp/oauth";
 export {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
+  MCP_OAUTH_GRANT_PRESETS,
   type McpOAuthAppOption,
+  type McpOAuthGrant,
+  type McpOAuthGrantAccess,
+  type McpOAuthGrantPreset,
   type McpOAuthOptions,
   type ResolvedMcpOAuthOptions,
   resolveMcpOAuthOption,

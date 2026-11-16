@@ -282,6 +282,62 @@ describe("MCP OAuth authorization server", () => {
   });
 
   describe("authorization code flow", () => {
+    describe("under mcpOAuth.grants: readOnly", () => {
+      const authorizeWithScope = async (
+        scope: string,
+        grants: McpOAuthOptions["grants"] = "readOnly"
+      ): Promise<supertest.Response> => {
+        const readOnlyApp = buildApp({
+          mcpOAuth: {...oauthOptions, grants},
+        });
+        const clientId = await registerClient(readOnlyApp);
+        return startAuthorization(readOnlyApp, {
+          client_id: clientId,
+          code_challenge: createPkce().challenge,
+          code_challenge_method: "S256",
+          redirect_uri: REDIRECT_URI,
+          resource: `${ISSUER}/mcp`,
+          response_type: "code",
+          scope,
+          state: "state-ro",
+        });
+      };
+
+      it("redirects scope=mcp:write with error=invalid_scope", async () => {
+        const res = await authorizeWithScope("mcp:write");
+
+        expect(res.status).toBe(302);
+        const redirect = new URL(res.headers.location);
+        expect(`${redirect.origin}${redirect.pathname}`).toBe(REDIRECT_URI);
+        expect(redirect.searchParams.get("error")).toBe("invalid_scope");
+        expect(redirect.searchParams.get("state")).toBe("state-ro");
+      });
+
+      it("redirects the legacy scope=mcp with error=invalid_scope", async () => {
+        const res = await authorizeWithScope("mcp");
+
+        expect(new URL(res.headers.location).searchParams.get("error")).toBe("invalid_scope");
+      });
+
+      it("accepts scope=mcp:write under readWrite", async () => {
+        const res = await authorizeWithScope("mcp:write", "readWrite");
+
+        const redirect = new URL(res.headers.location);
+        expect(redirect.origin).toBe("https://app.example.com");
+        expect(redirect.searchParams.get("error")).toBeNull();
+      });
+
+      it("accepts scope=mcp:read and goes on to the consent page", async () => {
+        const res = await authorizeWithScope("mcp:read");
+
+        expect(res.status).toBe(302);
+        const redirect = new URL(res.headers.location);
+        expect(redirect.origin).toBe("https://app.example.com");
+        expect(redirect.searchParams.get("error")).toBeNull();
+        expect(redirect.searchParams.get("request")).toBeTruthy();
+      });
+    });
+
     it("issues access and refresh tokens that call /mcp as the approving user", async () => {
       const clientId = await registerClient(app);
       const {challenge, verifier} = createPkce();

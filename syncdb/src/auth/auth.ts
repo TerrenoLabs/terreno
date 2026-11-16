@@ -95,6 +95,7 @@ export {
 } from "./session";
 export * from "./TerrenoAccountSecurityScreen";
 export * from "./TerrenoLoginScreen";
+export * from "./TerrenoOAuthConsentScreen";
 export {
   AUTH_TOKEN_KEY,
   createJwtTokenStorage,

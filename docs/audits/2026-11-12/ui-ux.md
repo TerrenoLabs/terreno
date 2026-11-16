@@ -89,6 +89,61 @@ Verified by listing `/workspace/ui/src` and `index.tsx` exports.
 | Dropzone, Chip/tag input, Timeline, Tree, Rating, Toggle group | Absent | no match |
 | Date range picker | SUSPECTED absent | `DateTimeField` only; not exercised |
 
+## Addendum (2026-11-14): comparison with vercel-labs/ui (UI SDK)
+
+[vercel-labs/ui](https://github.com/vercel-labs/ui) ("UI SDK", `@ui-sdk/*`, beta) solves a different problem from `@terreno/ui`, so matching it means adopting its behaviors, not copying its component list.
+
+| | vercel-labs/ui | `@terreno/ui` |
+| --- | --- | --- |
+| Layer | Unstyled behaviors: keyboard, focus, selection, dismissal, popups, drag and drop, ARIA | Styled, themed components |
+| Platform | DOM only; adapters for React, Vue, Svelte, Solid, Web Components | React Native on iOS, Android and web |
+| Scope | About 55 generic primitives plus about 130 composable behaviors | Generic components plus app features: DataTable, charts, consent, login/signup, GPTChat, asks, notifications, announcements |
+| Selling point | Every component is usable by agents through `createAgent` and WebMCP | Ready-made app features |
+
+UI SDK cannot be used in terreno directly, because it is DOM only and does not run on native. The useful move is a terreno behaviors layer on React Native that ports its ideas.
+
+### Components UI SDK has that the table above does not list
+
+The table above already covers Combobox, Command palette, Tabs, Menu, Tag input, Tree, Progress, Toggle group, Carousel, Rating and Timeline. UI SDK adds:
+
+| Component | Status | Notes |
+| --- | --- | --- |
+| Menu with submenus, Menubar, NavigationMenu | Absent | Extends the Menu row; `WebDropdownMenu` has no keyboard handling |
+| Inline Calendar, DatePicker, segmented DateInput/TimeInput | Absent | Only `DateTimeActionSheet` |
+| Meter | Absent | Pairs with Progress |
+| Listbox (inline multi-select list) | Absent | |
+| Toolbar | Absent | Pairs with Toggle group |
+| Resizable panels, ScrollArea | Absent | Would serve `ListDetailLayout` and `SplitPage` |
+| Hover card | Absent | |
+| Color picker, Image cropper, Waterfall (masonry) | Absent | Low priority |
+
+### Behaviors to adopt
+
+1. **Keyboard and focus contract for every interactive component:** roving focus with arrow keys in Radio, SegmentedControl, menus and tabs; typeahead in Select and menus; focus trap, Escape and focus return for Modal, Popover, Drawer and ActionSheet; active-descendant focus for Combobox. UI SDK builds these from shared pieces (`createRovingFocus`, `createTypeahead`, `createFocusRecovery`, `createPopup`). Terreno would need the same as hooks, with web keyboard handlers through react-native-web and `accessibilityActions` on native. Only 5 or 6 component files in `ui/src` handle keyboard input, and none use `aria-activedescendant`.
+2. **One controlled-value API:** `defaultValue`, or `value` plus `onValueChange(value, details)`, where `details` carries `reason`, `source` and `cancel()`. This complements the alias work in "Component API consistency" above; `details.source` is what makes item 3 possible.
+3. **Agent bridge:** components register their name, value and allowed actions; `snapshot()`, `act()` and `query()` let an agent fill or press things through the component API instead of the UI. Three markers control access:
+   - `confirm`: a person approves the action.
+   - `secret`: an agent can fill a value but never read it.
+   - `hidden`: the region is kept out of the agent's view.
+
+   `secret` and `hidden` map directly onto keeping PHI away from an LLM. It fits next to GPTChat, asks and AiSuggestionBox, and the existing `accessibilityLabel` coverage (about 70 files) is a base for naming.
+4. **Direct manipulation:** keyboard reordering with screen-reader announcements for DraggableList; swipe actions on list rows; pin-to-bottom for GPTChat; a generic virtualizer (check DataTable's existing virtualization first); bars that stay above the on-screen keyboard.
+5. **Contract tests:** UI SDK requires keyboard, focus, ARIA and agent-access tests for every component. A shared per-component test of role, name and keys would keep these behaviors from regressing.
+
+**Not worth copying:** the multi-framework adapters, web components, the CSS layer and `data-*` styling, server rendering, and right-to-left support (unless an app needs RTL).
+
+### Suggested order
+
+1. Focus and keyboard hooks, then retrofit Modal, Popover, Select and the dropdown menu.
+2. Combobox, Menu and Tabs, built on those hooks.
+3. Agent registry and bridge, with `secret` and `hidden` markers.
+4. Calendar and date inputs, token input, Tree.
+5. Everything else as apps need it.
+
+**Coverage today:** the open UI plans in #1708 cover only part of item 1 (`ui-accessibility`) and a web-only `SelectField` combobox (`ui-select-combobox`). No plan covers the new components, the hooks layer or the agent bridge.
+
+**Confidence:** the keyboard and ARIA counts in this addendum come from grepping `ui/src`, not from reading each component or running the app. The browser pass above verified that Modal traps focus and closes on Escape, so trust it over the grep where they differ.
+
 ## Craft Report
 
 - **Checked:** accessibility (roles, names, state, focus visibility, Tab order, Modal trap/Escape/return, live regions, touch targets, color-only signals, contrast from theme values, reduced motion), performance (animation drivers, non-reactive layout reads), responsive (1280/768/375, document overflow, fixed widths, safe-area usage in code), plus consumer API consistency, theming and component coverage. Web only, light and dark.

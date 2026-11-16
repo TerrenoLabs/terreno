@@ -1,7 +1,8 @@
 /**
  * Finishes a bearer-mode social sign-in as the app starts.
  *
- * The sign-in returns to /login with a one-time token in the URL fragment. index.js imports
+ * The sign-in returns to /login (or /oauth/consent, when started from the MCP OAuth consent
+ * screen) with a one-time token in the URL fragment. Pickup reads the fragment on any path. index.js imports
  * lib/oauthHandoffUrl.ts first, which hides the handoff from Expo Router's copy of the URL, then
  * this module, before `expo-router/entry`. Here the held URL goes back and
  * `completeBetterAuthOAuthHandoff` strips it again in the same synchronous step, before any

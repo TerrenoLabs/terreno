@@ -246,11 +246,11 @@ describe("buildBetterAuthConfig", () => {
     process.env.CORS_ORIGINS = "https://app.example.com";
     const config = buildBetterAuthConfig();
     expect(config?.oauthHandoff).toEqual({
-      callbackPaths: ["/login"],
+      callbackPaths: ["/login", "/oauth/consent"],
       webOrigins: getWebOrigins(),
     });
     expect(config?.oauthHandoff?.webOrigins).toContain("https://app.example.com");
-    expect(OAUTH_HANDOFF_CALLBACK_PATHS).toEqual(["/login"]);
+    expect(OAUTH_HANDOFF_CALLBACK_PATHS).toEqual(["/login", "/oauth/consent"]);
   });
 
   it("keeps loopback handoff origins outside production for the local e2e", () => {
@@ -367,6 +367,38 @@ describe("buildBetterAuthConfig", () => {
       const elsewhere = await supertest(app)
         .get("/api/auth/oauth-handoff/start")
         .query({callbackURL: `${WEB_ORIGIN}/profile`, provider: MOCK_OIDC_PROVIDER_ID});
+      expect(elsewhere.status).toBe(400);
+    } finally {
+      await discovery.close();
+    }
+  });
+
+  it("starts a handed-off sign-in that returns to the MCP OAuth consent page with its request id", async () => {
+    const discovery = await startDiscoveryServer();
+    try {
+      process.env.BETTER_AUTH_OAUTH_HANDOFF = "true";
+      process.env.MOCK_OIDC_ISSUER = discovery.issuer;
+      const config = buildBetterAuthConfig();
+      if (!config) {
+        throw new Error("Better Auth is the default provider, so a config is expected");
+      }
+      const app = express();
+      new BetterAuthApp({config, userModel: User as unknown as TerrenoAuthUserModel}).register(app);
+
+      const consent = await supertest(app)
+        .get("/api/auth/oauth-handoff/start")
+        .query({
+          callbackURL: `${WEB_ORIGIN}/oauth/consent?request=abc`,
+          provider: MOCK_OIDC_PROVIDER_ID,
+        });
+      expect(consent.status).toBe(302);
+      const authorize = new URL(consent.headers.location as string);
+      expect(`${authorize.origin}${authorize.pathname}`).toBe(`${discovery.issuer}/authorize`);
+
+      // A path that is not on the callback list is still refused.
+      const elsewhere = await supertest(app)
+        .get("/api/auth/oauth-handoff/start")
+        .query({callbackURL: `${WEB_ORIGIN}/elsewhere`, provider: MOCK_OIDC_PROVIDER_ID});
       expect(elsewhere.status).toBe(400);
     } finally {
       await discovery.close();

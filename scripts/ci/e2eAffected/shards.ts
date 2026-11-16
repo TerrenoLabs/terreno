@@ -149,6 +149,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/profile.tsx`,
       `${APP}/(tabs)/ai.tsx`,
       `${APP}/settings/security.tsx`,
+      `${APP}/oauth/consent.tsx`,
     ],
     specs: [
       "crossSiteBearer",
@@ -158,6 +159,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "crossSiteLogin",
       "account-linking",
       "account-security",
+      "crossSiteMcpOAuthConsent",
     ],
   },
   {

@@ -217,12 +217,17 @@ If you still call `GET …/feature-flags/evaluate`, migrate using [Add feature f
 Shipped vs planned work is tracked in [ROADMAP.md](ROADMAP.md). Web SSR and
 consumer-installable `/terreno-*` packaging are not shipped yet.
 
-## Contributing
+## How to contribute
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, and pull request expectations.
-Read our [Code of Conduct](CODE_OF_CONDUCT.md) and report security issues via
-[SECURITY.md](SECURITY.md) (do not open public issues for vulnerabilities).
-Community: [GitHub Discussions](https://github.com/TerrenoLabs/terreno/discussions).
+1. **Talk first.** Quick questions and half-formed ideas go in Slack `#terreno`. Anything worth tracking moves to GitHub.
+2. **Need something for an upcoming feature?** Open an [Idea discussion](https://github.com/TerrenoLabs/terreno/discussions/new?category=ideas) with the problem, the feature it unblocks, and when you need it. If it changes a public API or package, open an [RFC](https://github.com/TerrenoLabs/terreno/discussions/new?category=rfcs) instead.
+3. **Check what's coming.** [ROADMAP.md](ROADMAP.md) is generated from the [roadmap board](https://github.com/orgs/TerrenoLabs/projects/1). Comment on the existing tracking issue instead of starting a new thread.
+4. **Bigger changes get an IP first.** A new package, new public API, cross-package change, or breaking change needs an [implementation plan](docs/implementationPlans/README.md) that's reviewed before coding starts. Discuss it on the IP's PR.
+5. **Small, clear work goes straight to code.** File a [work item](https://github.com/TerrenoLabs/terreno/issues/new?template=work_item.yml) or open a draft PR from `master`. Include tests (the coverage gate is 95%) and a `changelog/unreleased/<feature>.md` file.
+6. **Bugs** go in a [bug report](https://github.com/TerrenoLabs/terreno/issues/new?template=bug_report.yml). **Security issues** follow [SECURITY.md](SECURITY.md) and never go in a public issue.
+7. **Agent pipeline.** `npx skills add TerrenoLabs/terreno-skills` installs Grow → Pick ⇄ Roast → Brew → Taste. Changes to those skills go in [terreno-skills](https://github.com/TerrenoLabs/terreno-skills).
+
+Setup, commands, and conventions are in [CONTRIBUTING.md](CONTRIBUTING.md). Please follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

@@ -72,6 +72,7 @@ const fakeClient = (methods: BetterAuthMethods = METHODS): LoginControllerClient
   getSession: async () => ({data: null, error: null}),
   signIn: {
     email: async () => ({data: {twoFactorMethods: ["totp"], twoFactorRedirect: true}, error: null}),
+    passkey: async () => ({data: null, error: null}),
     social: async () => ({data: null, error: null}),
   },
   twoFactor: {
@@ -252,5 +253,97 @@ describe("TerrenoLoginScreen", () => {
     });
     expect(onTwoFactorRequired).toHaveBeenCalledWith({method: "email", twoFactorMethods: ["totp"]});
     expect(find("TwoFactorChallengeScreen")).toBeUndefined();
+  });
+
+  describe("methods allowlist", () => {
+    const renderScreen = async (
+      serverMethods: BetterAuthMethods,
+      methods?: {providers?: string[]; emailPassword?: boolean; passkey?: boolean}
+    ): Promise<Record<string, unknown>> => {
+      await act(async () => {
+        renderer = create(
+          <TerrenoLoginScreen
+            client={fakeClient(serverMethods)}
+            methods={methods}
+            onSignedIn={mock(() => {})}
+            rememberedAccounts={memoryStore()}
+            webAuth="cookie"
+          />
+        );
+      });
+      await flush();
+      return last("LoginScreen");
+    };
+    const branded = (login: Record<string, unknown>): string[] =>
+      ((login.oauthProviders ?? []) as Array<{provider: string}>).map(({provider}) => provider);
+    const generic = (login: Record<string, unknown>): string[] =>
+      ((login.genericProviders ?? []) as Array<{id: string}>).map(({id}) => id);
+
+    it("renders only the Google button when the server offers google, github, apple", async () => {
+      const login = await renderScreen(
+        {...METHODS, providers: ["google", "github", "apple"]},
+        {providers: ["google"]}
+      );
+      expect(branded(login)).toEqual(["google"]);
+      expect(generic(login)).toEqual([]);
+    });
+
+    it("renders only the mock-oidc generic button for providers mock-oidc and apple", async () => {
+      const login = await renderScreen(
+        {...METHODS, providers: ["google", "mock-oidc"]},
+        {providers: ["mock-oidc", "apple"]}
+      );
+      expect(branded(login)).toEqual([]);
+      expect(generic(login)).toEqual(["mock-oidc"]);
+    });
+
+    it("renders no social buttons but keeps the email form for providers []", async () => {
+      const login = await renderScreen(
+        {...METHODS, providers: ["google", "mock-oidc"]},
+        {providers: []}
+      );
+      expect(branded(login)).toEqual([]);
+      expect(generic(login)).toEqual([]);
+      expect(login.fields).toBe(DEFAULT_LOGIN_FIELDS);
+    });
+
+    it("renders no email form with emailPassword false while the server has it on", async () => {
+      const login = await renderScreen({...METHODS, emailPassword: true}, {emailPassword: false});
+      expect(login.fields).toEqual([]);
+    });
+
+    it("renders no email form with emailPassword true while the server has it off, and the form when both agree", async () => {
+      const off = await renderScreen({...METHODS, emailPassword: false}, {emailPassword: true});
+      expect(off.fields).toEqual([]);
+      act(() => renderer?.unmount());
+      rendered.length = 0;
+      const on = await renderScreen({...METHODS, emailPassword: true}, {emailPassword: true});
+      expect(on.fields).toBe(DEFAULT_LOGIN_FIELDS);
+    });
+
+    it("renders no passkey button with passkey false while the server has it on", async () => {
+      const login = await renderScreen({...METHODS, passkey: true}, {passkey: false});
+      expect(login.onPasskeyPress).toBeUndefined();
+    });
+
+    it("renders the passkey button with passkey true only when the server has it on", async () => {
+      const off = await renderScreen({...METHODS, passkey: false}, {passkey: true});
+      expect(off.onPasskeyPress).toBeUndefined();
+      act(() => renderer?.unmount());
+      rendered.length = 0;
+      const on = await renderScreen({...METHODS, passkey: true}, {passkey: true});
+      expect(on.onPasskeyPress).toBeDefined();
+    });
+
+    it("renders every server method when methods is undefined", async () => {
+      const login = await renderScreen(
+        {...METHODS, passkey: true, providers: ["google", "github", "mock-oidc"]},
+        undefined
+      );
+      expect(branded(login)).toEqual(["google", "github"]);
+      expect(generic(login)).toEqual(["mock-oidc"]);
+      expect(login.fields).toBe(DEFAULT_LOGIN_FIELDS);
+      expect(login.onPasskeyPress).toBeDefined();
+    });
   });
 });

@@ -1368,6 +1368,115 @@ describe("useLoginController", () => {
     expect(offline.result.current.screenProps.oauthProviders).toEqual([]);
     expect(offline.result.current.screenProps.genericProviders).toEqual([]);
   });
+
+  describe("methods allowlist", () => {
+    const providerIds = (result: {
+      current: ReturnType<typeof useLoginController>;
+    }): {branded: string[]; generic: string[]} => ({
+      branded: (result.current.screenProps.oauthProviders ?? []).map(({provider}) => provider),
+      generic: (result.current.screenProps.genericProviders ?? []).map(({id}) => id),
+    });
+
+    it("shows only the allowed branded provider when the server offers google, github, apple", async () => {
+      const client = fakeClient({
+        methods: {...METHODS, providers: ["google", "github", "apple"]},
+      });
+      const {result} = renderController({client, methods: {providers: ["google"]}});
+      await waitForLoginScreen(result);
+      expect(providerIds(result)).toEqual({branded: ["google"], generic: []});
+    });
+
+    it("ignores an allowed provider the server does not offer", async () => {
+      const client = fakeClient({methods: {...METHODS, providers: ["google", "mock-oidc"]}});
+      const {result} = renderController({client, methods: {providers: ["mock-oidc", "apple"]}});
+      await waitForLoginScreen(result);
+      expect(providerIds(result)).toEqual({branded: [], generic: ["mock-oidc"]});
+    });
+
+    it("keeps the server's order, not the allowlist's", async () => {
+      const client = fakeClient({
+        methods: {...METHODS, providers: ["a-oidc", "b-oidc", "c-oidc"]},
+      });
+      const {result} = renderController({client, methods: {providers: ["c-oidc", "a-oidc"]}});
+      await waitForLoginScreen(result);
+      expect(providerIds(result).generic).toEqual(["a-oidc", "c-oidc"]);
+    });
+
+    it("shows no social buttons for an empty provider list but keeps the email form", async () => {
+      const {result} = renderController({client: fakeClient(), methods: {providers: []}});
+      await waitForLoginScreen(result);
+      expect(providerIds(result)).toEqual({branded: [], generic: []});
+      expect(result.current.isEmailPasswordEnabled).toBe(true);
+    });
+
+    it("shows every server provider when providers is undefined", async () => {
+      const {result} = renderController({client: fakeClient(), methods: {emailPassword: true}});
+      await waitForLoginScreen(result);
+      expect(providerIds(result)).toEqual({branded: ["google", "github"], generic: ["mock-oidc"]});
+    });
+
+    it("hides the email form with emailPassword false and forgot-password with it", async () => {
+      const onForgotPasswordPress = mock(() => {});
+      const {result} = renderController({
+        client: fakeClient(),
+        methods: {emailPassword: false},
+        onForgotPasswordPress,
+      });
+      await waitForLoginScreen(result);
+      expect(result.current.isEmailPasswordEnabled).toBe(false);
+      expect(result.current.screenProps.onForgotPasswordPress).toBeUndefined();
+    });
+
+    it("never shows email and password the server disables, and keeps it when both agree", async () => {
+      const off = renderController({
+        client: fakeClient({methods: {...METHODS, emailPassword: false}}),
+        methods: {emailPassword: true},
+      });
+      await waitForLoginScreen(off.result);
+      expect(off.result.current.isEmailPasswordEnabled).toBe(false);
+
+      const on = renderController({client: fakeClient(), methods: {emailPassword: true}});
+      await waitForLoginScreen(on.result);
+      expect(on.result.current.isEmailPasswordEnabled).toBe(true);
+    });
+
+    it("hides the passkey button and skips passkey autofill with passkey false", async () => {
+      globalWithWindow.window = {
+        PublicKeyCredential: {isConditionalMediationAvailable: async (): Promise<boolean> => true},
+      };
+      // Autofill waits for the browser, so the screen stays on the login step.
+      const client = fakeClient({}, {passkey: () => new Promise(() => {})});
+      const {result, onSignedIn} = renderController({client, methods: {passkey: false}});
+      await waitForLoginScreen(result);
+      expect(result.current.screenProps.onPasskeyPress).toBeUndefined();
+      expect(result.current.screenProps.passkeyAutofill).toBe(false);
+      expect(client.calls.passkey).toEqual([]);
+      expect(onSignedIn).not.toHaveBeenCalled();
+    });
+
+    it("never shows a passkey the server disables, and keeps it when both agree", async () => {
+      const off = renderController({
+        client: fakeClient({methods: {...METHODS, passkey: false}}),
+        methods: {passkey: true},
+      });
+      await waitForLoginScreen(off.result);
+      expect(off.result.current.screenProps.onPasskeyPress).toBeUndefined();
+
+      const on = renderController({client: fakeClient(), methods: {passkey: true}});
+      await waitForLoginScreen(on.result);
+      expect(on.result.current.screenProps.onPasskeyPress).toBeDefined();
+    });
+
+    it("does not sign in with a hidden provider from a remembered account", async () => {
+      const client = fakeClient();
+      const {result} = renderController({client, methods: {providers: ["google"]}});
+      await waitForLoginScreen(result);
+      await act(async () => {
+        await result.current.continueAs({id: "u1", method: "github"}, "remembered");
+      });
+      expect(client.calls.social).toEqual([]);
+    });
+  });
 });
 
 describe("recordRememberedSignIn", () => {

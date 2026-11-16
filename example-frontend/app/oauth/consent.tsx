@@ -29,7 +29,7 @@ const CONSENT_SIGN_IN_METHODS: LoginMethodsFilter = {
  * here with the request intact. app/_layout.tsx lets signed-out visitors reach this route, and
  * the legal ConsentNavigator still gates it once signed in.
  */
-const OAuthConsent: React.FC = () => {
+const OAuthConsent = (): React.ReactElement => {
   return (
     <TerrenoOAuthConsentScreen
       loginProps={{

@@ -267,9 +267,14 @@ const RootLayoutNav = (): React.ReactElement => {
       segments[0] === "resetPassword" ||
       segments[0] === "verifyEmail";
 
-    if (!userId && segments[0] === "oauth") {
-      pendingOAuthConsentRequest.current = oauthConsentRequest ?? null;
-    } else if (userId && segments[0] === "oauth") {
+    // Remember the consent request across sign-in: signing in remounts the Stack onto "(tabs)",
+    // and the effect can run signed in while still on "oauth" before that remount lands, so the
+    // request is only dropped once the user is sent back or goes somewhere else.
+    if (segments[0] === "oauth") {
+      if (!userId) {
+        pendingOAuthConsentRequest.current = oauthConsentRequest ?? null;
+      }
+    } else if (segments[0] && segments[0] !== "(tabs)") {
       pendingOAuthConsentRequest.current = null;
     }
 

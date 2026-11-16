@@ -16,7 +16,7 @@ type ConsentElement = React.ReactElement<React.ComponentProps<typeof TerrenoOAut
 
 describe("OAuthConsent route", () => {
   it("renders the prebuilt consent screen with the app's login client and branding", () => {
-    const element = OAuthConsent({}) as ConsentElement;
+    const element = OAuthConsent() as ConsentElement;
     assert.strictEqual(element.type, TerrenoOAuthConsentScreen);
     assert.strictEqual(element.props.testID, "oauth-consent");
     const loginProps = element.props.loginProps;
@@ -29,7 +29,7 @@ describe("OAuthConsent route", () => {
   });
 
   it("offers email, passkey, and every social provider the app knows, including the e2e mock", () => {
-    const element = OAuthConsent({}) as ConsentElement;
+    const element = OAuthConsent() as ConsentElement;
     assert.deepEqual(element.props.loginProps.methods, {
       emailPassword: true,
       passkey: true,
@@ -38,7 +38,7 @@ describe("OAuthConsent route", () => {
   });
 
   it("leaves callbackURL to the screen's default so social sign-in returns with ?request=", () => {
-    const element = OAuthConsent({}) as ConsentElement;
+    const element = OAuthConsent() as ConsentElement;
     assert.isUndefined(element.props.loginProps.callbackURL);
   });
 });

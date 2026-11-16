@@ -115,3 +115,4 @@ export * from "./useAccountSecurity";
 export * from "./useAuthMethods";
 export {type UseJwtAuthResult, useJwtAuth} from "./useJwtAuth";
 export * from "./useLoginController";
+export * from "./useMcpOAuthConsent";

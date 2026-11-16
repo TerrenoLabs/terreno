@@ -233,6 +233,7 @@
     "analyze:full": "bun run scripts/static-analysis/full.ts",
     "analyze:staged": "bun run scripts/static-analysis/fast.ts --staged",
     "check": "bun run check:no-barrel-imports && bun run check:explicit-any:baseline && bun run check:source-rules",
+    "bootstrap-loop": "bun run scripts/bootstrapLoop/cli.ts",
     "check:changelog": "bun run scripts/changelog/check.ts",
     "check:circleci-parity": "bun run scripts/check-circleci-parity/check.ts",
     "check:demo-coverage": "bun run scripts/check-demo-coverage.ts",

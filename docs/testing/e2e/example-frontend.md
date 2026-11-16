@@ -93,6 +93,24 @@ take 12–20 s, Chromium 7.5–10 s, and teardown 1–2.5 s. The export itself t
 the export moved to `export:smoke`, every run rebuilt it cold and took 196–207 s. Budget: 30 s,
 excluding the compile and the web export.
 
+## MCP OAuth consent
+
+[`example-frontend/e2e/mcpOAuthConsent.spec.ts`](https://github.com/TerrenoLabs/terreno/blob/master/example-frontend/e2e/mcpOAuthConsent.spec.ts)
+runs at the `browser` layer in the `app` shard. It registers an MCP client and starts an
+authorization through the API (`e2e/helpers/mcpOAuth.ts`), then drives the app's
+`/oauth/consent` route (`TerrenoOAuthConsentScreen`):
+
+- A signed-out user signs in on the consent route, unchecks "Change your data", and approves.
+  The exchanged token has scope `mcp:read`, `tools/list` has no `todos_create`, and calling it
+  creates no todo.
+- A signed-in user who taps Deny lands on the client redirect with `error=access_denied`.
+- A user who has not accepted the legal consent forms sees them before the consent card.
+
+The backend needs `MCP_OAUTH_ENABLED=true`, `PUBLIC_API_URL=http://localhost:4000`, and
+`MCP_OAUTH_CONSENT_URL=http://localhost:8082/oauth/consent`. `playwright.config.ts` sets them on
+the backend it starts, and CircleCI's "Start example-backend" step exports them. Against a backend
+without `MCP_OAUTH_ENABLED`, the spec skips itself.
+
 ## Add an e2e test
 
 - **A screen, hook, or store helper changed:** add a unit test next to it. The smoke stays one

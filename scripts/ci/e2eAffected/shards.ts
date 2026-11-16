@@ -81,6 +81,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/settings/**`,
       `${APP}/todo-windows/**`,
       `${APP}/todo-browser/**`,
+      `${APP}/oauth/**`,
     ],
     specs: [
       "todos",
@@ -93,6 +94,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "notifications",
       "socket-flags",
       "mcp-tokens",
+      "mcpOAuthConsent",
     ],
   },
   {

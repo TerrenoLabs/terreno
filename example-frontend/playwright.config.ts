@@ -207,7 +207,12 @@ export default defineConfig({
               BETTER_AUTH_URL: CROSS_SITE_API_URL,
               MOCK_OIDC_ISSUER,
             }
-          : {}),
+          : {
+              // mcpOAuthConsent.spec.ts: MCP OAuth with consent on this app's /oauth/consent route.
+              MCP_OAUTH_CONSENT_URL: "http://localhost:8082/oauth/consent",
+              MCP_OAUTH_ENABLED: "true",
+              PUBLIC_API_URL: "http://localhost:4000",
+            }),
       },
       port: 4000,
       // The cross-site run needs the backend's OAuth settings above, so it never reuses one.

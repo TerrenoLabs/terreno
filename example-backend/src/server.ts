@@ -211,14 +211,19 @@ export const start = async (
         level: Configuration.get<string>("LOGGING_LEVEL") as "debug" | "info" | "warn" | "error",
         logRequests: Boolean(!isDeployed),
       },
-      // Opt-in OAuth for remote MCP clients; consent runs on the admin SPA's built-in screen.
+      // Opt-in OAuth for remote MCP clients with the read/write grant presets. Consent runs on
+      // MCP_OAUTH_CONSENT_URL (example-frontend's /oauth/consent in e2e), defaulting to the admin
+      // SPA's built-in screen.
       mcpOAuth:
         process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
           ? {
               allowedRedirectHosts: ["claude.ai", "chatgpt.com", "localhost", "127.0.0.1"],
-              consentUrl: `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
+              consentUrl:
+                process.env.MCP_OAUTH_CONSENT_URL ??
+                `${process.env.PUBLIC_API_URL}/console/oauth/consent`,
               dynamicClientRegistration: true,
               enabled: true,
+              grants: "readWrite",
               issuer: process.env.PUBLIC_API_URL,
             }
           : undefined,

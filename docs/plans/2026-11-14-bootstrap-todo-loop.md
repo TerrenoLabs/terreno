@@ -7,8 +7,8 @@ says what got worse. A weekly CI job (`bootstrap-app-check.yml`) only proves the
 compiles. This plan adds a repeatable loop: a deliberately naive prompt ("make me a todo
 app") drives the bootstrap through eleven named stages, a separate agent session scores the
 result against a fixed rubric and against the previous version's timings, failing stages are
-rerun until the rubric passes or iterations run out, and the whole thing runs once per minor
-version of the template. Terreno maintainers feel the difference: a regression in the
+rerun until the rubric passes or iterations run out, and the whole thing runs once per 58.x
+release of the template (D2, D8). Terreno maintainers feel the difference: a regression in the
 template, the bootstrap prompt or the docs shows up as a red rubric row or a slower stage,
 with the version that introduced it.
 
@@ -38,20 +38,20 @@ a stage in isolation, and a self-grading builder hides its own failures.
 | T5 | Evidence probes for every rubric row | T1 | `scripts/bootstrapLoop/score/probes/` | `bun test` with fixture apps |
 | T6 | Scorer session, `SCORE.md`, time-regression comparison | T5 | `scripts/bootstrapLoop/score/` | `bun test` with a fake scorer command |
 | T7 | Iteration loop with per-iteration log | T4, T6 | `scripts/bootstrapLoop/loop.ts` | `bun test` (fake builder + scorer) |
-| T8 | Version matrix, output diff, regression report | T7 | `scripts/bootstrapLoop/matrix/` | `bun test` with a fake registry |
+| T8 | Version matrix (58.x releases + `local`), output diff, regression report | T7 | `scripts/bootstrapLoop/matrix/` | `bun test` with a fake registry |
 | T9 | Artifact upload with redaction, teardown | T7 | `scripts/bootstrapLoop/upload.ts`, `teardown.ts` | `bun test` |
 | T12 | Docs and CI wiring of the harness tests | T8, T9 | `docs/`, `.circleci/`, `bootstrap-app-check.yml` | `bun run test:bootstrap-loop`, `bun run check:circleci-parity` |
-| T10 | Real runs: one single-stage run, one full loop on the latest version to a green rubric | T9, T12, Q1 | `docs/bootstrapLoop/runs/<version>/` | committed `score.json` all rows PASS |
-| T11 | Real matrix across every version (Q2), regressions found, noted and fixed at HEAD where possible | T10, T8, Q1, Q2 | `docs/bootstrapLoop/REGRESSIONS.md`, fixes | committed report + fix PR commits |
+| T10 | Real runs: one single-stage run, one full loop on the latest version to a green rubric | T9, T12, D1 | `docs/bootstrapLoop/runs/<version>/` | committed `score.json` all rows PASS |
+| T11 | Real matrix across every version (D2, D8), regressions found, noted and fixed at HEAD where possible | T10, T8, D1 | `docs/bootstrapLoop/REGRESSIONS.md`, fixes | committed report + fix PR commits |
 
 Tracer: the `scaffold` stage run alone, the builder following that version's bootstrap prompt, (`bun run bootstrap-loop stage scaffold --version local`) writes a valid stage JSON and a scaffolded app.
 E2E: 2 specs (process): the single-stage CLI run and the full `build` with a fake builder.
 Regression: None — no hard-to-automate change; the loop itself is the automated check.
 User guide: None — no change to what example-app users see or do.
 Design: None — no canvas; the built app's look is judged by the scorer's visual rubric row.
-Out of scope: X1 scheduled CI run of the matrix, X2 native-device scoring, X3 varying the driver skill per version, X4 other app concepts (see Expansions).
-Open risks: external accounts and keys (Q1) gate R2's deploy check, R5, R9 and R13; ~20 full agent builds cost real time and money (Q3); published template versions are immutable, so old-version regressions can only be noted, not fixed (Q4).
-Elephant: the full matrix is roughly 20 agent builds × up to 3 iterations, likely 20–60 wall-clock hours and several hundred dollars of model spend, and every build creates a deploy and two CI runs on external services.
+Out of scope: X1 scheduled CI run of the matrix, X2 native-device scoring, X3 varying the driver skill per version, X4 other app concepts, X5 pre-58 versions (see Expansions).
+Open risks: the Vercel, Atlas and Gemini credentials (D1) must be in the session env before T10, or R2's deploy check, R5, R9 and R13 stay UNKNOWN and T10 ends BLOCKED naming the missing variables; 8 full agent builds cost real time and money (D3); published template versions are immutable, so old-version regressions can only be noted, not fixed (D4).
+Elephant: the full matrix is 8 agent builds (58.0.0–58.0.6 plus `local`) × up to 3 iterations, likely 8–24 wall-clock hours and a few hundred dollars of model spend, and every build creates a deploy and two CI runs on external services.
 
 ## E2E tests
 
@@ -76,19 +76,16 @@ None — no canvas.
 
 ## Architecture decisions
 
-- **Versions under test (pending Q2).** Recommended matrix: the latest published patch of
-  every minor line from 57.4 (first `create-terreno-app` release; tag 57.4.0) through the
-  newest 58.x, about 20 versions, plus `local` (this checkout), plus one build each of 0.31
-  (last of major 0) and 57.3 (last pre-template 57), reported as a separate stack outside the
-  regression diff. Those two scaffold through the MCP tool `terreno_bootstrap_app` instead of
-  `create-terreno-app` (`git show 0.31.0:mcp-server/src/bootstrap.ts`), so the scaffold stage
-  points the builder's `.mcp.json` at that version's `@terreno/mcp`.
+- **Versions under test (D2, D8).** Major 58 and up only. Today the only 58 minor is 58.0
+  (tags 58.0.0–58.0.6), so the matrix runs every stable 58.x release, patches included
+  (58.0.0, 58.0.1, …, 58.0.6, prereleases excluded), plus `local` (this checkout) last, so
+  each adjacent pair can be diffed. When 58.1+ or 59 ship, the same rule keeps every stable
+  release from 58.0.0. Nothing below 58.0.0 is run (X5).
 - **The scaffold stage drives the bootstrap prompt.** `scaffold` is an agent stage: the
   builder receives the naive prompt plus that version's `terreno_bootstrap` prompt text and
   carries out the prompt's own steps (`create-terreno-app`, `terreno_bootstrap_ai_rules`,
   rulesync generate). The prompt text is rendered by installing `@terreno/mcp@<v>` into a temp
-  dir and importing `dist/prompts.js` by file path (bypassing the exports map, since
-  `@terreno/mcp/bootstrap` only exists from 57.5.0), then calling
+  dir and importing its `@terreno/mcp/bootstrap` export (present in every 58.x), then calling
   `handlePromptRequest("terreno_bootstrap", {appName, appDisplayName})`; for `local` it comes
   from this checkout's `mcp-server`, and the runner rewrites its `bunx create-terreno-app …`
   line to `bun <checkout>/cli/dist/bin.js bootstrap app … --terreno-path <checkout>` so the
@@ -96,7 +93,7 @@ None — no canvas.
   the prompt's tool calls hit that version. After the builder, the stage pins every
   `@terreno/*` and `create-terreno-app`-written Terreno dependency to exactly `<v>` (the
   template writes caret ranges, `create-terreno-app/src/generate.ts:12`, which would otherwise
-  resolve every 57.x build to the newest 57.x), installs, and type-checks. The naive driver
+  resolve every 58.x build to the newest 58.x), installs, and type-checks. The naive driver
   skill and later stage prompts are fixed at HEAD so runs stay comparable (X3).
 - **Time accounting.** A stage's minutes are the sum of every attempt's wall-clock time in
   the run (first build plus every iteration rerun); `build.json` and the iteration log record
@@ -135,8 +132,8 @@ None — no canvas.
   | R4 | Works on desktop and mobile | Playwright at 1280×800 and 390×844: no horizontal scroll, primary actions visible, todo create works at both sizes |
   | R5 | GPT setup works | `POST /gpt/prompt` streams a non-empty reply with the configured provider key; an `AIRequest` row is written |
   | R6 | Consent forms present | A consent form exists and is shown to a fresh user before the todo screen; accepting records a consent response |
-  | R7 | New features present | Todo create, edit, complete, delete, due date and an all/active/done filter, owner-scoped and synced (Q6) |
-  | R8 | Roles work | Member cannot reach admin routes (403) or another user's todo (403/404); admin can; the template's seeded RBAC roles (`access.roles.seedDefaults()`, `operator`, `org-admin`) exist and the admin holds `org-admin` (Q5) |
+  | R7 | New features present | Todo create, edit, complete, delete, due date and an all/active/done filter, owner-scoped and synced (D6) |
+  | R8 | Roles work | Member cannot reach admin routes (403) or another user's todo (403/404); admin can; the template's seeded RBAC roles (`access.roles.seedDefaults()`, `operator`, `org-admin`) exist and the admin holds `org-admin` (D5) |
   | R9 | GitHub Actions and CircleCI green with coverage | Latest run on the build's branch is `success` on both hosts (`gh run list`, CircleCI API v2) and each uploads or prints a coverage report |
   | R10 | AI tooling wired up | `.rulesync/` sources plus generated `CLAUDE.md`/`AGENTS.md`, `.mcp.json` naming `terreno-local`, `terreno info` runs in the app |
   | R11 | `CHECKLIST.md` for the user | File at the app root with unchecked items covering secrets, deploy, admin password change, consent text review |
@@ -175,7 +172,7 @@ None — no canvas.
     - after the stage `T/app` is a git repo with exactly one commit (`git rev-list --count HEAD` = 1)
     - same command again → `attempt: 2`, `T/stages/scaffold.1.json` exists
     - after the stage, every `@terreno/*` dependency in `T/app/backend/package.json` and `T/app/frontend/package.json` is an exact version (no `^`/`~`); with `--version 58.0.6` (fake builder writing `^58.0.6` deps from a fixture) they read `58.0.6`
-    - `renderBootstrapPrompt` for `57.4.0` (no `@terreno/mcp/bootstrap` export) and `58.0.6` both return text containing `create-terreno-app` and `terreno_bootstrap_ai_rules`; for `0.31.0` it returns text naming `terreno_bootstrap_app` (registry fetch; skipped offline with a logged reason)
+    - `renderBootstrapPrompt` for `58.0.0` and `58.0.6` both return text containing `create-terreno-app` and `terreno_bootstrap_ai_rules` (registry fetch; skipped offline with a logged reason); `renderBootstrapPrompt` for `57.4.0` throws `version below 58.0.0 not supported`
     - `stage nope` → exit 2, stderr names the valid stage ids
     - fake builder exits 3 → exit 1, `status: "FAIL"`, ev contains `builder exited 3`
     - type-check failure (fake builder injects a TS error) → exit 1, failing check `ev` holds the tsc output tail
@@ -266,7 +263,7 @@ None — no canvas.
 - [ ] **T7** — Rerun failing stages and rescore until the rubric passes or iterations run out
   - Depends on: T4, T6
   - Files: scripts/bootstrapLoop/loop.ts, scripts/bootstrapLoop/loop.test.ts, scripts/bootstrapLoop/commands/loop.ts
-  - Criteria: `bun run bootstrap-loop loop --version <v> [--max-iterations N]` (default 3; Q3) runs `build`, then `score`; while `pass` is false and iterations remain, maps each failing row to its owning stage (table above), reruns those stages with the failing rows' reasons as `failures`, and rescores. Each iteration appends to `<runDir>/iterations.jsonl` and `ITERATIONS.md`: `{iteration, failedRows, rerunStages, changedFiles (git diff --stat in the app), score: {passCount, total}, minutes}`. Exit 0 on pass, 1 when exhausted.
+  - Criteria: `bun run bootstrap-loop loop --version <v> [--max-iterations N]` (default 3; D3) runs `build`, then `score`; while `pass` is false and iterations remain, maps each failing row to its owning stage (table above), reruns those stages with the failing rows' reasons as `failures`, and rescores. Each iteration appends to `<runDir>/iterations.jsonl` and `ITERATIONS.md`: `{iteration, failedRows, rerunStages, changedFiles (git diff --stat in the app), score: {passCount, total}, minutes}`. Exit 0 on pass, 1 when exhausted.
   - Seam: exported `runLoop(...)`
   - Interface: `runLoop({version, runDir, maxIterations, previousRunDir?})` → `Promise<{pass: boolean, iterations: IterationLog[]}>`
   - Cases:
@@ -277,18 +274,19 @@ None — no canvas.
   - Blast radius: T8 calls `runLoop` per version
   - Test skills: none
 
-- [ ] **T8** — Run the loop for every minor version and report regressions between versions
+- [ ] **T8** — Run the loop for every 58.x release and report regressions between versions
   - Depends on: T7
   - Files: scripts/bootstrapLoop/matrix/versions.ts, scripts/bootstrapLoop/matrix/diff.ts, scripts/bootstrapLoop/matrix/matrix.ts, scripts/bootstrapLoop/matrix/report.ts, scripts/bootstrapLoop/matrix/*.test.ts, scripts/bootstrapLoop/commands/matrix.ts
-  - Criteria: `bun run bootstrap-loop matrix [--versions a,b] [--from-version <v>] [--include-local]` lists versions from the npm registry (latest patch per minor at or above `--from-version`, default `57.4.0` plus the extra versions Q2 settles (recommended `0.31.x` and `57.3.x`, reported as a separate stack), excluding prereleases; for versions below 57.4.0 it lists `@terreno/mcp` instead, since `create-terreno-app` did not exist), runs `runLoop` per version in ascending order with the previous version as `previousRunDir`, and writes `docs/bootstrapLoop/REGRESSIONS.md` plus `docs/bootstrapLoop/runs/<version>/{score.json,SCORE.md,ITERATIONS.md,build.json}`. A regression is a rubric row PASS at version N−1 and FAIL at N (after iterations), a row needing more iterations than at N−1, a time regression, or a scaffold file-tree change that removes a file the previous version had. The report has one table per version pair and a "Fixed at HEAD" column (filled by T11).
+  - Criteria: `bun run bootstrap-loop matrix [--versions a,b] [--from-version <v>] [--no-local]` lists `create-terreno-app` versions from the npm registry: every stable release at or above `--from-version` (default and floor `58.0.0`; a lower value exits 2), prereleases excluded, ascending, then `local` last unless `--no-local`. It runs `runLoop` per version in that order with the previous version as `previousRunDir`, and writes `docs/bootstrapLoop/REGRESSIONS.md` plus `docs/bootstrapLoop/runs/<version>/{score.json,SCORE.md,ITERATIONS.md,build.json}`. A regression is a rubric row PASS at version N−1 and FAIL at N (after iterations), a row needing more iterations than at N−1, a time regression, or a scaffold file-tree change that removes a file the previous version had. The report has one table per version pair and a "Fixed at HEAD" column (filled by T11).
   - Seam: exported `listVersions(registryJson)`, `diffRuns(prev, next)`, `runMatrix(...)`
   - Interface: `listVersions` → ascending `string[]`; `diffRuns` → `{rowRegressions, iterationRegressions, timeRegressions, removedFiles}`
   - Cases:
-    - registry versions `57.3.9, 57.4.0, 57.4.2, 57.5.0, 58.0.0-beta.1, 58.0.6` → `["57.4.2", "57.5.0", "58.0.6"]`
+    - registry versions `57.4.2, 57.5.0, 58.0.0-beta.1, 58.0.0, 58.0.1, 58.0.6` → `["58.0.0", "58.0.1", "58.0.6", "local"]`; with `--no-local` → `["58.0.0", "58.0.1", "58.0.6"]`
+    - `--from-version 57.4.0` → exit 2 naming the `58.0.0` floor
     - prev R6 PASS, next R6 FAIL → one row regression naming R6 and both versions
     - prev 1 iteration, next 3 → iteration regression
     - prev tree has `frontend/app/signup.tsx`, next lacks it → `removedFiles` lists it
-    - `--versions 57.20.1,58.0.6` runs exactly those two with a fake loop
+    - `--versions 58.0.1,58.0.6` runs exactly those two with a fake loop
   - Blast radius: none (report only)
   - Test skills: none
 
@@ -318,7 +316,7 @@ None — no canvas.
   - Test skills: update-docs
 
 - [ ] **T10** — Demonstrate a single-stage run and a full loop on the latest version to a green rubric
-  - Depends on: T9, T12, and the Q1 answer (accounts and keys in the session env); without it the stage ends BLOCKED naming the missing variables
+  - Depends on: T9, T12, and the D1 credentials (`VERCEL_TOKEN`, `BOOTSTRAP_LOOP_MONGO_URI`, `GOOGLE_GENERATIVE_AI_API_KEY`, `BOOTSTRAP_LOOP_GH_TOKEN`) in the session env; without them the stage ends BLOCKED naming the missing variables
   - Files: docs/bootstrapLoop/runs/<latest>/*, docs/bootstrapLoop/runs/single-stage-demo.md, fixes in scripts/bootstrapLoop/ or create-terreno-app/ or mcp-server/src/bootstrap.ts found by the run
   - Criteria: one `stage auth` run on an existing scaffold recorded in `single-stage-demo.md` (command, stage JSON); one `loop --version <latest published>` whose committed `score.json` has `pass: true` with every R1–R13 row PASS; outputs uploaded with T9's command. Any harness or template fix carries its own unit test.
   - Seam: committed run outputs
@@ -329,9 +327,9 @@ None — no canvas.
   - Test skills: verify-ui-changes (screenshots)
 
 - [ ] **T11** — Run the version matrix, note every regression, and fix the ones still present at HEAD
-  - Depends on: T10, T8, and the Q1 and Q2 answers
+  - Depends on: T10, T8, and the D1 credentials
   - Files: docs/bootstrapLoop/REGRESSIONS.md, docs/bootstrapLoop/runs/*/, docs/bootstrapLoop/runs/local/, fixes in create-terreno-app/, mcp-server/src/bootstrap.ts, docs/
-  - Criteria: `matrix` executed over every version T8 lists; `REGRESSIONS.md` lists each regression with the version that introduced it; matrix outputs are uploaded with `upload` and non-latest deploys torn down; each regression that still reproduces on `local` is fixed in the template or bootstrap prompt with a test and marked "Fixed at HEAD"; ones confined to published versions are marked "Published only — cannot fix" (Q4). After the fixes, `loop --version local` reaches `pass: true` and its outputs are committed as `docs/bootstrapLoop/runs/local/` beside the latest published version's.
+  - Criteria: `matrix` executed over every version T8 lists; `REGRESSIONS.md` lists each regression with the version that introduced it; matrix outputs are uploaded with `upload` and non-latest deploys torn down; each regression that still reproduces on `local` is fixed in the template or bootstrap prompt with a test and marked "Fixed at HEAD"; ones confined to published versions are marked "Published only — cannot fix" (D4). After the fixes, `loop --version local` reaches `pass: true` and its outputs are committed as `docs/bootstrapLoop/runs/local/` beside the latest published version's.
   - Seam: committed report
   - Interface: `REGRESSIONS.md` per T8
   - Cases: none (untestable as a unit: operational; each fix's own test is written with that fix)
@@ -357,28 +355,34 @@ None — no canvas.
 
 | ID | Question | Recommendation | Why | If answered differently | Tasks affected |
 | --- | --- | --- | --- | --- | --- |
-| Q1 (fundamental) | The rubric needs external accounts this sandbox lacks: it has only `gh` and `CIRCLECI_TOKEN`, with no deploy credentials, no database for a deployed backend and no AI key. Which accounts may the builds use, and where should they deploy? | Create one private repo, `TerrenoLabs/bootstrap-todo-runs`, with one branch per version and one CircleCI project followed once. Deploy Vercel previews (web plus backend Functions, via the `deploy-vercel` skill) against one MongoDB Atlas replica set with one database per version. Use a Gemini key. Add `VERCEL_TOKEN`, `BOOTSTRAP_LOOP_MONGO_URI` and `GOOGLE_GENERATIVE_AI_API_KEY` to the session env. Tear down non-latest deploys after scoring. | R5, R9 and R13 can't pass without them, and creating repos and deploys is an external commitment. Vercel over Cloud Run because previews are per branch and need no per-version infra. Cloud Run (`deploy-gcp`, the template's `Dockerfile`) is where Flourish runs, but it would need ~20 services and `GCP_SA_TERRENO`, which this session lacks. | Cloud Run swaps the `deploy` and `ci` stage prompts, the R13 probe and teardown. One repo per version multiplies repos by 20. With no credentials, R5, R9 and R13 stay UNKNOWN, and T10/T11 end BLOCKED. | T2, T5, T9, T10, T11 |
-| Q2 (fundamental) | Does "every minor and every major version" include major 0 (0.0–0.31) and 57.0–57.3? Their `terreno_bootstrap` prompt exists but scaffolds through the MCP tool `terreno_bootstrap_app` on the legacy RTK/JWT stack, not through `create-terreno-app`. | Partly. Run every minor from 57.4 (the first `create-terreno-app`) to the newest 58.x (~20 versions), plus `local`. Add 0.31 (the last version of major 0) and 57.3 (the last pre-template 57), so every major runs at least once. Report those two as a different stack, outside the regression diff. | Builds before 57.4 use a different scaffold and stack, so diffing them against 57.4+ would show the stack change, not regressions. One build per older line meets "every major" for two builds. The request names this exact ambiguity as an inbox question. | **All of 0.x and 57.0–57.3** adds ~36 builds, each needing that version's MCP server for `terreno_bootstrap_app` and JWT-stack probes for R2. **Template era only** drops the two extra builds and leaves major 0 untested. | T1, T5, T8, T11 |
-| Q3 | Should every matrix version get the full agent loop (deploy, CI, up to 3 iterations), or should the full loop run on the latest and once per major, with older minors getting scaffold plus deterministic probes only? | Run the full loop on every version as requested, with `--max-iterations 3`. The latest may go to 5 to reach green. | The request says every build in the matrix goes through the same test-and-score loop. | The cheaper option gives T8 a `--depth probes` mode for older minors, and the report marks their agent rows "not run". | T7, T8, T11 |
-| Q4 | Published versions can't be fixed (npm is immutable). Should we fix only the regressions that still reproduce at HEAD? | Yes. Fix them at HEAD with a test, and note the published-only ones. | The request says "fix what you can". | Backporting to old minors adds a release task per minor. | T11 |
-| Q5 | Which roles must "roles work" cover? | Admin (`user.admin`) and member, plus the RBAC roles the template seeds (`access.roles.seedDefaults()`, `operator`, `org-admin`), each checked for the access it grants. | The template already ships these. Nothing in the request names more. | A new role, such as read-only staff, adds RBAC work to the `roles` stage and a probe case. | T2, T5 |
-| Q6 | Which "new features" make the todo app complete, so runs stay comparable? | A fixed spec in the `features` prompt: create, edit, complete, delete, due date, and an all/active/done filter; owner-scoped and synced via syncdb. | A naive prompt gives no spec, and a fixed one lets versions be diffed. | A different list changes only the `features` prompt and the R7 probe. | T2, T5 |
-| Q7 | Should "works on mobile" be judged on mobile-width web or on a native emulator? | Mobile-width web (Playwright at 390×844). | Native builds for ~20 versions need EAS or Gradle each time, and the emulator companion is on demand and slow. | Native adds a Maestro flow per build and the emulator to every run (X2). | T5 |
+| Q8 | "58 and up" leaves one minor (58.0) today. Should the matrix also run each 58.0.x patch, so there are version pairs to diff? | Yes: every stable 58.x release (58.0.0–58.0.6, 7 builds) plus `local`, recorded as D8. | One minor plus `local` gives only one pair, too few to say which release introduced a regression. | Latest patch per minor only: the matrix is 58.0.6 plus `local`, and T8's `listVersions` keeps only the newest patch per minor. | T8, T11 |
 
 ## Expansions (follow up later)
 
 | ID | Idea | Why it came up | Rough size | Depends on |
 | --- | --- | --- | --- | --- |
-| X1 | Scheduled CI job that runs `loop --version local` weekly, replacing or extending `bootstrap-app-check.yml` | Catching regressions per release without a human starting the run | M | T10, Q1 |
+| X1 | Scheduled CI job that runs `loop --version local` weekly, replacing or extending `bootstrap-app-check.yml` | Catching regressions per release without a human starting the run | M | T10, D1 |
 | X2 | Native (Android emulator / iOS) scoring with Maestro | "Mobile" could mean native | L | Q7 |
 | X3 | Vary the naive driver skill and stage prompts per version too | "Versions of the bootstrap skill" could include the prompts this plan adds | S | T8 |
 | X4 | More app concepts than todo (reuse `build-terreno-app` concepts) | Same harness fits any concept | M | T7 |
+| X5 | Matrix builds for pre-58 versions (57.4–57.x on `create-terreno-app`; 0.x and 57.0–57.3 on the MCP `terreno_bootstrap_app` RTK/JWT stack) | The human limited the matrix to 58 and up | M | T8 |
 
 ## Decisions
 
-None.
+Answered by the human on 2026-11-16.
+
+| ID | Decision | Effect on the plan |
+| --- | --- | --- |
+| D1 (was Q1) | Vercel + Atlas + Gemini, as recommended: one private repo `TerrenoLabs/bootstrap-todo-runs` with a branch per version and CircleCI followed; Vercel previews (web plus Functions) against one MongoDB Atlas replica set with a database per version; a Gemini key. `VERCEL_TOKEN`, `BOOTSTRAP_LOOP_MONGO_URI`, `GOOGLE_GENERATIVE_AI_API_KEY` (and `BOOTSTRAP_LOOP_GH_TOKEN`) go in the session env; non-latest deploys are torn down. | As planned. |
+| D2 (was Q2) | 58 and up only. | Differs from the recommendation: no 0.31 or 57.x builds, no separate stack, no MCP-tool scaffold path. Versions bullet, T1 prompt-render cases, and T8 floor and cases rewritten; pre-58 parked as X5. |
+| D3 (was Q3) | Full loop everywhere (deploy, CI, max 3 iterations; up to 5 on the latest to reach green). | As planned. |
+| D4 (was Q4) | Fix regressions that still reproduce at HEAD with a test; note published-only ones. | As planned. |
+| D5 (was Q5) | Roles: admin, member and the template's seeded RBAC roles (`operator`, `org-admin`). | As planned. |
+| D6 (was Q6) | Features: the fixed list (create, edit, complete, delete, due date, all/active/done filter; owner-scoped, synced). | As planned. |
+| D7 (was Q7) | Mobile judged on mobile-width web (Playwright 390×844). | As planned. |
+| D8 | Matrix = every stable 58.x release including patches, plus `local` (Q8 recommendation, assumed). | T8 `listVersions` keeps patches. |
 
 ## Sign-off
 
-Status: awaiting sign-off (2026-11-14)
-Cut: 2 rounds, 23 findings: 21 fixed, 2 moved to questions or expansions, 0 rebutted, 0 blocking open
+Status: approved 2026-11-16
+Cut: 2 rounds, 23 findings: 21 fixed, 2 moved to questions or expansions, 0 rebutted, 0 blocking open; no cut after sign-off: D2 only narrowed the version list

@@ -657,6 +657,37 @@ cover:
 `variant` still sets both the trigger and the Apply button; `triggerVariant` and
 `applyButtonVariant` override each independently.
 
+### ThumbsUpDownFeedback and FeedbackCommentField
+
+`ThumbsUpDownFeedback` takes an optional comment. Pass `onCommentSubmit` and, once a value is
+selected, a multiline field and a **Send** button render under the thumbs. Send is disabled
+while the trimmed text is empty or a send is running, calls `onCommentSubmit` with the trimmed
+text, then shows "Thanks for the feedback" in place of the field. A rejection keeps the text
+for a retry. Clearing the selection hides the field; changing it remounts the field with empty
+text, so clear `comment` in `onChange` when a new vote should get a new comment.
+
+| Prop | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `onCommentSubmit` | `(comment: string) => void \| Promise<void>` | unset | No comment field without it |
+| `commentPlaceholder` | `string` | `"Tell us more (optional)"` | |
+| `comment` | `string` | unset | A comment already sent; shows the sent state |
+
+Test IDs: `{testID}-comment-input`, `{testID}-comment-send`, `{testID}-comment-sent`.
+
+```tsx
+<ThumbsUpDownFeedback
+  comment={sentComment}
+  onChange={setVote}
+  onCommentSubmit={(comment) => sendFeedback({thumbs, comment})}
+  testID="summary-feedback"
+  value={vote}
+/>
+```
+
+`FeedbackCommentField` is the same field on its own (`{onSubmit, placeholder?, sentComment?,
+testID}`, test IDs `{testID}-input`, `-send`, `-sent`), for rating controls that are not
+`ThumbsUpDownFeedback`, such as GPTChat's rating buttons.
+
 ### GPTChat
 
 Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optional MCP/tools stay under consumer control.

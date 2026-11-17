@@ -230,7 +230,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: the experiment runner reads `proofread` → the experiment-skip case above; the dataset detail view shows tags (no UI change needed).
   - Test skills: terreno-backend-tests
 
-- [ ] **T8** — Let ThumbsUpDownFeedback take an optional comment
+- [x] **T8** — Let ThumbsUpDownFeedback take an optional comment
   - Depends on: none
   - Files: ui/src/FeedbackCommentField.tsx, ui/src/FeedbackCommentField.test.tsx, ui/src/ThumbsUpDownFeedback.tsx, ui/src/ThumbsUpDownFeedback.test.tsx, ui/src/Common.ts, ui/src/index.tsx, demo/stories/ThumbsUpDownFeedback.stories.tsx, demo/story-config/ThumbsUpDownFeedback.config.tsx, docs/reference/ui.md
   - Criteria: new optional props `onCommentSubmit?: (comment: string) => void | Promise<void>`, `commentPlaceholder?: string` (default "Tell us more (optional)"), and `comment?: string` (already-sent text). With `onCommentSubmit` set and a value selected, a multiline `TextField` and a **Send** button render under the thumbs. The field is its own exported component, `FeedbackCommentField` (`ui/src/FeedbackCommentField.tsx`, props `{onSubmit, placeholder?, sentComment?, testID}`), which `ThumbsUpDownFeedback` renders and GPTChat reuses in T9. Send is disabled while the trimmed text is empty or a send is in flight, then shows "Thanks for the feedback" in place of the field. Deselecting hides the field. Without `onCommentSubmit` nothing changes. Built only from cross-platform `@terreno/ui` components (no web-only code). The demo story shows it, and the reference documents the props.

@@ -69,7 +69,10 @@ import {
   executeDelete,
   executeUpdate,
   isExecutorConflictError,
+  loadDocOr404,
   runPostCreate,
+  runPostDelete,
+  runPostUpdate,
 } from "./sync/executors";
 import type {SyncConfig} from "./sync/types";
 import {
@@ -880,7 +883,18 @@ const _buildModelRouter = <T>(
   const validateBulkBody: BulkBodyValidator = ({method, body, req}) =>
     runBodyValidator(method === "create" ? createValidation : updateValidation, body, req);
   registerBulkRoute({
-    deps: {authenticateMiddleware, checkPermissions, executeCreate, runPostCreate},
+    deps: {
+      authenticateMiddleware,
+      checkPermissions,
+      executeCreate,
+      executeDelete,
+      executeUpdate,
+      isExecutorConflictError,
+      loadDocOr404,
+      runPostCreate,
+      runPostDelete,
+      runPostUpdate,
+    },
     model,
     options,
     responseHandler: responseHandler as NonNullable<ModelRouterOptions<T>["responseHandler"]>,

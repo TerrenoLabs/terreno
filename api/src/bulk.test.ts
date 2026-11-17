@@ -1,5 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from "bun:test";
 import type express from "express";
+import {DateTime} from "luxon";
 import mongoose from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
@@ -11,6 +12,9 @@ import {toBulkItemError} from "./bulk";
 import {apiUnauthorizedMiddleware, isAPIError} from "./errors";
 import {configureOpenApiValidator, resetOpenApiValidatorConfig} from "./openApiValidator";
 import {Permissions} from "./permissions";
+import {createdUpdatedPlugin, type IsDeleted, isDeletedPlugin} from "./plugins";
+import {clearSyncRegistry, registerSync} from "./sync/registry";
+import {syncPlugin} from "./sync/syncSeqPlugin";
 import {TerrenoApp} from "./terrenoApp";
 import {authAsUser, type Food, FoodModel, getBaseServer, setupDb, UserModel} from "./tests";
 
@@ -129,19 +133,6 @@ describe("modelRouter bulk", () => {
         .post("/food/bulk")
         .send({atomic: false, operations: [{body: {name: "bulk-a"}, method: "create"}]})
         .expect(401);
-      expect(await bulkFoodNames()).toEqual([]);
-    });
-  });
-
-  describe("atomic flag (until atomic mode lands)", () => {
-    it("returns 501 bulk-atomic-not-implemented when atomic is absent and writes nothing", async () => {
-      mountFoodRouter({bulk: true} as Partial<RouterOptions>);
-      const agent = await authAsUser(app, "notAdmin");
-      const res = await agent
-        .post("/food/bulk")
-        .send({operations: [{body: {name: "bulk-a"}, method: "create"}]})
-        .expect(501);
-      expect(res.body.code).toBe("bulk-atomic-not-implemented");
       expect(await bulkFoodNames()).toEqual([]);
     });
   });
@@ -664,5 +655,599 @@ describe("toBulkItemError", () => {
     const castError = new mongoose.Error.CastError("ObjectId", "nope", "eatenBy");
     const {status} = toBulkItemError(castError);
     expect(status).toBe(400);
+  });
+});
+
+interface BulkSoft extends IsDeleted {
+  _id: mongoose.Types.ObjectId;
+  calories?: number;
+  created: Date;
+  name: string;
+  ownerId?: mongoose.Types.ObjectId;
+  updated?: Date;
+}
+
+const bulkSoftSchema = new mongoose.Schema<BulkSoft>({
+  calories: {description: "Number of calories", type: Number},
+  name: {description: "The name of the item", required: true, type: String},
+  ownerId: {description: "The user who owns this item", ref: "User", type: "ObjectId"},
+});
+bulkSoftSchema.plugin(isDeletedPlugin);
+bulkSoftSchema.plugin(createdUpdatedPlugin);
+const BulkSoftModel = mongoose.model<BulkSoft>("BulkSoft", bulkSoftSchema);
+
+interface BulkSynced extends IsDeleted {
+  _id: string;
+  _syncSeq?: number;
+  name: string;
+  ownerId: string;
+}
+
+const bulkSyncedSchema = new mongoose.Schema<BulkSynced>({
+  _id: {
+    default: (): string => new mongoose.Types.ObjectId().toHexString(),
+    description: "String id so the doc can be synced",
+    type: String,
+  },
+  name: {description: "The name of the item", required: true, type: String},
+  ownerId: {description: "The user who owns this item", required: true, type: String},
+});
+bulkSyncedSchema.plugin(isDeletedPlugin);
+bulkSyncedSchema.plugin(createdUpdatedPlugin);
+bulkSyncedSchema.plugin(syncPlugin);
+const BulkSyncedModel = mongoose.model<BulkSynced>("BulkSynced", bulkSyncedSchema);
+
+interface BulkEntry {
+  data?: Record<string, unknown>;
+  error?: Record<string, unknown>;
+  id?: string;
+  index: number;
+  method: string;
+  status: number;
+}
+
+describe("partial-mode update and delete", () => {
+  let app: express.Application;
+
+  const mountRouter = (
+    path: string,
+    model: mongoose.Model<never>,
+    options: Record<string, unknown>
+  ): void => {
+    app.use(
+      path,
+      modelRouter(model, {
+        bulk: true,
+        permissions: allPermissions,
+        ...options,
+      } as never)
+    );
+    app.use(apiUnauthorizedMiddleware);
+    app.use((_req: express.Request, res: express.Response) => {
+      res.status(404).json({title: "Not Found"});
+    });
+  };
+
+  const mountFood = (options: Partial<RouterOptions> = {}): void => {
+    mountRouter("/food", FoodModel as never, options as Record<string, unknown>);
+  };
+
+  const userId = async (email: string): Promise<mongoose.Types.ObjectId> => {
+    const user = await UserModel.findOne({email});
+    return (user as unknown as {_id: mongoose.Types.ObjectId})._id;
+  };
+
+  const bulk = async (
+    agent: TestAgent,
+    path: string,
+    operations: unknown[]
+  ): Promise<BulkEntry[]> => {
+    const res = await agent.post(`${path}/bulk`).send({atomic: false, operations}).expect(200);
+    return res.body.data as BulkEntry[];
+  };
+
+  const makeFood = async (
+    fields: Partial<Food> & {created?: Date} = {}
+  ): Promise<mongoose.HydratedDocument<Food>> =>
+    FoodModel.create({calories: 1, likesIds: [], name: "bulk-old", ...fields} as never);
+
+  beforeEach(async () => {
+    process.env.REFRESH_TOKEN_SECRET = "testsecret1234";
+    await setupDb();
+    await Promise.all([
+      FoodModel.deleteMany({}),
+      BulkSoftModel.deleteMany({}),
+      BulkSyncedModel.deleteMany({}),
+    ]);
+    clearSyncRegistry();
+    app = getBaseServer();
+    setupAuth(app, UserModel as unknown as UserMongooseModel);
+    addAuthRoutes(app, UserModel as unknown as UserMongooseModel);
+  });
+
+  afterEach(() => {
+    resetOpenApiValidatorConfig();
+    clearSyncRegistry();
+  });
+
+  describe("update", () => {
+    it("updates two docs, runs preUpdate/postUpdate per item, and passes prevValue", async () => {
+      const preCalls: string[] = [];
+      const postCalls: {calories: number | undefined; prevCalories: number | undefined}[] = [];
+      mountFood({
+        postUpdate: (doc: Food, _body: Partial<Food>, _req: express.Request, prev: Food) => {
+          postCalls.push({calories: doc.calories, prevCalories: prev.calories});
+        },
+        preUpdate: (body: Partial<Food>) => {
+          preCalls.push(String(body.calories));
+          return body as Food;
+        },
+      } as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const a = await makeFood({calories: 1, name: "bulk-a", ownerId: owner} as never);
+      const b = await makeFood({calories: 2, name: "bulk-b", ownerId: owner} as never);
+
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 10}, id: a.id, method: "update"},
+        {body: {calories: 20}, id: b.id, method: "update"},
+      ]);
+
+      expect(entries.map((entry) => entry.status)).toEqual([200, 200]);
+      expect(entries.map((entry) => entry.index)).toEqual([0, 1]);
+      expect(entries.map((entry) => entry.id)).toEqual([a.id, b.id]);
+      expect(entries.map((entry) => entry.method)).toEqual(["update", "update"]);
+      expect((await FoodModel.findById(a.id))?.calories).toBe(10);
+      expect((await FoodModel.findById(b.id))?.calories).toBe(20);
+      expect(preCalls).toEqual(["10", "20"]);
+      expect(postCalls).toEqual([
+        {calories: 10, prevCalories: 1},
+        {calories: 20, prevCalories: 2},
+      ]);
+    });
+
+    it("returns the same data a PATCH /food/:id returns for the same body", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({name: "bulk-a", ownerId: owner} as never);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 77}, id: doc.id, method: "update"},
+      ]);
+      const single = await agent.patch(`/food/${doc.id}`).send({calories: 77}).expect(200);
+      expect(entries[0].status).toBe(200);
+      expect(stripVolatile(entries[0].data as Record<string, unknown>)).toEqual(
+        stripVolatile(single.body.data)
+      );
+    });
+
+    it("reports 403 for an item targeting another user's doc and 200 for the owner's", async () => {
+      mountFood({
+        permissions: {...allPermissions, update: [Permissions.IsOwner]},
+      } as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const mine = await makeFood({
+        calories: 1,
+        name: "bulk-mine",
+        ownerId: await userId("notAdmin@example.com"),
+      } as never);
+      const theirs = await makeFood({
+        calories: 1,
+        name: "bulk-theirs",
+        ownerId: await userId("admin@example.com"),
+      } as never);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 5}, id: theirs.id, method: "update"},
+        {body: {calories: 5}, id: mine.id, method: "update"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([403, 200]);
+      expect((await FoodModel.findById(theirs.id))?.calories).toBe(1);
+      expect((await FoodModel.findById(mine.id))?.calories).toBe(5);
+    });
+
+    it("reports 404 for a nonexistent id", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const missing = new mongoose.Types.ObjectId().toString();
+      const single = await agent.patch(`/food/${missing}`).send({calories: 1});
+      expect(single.status).toBe(404);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 1}, id: missing, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(404);
+      expect(entries[0].index).toBe(0);
+    });
+
+    it("reports the same status as PATCH for a malformed id", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const single = await agent.patch("/food/not-an-object-id").send({calories: 1});
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 1}, id: "not-an-object-id", method: "update"},
+      ]);
+      expect(entries[0].status).toBe(single.status);
+    });
+
+    it("reports 405, not 404, for a nonexistent id when update permission is []", async () => {
+      mountFood({permissions: {...allPermissions, update: []}} as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const missing = new mongoose.Types.ObjectId().toString();
+      const single = await agent.patch(`/food/${missing}`).send({calories: 1});
+      expect(single.status).toBe(405);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 1}, id: missing, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(405);
+    });
+
+    it("reports 409 with the PATCH conflict body for a stale _updatedAt, and 200 for a newer one", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const created = DateTime.fromISO("2024-06-01T12:00:00.000Z").toJSDate();
+      const doc = await makeFood({calories: 1, created, name: "bulk-a", ownerId: owner} as never);
+      const stale = "2024-01-01T00:00:00.000Z";
+      const newer = "2025-01-01T00:00:00.000Z";
+
+      const single = await agent
+        .patch(`/food/${doc.id}`)
+        .send({_updatedAt: stale, calories: 2})
+        .expect(409);
+      const entries = await bulk(agent, "/food", [
+        {body: {_updatedAt: stale, calories: 2}, id: doc.id, method: "update"},
+        {body: {_updatedAt: newer, calories: 3}, id: doc.id, method: "update"},
+      ]);
+
+      expect(entries[0].status).toBe(409);
+      expect(entries[0].error).toEqual(single.body);
+      expect(entries[0].error?.error).toBe("Conflict");
+      expect(entries[0].error?.message).toBe("Document was modified since your last read");
+      expect(entries[1].status).toBe(200);
+      expect((await FoodModel.findById(doc.id))?.calories).toBe(3);
+    });
+
+    it("reports 400 for an unparseable _updatedAt, matching PATCH", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({name: "bulk-a", ownerId: owner} as never);
+      const single = await agent
+        .patch(`/food/${doc.id}`)
+        .send({_updatedAt: "not-a-date", calories: 2});
+      expect(single.status).toBe(400);
+      const entries = await bulk(agent, "/food", [
+        {body: {_updatedAt: "not-a-date", calories: 2}, id: doc.id, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(400);
+      expect(entries[0].error).toEqual(single.body);
+    });
+
+    it("reports 400 with the PATCH body for a wrong-typed field when validation is on", async () => {
+      configureOpenApiValidator({});
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({calories: 1, name: "bulk-a", ownerId: owner} as never);
+      const single = await agent.patch(`/food/${doc.id}`).send({calories: "lots"});
+      expect(single.status).toBe(400);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: "lots"}, id: doc.id, method: "update"},
+        {body: {calories: 9}, id: doc.id, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(400);
+      expect(entries[0].error).toEqual(single.body);
+      expect(entries[1].status).toBe(200);
+      expect((await FoodModel.findById(doc.id))?.calories).toBe(9);
+    });
+
+    it("strips deleted:true from an update body on a soft-delete model, as PATCH does", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {});
+      const agent = await authAsUser(app, "notAdmin");
+      const viaPatch = await BulkSoftModel.create({name: "bulk-patch"});
+      const viaBulk = await BulkSoftModel.create({name: "bulk-bulk"});
+      await agent.patch(`/soft/${viaPatch.id}`).send({deleted: true, name: "bulk-patched"});
+      const entries = await bulk(agent, "/soft", [
+        {body: {deleted: true, name: "bulk-bulked"}, id: viaBulk.id, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(200);
+      const patched = await BulkSoftModel.findById(viaPatch.id);
+      const bulked = await BulkSoftModel.findById(viaBulk.id);
+      expect(patched?.deleted).not.toBe(true);
+      expect(bulked?.deleted).not.toBe(true);
+      expect(bulked?.name).toBe("bulk-bulked");
+    });
+
+    it("applies repeated updates to the same id in input order", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({calories: 1, name: "bulk-a", ownerId: owner} as never);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 2}, id: doc.id, method: "update"},
+        {body: {calories: 3}, id: doc.id, method: "update"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([200, 200]);
+      expect((await FoodModel.findById(doc.id))?.calories).toBe(3);
+    });
+
+    it("turns a throwing postUpdate into a 400 post-update-hook-error and keeps the write", async () => {
+      mountFood({
+        postUpdate: () => {
+          throw new Error("boom");
+        },
+      } as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({calories: 1, name: "bulk-a", ownerId: owner} as never);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 8}, id: doc.id, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(400);
+      expect(entries[0].error?.code).toBe("post-update-hook-error");
+      expect((await FoodModel.findById(doc.id))?.calories).toBe(8);
+    });
+
+    it("reports 403 'Update not allowed' for an item whose preUpdate returns null", async () => {
+      mountFood({
+        preUpdate: (body: Partial<Food>) => (body.calories === 99 ? null : (body as Food)),
+      } as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = await userId("notAdmin@example.com");
+      const doc = await makeFood({calories: 1, name: "bulk-a", ownerId: owner} as never);
+      const entries = await bulk(agent, "/food", [
+        {body: {calories: 99}, id: doc.id, method: "update"},
+        {body: {calories: 5}, id: doc.id, method: "update"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([403, 200]);
+      expect((await FoodModel.findById(doc.id))?.calories).toBe(5);
+    });
+  });
+
+  describe("delete", () => {
+    it("soft deletes two docs, returns 204 entries with no data, and runs delete hooks per item", async () => {
+      const preCalls: string[] = [];
+      const postCalls: string[] = [];
+      mountRouter("/soft", BulkSoftModel as never, {
+        postDelete: (_req: express.Request, doc: BulkSoft) => {
+          postCalls.push(doc.name);
+        },
+        preDelete: (doc: BulkSoft) => {
+          preCalls.push(doc.name);
+          return doc;
+        },
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const a = await BulkSoftModel.create({name: "bulk-a"});
+      const b = await BulkSoftModel.create({name: "bulk-b"});
+      const entries = await bulk(agent, "/soft", [
+        {id: a.id, method: "delete"},
+        {id: b.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([204, 204]);
+      expect(entries.map((entry) => entry.id)).toEqual([a.id, b.id]);
+      expect(entries.map((entry) => entry.index)).toEqual([0, 1]);
+      expect(entries[0].data).toBeUndefined();
+      expect(entries[0].error).toBeUndefined();
+      expect((await BulkSoftModel.findOne({_id: a.id, deleted: true}))?.deleted).toBe(true);
+      expect(await BulkSoftModel.countDocuments({deleted: true})).toBe(2);
+      expect(preCalls).toEqual(["bulk-a", "bulk-b"]);
+      expect(postCalls).toEqual(["bulk-a", "bulk-b"]);
+    });
+
+    it("reports an already soft-deleted doc as the 404 DELETE /:id returns, without rerunning postDelete", async () => {
+      const postCalls: string[] = [];
+      mountRouter("/soft", BulkSoftModel as never, {
+        postDelete: (_req: express.Request, doc: BulkSoft) => {
+          postCalls.push(doc.name);
+        },
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const a = await BulkSoftModel.create({name: "bulk-a"});
+      const gone = await BulkSoftModel.create({name: "bulk-gone"});
+      await agent.delete(`/soft/${gone.id}`).expect(204);
+      const single = await agent.delete(`/soft/${gone.id}`);
+      expect(single.status).toBe(404);
+      postCalls.length = 0;
+
+      const entries = await bulk(agent, "/soft", [
+        {id: a.id, method: "delete"},
+        {id: a.id, method: "delete"},
+        {id: gone.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([204, 404, 404]);
+      expect(entries[2].error).toEqual(single.body);
+      expect(postCalls).toEqual(["bulk-a"]);
+    });
+
+    it("reports 405 for every item when delete permission is []", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {
+        permissions: {...allPermissions, delete: []},
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const a = await BulkSoftModel.create({name: "bulk-a"});
+      const entries = await bulk(agent, "/soft", [{id: a.id, method: "delete"}]);
+      expect(entries[0].status).toBe(405);
+      expect(await BulkSoftModel.countDocuments({deleted: true})).toBe(0);
+    });
+
+    it("reports 403 for another user's doc under IsOwner and 204 for the owner's", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {
+        permissions: {...allPermissions, delete: [Permissions.IsOwner]},
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const mine = await BulkSoftModel.create({
+        name: "bulk-mine",
+        ownerId: await userId("notAdmin@example.com"),
+      });
+      const theirs = await BulkSoftModel.create({
+        name: "bulk-theirs",
+        ownerId: await userId("admin@example.com"),
+      });
+      const entries = await bulk(agent, "/soft", [
+        {id: theirs.id, method: "delete"},
+        {id: mine.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([403, 204]);
+      expect(await BulkSoftModel.countDocuments({deleted: true})).toBe(1);
+    });
+
+    it("reports 404 for a nonexistent id, matching DELETE", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {});
+      const agent = await authAsUser(app, "notAdmin");
+      const missing = new mongoose.Types.ObjectId().toString();
+      const single = await agent.delete(`/soft/${missing}`);
+      expect(single.status).toBe(404);
+      const entries = await bulk(agent, "/soft", [{id: missing, method: "delete"}]);
+      expect(entries[0].status).toBe(404);
+    });
+
+    it("reports 403 'Delete not allowed' for an item whose preDelete returns null", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {
+        preDelete: (doc: BulkSoft) => (doc.name === "bulk-keep" ? null : doc),
+      });
+      const agent = await authAsUser(app, "notAdmin");
+      const keep = await BulkSoftModel.create({name: "bulk-keep"});
+      const drop = await BulkSoftModel.create({name: "bulk-drop"});
+      const entries = await bulk(agent, "/soft", [
+        {id: keep.id, method: "delete"},
+        {id: drop.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([403, 204]);
+      expect(await BulkSoftModel.countDocuments({deleted: true})).toBe(1);
+    });
+
+    it("hard deletes on a model without soft delete", async () => {
+      mountFood();
+      const agent = await authAsUser(app, "notAdmin");
+      const doc = await makeFood({name: "bulk-a"});
+      const entries = await bulk(agent, "/food", [{id: doc.id, method: "delete"}]);
+      expect(entries[0].status).toBe(204);
+      expect(await FoodModel.findById(doc.id)).toBeNull();
+    });
+  });
+
+  describe("mixed", () => {
+    it("runs create, update, and delete in one request and returns 201/200/204 in order", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {});
+      const agent = await authAsUser(app, "notAdmin");
+      const toUpdate = await BulkSoftModel.create({name: "bulk-old"});
+      const toDelete = await BulkSoftModel.create({name: "bulk-gone"});
+      const entries = await bulk(agent, "/soft", [
+        {body: {name: "bulk-new"}, method: "create"},
+        {body: {name: "bulk-updated"}, id: toUpdate.id, method: "update"},
+        {id: toDelete.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([201, 200, 204]);
+      expect(entries.map((entry) => entry.method)).toEqual(["create", "update", "delete"]);
+      expect(entries.map((entry) => entry.index)).toEqual([0, 1, 2]);
+      expect((await BulkSoftModel.findById(toUpdate.id))?.name).toBe("bulk-updated");
+      expect(await BulkSoftModel.countDocuments({name: "bulk-new"})).toBe(1);
+      expect(await BulkSoftModel.countDocuments({deleted: true})).toBe(1);
+    });
+
+    it("an update then a delete of the same id both succeed in input order", async () => {
+      mountRouter("/soft", BulkSoftModel as never, {});
+      const agent = await authAsUser(app, "notAdmin");
+      const doc = await BulkSoftModel.create({name: "bulk-a"});
+      const entries = await bulk(agent, "/soft", [
+        {body: {name: "bulk-b"}, id: doc.id, method: "update"},
+        {id: doc.id, method: "delete"},
+      ]);
+      expect(entries.map((entry) => entry.status)).toEqual([200, 204]);
+    });
+  });
+
+  describe("audit", () => {
+    it("writes one AuditEvent per update and delete item with before/after", async () => {
+      resetAuditRecorderForTests();
+      if (mongoose.connection.models.TerrenoAuditEvent) {
+        mongoose.connection.deleteModel("TerrenoAuditEvent");
+      }
+      await mongoose.connection.collection("auditevents").deleteMany({});
+      const auditApp = new TerrenoApp({
+        skipListen: true,
+        userModel: UserModel as unknown as UserMongooseModel,
+      })
+        .register(new AuditApp())
+        .build();
+      auditApp.use(
+        "/soft",
+        modelRouter(
+          BulkSoftModel as never,
+          {
+            audit: true,
+            bulk: true,
+            permissions: allPermissions,
+          } as never
+        )
+      );
+      const agent = await authAsUser(auditApp, "notAdmin");
+      const toUpdate = await BulkSoftModel.create({name: "audit-old"});
+      const toDelete = await BulkSoftModel.create({name: "audit-gone"});
+      await agent
+        .post("/soft/bulk")
+        .send({
+          atomic: false,
+          operations: [
+            {body: {name: "audit-new"}, id: toUpdate.id, method: "update"},
+            {id: toDelete.id, method: "delete"},
+          ],
+        })
+        .expect(200);
+      await flushAuditRecorderForTests();
+      const adminAgent = await authAsUser(auditApp, "admin");
+      const list = await adminAgent.get("/audit-events").expect(200);
+      const events = list.body.data as {
+        after?: {name?: string};
+        before?: {name?: string};
+        operation: string;
+        recordId: string;
+      }[];
+      const updated = events.filter((event) => event.operation === "update");
+      const deleted = events.filter((event) => event.operation === "delete");
+      expect(updated).toHaveLength(1);
+      expect(deleted).toHaveLength(1);
+      expect(updated[0].recordId).toBe(toUpdate.id);
+      expect(updated[0].before?.name).toBe("audit-old");
+      expect(updated[0].after?.name).toBe("audit-new");
+      expect(deleted[0].recordId).toBe(toDelete.id);
+      expect(deleted[0].before?.name).toBe("audit-gone");
+
+      resetAuditRecorderForTests();
+      if (mongoose.connection.models.TerrenoAuditEvent) {
+        mongoose.connection.deleteModel("TerrenoAuditEvent");
+      }
+    });
+  });
+
+  describe("synced model", () => {
+    it("advances _syncSeq on a bulk update and soft-deletes on a bulk delete", async () => {
+      const options = {permissions: allPermissions, sync: {scope: {type: "owner"}}};
+      registerSync({
+        config: {scope: {type: "owner"}},
+        model: BulkSyncedModel as never,
+        options: options as never,
+        routePath: "/synced",
+      });
+      mountRouter("/synced", BulkSyncedModel as never, options);
+      const agent = await authAsUser(app, "notAdmin");
+      const owner = (await userId("notAdmin@example.com")).toString();
+      const doc = await BulkSyncedModel.create({name: "bulk-a", ownerId: owner});
+      const before = (await BulkSyncedModel.findById(doc.id))?._syncSeq;
+      expect(typeof before).toBe("number");
+
+      const entries = await bulk(agent, "/synced", [
+        {body: {name: "bulk-b"}, id: doc.id, method: "update"},
+      ]);
+      expect(entries[0].status).toBe(200);
+      const afterUpdate = (await BulkSyncedModel.findById(doc.id))?._syncSeq as number;
+      expect(afterUpdate).toBeGreaterThan(before as number);
+
+      const deletes = await bulk(agent, "/synced", [{id: doc.id, method: "delete"}]);
+      expect(deletes[0].status).toBe(204);
+      const tombstone = await BulkSyncedModel.findOne({_id: doc.id, deleted: true});
+      expect(tombstone?.deleted).toBe(true);
+      expect(tombstone?._syncSeq as number).toBeGreaterThan(afterUpdate);
+    });
   });
 });

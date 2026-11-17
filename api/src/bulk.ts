@@ -11,15 +11,18 @@
  */
 import type express from "express";
 import type {Request, Response} from "express";
+import {DateTime} from "luxon";
 import type {Document, Model} from "mongoose";
 
 import type {JSONValue, ModelRouterOptions} from "./api";
-import {maybeRecordModelRouterAudit} from "./audit/record";
+import {maybeRecordModelRouterAudit, snapshotAuditBefore} from "./audit/record";
 import type {authenticateMiddleware} from "./auth";
 import {bulkOpenApiMiddleware} from "./bulkOpenApi";
+import type {loadDocOr404} from "./docLoader";
 import {
   APIError,
   type APIErrorBody,
+  errorMessage,
   isAPIError,
   logAndCaptureAPIError,
   mongooseErrorToAPIError,
@@ -27,7 +30,16 @@ import {
   serializeAPIError,
 } from "./errors";
 import type {checkPermissions} from "./permissions";
-import type {executeCreate, runPostCreate} from "./sync/executors";
+import type {
+  ExecutorConcurrencyCheck,
+  executeCreate,
+  executeDelete,
+  executeUpdate,
+  isExecutorConflictError,
+  runPostCreate,
+  runPostDelete,
+  runPostUpdate,
+} from "./sync/executors";
 
 /** The write operations a bulk request may carry. */
 export type BulkMethod = "create" | "update" | "delete";
@@ -68,7 +80,8 @@ interface BulkItemResult {
   id?: string;
   status: number;
   data?: JSONValue;
-  error?: APIErrorBody;
+  /** The body the single route would have sent for this failure (for a 409, the PATCH 409 body). */
+  error?: APIErrorBody | Record<string, unknown>;
 }
 
 type ResponseHandler<T> = NonNullable<ModelRouterOptions<T>["responseHandler"]>;
@@ -88,7 +101,13 @@ export interface BulkRouteDeps {
   authenticateMiddleware: typeof authenticateMiddleware;
   checkPermissions: typeof checkPermissions;
   executeCreate: typeof executeCreate;
+  executeDelete: typeof executeDelete;
+  executeUpdate: typeof executeUpdate;
+  isExecutorConflictError: typeof isExecutorConflictError;
+  loadDocOr404: typeof loadDocOr404;
   runPostCreate: typeof runPostCreate;
+  runPostDelete: typeof runPostDelete;
+  runPostUpdate: typeof runPostUpdate;
 }
 
 /** Resolves `ModelRouterOptions.bulk` to concrete limits, or null when bulk is off. */
@@ -235,19 +254,51 @@ const serializeItem = async <T>(
   }
 };
 
+// Method permission before body validation, the same order as the single routes
+// (permissionMiddleware, then validation), so an unpermitted caller gets 405, not schema details.
+const assertMethodPermission = async <T>(
+  ctx: ItemContext<T>,
+  method: "create" | "update"
+): Promise<void> => {
+  if (await ctx.deps.checkPermissions(method, ctx.options.permissions[method], ctx.req.user)) {
+    return;
+  }
+  throw new APIError({
+    status: 405,
+    title: `Access to ${method.toUpperCase()} on ${ctx.model.modelName} denied for ${ctx.req.user?.id}`,
+  });
+};
+
+// The same `_updatedAt` last-write-wins check PATCH /:id builds from the body.
+const concurrencyCheckFromBody = (
+  body: Record<string, unknown>
+): ExecutorConcurrencyCheck | undefined => {
+  const bodyUpdatedAt = body._updatedAt;
+  if (!bodyUpdatedAt) {
+    return undefined;
+  }
+  return {
+    ifUnmodifiedSince: DateTime.fromISO(String(bodyUpdatedAt)).toJSDate(),
+    invalidTimestampDetail: "_updatedAt body field could not be parsed as an ISO date",
+    type: "timestamp",
+  };
+};
+
+const hookErrorResult = (
+  error: unknown,
+  wrapper: {code: string; detail?: string; title: string},
+  result: {id: string; index: number; method: BulkMethod}
+): BulkItemResult => {
+  const {body, status} = toBulkItemError(passthroughOrWrap(error, {...wrapper, status: 400}));
+  return {...result, error: body, status};
+};
+
 const runCreateItem = async <T>(
   ctx: ItemContext<T>,
   operation: Extract<BulkOperation, {method: "create"}>,
   index: number
 ): Promise<BulkItemResult> => {
-  // Method permission before body validation, the same order as POST / (permissionMiddleware,
-  // then validation), so an unpermitted caller gets 405 rather than schema details.
-  if (!(await ctx.deps.checkPermissions("create", ctx.options.permissions.create, ctx.req.user))) {
-    throw new APIError({
-      status: 405,
-      title: `Access to CREATE on ${ctx.model.modelName} denied for ${ctx.req.user?.id}`,
-    });
-  }
+  await assertMethodPermission(ctx, "create");
   const itemReq = buildItemRequest(ctx.req, operation.body);
   const body = ctx.validateBody({body: operation.body, method: "create", req: itemReq});
   itemReq.body = body;
@@ -263,14 +314,11 @@ const runCreateItem = async <T>(
   try {
     await ctx.deps.runPostCreate({doc, options: ctx.options, request: itemReq});
   } catch (error: unknown) {
-    const {body: errorBody, status} = toBulkItemError(
-      passthroughOrWrap(error, {
-        code: "post-create-hook-error",
-        status: 400,
-        title: "postCreate hook error",
-      })
+    return hookErrorResult(
+      error,
+      {code: "post-create-hook-error", title: "postCreate hook error"},
+      {id, index, method: "create"}
     );
-    return {error: errorBody, id, index, method: "create", status};
   }
   void maybeRecordModelRouterAudit({
     after: doc,
@@ -285,6 +333,131 @@ const runCreateItem = async <T>(
   return {data, id, index, method: "create", status: 201};
 };
 
+const runUpdateItem = async <T>(
+  ctx: ItemContext<T>,
+  operation: Extract<BulkOperation, {method: "update"}>,
+  index: number
+): Promise<BulkItemResult> => {
+  const {id} = operation;
+  await assertMethodPermission(ctx, "update");
+  const itemReq = buildItemRequest(ctx.req, operation.body, id);
+  const body = ctx.validateBody({body: operation.body, method: "update", req: itemReq});
+  itemReq.body = body;
+
+  let result: Awaited<ReturnType<typeof executeUpdate<T>>>;
+  try {
+    result = await ctx.deps.executeUpdate<T>({
+      body,
+      concurrencyCheck: concurrencyCheckFromBody(body),
+      id,
+      model: ctx.model,
+      options: ctx.options,
+      req: itemReq,
+      skipPostHooks: true,
+      user: ctx.req.user,
+    });
+  } catch (error: unknown) {
+    if (!ctx.deps.isExecutorConflictError(error)) {
+      throw error;
+    }
+    // Exactly the body PATCH /:id sends for a conflict, including the current server doc.
+    const data = await serializeItem(
+      ctx,
+      error.doc as Document<unknown, unknown, unknown> & T,
+      "update",
+      itemReq
+    );
+    return {
+      error: {data, error: "Conflict", message: "Document was modified since your last read"},
+      id,
+      index,
+      method: "update",
+      status: 409,
+    };
+  }
+
+  const {doc, cleanedBody, prevDoc} = result;
+  try {
+    await ctx.deps.runPostUpdate({
+      cleanedBody: cleanedBody as Partial<T>,
+      doc,
+      options: ctx.options,
+      prevDoc: prevDoc as T,
+      request: itemReq,
+    });
+  } catch (error: unknown) {
+    return hookErrorResult(
+      error,
+      {
+        code: "post-update-hook-error",
+        detail: `postUpdate hook error on ${id}: ${errorMessage(error)}`,
+        title: "postUpdate hook error",
+      },
+      {id, index, method: "update"}
+    );
+  }
+  void maybeRecordModelRouterAudit({
+    after: doc,
+    audit: ctx.options.audit,
+    before: snapshotAuditBefore({
+      audit: ctx.options.audit,
+      doc: prevDoc as {toJSON?: () => unknown},
+    }),
+    modelName: ctx.model.modelName,
+    operation: "update",
+    recordId: String(doc._id),
+    req: itemReq,
+    verb: "updated",
+  });
+  const data = await serializeItem(ctx, doc, "update", itemReq);
+  return {data, id, index, method: "update", status: 200};
+};
+
+const runDeleteItem = async <T>(
+  ctx: ItemContext<T>,
+  operation: Extract<BulkOperation, {method: "delete"}>,
+  index: number
+): Promise<BulkItemResult> => {
+  const {id} = operation;
+  const itemReq = buildItemRequest(ctx.req, {}, id);
+  const {doc, prevDoc} = await ctx.deps.executeDelete<T>({
+    id,
+    model: ctx.model,
+    options: ctx.options,
+    req: itemReq,
+    skipPostHooks: true,
+    user: ctx.req.user,
+  });
+  if (!prevDoc) {
+    // executeDelete treats an already soft-deleted doc as an idempotent success for the sync
+    // channel (and then returns no prevDoc). DELETE /:id answers 404 there, so bulk does too:
+    // loading the tombstone through the normal loader throws that same 404.
+    await ctx.deps.loadDocOr404(ctx.model, id, ctx.options.populatePaths);
+  }
+  try {
+    await ctx.deps.runPostDelete({doc, options: ctx.options, request: itemReq});
+  } catch (error: unknown) {
+    return hookErrorResult(
+      error,
+      {code: "post-delete-hook-error", title: "postDelete hook error"},
+      {id, index, method: "delete"}
+    );
+  }
+  void maybeRecordModelRouterAudit({
+    audit: ctx.options.audit,
+    before: snapshotAuditBefore({
+      audit: ctx.options.audit,
+      doc: (prevDoc ?? doc) as {toJSON?: () => unknown},
+    }),
+    modelName: ctx.model.modelName,
+    operation: "delete",
+    recordId: String(doc._id),
+    req: itemReq,
+    verb: "deleted",
+  });
+  return {id, index, method: "delete", status: 204};
+};
+
 const runItem = async <T>(
   ctx: ItemContext<T>,
   operation: BulkOperation,
@@ -294,11 +467,10 @@ const runItem = async <T>(
     if (operation.method === "create") {
       return await runCreateItem(ctx, operation, index);
     }
-    throw new APIError({
-      code: "bulk-method-not-implemented",
-      status: 501,
-      title: `Bulk ${operation.method} is not implemented`,
-    });
+    if (operation.method === "update") {
+      return await runUpdateItem(ctx, operation, index);
+    }
+    return await runDeleteItem(ctx, operation, index);
   } catch (error: unknown) {
     const {body, status} = toBulkItemError(error);
     const id = operation.method === "create" ? undefined : operation.id;

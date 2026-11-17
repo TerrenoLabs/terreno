@@ -193,7 +193,7 @@ None — backend only.
   - Test skills: terreno-backend-tests
   - Docs: none in this task (T6)
 
-- [ ] **T3** — Partial-mode update and delete items
+- [x] **T3** — Partial-mode update and delete items
   - Depends on: T2
   - Files: api/src/bulk.ts, api/src/bulk.test.ts, api/src/sync/executors.ts, api/src/sync/executors.test.ts
   - Seam: `POST /<route>/bulk`

@@ -69,6 +69,7 @@ import {
   executeDelete,
   executeUpdate,
   isExecutorConflictError,
+  runPostCreate,
 } from "./sync/executors";
 import type {SyncConfig} from "./sync/types";
 import {
@@ -375,6 +376,7 @@ export interface ModelRouterOptions<T> {
     create?: Record<string, unknown>;
     update?: Record<string, unknown>;
     delete?: Record<string, unknown>;
+    bulk?: Record<string, unknown>;
   };
   /**
    * Overwrite parts of the model properties for the OpenAPI generator.
@@ -878,6 +880,7 @@ const _buildModelRouter = <T>(
   const validateBulkBody: BulkBodyValidator = ({method, body, req}) =>
     runBodyValidator(method === "create" ? createValidation : updateValidation, body, req);
   registerBulkRoute({
+    deps: {authenticateMiddleware, checkPermissions, executeCreate, runPostCreate},
     model,
     options,
     responseHandler: responseHandler as NonNullable<ModelRouterOptions<T>["responseHandler"]>,

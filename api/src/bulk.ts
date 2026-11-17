@@ -15,7 +15,8 @@ import type {Document, Model} from "mongoose";
 
 import type {JSONValue, ModelRouterOptions} from "./api";
 import {maybeRecordModelRouterAudit} from "./audit/record";
-import {authenticateMiddleware} from "./auth";
+import type {authenticateMiddleware} from "./auth";
+import {bulkOpenApiMiddleware} from "./bulkOpenApi";
 import {
   APIError,
   type APIErrorBody,
@@ -25,8 +26,8 @@ import {
   passthroughOrWrap,
   serializeAPIError,
 } from "./errors";
-import {checkPermissions} from "./permissions";
-import {executeCreate, runPostCreate} from "./sync/executors";
+import type {checkPermissions} from "./permissions";
+import type {executeCreate, runPostCreate} from "./sync/executors";
 
 /** The write operations a bulk request may carry. */
 export type BulkMethod = "create" | "update" | "delete";
@@ -40,7 +41,7 @@ export interface ModelRouterBulkOptions {
 }
 
 /** Default cap on operations per bulk request, matching the sync batch limit. */
-export const DEFAULT_BULK_MAX_ITEMS = 100;
+const DEFAULT_BULK_MAX_ITEMS = 100;
 
 const BULK_METHODS: BulkMethod[] = ["create", "update", "delete"];
 
@@ -50,7 +51,7 @@ interface ResolvedBulkOptions {
 }
 
 /** One parsed operation from the request envelope. */
-export type BulkOperation =
+type BulkOperation =
   | {method: "create"; body: Record<string, unknown>}
   | {method: "update"; id: string; body: Record<string, unknown>}
   | {method: "delete"; id: string};
@@ -61,7 +62,7 @@ interface BulkRequest {
 }
 
 /** One entry of the bulk response, in input order. */
-export interface BulkItemResult {
+interface BulkItemResult {
   index: number;
   method: BulkMethod;
   id?: string;
@@ -79,8 +80,19 @@ export type BulkBodyValidator = (args: {
   req: Request;
 }) => Record<string, unknown>;
 
+/**
+ * Runtime functions the bulk route needs from modules that themselves import `api.ts`. `api.ts`
+ * passes them in so this module never imports them at runtime (no import cycle).
+ */
+export interface BulkRouteDeps {
+  authenticateMiddleware: typeof authenticateMiddleware;
+  checkPermissions: typeof checkPermissions;
+  executeCreate: typeof executeCreate;
+  runPostCreate: typeof runPostCreate;
+}
+
 /** Resolves `ModelRouterOptions.bulk` to concrete limits, or null when bulk is off. */
-export const resolveBulkOptions = (
+const resolveBulkOptions = (
   bulk: boolean | ModelRouterBulkOptions | undefined
 ): ResolvedBulkOptions | null => {
   if (!bulk) {
@@ -149,7 +161,7 @@ const parseOperation = (
 };
 
 /** Parses and checks the whole envelope before any write. Throws a 400 on any defect. */
-export const parseBulkRequest = (body: unknown, config: ResolvedBulkOptions): BulkRequest => {
+const parseBulkRequest = (body: unknown, config: ResolvedBulkOptions): BulkRequest => {
   if (!isPlainObject(body)) {
     throw envelopeError("Body must be an object with an operations array");
   }
@@ -173,6 +185,7 @@ export const parseBulkRequest = (body: unknown, config: ResolvedBulkOptions): Bu
 };
 
 /**
+ * @internal Exported for tests.
  * Maps any error from one item to the status and JSON body the single route's error middleware
  * would send, and logs/captures it the same way.
  */
@@ -198,6 +211,7 @@ const buildItemRequest = (req: Request, body: unknown, id?: string): Request => 
 };
 
 interface ItemContext<T> {
+  deps: BulkRouteDeps;
   model: Model<T>;
   options: ModelRouterOptions<T>;
   req: Request;
@@ -228,7 +242,7 @@ const runCreateItem = async <T>(
 ): Promise<BulkItemResult> => {
   // Method permission before body validation, the same order as POST / (permissionMiddleware,
   // then validation), so an unpermitted caller gets 405 rather than schema details.
-  if (!(await checkPermissions("create", ctx.options.permissions.create, ctx.req.user))) {
+  if (!(await ctx.deps.checkPermissions("create", ctx.options.permissions.create, ctx.req.user))) {
     throw new APIError({
       status: 405,
       title: `Access to CREATE on ${ctx.model.modelName} denied for ${ctx.req.user?.id}`,
@@ -237,7 +251,7 @@ const runCreateItem = async <T>(
   const itemReq = buildItemRequest(ctx.req, operation.body);
   const body = ctx.validateBody({body: operation.body, method: "create", req: itemReq});
   itemReq.body = body;
-  const {doc} = await executeCreate<T>({
+  const {doc} = await ctx.deps.executeCreate<T>({
     body,
     model: ctx.model,
     options: ctx.options,
@@ -247,7 +261,7 @@ const runCreateItem = async <T>(
   });
   const id = String(doc._id);
   try {
-    await runPostCreate({doc, options: ctx.options, request: itemReq});
+    await ctx.deps.runPostCreate({doc, options: ctx.options, request: itemReq});
   } catch (error: unknown) {
     const {body: errorBody, status} = toBulkItemError(
       passthroughOrWrap(error, {
@@ -297,12 +311,14 @@ const runItem = async <T>(
  * collection actions, before user `endpoints` and the `/:id` routes.
  */
 export const registerBulkRoute = <T>({
+  deps,
   router,
   model,
   options,
   responseHandler,
   validateBody,
 }: {
+  deps: BulkRouteDeps;
   router: express.Router;
   model: Model<T>;
   options: ModelRouterOptions<T>;
@@ -313,11 +329,12 @@ export const registerBulkRoute = <T>({
   if (!config) {
     return;
   }
-  const ctxBase = {model, options, responseHandler, validateBody};
+  const ctxBase = {deps, model, options, responseHandler, validateBody};
 
   router.post(
     "/bulk",
-    authenticateMiddleware(options.allowAnonymous),
+    deps.authenticateMiddleware(options.allowAnonymous),
+    bulkOpenApiMiddleware({model, options, ...config}),
     async (req: Request, res: Response, next: express.NextFunction): Promise<void> => {
       try {
         const request = parseBulkRequest(req.body, config);

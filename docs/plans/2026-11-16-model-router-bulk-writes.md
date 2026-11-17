@@ -286,9 +286,9 @@ None — backend only.
   - Test skills: terreno-backend-tests, terreno-test-setup
   - Docs: none in this task (T6)
 
-- [ ] **T5** — Document `POST /bulk` in OpenAPI
+- [x] **T5** — Document `POST /bulk` in OpenAPI
   - Depends on: T2
-  - Files: api/src/bulkOpenApi.ts, api/src/bulkOpenApi.test.ts, api/src/api.ts
+  - Files: api/src/bulkOpenApi.ts, api/src/bulkOpenApi.test.ts, api/src/bulk.ts, api/src/api.ts, api/src/openApi.ts, syncdb/src/codegen/discoverOperations.test.ts
   - Seam: `GET /openapi.json` on a server with a `bulk` router, plus the syncdb codegen's
     `discoverOperations`
   - Interface:
@@ -298,10 +298,11 @@ None — backend only.
       standard error schemas.
     - Only the methods in `bulk.methods` appear in the `method` enum.
   - Cases:
-    - `bulk: true` → `paths["/food/bulk"].post` exists with operationId `food_bulk`; the `method` enum is `["create","update","delete"]`
+    - `bulk: true` → `paths["/food/bulk"].post` exists with operationId `foods_bulk` (tag `foods`); the `method` enum is `["create","update","delete"]`
     - `bulk: {methods: ["update"]}` → the enum is `["update"]`
     - no `bulk` → no `/food/bulk` path
-    - `discoverOperations` on that spec yields a `food_bulk` operation (the syncdb codegen will emit a hook)
+    - `discoverOperations` on a spec with that path yields a `foodsBulk` operation (the syncdb codegen will emit a hook), in `syncdb/src/codegen/discoverOperations.test.ts`
+  - Changed from the approved brief (T5): the operationId is `foods_bulk`, not `food_bulk`, because `{tag}` is the collection name, as for actions; the discovery case lives in syncdb with a fixture spec because api's typecheck `rootDir` forbids importing syncdb source.
     - the existing openApi snapshot tests still pass (no change for routers without `bulk`)
   - Blast radius: syncdb `--api-out` codegen consumes the spec, covered by the discoverOperations case. For synced collections see Q3.
   - Test skills: terreno-backend-tests

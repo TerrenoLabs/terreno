@@ -9,6 +9,8 @@
 import type {AsyncLocalStorage} from "node:async_hooks";
 import type {ClientSession, Connection, Mongoose} from "mongoose";
 
+import {APIError} from "./errors";
+
 interface TransactionStore {
   session: ClientSession;
 }
@@ -123,7 +125,10 @@ export const runInBulkTransaction = async <R>({
 }): Promise<R> => {
   const storage = (base as MongooseWithTransactionStore).transactionAsyncLocalStorage;
   if (!storage) {
-    throw new Error("transactionAsyncLocalStorage is not enabled on this Mongoose instance");
+    throw new APIError({
+      status: 500,
+      title: "transactionAsyncLocalStorage is not enabled on this Mongoose instance",
+    });
   }
   const session = await connection.startSession();
   try {

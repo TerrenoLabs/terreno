@@ -236,7 +236,7 @@ None — backend only.
   - Test skills: terreno-backend-tests
   - Docs: none in this task (T6)
 
-- [ ] **T4** — Atomic mode by default, inside one transaction
+- [x] **T4** — Atomic mode by default, inside one transaction
   - Depends on: T1, T3
   - Files: api/src/bulk.ts, api/src/bulkTransaction.ts, api/src/isolated/bulkAtomic.isolated.ts (replica set via `useMongoTopology`), api/src/isolated/bulkStandalone.isolated.ts (the standalone case), api/src/sync/syncSeqPlugin.ts + its test (only if the seq claim does not join the session)
   - Seam: `POST /<route>/bulk` with `atomic` omitted or `true`

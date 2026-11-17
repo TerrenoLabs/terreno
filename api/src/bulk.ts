@@ -18,6 +18,12 @@ import type {JSONValue, ModelRouterOptions} from "./api";
 import {maybeRecordModelRouterAudit, snapshotAuditBefore} from "./audit/record";
 import type {authenticateMiddleware} from "./auth";
 import {bulkOpenApiMiddleware} from "./bulkOpenApi";
+import {
+  enableTransactionAsyncLocalStorage,
+  isTransientTransactionError,
+  runInBulkTransaction,
+  supportsTransactions,
+} from "./bulkTransaction";
 import type {loadDocOr404} from "./docLoader";
 import {
   APIError,
@@ -293,11 +299,26 @@ const hookErrorResult = (
   return {...result, error: body, status};
 };
 
-const runCreateItem = async <T>(
+/**
+ * An item whose write succeeded. `finish` runs the post hook, audit, and `responseHandler`;
+ * in atomic mode that happens only after the transaction commits.
+ */
+interface WrittenItem {
+  finish: () => Promise<BulkItemResult>;
+}
+
+/** An item whose write was refused with a response body (an executor conflict). */
+interface RefusedItem {
+  refused: BulkItemResult;
+}
+
+type ItemWrite = WrittenItem | RefusedItem;
+
+const writeCreateItem = async <T>(
   ctx: ItemContext<T>,
   operation: Extract<BulkOperation, {method: "create"}>,
   index: number
-): Promise<BulkItemResult> => {
+): Promise<ItemWrite> => {
   await assertMethodPermission(ctx, "create");
   const itemReq = buildItemRequest(ctx.req, operation.body);
   const body = ctx.validateBody({body: operation.body, method: "create", req: itemReq});
@@ -311,33 +332,36 @@ const runCreateItem = async <T>(
     user: ctx.req.user,
   });
   const id = String(doc._id);
-  try {
-    await ctx.deps.runPostCreate({doc, options: ctx.options, request: itemReq});
-  } catch (error: unknown) {
-    return hookErrorResult(
-      error,
-      {code: "post-create-hook-error", title: "postCreate hook error"},
-      {id, index, method: "create"}
-    );
-  }
-  void maybeRecordModelRouterAudit({
-    after: doc,
-    audit: ctx.options.audit,
-    modelName: ctx.model.modelName,
-    operation: "create",
-    recordId: id,
-    req: itemReq,
-    verb: "created",
-  });
-  const data = await serializeItem(ctx, doc, "create", itemReq);
-  return {data, id, index, method: "create", status: 201};
+  const finish = async (): Promise<BulkItemResult> => {
+    try {
+      await ctx.deps.runPostCreate({doc, options: ctx.options, request: itemReq});
+    } catch (error: unknown) {
+      return hookErrorResult(
+        error,
+        {code: "post-create-hook-error", title: "postCreate hook error"},
+        {id, index, method: "create"}
+      );
+    }
+    void maybeRecordModelRouterAudit({
+      after: doc,
+      audit: ctx.options.audit,
+      modelName: ctx.model.modelName,
+      operation: "create",
+      recordId: id,
+      req: itemReq,
+      verb: "created",
+    });
+    const data = await serializeItem(ctx, doc, "create", itemReq);
+    return {data, id, index, method: "create", status: 201};
+  };
+  return {finish};
 };
 
-const runUpdateItem = async <T>(
+const writeUpdateItem = async <T>(
   ctx: ItemContext<T>,
   operation: Extract<BulkOperation, {method: "update"}>,
   index: number
-): Promise<BulkItemResult> => {
+): Promise<ItemWrite> => {
   const {id} = operation;
   await assertMethodPermission(ctx, "update");
   const itemReq = buildItemRequest(ctx.req, operation.body, id);
@@ -368,56 +392,61 @@ const runUpdateItem = async <T>(
       itemReq
     );
     return {
-      error: {data, error: "Conflict", message: "Document was modified since your last read"},
-      id,
-      index,
-      method: "update",
-      status: 409,
+      refused: {
+        error: {data, error: "Conflict", message: "Document was modified since your last read"},
+        id,
+        index,
+        method: "update",
+        status: 409,
+      },
     };
   }
 
   const {doc, cleanedBody, prevDoc} = result;
-  try {
-    await ctx.deps.runPostUpdate({
-      cleanedBody: cleanedBody as Partial<T>,
-      doc,
-      options: ctx.options,
-      prevDoc: prevDoc as T,
-      request: itemReq,
-    });
-  } catch (error: unknown) {
-    return hookErrorResult(
-      error,
-      {
-        code: "post-update-hook-error",
-        detail: `postUpdate hook error on ${id}: ${errorMessage(error)}`,
-        title: "postUpdate hook error",
-      },
-      {id, index, method: "update"}
-    );
-  }
-  void maybeRecordModelRouterAudit({
-    after: doc,
-    audit: ctx.options.audit,
-    before: snapshotAuditBefore({
+  const finish = async (): Promise<BulkItemResult> => {
+    try {
+      await ctx.deps.runPostUpdate({
+        cleanedBody: cleanedBody as Partial<T>,
+        doc,
+        options: ctx.options,
+        prevDoc: prevDoc as T,
+        request: itemReq,
+      });
+    } catch (error: unknown) {
+      return hookErrorResult(
+        error,
+        {
+          code: "post-update-hook-error",
+          detail: `postUpdate hook error on ${id}: ${errorMessage(error)}`,
+          title: "postUpdate hook error",
+        },
+        {id, index, method: "update"}
+      );
+    }
+    void maybeRecordModelRouterAudit({
+      after: doc,
       audit: ctx.options.audit,
-      doc: prevDoc as {toJSON?: () => unknown},
-    }),
-    modelName: ctx.model.modelName,
-    operation: "update",
-    recordId: String(doc._id),
-    req: itemReq,
-    verb: "updated",
-  });
-  const data = await serializeItem(ctx, doc, "update", itemReq);
-  return {data, id, index, method: "update", status: 200};
+      before: snapshotAuditBefore({
+        audit: ctx.options.audit,
+        doc: prevDoc as {toJSON?: () => unknown},
+      }),
+      modelName: ctx.model.modelName,
+      operation: "update",
+      recordId: String(doc._id),
+      req: itemReq,
+      verb: "updated",
+    });
+    const data = await serializeItem(ctx, doc, "update", itemReq);
+    return {data, id, index, method: "update", status: 200};
+  };
+  return {finish};
 };
 
-const runDeleteItem = async <T>(
+const writeDeleteItem = async <T>(
   ctx: ItemContext<T>,
   operation: Extract<BulkOperation, {method: "delete"}>,
   index: number
-): Promise<BulkItemResult> => {
+): Promise<ItemWrite> => {
   const {id} = operation;
   const itemReq = buildItemRequest(ctx.req, {}, id);
   const {doc, prevDoc} = await ctx.deps.executeDelete<T>({
@@ -434,48 +463,153 @@ const runDeleteItem = async <T>(
     // loading the tombstone through the normal loader throws that same 404.
     await ctx.deps.loadDocOr404(ctx.model, id, ctx.options.populatePaths);
   }
-  try {
-    await ctx.deps.runPostDelete({doc, options: ctx.options, request: itemReq});
-  } catch (error: unknown) {
-    return hookErrorResult(
-      error,
-      {code: "post-delete-hook-error", title: "postDelete hook error"},
-      {id, index, method: "delete"}
-    );
-  }
-  void maybeRecordModelRouterAudit({
-    audit: ctx.options.audit,
-    before: snapshotAuditBefore({
+  const finish = async (): Promise<BulkItemResult> => {
+    try {
+      await ctx.deps.runPostDelete({doc, options: ctx.options, request: itemReq});
+    } catch (error: unknown) {
+      return hookErrorResult(
+        error,
+        {code: "post-delete-hook-error", title: "postDelete hook error"},
+        {id, index, method: "delete"}
+      );
+    }
+    void maybeRecordModelRouterAudit({
       audit: ctx.options.audit,
-      doc: (prevDoc ?? doc) as {toJSON?: () => unknown},
-    }),
-    modelName: ctx.model.modelName,
-    operation: "delete",
-    recordId: String(doc._id),
-    req: itemReq,
-    verb: "deleted",
-  });
-  return {id, index, method: "delete", status: 204};
+      before: snapshotAuditBefore({
+        audit: ctx.options.audit,
+        doc: (prevDoc ?? doc) as {toJSON?: () => unknown},
+      }),
+      modelName: ctx.model.modelName,
+      operation: "delete",
+      recordId: String(doc._id),
+      req: itemReq,
+      verb: "deleted",
+    });
+    return {id, index, method: "delete", status: 204};
+  };
+  return {finish};
 };
 
-const runItem = async <T>(
+const writeItem = <T>(
   ctx: ItemContext<T>,
   operation: BulkOperation,
   index: number
-): Promise<BulkItemResult> => {
-  try {
-    if (operation.method === "create") {
-      return await runCreateItem(ctx, operation, index);
-    }
-    if (operation.method === "update") {
-      return await runUpdateItem(ctx, operation, index);
-    }
-    return await runDeleteItem(ctx, operation, index);
-  } catch (error: unknown) {
-    const {body, status} = toBulkItemError(error);
-    const id = operation.method === "create" ? undefined : operation.id;
-    return {error: body, index, method: operation.method, status, ...(id ? {id} : {})};
+): Promise<ItemWrite> => {
+  if (operation.method === "create") {
+    return writeCreateItem(ctx, operation, index);
   }
+  if (operation.method === "update") {
+    return writeUpdateItem(ctx, operation, index);
+  }
+  return writeDeleteItem(ctx, operation, index);
+};
+
+const failedItemResult = (
+  error: unknown,
+  operation: BulkOperation,
+  index: number
+): BulkItemResult => {
+  const {body, status} = toBulkItemError(error);
+  const id = operation.method === "create" ? undefined : operation.id;
+  return {error: body, index, method: operation.method, status, ...(id ? {id} : {})};
+};
+
+/** Partial mode: each item commits on its own; a failure is recorded and the batch continues. */
+const runPartial = async <T>(
+  ctx: ItemContext<T>,
+  operations: BulkOperation[]
+): Promise<BulkItemResult[]> => {
+  const results: BulkItemResult[] = [];
+  for (const [index, operation] of operations.entries()) {
+    try {
+      const written = await writeItem(ctx, operation, index);
+      results.push("refused" in written ? written.refused : await written.finish());
+    } catch (error: unknown) {
+      results.push(failedItemResult(error, operation, index));
+    }
+  }
+  return results;
+};
+
+/** Thrown inside the atomic transaction to abort it with one item's response. */
+class BulkItemAbort extends Error {
+  constructor(readonly result: BulkItemResult) {
+    super("Bulk item failed");
+  }
+}
+
+const transactionConflictError = (cause: unknown): APIError =>
+  new APIError({
+    cause,
+    code: "bulk-transaction-conflict",
+    detail: "Another write touched the same documents. Nothing was written; retry the request.",
+    status: 409,
+    title: "Bulk transaction conflict",
+  });
+
+/**
+ * Atomic mode: every item's write runs in one transaction. The first failure aborts it and
+ * becomes the whole response (that item's status and body plus `meta.index`). After a commit,
+ * post hooks, audit, and `responseHandler` run per item, in order.
+ */
+const runAtomic = async <T>(
+  ctx: ItemContext<T>,
+  operations: BulkOperation[],
+  res: Response
+): Promise<void> => {
+  if (!(await supportsTransactions(ctx.model.db))) {
+    throw new APIError({
+      code: "bulk-atomic-unsupported",
+      detail: "Atomic bulk mode requires a replica set; send atomic:false for per-item writes.",
+      status: 400,
+      title: "Atomic bulk writes are not supported by this database",
+    });
+  }
+
+  let written: WrittenItem[];
+  try {
+    written = await runInBulkTransaction({
+      base: ctx.model.base,
+      connection: ctx.model.db,
+      fn: async (): Promise<WrittenItem[]> => {
+        const items: WrittenItem[] = [];
+        for (const [index, operation] of operations.entries()) {
+          let write: ItemWrite;
+          try {
+            write = await writeItem(ctx, operation, index);
+          } catch (error: unknown) {
+            if (isTransientTransactionError(error)) {
+              throw error;
+            }
+            throw new BulkItemAbort(failedItemResult(error, operation, index));
+          }
+          if ("refused" in write) {
+            throw new BulkItemAbort(write.refused);
+          }
+          items.push(write);
+        }
+        return items;
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof BulkItemAbort) {
+      const {error: body, index, status} = error.result;
+      const errorBody = (body ?? {}) as Record<string, unknown>;
+      const meta = (errorBody.meta ?? {}) as Record<string, unknown>;
+      res.status(status).json({...errorBody, meta: {...meta, index}});
+      return;
+    }
+    if (isTransientTransactionError(error)) {
+      throw transactionConflictError(error);
+    }
+    throw error;
+  }
+
+  const results: BulkItemResult[] = [];
+  for (const item of written) {
+    results.push(await item.finish());
+  }
+  res.json({data: results});
 };
 
 /**
@@ -501,6 +635,8 @@ export const registerBulkRoute = <T>({
   if (!config) {
     return;
   }
+  // Atomic requests join every Mongoose operation (hook writes included) to their transaction.
+  enableTransactionAsyncLocalStorage(model.base);
   const ctxBase = {deps, model, options, responseHandler, validateBody};
 
   router.post(
@@ -510,20 +646,12 @@ export const registerBulkRoute = <T>({
     async (req: Request, res: Response, next: express.NextFunction): Promise<void> => {
       try {
         const request = parseBulkRequest(req.body, config);
-        if (request.atomic) {
-          throw new APIError({
-            code: "bulk-atomic-not-implemented",
-            detail: "Send atomic: false for per-item writes.",
-            status: 501,
-            title: "Atomic bulk writes are not implemented",
-          });
-        }
         const ctx: ItemContext<T> = {...ctxBase, req};
-        const results: BulkItemResult[] = [];
-        for (const [index, operation] of request.operations.entries()) {
-          results.push(await runItem(ctx, operation, index));
+        if (request.atomic) {
+          await runAtomic(ctx, request.operations, res);
+          return;
         }
-        res.json({data: results});
+        res.json({data: await runPartial(ctx, request.operations)});
       } catch (error: unknown) {
         next(error);
       }

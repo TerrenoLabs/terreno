@@ -2,8 +2,8 @@
  * Path-filter parity between GitHub Actions workflows and their CircleCI twins.
  *
  * During the CircleCI dual-run (docs/how-to/circleci.md) every ported GHA
- * workflow has a CircleCI job gated by a pipeline parameter set by the
- * path-filtering orb. A path watched by the GHA workflow but absent from the
+ * workflow has a CircleCI job gated by a pipeline parameter set by the setup
+ * path filter (.circleci/config.yml). A path watched by the GHA workflow but absent from the
  * mapping silently skips the twin, so CircleCI reports success without ever
  * running the job.
  */
@@ -49,7 +49,7 @@ interface SetupConfig {
   setup?: boolean;
   workflows?: {
     setup?: {
-      jobs?: {"path-filtering/filter"?: {mapping?: string}}[];
+      jobs?: Record<string, {mapping?: string} | undefined>[];
     };
   };
 }
@@ -87,10 +87,14 @@ const readSetupConfig = ({repoRoot}: {repoRoot: string}): SetupConfig => {
   return enabled?.config ?? candidates[0].config;
 };
 
+// The local one-pass job, and the circleci/path-filtering orb job it replaced.
+const FILTER_JOB_NAMES = ["path-filter", "path-filtering/filter"] as const;
+
 export const readMappings = ({repoRoot}: {repoRoot: string}): Mapping[] => {
   const config = readSetupConfig({repoRoot});
-  const filterJob = config?.workflows?.setup?.jobs?.[0]?.["path-filtering/filter"];
-  const raw = filterJob?.mapping ?? "";
+  const firstJob = config?.workflows?.setup?.jobs?.[0];
+  const filterName = FILTER_JOB_NAMES.find((name) => firstJob?.[name]?.mapping !== undefined);
+  const raw = filterName ? (firstJob?.[filterName]?.mapping ?? "") : "";
   return raw
     .split("\n")
     .map((line) => line.trim())
@@ -146,7 +150,7 @@ export const isCovered = ({
   if (samples.length === 0) {
     return false;
   }
-  // path-filtering anchors every mapping regex with ^…$. A GHA glob is covered
+  // The setup path filter anchors every mapping regex with ^…$. A GHA glob is covered
   // only when every representative sample would set the twin's parameter.
   return samples.every((sample) =>
     candidates.some((mapping) => new RegExp(`^(?:${mapping.regex})$`).test(sample))

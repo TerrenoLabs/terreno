@@ -262,7 +262,7 @@ export const TextField: FC<TextFieldProps> = ({
   }
 
   const isProseField =
-    (type === "text" || type === "textarea") && (!autoComplete || autoComplete === "on");
+    ["text", "textarea"].includes(type) && (!autoComplete || autoComplete === "on");
   const shouldSpellCheck = spellCheck ?? isProseField;
   const shouldAutocorrect = autoCorrect ?? (Platform.OS !== "web" && isProseField);
 

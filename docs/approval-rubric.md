@@ -9,13 +9,30 @@ Most features are medium. High is reserved for security-related code.
 
 | Level | Human approvals | Meaning | Examples |
 | --- | --- | --- | --- |
-| low | None, once automated review and security checks are green | A mistake is cheap and visible; the PR proves itself | docs; copy and i18n strings; tests, snapshots, fixtures; internal-only features (admin screens, dev tooling, scripts no user runs); additive changes behind a feature flag that defaults off; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; one-line bug fixes with a regression test; small presentational UI tweaks (see below) |
-| medium | One person | Ordinary product changes, and changes to sensitive areas | new or changed behavior with tests; UI changes with screenshots beyond a small presentational tweak; new endpoints with permission tests; schema changes, migrations, and backfills; caching (RTK tags, syncdb, HTTP/CDN caching); app updates (expo-updates, `eas.json`, `app.json`, release channels); AI system prompts and tool definitions; billing; infra, Dockerfiles, CI; public API shape (removed, renamed, or retyped exports, props, or endpoints); dependency minor and major bumps; feature-flag removals; hotfix branches; deleted or skipped tests |
+| low | None, once automated review and security checks are green | A mistake is cheap and visible; the PR proves itself | docs; copy and i18n strings; tests, snapshots, fixtures; internal-only features (admin screens, dev tooling, scripts no user runs); additive changes behind a feature flag that defaults off; lint autofix; regenerated files whose source changed in the same PR; changelog fragments; dependency patch bumps with green CI; small bug fixes with regression tests (see below); small presentational UI tweaks (see below) |
+| medium | One person | Ordinary product changes, and changes to sensitive areas | new features, and behavior changes beyond a small bug fix; UI changes with screenshots beyond a small presentational tweak or small bug fix; new endpoints with permission tests; schema changes, migrations, and backfills; caching (RTK tags, syncdb, HTTP/CDN caching); app updates (expo-updates, `eas.json`, `app.json`, release channels); AI system prompts and tool definitions; billing; infra, Dockerfiles, CI; public API shape (removed, renamed, or retyped exports, props, or endpoints; added required props or params); dependency minor and major bumps; feature-flag removals; hotfix branches; deleted or skipped tests |
 | high | One person | Security-related code, where a mistake is costly, hidden, or hard to undo | auth, sessions, tokens, Better Auth and Passport config; permissions, RBAC, `queryFilter`s that scope data to a user; MCP OAuth; `socketAuth` and `sessionRevalidation`; secrets and env files; crypto, hashing, signature verification (webhook verifiers); PHI handling, consent, and audit logging; rate limits on unauthenticated routes; CORS and trusted origins; IAM, network, and firewall rules in infra; dependencies added for auth, crypto, or parsing untrusted input; reverts of security changes |
 
 A PR is high only when it changes how the system decides who may see or do something,
 or how secrets, credentials, or PHI are handled. Touching a security-adjacent file for an
 unrelated reason (a typo, a log message, a rename) is judged by what the change does.
+
+A **small bug fix** is low. It makes one component, module, or function do what its
+docs, its name, or the platform default say it should, and stays inside that area
+(roughly one package and a few source files; line count alone never disqualifies it). It
+may change what every consumer sees by default when the old behavior was the bug, as long
+as the old behavior is one optional prop or option away. It needs tests that would
+fail without the fix, plus screenshots or video when it is visible in the UI. It is not
+small when it touches data fetching or syncdb/RTK, navigation, auth, consent, permissions,
+PHI, or a schema, or when it changes what a user can submit or do beyond restoring the
+intended behavior. Example: restoring browser spell check on a `TextField` that had forced it off,
+with `spellCheck`/`autoCorrect` override props and tests for both defaults and overrides.
+
+An **additive optional prop or option** (new, with a default) is not a public API shape
+change; only removing, renaming, or retyping an export, prop, or endpoint, or adding a
+required one, is. It is not a low category on its own: a new prop is low only inside a
+small bug fix or small presentational tweak, and otherwise it is judged by the behavior it
+adds.
 
 A **small presentational UI tweak** is low. It changes how one component looks or when it
 shows something (layout, spacing, copy, color, a display delay or debounce, an animation)
